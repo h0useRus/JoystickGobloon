@@ -207,17 +207,19 @@ mod tests {
 
     #[test]
     fn aliases_profile_devices_by_name() {
-        let mut profile = Profile::default();
-        profile.devices = vec![
-            gob_core::Device {
-                id: "7D12D5C0-43EA-11F0-800A-444553540000".into(),
-                name: " VKBsim Gladiator EVO OT L  ".into(),
-            },
-            gob_core::Device {
-                id: "ec8bbeb0-4009-11f0-8002-444553540000".into(),
-                name: " VKBsim Gladiator EVO  R  ".into(),
-            },
-        ];
+        let profile = Profile {
+            devices: vec![
+                gob_core::Device {
+                    id: "7D12D5C0-43EA-11F0-800A-444553540000".into(),
+                    name: " VKBsim Gladiator EVO OT L  ".into(),
+                },
+                gob_core::Device {
+                    id: "ec8bbeb0-4009-11f0-8002-444553540000".into(),
+                    name: " VKBsim Gladiator EVO  R  ".into(),
+                },
+            ],
+            ..Default::default()
+        };
         let devices = [
             live(
                 "a2196530-a616-11f0-8012-444553540000",
