@@ -96,6 +96,7 @@ fn appearance(ui: &mut egui::Ui, i18n: &I18n, settings: &Settings) -> Option<Cha
             );
             let card = egui::Button::new(job)
                 .selected(selected)
+                .corner_radius(style::RADIUS)
                 .min_size(Vec2::new(120.0, 80.0));
             if ui.add(card).clicked() && !selected {
                 change = Some(Change::Theme(theme));

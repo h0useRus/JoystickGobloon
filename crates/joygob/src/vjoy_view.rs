@@ -204,7 +204,9 @@ impl Tester {
             for (i, state) in self.buttons.iter_mut().enumerate() {
                 let r = ui.add_sized(
                     [40.0, 26.0],
-                    egui::Button::new((i + 1).to_string()).selected(*state),
+                    egui::Button::new((i + 1).to_string())
+                        .selected(*state)
+                        .corner_radius(style::RADIUS),
                 );
                 let down = r.is_pointer_button_down_on();
                 if down != *state {
@@ -227,7 +229,8 @@ impl Tester {
                                 let r = ui.add_sized(
                                     [26.0, 26.0],
                                     egui::Button::new(glyph)
-                                        .selected(*state == *dir && dir.is_some()),
+                                        .selected(*state == *dir && dir.is_some())
+                                        .corner_radius(style::RADIUS),
                                 );
                                 if dir.is_some() && r.is_pointer_button_down_on() {
                                     wanted = *dir;

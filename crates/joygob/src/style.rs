@@ -6,6 +6,9 @@ pub use egui_phosphor::regular as icon;
 use crate::settings::Theme;
 
 pub const ICON_SIZE: f32 = 20.0;
+/// Corner radius of widgets. Pass it explicitly to selectable buttons:
+/// egui draws selected buttons with square corners otherwise.
+pub const RADIUS: u8 = 8;
 
 pub fn install_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
@@ -48,7 +51,7 @@ pub fn apply(ctx: &egui::Context, theme: Theme) {
         &mut v.widgets.active,
         &mut v.widgets.open,
     ] {
-        w.corner_radius = CornerRadius::same(8);
+        w.corner_radius = CornerRadius::same(RADIUS);
     }
     ctx.set_visuals(v);
     ctx.style_mut(|s| {
@@ -77,7 +80,10 @@ pub fn icon_toggle(
     };
     ui.add_sized(
         [44.0, 40.0],
-        egui::Button::new(text).selected(selected).frame(selected),
+        egui::Button::new(text)
+            .selected(selected)
+            .corner_radius(RADIUS)
+            .frame(selected),
     )
     .on_hover_text(tooltip)
 }
@@ -96,6 +102,7 @@ pub fn tab(ui: &mut egui::Ui, selected: bool, glyph: &str, caption: &str) -> egu
     ui.add(
         egui::Button::new(format!("{glyph}  {caption}"))
             .selected(selected)
+            .corner_radius(RADIUS)
             .min_size(Vec2::new(0.0, 32.0)),
     )
 }
