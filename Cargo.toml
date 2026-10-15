@@ -16,6 +16,8 @@ gob-input = { path = "crates/gob-input" }
 windows = "0.61"
 libloading = "0.8"
 gob-vjoy = { path = "crates/gob-vjoy" }
+gob-hidhide = { path = "crates/gob-hidhide" }
+serde_json = "1"
 eframe = "0.31"
 fluent-bundle = "0.15"
 unic-langid = "0.9"
