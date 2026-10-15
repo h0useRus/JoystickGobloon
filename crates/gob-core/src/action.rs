@@ -95,6 +95,10 @@ pub enum ActionKind<'a> {
         text: &'a str,
     },
     MapToMouse(MouseAction),
+    /// Keys pressed in order on press and released in reverse on release.
+    MapToKeyboard {
+        keys: Vec<Key>,
+    },
     /// Short press latches the children on, hold acts momentarily.
     SmartToggle {
         children: Vec<&'a str>,
@@ -178,6 +182,13 @@ pub enum MouseAction {
     },
 }
 
+/// A keyboard key as Gremlin stores it: set 1 scan code plus the E0 prefix flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Key {
+    pub scan_code: u16,
+    pub extended: bool,
+}
+
 /// One `<macro-action>` of a macro.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MacroStep {
@@ -246,6 +257,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "tempo",
     "description",
     "map-to-mouse",
+    "map-to-keyboard",
     "smart-toggle",
     "split-axis",
     "pause-resume",
@@ -355,6 +367,24 @@ impl Action {
             "run-command" => ActionKind::RunCommand {
                 executable: self.str("executable").unwrap_or_default(),
                 arguments: self.str("arguments").unwrap_or_default(),
+            },
+            "map-to-keyboard" => ActionKind::MapToKeyboard {
+                keys: self
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        Item::Group { tag, items, .. } if tag == "input" => Some(Key {
+                            scan_code: find_property(items, "scan-code")?
+                                .value
+                                .trim()
+                                .parse()
+                                .ok()?,
+                            extended: find_property(items, "is-extended")
+                                .is_some_and(|p| p.value.trim().eq_ignore_ascii_case("true")),
+                        }),
+                        _ => None,
+                    })
+                    .collect(),
             },
             "map-to-mouse" => ActionKind::MapToMouse(match self.str("mode").map(str::trim) {
                 Some("Motion") => MouseAction::Motion {

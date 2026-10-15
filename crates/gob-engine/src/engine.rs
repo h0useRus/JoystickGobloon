@@ -1,9 +1,9 @@
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use gob_core::{
-    Action, ActionKind, ActivationMode, AxisDirection, InputType, Item, MacroRepeat, MacroStep,
-    MouseAction, MouseButton, Profile, VirtualButton,
+    Action, ActionKind, ActivationMode, AxisDirection, InputType, Item, Key, MacroRepeat,
+    MacroStep, MouseAction, MouseButton, Profile, VirtualButton,
 };
 
 use crate::modes::ModeStack;
@@ -61,6 +61,10 @@ enum Node {
     },
     Mouse {
         action: MouseAction,
+        act: ActivationMode,
+    },
+    Keys {
+        keys: Vec<Key>,
         act: ActivationMode,
     },
     SmartToggle {
@@ -176,6 +180,7 @@ enum ReleaseAction {
     LeaveTemporary(String),
     TempoRelease(NodeId),
     StopMacro(NodeId),
+    ReleaseKeys(NodeId),
 }
 
 /// Runs when the physical input that registered it is released (Gremlin's ButtonReleaseActions).
@@ -286,6 +291,8 @@ pub struct Engine {
     motion: Motion<(NodeId, InputKey), String>,
     toggles: HashMap<NodeId, ToggleState>,
     macros: HashMap<NodeId, MacroRun>,
+    /// map-to-keyboard actions whose keys are held.
+    keys_down: HashSet<NodeId>,
     /// Profile's `macro-default-delay` in seconds.
     macro_delay: f64,
     /// Last value written to each vJoy axis, for relative macro steps.
@@ -336,6 +343,7 @@ impl Engine {
             motion: Motion::default(),
             toggles: HashMap::new(),
             macros: HashMap::new(),
+            keys_down: HashSet::new(),
             macro_delay: profile
                 .settings
                 .child_text("macro-default-delay")
@@ -501,6 +509,10 @@ impl Engine {
                         .collect(),
                     threshold: Duration::from_secs_f64(threshold.max(0.0)),
                     on_press: activate_on == "press",
+                },
+                ActionKind::MapToKeyboard { keys } => Node::Keys {
+                    keys,
+                    act: action.activation_mode(),
                 },
                 ActionKind::MapToMouse(action_kind) => Node::Mouse {
                     action: action_kind,
@@ -885,12 +897,47 @@ impl Engine {
                     self.mouse(node, action, src, *value, now, out);
                 }
             }
+            Node::Keys { keys, act } => {
+                if !should_execute(act, *value) {
+                    return;
+                }
+                if value.truthy() {
+                    for k in &keys {
+                        out.key(k.scan_code, k.extended, true);
+                    }
+                    self.keys_down.insert(node);
+                    // Not in Gremlin: release the keys if the input is let go in another mode.
+                    self.register(
+                        &src.key,
+                        ReleaseEntry {
+                            mode: src.mode.clone(),
+                            any_mode: false,
+                            on_press: false,
+                            action: ReleaseAction::ReleaseKeys(node),
+                        },
+                    );
+                } else {
+                    self.release_keys(node, out);
+                }
+            }
             Node::Macro { repeat, act, .. } => {
                 if should_execute(act, *value) {
                     self.macro_trigger(node, repeat, src, now, out);
                 }
             }
             Node::Noop => {}
+        }
+    }
+
+    /// Releases a map-to-keyboard action's keys in reverse order, once per press.
+    fn release_keys(&mut self, node: NodeId, out: &mut dyn Output) {
+        if !self.keys_down.remove(&node) {
+            return;
+        }
+        if let Node::Keys { keys, .. } = &self.nodes[node] {
+            for k in keys.iter().rev() {
+                out.key(k.scan_code, k.extended, false);
+            }
         }
     }
 
@@ -1323,6 +1370,7 @@ impl Engine {
             match entry.action {
                 ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
                 ReleaseAction::LeaveTemporary(mode) => self.leave_temporary(&mode),
+                ReleaseAction::ReleaseKeys(node) => self.release_keys(node, out),
                 ReleaseAction::StopMacro(node) => {
                     if let Some(run) = self.macros.get_mut(&node) {
                         run.stop = true;

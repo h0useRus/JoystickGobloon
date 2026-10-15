@@ -529,7 +529,7 @@ impl Editor<'_> {
                         self.container(ui, id, g, depth + 1);
                     }
                 }
-                ActionKind::Macro { .. } | ActionKind::Other => {
+                ActionKind::Macro { .. } | ActionKind::MapToKeyboard { .. } | ActionKind::Other => {
                     ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
                 }
             }

@@ -200,6 +200,18 @@ fn profile() -> String {
         root("r-b12", &["mhold"]),
         root("r-b13", &["mtoggle"]),
         root("r-b14", &["mcount"]),
+        root("r-b15", &["keys"]),
+        act(
+            "keys",
+            "map-to-keyboard",
+            &format!(
+                "<input>{}{}</input><input>{}{}</input>",
+                prop("int", "scan-code", "29"),
+                prop("bool", "is-extended", "False"),
+                prop("int", "scan-code", "75"),
+                prop("bool", "is-extended", "True")
+            ),
+        ),
         // Tap: vJoy button 26; hold: macro pulsing vJoy 2 button 46 on release
         // (Star Citizen scan / light amplification bind).
         act(
@@ -360,6 +372,7 @@ fn profile() -> String {
         input("button", 12, "Default", "r-b12", ""),
         input("button", 13, "Default", "r-b13", ""),
         input("button", 14, "Default", "r-b14", ""),
+        input("button", 15, "Default", "r-b15", ""),
     ]
     .concat();
     format!(
@@ -796,4 +809,20 @@ fn macro_count_runs_n_times() {
         .filter(|o| **o == Out::Button(42, true))
         .count();
     assert_eq!(presses, 3);
+}
+
+#[test]
+fn map_to_keyboard_presses_in_order_releases_in_reverse() {
+    let mut r = Rig::new();
+    r.button(15, true, 0);
+    assert_eq!(r.take(), [Out::Key(29, true), Out::Key(75, true)]);
+    r.button(15, false, 10);
+    assert_eq!(r.take(), [Out::Key(75, false), Out::Key(29, false)]);
+
+    // Let go in another mode: keys are released once.
+    r.button(15, true, 20);
+    r.button(2, true, 30);
+    r.take();
+    r.button(15, false, 40);
+    assert_eq!(r.take(), [Out::Key(75, false), Out::Key(29, false)]);
 }

@@ -15,7 +15,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `description` | A B H K | done |
 | `map-to-mouse` | A B H K | done |
 | `macro` | B K | done (keys, mouse, vJoy, pauses, repeat modes; not exclusive/preemptive, joystick, logical-device) |
-| `map-to-keyboard` | B K | todo |
+| `map-to-keyboard` | B K | done (engine; editor todo) |
 | `chain` | B K | todo |
 | `double-tap` | B K | todo |
 | `smart-toggle` | B K | done |
@@ -62,3 +62,11 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - Wheel Up/Down steps scroll one notch regardless of `is-pressed`. Keys go through SendInput with
   virtual key + scan code like Gremlin's `keybd_event`.
 - vJoy devices used only by macros are acquired too.
+
+## map-to-keyboard
+
+- One `<input>` group per key with `scan-code` int and `is-extended` bool.
+- Press sends key-down for each key in order, release sends key-up in reverse order (Gremlin queues two
+  macros with zero pauses, so no default delay).
+- JoyGob addition: if the input is released in a mode where it is bound differently, the keys are still
+  released (Gremlin would leave them stuck). Each press releases at most once.
