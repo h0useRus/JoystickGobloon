@@ -12,14 +12,15 @@ use crate::style::{self, icon};
 
 pub struct LoadedProfile {
     pub profile: Profile,
-    pub path: PathBuf,
+    /// `None` for a new profile that was never saved.
+    pub path: Option<PathBuf>,
     pub report: ImportReport,
     /// Changed since it was loaded or saved.
     pub dirty: bool,
 }
 
 impl LoadedProfile {
-    pub fn new(profile: Profile, path: PathBuf) -> Self {
+    pub fn new(profile: Profile, path: Option<PathBuf>) -> Self {
         let report = gob_gremlin::report(&profile);
         Self {
             profile,
@@ -36,9 +37,10 @@ impl LoadedProfile {
     }
 
     pub fn file_name(&self) -> String {
-        self.path
-            .file_name()
-            .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
+        self.path.as_ref().and_then(|p| p.file_name()).map_or_else(
+            || "untitled.xml".into(),
+            |n| n.to_string_lossy().into_owned(),
+        )
     }
 }
 

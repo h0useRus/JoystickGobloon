@@ -6,7 +6,7 @@ nav-hidhide = Device hiding
 nav-vjoy = Virtual joysticks
 nav-settings = Settings
 action-open = Import Joystick Gremlin profile
-action-save = Save as Joystick Gremlin profile
+action-save = Save
 action-report = Import report
 label-mode = Mode
 
@@ -116,3 +116,20 @@ kind-response-curve = Response curve
 kind-change-mode = Change mode
 kind-tempo = Short / long press
 kind-description = Description
+
+# Files and modes
+action-new = New profile
+action-save-as = Save as…
+status-new = New profile
+unsaved-title = Unsaved changes
+unsaved-text = Save changes to { $file }?
+unsaved-save = Save
+unsaved-discard = Don't save
+cancel = Cancel
+modes-title = Modes
+modes-name = Name
+modes-parent = Inherits from
+modes-startup = Mode on startup
+modes-remove = Remove mode and its bindings
+modes-new = New mode
+modes-add = Add mode

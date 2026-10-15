@@ -4,6 +4,7 @@ mod action_editor;
 mod app;
 mod devices_view;
 mod hidhide_view;
+mod modes_view;
 mod profile_view;
 mod settings;
 mod settings_view;

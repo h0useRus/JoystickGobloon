@@ -40,6 +40,19 @@ pub struct JoyGobApp {
     runner: Option<gob_engine::Runner>,
     /// Time of the last edit; a running profile restarts once edits settle.
     edited: Option<std::time::Instant>,
+    /// Action waiting for the "save changes?" answer.
+    pending: Option<Pending>,
+    /// The user already agreed to close without saving.
+    allow_close: bool,
+    show_modes: bool,
+    modes_window: crate::modes_view::ModesWindow,
+}
+
+#[derive(Clone, Copy)]
+enum Pending {
+    Close,
+    New,
+    Open,
 }
 
 impl JoyGobApp {
@@ -88,6 +101,10 @@ impl JoyGobApp {
             hidhide_view: HidHideView::new(),
             runner: None,
             edited: None,
+            pending: None,
+            allow_close: false,
+            show_modes: false,
+            modes_window: Default::default(),
         };
         if app.settings.hidhide_whitelist_self {
             match app.hidhide_view.whitelist_self() {
@@ -105,7 +122,7 @@ impl JoyGobApp {
     fn open_profile(&mut self, path: PathBuf, show_report: bool) {
         match gob_gremlin::load(&path) {
             Ok(profile) => {
-                let loaded = LoadedProfile::new(profile, path.clone());
+                let loaded = LoadedProfile::new(profile, Some(path.clone()));
                 self.status = self
                     .i18n
                     .trf("status-loaded", &[("file", loaded.file_name().into())]);
@@ -133,35 +150,131 @@ impl JoyGobApp {
         }
     }
 
-    fn save_dialog(&mut self) {
-        let Some(loaded) = &mut self.profile else {
-            return;
+    /// Saves to the current file, asking for one when the profile is new.
+    fn save(&mut self) -> bool {
+        match self.profile.as_ref().and_then(|p| p.path.clone()) {
+            Some(path) => self.save_to(path),
+            None => self.save_as(),
+        }
+    }
+
+    fn save_as(&mut self) -> bool {
+        let Some(loaded) = &self.profile else {
+            return false;
         };
         let mut dialog = rfd::FileDialog::new()
             .add_filter(self.i18n.tr("file-filter-gremlin"), &["xml"])
             .set_file_name(loaded.file_name());
-        if let Some(dir) = loaded.path.parent() {
+        if let Some(dir) = loaded.path.as_ref().and_then(|p| p.parent()) {
             dialog = dialog.set_directory(dir);
         }
-        let Some(path) = dialog.save_file() else {
-            return;
+        match dialog.save_file() {
+            Some(path) => self.save_to(path),
+            None => false,
+        }
+    }
+
+    fn save_to(&mut self, path: PathBuf) -> bool {
+        let Some(loaded) = &mut self.profile else {
+            return false;
         };
-        self.status = match gob_gremlin::save(&path, &loaded.profile) {
+        match gob_gremlin::save(&path, &loaded.profile) {
             Ok(()) => {
-                let status = self.i18n.trf(
+                self.status = self.i18n.trf(
                     "status-saved",
                     &[("file", path.display().to_string().into())],
                 );
-                loaded.path = path.clone();
+                loaded.path = Some(path.clone());
                 loaded.dirty = false;
                 self.settings.last_profile = Some(path);
                 self.settings.save();
-                status
+                true
             }
-            Err(e) => self
-                .i18n
-                .trf("save-error", &[("error", e.to_string().into())]),
-        };
+            Err(e) => {
+                self.status = self
+                    .i18n
+                    .trf("save-error", &[("error", e.to_string().into())]);
+                false
+            }
+        }
+    }
+
+    fn new_profile(&mut self) {
+        let mut profile = gob_core::Profile::default();
+        profile.set_startup_mode("Default");
+        self.profile = Some(LoadedProfile::new(profile, None));
+        self.runner = None;
+        self.devices_view.reset_mode();
+        self.status = self.i18n.tr("status-new");
+    }
+
+    /// Runs `action`, first asking to save unsaved changes.
+    fn request(&mut self, action: Pending, ctx: &egui::Context) {
+        if self.profile.as_ref().is_some_and(|p| p.dirty) {
+            self.pending = Some(action);
+        } else {
+            self.perform(action, ctx);
+        }
+    }
+
+    fn perform(&mut self, action: Pending, ctx: &egui::Context) {
+        match action {
+            Pending::Close => {
+                self.allow_close = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            Pending::New => self.new_profile(),
+            Pending::Open => self.import_dialog(),
+        }
+    }
+
+    /// "Save changes?" dialog for a pending action.
+    fn unsaved_dialog(&mut self, ctx: &egui::Context) {
+        let Some(action) = self.pending else { return };
+        let file = self
+            .profile
+            .as_ref()
+            .map(|p| p.file_name())
+            .unwrap_or_default();
+        let mut choice = None;
+        egui::Modal::new(egui::Id::new("unsaved")).show(ctx, |ui| {
+            ui.set_width(360.0);
+            ui.heading(self.i18n.tr("unsaved-title"));
+            ui.label(self.i18n.trf("unsaved-text", &[("file", file.into())]));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .button(format!(
+                        "{}  {}",
+                        icon::FLOPPY_DISK,
+                        self.i18n.tr("unsaved-save")
+                    ))
+                    .clicked()
+                {
+                    choice = Some(0);
+                }
+                if ui.button(self.i18n.tr("unsaved-discard")).clicked() {
+                    choice = Some(1);
+                }
+                if ui.button(self.i18n.tr("cancel")).clicked() {
+                    choice = Some(2);
+                }
+            });
+        });
+        match choice {
+            Some(0) => {
+                self.pending = None;
+                if self.save() {
+                    self.perform(action, ctx);
+                }
+            }
+            Some(1) => {
+                self.pending = None;
+                self.perform(action, ctx);
+            }
+            Some(_) => self.pending = None,
+            None => {}
+        }
     }
 
     fn nav_rail(&mut self, ui: &mut egui::Ui) {
@@ -220,10 +333,14 @@ impl JoyGobApp {
     fn devices_page(&mut self, ui: &mut egui::Ui) {
         let loaded = self.profile.is_some();
         ui.horizontal(|ui| {
+            if style::icon_button(ui, true, icon::FILE_PLUS, &self.i18n.tr("action-new")).clicked()
+            {
+                self.request(Pending::New, ui.ctx());
+            }
             if style::icon_button(ui, true, icon::FOLDER_OPEN, &self.i18n.tr("action-open"))
                 .clicked()
             {
-                self.import_dialog();
+                self.request(Pending::Open, ui.ctx());
             }
             let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
             let save = if dirty {
@@ -232,7 +349,27 @@ impl JoyGobApp {
                 icon::FLOPPY_DISK
             };
             if style::icon_button(ui, loaded, save, &self.i18n.tr("action-save")).clicked() {
-                self.save_dialog();
+                self.save();
+            }
+            if style::icon_button(
+                ui,
+                loaded,
+                icon::FILE_ARROW_DOWN,
+                &self.i18n.tr("action-save-as"),
+            )
+            .clicked()
+            {
+                self.save_as();
+            }
+            if style::icon_button(
+                ui,
+                loaded,
+                icon::TREE_STRUCTURE,
+                &self.i18n.tr("modes-title"),
+            )
+            .clicked()
+            {
+                self.show_modes = true;
             }
             let has_warnings = self
                 .profile
@@ -262,8 +399,12 @@ impl JoyGobApp {
             if let Some(p) = &self.profile {
                 ui.separator();
                 ui.label(RichText::new(icon::FILE_TEXT).size(style::ICON_SIZE));
-                ui.strong(p.file_name())
-                    .on_hover_text(p.path.display().to_string());
+                ui.strong(p.file_name()).on_hover_text(
+                    p.path
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default(),
+                );
                 if p.dirty {
                     let (rect, r) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
                     ui.painter()
@@ -349,6 +490,15 @@ impl JoyGobApp {
 
 impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
+        if ctx.input(|i| i.viewport().close_requested()) && dirty && !self.allow_close {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.pending = Some(Pending::Close);
+        }
+        let save_key = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::S);
+        if self.profile.is_some() && ctx.input_mut(|i| i.consume_shortcut(&save_key)) {
+            self.save();
+        }
         if let Some(t) = self.edited {
             let settle = std::time::Duration::from_millis(600);
             if self.runner.is_none() {
@@ -421,6 +571,24 @@ impl eframe::App for JoyGobApp {
                 self.substitute = None;
             }
         }
+
+        if let (true, Some(loaded)) = (self.show_modes, &self.profile) {
+            let mut open = true;
+            let ops = self
+                .modes_window
+                .show(ctx, &self.i18n, &loaded.profile, &mut open);
+            self.show_modes = open;
+            if !ops.is_empty() {
+                if let Some(loaded) = &mut self.profile {
+                    for op in ops {
+                        crate::modes_view::apply(&mut loaded.profile, op);
+                    }
+                    loaded.refresh();
+                    self.edited = Some(std::time::Instant::now());
+                }
+            }
+        }
+        self.unsaved_dialog(ctx);
 
         if let (true, Some(loaded)) = (self.show_report, &self.profile) {
             report_window(ctx, &self.i18n, &loaded.report, &mut self.show_report);

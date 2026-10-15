@@ -6,7 +6,7 @@ nav-hidhide = Скрытие устройств
 nav-vjoy = Виртуальные джойстики
 nav-settings = Настройки
 action-open = Импорт профиля Joystick Gremlin
-action-save = Сохранить как профиль Joystick Gremlin
+action-save = Сохранить
 action-report = Отчёт об импорте
 label-mode = Режим
 
@@ -116,3 +116,20 @@ kind-response-curve = Кривая отклика
 kind-change-mode = Смена режима
 kind-tempo = Короткое / долгое нажатие
 kind-description = Описание
+
+# Files and modes
+action-new = Новый профиль
+action-save-as = Сохранить как…
+status-new = Новый профиль
+unsaved-title = Несохранённые изменения
+unsaved-text = Сохранить изменения в { $file }?
+unsaved-save = Сохранить
+unsaved-discard = Не сохранять
+cancel = Отмена
+modes-title = Режимы
+modes-name = Название
+modes-parent = Наследует от
+modes-startup = Режим при запуске
+modes-remove = Удалить режим и его назначения
+modes-new = Новый режим
+modes-add = Добавить режим
