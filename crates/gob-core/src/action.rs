@@ -94,6 +94,19 @@ pub enum ActionKind<'a> {
     Description {
         text: &'a str,
     },
+    /// Each activation (press + release) runs the next sequence; `timeout` > 0 restarts
+    /// from the first one after that many idle seconds.
+    Chain {
+        chains: Vec<Vec<&'a str>>,
+        timeout: f64,
+    },
+    /// `activate_on`: `exclusive` (single waits for the threshold) or `combined`.
+    DoubleTap {
+        single: Vec<&'a str>,
+        double: Vec<&'a str>,
+        threshold: f64,
+        activate_on: &'a str,
+    },
     MapToMouse(MouseAction),
     /// Keys pressed in order on press and released in reverse on release.
     MapToKeyboard {
@@ -258,6 +271,8 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "description",
     "map-to-mouse",
     "map-to-keyboard",
+    "chain",
+    "double-tap",
     "smart-toggle",
     "split-axis",
     "pause-resume",
@@ -348,6 +363,32 @@ impl Action {
                 long: self.refs_in("long-actions"),
                 threshold: self.parse("threshold").unwrap_or(0.5),
                 activate_on: self.str("activate-on").unwrap_or("release"),
+            },
+            "chain" => {
+                let mut chains: Vec<(u32, Vec<&str>)> = self
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        Item::Group { tag, items, .. } => {
+                            let n = tag.strip_prefix("chain-")?.parse().ok()?;
+                            let mut refs = Vec::new();
+                            collect_refs(items, &mut refs);
+                            Some((n, refs))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                chains.sort_by_key(|(n, _)| *n);
+                ActionKind::Chain {
+                    chains: chains.into_iter().map(|(_, c)| c).collect(),
+                    timeout: self.parse("timeout").unwrap_or(0.0),
+                }
+            }
+            "double-tap" => ActionKind::DoubleTap {
+                single: self.refs_in("single-actions"),
+                double: self.refs_in("double-actions"),
+                threshold: self.parse("threshold").unwrap_or(0.5),
+                activate_on: self.str("activate-on").unwrap_or("exclusive"),
             },
             "description" => ActionKind::Description {
                 text: self.str("description").unwrap_or_default(),

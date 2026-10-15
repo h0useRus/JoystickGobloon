@@ -88,6 +88,17 @@ enum Node {
         threshold: Duration,
         on_press: bool,
     },
+    Chain {
+        chains: Vec<Vec<NodeId>>,
+        /// Zero: never restart.
+        timeout: Duration,
+    },
+    DoubleTap {
+        single: Vec<NodeId>,
+        double: Vec<NodeId>,
+        threshold: Duration,
+        exclusive: bool,
+    },
     /// Steps already include the default delay between non-pause steps.
     Macro {
         steps: Vec<MacroStep>,
@@ -144,6 +155,30 @@ struct TempoState {
     press: Option<(Value, Source)>,
 }
 
+/// Double-tap FSM states (Gremlin names: neutral, p1, p1+t, t, p2+t; +t = timer running).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum TapPhase {
+    #[default]
+    Neutral,
+    Pressed,
+    PressedTimed,
+    Timed,
+    SecondTimed,
+}
+
+#[derive(Debug, Default)]
+struct TapState {
+    phase: TapPhase,
+    timer: Option<u64>,
+    press: Option<(Value, Source)>,
+}
+
+#[derive(Debug, Default)]
+struct ChainState {
+    index: usize,
+    last: Option<Instant>,
+}
+
 /// A macro being executed (Gremlin's MacroManager entry, driven by timers instead of a thread).
 #[derive(Debug, Default)]
 struct MacroRun {
@@ -162,6 +197,7 @@ struct MacroRun {
 #[derive(Debug)]
 enum TimerKind {
     MacroStep(NodeId),
+    TapTimeout(NodeId),
     TempoTimeout(NodeId),
     ToggleTimeout(NodeId),
     PulseRelease { nodes: Vec<NodeId>, src: Source },
@@ -180,6 +216,7 @@ enum ReleaseAction {
     LeaveTemporary(String),
     TempoRelease(NodeId),
     StopMacro(NodeId),
+    TapRelease(NodeId),
     ReleaseKeys(NodeId),
 }
 
@@ -291,6 +328,8 @@ pub struct Engine {
     motion: Motion<(NodeId, InputKey), String>,
     toggles: HashMap<NodeId, ToggleState>,
     macros: HashMap<NodeId, MacroRun>,
+    taps: HashMap<NodeId, TapState>,
+    chains: HashMap<NodeId, ChainState>,
     /// map-to-keyboard actions whose keys are held.
     keys_down: HashSet<NodeId>,
     /// Profile's `macro-default-delay` in seconds.
@@ -343,6 +382,8 @@ impl Engine {
             motion: Motion::default(),
             toggles: HashMap::new(),
             macros: HashMap::new(),
+            taps: HashMap::new(),
+            chains: HashMap::new(),
             keys_down: HashSet::new(),
             macro_delay: profile
                 .settings
@@ -510,6 +551,34 @@ impl Engine {
                     threshold: Duration::from_secs_f64(threshold.max(0.0)),
                     on_press: activate_on == "press",
                 },
+                ActionKind::Chain { chains, timeout } => Node::Chain {
+                    chains: chains
+                        .iter()
+                        .map(|c| {
+                            c.iter()
+                                .map(|a| self.compile(index, a, depth + 1))
+                                .collect()
+                        })
+                        .collect(),
+                    timeout: Duration::from_secs_f64(timeout.max(0.0)),
+                },
+                ActionKind::DoubleTap {
+                    single,
+                    double,
+                    threshold,
+                    activate_on,
+                } => Node::DoubleTap {
+                    single: single
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                    double: double
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                    threshold: Duration::from_secs_f64(threshold.max(0.0)),
+                    exclusive: activate_on != "combined",
+                },
                 ActionKind::MapToKeyboard { keys } => Node::Keys {
                     keys,
                     act: action.activation_mode(),
@@ -626,6 +695,7 @@ impl Engine {
             let timer = self.timers.remove(pos);
             match timer.kind {
                 TimerKind::MacroStep(node) => self.macro_advance(node, now, out),
+                TimerKind::TapTimeout(node) => self.tap_timeout(node, now, out),
                 TimerKind::TempoTimeout(node) => self.tempo_timeout(node, now, out),
                 TimerKind::ToggleTimeout(node) => {
                     let state = self.toggles.entry(node).or_default();
@@ -852,6 +922,26 @@ impl Engine {
                 }
             }
             Node::Tempo { .. } => self.tempo_event(node, src, *value, now, out),
+            Node::DoubleTap { .. } => self.tap_event(node, src, *value, now, out),
+            Node::Chain { chains, timeout } => {
+                if chains.is_empty() {
+                    return;
+                }
+                let state = self.chains.entry(node).or_default();
+                if !timeout.is_zero() {
+                    if state.last.is_some_and(|t| t + timeout < now) {
+                        state.index = 0;
+                    }
+                    state.last = Some(now);
+                }
+                let index = state.index.min(chains.len() - 1);
+                for &c in &chains[index] {
+                    self.run(c, src, value, now, out, depth + 1);
+                }
+                if !value.truthy() {
+                    self.chains.entry(node).or_default().index = (index + 1) % chains.len();
+                }
+            }
             Node::SmartToggle { children, delay } => {
                 if let Value::Button(pressed) = *value {
                     self.smart_toggle(node, &children, delay, src, pressed, now, out);
@@ -1292,17 +1382,155 @@ impl Engine {
     }
 
     fn short_pulse(&mut self, node: NodeId, short: &[NodeId], now: Instant, out: &mut dyn Output) {
-        let Some((value, src)) = self.tempo.get(&node).and_then(|s| s.press.clone()) else {
-            return;
-        };
-        self.run_all(short, &src, value, now, out);
+        if let Some((value, src)) = self.tempo.get(&node).and_then(|s| s.press.clone()) {
+            self.pulse(short, value, src, now, out);
+        }
+    }
+
+    /// Runs `nodes` with the press value now and with a release [`PULSE`] later.
+    fn pulse(
+        &mut self,
+        nodes: &[NodeId],
+        value: Value,
+        src: Source,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        self.run_all(nodes, &src, value, now, out);
         self.add_timer(
             now + PULSE,
             TimerKind::PulseRelease {
-                nodes: short.to_vec(),
+                nodes: nodes.to_vec(),
                 src,
             },
         );
+    }
+
+    /// Gremlin's DoubleTapFunctor state machine.
+    fn tap_event(
+        &mut self,
+        node: NodeId,
+        src: &Source,
+        value: Value,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        let Value::Button(pressed) = value else {
+            return;
+        };
+        let Node::DoubleTap {
+            single,
+            double,
+            threshold,
+            exclusive,
+        } = self.nodes[node].clone()
+        else {
+            return;
+        };
+        if pressed {
+            self.taps.entry(node).or_default().press = Some((value, src.clone()));
+            self.register(
+                &src.key,
+                ReleaseEntry {
+                    mode: src.mode.clone(),
+                    any_mode: true,
+                    on_press: false,
+                    action: ReleaseAction::TapRelease(node),
+                },
+            );
+        }
+        use TapPhase::*;
+        let phase = self.taps.entry(node).or_default().phase;
+        let next = match (exclusive, phase, pressed) {
+            (_, Neutral, true) => {
+                if !exclusive {
+                    self.run_all(&single, src, value, now, out);
+                }
+                let timer = self.add_timer(now + threshold, TimerKind::TapTimeout(node));
+                self.taps.entry(node).or_default().timer = Some(timer);
+                PressedTimed
+            }
+            (true, Neutral, false) => Neutral,
+            (_, PressedTimed, false) => {
+                if !exclusive {
+                    self.run_all(&single, src, value, now, out);
+                }
+                Timed
+            }
+            (_, Pressed, false) => {
+                self.run_all(&single, src, value, now, out);
+                Neutral
+            }
+            (_, Timed, true) => {
+                if !exclusive {
+                    self.run_all(&single, src, value, now, out);
+                }
+                self.run_all(&double, src, value, now, out);
+                SecondTimed
+            }
+            (_, SecondTimed, false) => {
+                if !exclusive {
+                    self.run_all(&single, src, value, now, out);
+                }
+                self.run_all(&double, src, value, now, out);
+                Neutral
+            }
+            // Invalid transition: reset like Gremlin.
+            _ => {
+                self.tap_reset(node, src, value, now, out);
+                return;
+            }
+        };
+        self.taps.entry(node).or_default().phase = next;
+    }
+
+    fn tap_timeout(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
+        let Node::DoubleTap {
+            single, exclusive, ..
+        } = self.nodes[node].clone()
+        else {
+            return;
+        };
+        let state = self.taps.entry(node).or_default();
+        state.timer = None;
+        let press = state.press.clone();
+        // Timeouts without a transition are stale and ignored.
+        let next = match state.phase {
+            TapPhase::PressedTimed => {
+                if let (true, Some((value, src))) = (exclusive, press) {
+                    self.run_all(&single, &src, value, now, out);
+                }
+                TapPhase::Pressed
+            }
+            TapPhase::Timed => {
+                if let (true, Some((value, src))) = (exclusive, press) {
+                    self.pulse(&single, value, src, now, out);
+                }
+                TapPhase::Neutral
+            }
+            phase => phase,
+        };
+        self.taps.entry(node).or_default().phase = next;
+    }
+
+    fn tap_reset(
+        &mut self,
+        node: NodeId,
+        src: &Source,
+        value: Value,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        let Node::DoubleTap { single, double, .. } = self.nodes[node].clone() else {
+            return;
+        };
+        let state = self.taps.entry(node).or_default();
+        state.phase = TapPhase::Neutral;
+        if let Some(id) = state.timer.take() {
+            self.timers.retain(|t| t.id != id);
+        }
+        let all: Vec<NodeId> = single.into_iter().chain(double).collect();
+        self.run_all(&all, src, value, now, out);
     }
 
     fn tempo_reset(
@@ -1371,6 +1599,18 @@ impl Engine {
                 ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
                 ReleaseAction::LeaveTemporary(mode) => self.leave_temporary(&mode),
                 ReleaseAction::ReleaseKeys(node) => self.release_keys(node, out),
+                ReleaseAction::TapRelease(node) => {
+                    // Fallback when the release went elsewhere: only states that accept a press are valid.
+                    let phase = self.taps.get(&node).map(|s| s.phase).unwrap_or_default();
+                    if !matches!(phase, TapPhase::Neutral | TapPhase::Timed) {
+                        let src = Source {
+                            key: key.clone(),
+                            mode: current.clone(),
+                            no_auto_release: false,
+                        };
+                        self.tap_reset(node, &src, Value::Button(false), now, out);
+                    }
+                }
                 ReleaseAction::StopMacro(node) => {
                     if let Some(run) = self.macros.get_mut(&node) {
                         run.stop = true;

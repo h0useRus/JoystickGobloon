@@ -16,8 +16,8 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `map-to-mouse` | A B H K | done |
 | `macro` | B K | done (keys, mouse, vJoy, pauses, repeat modes; not exclusive/preemptive, joystick, logical-device) |
 | `map-to-keyboard` | B K | done (engine; editor todo) |
-| `chain` | B K | todo |
-| `double-tap` | B K | todo |
+| `chain` | B K | done (editor: timeout + existing steps; adding steps todo) |
+| `double-tap` | B K | done |
 | `smart-toggle` | B K | done |
 | `hat-buttons` | H | todo |
 | `split-axis` | A | done |
@@ -70,3 +70,19 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   macros with zero pauses, so no default delay).
 - JoyGob addition: if the input is released in a mode where it is bound differently, the keys are still
   released (Gremlin would leave them stuck). Each press releases at most once.
+
+## chain
+
+- Groups `chain-0`, `chain-1`, ... with `<action-id>` lists (ordered by number), `timeout` float (s, 0 = off).
+- Each event runs the current step's actions; a release advances to the next step (wraps). With a timeout,
+  an event more than `timeout` after the previous one (press or release) restarts from step 0.
+
+## double-tap
+
+- `single-actions`, `double-actions`, `threshold` float (s, default 0.5), `activate-on` `exclusive`/`combined`.
+- Exclusive: a press starts the timer; released and not pressed again in time -> single pulse at the timeout;
+  still held at the timeout -> single press now, single release with the button; second press in time ->
+  double actions only.
+- Combined: single actions follow the button at once; a second press in time adds the double actions
+  (press and release) on top.
+- Invalid transitions reset the FSM and send the event to both lists, like tempo.

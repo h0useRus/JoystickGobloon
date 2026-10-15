@@ -201,6 +201,42 @@ fn profile() -> String {
         root("r-b13", &["mtoggle"]),
         root("r-b14", &["mcount"]),
         root("r-b15", &["keys"]),
+        root("r-b16", &["chain"]),
+        root("r-b17", &["dtx"]),
+        root("r-b18", &["dtc"]),
+        act(
+            "chain",
+            "chain",
+            &format!(
+                "<chain-0><action-id>v30</action-id></chain-0>\
+                 <chain-1><action-id>v31</action-id></chain-1>{}",
+                prop("float", "timeout", "1.0")
+            ),
+        ),
+        vjoy("v30", "button", 30),
+        vjoy("v31", "button", 31),
+        vjoy("v32", "button", 32),
+        vjoy("v33", "button", 33),
+        act(
+            "dtx",
+            "double-tap",
+            &format!(
+                "<single-actions><action-id>v32</action-id></single-actions>\
+                 <double-actions><action-id>v33</action-id></double-actions>{}{}",
+                prop("float", "threshold", "0.3"),
+                prop("string", "activate-on", "exclusive")
+            ),
+        ),
+        act(
+            "dtc",
+            "double-tap",
+            &format!(
+                "<single-actions><action-id>v32</action-id></single-actions>\
+                 <double-actions><action-id>v33</action-id></double-actions>{}{}",
+                prop("float", "threshold", "0.3"),
+                prop("string", "activate-on", "combined")
+            ),
+        ),
         act(
             "keys",
             "map-to-keyboard",
@@ -373,6 +409,9 @@ fn profile() -> String {
         input("button", 13, "Default", "r-b13", ""),
         input("button", 14, "Default", "r-b14", ""),
         input("button", 15, "Default", "r-b15", ""),
+        input("button", 16, "Default", "r-b16", ""),
+        input("button", 17, "Default", "r-b17", ""),
+        input("button", 18, "Default", "r-b18", ""),
     ]
     .concat();
     format!(
@@ -825,4 +864,80 @@ fn map_to_keyboard_presses_in_order_releases_in_reverse() {
     r.take();
     r.button(15, false, 40);
     assert_eq!(r.take(), [Out::Key(75, false), Out::Key(29, false)]);
+}
+
+#[test]
+fn chain_cycles_and_restarts_after_timeout() {
+    let mut r = Rig::new();
+    let tap = |r: &mut Rig, ms: u64| {
+        r.button(16, true, ms);
+        r.button(16, false, ms + 10);
+        r.take()
+    };
+    assert_eq!(
+        tap(&mut r, 0),
+        [Out::Button(30, true), Out::Button(30, false)]
+    );
+    assert_eq!(
+        tap(&mut r, 100),
+        [Out::Button(31, true), Out::Button(31, false)]
+    );
+    assert_eq!(
+        tap(&mut r, 200),
+        [Out::Button(30, true), Out::Button(30, false)]
+    );
+    // Next would be 31, but more than a second passed.
+    assert_eq!(
+        tap(&mut r, 2000),
+        [Out::Button(30, true), Out::Button(30, false)]
+    );
+}
+
+#[test]
+fn double_tap_exclusive() {
+    let mut r = Rig::new();
+    // Single tap: pulse after the threshold.
+    r.button(17, true, 0);
+    r.button(17, false, 50);
+    r.tick(299);
+    assert!(r.take().is_empty());
+    r.tick(300);
+    assert_eq!(r.take(), [Out::Button(32, true)]);
+    r.tick(350);
+    assert_eq!(r.take(), [Out::Button(32, false)]);
+    // Single hold: press after the threshold, release with the button.
+    r.button(17, true, 1000);
+    r.tick(1300);
+    assert_eq!(r.take(), [Out::Button(32, true)]);
+    r.button(17, false, 1500);
+    assert_eq!(r.take(), [Out::Button(32, false)]);
+    // Double tap: only the double action.
+    r.button(17, true, 2000);
+    r.button(17, false, 2050);
+    r.button(17, true, 2100);
+    assert_eq!(r.take(), [Out::Button(33, true)]);
+    r.button(17, false, 2400);
+    r.tick(3000);
+    assert_eq!(r.take(), [Out::Button(33, false)]);
+}
+
+#[test]
+fn double_tap_combined() {
+    let mut r = Rig::new();
+    r.button(18, true, 0);
+    r.button(18, false, 50);
+    r.button(18, true, 100);
+    r.button(18, false, 150);
+    r.tick(1000);
+    assert_eq!(
+        r.take(),
+        [
+            Out::Button(32, true),
+            Out::Button(32, false),
+            Out::Button(32, true),
+            Out::Button(33, true),
+            Out::Button(32, false),
+            Out::Button(33, false),
+        ]
+    );
 }
