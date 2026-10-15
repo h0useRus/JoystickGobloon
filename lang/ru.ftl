@@ -220,7 +220,7 @@ hat-center = Центр
 
 # Merge axis
 kind-merge-axis = Объединение осей
-edit-reuse = Добавить сюда и это объединение осей (общее действие)
+edit-reuse = Добавить сюда и это действие (общее, как в Gremlin для обеих осей)
 edit-merge-name = Название
 edit-merge-no-device = (нет устройства)
 edit-merged = Объединённая ось
@@ -237,3 +237,11 @@ kind-axis-delta = Шаг оси
 edit-delta-threshold = Изменение оси, после которого срабатывает импульс
 edit-delta-positive = Ось увеличилась
 edit-delta-negative = Ось уменьшилась
+
+# Dual axis deadzone
+kind-dual-axis-deadzone = Мёртвая зона двух осей
+edit-dual-inner = Внутренняя мёртвая зона (круг вокруг центра)
+edit-dual-outer = Внешний предел (отсюда полное отклонение)
+edit-dual-close = Внутренняя и внешняя зоны слишком близки.
+edit-dual-first = Выход первой оси
+edit-dual-second = Выход второй оси

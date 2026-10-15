@@ -207,6 +207,24 @@ fn profile() -> String {
         root("r-h1", &["hb4"]),
         root("r-a6", &["merge"]),
         root("r-a8", &["delta"]),
+        root("r-a9", &["dual"]),
+        act(
+            "dual",
+            "dual-axis-deadzone",
+            &format!(
+                "{}{}{}{}{}{}{}<output1-actions><action-id>va3</action-id></output1-actions>\
+                 <output2-actions><action-id>va4</action-id></output2-actions>",
+                prop("string", "label", "Stick"),
+                prop("float", "inner-deadzone", "0.2"),
+                prop("float", "outer-deadzone", "0.9"),
+                prop("uuid", "axis1-guid", DEV),
+                prop("int", "axis1-axis", "9"),
+                prop("uuid", "axis2-guid", DEV),
+                prop("int", "axis2-axis", "10"),
+            ),
+        ),
+        vjoy("va3", "axis", 3),
+        vjoy("va4", "axis", 4),
         act(
             "delta",
             "axis-delta",
@@ -465,6 +483,8 @@ fn profile() -> String {
         input("axis", 6, "Default", "r-a6", ""),
         input("axis", 7, "Default", "r-a6", ""),
         input("axis", 8, "Default", "r-a8", ""),
+        input("axis", 9, "Default", "r-a9", ""),
+        input("axis", 10, "Default", "r-a9", ""),
         input("hat", 2, "Default", "r-h2", ""),
         input("hat", 2, "Combat", "r-b1c", ""),
     ]
@@ -1076,4 +1096,14 @@ fn axis_delta_pulses_per_threshold() {
     r.axis_at(8, 0.3, 100);
     r.axis_at(8, 0.1, 110); // -0.3
     assert_eq!(r.take(), [Out::Button(39, true)]);
+}
+
+#[test]
+fn dual_axis_deadzone_outputs_both_axes() {
+    let mut r = Rig::new();
+    r.axis(9, 0.55);
+    assert_eq!(r.take(), [Out::Axis(3, 0.5), Out::Axis(4, 0.0)]);
+    r.axis(10, -0.95);
+    let out = r.take();
+    assert_eq!(out[1], Out::Axis(4, -1.0));
 }

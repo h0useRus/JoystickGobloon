@@ -121,6 +121,16 @@ pub enum ActionKind<'a> {
         operation: MergeOp,
         children: Vec<&'a str>,
     },
+    /// Two axes as one stick: circular `inner` deadzone, square `outer` limit; `first`
+    /// gets the first axis' result, `second` the second's.
+    DualAxisDeadzone {
+        axis1: (&'a str, u32),
+        axis2: (&'a str, u32),
+        inner: f64,
+        outer: f64,
+        first: Vec<&'a str>,
+        second: Vec<&'a str>,
+    },
     /// Pulses `positive` / `negative` each time the axis moved `threshold` that way.
     AxisDelta {
         threshold: f64,
@@ -378,6 +388,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "hat-buttons",
     "merge-axis",
     "axis-delta",
+    "dual-axis-deadzone",
     "smart-toggle",
     "split-axis",
     "pause-resume",
@@ -506,20 +517,22 @@ impl Action {
                 directions.push(("Center", None, self.refs_in("Center")));
                 ActionKind::HatButtons { directions }
             }
+            "dual-axis-deadzone" => ActionKind::DualAxisDeadzone {
+                axis1: self.axis_ref(1),
+                axis2: self.axis_ref(2),
+                inner: self.parse("inner-deadzone").unwrap_or(0.0),
+                outer: self.parse("outer-deadzone").unwrap_or(1.0),
+                first: self.refs_in("output1-actions"),
+                second: self.refs_in("output2-actions"),
+            },
             "axis-delta" => ActionKind::AxisDelta {
                 threshold: self.parse("threshold").unwrap_or(0.1),
                 positive: self.refs_in("positive-actions"),
                 negative: self.refs_in("negative-actions"),
             },
             "merge-axis" => ActionKind::MergeAxis {
-                axis1: (
-                    self.str("axis1-guid").unwrap_or_default().trim(),
-                    self.parse("axis1-axis").unwrap_or(0),
-                ),
-                axis2: (
-                    self.str("axis2-guid").unwrap_or_default().trim(),
-                    self.parse("axis2-axis").unwrap_or(0),
-                ),
+                axis1: self.axis_ref(1),
+                axis2: self.axis_ref(2),
                 operation: self
                     .str("operation")
                     .and_then(MergeOp::parse)
@@ -619,6 +632,16 @@ impl Action {
     fn bool(&self, name: &str) -> bool {
         self.str(name)
             .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+    }
+
+    /// `axis{n}-guid` / `axis{n}-axis` of merge-axis and dual-axis-deadzone.
+    fn axis_ref(&self, n: u8) -> (&str, u32) {
+        (
+            self.str(&format!("axis{n}-guid"))
+                .unwrap_or_default()
+                .trim(),
+            self.parse(&format!("axis{n}-axis")).unwrap_or(0),
+        )
     }
 
     fn refs_in(&self, tag: &str) -> Vec<&str> {

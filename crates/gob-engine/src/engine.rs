@@ -103,6 +103,13 @@ enum Node {
     },
     /// Hat direction (`None` = center) -> actions run as a button while the hat points exactly there.
     HatButtons(Vec<(Option<u16>, Vec<NodeId>)>),
+    /// Radial inner deadzone and square outer limit over two axes, each result to its list.
+    DualDeadzone {
+        axes: [InputKey; 2],
+        inner: f32,
+        outer: f32,
+        outputs: [Vec<NodeId>; 2],
+    },
     /// Accumulates raw axis changes; a pulse whenever they reach `threshold` either way.
     AxisDelta {
         threshold: f32,
@@ -627,6 +634,27 @@ impl Engine {
                         })
                         .collect(),
                 ),
+                ActionKind::DualAxisDeadzone {
+                    axis1,
+                    axis2,
+                    inner,
+                    outer,
+                    first,
+                    second,
+                } => Node::DualDeadzone {
+                    axes: [axis1, axis2].map(|(device, id)| InputKey {
+                        device: self.device(device),
+                        kind: InputKind::Axis,
+                        id,
+                    }),
+                    inner: inner as f32,
+                    outer: outer as f32,
+                    outputs: [first, second].map(|ids| {
+                        ids.iter()
+                            .map(|c| self.compile(index, c, depth + 1))
+                            .collect()
+                    }),
+                },
                 ActionKind::AxisDelta {
                     threshold,
                     positive,
@@ -1090,6 +1118,22 @@ impl Engine {
                     );
                 } else {
                     self.release_keys(node, out);
+                }
+            }
+            Node::DualDeadzone {
+                axes,
+                inner,
+                outer,
+                outputs,
+            } => {
+                let [x, y] = axes.map(|k| self.axes.get(&k).copied().unwrap_or(0.0));
+                if let Some(results) = dual_deadzone(x, y, inner, outer) {
+                    for (v, nodes) in results.into_iter().zip(outputs) {
+                        let mut v = Value::Axis(v);
+                        for n in nodes {
+                            self.run(n, src, &mut v, now, out, depth + 1);
+                        }
+                    }
                 }
             }
             Node::AxisDelta {
@@ -1820,6 +1864,20 @@ impl Engine {
     }
 }
 
+/// Gremlin's DualAxisDeadzoneFunctor: the inner deadzone is a circle (its x/y share
+/// follows the stick angle), the outer one a square. `None` when the limits coincide
+/// (Gremlin's ZeroDivisionError: nothing is sent).
+fn dual_deadzone(x: f32, y: f32, inner: f32, outer: f32) -> Option<[f32; 2]> {
+    let alpha = y.atan2(x);
+    let (lx, ly) = ((alpha.cos() * inner).abs(), (alpha.sin() * inner).abs());
+    let (dx, dy) = (outer - lx, outer - ly);
+    if dx == 0.0 || dy == 0.0 {
+        return None;
+    }
+    let scale = |v: f32, low: f32, d: f32| ((v.abs() - low) / d).clamp(0.0, 1.0).copysign(v);
+    Some([scale(x, lx, dx), scale(y, ly, dy)])
+}
+
 fn hat_button_key(node: NodeId, direction: usize) -> InputKey {
     InputKey {
         device: HAT_BUTTON_DEVICE.into(),
@@ -1930,6 +1988,16 @@ fn curve(points: &[(f32, f32)], x: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dual_axis_deadzone() {
+        let r =
+            |x, y| dual_deadzone(x, y, 0.2, 0.9).map(|v| v.map(|a| (a * 1000.0).round() / 1000.0));
+        assert_eq!(r(0.1, 0.1), Some([0.0, 0.0]), "inside the circle");
+        assert_eq!(r(0.55, 0.0), Some([0.5, 0.0]));
+        assert_eq!(r(-1.0, 0.95), Some([-1.0, 1.0]), "beyond the square");
+        assert_eq!(dual_deadzone(1.0, 0.0, 0.5, 0.5), None);
+    }
 
     #[test]
     fn deadzone_and_curve() {

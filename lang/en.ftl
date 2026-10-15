@@ -220,7 +220,7 @@ hat-center = Center
 
 # Merge axis
 kind-merge-axis = Merge axis
-edit-reuse = Add this existing merge axis here too (shared action)
+edit-reuse = Add this existing action here too (shared, like Gremlin binds it to both axes)
 edit-merge-name = Name
 edit-merge-no-device = (no device)
 edit-merged = Merged axis
@@ -237,3 +237,11 @@ kind-axis-delta = Axis delta
 edit-delta-threshold = Axis change that triggers a pulse
 edit-delta-positive = Axis increased
 edit-delta-negative = Axis decreased
+
+# Dual axis deadzone
+kind-dual-axis-deadzone = Dual axis deadzone
+edit-dual-inner = Inner deadzone (circle around the center)
+edit-dual-outer = Outer limit (full deflection from here)
+edit-dual-close = Inner and outer deadzone are too close to each other.
+edit-dual-first = First axis output
+edit-dual-second = Second axis output

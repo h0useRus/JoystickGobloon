@@ -23,7 +23,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `split-axis` | A | done |
 | `merge-axis` | A B | done |
 | `axis-delta` | A | done |
-| `dual-axis-deadzone` | A | todo |
+| `dual-axis-deadzone` | A | done |
 | `condition` | A B H K | todo |
 | `reference` | A B H K | todo (reuses another library action) |
 | `pause-resume` | B K | done |
@@ -114,3 +114,13 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   an exact 0.0 is skipped without updating it (Gremlin's Python falsiness). Changes accumulate; reaching
   +threshold pulses the positive list, -threshold the negative list (press, release 50 ms later), then the
   accumulator resets. Gremlin sleeps 50 ms in the event thread; JoyGob uses a timer.
+
+## dual-axis-deadzone
+
+- Properties: `label`, `inner-deadzone` (default 0.0), `outer-deadzone` (default 1.0), `axis1-guid`/`axis1-axis`,
+  `axis2-guid`/`axis2-axis`; children `output1-actions`, `output2-actions`. Activation disabled.
+- On any event reads both axes' latest values (x, y). With alpha = atan2(y, x), the inner limits are
+  |cos(alpha)|*inner and |sin(alpha)|*inner (a circle), the outer limit is `outer` on both (a square);
+  each axis becomes clamp((|v| - low) / (outer - low), 0, 1) with v's sign and goes to its own list.
+  Coinciding limits (Gremlin's ZeroDivisionError) send nothing.
+- Like merge-axis it is usually bound to both axes; the add menu offers to reuse it.

@@ -22,6 +22,11 @@ pub enum NewAction {
     /// Four directions plus center.
     HatButtons,
     AxisDelta,
+    /// Starts with `axis` of `device` in both slots, like [`NewAction::MergeAxis`].
+    DualAxisDeadzone {
+        device: String,
+        axis: u32,
+    },
     /// Averages `axis` of `device` with itself until the second axis is picked.
     MergeAxis {
         device: String,
@@ -177,6 +182,21 @@ impl Action {
                     group("double-actions", Vec::new()),
                     prop("float", "threshold", "0.5"),
                     prop("string", "activate-on", "exclusive"),
+                ],
+                "disallowed",
+            ),
+            NewAction::DualAxisDeadzone { device, axis } => Self::build(
+                "dual-axis-deadzone",
+                vec![
+                    prop("string", "label", ""),
+                    prop("float", "inner-deadzone", "0.0"),
+                    prop("float", "outer-deadzone", "1.0"),
+                    prop("uuid", "axis1-guid", device.clone()),
+                    prop("int", "axis1-axis", axis.to_string()),
+                    prop("uuid", "axis2-guid", device.clone()),
+                    prop("int", "axis2-axis", axis.to_string()),
+                    group("output1-actions", Vec::new()),
+                    group("output2-actions", Vec::new()),
                 ],
                 "disallowed",
             ),

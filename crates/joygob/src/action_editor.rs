@@ -223,13 +223,16 @@ pub fn py_float(v: f32) -> String {
     }
 }
 
-/// Merge-axis actions are told apart by their own `label` property.
+/// Actions that read two physical axes and are usually bound to both of them.
+const TWO_AXIS_KINDS: [&str; 2] = ["merge-axis", "dual-axis-deadzone"];
+
+/// Two-axis actions are told apart by their own `label` property.
 fn merge_label(a: &Action, i18n: &I18n) -> String {
     match a.str("label").map(str::trim).filter(|l| !l.is_empty()) {
         Some(l) => l.to_string(),
         None => format!(
             "{} {}",
-            i18n.tr("kind-merge-axis"),
+            i18n.tr(&format!("kind-{}", a.kind)),
             &a.id[..a.id.len().min(8)]
         ),
     }
@@ -254,6 +257,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "hat-buttons" => icon::COMPASS,
         "merge-axis" => icon::ARROWS_IN_SIMPLE,
         "axis-delta" => icon::ARROWS_DOWN_UP,
+        "dual-axis-deadzone" => icon::CIRCLE_DASHED,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -533,6 +537,70 @@ impl Editor<'_> {
                         .map(|((tag, d, _), key)| (*tag, hat_glyph(*d), key.as_str()))
                         .collect();
                     self.nested(ui, &action.id, &groups, InputType::Button, depth);
+                }
+                ActionKind::DualAxisDeadzone {
+                    axis1,
+                    axis2,
+                    inner,
+                    outer,
+                    ..
+                } => {
+                    let id = action.id.clone();
+                    ui.horizontal(|ui| {
+                        ui.label(self.i18n.tr("edit-merge-name"));
+                        let mut label = action.str("label").unwrap_or_default().to_string();
+                        let edit = egui::TextEdit::singleline(&mut label).desired_width(180.0);
+                        if ui.add(edit).changed() {
+                            self.set(&id, "label", "string", label);
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        for (name, value, glyph, key) in [
+                            (
+                                "inner-deadzone",
+                                inner,
+                                icon::CIRCLE_DASHED,
+                                "edit-dual-inner",
+                            ),
+                            ("outer-deadzone", outer, icon::SQUARE, "edit-dual-outer"),
+                        ] {
+                            ui.label(RichText::new(glyph).size(style::ICON_SIZE))
+                                .on_hover_text(self.i18n.tr(key));
+                            let mut v = value as f32;
+                            let drag = egui::DragValue::new(&mut v)
+                                .range(0.0..=1.0)
+                                .speed(0.005)
+                                .fixed_decimals(3);
+                            if ui.add(drag).changed() {
+                                self.set(&id, name, "float", py_float(v));
+                            }
+                        }
+                    });
+                    if (outer - inner).abs() < 0.01 {
+                        ui.colored_label(
+                            ui.visuals().warn_fg_color,
+                            self.i18n.tr("edit-dual-close"),
+                        );
+                    }
+                    self.axis_pickers(ui, &id, [axis1, axis2]);
+                    self.nested(
+                        ui,
+                        &action.id,
+                        &[
+                            (
+                                "output1-actions",
+                                icon::NUMBER_CIRCLE_ONE,
+                                "edit-dual-first",
+                            ),
+                            (
+                                "output2-actions",
+                                icon::NUMBER_CIRCLE_TWO,
+                                "edit-dual-second",
+                            ),
+                        ],
+                        InputType::Axis,
+                        depth,
+                    );
                 }
                 ActionKind::AxisDelta { threshold, .. } => {
                     ui.horizontal(|ui| {
@@ -1007,26 +1075,44 @@ impl Editor<'_> {
     /// a single merge-axis action to both of its axes.
     fn merge_menu(&mut self, ui: &mut egui::Ui, make: &impl Fn(AddKind) -> Op) {
         if let Some((device, axis)) = self.input {
-            let text = format!(
-                "{}  {}",
-                icon::ARROWS_IN_SIMPLE,
-                self.i18n.tr("kind-merge-axis")
-            );
-            if ui.button(text).clicked() {
-                self.ops.push(make(AddKind::New(NewAction::MergeAxis {
-                    device: device.to_string(),
-                    axis,
-                })));
-                ui.close_menu();
+            let device = device.to_string();
+            let templates = [
+                (
+                    "merge-axis",
+                    NewAction::MergeAxis {
+                        device: device.clone(),
+                        axis,
+                    },
+                ),
+                (
+                    "dual-axis-deadzone",
+                    NewAction::DualAxisDeadzone { device, axis },
+                ),
+            ];
+            for (kind, template) in templates {
+                let text = format!(
+                    "{}  {}",
+                    kind_icon(kind),
+                    self.i18n.tr(&format!("kind-{kind}"))
+                );
+                if ui.button(text).clicked() {
+                    self.ops.push(make(AddKind::New(template)));
+                    ui.close_menu();
+                }
             }
         }
         for a in self
             .profile
             .library
             .iter()
-            .filter(|a| a.kind == "merge-axis")
+            .filter(|a| TWO_AXIS_KINDS.contains(&a.kind.as_str()))
         {
-            let text = format!("{}  {}", icon::LINK, merge_label(a, self.i18n));
+            let text = format!(
+                "{}  {}  {}",
+                icon::LINK,
+                kind_icon(&a.kind),
+                merge_label(a, self.i18n)
+            );
             if ui
                 .button(text)
                 .on_hover_text(self.i18n.tr("edit-reuse"))
@@ -1064,6 +1150,11 @@ impl Editor<'_> {
                     }
                 });
         });
+        self.axis_pickers(ui, &id, axes);
+    }
+
+    /// Device and axis dropdowns for `axis1-*` / `axis2-*` (merge-axis, dual-axis-deadzone).
+    fn axis_pickers(&mut self, ui: &mut egui::Ui, id: &str, axes: [(&str, u32); 2]) {
         // Profile devices first, then attached ones the profile does not know yet.
         let mut devices: Vec<(String, String)> = self
             .profile
@@ -1092,23 +1183,23 @@ impl Editor<'_> {
             let prefix = format!("axis{}", n + 1);
             ui.horizontal(|ui| {
                 ui.label(RichText::new((n + 1).to_string()).strong());
-                egui::ComboBox::from_id_salt((&prefix, "device", &id))
+                egui::ComboBox::from_id_salt((&prefix, "device", id))
                     .selected_text(&name)
                     .width(220.0)
                     .show_ui(ui, |ui| {
                         for (g, label) in &devices {
                             if ui.selectable_label(*g == device, label).clicked() {
-                                self.set(&id, &format!("{prefix}-guid"), "uuid", g.clone());
+                                self.set(id, &format!("{prefix}-guid"), "uuid", g.clone());
                             }
                         }
                     });
-                egui::ComboBox::from_id_salt((&prefix, "axis", &id))
+                egui::ComboBox::from_id_salt((&prefix, "axis", id))
                     .selected_text(self.i18n.tr(&format!("vjoy-axis-{axis}")))
                     .show_ui(ui, |ui| {
                         for s in slots {
                             let text = self.i18n.tr(&format!("vjoy-axis-{s}"));
                             if ui.selectable_label(s == axis, text).clicked() {
-                                self.set(&id, &format!("{prefix}-axis"), "int", s.to_string());
+                                self.set(id, &format!("{prefix}-axis"), "int", s.to_string());
                             }
                         }
                     });
