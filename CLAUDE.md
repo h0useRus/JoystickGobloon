@@ -1,6 +1,6 @@
 # Joystick Gobloon (JoyGob)
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
-Plan: phases 0-10 in docs/ROADMAP.md (phases 0-5 done; device substitution added). Work on ONE crate per session.
+Plan: phases 0-10 in docs/ROADMAP.md (phases 0-6 done; device substitution added). Work on ONE crate per session.
 
 ## Layout
 - crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default), other `lang/*.ftl` embedded or loaded from `<exe>/lang/`.
@@ -31,6 +31,7 @@ Plan: phases 0-10 in docs/ROADMAP.md (phases 0-5 done; device substitution added
 
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
+- No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
 - HidHide hides the VKB sticks; target\debug\JoystickGobloon.exe and examples\monitor.exe are whitelisted.
 - Profile device GUIDs come from another PC: use the substitution banner on the Devices page.
 - JoyGob whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.
