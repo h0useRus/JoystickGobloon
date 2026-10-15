@@ -18,7 +18,8 @@ struct Row {
 
 pub struct SubstituteDialog {
     rows: Vec<Row>,
-    /// Attached devices no profile device uses: the candidates.
+    /// Attached physical devices: the candidates. One the profile already knows is a valid
+    /// target too: the old device's bindings are merged into it.
     free: Vec<(String, String)>,
 }
 
@@ -44,16 +45,7 @@ pub fn missing_devices<'a>(
 impl SubstituteDialog {
     /// Pre-selects an attached device with the same name when it is unambiguous.
     pub fn new(profile: &Profile, devices: &[DeviceState]) -> Self {
-        let free: Vec<&DeviceState> = devices
-            .iter()
-            .filter(|s| {
-                !s.info.is_vjoy()
-                    && !profile
-                        .devices
-                        .iter()
-                        .any(|d| d.id.eq_ignore_ascii_case(&s.info.guid))
-            })
-            .collect();
+        let free: Vec<&DeviceState> = devices.iter().filter(|s| !s.info.is_vjoy()).collect();
         let free_ids = free
             .iter()
             .map(|s| (s.info.guid.clone(), s.info.name.clone()))
@@ -347,6 +339,35 @@ mod tests {
         assert_eq!(dialog.rows[0].target.as_deref(), Some("d1"));
         assert_eq!(dialog.rows[1].target, None, "two equally similar throttles");
         assert_eq!(dialog.rows[2].target, None, "no similar device");
+    }
+
+    #[test]
+    fn maps_onto_devices_the_profile_already_knows() {
+        // Gremlin on this PC already added the attached sticks; old entries remain.
+        let dev = |id: &str, name: &str| gob_core::Device {
+            id: id.into(),
+            name: name.into(),
+        };
+        let profile = Profile {
+            devices: vec![
+                dev("old-l", " VKBsim Gladiator EVO OT L  "),
+                dev("old-r", " VKBsim Gladiator EVO  R  "),
+                dev("new-l", " VKBsim Gladiator EVO OT L  "),
+                dev("new-r", " VKBsim Gladiator EVO R  "),
+            ],
+            ..Default::default()
+        };
+        let devices = [
+            live("new-l", "VKBsim Gladiator EVO OT L"),
+            live("new-r", "VKBsim Gladiator EVO R"),
+        ];
+        let mut dialog = SubstituteDialog::new(&profile, &devices);
+        for r in &mut dialog.rows {
+            r.target = None;
+        }
+        assert_eq!(dialog.auto_map(), 2);
+        assert_eq!(dialog.rows[0].target.as_deref(), Some("new-l"));
+        assert_eq!(dialog.rows[1].target.as_deref(), Some("new-r"));
     }
 
     #[test]
