@@ -10,6 +10,7 @@ use gob_core::{same_device_name, Action, InputBinding, InputType};
 use gob_i18n::I18n;
 use gob_input::{DeviceState, InputEvent};
 
+use crate::action_editor::{Editor, Op};
 use crate::profile_view::{action_tree, summary, LoadedProfile};
 use crate::style::{self, icon};
 
@@ -90,6 +91,7 @@ impl DevicesView {
         i18n: &I18n,
         profile: Option<&LoadedProfile>,
         devices: &[DeviceState],
+        ops: &mut Vec<Op>,
     ) {
         let mut tabs: Vec<Tab> = devices
             .iter()
@@ -199,32 +201,54 @@ impl DevicesView {
             return;
         };
 
-        let mut rows: BTreeMap<Key, Option<&InputBinding>> = BTreeMap::new();
+        let mut rows: BTreeMap<Key, Bound> = BTreeMap::new();
         if let Some(d) = tab.live {
             rows.extend(
                 d.info
                     .axes
                     .iter()
-                    .map(|&a| ((Kind::Axis, u32::from(a)), None)),
+                    .map(|&a| ((Kind::Axis, u32::from(a)), Bound::None)),
             );
-            rows.extend((1..=d.buttons.len() as u32).map(|b| ((Kind::Button, b), None)));
-            rows.extend((1..=d.hats.len() as u32).map(|h| ((Kind::Hat, h), None)));
+            rows.extend((1..=d.buttons.len() as u32).map(|b| ((Kind::Button, b), Bound::None)));
+            rows.extend((1..=d.hats.len() as u32).map(|h| ((Kind::Hat, h), Bound::None)));
         }
         if let (Some(p), Some(mode)) = (profile, &self.mode) {
-            for b in p.profile.inputs.iter().filter(|b| {
-                let own = b.device_id.eq_ignore_ascii_case(tab.guid)
-                    || tab
-                        .alias
-                        .is_some_and(|a| b.device_id.eq_ignore_ascii_case(a));
-                own && &b.mode == mode
-            }) {
-                let kind = match b.input_type() {
-                    InputType::Axis => Kind::Axis,
-                    InputType::Button => Kind::Button,
-                    InputType::Hat => Kind::Hat,
-                    InputType::Other => Kind::Other,
-                };
-                rows.insert((kind, b.input_id.parse().unwrap_or(0)), Some(b));
+            // Walk from the current mode up through its parents; the nearest binding wins.
+            let mut chain = vec![mode.clone()];
+            while let Some(parent) = p
+                .profile
+                .modes
+                .iter()
+                .find(|m| Some(&m.name) == chain.last())
+                .and_then(|m| m.parent.clone())
+                .filter(|par| !chain.contains(par))
+            {
+                chain.push(parent);
+            }
+            for (depth, m) in chain.iter().enumerate() {
+                for b in p.profile.inputs.iter().filter(|b| {
+                    let own = b.device_id.eq_ignore_ascii_case(tab.guid)
+                        || tab
+                            .alias
+                            .is_some_and(|a| b.device_id.eq_ignore_ascii_case(a));
+                    own && &b.mode == m
+                }) {
+                    let kind = match b.input_type() {
+                        InputType::Axis => Kind::Axis,
+                        InputType::Button => Kind::Button,
+                        InputType::Hat => Kind::Hat,
+                        InputType::Other => Kind::Other,
+                    };
+                    let key = (kind, b.input_id.parse().unwrap_or(0));
+                    let slot = rows.entry(key).or_insert(Bound::None);
+                    if matches!(slot, Bound::None) {
+                        *slot = if depth == 0 {
+                            Bound::Own(b)
+                        } else {
+                            Bound::Inherited(b)
+                        };
+                    }
+                }
             }
         }
 
@@ -234,18 +258,22 @@ impl DevicesView {
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
-                for (key, binding) in rows {
-                    self.row(ui, tab, key, binding, &index);
+                for (key, bound) in rows {
+                    self.row(ui, i18n, profile, ops, tab, key, bound, &index);
                 }
             });
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn row(
         &mut self,
         ui: &mut egui::Ui,
+        i18n: &I18n,
+        profile: Option<&LoadedProfile>,
+        ops: &mut Vec<Op>,
         tab: &Tab,
         key: Key,
-        binding: Option<&InputBinding>,
+        bound: Bound,
         index: &HashMap<&str, &Action>,
     ) {
         let active = self
@@ -261,41 +289,118 @@ impl DevicesView {
             .fill(fill)
             .corner_radius(6)
             .inner_margin(Margin::symmetric(4, 1));
+        // Bindings are written for the profile's device id (the alias when linked by name).
+        let device = tab.alias.unwrap_or(tab.guid).to_string();
+        let input_type = match key.0 {
+            Kind::Axis => "axis",
+            Kind::Hat => "hat",
+            Kind::Button | Kind::Other => "button",
+        };
+        let behavior = InputType::parse(input_type);
+        let mode = self.mode.clone().unwrap_or_default();
+        let bind = |add| Op::Bind {
+            device: device.clone(),
+            name: tab.name.to_string(),
+            input_type: input_type.into(),
+            input_id: key.1.to_string(),
+            mode: mode.clone(),
+            add,
+        };
         let response = frame
             .show(ui, |ui| {
-                let header = |ui: &mut egui::Ui| {
+                let summary_of = |b: &InputBinding| {
+                    b.configs
+                        .first()
+                        .and_then(|c| summary(index, &c.root_action))
+                };
+                let header = |ui: &mut egui::Ui, ops: &mut Vec<Op>| {
                     ui.label(RichText::new(kind_glyph(key.0)).size(16.0));
                     ui.add_sized(
                         [28.0, 18.0],
                         egui::Label::new(RichText::new(key.1.to_string()).monospace()),
                     );
                     live_widget(ui, tab.live, key);
-                    if let Some(text) = binding
-                        .and_then(|b| b.configs.first())
-                        .and_then(|c| summary(index, &c.root_action))
-                    {
-                        ui.label(text);
+                    match bound {
+                        Bound::Own(b) => {
+                            if let Some(text) = summary_of(b) {
+                                ui.label(text);
+                            }
+                        }
+                        Bound::Inherited(b) => {
+                            ui.label(RichText::new(icon::ARROW_BEND_UP_LEFT).weak())
+                                .on_hover_text(
+                                    i18n.trf("edit-inherited", &[("mode", b.mode.clone().into())]),
+                                );
+                            if let Some(text) = summary_of(b) {
+                                ui.label(RichText::new(text).weak());
+                            }
+                        }
+                        Bound::None => {
+                            if let Some(p) = profile {
+                                let mut editor = Editor {
+                                    profile: &p.profile,
+                                    i18n,
+                                    ops,
+                                    behavior,
+                                };
+                                editor.add_menu(ui, |kind| bind(Some(kind)));
+                            }
+                        }
                     }
                 };
-                match binding {
-                    Some(b) => {
-                        let id = ui.make_persistent_id((tab.guid, key));
+                let id = ui.make_persistent_id((tab.guid, key));
+                match (bound, profile) {
+                    (Bound::Own(b), Some(p)) => {
                         egui::collapsing_header::CollapsingState::load_with_default_open(
                             ui.ctx(),
                             id,
                             false,
                         )
-                        .show_header(ui, header)
+                        .show_header(ui, |ui| header(ui, ops))
+                        .body(|ui| {
+                            let text = format!("{}  {}", icon::TRASH, i18n.tr("edit-unbind"));
+                            if ui.button(text).clicked() {
+                                ops.push(Op::Unbind {
+                                    device: b.device_id.clone(),
+                                    input_type: b.input_type.clone(),
+                                    input_id: b.input_id.clone(),
+                                    mode: b.mode.clone(),
+                                });
+                            }
+                            let behavior = b.configs.first().map_or(behavior, |c| c.behavior());
+                            let mut editor = Editor {
+                                profile: &p.profile,
+                                i18n,
+                                ops,
+                                behavior,
+                            };
+                            for cfg in &b.configs {
+                                editor.container(ui, &cfg.root_action, "actions", 0);
+                            }
+                        });
+                    }
+                    (Bound::Inherited(b), _) => {
+                        egui::collapsing_header::CollapsingState::load_with_default_open(
+                            ui.ctx(),
+                            id,
+                            false,
+                        )
+                        .show_header(ui, |ui| header(ui, ops))
                         .body(|ui| {
                             for cfg in &b.configs {
                                 action_tree(ui, index, &cfg.root_action, 0);
                             }
+                            let text =
+                                format!("{}  {}", icon::PENCIL_SIMPLE, i18n.tr("edit-override"));
+                            if ui.button(text).clicked() {
+                                ops.push(bind(None));
+                            }
                         });
                     }
-                    None => {
+                    _ => {
                         ui.horizontal(|ui| {
                             ui.add_space(ui.spacing().indent);
-                            header(ui);
+                            header(ui, ops);
                         });
                     }
                 }
@@ -314,6 +419,14 @@ impl DevicesView {
             ui.ctx().request_repaint_after(HIGHLIGHT);
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum Bound<'a> {
+    None,
+    Own(&'a InputBinding),
+    /// Bound in an ancestor mode and used through inheritance.
+    Inherited(&'a InputBinding),
 }
 
 fn kind_glyph(kind: Kind) -> &'static str {

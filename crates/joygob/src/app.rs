@@ -38,6 +38,8 @@ pub struct JoyGobApp {
     hidhide_view: HidHideView,
     /// Running profile, if activated.
     runner: Option<gob_engine::Runner>,
+    /// Time of the last edit; a running profile restarts once edits settle.
+    edited: Option<std::time::Instant>,
 }
 
 impl JoyGobApp {
@@ -85,6 +87,7 @@ impl JoyGobApp {
             vjoy_view: VJoyView::new(),
             hidhide_view: HidHideView::new(),
             runner: None,
+            edited: None,
         };
         if app.settings.hidhide_whitelist_self {
             match app.hidhide_view.whitelist_self() {
@@ -306,8 +309,26 @@ impl JoyGobApp {
             ui.add_space(4.0);
         }
         let devices = self.input.devices();
+        let mut ops = Vec::new();
         self.devices_view
-            .show(ui, &self.i18n, self.profile.as_ref(), &devices);
+            .show(ui, &self.i18n, self.profile.as_ref(), &devices, &mut ops);
+        drop(devices);
+        self.apply_ops(ops);
+    }
+
+    /// Applies queued edits, marks the profile unsaved and restarts a running profile.
+    fn apply_ops(&mut self, ops: Vec<crate::action_editor::Op>) {
+        let Some(loaded) = &mut self.profile else {
+            return;
+        };
+        if ops.is_empty() {
+            return;
+        }
+        for op in ops {
+            crate::action_editor::apply(&mut loaded.profile, op);
+        }
+        loaded.refresh();
+        self.edited = Some(std::time::Instant::now());
     }
 
     fn apply_change(&mut self, ctx: &egui::Context, change: Change) {
@@ -328,6 +349,18 @@ impl JoyGobApp {
 
 impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if let Some(t) = self.edited {
+            let settle = std::time::Duration::from_millis(600);
+            if self.runner.is_none() {
+                self.edited = None;
+            } else if t.elapsed() >= settle {
+                self.edited = None;
+                self.runner = None;
+                self.toggle_runner(ctx);
+            } else {
+                ctx.request_repaint_after(settle - t.elapsed());
+            }
+        }
         self.devices_view
             .handle_events(self.input.events(), &self.input.devices());
         egui::SidePanel::left("nav")
