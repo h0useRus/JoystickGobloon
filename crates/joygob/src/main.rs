@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod devices_view;
 mod profile_view;
 mod settings;
 mod settings_view;

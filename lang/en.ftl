@@ -22,8 +22,8 @@ about-text = Device hiding, virtual joysticks and input mapping in one app.
 
 # Empty states
 no-profile = No profile loaded
-no-devices = The profile has no devices.
-no-bindings = Nothing is bound on this device in this mode.
+device-disconnected = Not connected
+no-devices-attached = No game controllers found
 placeholder-hidhide = Hide physical devices from games (HidHide driver).
 placeholder-vjoy = Configure virtual joysticks (vJoy driver).
 

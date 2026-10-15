@@ -22,8 +22,8 @@ about-text = Скрытие устройств, виртуальные джой�
 
 # Empty states
 no-profile = Профиль не загружен
-no-devices = В профиле нет устройств.
-no-bindings = На этом устройстве в этом режиме ничего не назначено.
+device-disconnected = Не подключено
+no-devices-attached = Игровые контроллеры не найдены
 placeholder-hidhide = Скрытие физических устройств от игр (драйвер HidHide).
 placeholder-vjoy = Настройка виртуальных джойстиков (драйвер vJoy).
 

@@ -12,6 +12,7 @@ path = "src/main.rs"
 gob-i18n.workspace = true
 gob-core.workspace = true
 gob-gremlin.workspace = true
+gob-input.workspace = true
 rfd.workspace = true
 egui-phosphor.workspace = true
 eframe.workspace = true

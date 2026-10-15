@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use eframe::egui::{self, Align, Layout, RichText, Vec2};
 use gob_i18n::I18n;
 
+use crate::devices_view::DevicesView;
 use crate::profile_view::{report_window, LoadedProfile};
 use crate::settings::Settings;
 use crate::settings_view::{self, Change, SettingsTab};
@@ -27,6 +28,8 @@ pub struct JoyGobApp {
     status: String,
     profile: Option<LoadedProfile>,
     logo: egui::TextureHandle,
+    input: gob_input::InputService,
+    devices_view: DevicesView,
 }
 
 impl JoyGobApp {
@@ -65,6 +68,11 @@ impl JoyGobApp {
             status,
             profile: None,
             logo,
+            input: {
+                let ctx = cc.egui_ctx.clone();
+                gob_input::InputService::start(move || ctx.request_repaint())
+            },
+            devices_view: DevicesView::default(),
         };
         if let Some(path) = reopen {
             app.open_profile(path, false);
@@ -81,6 +89,7 @@ impl JoyGobApp {
                     .trf("status-loaded", &[("file", loaded.file_name().into())]);
                 self.show_report = show_report;
                 self.profile = Some(loaded);
+                self.devices_view.reset_mode();
                 self.settings.last_profile = Some(path);
                 self.settings.save();
             }
@@ -182,18 +191,20 @@ impl JoyGobApp {
             }
         });
         ui.separator();
-        match self.profile.as_mut() {
-            Some(p) => p.devices_tab(ui, &self.i18n),
-            None => {
-                empty_state(ui, icon::JOYSTICK, &self.i18n.tr("no-profile"));
-                ui.vertical_centered(|ui| {
-                    let open = format!("{}  {}", icon::FOLDER_OPEN, self.i18n.tr("action-open"));
-                    if ui.button(open).clicked() {
-                        self.import_dialog();
-                    }
-                });
-            }
+        let no_devices = self.input.devices().iter().all(|d| d.info.is_vjoy());
+        if self.profile.is_none() && no_devices {
+            empty_state(ui, icon::JOYSTICK, &self.i18n.tr("no-profile"));
+            ui.vertical_centered(|ui| {
+                let open = format!("{}  {}", icon::FOLDER_OPEN, self.i18n.tr("action-open"));
+                if ui.button(open).clicked() {
+                    self.import_dialog();
+                }
+            });
+            return;
         }
+        let devices = self.input.devices();
+        self.devices_view
+            .show(ui, &self.i18n, self.profile.as_ref(), &devices);
     }
 
     fn apply_change(&mut self, ctx: &egui::Context, change: Change) {
@@ -214,6 +225,8 @@ impl JoyGobApp {
 
 impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.devices_view
+            .handle_events(self.input.events(), &self.input.devices());
         egui::SidePanel::left("nav")
             .resizable(false)
             .exact_width(60.0)
@@ -255,7 +268,7 @@ impl eframe::App for JoyGobApp {
 }
 
 /// Big faded icon with a hint, for pages without content.
-fn empty_state(ui: &mut egui::Ui, glyph: &str, text: &str) {
+pub(crate) fn empty_state(ui: &mut egui::Ui, glyph: &str, text: &str) {
     ui.vertical_centered(|ui| {
         ui.add_space(ui.available_height() * 0.25);
         ui.label(RichText::new(glyph).size(64.0).weak());
