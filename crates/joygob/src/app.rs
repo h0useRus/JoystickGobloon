@@ -46,6 +46,8 @@ pub struct JoyGobApp {
     allow_close: bool,
     show_modes: bool,
     modes_window: crate::modes_view::ModesWindow,
+    /// Window title last sent to the viewport.
+    title: String,
 }
 
 #[derive(Clone, Copy)]
@@ -105,6 +107,7 @@ impl JoyGobApp {
             allow_close: false,
             show_modes: false,
             modes_window: Default::default(),
+            title: crate::APP_NAME.into(),
         };
         if app.settings.hidhide_whitelist_self {
             match app.hidhide_view.whitelist_self() {
@@ -303,6 +306,31 @@ impl JoyGobApp {
         });
     }
 
+    /// "{app} | {profile file}[*] | {Active|Inactive}"; just the app name without a profile.
+    fn update_title(&mut self, ctx: &egui::Context) {
+        let title = match &self.profile {
+            None => crate::APP_NAME.to_string(),
+            Some(p) => {
+                let state = if self.runner.is_some() {
+                    "title-active"
+                } else {
+                    "title-inactive"
+                };
+                let modified = if p.dirty { "*" } else { "" };
+                format!(
+                    "{} | {}{modified} | {}",
+                    crate::APP_NAME,
+                    p.file_name(),
+                    self.i18n.tr(state)
+                )
+            }
+        };
+        if title != self.title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.title = title;
+        }
+    }
+
     fn toggle_runner(&mut self, ctx: &egui::Context) {
         if self.runner.take().is_some() {
             self.status = self.i18n.tr("status-stopped");
@@ -424,22 +452,6 @@ impl JoyGobApp {
             if toggle.inner.clicked() {
                 self.toggle_runner(ui.ctx());
             }
-            if let Some(p) = &self.profile {
-                ui.separator();
-                ui.label(RichText::new(icon::FILE_TEXT).size(style::ICON_SIZE));
-                ui.strong(p.file_name()).on_hover_text(
-                    p.path
-                        .as_ref()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_default(),
-                );
-                if p.dirty {
-                    let (rect, r) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
-                    ui.painter()
-                        .circle_filled(rect.center(), 4.0, style::accent(ui));
-                    r.on_hover_text(self.i18n.tr("profile-modified"));
-                }
-            }
         });
         ui.separator();
         let no_devices = self.input.devices().iter().all(|d| d.info.is_vjoy());
@@ -542,6 +554,7 @@ impl JoyGobApp {
 
 impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.update_title(ctx);
         let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
         if ctx.input(|i| i.viewport().close_requested()) && dirty && !self.allow_close {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);

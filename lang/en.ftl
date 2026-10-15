@@ -49,7 +49,6 @@ subst-banner = Device IDs in the profile do not match this PC: { $count }
 subst-keep = Keep as is
 subst-apply = Apply
 status-substituted = Devices replaced. Save the profile to keep the change.
-profile-modified = Unsaved changes
 
 # vJoy
 vjoy-missing = vJoy is not installed or could not be loaded.
@@ -86,6 +85,8 @@ status-whitelisted = JoyGob was added to the HidHide whitelist.
 # Engine
 action-activate = Activate the profile
 action-deactivate = Stop the profile
+title-active = Active
+title-inactive = Inactive
 status-active = Profile active
 status-stopped = Profile stopped
 activate-error = Could not activate the profile: { $error }

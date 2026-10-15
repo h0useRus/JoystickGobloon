@@ -49,7 +49,6 @@ subst-banner = ID устройств в профиле не совпадают �
 subst-keep = Оставить как есть
 subst-apply = Применить
 status-substituted = Устройства заменены. Сохраните профиль, чтобы закрепить изменения.
-profile-modified = Есть несохранённые изменения
 
 # vJoy
 vjoy-missing = vJoy не установлен или не загружается.
@@ -86,6 +85,8 @@ status-whitelisted = JoyGob добавлен в белый список HidHide.
 # Engine
 action-activate = Активировать профиль
 action-deactivate = Остановить профиль
+title-active = Активен
+title-inactive = Неактивен
 status-active = Профиль активен
 status-stopped = Профиль остановлен
 activate-error = Не удалось активировать профиль: { $error }
