@@ -36,9 +36,10 @@ impl I18n {
             if let Ok(entries) = std::fs::read_dir(dir) {
                 for path in entries.flatten().map(|e| e.path()) {
                     if path.extension().is_some_and(|e| e == "ftl") {
-                        if let (Some(code), Ok(text)) =
-                            (path.file_stem().and_then(|s| s.to_str()), std::fs::read_to_string(&path))
-                        {
+                        if let (Some(code), Ok(text)) = (
+                            path.file_stem().and_then(|s| s.to_str()),
+                            std::fs::read_to_string(&path),
+                        ) {
                             sources.insert(code.to_string(), text);
                         }
                     }
@@ -46,7 +47,12 @@ impl I18n {
             }
         }
         let fallback = build_bundle(DEFAULT_LANG, &sources[DEFAULT_LANG]);
-        Self { sources, fallback, current: None, current_code: DEFAULT_LANG.into() }
+        Self {
+            sources,
+            fallback,
+            current: None,
+            current_code: DEFAULT_LANG.into(),
+        }
     }
 
     /// Switches language; unknown codes fall back to English.
@@ -83,6 +89,15 @@ impl I18n {
         self.tr_args(key, None)
     }
 
+    /// `tr` with named arguments: `i18n.trf("key", &[("count", 3.into())])`.
+    pub fn trf(&self, key: &str, args: &[(&str, FluentValue<'static>)]) -> String {
+        let mut fa = FluentArgs::new();
+        for (k, v) in args {
+            fa.set(*k, v.clone());
+        }
+        self.tr_args(key, Some(&fa))
+    }
+
     pub fn tr_args(&self, key: &str, args: Option<&FluentArgs>) -> String {
         self.current
             .as_ref()
@@ -105,7 +120,11 @@ fn build_bundle(code: &str, src: &str) -> Bundle {
 fn format_in(bundle: &Bundle, key: &str, args: Option<&FluentArgs>) -> Option<String> {
     let pattern = bundle.get_message(key)?.value()?;
     let mut errors = vec![];
-    Some(bundle.format_pattern(pattern, args, &mut errors).into_owned())
+    Some(
+        bundle
+            .format_pattern(pattern, args, &mut errors)
+            .into_owned(),
+    )
 }
 
 #[cfg(test)]

@@ -10,6 +10,9 @@ path = "src/main.rs"
 
 [dependencies]
 gob-i18n.workspace = true
+gob-core.workspace = true
+gob-gremlin.workspace = true
+rfd.workspace = true
 eframe.workspace = true
 serde.workspace = true
 toml.workspace = true

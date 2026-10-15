@@ -15,18 +15,27 @@ pub enum Theme {
 pub struct Settings {
     pub theme: Theme,
     pub language: String,
+    /// Reopened on startup.
+    pub last_profile: Option<PathBuf>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { theme: Theme::default(), language: gob_i18n::DEFAULT_LANG.into() }
+        Self {
+            theme: Theme::default(),
+            language: gob_i18n::DEFAULT_LANG.into(),
+            last_profile: None,
+        }
     }
 }
 
 impl Settings {
     fn path() -> Option<PathBuf> {
-        std::env::var_os("APPDATA")
-            .map(|p| PathBuf::from(p).join("JoystickGobloon").join("settings.toml"))
+        std::env::var_os("APPDATA").map(|p| {
+            PathBuf::from(p)
+                .join("JoystickGobloon")
+                .join("settings.toml")
+        })
     }
 
     pub fn load() -> Self {
