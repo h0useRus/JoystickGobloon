@@ -341,7 +341,7 @@ fn live_widget(ui: &mut egui::Ui, live: Option<&DeviceState>, (kind, id): Key) {
     }
 }
 
-fn hat_glyph(direction: Option<u16>) -> &'static str {
+pub(crate) fn hat_glyph(direction: Option<u16>) -> &'static str {
     const ARROWS: [&str; 8] = [
         icon::ARROW_UP,
         icon::ARROW_UP_RIGHT,

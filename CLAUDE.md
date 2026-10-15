@@ -1,6 +1,6 @@
 # Joystick Gobloon (JoyGob)
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
-Plan: phases 0-10 in docs/ROADMAP.md (phases 0-2 done). Work on ONE crate per session.
+Plan: phases 0-10 in docs/ROADMAP.md (phases 0-3 done; device substitution added). Work on ONE crate per session.
 
 ## Layout
 - crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default), other `lang/*.ftl` embedded or loaded from `<exe>/lang/`.
@@ -9,7 +9,9 @@ Plan: phases 0-10 in docs/ROADMAP.md (phases 0-2 done). Work on ONE crate per se
 - crates/gob-gremlin XML <-> Element <-> Profile, lossless round-trip; `report()` import warnings; example `resave`
 - crates/gob-input   DirectInput8 polling thread (InputService: snapshot + events); ids = DI instance GUIDs like Gremlin;
   links dinput8.lib/dxguid.lib statically (-bundle) for c_dfDIJoystick2; example `monitor`
-- planned: gob-vjoy (vJoyInterface.dll FFI), gob-hidhide (\\.\HidHide IOCTL), gob-engine, gob-plugin
+- crates/gob-vjoy    runtime-loaded vJoyInterface.dll (path from vJoy uninstall key); VJoy::acquire -> Device
+  (reset+release on drop); axis slots 1..8 like gob-input; example `vjoy_info --sweep <id>`
+- planned: gob-hidhide (\\.\HidHide IOCTL), gob-engine, gob-plugin
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
 
@@ -21,6 +23,10 @@ Plan: phases 0-10 in docs/ROADMAP.md (phases 0-2 done). Work on ONE crate per se
 - GUI never blocks; engine runs on its own thread, talks via channels.
 - Settings: TOML in %APPDATA%\JoystickGobloon\settings.toml.
 - Commits: Conventional Commits (feat/fix/docs/refactor/test/chore/build/ci; scope = crate, e.g. `feat(gob-gremlin): parse R14 library`).
+
+## Testing notes
+- HidHide hides the VKB sticks; target\debug\JoystickGobloon.exe and examples\monitor.exe are whitelisted.
+- Profile device GUIDs come from another PC: use the substitution banner on the Devices page.
 
 ## Commands
 - cargo build / cargo run -p joygob

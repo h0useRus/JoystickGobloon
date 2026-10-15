@@ -25,7 +25,6 @@ no-profile = No profile loaded
 device-disconnected = Not connected
 no-devices-attached = No game controllers found
 placeholder-hidhide = Hide physical devices from games (HidHide driver).
-placeholder-vjoy = Configure virtual joysticks (vJoy driver).
 
 # Status bar
 status-ready = Ready
@@ -51,3 +50,19 @@ subst-keep = Keep as is
 subst-apply = Apply
 status-substituted = Devices replaced. Save the profile to keep the change.
 profile-modified = Unsaved changes
+
+# vJoy
+vjoy-missing = vJoy is not installed or could not be loaded.
+vjoy-enabled = Driver enabled
+vjoy-disabled = Driver disabled
+vjoy-no-devices = No vJoy devices configured. Add one in “Configure vJoy”.
+vjoy-axes = Axes
+vjoy-buttons = Buttons
+vjoy-hats = Hats
+vjoy-test = Test output: take control of this device
+vjoy-test-hint = Press the flask to take control of this device and test its output.
+vjoy-free = Free
+vjoy-own = Controlled by JoyGob
+vjoy-busy = Used by another program (e.g. Joystick Gremlin)
+vjoy-unknown = Unknown state
+vjoy-error = Could not take the device: { $error }

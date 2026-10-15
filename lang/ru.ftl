@@ -25,7 +25,6 @@ no-profile = Профиль не загружен
 device-disconnected = Не подключено
 no-devices-attached = Игровые контроллеры не найдены
 placeholder-hidhide = Скрытие физических устройств от игр (драйвер HidHide).
-placeholder-vjoy = Настройка виртуальных джойстиков (драйвер vJoy).
 
 # Status bar
 status-ready = Готово
@@ -51,3 +50,19 @@ subst-keep = Оставить как есть
 subst-apply = Применить
 status-substituted = Устройства заменены. Сохраните профиль, чтобы закрепить изменения.
 profile-modified = Есть несохранённые изменения
+
+# vJoy
+vjoy-missing = vJoy не установлен или не загружается.
+vjoy-enabled = Драйвер включён
+vjoy-disabled = Драйвер выключен
+vjoy-no-devices = Устройства vJoy не настроены. Добавьте их в «Configure vJoy».
+vjoy-axes = Оси
+vjoy-buttons = Кнопки
+vjoy-hats = Хатки
+vjoy-test = Проверка вывода: взять управление устройством
+vjoy-test-hint = Нажмите на колбу, чтобы взять управление устройством и проверить его вывод.
+vjoy-free = Свободно
+vjoy-own = Управляется JoyGob
+vjoy-busy = Занято другой программой (например, Joystick Gremlin)
+vjoy-unknown = Неизвестное состояние
+vjoy-error = Не удалось взять устройство: { $error }

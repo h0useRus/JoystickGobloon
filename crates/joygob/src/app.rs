@@ -9,6 +9,7 @@ use crate::settings::Settings;
 use crate::settings_view::{self, Change, SettingsTab};
 use crate::style::{self, icon};
 use crate::substitute_view::{missing_devices, SubstituteDialog};
+use crate::vjoy_view::VJoyView;
 
 const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/joygob-256.png");
 
@@ -32,6 +33,7 @@ pub struct JoyGobApp {
     input: gob_input::InputService,
     devices_view: DevicesView,
     substitute: Option<SubstituteDialog>,
+    vjoy_view: VJoyView,
 }
 
 impl JoyGobApp {
@@ -76,6 +78,7 @@ impl JoyGobApp {
             },
             devices_view: DevicesView::default(),
             substitute: None,
+            vjoy_view: VJoyView::new(),
         };
         if let Some(path) = reopen {
             app.open_profile(path, false);
@@ -290,9 +293,7 @@ impl eframe::App for JoyGobApp {
                 Page::HidHide => {
                     empty_state(ui, icon::EYE_SLASH, &self.i18n.tr("placeholder-hidhide"))
                 }
-                Page::VJoy => {
-                    empty_state(ui, icon::GAME_CONTROLLER, &self.i18n.tr("placeholder-vjoy"))
-                }
+                Page::VJoy => self.vjoy_view.show(ui, &self.i18n),
                 Page::Settings => {
                     let change = settings_view::show(
                         ui,
