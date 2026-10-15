@@ -3,10 +3,12 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use eframe::egui;
+use eframe::egui::{self, RichText};
 use gob_core::{Action, InputType, Profile};
 use gob_gremlin::{ImportReport, Warning};
 use gob_i18n::I18n;
+
+use crate::style::{self, icon};
 
 pub struct LoadedProfile {
     pub profile: Profile,
@@ -40,8 +42,9 @@ impl LoadedProfile {
 
     pub fn devices_tab(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
         let p = &self.profile;
-        ui.horizontal(|ui| {
-            ui.label(i18n.tr("label-mode"));
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(icon::STACK).size(style::ICON_SIZE))
+                .on_hover_text(i18n.tr("label-mode"));
             egui::ComboBox::from_id_salt("mode")
                 .selected_text(&self.mode)
                 .show_ui(ui, |ui| {
@@ -49,10 +52,11 @@ impl LoadedProfile {
                         ui.selectable_value(&mut self.mode, m.name.clone(), &m.name);
                     }
                 });
-        });
-        ui.horizontal_wrapped(|ui| {
+            ui.separator();
             for (i, d) in p.devices.iter().enumerate() {
-                ui.selectable_value(&mut self.device, i, d.name.trim());
+                if style::tab(ui, self.device == i, icon::JOYSTICK, d.name.trim()).clicked() {
+                    self.device = i;
+                }
             }
         });
         ui.separator();
@@ -82,15 +86,15 @@ impl LoadedProfile {
             .auto_shrink(false)
             .show(ui, |ui| {
                 for b in inputs {
-                    let key = match b.input_type() {
-                        InputType::Axis => "input-axis",
-                        InputType::Button => "input-button",
-                        InputType::Hat => "input-hat",
-                        InputType::Other => "input-other",
+                    let glyph = match b.input_type() {
+                        InputType::Axis => icon::ARROWS_OUT_LINE_HORIZONTAL,
+                        InputType::Button => icon::RADIO_BUTTON,
+                        InputType::Hat => icon::ARROWS_OUT_CARDINAL,
+                        InputType::Other => icon::QUESTION,
                     };
-                    let mut title = i18n.trf(key, &[("id", b.input_id.clone().into())]);
+                    let mut title = format!("{glyph}  {:>3}", b.input_id);
                     if let Some(summary) = summary(&index, &b.root_action) {
-                        title = format!("{title}   ·   {summary}");
+                        title = format!("{title}     {summary}");
                     }
                     egui::CollapsingHeader::new(title)
                         .id_salt((&b.input_type, &b.input_id, &b.mode, &b.device_id))
@@ -124,10 +128,25 @@ fn summary(index: &HashMap<&str, &Action>, root: &str) -> Option<String> {
     Some(display_name(first))
 }
 
+/// Kind icon plus the user's label (or the Gremlin type name when there is none).
 fn display_name(action: &Action) -> String {
-    match action.label().filter(|l| !l.is_empty() && *l != "None") {
-        Some(label) => format!("{} — {label}", action.kind),
-        None => action.kind.clone(),
+    let text = action
+        .label()
+        .filter(|l| !l.is_empty() && *l != "None")
+        .unwrap_or(&action.kind);
+    format!("{}  {text}", kind_icon(&action.kind))
+}
+
+fn kind_icon(kind: &str) -> &'static str {
+    match kind {
+        "map-to-vjoy" => icon::GAME_CONTROLLER,
+        "response-curve" => icon::CHART_LINE,
+        "change-mode" => icon::STACK,
+        "tempo" => icon::TIMER,
+        "description" => icon::NOTE,
+        "macro" => icon::KEYBOARD,
+        "map-to-mouse" => icon::MOUSE,
+        _ => icon::PUZZLE_PIECE,
     }
 }
 
@@ -175,18 +194,22 @@ pub fn report_window(ctx: &egui::Context, i18n: &I18n, r: &ImportReport, open: &
                 ],
             ));
             ui.add_space(6.0);
-            ui.strong(i18n.tr("import-by-kind"));
+            ui.label(RichText::new(icon::LIST_BULLETS).size(style::ICON_SIZE));
             egui::Grid::new("by-kind").striped(true).show(ui, |ui| {
                 for (kind, count) in &r.by_kind {
-                    ui.label(kind);
+                    ui.label(format!("{}  {kind}", kind_icon(kind)));
                     ui.label(count.to_string());
                     ui.end_row();
                 }
             });
             ui.add_space(6.0);
-            ui.strong(i18n.tr("import-warnings"));
+            ui.label(RichText::new(icon::WARNING).size(style::ICON_SIZE));
             if r.warnings.is_empty() {
-                ui.label(i18n.tr("import-no-warnings"));
+                ui.label(format!(
+                    "{}  {}",
+                    icon::CHECK_CIRCLE,
+                    i18n.tr("import-no-warnings")
+                ));
             }
             egui::ScrollArea::vertical()
                 .max_height(200.0)

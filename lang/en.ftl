@@ -1,49 +1,45 @@
 language-name = English
 
-app-title = Joystick Gobloon
+# Navigation and toolbar tooltips
+nav-devices = Devices and bindings
+nav-hidhide = Device hiding
+nav-vjoy = Virtual joysticks
+nav-settings = Settings
+action-open = Import Joystick Gremlin profile
+action-save = Save as Joystick Gremlin profile
+action-report = Import report
+label-mode = Mode
 
-menu-file = File
-menu-import-gremlin = Import Joystick Gremlin profile…
-menu-exit = Exit
-menu-view = View
-menu-theme = Theme
+# Settings
+settings-appearance = Appearance
+settings-general = General
+settings-about = About
+settings-language = Language
+settings-reopen-last = Reopen the last profile on startup
 theme-light = Light
 theme-dark = Dark
-menu-language = Language
-menu-help = Help
-menu-about = About
+about-text = Device hiding, virtual joysticks and input mapping in one app.
 
-tab-devices = Devices
-tab-hidhide = Device hiding
-tab-vjoy = vJoy
+# Empty states
+no-profile = No profile loaded
+no-devices = The profile has no devices.
+no-bindings = Nothing is bound on this device in this mode.
+placeholder-hidhide = Hide physical devices from games (HidHide driver).
+placeholder-vjoy = Configure virtual joysticks (vJoy driver).
 
-placeholder-hidhide = Hide physical devices from games and other applications (HidHide driver).
-placeholder-vjoy = Virtual joystick configuration (vJoy driver).
-
+# Status bar
 status-ready = Ready
-about-text = Joystick Gobloon { $version } — device hiding, virtual joysticks and input mapping in one app.
-not-implemented = Not implemented yet
-
-menu-save-gremlin = Save as Joystick Gremlin profile…
 status-loaded = Loaded { $file }
 status-saved = Saved { $file }
-import-title = Import report
 import-error = Could not open the profile: { $error }
 save-error = Could not save the profile: { $error }
+file-filter-gremlin = Joystick Gremlin profile
+
+# Import report
+import-title = Import report
 import-summary = Format version { $version }: { $inputs } inputs, { $actions } actions, { $devices } devices, { $modes } modes.
-import-by-kind = Actions by type
-import-warnings = Warnings
 import-no-warnings = No problems found.
 warn-dangling = Missing action { $to } (referenced from { $from })
 warn-unknown-mode = Inputs use the undeclared mode “{ $mode }”
 warn-not-executable = “{ $kind }” × { $count }: kept in the profile, but not executed yet
 warn-scripts = The profile contains Python plugins: they are kept, but not run
-file-filter-gremlin = Joystick Gremlin profile
-label-mode = Mode
-no-profile = No profile loaded. Use File → Import Joystick Gremlin profile…
-no-devices = The profile has no devices.
-no-bindings = Nothing is bound on this device in this mode.
-input-axis = Axis { $id }
-input-button = Button { $id }
-input-hat = Hat { $id }
-input-other = Input { $id }

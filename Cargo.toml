@@ -18,6 +18,7 @@ unic-langid = "0.9"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 rfd = "0.15"
+egui-phosphor = "0.9"
 
 [profile.release]
 lto = true

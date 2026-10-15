@@ -15,7 +15,8 @@ pub enum Theme {
 pub struct Settings {
     pub theme: Theme,
     pub language: String,
-    /// Reopened on startup.
+    /// Reopen the last profile on startup.
+    pub reopen_last: bool,
     pub last_profile: Option<PathBuf>,
 }
 
@@ -24,6 +25,7 @@ impl Default for Settings {
         Self {
             theme: Theme::default(),
             language: gob_i18n::DEFAULT_LANG.into(),
+            reopen_last: true,
             last_profile: None,
         }
     }

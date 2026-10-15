@@ -13,6 +13,8 @@ Plan: phases 0-10 in docs/ROADMAP.md (phases 0-1 done). Work on ONE crate per se
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
 
 ## Rules
+- UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; helpers in joygob/src/style.rs.
+  Layout: left icon nav rail; all options live in settings_view.rs under horizontal tabs.
 - All user-visible strings go through i18n keys; add key to lang/en.ftl AND lang/ru.ftl.
 - Gremlin import must round-trip: unknown actions kept as raw XML.
 - GUI never blocks; engine runs on its own thread, talks via channels.

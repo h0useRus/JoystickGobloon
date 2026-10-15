@@ -1,26 +1,32 @@
 use std::path::PathBuf;
 
-use eframe::egui;
-use gob_i18n::{FluentValue, I18n};
+use eframe::egui::{self, Align, Layout, RichText, Vec2};
+use gob_i18n::I18n;
 
 use crate::profile_view::{report_window, LoadedProfile};
-use crate::settings::{Settings, Theme};
+use crate::settings::Settings;
+use crate::settings_view::{self, Change, SettingsTab};
+use crate::style::{self, icon};
+
+const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/joygob-256.png");
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Tab {
+enum Page {
     Devices,
     HidHide,
     VJoy,
+    Settings,
 }
 
 pub struct JoyGobApp {
     i18n: I18n,
     settings: Settings,
-    tab: Tab,
-    show_about: bool,
+    page: Page,
+    settings_tab: SettingsTab,
     show_report: bool,
     status: String,
     profile: Option<LoadedProfile>,
+    logo: egui::TextureHandle,
 }
 
 impl JoyGobApp {
@@ -31,19 +37,36 @@ impl JoyGobApp {
             .and_then(|p| p.parent().map(|d| d.join("lang")));
         let mut i18n = I18n::new(lang_dir.as_deref());
         i18n.set_language(&settings.language);
-        apply_theme(&cc.egui_ctx, settings.theme);
+        style::install_fonts(&cc.egui_ctx);
+        style::apply(&cc.egui_ctx, settings.theme);
+
+        let logo =
+            eframe::icon_data::from_png_bytes(LOGO_PNG).expect("embedded logo is a valid PNG");
+        let logo = cc.egui_ctx.load_texture(
+            "logo",
+            egui::ColorImage::from_rgba_unmultiplied(
+                [logo.width as usize, logo.height as usize],
+                &logo.rgba,
+            ),
+            egui::TextureOptions::LINEAR,
+        );
+
         let status = i18n.tr("status-ready");
-        let last = settings.last_profile.clone();
+        let reopen = settings
+            .last_profile
+            .clone()
+            .filter(|p| settings.reopen_last && p.exists());
         let mut app = Self {
             i18n,
             settings,
-            tab: Tab::Devices,
-            show_about: false,
+            page: Page::Devices,
+            settings_tab: SettingsTab::default(),
             show_report: false,
             status,
             profile: None,
+            logo,
         };
-        if let Some(path) = last.filter(|p| p.exists()) {
+        if let Some(path) = reopen {
             app.open_profile(path, false);
         }
         app
@@ -100,132 +123,144 @@ impl JoyGobApp {
         };
     }
 
-    fn set_theme(&mut self, ctx: &egui::Context, theme: Theme) {
-        self.settings.theme = theme;
-        apply_theme(ctx, theme);
-        self.settings.save();
-    }
-
-    fn set_language(&mut self, code: &str) {
-        self.i18n.set_language(code);
-        self.settings.language = self.i18n.language().to_string();
-        self.status = self.i18n.tr("status-ready");
-        self.settings.save();
-    }
-
-    fn menu_bar(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        egui::menu::bar(ui, |ui| {
-            ui.menu_button(self.i18n.tr("menu-file"), |ui| {
-                if ui.button(self.i18n.tr("menu-import-gremlin")).clicked() {
-                    ui.close_menu();
-                    self.import_dialog();
+    fn nav_rail(&mut self, ui: &mut egui::Ui) {
+        ui.vertical_centered(|ui| {
+            ui.add_space(8.0);
+            ui.add(egui::Image::new(&self.logo).fit_to_exact_size(Vec2::splat(34.0)));
+            ui.add_space(12.0);
+            for (page, glyph, key) in [
+                (Page::Devices, icon::JOYSTICK, "nav-devices"),
+                (Page::HidHide, icon::EYE_SLASH, "nav-hidhide"),
+                (Page::VJoy, icon::GAME_CONTROLLER, "nav-vjoy"),
+            ] {
+                if style::icon_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
+                    self.page = page;
                 }
-                let can_save = self.profile.is_some();
-                if ui
-                    .add_enabled(
-                        can_save,
-                        egui::Button::new(self.i18n.tr("menu-save-gremlin")),
-                    )
-                    .clicked()
-                {
-                    ui.close_menu();
-                    self.save_dialog();
-                }
-                if ui
-                    .add_enabled(can_save, egui::Button::new(self.i18n.tr("import-title")))
-                    .clicked()
-                {
-                    self.show_report = true;
-                    ui.close_menu();
-                }
-                ui.separator();
-                if ui.button(self.i18n.tr("menu-exit")).clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
-            });
-            ui.menu_button(self.i18n.tr("menu-view"), |ui| {
-                ui.menu_button(self.i18n.tr("menu-theme"), |ui| {
-                    for (theme, key) in [(Theme::Light, "theme-light"), (Theme::Dark, "theme-dark")]
-                    {
-                        if ui
-                            .radio(self.settings.theme == theme, self.i18n.tr(key))
-                            .clicked()
-                        {
-                            self.set_theme(ctx, theme);
-                            ui.close_menu();
-                        }
-                    }
-                });
-                ui.menu_button(self.i18n.tr("menu-language"), |ui| {
-                    for (code, name) in self.i18n.languages() {
-                        if ui.radio(self.i18n.language() == code, name).clicked() {
-                            self.set_language(&code);
-                            ui.close_menu();
-                        }
-                    }
-                });
-            });
-            ui.menu_button(self.i18n.tr("menu-help"), |ui| {
-                if ui.button(self.i18n.tr("menu-about")).clicked() {
-                    self.show_about = true;
-                    ui.close_menu();
-                }
-            });
+            }
         });
+        ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
+            ui.add_space(8.0);
+            let selected = self.page == Page::Settings;
+            if style::icon_toggle(ui, selected, icon::GEAR_SIX, &self.i18n.tr("nav-settings"))
+                .clicked()
+            {
+                self.page = Page::Settings;
+            }
+        });
+    }
+
+    fn devices_page(&mut self, ui: &mut egui::Ui) {
+        let loaded = self.profile.is_some();
+        ui.horizontal(|ui| {
+            if style::icon_button(ui, true, icon::FOLDER_OPEN, &self.i18n.tr("action-open"))
+                .clicked()
+            {
+                self.import_dialog();
+            }
+            if style::icon_button(ui, loaded, icon::FLOPPY_DISK, &self.i18n.tr("action-save"))
+                .clicked()
+            {
+                self.save_dialog();
+            }
+            let has_warnings = self
+                .profile
+                .as_ref()
+                .is_some_and(|p| !p.report.warnings.is_empty());
+            let glyph = if has_warnings {
+                icon::WARNING
+            } else {
+                icon::CLIPBOARD_TEXT
+            };
+            if style::icon_button(ui, loaded, glyph, &self.i18n.tr("action-report")).clicked() {
+                self.show_report = true;
+            }
+            if let Some(p) = &self.profile {
+                ui.separator();
+                ui.label(RichText::new(icon::FILE_TEXT).size(style::ICON_SIZE));
+                ui.strong(p.file_name())
+                    .on_hover_text(p.path.display().to_string());
+            }
+        });
+        ui.separator();
+        match self.profile.as_mut() {
+            Some(p) => p.devices_tab(ui, &self.i18n),
+            None => {
+                empty_state(ui, icon::JOYSTICK, &self.i18n.tr("no-profile"));
+                ui.vertical_centered(|ui| {
+                    let open = format!("{}  {}", icon::FOLDER_OPEN, self.i18n.tr("action-open"));
+                    if ui.button(open).clicked() {
+                        self.import_dialog();
+                    }
+                });
+            }
+        }
+    }
+
+    fn apply_change(&mut self, ctx: &egui::Context, change: Change) {
+        match change {
+            Change::Theme(theme) => {
+                self.settings.theme = theme;
+                style::apply(ctx, theme);
+            }
+            Change::Language(code) => {
+                self.i18n.set_language(&code);
+                self.settings.language = self.i18n.language().to_string();
+                self.status = self.i18n.tr("status-ready");
+            }
+        }
+        self.settings.save();
     }
 }
 
 impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::TopBottomPanel::top("menu").show(ctx, |ui| self.menu_bar(ctx, ui));
+        egui::SidePanel::left("nav")
+            .resizable(false)
+            .exact_width(60.0)
+            .show(ctx, |ui| self.nav_rail(ui));
 
-        egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                for (tab, key) in [
-                    (Tab::Devices, "tab-devices"),
-                    (Tab::HidHide, "tab-hidhide"),
-                    (Tab::VJoy, "tab-vjoy"),
-                ] {
-                    ui.selectable_value(&mut self.tab, tab, self.i18n.tr(key));
+        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+            ui.label(RichText::new(&self.status).size(12.0).weak());
+        });
+
+        let frame = egui::Frame::central_panel(&ctx.style()).inner_margin(16);
+        egui::CentralPanel::default()
+            .frame(frame)
+            .show(ctx, |ui| match self.page {
+                Page::Devices => self.devices_page(ui),
+                Page::HidHide => {
+                    empty_state(ui, icon::EYE_SLASH, &self.i18n.tr("placeholder-hidhide"))
+                }
+                Page::VJoy => {
+                    empty_state(ui, icon::GAME_CONTROLLER, &self.i18n.tr("placeholder-vjoy"))
+                }
+                Page::Settings => {
+                    let change = settings_view::show(
+                        ui,
+                        &self.i18n,
+                        &mut self.settings,
+                        &mut self.settings_tab,
+                        &self.logo,
+                    );
+                    if let Some(change) = change {
+                        self.apply_change(ctx, change);
+                    }
                 }
             });
-        });
-
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| ui.label(&self.status));
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if let (Tab::Devices, Some(loaded)) = (self.tab, self.profile.as_mut()) {
-                loaded.devices_tab(ui, &self.i18n);
-                return;
-            }
-            let key = match self.tab {
-                Tab::Devices => "no-profile",
-                Tab::HidHide => "placeholder-hidhide",
-                Tab::VJoy => "placeholder-vjoy",
-            };
-            ui.centered_and_justified(|ui| ui.label(self.i18n.tr(key)));
-        });
 
         if let (true, Some(loaded)) = (self.show_report, &self.profile) {
             report_window(ctx, &self.i18n, &loaded.report, &mut self.show_report);
         }
-
-        if self.show_about {
-            let mut args = gob_i18n::FluentArgs::new();
-            args.set("version", FluentValue::from(env!("CARGO_PKG_VERSION")));
-            let text = self.i18n.tr_args("about-text", Some(&args));
-            egui::Window::new(self.i18n.tr("menu-about"))
-                .open(&mut self.show_about)
-                .collapsible(false)
-                .resizable(false)
-                .show(ctx, |ui| ui.label(text));
-        }
     }
 }
 
-fn apply_theme(ctx: &egui::Context, theme: Theme) {
-    ctx.set_visuals(match theme {
-        Theme::Light => egui::Visuals::light(),
-        Theme::Dark => egui::Visuals::dark(),
+/// Big faded icon with a hint, for pages without content.
+fn empty_state(ui: &mut egui::Ui, glyph: &str, text: &str) {
+    ui.vertical_centered(|ui| {
+        ui.add_space(ui.available_height() * 0.25);
+        ui.label(RichText::new(glyph).size(64.0).weak());
+        ui.add_space(8.0);
+        ui.label(RichText::new(text).weak());
+        ui.add_space(8.0);
     });
 }

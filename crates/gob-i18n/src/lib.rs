@@ -153,10 +153,10 @@ mod tests {
     fn falls_back_to_english() {
         let mut i = I18n::new(None);
         i.set_language("ru");
-        assert_eq!(i.tr("menu-file"), "Файл");
+        assert_eq!(i.tr("nav-settings"), "Настройки");
         i.set_language("xx");
         assert_eq!(i.language(), "en");
-        assert_eq!(i.tr("menu-file"), "File");
+        assert_eq!(i.tr("nav-settings"), "Settings");
         assert_eq!(i.tr("no-such-key"), "no-such-key");
     }
 }
