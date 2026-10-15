@@ -290,7 +290,7 @@ impl JoyGobApp {
                 (Page::HidHide, icon::EYE_SLASH, "nav-hidhide"),
                 (Page::VJoy, icon::GAME_CONTROLLER, "nav-vjoy"),
             ] {
-                if style::icon_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
+                if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
                 }
             }
@@ -298,7 +298,7 @@ impl JoyGobApp {
         ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
             ui.add_space(8.0);
             let selected = self.page == Page::Settings;
-            if style::icon_toggle(ui, selected, icon::GEAR_SIX, &self.i18n.tr("nav-settings"))
+            if style::nav_toggle(ui, selected, icon::GEAR_SIX, &self.i18n.tr("nav-settings"))
                 .clicked()
             {
                 self.page = Page::Settings;

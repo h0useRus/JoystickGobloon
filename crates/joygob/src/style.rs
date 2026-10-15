@@ -5,7 +5,9 @@ pub use egui_phosphor::regular as icon;
 
 use crate::settings::Theme;
 
-pub const ICON_SIZE: f32 = 20.0;
+/// Icons inside rows of controls (buttons, captions next to fields).
+pub const ICON_SIZE: f32 = 16.0;
+const NAV_ICON_SIZE: f32 = 22.0;
 /// Corner radius of widgets. Pass it explicitly to selectable buttons:
 /// egui draws selected buttons with square corners otherwise.
 pub const RADIUS: u8 = 8;
@@ -66,33 +68,67 @@ pub fn accent(ui: &egui::Ui) -> Color32 {
     ui.visuals().selection.stroke.color
 }
 
-/// Large icon-only toggle used in the navigation rail and toolbars.
+/// Large icon-only toggle of the navigation rail.
+pub fn nav_toggle(ui: &mut egui::Ui, selected: bool, glyph: &str, tooltip: &str) -> egui::Response {
+    toggle(
+        ui,
+        selected,
+        glyph,
+        tooltip,
+        NAV_ICON_SIZE,
+        Vec2::new(44.0, 40.0),
+    )
+}
+
+/// Icon-only toggle as tall as text fields and dropdowns.
 pub fn icon_toggle(
     ui: &mut egui::Ui,
     selected: bool,
     glyph: &str,
     tooltip: &str,
 ) -> egui::Response {
+    let h = ui.spacing().interact_size.y;
+    toggle(
+        ui,
+        selected,
+        glyph,
+        tooltip,
+        ICON_SIZE,
+        Vec2::new(h + 4.0, h),
+    )
+}
+
+fn toggle(
+    ui: &mut egui::Ui,
+    selected: bool,
+    glyph: &str,
+    tooltip: &str,
+    size: f32,
+    button: Vec2,
+) -> egui::Response {
     let text = if selected {
-        RichText::new(glyph).size(ICON_SIZE + 2.0).color(accent(ui))
+        RichText::new(glyph).size(size).color(accent(ui))
     } else {
-        RichText::new(glyph).size(ICON_SIZE + 2.0)
+        RichText::new(glyph).size(size)
     };
-    ui.add_sized(
-        [44.0, 40.0],
+    let response = ui.add_sized(
+        button,
         egui::Button::new(text)
             .selected(selected)
             .corner_radius(RADIUS)
             .frame(selected),
-    )
-    .on_hover_text(tooltip)
+    );
+    response.on_hover_text(tooltip)
 }
 
-/// Icon-only push button with a tooltip.
+/// Icon-only push button with a tooltip, as tall as text fields.
 pub fn icon_button(ui: &mut egui::Ui, enabled: bool, glyph: &str, tooltip: &str) -> egui::Response {
+    let h = ui.spacing().interact_size.y;
     ui.add_enabled(
         enabled,
-        egui::Button::new(RichText::new(glyph).size(ICON_SIZE)).frame(false),
+        egui::Button::new(RichText::new(glyph).size(ICON_SIZE))
+            .frame(false)
+            .min_size(Vec2::new(h, h)),
     )
     .on_hover_text(tooltip)
 }
