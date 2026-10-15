@@ -212,6 +212,9 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "pause-resume" => icon::PLAY_PAUSE,
         "run-command" => icon::TERMINAL_WINDOW,
         "map-to-mouse" => icon::MOUSE,
+        "map-to-keyboard" => icon::KEYBOARD,
+        "double-tap" => icon::NUMBER_CIRCLE_TWO,
+        "chain" => icon::LIST_NUMBERS,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -241,6 +244,11 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             },
         ));
         list.push((icon::TIMER, "kind-tempo", NewAction::Tempo));
+        list.push((
+            icon::NUMBER_CIRCLE_TWO,
+            "kind-double-tap",
+            NewAction::DoubleTap,
+        ));
     }
     list.push((
         icon::MOUSE,
@@ -412,6 +420,37 @@ impl Editor<'_> {
                     activate_on,
                     ..
                 } => self.tempo(ui, action, threshold, activate_on, depth),
+                ActionKind::DoubleTap {
+                    threshold,
+                    activate_on,
+                    ..
+                } => self.double_tap(ui, action, threshold, activate_on, depth),
+                ActionKind::Chain { chains, timeout } => {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(icon::CLOCK_COUNTDOWN).size(style::ICON_SIZE))
+                            .on_hover_text(self.i18n.tr("edit-chain-timeout"));
+                        let mut t = timeout;
+                        let drag = egui::DragValue::new(&mut t)
+                            .range(0.0..=60.0)
+                            .speed(0.05)
+                            .suffix(" s");
+                        if ui.add(drag).changed() {
+                            self.set(&action.id, "timeout", "float", py_float(t as f32));
+                        }
+                    });
+                    if depth <= 8 {
+                        for n in 0..chains.len() {
+                            let group = format!("chain-{n}");
+                            let title = self.i18n.trf("edit-chain-step", &[("n", (n + 1).into())]);
+                            ui.label(
+                                RichText::new(format!("{}  {title}", icon::LIST_NUMBERS)).strong(),
+                            );
+                            ui.indent((&group, &action.id), |ui| {
+                                self.container(ui, &action.id, &group, depth + 1);
+                            });
+                        }
+                    }
+                }
                 ActionKind::MapToMouse(mouse) => self.mouse(ui, action, mouse),
                 ActionKind::SmartToggle { delay, .. } => {
                     self.seconds(ui, &action.id, "delay", "edit-delay", delay);
@@ -919,6 +958,53 @@ impl Editor<'_> {
             ui.separator();
             self.activation(ui, action);
         });
+    }
+
+    fn double_tap(
+        &mut self,
+        ui: &mut egui::Ui,
+        action: &Action,
+        threshold: f64,
+        activate_on: &str,
+        depth: usize,
+    ) {
+        let id = action.id.clone();
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::TIMER).size(style::ICON_SIZE))
+                .on_hover_text(self.i18n.tr("edit-tap-threshold"));
+            let mut t = threshold;
+            let drag = egui::DragValue::new(&mut t)
+                .range(0.05..=10.0)
+                .speed(0.01)
+                .suffix(" s");
+            if ui.add(drag).changed() {
+                self.set(&id, "threshold", "float", py_float(t as f32));
+            }
+            for (value, glyph, key) in [
+                ("exclusive", icon::NUMBER_CIRCLE_ONE, "edit-tap-exclusive"),
+                ("combined", icon::INTERSECT, "edit-tap-combined"),
+            ] {
+                if style::icon_toggle(ui, activate_on == value, glyph, &self.i18n.tr(key)).clicked()
+                {
+                    self.set(&id, "activate-on", "string", value);
+                }
+            }
+        });
+        if depth > 8 {
+            return;
+        }
+        for (group, glyph, key) in [
+            ("single-actions", icon::NUMBER_CIRCLE_ONE, "edit-single"),
+            ("double-actions", icon::NUMBER_CIRCLE_TWO, "edit-double"),
+        ] {
+            ui.label(RichText::new(format!("{glyph}  {}", self.i18n.tr(key))).strong());
+            ui.indent((group, &id), |ui| {
+                let saved = self.behavior;
+                self.behavior = InputType::Button;
+                self.container(ui, &id, group, depth + 1);
+                self.behavior = saved;
+            });
+        }
     }
 
     fn tempo(

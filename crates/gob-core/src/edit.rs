@@ -18,6 +18,7 @@ pub enum NewAction {
         target: String,
     },
     Tempo,
+    DoubleTap,
     Description,
     /// Button inputs map to a mouse button, axes and hats to cursor motion.
     MapToMouse {
@@ -34,6 +35,7 @@ pub fn child_groups(kind: &str) -> &'static [&'static str] {
     match kind {
         "root" => &["actions"],
         "tempo" => &["short-actions", "long-actions"],
+        "double-tap" => &["single-actions", "double-actions"],
         "smart-toggle" => &["actions"],
         "split-axis" => &["lower-actions", "upper-actions"],
         _ => &[],
@@ -156,6 +158,16 @@ impl Action {
                     group("long-actions", Vec::new()),
                     prop("float", "threshold", "0.5"),
                     prop("string", "activate-on", "release"),
+                ],
+                "disallowed",
+            ),
+            NewAction::DoubleTap => Self::build(
+                "double-tap",
+                vec![
+                    group("single-actions", Vec::new()),
+                    group("double-actions", Vec::new()),
+                    prop("float", "threshold", "0.5"),
+                    prop("string", "activate-on", "exclusive"),
                 ],
                 "disallowed",
             ),

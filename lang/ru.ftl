@@ -190,3 +190,14 @@ run-executable = Программа
 run-arguments = Аргументы
 run-browse = Выбрать программу
 status-paused = Профиль на паузе
+
+# Double tap, chain
+kind-double-tap = Двойное нажатие
+kind-chain = Цепочка
+edit-tap-threshold = Время до второго нажатия
+edit-tap-exclusive = Раздельно: одиночное нажатие ждёт, не будет ли второго
+edit-tap-combined = Вместе: двойное нажатие выполняет и действия одиночного
+edit-single = Одиночное нажатие
+edit-double = Двойное нажатие
+edit-chain-timeout = Начать с первого шага после такой паузы (0 = никогда)
+edit-chain-step = Шаг { $n }

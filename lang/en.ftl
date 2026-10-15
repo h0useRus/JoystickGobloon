@@ -190,3 +190,14 @@ run-executable = Program
 run-arguments = Arguments
 run-browse = Choose program
 status-paused = Profile paused
+
+# Double tap, chain
+kind-double-tap = Double tap
+kind-chain = Chain
+edit-tap-threshold = Time to the second tap
+edit-tap-exclusive = Exclusive: a single tap waits to rule out a double tap
+edit-tap-combined = Combined: a double tap also runs the single tap actions
+edit-single = Single tap
+edit-double = Double tap
+edit-chain-timeout = Restart from the first step after this idle time (0 = never)
+edit-chain-step = Step { $n }

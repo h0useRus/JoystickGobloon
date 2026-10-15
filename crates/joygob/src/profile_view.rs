@@ -9,6 +9,7 @@ use gob_core::{Action, Profile};
 use gob_gremlin::{ImportReport, Warning};
 use gob_i18n::I18n;
 
+use crate::action_editor::kind_icon;
 use crate::style::{self, icon};
 
 pub struct LoadedProfile {
@@ -118,23 +119,6 @@ fn display_name(action: &Action) -> String {
         .filter(|l| !l.is_empty() && *l != "None")
         .unwrap_or(&action.kind);
     format!("{}  {text}", kind_icon(&action.kind))
-}
-
-fn kind_icon(kind: &str) -> &'static str {
-    match kind {
-        "map-to-vjoy" => icon::GAME_CONTROLLER,
-        "response-curve" => icon::CHART_LINE,
-        "change-mode" => icon::STACK,
-        "tempo" => icon::TIMER,
-        "description" => icon::NOTE,
-        "macro" => icon::KEYBOARD,
-        "smart-toggle" => icon::TOGGLE_RIGHT,
-        "split-axis" => icon::ARROWS_SPLIT,
-        "pause-resume" => icon::PLAY_PAUSE,
-        "run-command" => icon::TERMINAL_WINDOW,
-        "map-to-mouse" => icon::MOUSE,
-        _ => icon::PUZZLE_PIECE,
-    }
 }
 
 /// Shows an action and its children; root containers are transparent, as in Gremlin.
