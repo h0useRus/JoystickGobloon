@@ -43,3 +43,11 @@ warn-dangling = Missing action { $to } (referenced from { $from })
 warn-unknown-mode = Inputs use the undeclared mode “{ $mode }”
 warn-not-executable = “{ $kind }” × { $count }: kept in the profile, but not executed yet
 warn-scripts = The profile contains Python plugins: they are kept, but not run
+
+# Device substitution
+subst-title = Replace devices
+subst-banner = Profile devices not connected: { $count }
+subst-keep = Keep as is
+subst-apply = Apply
+status-substituted = Devices replaced. Save the profile to keep the change.
+profile-modified = Unsaved changes

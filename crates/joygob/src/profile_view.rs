@@ -14,6 +14,8 @@ pub struct LoadedProfile {
     pub profile: Profile,
     pub path: PathBuf,
     pub report: ImportReport,
+    /// Changed since it was loaded or saved.
+    pub dirty: bool,
 }
 
 impl LoadedProfile {
@@ -23,7 +25,14 @@ impl LoadedProfile {
             profile,
             path,
             report,
+            dirty: false,
         }
+    }
+
+    /// Call after editing the profile: re-checks it and marks it unsaved.
+    pub fn refresh(&mut self) {
+        self.report = gob_gremlin::report(&self.profile);
+        self.dirty = true;
     }
 
     pub fn file_name(&self) -> String {

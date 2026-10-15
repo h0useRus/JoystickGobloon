@@ -6,6 +6,7 @@ mod profile_view;
 mod settings;
 mod settings_view;
 mod style;
+mod substitute_view;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {

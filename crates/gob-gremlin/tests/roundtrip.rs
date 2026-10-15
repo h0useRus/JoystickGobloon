@@ -185,3 +185,35 @@ fn local_profiles_round_trip() {
         );
     }
 }
+
+#[test]
+fn substitute_device_moves_all_references() {
+    let old = "11111111-0000-0000-0000-000000000001";
+    let new = "22222222-0000-0000-0000-000000000002";
+    // A property referencing the device, as conditions and merge actions do.
+    let text = SAMPLE.replace(
+        "<name>repeat-mode</name>",
+        &format!("<name>device</name>\n<value>{old}</value>\n</property>\n<property type=\"string\">\n<name>repeat-mode</name>"),
+    );
+    let mut p = gob_gremlin::from_str(&text).unwrap();
+    let n = p.substitute_device(old, new, "Test Stick 2");
+    assert_eq!(n, 3, "two inputs and one action property");
+    assert!(p.inputs.iter().all(|b| b.device_id == new));
+    assert_eq!(
+        (p.devices[0].id.as_str(), p.devices[0].name.as_str()),
+        (new, "Test Stick 2")
+    );
+    assert!(!gob_gremlin::to_string(&p).contains(old));
+}
+
+#[test]
+fn device_names_match_ignoring_padding() {
+    assert!(gob_core::same_device_name(
+        " VKBsim Gladiator EVO  R  ",
+        "VKBsim Gladiator EVO R"
+    ));
+    assert!(!gob_core::same_device_name(
+        "VKBsim Gladiator EVO L",
+        "VKBsim Gladiator EVO R"
+    ));
+}

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::action::{Action, InputType};
+use crate::action::{Action, InputType, Item};
 use crate::xml::Element;
 
 /// A physical input bound to a tree of actions in one mode.
@@ -119,4 +119,64 @@ impl Profile {
     pub fn has_scripts(&self) -> bool {
         self.scripts.elements().next().is_some()
     }
+
+    /// Moves everything bound to device `old` onto device `new`, e.g. the same
+    /// stick on another PC where DirectInput assigned a different GUID.
+    /// Returns the number of updated references.
+    pub fn substitute_device(&mut self, old: &str, new: &str, new_name: &str) -> usize {
+        let mut count = 0;
+        for b in &mut self.inputs {
+            if b.device_id.eq_ignore_ascii_case(old) {
+                b.device_id = new.to_string();
+                count += 1;
+            }
+        }
+        for a in &mut self.library {
+            count += replace_in_items(&mut a.items, old, new);
+        }
+        count += self.logical_device.replace_text(old, new);
+        for e in &mut self.extra {
+            count += e.replace_text(old, new);
+        }
+        let new_known = self.devices.iter().any(|d| d.id.eq_ignore_ascii_case(new));
+        if new_known {
+            self.devices.retain(|d| !d.id.eq_ignore_ascii_case(old));
+        } else if let Some(d) = self
+            .devices
+            .iter_mut()
+            .find(|d| d.id.eq_ignore_ascii_case(old))
+        {
+            d.id = new.to_string();
+            d.name = new_name.to_string();
+        }
+        count
+    }
+}
+
+/// Device names compare equal ignoring case and extra whitespace
+/// (Gremlin keeps the padding some drivers report, e.g. `" VKBsim Gladiator EVO  R  "`).
+pub fn same_device_name(a: &str, b: &str) -> bool {
+    let norm = |s: &str| {
+        s.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    };
+    norm(a) == norm(b)
+}
+
+fn replace_in_items(items: &mut [Item], old: &str, new: &str) -> usize {
+    let mut count = 0;
+    for item in items {
+        match item {
+            Item::Property(p) if p.value.eq_ignore_ascii_case(old) => {
+                p.value = new.to_string();
+                count += 1;
+            }
+            Item::Group { items, .. } => count += replace_in_items(items, old, new),
+            Item::Raw(e) => count += e.replace_text(old, new),
+            _ => {}
+        }
+    }
+    count
 }

@@ -43,3 +43,11 @@ warn-dangling = Нет действия { $to } (ссылка из { $from })
 warn-unknown-mode = Входы используют необъявленный режим «{ $mode }»
 warn-not-executable = «{ $kind }» × { $count }: сохраняется в профиле, но пока не выполняется
 warn-scripts = В профиле есть Python-плагины: они сохраняются, но не запускаются
+
+# Device substitution
+subst-title = Замена устройств
+subst-banner = Не подключено устройств профиля: { $count }
+subst-keep = Оставить как есть
+subst-apply = Применить
+status-substituted = Устройства заменены. Сохраните профиль, чтобы закрепить изменения.
+profile-modified = Есть несохранённые изменения

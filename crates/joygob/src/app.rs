@@ -8,6 +8,7 @@ use crate::profile_view::{report_window, LoadedProfile};
 use crate::settings::Settings;
 use crate::settings_view::{self, Change, SettingsTab};
 use crate::style::{self, icon};
+use crate::substitute_view::{missing_devices, SubstituteDialog};
 
 const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/joygob-256.png");
 
@@ -30,6 +31,7 @@ pub struct JoyGobApp {
     logo: egui::TextureHandle,
     input: gob_input::InputService,
     devices_view: DevicesView,
+    substitute: Option<SubstituteDialog>,
 }
 
 impl JoyGobApp {
@@ -73,6 +75,7 @@ impl JoyGobApp {
                 gob_input::InputService::start(move || ctx.request_repaint())
             },
             devices_view: DevicesView::default(),
+            substitute: None,
         };
         if let Some(path) = reopen {
             app.open_profile(path, false);
@@ -111,7 +114,9 @@ impl JoyGobApp {
     }
 
     fn save_dialog(&mut self) {
-        let Some(loaded) = &self.profile else { return };
+        let Some(loaded) = &mut self.profile else {
+            return;
+        };
         let mut dialog = rfd::FileDialog::new()
             .add_filter(self.i18n.tr("file-filter-gremlin"), &["xml"])
             .set_file_name(loaded.file_name());
@@ -122,10 +127,17 @@ impl JoyGobApp {
             return;
         };
         self.status = match gob_gremlin::save(&path, &loaded.profile) {
-            Ok(()) => self.i18n.trf(
-                "status-saved",
-                &[("file", path.display().to_string().into())],
-            ),
+            Ok(()) => {
+                let status = self.i18n.trf(
+                    "status-saved",
+                    &[("file", path.display().to_string().into())],
+                );
+                loaded.path = path.clone();
+                loaded.dirty = false;
+                self.settings.last_profile = Some(path);
+                self.settings.save();
+                status
+            }
             Err(e) => self
                 .i18n
                 .trf("save-error", &[("error", e.to_string().into())]),
@@ -166,9 +178,13 @@ impl JoyGobApp {
             {
                 self.import_dialog();
             }
-            if style::icon_button(ui, loaded, icon::FLOPPY_DISK, &self.i18n.tr("action-save"))
-                .clicked()
-            {
+            let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
+            let save = if dirty {
+                icon::FLOPPY_DISK_BACK
+            } else {
+                icon::FLOPPY_DISK
+            };
+            if style::icon_button(ui, loaded, save, &self.i18n.tr("action-save")).clicked() {
                 self.save_dialog();
             }
             let has_warnings = self
@@ -188,6 +204,12 @@ impl JoyGobApp {
                 ui.label(RichText::new(icon::FILE_TEXT).size(style::ICON_SIZE));
                 ui.strong(p.file_name())
                     .on_hover_text(p.path.display().to_string());
+                if p.dirty {
+                    let (rect, r) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
+                    ui.painter()
+                        .circle_filled(rect.center(), 4.0, style::accent(ui));
+                    r.on_hover_text(self.i18n.tr("profile-modified"));
+                }
             }
         });
         ui.separator();
@@ -201,6 +223,30 @@ impl JoyGobApp {
                 }
             });
             return;
+        }
+        let missing = self.profile.as_ref().map_or(0, |p| {
+            missing_devices(&p.profile, &self.input.devices()).len()
+        });
+        let any_physical = self.input.devices().iter().any(|d| !d.info.is_vjoy());
+        if missing > 0 && any_physical {
+            let banner = egui::Frame::new()
+                .fill(ui.visuals().faint_bg_color)
+                .corner_radius(8)
+                .inner_margin(8);
+            banner.show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(icon::PLUGS).size(style::ICON_SIZE));
+                    ui.label(self.i18n.trf("subst-banner", &[("count", missing.into())]));
+                    let text = format!("{}  {}", icon::SWAP, self.i18n.tr("subst-title"));
+                    if ui.button(text).clicked() {
+                        if let Some(p) = &self.profile {
+                            self.substitute =
+                                Some(SubstituteDialog::new(&p.profile, &self.input.devices()));
+                        }
+                    }
+                });
+            });
+            ui.add_space(4.0);
         }
         let devices = self.input.devices();
         self.devices_view
@@ -260,6 +306,21 @@ impl eframe::App for JoyGobApp {
                     }
                 }
             });
+
+        if let Some(dialog) = &mut self.substitute {
+            let mut open = true;
+            let applied = dialog.show(ctx, &self.i18n, &self.input.devices(), &mut open);
+            if let (Some(list), Some(loaded)) = (applied, &mut self.profile) {
+                for (old, new, name) in &list {
+                    loaded.profile.substitute_device(old, new, name);
+                }
+                loaded.refresh();
+                self.status = self.i18n.tr("status-substituted");
+            }
+            if !open {
+                self.substitute = None;
+            }
+        }
 
         if let (true, Some(loaded)) = (self.show_report, &self.profile) {
             report_window(ctx, &self.i18n, &loaded.report, &mut self.show_report);
