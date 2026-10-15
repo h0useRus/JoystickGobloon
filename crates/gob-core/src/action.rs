@@ -268,7 +268,7 @@ pub enum MacroRepeat {
 }
 
 /// hat-buttons group tags, clockwise from north (45 degrees apart).
-const HAT_BUTTONS: [&str; 8] = [
+pub(crate) const HAT_BUTTONS: [&str; 8] = [
     "North",
     "North-East",
     "East",

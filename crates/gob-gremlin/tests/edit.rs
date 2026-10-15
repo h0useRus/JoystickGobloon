@@ -171,3 +171,47 @@ fn mode_parents_and_removal() {
     assert!(p.inputs.iter().all(|b| b.mode != "Combat"));
     assert!(!p.remove_mode("Unknown"));
 }
+
+#[test]
+fn hat_button_count_keeps_shared_directions() {
+    let mut p = sample();
+    let root = p.bind(DEV, "hat", "1", "Default");
+    let hb = p
+        .add_child(
+            &root,
+            "actions",
+            gob_core::Action::new(&NewAction::HatButtons),
+        )
+        .unwrap();
+    let north = p
+        .add_child(&hb, "North", gob_core::Action::new(&NewAction::Description))
+        .unwrap();
+    p.set_hat_button_count(&hb, 8);
+    let ne = p
+        .add_child(
+            &hb,
+            "North-East",
+            gob_core::Action::new(&NewAction::Description),
+        )
+        .unwrap();
+    let p8 = reload(&p);
+    let ActionKind::HatButtons { directions } = p8.action(&hb).unwrap().kind() else {
+        panic!("not hat-buttons");
+    };
+    assert_eq!(directions.len(), 9);
+    assert_eq!(directions[0].2, [north.as_str()]);
+    assert_eq!(directions[1], ("North-East", Some(4500), vec![ne.as_str()]));
+
+    p.set_hat_button_count(&hb, 4);
+    let p4 = reload(&p);
+    let ActionKind::HatButtons { directions } = p4.action(&hb).unwrap().kind() else {
+        panic!("not hat-buttons");
+    };
+    let tags: Vec<&str> = directions.iter().map(|d| d.0).collect();
+    assert_eq!(tags, ["North", "East", "South", "West", "Center"]);
+    assert_eq!(directions[0].2, [north.as_str()]);
+    assert!(
+        p4.action(&ne).is_none(),
+        "dropped diagonal actions are collected"
+    );
+}

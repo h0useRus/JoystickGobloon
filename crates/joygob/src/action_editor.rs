@@ -70,6 +70,11 @@ pub enum Op {
         action: String,
         targets: Vec<String>,
     },
+    /// hat-buttons: 4 or 8 directions.
+    HatButtonCount {
+        action: String,
+        count: u8,
+    },
 }
 
 pub fn apply(p: &mut Profile, op: Op) {
@@ -132,6 +137,7 @@ pub fn apply(p: &mut Profile, op: Op) {
                 a.set(&name, &ty, value);
             }
         }
+        Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
         Op::SetInGroup {
             action,
             group,
@@ -457,6 +463,23 @@ impl Editor<'_> {
                     }
                 }
                 ActionKind::HatButtons { directions } => {
+                    let eight = directions.len() == 9;
+                    ui.horizontal(|ui| {
+                        for (count, glyph, key) in [
+                            (4, icon::NUMBER_CIRCLE_FOUR, "edit-hat-four"),
+                            (8, icon::NUMBER_CIRCLE_EIGHT, "edit-hat-eight"),
+                        ] {
+                            let on = eight == (count == 8);
+                            if style::icon_toggle(ui, on, glyph, &self.i18n.tr(key)).clicked()
+                                && !on
+                            {
+                                self.ops.push(Op::HatButtonCount {
+                                    action: action.id.clone(),
+                                    count,
+                                });
+                            }
+                        }
+                    });
                     let keys: Vec<String> = directions
                         .iter()
                         .map(|(tag, ..)| format!("hat-{}", tag.to_ascii_lowercase()))

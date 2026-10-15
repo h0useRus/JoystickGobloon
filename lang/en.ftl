@@ -204,6 +204,8 @@ edit-chain-step = Step { $n }
 
 # Hat as buttons
 kind-hat-buttons = Hat as buttons
+edit-hat-four = 4 directions
+edit-hat-eight = 8 directions (with diagonals)
 hat-north = North
 hat-north-east = North-east
 hat-east = East

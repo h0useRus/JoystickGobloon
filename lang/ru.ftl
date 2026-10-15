@@ -204,6 +204,8 @@ edit-chain-step = Шаг { $n }
 
 # Hat as buttons
 kind-hat-buttons = Хатка как кнопки
+edit-hat-four = 4 направления
+edit-hat-eight = 8 направлений (с диагоналями)
 hat-north = Север
 hat-north-east = Северо-восток
 hat-east = Восток

@@ -89,7 +89,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 
 ## hat-buttons
 
-- `button-count` int (4 or 8); groups named after the directions (`North`, `North-East`, ... `North-West`)
+- `button-count` int (4 or 8; switching keeps shared directions, drops diagonal actions); groups named after the directions (`North`, `North-East`, ... `North-West`)
   plus `Center`, each with `<action-id>` lists. Activation disabled.
 - Every direction is a virtual button pressed while the hat points exactly there; with 4 buttons a diagonal
   presses none of them. Centered presses `Center`. Children get button values (press, release).

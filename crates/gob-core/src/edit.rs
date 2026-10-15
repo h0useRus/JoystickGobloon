@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 use std::hash::{BuildHasher, Hasher};
 
-use crate::action::{Action, InputType, Item, Property};
+use crate::action::{Action, InputType, Item, Property, HAT_BUTTONS};
 use crate::profile::{ActionConfig, InputBinding, Mode, Profile};
 
 /// Action types the editor can create.
@@ -381,6 +381,51 @@ impl Profile {
         };
         let item = refs.remove(f);
         refs.insert(t, item);
+    }
+
+    /// Switches a hat-buttons action between 4 and 8 directions. Shared directions keep
+    /// their actions, dropped diagonals lose theirs (Gremlin's `set_button_count`).
+    pub fn set_hat_button_count(&mut self, id: &str, count: u8) {
+        if count != 4 && count != 8 {
+            return;
+        }
+        let Some(a) = self.action_mut(id) else {
+            return;
+        };
+        let mut lists: Vec<(String, Vec<Item>)> = Vec::new();
+        a.items.retain_mut(|i| match i {
+            Item::Group { tag, items, .. }
+                if HAT_BUTTONS.contains(&tag.as_str()) || tag == "Center" =>
+            {
+                lists.push((tag.clone(), std::mem::take(items)));
+                false
+            }
+            _ => true,
+        });
+        a.set("button-count", "int", count.to_string());
+        let at = a
+            .items
+            .iter()
+            .position(|i| matches!(i, Item::Property(p) if p.name == "button-count"))
+            .map_or(0, |p| p + 1);
+        let tags = HAT_BUTTONS
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| count == 8 || i % 2 == 0)
+            .map(|(_, t)| *t)
+            .chain(["Center"]);
+        let groups: Vec<Item> = tags
+            .map(|t| {
+                let items = lists
+                    .iter_mut()
+                    .find(|(tag, _)| tag == t)
+                    .map(|(_, items)| std::mem::take(items))
+                    .unwrap_or_default();
+                group(t, items)
+            })
+            .collect();
+        a.items.splice(at..at, groups);
+        self.collect_garbage();
     }
 
     /// Drops library actions that no input reaches any more.
