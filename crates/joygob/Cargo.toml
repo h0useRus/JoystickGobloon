@@ -13,3 +13,6 @@ gob-i18n.workspace = true
 eframe.workspace = true
 serde.workspace = true
 toml.workspace = true
+
+[build-dependencies]
+winresource = "0.1"
