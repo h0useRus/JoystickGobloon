@@ -157,3 +157,19 @@ vjoy-hat-n = Hat { $n }
 vjoy-absolute = Absolute
 vjoy-relative = Relative
 vjoy-speed = Speed
+
+# Mouse
+kind-map-to-mouse = Map to mouse
+mouse-mode-button = Mouse button
+mouse-mode-motion = Cursor motion
+mouse-left = Left button
+mouse-right = Right button
+mouse-middle = Middle button
+mouse-forward = Forward button
+mouse-back = Back button
+mouse-wheel-up = Wheel up
+mouse-wheel-down = Wheel down
+mouse-direction = Direction
+mouse-min-speed = Minimum speed
+mouse-max-speed = Maximum speed
+mouse-time-to-max = Time to maximum speed

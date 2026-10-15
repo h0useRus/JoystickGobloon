@@ -157,3 +157,19 @@ vjoy-hat-n = Хатка { $n }
 vjoy-absolute = Абсолютная
 vjoy-relative = Относительная
 vjoy-speed = Скорость
+
+# Mouse
+kind-map-to-mouse = Назначить на мышь
+mouse-mode-button = Кнопка мыши
+mouse-mode-motion = Движение курсора
+mouse-left = Левая кнопка
+mouse-right = Правая кнопка
+mouse-middle = Средняя кнопка
+mouse-forward = Кнопка «Вперёд»
+mouse-back = Кнопка «Назад»
+mouse-wheel-up = Колесо вверх
+mouse-wheel-down = Колесо вниз
+mouse-direction = Направление
+mouse-min-speed = Минимальная скорость
+mouse-max-speed = Максимальная скорость
+mouse-time-to-max = Время разгона

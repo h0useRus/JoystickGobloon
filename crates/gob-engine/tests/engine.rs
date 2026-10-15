@@ -11,6 +11,9 @@ const DEV: &str = "aaaaaaaa-0000-0000-0000-000000000001";
 enum Out {
     Axis(u8, f32),
     Button(u8, bool),
+    Move(i32, i32),
+    Mouse(gob_core::MouseButton, bool),
+    Wheel(i32),
 }
 
 #[derive(Default)]
@@ -25,6 +28,15 @@ impl Output for Recorder {
         self.0.push(Out::Button(button, pressed));
     }
     fn hat(&mut self, _device: u32, _hat: u8, _direction: Option<u16>) {}
+    fn mouse_move(&mut self, dx: i32, dy: i32) {
+        self.0.push(Out::Move(dx, dy));
+    }
+    fn mouse_button(&mut self, button: gob_core::MouseButton, pressed: bool) {
+        self.0.push(Out::Mouse(button, pressed));
+    }
+    fn mouse_wheel(&mut self, notches: i32) {
+        self.0.push(Out::Wheel(notches));
+    }
 }
 
 fn prop(ty: &str, name: &str, value: &str) -> String {
@@ -122,6 +134,39 @@ fn profile() -> String {
         root("r-a2", &["v20"]),
         root("r-b4", &["cycle"]),
         root("r-a3", &["vrel"]),
+        root("r-b5", &["mlb"]),
+        root("r-b6", &["mwu"]),
+        root("r-a4", &["mmove"]),
+        act(
+            "mlb",
+            "map-to-mouse",
+            &format!(
+                "{}{}",
+                prop("string", "mode", "Button"),
+                prop("string", "button", "Left")
+            ),
+        ),
+        act(
+            "mwu",
+            "map-to-mouse",
+            &format!(
+                "{}{}",
+                prop("string", "mode", "Button"),
+                prop("string", "button", "Wheel Up")
+            ),
+        ),
+        act(
+            "mmove",
+            "map-to-mouse",
+            &format!(
+                "{}{}{}{}{}",
+                prop("string", "mode", "Motion"),
+                prop("int", "direction", "90"),
+                prop("int", "min-speed", "0"),
+                prop("int", "max-speed", "1000"),
+                prop("float", "time-to-max-speed", "1.0")
+            ),
+        ),
         act(
             "vrel",
             "map-to-vjoy",
@@ -155,6 +200,9 @@ fn profile() -> String {
         input("axis", 2, "Default", "r-a2", vb),
         input("button", 4, "Default", "r-b4", ""),
         input("axis", 3, "Default", "r-a3", ""),
+        input("button", 5, "Default", "r-b5", ""),
+        input("button", 6, "Default", "r-b6", ""),
+        input("axis", 4, "Default", "r-a4", ""),
     ]
     .concat();
     format!(
@@ -384,5 +432,32 @@ fn relative_axis_moves_by_speed() {
         r.take().is_empty(),
         "stops a second after returning to center"
     );
+    assert!(r.engine.next_deadline().is_none());
+}
+
+#[test]
+fn map_to_mouse_buttons_wheel_and_motion() {
+    use gob_core::MouseButton;
+    let mut r = Rig::new();
+    r.button(5, true, 0);
+    r.button(5, false, 10);
+    r.button(6, true, 20);
+    r.button(6, false, 30);
+    assert_eq!(
+        r.take(),
+        [
+            Out::Mouse(MouseButton::Left, true),
+            Out::Mouse(MouseButton::Left, false),
+            Out::Wheel(1)
+        ]
+    );
+    // Axis at 0.5 with 0..1000 px/s to the right: 500 px/s, 5 px per 10 ms step.
+    r.axis_at(4, 0.5, 0);
+    r.tick(10);
+    r.tick(20);
+    assert_eq!(r.take(), [Out::Move(5, 0), Out::Move(5, 0)]);
+    r.axis_at(4, 0.0, 20);
+    r.tick(30);
+    assert!(r.take().is_empty(), "centered axis stops the cursor");
     assert!(r.engine.next_deadline().is_none());
 }

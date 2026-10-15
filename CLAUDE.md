@@ -16,6 +16,7 @@ Plan: phases 0-10 in docs/ROADMAP.md (phases 0-6 done; device substitution added
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
   semantics (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy;
   examples `dry_run` (profile -> printed vJoy output) and `runner_check`
+- docs/GREMLIN_ACTIONS.md  all Gremlin actions, inputs, JoyGob status and per-action notes; update when adding one
 - planned: gob-plugin
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search

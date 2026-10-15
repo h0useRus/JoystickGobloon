@@ -10,11 +10,19 @@ use crate::profile::{ActionConfig, InputBinding, Mode, Profile};
 /// Action types the editor can create.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NewAction {
-    MapToVjoy { input_type: InputType },
+    MapToVjoy {
+        input_type: InputType,
+    },
     ResponseCurve,
-    ChangeMode { target: String },
+    ChangeMode {
+        target: String,
+    },
     Tempo,
     Description,
+    /// Button inputs map to a mouse button, axes and hats to cursor motion.
+    MapToMouse {
+        input_type: InputType,
+    },
 }
 
 /// Child lists of container actions: `(group tag, is ordered list of actions)`.
@@ -145,6 +153,23 @@ impl Action {
                 ],
                 "disallowed",
             ),
+            NewAction::MapToMouse { input_type } => {
+                let items = if *input_type == InputType::Button {
+                    vec![
+                        prop("string", "mode", "Button"),
+                        prop("string", "button", "Left"),
+                    ]
+                } else {
+                    vec![
+                        prop("string", "mode", "Motion"),
+                        prop("int", "direction", "0"),
+                        prop("int", "min-speed", "50"),
+                        prop("int", "max-speed", "250"),
+                        prop("float", "time-to-max-speed", "1.0"),
+                    ]
+                };
+                Self::build("map-to-mouse", items, "both")
+            }
             NewAction::Description => Self::build(
                 "description",
                 vec![prop("string", "description", "")],

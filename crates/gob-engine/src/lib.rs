@@ -10,7 +10,9 @@
 
 mod engine;
 mod modes;
+mod motion;
 mod runner;
+mod sendinput;
 
 pub use engine::Engine;
 pub use runner::{Runner, RunnerStatus};
@@ -66,4 +68,9 @@ pub trait Output {
     fn axis(&mut self, device: u32, axis: u8, value: f32);
     fn button(&mut self, device: u32, button: u8, pressed: bool);
     fn hat(&mut self, device: u32, hat: u8, direction: Option<u16>);
+    /// Relative cursor movement in pixels.
+    fn mouse_move(&mut self, _dx: i32, _dy: i32) {}
+    fn mouse_button(&mut self, _button: gob_core::MouseButton, _pressed: bool) {}
+    /// Wheel notches: positive scrolls up.
+    fn mouse_wheel(&mut self, _notches: i32) {}
 }

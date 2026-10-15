@@ -2,7 +2,10 @@
 //! applied after the frame so drawing never holds a mutable borrow.
 
 use eframe::egui::{self, Align2, FontId, Pos2, RichText, Sense, Stroke, Vec2};
-use gob_core::{child_groups, Action, ActionKind, InputType, Item, NewAction, Profile, Property};
+use gob_core::{
+    child_groups, Action, ActionKind, InputType, Item, MouseAction, MouseButton, NewAction,
+    Profile, Property,
+};
 use gob_i18n::I18n;
 
 use crate::style::{self, icon};
@@ -39,6 +42,10 @@ pub enum Op {
         group: String,
         from: usize,
         to: usize,
+    },
+    Unset {
+        action: String,
+        name: String,
     },
     Set {
         action: String,
@@ -109,6 +116,11 @@ pub fn apply(p: &mut Profile, op: Op) {
             from,
             to,
         } => p.move_child(&parent, &group, from, to),
+        Op::Unset { action, name } => {
+            if let Some(a) = p.action_mut(&action) {
+                a.unset(&name);
+            }
+        }
         Op::Set {
             action,
             name,
@@ -226,6 +238,13 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
         ));
         list.push((icon::TIMER, "kind-tempo", NewAction::Tempo));
     }
+    list.push((
+        icon::MOUSE,
+        "kind-map-to-mouse",
+        NewAction::MapToMouse {
+            input_type: behavior,
+        },
+    ));
     list.push((icon::NOTE, "kind-description", NewAction::Description));
     list
 }
@@ -369,6 +388,7 @@ impl Editor<'_> {
                     activate_on,
                     ..
                 } => self.tempo(ui, action, threshold, activate_on, depth),
+                ActionKind::MapToMouse(mouse) => self.mouse(ui, action, mouse),
                 ActionKind::Description { text } => {
                     let mut text = text.to_string();
                     if ui
@@ -539,6 +559,139 @@ impl Editor<'_> {
                 self.activation(ui, action);
             }
         });
+    }
+
+    fn mouse(&mut self, ui: &mut egui::Ui, action: &Action, mouse: MouseAction) {
+        let id = action.id.clone();
+        // Axes and hats always move the cursor; buttons can do either.
+        if self.behavior == InputType::Button {
+            ui.horizontal(|ui| {
+                let motion = matches!(mouse, MouseAction::Motion { .. });
+                if ui
+                    .radio(!motion, self.i18n.tr("mouse-mode-button"))
+                    .clicked()
+                    && motion
+                {
+                    for name in ["direction", "min-speed", "max-speed", "time-to-max-speed"] {
+                        self.ops.push(Op::Unset {
+                            action: id.clone(),
+                            name: name.into(),
+                        });
+                    }
+                    self.set(&id, "mode", "string", "Button");
+                    self.set(&id, "button", "string", MouseButton::Left.name());
+                }
+                if ui
+                    .radio(motion, self.i18n.tr("mouse-mode-motion"))
+                    .clicked()
+                    && !motion
+                {
+                    self.ops.push(Op::Unset {
+                        action: id.clone(),
+                        name: "button".into(),
+                    });
+                    self.set(&id, "mode", "string", "Motion");
+                    self.set(&id, "direction", "int", "0");
+                    self.set(&id, "min-speed", "int", "50");
+                    self.set(&id, "max-speed", "int", "250");
+                    self.set(&id, "time-to-max-speed", "float", "1.0");
+                }
+            });
+        }
+        match mouse {
+            MouseAction::Button(button) => {
+                ui.horizontal_wrapped(|ui| {
+                    let name = |b: MouseButton| {
+                        self.i18n.tr(&format!(
+                            "mouse-{}",
+                            b.name().to_lowercase().replace(' ', "-")
+                        ))
+                    };
+                    egui::ComboBox::from_id_salt(("mouse-button", &id))
+                        .selected_text(name(button))
+                        .show_ui(ui, |ui| {
+                            for b in MouseButton::ALL {
+                                if ui.selectable_label(b == button, name(b)).clicked() {
+                                    self.set(&id, "button", "string", b.name());
+                                }
+                            }
+                        });
+                    ui.separator();
+                    self.activation(ui, action);
+                });
+            }
+            MouseAction::Motion {
+                direction,
+                min_speed,
+                max_speed,
+                time_to_max_speed,
+            } => {
+                egui::Grid::new(("mouse-motion", &id))
+                    .num_columns(2)
+                    .spacing([10.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.label(self.i18n.tr("mouse-direction"));
+                        ui.horizontal(|ui| {
+                            let mut d = direction.round() as i32;
+                            if ui
+                                .add(egui::DragValue::new(&mut d).range(0..=359).suffix("°"))
+                                .changed()
+                            {
+                                self.set(&id, "direction", "int", d.to_string());
+                            }
+                            // Quick headings: up, right, down, left.
+                            for (deg, glyph) in [
+                                (0, icon::ARROW_UP),
+                                (90, icon::ARROW_RIGHT),
+                                (180, icon::ARROW_DOWN),
+                                (270, icon::ARROW_LEFT),
+                            ] {
+                                if style::icon_toggle(ui, d == deg, glyph, &format!("{deg}°"))
+                                    .clicked()
+                                {
+                                    self.set(&id, "direction", "int", deg.to_string());
+                                }
+                            }
+                        });
+                        ui.end_row();
+                        for (key, name, value) in [
+                            ("mouse-min-speed", "min-speed", min_speed),
+                            ("mouse-max-speed", "max-speed", max_speed),
+                        ] {
+                            ui.label(self.i18n.tr(key));
+                            let mut v = value.round() as i32;
+                            if ui
+                                .add(
+                                    egui::DragValue::new(&mut v)
+                                        .range(0..=10_000)
+                                        .speed(5)
+                                        .suffix(" px/s"),
+                                )
+                                .changed()
+                            {
+                                self.set(&id, name, "int", v.to_string());
+                            }
+                            ui.end_row();
+                        }
+                        if self.behavior != InputType::Axis {
+                            ui.label(self.i18n.tr("mouse-time-to-max"));
+                            let mut t = time_to_max_speed;
+                            if ui
+                                .add(
+                                    egui::DragValue::new(&mut t)
+                                        .range(0.0..=10.0)
+                                        .speed(0.01)
+                                        .suffix(" s"),
+                                )
+                                .changed()
+                            {
+                                self.set(&id, "time-to-max-speed", "float", py_float(t));
+                            }
+                            ui.end_row();
+                        }
+                    });
+            }
+        }
     }
 
     fn change_mode(&mut self, ui: &mut egui::Ui, action: &Action, change_type: &str) {

@@ -2,10 +2,12 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 use gob_core::{
-    Action, ActionKind, ActivationMode, AxisDirection, InputType, Item, Profile, VirtualButton,
+    Action, ActionKind, ActivationMode, AxisDirection, InputType, Item, MouseAction, MouseButton,
+    Profile, VirtualButton,
 };
 
 use crate::modes::ModeStack;
+use crate::motion::{compass, Motion};
 use crate::{InputKey, InputKind, Output, Value};
 
 /// Delay between press and release of a pulse (Gremlin: 50 ms).
@@ -52,6 +54,10 @@ enum Node {
     Curve {
         deadzone: [f32; 4],
         points: Vec<(f32, f32)>,
+    },
+    Mouse {
+        action: MouseAction,
+        act: ActivationMode,
     },
     Tempo {
         short: Vec<NodeId>,
@@ -207,6 +213,8 @@ pub struct Engine {
     next_timer: u64,
     axes: HashMap<InputKey, f32>,
     relative: HashMap<(u32, u8), RelativeAxis>,
+    /// Cursor motion per (action, input), tagged with the mode it started in.
+    motion: Motion<(NodeId, InputKey), String>,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -248,6 +256,7 @@ impl Engine {
             next_timer: 0,
             axes: HashMap::new(),
             relative: HashMap::new(),
+            motion: Motion::default(),
         };
 
         let mut virtual_id = 0;
@@ -404,6 +413,10 @@ impl Engine {
                     threshold: Duration::from_secs_f64(threshold.max(0.0)),
                     on_press: activate_on == "press",
                 },
+                ActionKind::MapToMouse(action_kind) => Node::Mouse {
+                    action: action_kind,
+                    act: action.activation_mode(),
+                },
                 ActionKind::Description { .. } | ActionKind::Other => Node::Noop,
             },
         };
@@ -434,7 +447,12 @@ impl Engine {
             .filter(|r| r.active)
             .map(|r| r.last_step + RELATIVE_STEP)
             .min();
-        self.timers.iter().map(|t| t.at).chain(relative).min()
+        self.timers
+            .iter()
+            .map(|t| t.at)
+            .chain(relative)
+            .chain(self.motion.next_deadline())
+            .min()
     }
 
     /// Handles one physical input change.
@@ -462,6 +480,11 @@ impl Engine {
             }
         }
         self.step_relative(now, out);
+        if let Some((dx, dy)) = self.motion.step(now) {
+            if dx != 0 || dy != 0 {
+                out.mouse_move(dx, dy);
+            }
+        }
         self.after_mode_change(&before, now, out);
     }
 
@@ -486,6 +509,13 @@ impl Engine {
         if self.modes.current() == before {
             return;
         }
+        // Stop cursor motion whose input is bound differently in the new mode.
+        let (lookup, current) = (&self.lookup, self.modes.current().to_string());
+        self.motion.retain(|(_, key), mode| {
+            lookup
+                .get(key)
+                .is_some_and(|m| m.get(mode).is_some() && m.get(mode) == m.get(&current))
+        });
         let axes: Vec<(InputKey, f32)> = self.axes.iter().map(|(k, v)| (k.clone(), *v)).collect();
         for (key, v) in axes {
             self.dispatch(&key, Value::Axis(v), now, out);
@@ -652,7 +682,80 @@ impl Engine {
                 }
             }
             Node::Tempo { .. } => self.tempo_event(node, src, *value, now, out),
+            Node::Mouse { action, act } => {
+                if should_execute(act, *value) {
+                    self.mouse(node, action, src, *value, now, out);
+                }
+            }
             Node::Noop => {}
+        }
+    }
+
+    fn mouse(
+        &mut self,
+        node: NodeId,
+        action: MouseAction,
+        src: &Source,
+        value: Value,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        let MouseAction::Motion {
+            direction,
+            min_speed,
+            max_speed,
+            time_to_max_speed,
+        } = action
+        else {
+            if let MouseAction::Button(button) = action {
+                match button {
+                    MouseButton::WheelUp if value.truthy() => out.mouse_wheel(1),
+                    MouseButton::WheelDown if value.truthy() => out.mouse_wheel(-1),
+                    MouseButton::WheelUp | MouseButton::WheelDown => {}
+                    b => out.mouse_button(b, value.truthy()),
+                }
+            }
+            return;
+        };
+        let key = (node, src.key.clone());
+        match value {
+            Value::Axis(v) => {
+                // Gremlin maps the "vertical" heading 0 to 180 for axes: positive values move down.
+                let heading = if direction == 0.0 { 180.0 } else { direction };
+                let speed = if v.abs() < 1e-3 {
+                    0.0
+                } else {
+                    (min_speed + v.abs() * (max_speed - min_speed)).copysign(v)
+                };
+                let (x, y) = compass(heading);
+                self.motion
+                    .set_velocity(key, (x * speed, y * speed), src.mode.clone(), now);
+            }
+            Value::Hat(Some(d)) => {
+                let dir = compass(f32::from(d) / 100.0);
+                self.motion.set_accelerated(
+                    key,
+                    dir,
+                    min_speed,
+                    max_speed,
+                    time_to_max_speed,
+                    src.mode.clone(),
+                    now,
+                );
+            }
+            Value::Button(true) => {
+                let dir = compass(direction);
+                self.motion.set_accelerated(
+                    key,
+                    dir,
+                    min_speed,
+                    max_speed,
+                    time_to_max_speed,
+                    src.mode.clone(),
+                    now,
+                );
+            }
+            Value::Hat(None) | Value::Button(false) => self.motion.clear(&key),
         }
     }
 

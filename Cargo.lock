@@ -1411,6 +1411,7 @@ dependencies = [
  "gob-gremlin",
  "gob-input",
  "gob-vjoy",
+ "windows 0.61.3",
 ]
 
 [[package]]

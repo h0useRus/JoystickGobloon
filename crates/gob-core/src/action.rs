@@ -94,8 +94,62 @@ pub enum ActionKind<'a> {
     Description {
         text: &'a str,
     },
+    MapToMouse(MouseAction),
     /// Preserved in the profile but not executed (yet).
     Other,
+}
+
+/// Mouse buttons as Gremlin names them in profiles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
+    Forward,
+    Back,
+    WheelUp,
+    WheelDown,
+}
+
+impl MouseButton {
+    pub const ALL: [MouseButton; 7] = [
+        Self::Left,
+        Self::Right,
+        Self::Middle,
+        Self::Forward,
+        Self::Back,
+        Self::WheelUp,
+        Self::WheelDown,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Left => "Left",
+            Self::Right => "Right",
+            Self::Middle => "Middle",
+            Self::Forward => "Forward",
+            Self::Back => "Back",
+            Self::WheelUp => "Wheel Up",
+            Self::WheelDown => "Wheel Down",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|b| b.name() == s.trim())
+    }
+}
+
+/// What a map-to-mouse action does.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MouseAction {
+    Button(MouseButton),
+    /// Cursor motion: compass direction in degrees (0 = up, 90 = right), speeds in px/s.
+    Motion {
+        direction: f32,
+        min_speed: f32,
+        max_speed: f32,
+        time_to_max_speed: f32,
+    },
 }
 
 /// Action types decoded by [`Action::kind`].
@@ -106,6 +160,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "response-curve",
     "tempo",
     "description",
+    "map-to-mouse",
 ];
 
 impl Action {
@@ -195,6 +250,19 @@ impl Action {
             "description" => ActionKind::Description {
                 text: self.str("description").unwrap_or_default(),
             },
+            "map-to-mouse" => ActionKind::MapToMouse(match self.str("mode").map(str::trim) {
+                Some("Motion") => MouseAction::Motion {
+                    direction: self.parse("direction").unwrap_or(0.0),
+                    min_speed: self.parse("min-speed").unwrap_or(50.0),
+                    max_speed: self.parse("max-speed").unwrap_or(250.0),
+                    time_to_max_speed: self.parse("time-to-max-speed").unwrap_or(1.0),
+                },
+                _ => MouseAction::Button(
+                    self.str("button")
+                        .and_then(MouseButton::parse)
+                        .unwrap_or(MouseButton::Left),
+                ),
+            }),
             _ => ActionKind::Other,
         }
     }

@@ -27,11 +27,11 @@ pub struct Runner {
     status: Arc<Mutex<RunnerStatus>>,
 }
 
-struct VJoyOutput {
+struct SystemOutput {
     devices: HashMap<u32, gob_vjoy::Device>,
 }
 
-impl Output for VJoyOutput {
+impl Output for SystemOutput {
     fn axis(&mut self, device: u32, axis: u8, value: f32) {
         if let Some(d) = self.devices.get(&device) {
             d.set_axis(axis, value);
@@ -49,6 +49,18 @@ impl Output for VJoyOutput {
             d.set_hat(hat, direction);
         }
     }
+
+    fn mouse_move(&mut self, dx: i32, dy: i32) {
+        crate::sendinput::mouse_move(dx, dy);
+    }
+
+    fn mouse_button(&mut self, button: gob_core::MouseButton, pressed: bool) {
+        crate::sendinput::mouse_button(button, pressed);
+    }
+
+    fn mouse_wheel(&mut self, notches: i32) {
+        crate::sendinput::mouse_wheel(notches);
+    }
 }
 
 impl Runner {
@@ -63,7 +75,7 @@ impl Runner {
     ) -> Result<Self, String> {
         let mut engine = Engine::new(profile, aliases);
         let vjoy = VJoy::load().map_err(|e| e.to_string())?;
-        let mut out = VJoyOutput {
+        let mut out = SystemOutput {
             devices: HashMap::new(),
         };
         for id in engine.vjoy_devices() {
@@ -121,7 +133,7 @@ impl Drop for Runner {
 
 fn run(
     mut engine: Engine,
-    mut out: VJoyOutput,
+    mut out: SystemOutput,
     events: &Receiver<InputEvent>,
     status: &Mutex<RunnerStatus>,
     stop: &AtomicBool,

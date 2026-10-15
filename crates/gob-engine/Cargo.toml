@@ -9,5 +9,8 @@ gob-core.workspace = true
 gob-input.workspace = true
 gob-vjoy.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_UI_Input_KeyboardAndMouse"] }
+
 [dev-dependencies]
 gob-gremlin.workspace = true
