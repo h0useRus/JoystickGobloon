@@ -21,7 +21,7 @@ about-text = Device hiding, virtual joysticks and input mapping in one app.
 
 # Empty states
 no-profile = No profile loaded
-device-linked = Bindings of the profile device with the same name. Use “Replace devices” to save the link.
+device-linked = Bindings of the profile device with the same name. Use “Map controls” to save the link.
 device-disconnected = Not connected
 no-devices-attached = No game controllers found
 
@@ -42,12 +42,14 @@ hidhide-whitelist-error = Could not add JoyGob to the HidHide whitelist: { $erro
 warn-not-executable = “{ $kind }” × { $count }: kept in the profile, but not executed yet
 warn-scripts = The profile contains Python plugins: they are kept, but not run
 
-# Device substitution
-subst-title = Replace devices
+# Map controls (device substitution)
+subst-title = Map controls
+subst-auto = Auto
+subst-auto-tip = Map the remaining devices to attached ones with similar names; unclear ones stay for you to choose
 subst-banner = Device IDs in the profile do not match this PC: { $count }
 subst-keep = Keep as is
 subst-apply = Apply
-status-substituted = Devices replaced. Save the profile to keep the change.
+status-substituted = Controls mapped. Save the profile to keep the change.
 
 # vJoy
 vjoy-missing = vJoy is not installed or could not be loaded.
