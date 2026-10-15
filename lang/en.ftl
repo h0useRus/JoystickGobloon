@@ -231,3 +231,9 @@ merge-sum = Sum
 merge-bidirectional = Bidirectional (axis 2 minus axis 1)
 merge-maximum-deflection = Maximum deflection
 merge-closest-to-center = Closest to center
+
+# Axis delta
+kind-axis-delta = Axis delta
+edit-delta-threshold = Axis change that triggers a pulse
+edit-delta-positive = Axis increased
+edit-delta-negative = Axis decreased

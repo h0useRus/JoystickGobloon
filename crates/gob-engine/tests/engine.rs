@@ -206,6 +206,18 @@ fn profile() -> String {
         root("r-b18", &["dtc"]),
         root("r-h1", &["hb4"]),
         root("r-a6", &["merge"]),
+        root("r-a8", &["delta"]),
+        act(
+            "delta",
+            "axis-delta",
+            &format!(
+                "{}<positive-actions><action-id>v38</action-id></positive-actions>\
+                 <negative-actions><action-id>v39</action-id></negative-actions>",
+                prop("float", "threshold", "0.25")
+            ),
+        ),
+        vjoy("v38", "button", 38),
+        vjoy("v39", "button", 39),
         act(
             "merge",
             "merge-axis",
@@ -452,6 +464,7 @@ fn profile() -> String {
         input("hat", 1, "Default", "r-h1", ""),
         input("axis", 6, "Default", "r-a6", ""),
         input("axis", 7, "Default", "r-a6", ""),
+        input("axis", 8, "Default", "r-a8", ""),
         input("hat", 2, "Default", "r-h2", ""),
         input("hat", 2, "Combat", "r-b1c", ""),
     ]
@@ -1048,4 +1061,19 @@ fn merge_operations() {
         gob_core::MergeOp::parse("Maximum-Deflection"),
         Some(MaximumDeflection)
     );
+}
+
+#[test]
+fn axis_delta_pulses_per_threshold() {
+    let mut r = Rig::new();
+    r.axis_at(8, 0.1, 0); // first value only sets the reference
+    r.axis_at(8, 0.2, 10);
+    assert!(r.take().is_empty());
+    r.axis_at(8, 0.4, 20); // +0.3 accumulated
+    assert_eq!(r.take(), [Out::Button(38, true)]);
+    r.tick(70);
+    assert_eq!(r.take(), [Out::Button(38, false)]);
+    r.axis_at(8, 0.3, 100);
+    r.axis_at(8, 0.1, 110); // -0.3
+    assert_eq!(r.take(), [Out::Button(39, true)]);
 }

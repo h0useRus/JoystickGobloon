@@ -121,6 +121,12 @@ pub enum ActionKind<'a> {
         operation: MergeOp,
         children: Vec<&'a str>,
     },
+    /// Pulses `positive` / `negative` each time the axis moved `threshold` that way.
+    AxisDelta {
+        threshold: f64,
+        positive: Vec<&'a str>,
+        negative: Vec<&'a str>,
+    },
     MapToMouse(MouseAction),
     /// Keys pressed in order on press and released in reverse on release.
     MapToKeyboard {
@@ -371,6 +377,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "double-tap",
     "hat-buttons",
     "merge-axis",
+    "axis-delta",
     "smart-toggle",
     "split-axis",
     "pause-resume",
@@ -499,6 +506,11 @@ impl Action {
                 directions.push(("Center", None, self.refs_in("Center")));
                 ActionKind::HatButtons { directions }
             }
+            "axis-delta" => ActionKind::AxisDelta {
+                threshold: self.parse("threshold").unwrap_or(0.1),
+                positive: self.refs_in("positive-actions"),
+                negative: self.refs_in("negative-actions"),
+            },
             "merge-axis" => ActionKind::MergeAxis {
                 axis1: (
                     self.str("axis1-guid").unwrap_or_default().trim(),

@@ -103,6 +103,12 @@ enum Node {
     },
     /// Hat direction (`None` = center) -> actions run as a button while the hat points exactly there.
     HatButtons(Vec<(Option<u16>, Vec<NodeId>)>),
+    /// Accumulates raw axis changes; a pulse whenever they reach `threshold` either way.
+    AxisDelta {
+        threshold: f32,
+        positive: Vec<NodeId>,
+        negative: Vec<NodeId>,
+    },
     /// The two axes' latest values combined; children see the result.
     Merge {
         axes: [InputKey; 2],
@@ -341,6 +347,8 @@ pub struct Engine {
     macros: HashMap<NodeId, MacroRun>,
     taps: HashMap<NodeId, TapState>,
     chains: HashMap<NodeId, ChainState>,
+    /// axis-delta: last raw value and the change accumulated since the last pulse.
+    deltas: HashMap<NodeId, (Option<f32>, f32)>,
     /// Pressed state of each hat-buttons direction.
     hat_buttons: HashMap<NodeId, Vec<bool>>,
     /// map-to-keyboard actions whose keys are held.
@@ -400,6 +408,7 @@ impl Engine {
             taps: HashMap::new(),
             chains: HashMap::new(),
             hat_buttons: HashMap::new(),
+            deltas: HashMap::new(),
             keys_down: HashSet::new(),
             macro_delay: profile
                 .settings
@@ -618,6 +627,21 @@ impl Engine {
                         })
                         .collect(),
                 ),
+                ActionKind::AxisDelta {
+                    threshold,
+                    positive,
+                    negative,
+                } => Node::AxisDelta {
+                    threshold: threshold.max(0.0001) as f32,
+                    positive: positive
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                    negative: negative
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                },
                 ActionKind::MergeAxis {
                     axis1,
                     axis2,
@@ -1067,6 +1091,41 @@ impl Engine {
                 } else {
                     self.release_keys(node, out);
                 }
+            }
+            Node::AxisDelta {
+                threshold,
+                positive,
+                negative,
+            } => {
+                // Gremlin reads the raw input, not the value earlier actions changed.
+                let raw = match (self.axes.get(&src.key), *value) {
+                    (Some(&v), _) | (None, Value::Axis(v)) => v,
+                    _ => return,
+                };
+                let state = self.deltas.entry(node).or_insert((None, 0.0));
+                let Some(last) = state.0 else {
+                    state.0 = Some(raw);
+                    return;
+                };
+                // Gremlin skips an exact 0.0 (Python falsiness) without updating the last value.
+                if raw == 0.0 {
+                    return;
+                }
+                state.0 = Some(raw);
+                state.1 += raw - last;
+                let nodes = if state.1 >= threshold {
+                    positive
+                } else if state.1 <= -threshold {
+                    negative
+                } else {
+                    return;
+                };
+                state.1 = 0.0;
+                let psrc = Source {
+                    no_auto_release: true,
+                    ..src.clone()
+                };
+                self.pulse(&nodes, Value::Button(true), psrc, now, out);
             }
             Node::Merge { axes, op, children } => {
                 let [a, b] = axes.map(|k| self.axes.get(&k).copied().unwrap_or(0.0));

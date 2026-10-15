@@ -231,3 +231,9 @@ merge-sum = Сумма
 merge-bidirectional = Двунаправленное (ось 2 минус ось 1)
 merge-maximum-deflection = Наибольшее отклонение
 merge-closest-to-center = Ближайшее к центру
+
+# Axis delta
+kind-axis-delta = Шаг оси
+edit-delta-threshold = Изменение оси, после которого срабатывает импульс
+edit-delta-positive = Ось увеличилась
+edit-delta-negative = Ось уменьшилась

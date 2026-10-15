@@ -22,7 +22,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `hat-buttons` | H | done |
 | `split-axis` | A | done |
 | `merge-axis` | A B | done |
-| `axis-delta` | A | todo |
+| `axis-delta` | A | done |
 | `dual-axis-deadzone` | A | todo |
 | `condition` | A B H K | todo |
 | `reference` | A B H K | todo (reuses another library action) |
@@ -106,3 +106,11 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   (shared reference) next to a new one, which starts with the edited axis in both slots.
 - On any event it reads the latest values of both axes (0 until seen; the runner feeds the initial
   positions), sets the value and runs the children. Axis devices go through the device substitution.
+
+## axis-delta
+
+- `threshold` float (default 0.1), `positive-actions`, `negative-actions`. Activation disabled.
+- Uses the raw axis value (not one changed by earlier actions). The first event only sets the reference;
+  an exact 0.0 is skipped without updating it (Gremlin's Python falsiness). Changes accumulate; reaching
+  +threshold pulses the positive list, -threshold the negative list (press, release 50 ms later), then the
+  accumulator resets. Gremlin sleeps 50 ms in the event thread; JoyGob uses a timer.

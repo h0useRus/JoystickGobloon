@@ -21,6 +21,7 @@ pub enum NewAction {
     DoubleTap,
     /// Four directions plus center.
     HatButtons,
+    AxisDelta,
     /// Averages `axis` of `device` with itself until the second axis is picked.
     MergeAxis {
         device: String,
@@ -45,6 +46,7 @@ pub fn child_groups(kind: &str) -> &'static [&'static str] {
         "double-tap" => &["single-actions", "double-actions"],
         "smart-toggle" => &["actions"],
         "split-axis" => &["lower-actions", "upper-actions"],
+        "axis-delta" => &["positive-actions", "negative-actions"],
         _ => &[],
     }
 }
@@ -175,6 +177,15 @@ impl Action {
                     group("double-actions", Vec::new()),
                     prop("float", "threshold", "0.5"),
                     prop("string", "activate-on", "exclusive"),
+                ],
+                "disallowed",
+            ),
+            NewAction::AxisDelta => Self::build(
+                "axis-delta",
+                vec![
+                    prop("float", "threshold", "0.1"),
+                    group("positive-actions", Vec::new()),
+                    group("negative-actions", Vec::new()),
                 ],
                 "disallowed",
             ),

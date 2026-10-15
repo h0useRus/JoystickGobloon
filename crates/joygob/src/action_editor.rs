@@ -253,6 +253,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "chain" => icon::LIST_NUMBERS,
         "hat-buttons" => icon::COMPASS,
         "merge-axis" => icon::ARROWS_IN_SIMPLE,
+        "axis-delta" => icon::ARROWS_DOWN_UP,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -317,6 +318,11 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
     }
     if behavior == InputType::Axis {
         list.push((icon::ARROWS_SPLIT, "kind-split-axis", NewAction::SplitAxis));
+        list.push((
+            icon::ARROWS_DOWN_UP,
+            "kind-axis-delta",
+            NewAction::AxisDelta,
+        ));
     }
     list.push((icon::NOTE, "kind-description", NewAction::Description));
     list
@@ -527,6 +533,38 @@ impl Editor<'_> {
                         .map(|((tag, d, _), key)| (*tag, hat_glyph(*d), key.as_str()))
                         .collect();
                     self.nested(ui, &action.id, &groups, InputType::Button, depth);
+                }
+                ActionKind::AxisDelta { threshold, .. } => {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(icon::RULER).size(style::ICON_SIZE))
+                            .on_hover_text(self.i18n.tr("edit-delta-threshold"));
+                        let mut t = threshold as f32;
+                        let drag = egui::DragValue::new(&mut t)
+                            .range(0.0001..=2.0)
+                            .speed(0.005)
+                            .fixed_decimals(3);
+                        if ui.add(drag).changed() {
+                            self.set(&action.id, "threshold", "float", py_float(t));
+                        }
+                    });
+                    self.nested(
+                        ui,
+                        &action.id,
+                        &[
+                            (
+                                "positive-actions",
+                                icon::ARROW_FAT_UP,
+                                "edit-delta-positive",
+                            ),
+                            (
+                                "negative-actions",
+                                icon::ARROW_FAT_DOWN,
+                                "edit-delta-negative",
+                            ),
+                        ],
+                        InputType::Button,
+                        depth,
+                    );
                 }
                 ActionKind::MergeAxis {
                     axis1,
