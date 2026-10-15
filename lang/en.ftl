@@ -7,7 +7,6 @@ nav-vjoy = Virtual joysticks
 nav-settings = Settings
 action-open = Import Joystick Gremlin profile
 action-save = Save
-action-report = Import report
 label-mode = Mode
 
 # Settings
@@ -35,11 +34,11 @@ save-error = Could not save the profile: { $error }
 file-filter-gremlin = Joystick Gremlin profile
 
 # Import report
-import-title = Import report
-import-summary = Format version { $version }: { $inputs } inputs, { $actions } actions, { $devices } devices, { $modes } modes.
-import-no-warnings = No problems found.
-warn-dangling = Missing action { $to } (referenced from { $from })
-warn-unknown-mode = Inputs use the undeclared mode “{ $mode }”
+alert-error = Something went wrong
+alert-import = Some actions in { $file } will not work
+alert-open-log = Open the log
+ok = OK
+hidhide-whitelist-error = Could not add JoyGob to the HidHide whitelist: { $error }
 warn-not-executable = “{ $kind }” × { $count }: kept in the profile, but not executed yet
 warn-scripts = The profile contains Python plugins: they are kept, but not run
 

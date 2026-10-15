@@ -1,22 +1,20 @@
-//! Loaded profile, its import report and the action tree widgets.
+//! Loaded profile, import warnings for the user and the action tree widgets.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use eframe::egui::{self, RichText};
+use eframe::egui;
 use gob_core::{Action, Profile};
 use gob_gremlin::{ImportReport, Warning};
 use gob_i18n::I18n;
 
 use crate::action_editor::kind_icon;
-use crate::style::{self, icon};
 
 pub struct LoadedProfile {
     pub profile: Profile,
     /// `None` for a new profile that was never saved.
     pub path: Option<PathBuf>,
-    pub report: ImportReport,
     /// Changed since it was loaded or saved.
     pub dirty: bool,
     undo: Vec<Profile>,
@@ -30,11 +28,9 @@ const UNDO_LIMIT: usize = 100;
 
 impl LoadedProfile {
     pub fn new(profile: Profile, path: Option<PathBuf>) -> Self {
-        let report = gob_gremlin::report(&profile);
         Self {
             profile,
             path,
-            report,
             dirty: false,
             undo: Vec::new(),
             redo: Vec::new(),
@@ -83,9 +79,8 @@ impl LoadedProfile {
         true
     }
 
-    /// Call after editing the profile: re-checks it and marks it unsaved.
+    /// Call after editing the profile: marks it unsaved.
     pub fn refresh(&mut self) {
-        self.report = gob_gremlin::report(&self.profile);
         self.dirty = true;
     }
 
@@ -149,62 +144,20 @@ pub fn action_tree(ui: &mut egui::Ui, index: &HashMap<&str, &Action>, id: &str, 
     }
 }
 
-pub fn report_window(ctx: &egui::Context, i18n: &I18n, r: &ImportReport, open: &mut bool) {
-    egui::Window::new(i18n.tr("import-title"))
-        .open(open)
-        .collapsible(false)
-        .show(ctx, |ui| {
-            ui.label(i18n.trf(
-                "import-summary",
-                &[
-                    ("version", r.version.clone().into()),
-                    ("inputs", r.inputs.into()),
-                    ("actions", r.actions.into()),
-                    ("devices", r.devices.into()),
-                    ("modes", r.modes.into()),
-                ],
-            ));
-            ui.add_space(6.0);
-            ui.label(RichText::new(icon::LIST_BULLETS).size(style::ICON_SIZE));
-            egui::Grid::new("by-kind").striped(true).show(ui, |ui| {
-                for (kind, count) in &r.by_kind {
-                    ui.label(format!("{}  {kind}", kind_icon(kind)));
-                    ui.label(count.to_string());
-                    ui.end_row();
-                }
-            });
-            ui.add_space(6.0);
-            ui.label(RichText::new(icon::WARNING).size(style::ICON_SIZE));
-            if r.warnings.is_empty() {
-                ui.label(format!(
-                    "{}  {}",
-                    icon::CHECK_CIRCLE,
-                    i18n.tr("import-no-warnings")
-                ));
-            }
-            egui::ScrollArea::vertical()
-                .max_height(200.0)
-                .show(ui, |ui| {
-                    for w in &r.warnings {
-                        ui.label(warning_text(i18n, w));
-                    }
-                });
-        });
-}
-
-fn warning_text(i18n: &I18n, w: &Warning) -> String {
-    match w {
-        Warning::DanglingRef { from, to } => i18n.trf(
-            "warn-dangling",
-            &[("from", from.clone().into()), ("to", to.clone().into())],
-        ),
-        Warning::UnknownMode(m) => i18n.trf("warn-unknown-mode", &[("mode", m.clone().into())]),
-        Warning::NotExecutable { kind, count } => i18n.trf(
-            "warn-not-executable",
-            &[("kind", kind.clone().into()), ("count", (*count).into())],
-        ),
-        Warning::HasScripts => i18n.tr("warn-scripts"),
-    }
+/// Import problems the user should know about: actions that will not work.
+/// Everything else from the report only goes to the log.
+pub fn important_warnings(i18n: &I18n, r: &ImportReport) -> Vec<String> {
+    r.warnings
+        .iter()
+        .filter_map(|w| match w {
+            Warning::NotExecutable { kind, count } => Some(i18n.trf(
+                "warn-not-executable",
+                &[("kind", kind.clone().into()), ("count", (*count).into())],
+            )),
+            Warning::HasScripts => Some(i18n.tr("warn-scripts")),
+            Warning::DanglingRef { .. } | Warning::UnknownMode(_) => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]

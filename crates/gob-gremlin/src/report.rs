@@ -1,4 +1,4 @@
-//! Import summary and consistency checks shown to the user after loading.
+//! Import summary and consistency checks run after loading.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -14,6 +14,37 @@ pub enum Warning {
     NotExecutable { kind: String, count: usize },
     /// The profile contains user Python scripts, which JoyGob does not run.
     HasScripts,
+}
+
+impl std::fmt::Display for Warning {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DanglingRef { from, to } => {
+                write!(f, "missing action {to} (referenced from {from})")
+            }
+            Self::UnknownMode(m) => write!(f, "inputs use the undeclared mode \"{m}\""),
+            Self::NotExecutable { kind, count } => {
+                write!(f, "{count} \"{kind}\" action(s) are kept but not executed")
+            }
+            Self::HasScripts => write!(f, "Python plugins are kept but not run"),
+        }
+    }
+}
+
+impl std::fmt::Display for ImportReport {
+    /// One-line summary, e.g. for a log file.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "format {}: {} inputs, {} actions, {} devices, {} modes, {} warnings",
+            self.version,
+            self.inputs,
+            self.actions,
+            self.devices,
+            self.modes,
+            self.warnings.len()
+        )
+    }
 }
 
 #[derive(Debug, Clone, Default)]

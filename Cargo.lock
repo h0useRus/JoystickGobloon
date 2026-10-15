@@ -1786,9 +1786,11 @@ dependencies = [
  "gob-i18n",
  "gob-input",
  "gob-vjoy",
+ "log",
  "rfd",
  "serde",
  "toml 0.8.23",
+ "windows 0.61.3",
  "winresource",
 ]
 

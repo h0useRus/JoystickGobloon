@@ -4,6 +4,7 @@ mod action_editor;
 mod app;
 mod devices_view;
 mod hidhide_view;
+mod logfile;
 mod modes_view;
 mod profile_view;
 mod settings;
@@ -15,6 +16,7 @@ mod vjoy_view;
 pub const APP_NAME: &str = "Joystick Gobloon";
 
 fn main() -> eframe::Result {
+    logfile::init();
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title(APP_NAME)
@@ -29,7 +31,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "Joystick Gobloon",
+        APP_NAME,
         options,
         Box::new(|cc| Ok(Box::new(app::JoyGobApp::new(cc)))),
     )

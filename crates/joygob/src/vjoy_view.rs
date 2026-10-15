@@ -176,7 +176,10 @@ impl VJoyView {
                     hats: vec![None; info.hats() as usize],
                 });
             }
-            Err(e) => self.error = Some(i18n.trf("vjoy-error", &[("error", e.to_string().into())])),
+            Err(e) => {
+                log::error!("acquiring vJoy device {}: {e}", info.id);
+                self.error = Some(i18n.trf("vjoy-error", &[("error", e.to_string().into())]));
+            }
         }
         self.refreshed = None;
     }

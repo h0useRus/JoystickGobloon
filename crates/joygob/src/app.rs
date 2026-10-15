@@ -5,7 +5,7 @@ use gob_i18n::I18n;
 
 use crate::devices_view::DevicesView;
 use crate::hidhide_view::HidHideView;
-use crate::profile_view::{report_window, LoadedProfile};
+use crate::profile_view::{important_warnings, LoadedProfile};
 use crate::settings::Settings;
 use crate::settings_view::{self, Change, SettingsTab};
 use crate::style::{self, icon};
@@ -27,7 +27,8 @@ pub struct JoyGobApp {
     settings: Settings,
     page: Page,
     settings_tab: SettingsTab,
-    show_report: bool,
+    /// Warnings and errors for the user, shown one at a time as dialogs.
+    alerts: Vec<Alert>,
     status: String,
     profile: Option<LoadedProfile>,
     logo: egui::TextureHandle,
@@ -48,6 +49,12 @@ pub struct JoyGobApp {
     modes_window: crate::modes_view::ModesWindow,
     /// Window title last sent to the viewport.
     title: String,
+}
+
+/// A dialog with a title and lines of text; technical details go to the log file.
+struct Alert {
+    title: String,
+    lines: Vec<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -89,7 +96,7 @@ impl JoyGobApp {
             settings,
             page: Page::Devices,
             settings_tab: SettingsTab::default(),
-            show_report: false,
+            alerts: Vec::new(),
             status,
             profile: None,
             logo,
@@ -111,8 +118,16 @@ impl JoyGobApp {
         };
         if app.settings.hidhide_whitelist_self {
             match app.hidhide_view.whitelist_self() {
-                Some(Ok(true)) => app.status = app.i18n.tr("status-whitelisted"),
-                Some(Err(e)) => app.status = e,
+                Some(Ok(true)) => {
+                    log::info!("added to the HidHide whitelist");
+                    app.status = app.i18n.tr("status-whitelisted");
+                }
+                Some(Err(e)) => {
+                    let text = app
+                        .i18n
+                        .trf("hidhide-whitelist-error", &[("error", e.into())]);
+                    app.error(text);
+                }
                 _ => {}
             }
         }
@@ -122,14 +137,37 @@ impl JoyGobApp {
         app
     }
 
-    fn open_profile(&mut self, path: PathBuf, show_report: bool) {
+    /// Logs an error and shows it to the user.
+    fn error(&mut self, text: String) {
+        log::error!("{text}");
+        self.alerts.push(Alert {
+            title: self.i18n.tr("alert-error"),
+            lines: vec![text],
+        });
+    }
+
+    /// `interactive`: opened by the user, so import warnings are shown, not only logged.
+    fn open_profile(&mut self, path: PathBuf, interactive: bool) {
         match gob_gremlin::load(&path) {
             Ok(profile) => {
+                let report = gob_gremlin::report(&profile);
+                log::info!("loaded {}: {report}", path.display());
+                for w in &report.warnings {
+                    log::warn!("{}: {w}", path.display());
+                }
                 let loaded = LoadedProfile::new(profile, Some(path.clone()));
                 self.status = self
                     .i18n
                     .trf("status-loaded", &[("file", loaded.file_name().into())]);
-                self.show_report = show_report;
+                let lines = important_warnings(&self.i18n, &report);
+                if interactive && !lines.is_empty() {
+                    self.alerts.push(Alert {
+                        title: self
+                            .i18n
+                            .trf("alert-import", &[("file", loaded.file_name().into())]),
+                        lines,
+                    });
+                }
                 self.profile = Some(loaded);
                 self.runner = None;
                 self.devices_view.reset_mode();
@@ -137,9 +175,11 @@ impl JoyGobApp {
                 self.settings.save();
             }
             Err(e) => {
-                self.status = self
+                log::error!("loading {}: {e}", path.display());
+                let text = self
                     .i18n
-                    .trf("import-error", &[("error", e.to_string().into())])
+                    .trf("import-error", &[("error", e.to_string().into())]);
+                self.error(text);
             }
         }
     }
@@ -183,6 +223,7 @@ impl JoyGobApp {
         };
         match gob_gremlin::save(&path, &loaded.profile) {
             Ok(()) => {
+                log::info!("saved {}", path.display());
                 self.status = self.i18n.trf(
                     "status-saved",
                     &[("file", path.display().to_string().into())],
@@ -194,9 +235,11 @@ impl JoyGobApp {
                 true
             }
             Err(e) => {
-                self.status = self
+                log::error!("saving {}: {e}", path.display());
+                let text = self
                     .i18n
                     .trf("save-error", &[("error", e.to_string().into())]);
+                self.error(text);
                 false
             }
         }
@@ -232,6 +275,47 @@ impl JoyGobApp {
     }
 
     /// "Save changes?" dialog for a pending action.
+    fn alert_dialog(&mut self, ctx: &egui::Context) {
+        let Some(alert) = self.alerts.first() else {
+            return;
+        };
+        let mut close = false;
+        egui::Modal::new(egui::Id::new("alert")).show(ctx, |ui| {
+            ui.set_width(420.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(icon::WARNING)
+                        .size(style::ICON_SIZE)
+                        .color(ui.visuals().warn_fg_color),
+                );
+                ui.heading(&alert.title);
+            });
+            ui.add_space(4.0);
+            for line in &alert.lines {
+                ui.label(line);
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button(self.i18n.tr("ok")).clicked() {
+                    close = true;
+                }
+                if let Some(path) = crate::logfile::path() {
+                    let text = format!("{}  {}", icon::FILE_TEXT, self.i18n.tr("alert-open-log"));
+                    if ui
+                        .button(text)
+                        .on_hover_text(path.display().to_string())
+                        .clicked()
+                    {
+                        let _ = std::process::Command::new("notepad.exe").arg(&path).spawn();
+                    }
+                }
+            });
+        });
+        if close {
+            self.alerts.remove(0);
+        }
+    }
+
     fn unsaved_dialog(&mut self, ctx: &egui::Context) {
         let Some(action) = self.pending else { return };
         let file = self
@@ -333,6 +417,7 @@ impl JoyGobApp {
 
     fn toggle_runner(&mut self, ctx: &egui::Context) {
         if self.runner.take().is_some() {
+            log::info!("profile stopped");
             self.status = self.i18n.tr("status-stopped");
             return;
         }
@@ -351,10 +436,18 @@ impl JoyGobApp {
             repaint,
         ) {
             Ok(runner) => {
+                log::info!(
+                    "profile {} active, {} device substitution(s)",
+                    loaded.file_name(),
+                    aliases.len()
+                );
                 self.runner = Some(runner);
                 self.status = self.i18n.tr("status-active");
             }
-            Err(e) => self.status = self.i18n.trf("activate-error", &[("error", e.into())]),
+            Err(e) => {
+                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
+                self.error(text);
+            }
         }
     }
 
@@ -426,18 +519,6 @@ impl JoyGobApp {
             .clicked()
             {
                 self.show_modes = true;
-            }
-            let has_warnings = self
-                .profile
-                .as_ref()
-                .is_some_and(|p| !p.report.warnings.is_empty());
-            let glyph = if has_warnings {
-                icon::WARNING
-            } else {
-                icon::CLIPBOARD_TEXT
-            };
-            if style::icon_button(ui, loaded, glyph, &self.i18n.tr("action-report")).clicked() {
-                self.show_report = true;
             }
             ui.separator();
             let active = self.runner.is_some();
@@ -680,10 +761,7 @@ impl eframe::App for JoyGobApp {
             }
         }
         self.unsaved_dialog(ctx);
-
-        if let (true, Some(loaded)) = (self.show_report, &self.profile) {
-            report_window(ctx, &self.i18n, &loaded.report, &mut self.show_report);
-        }
+        self.alert_dialog(ctx);
     }
 }
 

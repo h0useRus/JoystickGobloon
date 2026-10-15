@@ -7,7 +7,6 @@ nav-vjoy = Виртуальные джойстики
 nav-settings = Настройки
 action-open = Импорт профиля Joystick Gremlin
 action-save = Сохранить
-action-report = Отчёт об импорте
 label-mode = Режим
 
 # Settings
@@ -35,11 +34,11 @@ save-error = Не удалось сохранить профиль: { $error }
 file-filter-gremlin = Профиль Joystick Gremlin
 
 # Import report
-import-title = Отчёт об импорте
-import-summary = Версия формата { $version }: входов — { $inputs }, действий — { $actions }, устройств — { $devices }, режимов — { $modes }.
-import-no-warnings = Проблем не найдено.
-warn-dangling = Нет действия { $to } (ссылка из { $from })
-warn-unknown-mode = Входы используют необъявленный режим «{ $mode }»
+alert-error = Что-то пошло не так
+alert-import = Часть действий в { $file } не будет работать
+alert-open-log = Открыть журнал
+ok = ОК
+hidhide-whitelist-error = Не удалось добавить JoyGob в белый список HidHide: { $error }
 warn-not-executable = «{ $kind }» × { $count }: сохраняется в профиле, но пока не выполняется
 warn-scripts = В профиле есть Python-плагины: они сохраняются, но не запускаются
 

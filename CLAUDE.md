@@ -28,6 +28,10 @@ Plan: phases 0-10 in docs/ROADMAP.md (phases 0-6 done; device substitution added
 - Gremlin import must round-trip: unknown actions kept as raw XML.
 - GUI never blocks; engine runs on its own thread, talks via channels.
 - Settings: TOML in %APPDATA%\JoystickGobloon\settings.toml.
+- Messages: technical output (processing results, import/engine warnings, errors) goes to the log file
+  %APPDATA%\JoystickGobloon\joygob.log via the `log` crate (English, not i18n; joygob/src/logfile.rs).
+  Only warnings/errors that matter to a general user become dialogs (`JoyGobApp::error` / `alerts`),
+  translated; routine info goes to the status bar. No report/diagnostics windows.
 - Commits: Conventional Commits (feat/fix/docs/refactor/test/chore/build/ci; scope = crate, e.g. `feat(gob-gremlin): parse R14 library`).
 
 ## Testing notes
