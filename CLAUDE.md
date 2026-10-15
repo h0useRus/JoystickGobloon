@@ -1,6 +1,6 @@
 # Joystick Gobloon (JoyGob)
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
-Plan: phases 0-10 in docs/ROADMAP.md (phases 0-4 done; device substitution added). Work on ONE crate per session.
+Plan: phases 0-10 in docs/ROADMAP.md (phases 0-5 done; device substitution added). Work on ONE crate per session.
 
 ## Layout
 - crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default), other `lang/*.ftl` embedded or loaded from `<exe>/lang/`.
@@ -13,7 +13,10 @@ Plan: phases 0-10 in docs/ROADMAP.md (phases 0-4 done; device substitution added
   (reset+release on drop); axis slots 1..8 like gob-input; example `vjoy_info --sweep <id>`
 - crates/gob-hidhide wraps HidHideCLI.exe (path from HKLM\SOFTWARE\Nefarius Software Solutions e.U.\HidHide):
   cloak, hidden devices (HID + USB container), app whitelist, `--dev-gaming` JSON; example `hidhide_info`
-- planned: gob-engine, gob-plugin
+- crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
+  semantics (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy;
+  examples `dry_run` (profile -> printed vJoy output) and `runner_check`
+- planned: gob-plugin
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
 
@@ -30,6 +33,8 @@ Plan: phases 0-10 in docs/ROADMAP.md (phases 0-4 done; device substitution added
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - HidHide hides the VKB sticks; target\debug\JoystickGobloon.exe and examples\monitor.exe are whitelisted.
 - Profile device GUIDs come from another PC: use the substitution banner on the Devices page.
+- JoyGob whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.
+- vJoy reports only on change: start `monitor` BEFORE activating a profile to see vJoy output.
 
 ## Commands
 - cargo build / cargo run -p joygob

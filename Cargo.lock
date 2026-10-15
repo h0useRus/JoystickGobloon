@@ -1779,6 +1779,7 @@ dependencies = [
  "eframe",
  "egui-phosphor",
  "gob-core",
+ "gob-engine",
  "gob-gremlin",
  "gob-hidhide",
  "gob-i18n",

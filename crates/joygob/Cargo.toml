@@ -15,6 +15,7 @@ gob-gremlin.workspace = true
 gob-input.workspace = true
 gob-vjoy.workspace = true
 gob-hidhide.workspace = true
+gob-engine.workspace = true
 rfd.workspace = true
 egui-phosphor.workspace = true
 eframe.workspace = true

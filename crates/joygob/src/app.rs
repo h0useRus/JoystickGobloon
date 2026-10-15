@@ -9,7 +9,7 @@ use crate::profile_view::{report_window, LoadedProfile};
 use crate::settings::Settings;
 use crate::settings_view::{self, Change, SettingsTab};
 use crate::style::{self, icon};
-use crate::substitute_view::{missing_devices, SubstituteDialog};
+use crate::substitute_view::{auto_aliases, missing_devices, SubstituteDialog};
 use crate::vjoy_view::VJoyView;
 
 const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/joygob-256.png");
@@ -36,6 +36,8 @@ pub struct JoyGobApp {
     substitute: Option<SubstituteDialog>,
     vjoy_view: VJoyView,
     hidhide_view: HidHideView,
+    /// Running profile, if activated.
+    runner: Option<gob_engine::Runner>,
 }
 
 impl JoyGobApp {
@@ -82,6 +84,7 @@ impl JoyGobApp {
             substitute: None,
             vjoy_view: VJoyView::new(),
             hidhide_view: HidHideView::new(),
+            runner: None,
         };
         if app.settings.hidhide_whitelist_self {
             match app.hidhide_view.whitelist_self() {
@@ -105,6 +108,7 @@ impl JoyGobApp {
                     .trf("status-loaded", &[("file", loaded.file_name().into())]);
                 self.show_report = show_report;
                 self.profile = Some(loaded);
+                self.runner = None;
                 self.devices_view.reset_mode();
                 self.settings.last_profile = Some(path);
                 self.settings.save();
@@ -183,6 +187,33 @@ impl JoyGobApp {
         });
     }
 
+    fn toggle_runner(&mut self, ctx: &egui::Context) {
+        if self.runner.take().is_some() {
+            self.status = self.i18n.tr("status-stopped");
+            return;
+        }
+        let Some(loaded) = &self.profile else { return };
+        let devices = self.input.devices().clone();
+        let aliases = auto_aliases(&loaded.profile, &devices);
+        let repaint = {
+            let ctx = ctx.clone();
+            move || ctx.request_repaint()
+        };
+        match gob_engine::Runner::start(
+            &loaded.profile,
+            &aliases,
+            self.input.subscribe(),
+            &devices,
+            repaint,
+        ) {
+            Ok(runner) => {
+                self.runner = Some(runner);
+                self.status = self.i18n.tr("status-active");
+            }
+            Err(e) => self.status = self.i18n.trf("activate-error", &[("error", e.into())]),
+        }
+    }
+
     fn devices_page(&mut self, ui: &mut egui::Ui) {
         let loaded = self.profile.is_some();
         ui.horizontal(|ui| {
@@ -211,6 +242,19 @@ impl JoyGobApp {
             };
             if style::icon_button(ui, loaded, glyph, &self.i18n.tr("action-report")).clicked() {
                 self.show_report = true;
+            }
+            ui.separator();
+            let active = self.runner.is_some();
+            let (glyph, tip) = if active {
+                (icon::STOP, "action-deactivate")
+            } else {
+                (icon::PLAY, "action-activate")
+            };
+            let toggle = ui.add_enabled_ui(loaded, |ui| {
+                style::icon_toggle(ui, active, glyph, &self.i18n.tr(tip))
+            });
+            if toggle.inner.clicked() {
+                self.toggle_runner(ui.ctx());
             }
             if let Some(p) = &self.profile {
                 ui.separator();
@@ -292,7 +336,20 @@ impl eframe::App for JoyGobApp {
             .show(ctx, |ui| self.nav_rail(ui));
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
-            ui.label(RichText::new(&self.status).size(12.0).weak());
+            ui.horizontal(|ui| {
+                if let Some(runner) = &self.runner {
+                    let mode = runner.status().mode;
+                    ui.label(
+                        RichText::new(icon::PLAY)
+                            .size(12.0)
+                            .color(style::accent(ui)),
+                    );
+                    ui.label(RichText::new(format!("{}  {mode}", icon::STACK)).size(12.0))
+                        .on_hover_text(self.i18n.tr("label-mode"));
+                    ui.separator();
+                }
+                ui.label(RichText::new(&self.status).size(12.0).weak());
+            });
         });
 
         let frame = egui::Frame::central_panel(&ctx.style()).inner_margin(16);
@@ -324,6 +381,7 @@ impl eframe::App for JoyGobApp {
                     loaded.profile.substitute_device(old, new, name);
                 }
                 loaded.refresh();
+                self.runner = None;
                 self.status = self.i18n.tr("status-substituted");
             }
             if !open {

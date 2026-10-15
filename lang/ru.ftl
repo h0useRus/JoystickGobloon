@@ -82,3 +82,10 @@ hidhide-app-missing = Файл не найден
 action-refresh = Обновить
 settings-hidhide-self = Добавлять JoyGob в белый список HidHide при запуске
 status-whitelisted = JoyGob добавлен в белый список HidHide.
+
+# Engine
+action-activate = Активировать профиль
+action-deactivate = Остановить профиль
+status-active = Профиль активен
+status-stopped = Профиль остановлен
+activate-error = Не удалось активировать профиль: { $error }

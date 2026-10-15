@@ -1,6 +1,8 @@
 //! Device substitution: re-target profile devices that are not connected onto
 //! attached ones (DirectInput GUIDs differ between PCs).
 
+use std::collections::HashMap;
+
 use eframe::egui::{self, RichText};
 use gob_core::{same_device_name, Profile};
 use gob_i18n::I18n;
@@ -155,5 +157,86 @@ impl SubstituteDialog {
                 })
                 .collect(),
         )
+    }
+}
+
+/// Profile device GUID (lowercase) -> attached device with the same name, for
+/// devices whose GUID differs on this PC. Ambiguous names are left out.
+pub fn auto_aliases(profile: &Profile, devices: &[DeviceState]) -> HashMap<String, String> {
+    let free: Vec<&DeviceState> = devices
+        .iter()
+        .filter(|s| {
+            !s.info.is_vjoy()
+                && !profile
+                    .devices
+                    .iter()
+                    .any(|d| d.id.eq_ignore_ascii_case(&s.info.guid))
+        })
+        .collect();
+    let mut aliases = HashMap::new();
+    for d in missing_devices(profile, devices) {
+        let same: Vec<&&DeviceState> = free
+            .iter()
+            .filter(|s| same_device_name(&s.info.name, &d.name))
+            .collect();
+        if let [one] = same.as_slice() {
+            if !aliases.values().any(|g: &String| g == &one.info.guid) {
+                aliases.insert(d.id.to_ascii_lowercase(), one.info.guid.clone());
+            }
+        }
+    }
+    aliases
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gob_input::DeviceInfo;
+
+    fn live(guid: &str, name: &str) -> DeviceState {
+        DeviceState::new(DeviceInfo {
+            guid: guid.into(),
+            name: name.into(),
+            vendor_id: 0x231d,
+            product_id: 0x0200,
+            axes: vec![1],
+            buttons: 1,
+            hats: 0,
+        })
+    }
+
+    #[test]
+    fn aliases_profile_devices_by_name() {
+        let mut profile = Profile::default();
+        profile.devices = vec![
+            gob_core::Device {
+                id: "7D12D5C0-43EA-11F0-800A-444553540000".into(),
+                name: " VKBsim Gladiator EVO OT L  ".into(),
+            },
+            gob_core::Device {
+                id: "ec8bbeb0-4009-11f0-8002-444553540000".into(),
+                name: " VKBsim Gladiator EVO  R  ".into(),
+            },
+        ];
+        let devices = [
+            live(
+                "a2196530-a616-11f0-8012-444553540000",
+                "VKBsim Gladiator EVO OT L",
+            ),
+            live(
+                "a21805a0-a616-11f0-8006-444553540000",
+                "VKBsim Gladiator EVO R",
+            ),
+        ];
+        let aliases = auto_aliases(&profile, &devices);
+        assert_eq!(aliases.len(), 2);
+        assert_eq!(
+            aliases["7d12d5c0-43ea-11f0-800a-444553540000"],
+            "a2196530-a616-11f0-8012-444553540000"
+        );
+        assert_eq!(
+            aliases["ec8bbeb0-4009-11f0-8002-444553540000"],
+            "a21805a0-a616-11f0-8006-444553540000"
+        );
     }
 }
