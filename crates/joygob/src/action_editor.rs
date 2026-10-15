@@ -781,24 +781,32 @@ fn curve_widget(
     if response.drag_stopped() {
         ui.data_mut(|d| d.remove::<usize>(drag_id));
     }
+    // A single click inverts, but only once it is clear it was not the first
+    // half of a double-click (which adds a point instead).
+    const DOUBLE_CLICK: f64 = 0.3;
+    let pending_id = ui.make_persistent_id(("curve-invert", id));
+    let now = ui.input(|i| i.time);
     let on_point = response.interact_pointer_pos().and_then(nearest).is_some();
-    let mut changed = false;
-    // A click on empty space inverts. A double-click is two clicks, so it inverts
-    // twice (no net change) and then adds a point.
-    if response.clicked() && !on_point {
-        pts.iter_mut().for_each(|p| p.1 = -p.1);
-        changed = true;
-    }
-    if response.double_clicked() && !on_point {
-        if let Some(pos) = response.interact_pointer_pos() {
+    if response.double_clicked() {
+        ui.data_mut(|d| d.remove::<f64>(pending_id));
+        if let Some(pos) = response.interact_pointer_pos().filter(|_| !on_point) {
             let p = to_curve(pos);
             if let Some(at) = pts.iter().position(|q| q.0 > p.0).filter(|&at| at > 0) {
                 pts.insert(at, p);
+                return Some(pts);
             }
         }
+    } else if response.clicked() && !on_point {
+        ui.data_mut(|d| d.insert_temp(pending_id, now));
     }
-    if changed {
-        return Some(pts);
+    if let Some(clicked_at) = ui.data(|d| d.get_temp::<f64>(pending_id)) {
+        if now - clicked_at >= DOUBLE_CLICK {
+            ui.data_mut(|d| d.remove::<f64>(pending_id));
+            pts.iter_mut().for_each(|p| p.1 = -p.1);
+            return Some(pts);
+        }
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs_f64(DOUBLE_CLICK));
     }
     if response.secondary_clicked() {
         if let Some(i) = response

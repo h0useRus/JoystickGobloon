@@ -332,7 +332,9 @@ impl JoyGobApp {
 
     fn devices_page(&mut self, ui: &mut egui::Ui) {
         let loaded = self.profile.is_some();
-        ui.horizontal(|ui| {
+        // Center vertically: the play toggle is taller than the plain icon buttons.
+        let row = Vec2::new(ui.available_width(), 44.0);
+        ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
             if style::icon_button(ui, true, icon::FILE_PLUS, &self.i18n.tr("action-new")).clicked()
             {
                 self.request(Pending::New, ui.ctx());

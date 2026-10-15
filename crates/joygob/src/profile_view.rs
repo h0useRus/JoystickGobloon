@@ -237,7 +237,11 @@ mod tests {
         edit(&mut lp, "B"); // within the coalescing window: same step as "A"
         assert_eq!(lp.profile.modes.len(), 3);
         assert!(lp.undo());
-        assert_eq!(lp.profile.modes.len(), 1, "both quick edits undone together");
+        assert_eq!(
+            lp.profile.modes.len(),
+            1,
+            "both quick edits undone together"
+        );
         assert!(!lp.can_undo());
         assert!(lp.redo());
         assert_eq!(lp.profile.modes.len(), 3);
