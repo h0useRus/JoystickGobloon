@@ -22,6 +22,7 @@ about-text = Device hiding, virtual joysticks and input mapping in one app.
 
 # Empty states
 no-profile = No profile loaded
+device-linked = Bindings of the profile device with the same name. Use “Replace devices” to save the link.
 device-disconnected = Not connected
 no-devices-attached = No game controllers found
 placeholder-hidhide = Hide physical devices from games (HidHide driver).
@@ -45,7 +46,7 @@ warn-scripts = The profile contains Python plugins: they are kept, but not run
 
 # Device substitution
 subst-title = Replace devices
-subst-banner = Profile devices not connected: { $count }
+subst-banner = Device IDs in the profile do not match this PC: { $count }
 subst-keep = Keep as is
 subst-apply = Apply
 status-substituted = Devices replaced. Save the profile to keep the change.

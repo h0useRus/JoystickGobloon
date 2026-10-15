@@ -22,6 +22,7 @@ about-text = Скрытие устройств, виртуальные джой�
 
 # Empty states
 no-profile = Профиль не загружен
+device-linked = Назначения устройства профиля с тем же именем. Нажмите «Замена устройств», чтобы сохранить связь.
 device-disconnected = Не подключено
 no-devices-attached = Игровые контроллеры не найдены
 placeholder-hidhide = Скрытие физических устройств от игр (драйвер HidHide).
@@ -45,7 +46,7 @@ warn-scripts = В профиле есть Python-плагины: они сохр
 
 # Device substitution
 subst-title = Замена устройств
-subst-banner = Не подключено устройств профиля: { $count }
+subst-banner = ID устройств в профиле не совпадают с этим ПК: { $count }
 subst-keep = Оставить как есть
 subst-apply = Применить
 status-substituted = Устройства заменены. Сохраните профиль, чтобы закрепить изменения.

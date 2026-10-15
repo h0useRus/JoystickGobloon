@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use eframe::egui::{
     self, Align, Align2, Color32, FontId, Margin, Rect, RichText, Sense, Stroke, Vec2,
 };
-use gob_core::{Action, InputBinding, InputType};
+use gob_core::{same_device_name, Action, InputBinding, InputType};
 use gob_i18n::I18n;
 use gob_input::{DeviceState, InputEvent};
 
@@ -31,6 +31,8 @@ type Key = (Kind, u32);
 #[derive(Default)]
 pub struct DevicesView {
     selected: Option<String>,
+    /// The user picked the tab; otherwise a connected device is preferred.
+    user_selected: bool,
     mode: Option<String>,
     activity: HashMap<(String, Key), Instant>,
     scroll_to: Option<(String, Key)>,
@@ -40,6 +42,8 @@ struct Tab<'a> {
     guid: &'a str,
     name: &'a str,
     live: Option<&'a DeviceState>,
+    /// Profile device (different GUID, same name) whose bindings are shown on this live device.
+    alias: Option<&'a str>,
 }
 
 impl DevicesView {
@@ -94,25 +98,52 @@ impl DevicesView {
                 guid: &d.info.guid,
                 name: &d.info.name,
                 live: Some(d),
+                alias: None,
             })
             .collect();
         if let Some(p) = profile {
+            let known = |guid: &str| {
+                p.profile
+                    .devices
+                    .iter()
+                    .any(|d| d.id.eq_ignore_ascii_case(guid))
+            };
             for d in &p.profile.devices {
-                if !tabs.iter().any(|t| t.guid == d.id) {
+                if tabs.iter().any(|t| t.guid.eq_ignore_ascii_case(&d.id)) {
+                    continue;
+                }
+                // Same stick on this PC under another GUID: show its bindings on the live tab.
+                let mut same: Vec<usize> = (0..tabs.len())
+                    .filter(|&i| {
+                        let t = &tabs[i];
+                        t.live.is_some()
+                            && t.alias.is_none()
+                            && !known(t.guid)
+                            && same_device_name(t.name, &d.name)
+                    })
+                    .collect();
+                if same.len() == 1 {
+                    tabs[same.pop().unwrap()].alias = Some(&d.id);
+                } else {
                     tabs.push(Tab {
                         guid: &d.id,
                         name: d.name.trim(),
                         live: None,
+                        alias: None,
                     });
                 }
             }
         }
-        if !self
+        let valid = self
             .selected
             .as_ref()
-            .is_some_and(|s| tabs.iter().any(|t| t.guid == s))
-        {
-            self.selected = tabs.first().map(|t| t.guid.to_string());
+            .is_some_and(|s| tabs.iter().any(|t| t.guid == s));
+        let on_ghost = tabs
+            .iter()
+            .any(|t| self.selected.as_deref() == Some(t.guid) && t.live.is_none());
+        if !valid || (!self.user_selected && on_ghost) {
+            let first = tabs.iter().find(|t| t.live.is_some()).or(tabs.first());
+            self.selected = first.map(|t| t.guid.to_string());
         }
         if let Some(p) = profile {
             let modes = &p.profile.modes;
@@ -143,17 +174,18 @@ impl DevicesView {
             }
             for t in &tabs {
                 let selected = self.selected.as_deref() == Some(t.guid);
-                let glyph = if t.live.is_some() {
-                    icon::JOYSTICK
-                } else {
-                    icon::PLUGS
+                let (glyph, hint) = match (t.live, t.alias) {
+                    (Some(_), Some(_)) => (icon::LINK, Some("device-linked")),
+                    (Some(_), None) => (icon::JOYSTICK, None),
+                    (None, _) => (icon::PLUGS, Some("device-disconnected")),
                 };
                 let mut r = style::tab(ui, selected, glyph, t.name);
-                if t.live.is_none() {
-                    r = r.on_hover_text(i18n.tr("device-disconnected"));
+                if let Some(key) = hint {
+                    r = r.on_hover_text(i18n.tr(key));
                 }
                 if r.clicked() {
                     self.selected = Some(t.guid.to_string());
+                    self.user_selected = true;
                 }
             }
         });
@@ -179,12 +211,13 @@ impl DevicesView {
             rows.extend((1..=d.hats.len() as u32).map(|h| ((Kind::Hat, h), None)));
         }
         if let (Some(p), Some(mode)) = (profile, &self.mode) {
-            for b in p
-                .profile
-                .inputs
-                .iter()
-                .filter(|b| b.device_id == tab.guid && &b.mode == mode)
-            {
+            for b in p.profile.inputs.iter().filter(|b| {
+                let own = b.device_id.eq_ignore_ascii_case(tab.guid)
+                    || tab
+                        .alias
+                        .is_some_and(|a| b.device_id.eq_ignore_ascii_case(a));
+                own && &b.mode == mode
+            }) {
                 let kind = match b.input_type() {
                     InputType::Axis => Kind::Axis,
                     InputType::Button => Kind::Button,
