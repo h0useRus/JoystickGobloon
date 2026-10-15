@@ -15,6 +15,8 @@ const PULSE: Duration = Duration::from_millis(50);
 /// Guards against reference cycles in broken profiles.
 const MAX_DEPTH: usize = 32;
 const VIRTUAL_DEVICE: &str = "virtual";
+/// Device of the virtual buttons a hat-buttons action creates, one per direction.
+const HAT_BUTTON_DEVICE: &str = "virtual-hat";
 /// Gremlin's default pause between macro steps without an explicit pause.
 const MACRO_DELAY: f64 = 0.05;
 /// Lower bound between macro repetitions so a zero delay cannot spin `tick`.
@@ -99,6 +101,8 @@ enum Node {
         threshold: Duration,
         exclusive: bool,
     },
+    /// Hat direction (`None` = center) -> actions run as a button while the hat points exactly there.
+    HatButtons(Vec<(Option<u16>, Vec<NodeId>)>),
     /// Steps already include the default delay between non-pause steps.
     Macro {
         steps: Vec<MacroStep>,
@@ -218,6 +222,7 @@ enum ReleaseAction {
     StopMacro(NodeId),
     TapRelease(NodeId),
     ReleaseKeys(NodeId),
+    HatButtons(NodeId),
 }
 
 /// Runs when the physical input that registered it is released (Gremlin's ButtonReleaseActions).
@@ -330,6 +335,8 @@ pub struct Engine {
     macros: HashMap<NodeId, MacroRun>,
     taps: HashMap<NodeId, TapState>,
     chains: HashMap<NodeId, ChainState>,
+    /// Pressed state of each hat-buttons direction.
+    hat_buttons: HashMap<NodeId, Vec<bool>>,
     /// map-to-keyboard actions whose keys are held.
     keys_down: HashSet<NodeId>,
     /// Profile's `macro-default-delay` in seconds.
@@ -384,6 +391,7 @@ impl Engine {
             macros: HashMap::new(),
             taps: HashMap::new(),
             chains: HashMap::new(),
+            hat_buttons: HashMap::new(),
             keys_down: HashSet::new(),
             macro_delay: profile
                 .settings
@@ -579,6 +587,19 @@ impl Engine {
                     threshold: Duration::from_secs_f64(threshold.max(0.0)),
                     exclusive: activate_on != "combined",
                 },
+                ActionKind::HatButtons { directions } => Node::HatButtons(
+                    directions
+                        .into_iter()
+                        .map(|(_, d, ids)| {
+                            (
+                                d,
+                                ids.iter()
+                                    .map(|c| self.compile(index, c, depth + 1))
+                                    .collect(),
+                            )
+                        })
+                        .collect(),
+                ),
                 ActionKind::MapToKeyboard { keys } => Node::Keys {
                     keys,
                     act: action.activation_mode(),
@@ -789,8 +810,10 @@ impl Engine {
                 }
             }
         }
-        if let Value::Button(pressed) = value {
-            self.process_release(key, pressed, now, out);
+        match value {
+            Value::Button(pressed) => self.process_release(key, pressed, now, out),
+            Value::Hat(None) => self.process_release(key, false, now, out),
+            _ => {}
         }
     }
 
@@ -1008,6 +1031,11 @@ impl Engine {
                     );
                 } else {
                     self.release_keys(node, out);
+                }
+            }
+            Node::HatButtons(buttons) => {
+                if let Value::Hat(d) = *value {
+                    self.hat_buttons_event(node, &buttons, src, d, now, out, depth);
                 }
             }
             Node::Macro { repeat, act, .. } => {
@@ -1406,6 +1434,54 @@ impl Engine {
         );
     }
 
+    /// Gremlin's HatButtonsFunctor: every direction is a button pressed while the hat
+    /// points exactly there (4-button mode ignores diagonals), centered presses `Center`.
+    #[allow(clippy::too_many_arguments)]
+    fn hat_buttons_event(
+        &mut self,
+        node: NodeId,
+        buttons: &[(Option<u16>, Vec<NodeId>)],
+        src: &Source,
+        direction: Option<u16>,
+        now: Instant,
+        out: &mut dyn Output,
+        depth: usize,
+    ) {
+        for (i, (dir, children)) in buttons.iter().enumerate() {
+            let pressed = *dir == direction;
+            let state = self
+                .hat_buttons
+                .entry(node)
+                .or_insert_with(|| vec![false; buttons.len()]);
+            if state[i] == pressed {
+                continue;
+            }
+            state[i] = pressed;
+            let vsrc = Source {
+                key: hat_button_key(node, i),
+                mode: src.mode.clone(),
+                no_auto_release: src.no_auto_release,
+            };
+            for &c in children {
+                self.run(c, &vsrc, &mut Value::Button(pressed), now, out, depth + 1);
+            }
+            self.process_release(&vsrc.key, pressed, now, out);
+        }
+        // Not in Gremlin: the hat centered in a mode where it is bound differently
+        // still releases what the directions pressed.
+        if direction.is_some() {
+            self.register(
+                &src.key,
+                ReleaseEntry {
+                    mode: src.mode.clone(),
+                    any_mode: false,
+                    on_press: false,
+                    action: ReleaseAction::HatButtons(node),
+                },
+            );
+        }
+    }
+
     /// Gremlin's DoubleTapFunctor state machine.
     fn tap_event(
         &mut self,
@@ -1599,6 +1675,16 @@ impl Engine {
                 ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
                 ReleaseAction::LeaveTemporary(mode) => self.leave_temporary(&mode),
                 ReleaseAction::ReleaseKeys(node) => self.release_keys(node, out),
+                ReleaseAction::HatButtons(node) => {
+                    let Some(state) = self.hat_buttons.get_mut(&node) else {
+                        continue;
+                    };
+                    let held: Vec<usize> = (0..state.len()).filter(|&i| state[i]).collect();
+                    state.fill(false);
+                    for i in held {
+                        self.process_release(&hat_button_key(node, i), false, now, out);
+                    }
+                }
                 ReleaseAction::TapRelease(node) => {
                     // Fallback when the release went elsewhere: only states that accept a press are valid.
                     let phase = self.taps.get(&node).map(|s| s.phase).unwrap_or_default();
@@ -1630,6 +1716,14 @@ impl Engine {
                 }
             }
         }
+    }
+}
+
+fn hat_button_key(node: NodeId, direction: usize) -> InputKey {
+    InputKey {
+        device: HAT_BUTTON_DEVICE.into(),
+        kind: InputKind::Button,
+        id: (node * 9 + direction) as u32,
     }
 }
 

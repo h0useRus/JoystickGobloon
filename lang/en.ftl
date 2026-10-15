@@ -201,3 +201,15 @@ edit-single = Single tap
 edit-double = Double tap
 edit-chain-timeout = Restart from the first step after this idle time (0 = never)
 edit-chain-step = Step { $n }
+
+# Hat as buttons
+kind-hat-buttons = Hat as buttons
+hat-north = North
+hat-north-east = North-east
+hat-east = East
+hat-south-east = South-east
+hat-south = South
+hat-south-west = South-west
+hat-west = West
+hat-north-west = North-west
+hat-center = Center

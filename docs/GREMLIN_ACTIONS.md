@@ -19,7 +19,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `chain` | B K | done (editor: timeout + existing steps; adding steps todo) |
 | `double-tap` | B K | done |
 | `smart-toggle` | B K | done |
-| `hat-buttons` | H | todo |
+| `hat-buttons` | H | done |
 | `split-axis` | A | done |
 | `merge-axis` | A B | todo |
 | `axis-delta` | A | todo |
@@ -86,3 +86,12 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - Combined: single actions follow the button at once; a second press in time adds the double actions
   (press and release) on top.
 - Invalid transitions reset the FSM and send the event to both lists, like tempo.
+
+## hat-buttons
+
+- `button-count` int (4 or 8); groups named after the directions (`North`, `North-East`, ... `North-West`)
+  plus `Center`, each with `<action-id>` lists. Activation disabled.
+- Every direction is a virtual button pressed while the hat points exactly there; with 4 buttons a diagonal
+  presses none of them. Centered presses `Center`. Children get button values (press, release).
+- JoyGob addition: if the hat is centered in a mode where it is bound differently, what the directions
+  pressed (vJoy buttons, keys) is still released.

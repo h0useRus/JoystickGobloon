@@ -8,6 +8,7 @@ use gob_core::{
 };
 use gob_i18n::I18n;
 
+use crate::devices_view::hat_glyph;
 use crate::style::{self, icon};
 
 #[derive(Debug, Clone)]
@@ -215,6 +216,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "map-to-keyboard" => icon::KEYBOARD,
         "double-tap" => icon::NUMBER_CIRCLE_TWO,
         "chain" => icon::LIST_NUMBERS,
+        "hat-buttons" => icon::COMPASS,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -273,6 +275,9 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             "kind-run-command",
             NewAction::RunCommand,
         ));
+    }
+    if behavior == InputType::Hat {
+        list.push((icon::COMPASS, "kind-hat-buttons", NewAction::HatButtons));
     }
     if behavior == InputType::Axis {
         list.push((icon::ARROWS_SPLIT, "kind-split-axis", NewAction::SplitAxis));
@@ -450,6 +455,18 @@ impl Editor<'_> {
                             });
                         }
                     }
+                }
+                ActionKind::HatButtons { directions } => {
+                    let keys: Vec<String> = directions
+                        .iter()
+                        .map(|(tag, ..)| format!("hat-{}", tag.to_ascii_lowercase()))
+                        .collect();
+                    let groups: Vec<(&str, &str, &str)> = directions
+                        .iter()
+                        .zip(&keys)
+                        .map(|((tag, d, _), key)| (*tag, hat_glyph(*d), key.as_str()))
+                        .collect();
+                    self.nested(ui, &action.id, &groups, InputType::Button, depth);
                 }
                 ActionKind::MapToMouse(mouse) => self.mouse(ui, action, mouse),
                 ActionKind::SmartToggle { delay, .. } => {

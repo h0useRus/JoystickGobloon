@@ -204,6 +204,28 @@ fn profile() -> String {
         root("r-b16", &["chain"]),
         root("r-b17", &["dtx"]),
         root("r-b18", &["dtc"]),
+        root("r-h1", &["hb4"]),
+        root("r-h2", &["hb8"]),
+        act(
+            "hb4",
+            "hat-buttons",
+            &format!(
+                "{}<North><action-id>v34</action-id></North><East><action-id>v35</action-id></East>                 <South/><West/><Center><action-id>v36</action-id></Center>",
+                prop("int", "button-count", "4")
+            ),
+        ),
+        act(
+            "hb8",
+            "hat-buttons",
+            &format!(
+                "{}<North><action-id>v34</action-id></North>                 <North-East><action-id>v37</action-id></North-East>",
+                prop("int", "button-count", "8")
+            ),
+        ),
+        vjoy("v34", "button", 34),
+        vjoy("v35", "button", 35),
+        vjoy("v36", "button", 36),
+        vjoy("v37", "button", 37),
         act(
             "chain",
             "chain",
@@ -412,6 +434,9 @@ fn profile() -> String {
         input("button", 16, "Default", "r-b16", ""),
         input("button", 17, "Default", "r-b17", ""),
         input("button", 18, "Default", "r-b18", ""),
+        input("hat", 1, "Default", "r-h1", ""),
+        input("hat", 2, "Default", "r-h2", ""),
+        input("hat", 2, "Combat", "r-b1c", ""),
     ]
     .concat();
     format!(
@@ -466,6 +491,16 @@ impl Rig {
         self.engine.process(
             &InputKey::new(DEV, InputKind::Axis, id),
             Value::Axis(value),
+            now,
+            &mut self.out,
+        );
+    }
+
+    fn hat(&mut self, id: u32, direction: Option<u16>) {
+        let now = self.t0;
+        self.engine.process(
+            &InputKey::new(DEV, InputKind::Hat, id),
+            Value::Hat(direction),
             now,
             &mut self.out,
         );
@@ -940,4 +975,36 @@ fn double_tap_combined() {
             Out::Button(33, false),
         ]
     );
+}
+
+#[test]
+fn hat_buttons_four_and_eight_directions() {
+    let mut r = Rig::new();
+    r.hat(1, None);
+    assert_eq!(r.take(), [Out::Button(36, true)]);
+    r.hat(1, Some(0));
+    assert_eq!(r.take(), [Out::Button(34, true), Out::Button(36, false)]);
+    // Four buttons: a diagonal is none of them.
+    r.hat(1, Some(4500));
+    assert_eq!(r.take(), [Out::Button(34, false)]);
+    r.hat(1, Some(9000));
+    assert_eq!(r.take(), [Out::Button(35, true)]);
+    r.hat(1, None);
+    assert_eq!(r.take(), [Out::Button(35, false), Out::Button(36, true)]);
+
+    r.hat(2, Some(4500));
+    assert_eq!(r.take(), [Out::Button(37, true)]);
+    r.hat(2, Some(0));
+    assert_eq!(r.take(), [Out::Button(34, true), Out::Button(37, false)]);
+}
+
+#[test]
+fn hat_buttons_release_when_centered_in_another_mode() {
+    let mut r = Rig::new();
+    r.hat(2, Some(0));
+    assert_eq!(r.take(), [Out::Button(34, true)]);
+    // Hat 2 maps to vJoy button 5 in Combat; centering there still releases button 34.
+    r.button(2, true, 10);
+    r.hat(2, None);
+    assert_eq!(r.take(), [Out::Button(5, false), Out::Button(34, false)]);
 }

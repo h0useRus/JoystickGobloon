@@ -107,6 +107,12 @@ pub enum ActionKind<'a> {
         threshold: f64,
         activate_on: &'a str,
     },
+    /// Each hat direction (and the center) acts as a button running its own actions.
+    /// `directions` holds 4 or 8 `(group tag, direction, actions)` entries plus the center
+    /// (`Center`, `None`), in Gremlin's order.
+    HatButtons {
+        directions: Vec<(&'static str, Option<u16>, Vec<&'a str>)>,
+    },
     MapToMouse(MouseAction),
     /// Keys pressed in order on press and released in reverse on release.
     MapToKeyboard {
@@ -261,6 +267,18 @@ pub enum MacroRepeat {
     },
 }
 
+/// hat-buttons group tags, clockwise from north (45 degrees apart).
+const HAT_BUTTONS: [&str; 8] = [
+    "North",
+    "North-East",
+    "East",
+    "South-East",
+    "South",
+    "South-West",
+    "West",
+    "North-West",
+];
+
 /// Action types decoded by [`Action::kind`].
 pub const SUPPORTED_KINDS: &[&str] = &[
     "root",
@@ -273,6 +291,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "map-to-keyboard",
     "chain",
     "double-tap",
+    "hat-buttons",
     "smart-toggle",
     "split-axis",
     "pause-resume",
@@ -390,6 +409,17 @@ impl Action {
                 threshold: self.parse("threshold").unwrap_or(0.5),
                 activate_on: self.str("activate-on").unwrap_or("exclusive"),
             },
+            "hat-buttons" => {
+                let eight = self.parse("button-count") == Some(8);
+                let mut directions: Vec<_> = HAT_BUTTONS
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| eight || i % 2 == 0)
+                    .map(|(i, &name)| (name, Some(i as u16 * 4500), self.refs_in(name)))
+                    .collect();
+                directions.push(("Center", None, self.refs_in("Center")));
+                ActionKind::HatButtons { directions }
+            }
             "description" => ActionKind::Description {
                 text: self.str("description").unwrap_or_default(),
             },

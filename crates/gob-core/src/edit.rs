@@ -19,6 +19,8 @@ pub enum NewAction {
     },
     Tempo,
     DoubleTap,
+    /// Four directions plus center.
+    HatButtons,
     Description,
     /// Button inputs map to a mouse button, axes and hats to cursor motion.
     MapToMouse {
@@ -171,6 +173,13 @@ impl Action {
                 ],
                 "disallowed",
             ),
+            NewAction::HatButtons => {
+                let mut items = vec![prop("int", "button-count", "4")];
+                items.extend(
+                    ["North", "East", "South", "West", "Center"].map(|d| group(d, Vec::new())),
+                );
+                Self::build("hat-buttons", items, "disallowed")
+            }
             NewAction::MapToMouse { input_type } => {
                 let items = if *input_type == InputType::Button {
                     vec![

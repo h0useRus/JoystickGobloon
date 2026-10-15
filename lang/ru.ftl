@@ -201,3 +201,15 @@ edit-single = Одиночное нажатие
 edit-double = Двойное нажатие
 edit-chain-timeout = Начать с первого шага после такой паузы (0 = никогда)
 edit-chain-step = Шаг { $n }
+
+# Hat as buttons
+kind-hat-buttons = Хатка как кнопки
+hat-north = Север
+hat-north-east = Северо-восток
+hat-east = Восток
+hat-south-east = Юго-восток
+hat-south = Юг
+hat-south-west = Юго-запад
+hat-west = Запад
+hat-north-west = Северо-запад
+hat-center = Центр
