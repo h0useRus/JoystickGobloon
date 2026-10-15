@@ -133,3 +133,10 @@ modes-startup = Mode on startup
 modes-remove = Remove mode and its bindings
 modes-new = New mode
 modes-add = Add mode
+
+# Undo
+action-undo = Undo (Ctrl+Z)
+action-redo = Redo (Ctrl+Y)
+status-undone = Undone
+status-redone = Redone
+edit-curve-help = Drag a point to move it · Click empty space to invert · Double-click to add a point · Right-click a point to remove it

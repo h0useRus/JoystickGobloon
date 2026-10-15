@@ -647,7 +647,7 @@ impl Editor<'_> {
         let id = action.id.clone();
         let pts: Vec<(f32, f32)> = points.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
         ui.horizontal(|ui| {
-            if let Some(new) = curve_widget(ui, &id, &pts) {
+            if let Some(new) = curve_widget(ui, &id, &pts, &self.i18n.tr("edit-curve-help")) {
                 self.ops.push(Op::SetPoints {
                     action: id.clone(),
                     points: new,
@@ -698,11 +698,18 @@ impl Editor<'_> {
     }
 }
 
-/// Drag points to edit; double-click adds a point, right-click removes one.
-/// End points stay at x = -1 and x = 1. Returns the new points when changed.
-fn curve_widget(ui: &mut egui::Ui, id: &str, points: &[(f32, f32)]) -> Option<Vec<(f32, f32)>> {
+/// Drag points to move them, click empty space to invert, double-click to add
+/// a point, right-click a point to remove it. End points stay at x = -1 and
+/// x = 1. Returns the new points when changed.
+fn curve_widget(
+    ui: &mut egui::Ui,
+    id: &str,
+    points: &[(f32, f32)],
+    help: &str,
+) -> Option<Vec<(f32, f32)>> {
     const SIZE: f32 = 200.0;
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(SIZE), Sense::click_and_drag());
+    let response = response.on_hover_text(help);
     let to_screen = |(x, y): (f32, f32)| {
         Pos2::new(
             rect.center().x + x * SIZE / 2.0,
@@ -774,14 +781,24 @@ fn curve_widget(ui: &mut egui::Ui, id: &str, points: &[(f32, f32)]) -> Option<Ve
     if response.drag_stopped() {
         ui.data_mut(|d| d.remove::<usize>(drag_id));
     }
-    if response.double_clicked() {
+    let on_point = response.interact_pointer_pos().and_then(nearest).is_some();
+    let mut changed = false;
+    // A click on empty space inverts. A double-click is two clicks, so it inverts
+    // twice (no net change) and then adds a point.
+    if response.clicked() && !on_point {
+        pts.iter_mut().for_each(|p| p.1 = -p.1);
+        changed = true;
+    }
+    if response.double_clicked() && !on_point {
         if let Some(pos) = response.interact_pointer_pos() {
             let p = to_curve(pos);
             if let Some(at) = pts.iter().position(|q| q.0 > p.0).filter(|&at| at > 0) {
                 pts.insert(at, p);
-                return Some(pts);
             }
         }
+    }
+    if changed {
+        return Some(pts);
     }
     if response.secondary_clicked() {
         if let Some(i) = response

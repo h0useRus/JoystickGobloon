@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 use eframe::egui::{self, RichText};
 use gob_core::{Action, Profile};
@@ -17,7 +18,14 @@ pub struct LoadedProfile {
     pub report: ImportReport,
     /// Changed since it was loaded or saved.
     pub dirty: bool,
+    undo: Vec<Profile>,
+    redo: Vec<Profile>,
+    last_checkpoint: Option<Instant>,
 }
+
+/// Edits closer together than this form one undo step (typing, dragging).
+const COALESCE: Duration = Duration::from_millis(700);
+const UNDO_LIMIT: usize = 100;
 
 impl LoadedProfile {
     pub fn new(profile: Profile, path: Option<PathBuf>) -> Self {
@@ -27,7 +35,51 @@ impl LoadedProfile {
             path,
             report,
             dirty: false,
+            undo: Vec::new(),
+            redo: Vec::new(),
+            last_checkpoint: None,
         }
+    }
+
+    /// Call before editing: remembers the current state for undo.
+    pub fn checkpoint(&mut self) {
+        if self.last_checkpoint.is_none_or(|t| t.elapsed() > COALESCE) {
+            self.undo.push(self.profile.clone());
+            if self.undo.len() > UNDO_LIMIT {
+                self.undo.remove(0);
+            }
+        }
+        self.redo.clear();
+        self.last_checkpoint = Some(Instant::now());
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+
+    pub fn undo(&mut self) -> bool {
+        let Some(previous) = self.undo.pop() else {
+            return false;
+        };
+        self.redo
+            .push(std::mem::replace(&mut self.profile, previous));
+        self.last_checkpoint = None;
+        self.refresh();
+        true
+    }
+
+    pub fn redo(&mut self) -> bool {
+        let Some(next) = self.redo.pop() else {
+            return false;
+        };
+        self.undo.push(std::mem::replace(&mut self.profile, next));
+        self.last_checkpoint = None;
+        self.refresh();
+        true
     }
 
     /// Call after editing the profile: re-checks it and marks it unsaved.
@@ -164,5 +216,36 @@ fn warning_text(i18n: &I18n, w: &Warning) -> String {
             &[("kind", kind.clone().into()), ("count", (*count).into())],
         ),
         Warning::HasScripts => i18n.tr("warn-scripts"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn edit(lp: &mut LoadedProfile, name: &str) {
+        lp.checkpoint();
+        lp.profile.add_mode(name, None);
+        lp.refresh();
+    }
+
+    #[test]
+    fn undo_redo_and_coalescing() {
+        let mut lp = LoadedProfile::new(Profile::default(), None);
+        assert!(!lp.can_undo());
+        edit(&mut lp, "A");
+        edit(&mut lp, "B"); // within the coalescing window: same step as "A"
+        assert_eq!(lp.profile.modes.len(), 3);
+        assert!(lp.undo());
+        assert_eq!(lp.profile.modes.len(), 1, "both quick edits undone together");
+        assert!(!lp.can_undo());
+        assert!(lp.redo());
+        assert_eq!(lp.profile.modes.len(), 3);
+
+        lp.last_checkpoint = None; // as if time passed
+        edit(&mut lp, "C");
+        assert!(!lp.can_redo(), "a new edit clears redo");
+        assert!(lp.undo());
+        assert_eq!(lp.profile.modes.len(), 3);
     }
 }

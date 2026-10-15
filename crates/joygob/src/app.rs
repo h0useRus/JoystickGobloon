@@ -361,6 +361,32 @@ impl JoyGobApp {
             {
                 self.save_as();
             }
+            ui.separator();
+            let (can_undo, can_redo) = self
+                .profile
+                .as_ref()
+                .map_or((false, false), |p| (p.can_undo(), p.can_redo()));
+            if style::icon_button(
+                ui,
+                can_undo,
+                icon::ARROW_COUNTER_CLOCKWISE,
+                &self.i18n.tr("action-undo"),
+            )
+            .clicked()
+            {
+                self.history(true);
+            }
+            if style::icon_button(
+                ui,
+                can_redo,
+                icon::ARROW_CLOCKWISE,
+                &self.i18n.tr("action-redo"),
+            )
+            .clicked()
+            {
+                self.history(false);
+            }
+            ui.separator();
             if style::icon_button(
                 ui,
                 loaded,
@@ -457,6 +483,22 @@ impl JoyGobApp {
         self.apply_ops(ops);
     }
 
+    /// Undo (`true`) or redo (`false`) the last edit.
+    fn history(&mut self, undo: bool) {
+        let Some(loaded) = &mut self.profile else {
+            return;
+        };
+        let done = if undo { loaded.undo() } else { loaded.redo() };
+        if done {
+            self.edited = Some(std::time::Instant::now());
+            self.status = self.i18n.tr(if undo {
+                "status-undone"
+            } else {
+                "status-redone"
+            });
+        }
+    }
+
     /// Applies queued edits, marks the profile unsaved and restarts a running profile.
     fn apply_ops(&mut self, ops: Vec<crate::action_editor::Op>) {
         let Some(loaded) = &mut self.profile else {
@@ -465,6 +507,7 @@ impl JoyGobApp {
         if ops.is_empty() {
             return;
         }
+        loaded.checkpoint();
         for op in ops {
             crate::action_editor::apply(&mut loaded.profile, op);
         }
@@ -498,6 +541,21 @@ impl eframe::App for JoyGobApp {
         let save_key = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::S);
         if self.profile.is_some() && ctx.input_mut(|i| i.consume_shortcut(&save_key)) {
             self.save();
+        }
+        // Text fields keep their own Ctrl+Z while focused.
+        if !ctx.wants_keyboard_input() {
+            let undo = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Z);
+            let redo = egui::KeyboardShortcut::new(
+                egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+                egui::Key::Z,
+            );
+            let redo_y = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Y);
+            // Check the longer shortcut first: Ctrl+Shift+Z also matches Ctrl+Z.
+            if ctx.input_mut(|i| i.consume_shortcut(&redo) || i.consume_shortcut(&redo_y)) {
+                self.history(false);
+            } else if ctx.input_mut(|i| i.consume_shortcut(&undo)) {
+                self.history(true);
+            }
         }
         if let Some(t) = self.edited {
             let settle = std::time::Duration::from_millis(600);
@@ -561,6 +619,7 @@ impl eframe::App for JoyGobApp {
             let applied = dialog.show(ctx, &self.i18n, &self.input.devices(), &mut open);
             if let (Some(list), Some(loaded)) = (applied, &mut self.profile) {
                 for (old, new, name) in &list {
+                    loaded.checkpoint();
                     loaded.profile.substitute_device(old, new, name);
                 }
                 loaded.refresh();
@@ -581,6 +640,7 @@ impl eframe::App for JoyGobApp {
             if !ops.is_empty() {
                 if let Some(loaded) = &mut self.profile {
                     for op in ops {
+                        loaded.checkpoint();
                         crate::modes_view::apply(&mut loaded.profile, op);
                     }
                     loaded.refresh();

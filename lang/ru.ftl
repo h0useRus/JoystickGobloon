@@ -133,3 +133,10 @@ modes-startup = Режим при запуске
 modes-remove = Удалить режим и его назначения
 modes-new = Новый режим
 modes-add = Добавить режим
+
+# Undo
+action-undo = Отменить (Ctrl+Z)
+action-redo = Повторить (Ctrl+Y)
+status-undone = Отменено
+status-redone = Повторено
+edit-curve-help = Тяните точку, чтобы сдвинуть · Клик по пустому месту — инверсия · Двойной клик — новая точка · Правый клик по точке — удалить
