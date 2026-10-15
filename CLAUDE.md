@@ -15,6 +15,7 @@ Plan: phases 0-10 in docs/ROADMAP.md (phase 0 done). Work on ONE crate per sessi
 - Gremlin import must round-trip: unknown actions kept as raw XML.
 - GUI never blocks; engine runs on its own thread, talks via channels.
 - Settings: TOML in %APPDATA%\JoystickGobloon\settings.toml.
+- Commits: Conventional Commits (feat/fix/docs/refactor/test/chore/build/ci; scope = crate, e.g. `feat(gob-gremlin): parse R14 library`).
 
 ## Commands
 - cargo build / cargo run -p joygob
