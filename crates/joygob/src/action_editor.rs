@@ -11,12 +11,17 @@ use gob_i18n::I18n;
 use crate::devices_view::hat_glyph;
 use crate::style::{self, icon};
 
+/// Builds an [`AddKind`] from an existing action id.
+type MakeAdd = fn(String) -> AddKind;
+
 /// What the add menu puts into a list.
 #[derive(Debug, Clone)]
 pub enum AddKind {
     New(NewAction),
     /// An existing library action, shared (merge-axis is bound to both of its axes).
     Reuse(String),
+    /// A deep copy of an existing action.
+    Duplicate(String),
 }
 
 fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
@@ -26,6 +31,11 @@ fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
         }
         AddKind::Reuse(id) => {
             p.add_ref(parent, group, id);
+        }
+        AddKind::Duplicate(id) => {
+            if let Some(copy) = p.duplicate(id) {
+                p.add_ref(parent, group, &copy);
+            }
         }
     }
 }
@@ -347,8 +357,14 @@ pub struct Editor<'a> {
 }
 
 impl Editor<'_> {
-    /// "Add action" menu button; `make` turns the chosen template into an op.
-    pub fn add_menu(&mut self, ui: &mut egui::Ui, make: impl Fn(AddKind) -> Op) {
+    /// "Add action" menu button; `make` turns the chosen template into an op. `parent`
+    /// is the action the list belongs to (`None` for a new binding), to avoid loops.
+    pub fn add_menu(
+        &mut self,
+        ui: &mut egui::Ui,
+        parent: Option<&str>,
+        make: impl Fn(AddKind) -> Op,
+    ) {
         let mode = self.profile.modes.first().map_or("", |m| m.name.as_str());
         ui.menu_button(
             RichText::new(icon::PLUS_CIRCLE).size(style::ICON_SIZE),
@@ -365,6 +381,7 @@ impl Editor<'_> {
                 if self.behavior == InputType::Axis {
                     self.merge_menu(ui, &make);
                 }
+                self.existing_menu(ui, parent, &make);
             },
         )
         .response
@@ -381,7 +398,7 @@ impl Editor<'_> {
             self.card(ui, parent, group, i, children.len(), id, depth);
         }
         let (parent, group) = (parent.to_string(), group.to_string());
-        self.add_menu(ui, |kind: AddKind| Op::Add {
+        self.add_menu(ui, Some(&parent), |kind: AddKind| Op::Add {
             parent: parent.clone(),
             group: group.clone(),
             action: kind,
@@ -1073,6 +1090,46 @@ impl Editor<'_> {
 
     /// New merge-axis on the edited input, or one already in the profile: Gremlin binds
     /// a single merge-axis action to both of its axes.
+    /// Gremlin's reference action: insert an action that already exists, linked (shared,
+    /// edits apply everywhere) or as a copy.
+    fn existing_menu(
+        &mut self,
+        ui: &mut egui::Ui,
+        parent: Option<&str>,
+        make: &impl Fn(AddKind) -> Op,
+    ) {
+        let mut candidates: Vec<(String, &Action)> = self
+            .profile
+            .library
+            .iter()
+            .filter(|a| a.kind != "root" && parent.is_none_or(|p| !self.profile.reaches(&a.id, p)))
+            .map(|a| (crate::profile_view::display_name(a), a))
+            .collect();
+        if candidates.is_empty() {
+            return;
+        }
+        candidates.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        ui.separator();
+        let menus: [(&str, &str, MakeAdd); 2] = [
+            (icon::LINK, "edit-link-existing", AddKind::Reuse),
+            (icon::COPY, "edit-copy-existing", AddKind::Duplicate),
+        ];
+        for (glyph, key, kind) in menus {
+            ui.menu_button(format!("{glyph}  {}", self.i18n.tr(key)), |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(360.0)
+                    .show(ui, |ui| {
+                        for (name, a) in &candidates {
+                            if ui.button(name).on_hover_text(&a.kind).clicked() {
+                                self.ops.push(make(kind(a.id.clone())));
+                                ui.close_menu();
+                            }
+                        }
+                    });
+            });
+        }
+    }
+
     fn merge_menu(&mut self, ui: &mut egui::Ui, make: &impl Fn(AddKind) -> Op) {
         if let Some((device, axis)) = self.input {
             let device = device.to_string();

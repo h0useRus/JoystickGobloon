@@ -245,3 +245,7 @@ edit-dual-outer = Внешний предел (отсюда полное отк�
 edit-dual-close = Внутренняя и внешняя зоны слишком близки.
 edit-dual-first = Выход первой оси
 edit-dual-second = Выход второй оси
+
+# Existing actions (Gremlin's reference action)
+edit-link-existing = Связать с существующим действием
+edit-copy-existing = Копировать существующее действие

@@ -25,7 +25,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `axis-delta` | A | done |
 | `dual-axis-deadzone` | A | done |
 | `condition` | A B H K | todo |
-| `reference` | A B H K | todo (reuses another library action) |
+| `reference` | A B H K | done (editor only: link / copy existing action) |
 | `pause-resume` | B K | done |
 | `load-profile` | B K | todo |
 | `play-sound` | B K | todo |
@@ -124,3 +124,11 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   each axis becomes clamp((|v| - low) / (outer - low), 0, 1) with v's sign and goes to its own list.
   Coinciding limits (Gremlin's ZeroDivisionError) send nothing.
 - Like merge-axis it is usually bound to both axes; the add menu offers to reuse it.
+
+## reference
+
+- Not a runtime action: in Gremlin's editor it is a placeholder that is replaced by an existing library
+  action, either the same one (shared) or a deep copy, and it writes nothing to the profile.
+- JoyGob: the add menu has "Link an existing action" and "Copy an existing action". Roots and actions that
+  would create a loop (the list's own action or one containing it) are not offered; `Profile::add_ref`
+  refuses loops too. A copy duplicates the whole subtree with new ids, keeping sharing inside it.

@@ -108,7 +108,7 @@ pub fn summary(index: &HashMap<&str, &Action>, root: &str) -> Option<String> {
 }
 
 /// Kind icon plus the user's label (or the Gremlin type name when there is none).
-fn display_name(action: &Action) -> String {
+pub(crate) fn display_name(action: &Action) -> String {
     let text = action
         .label()
         .filter(|l| !l.is_empty() && *l != "None")

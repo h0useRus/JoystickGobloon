@@ -351,7 +351,7 @@ impl DevicesView {
                                     inputs,
                                     input: Some((&device, key.1)),
                                 };
-                                editor.add_menu(ui, |kind| bind(Some(kind)));
+                                editor.add_menu(ui, None, |kind| bind(Some(kind)));
                             }
                         }
                     }

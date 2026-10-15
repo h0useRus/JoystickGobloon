@@ -245,3 +245,7 @@ edit-dual-outer = Outer limit (full deflection from here)
 edit-dual-close = Inner and outer deadzone are too close to each other.
 edit-dual-first = First axis output
 edit-dual-second = Second axis output
+
+# Existing actions (Gremlin's reference action)
+edit-link-existing = Link an existing action
+edit-copy-existing = Copy an existing action

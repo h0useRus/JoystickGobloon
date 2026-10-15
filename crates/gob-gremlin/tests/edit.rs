@@ -247,3 +247,48 @@ fn merge_axis_is_shared_by_both_axes() {
         "still reachable through the second axis"
     );
 }
+
+#[test]
+fn link_refuses_loops_and_duplicate_copies_the_subtree() {
+    let mut p = sample();
+    let root = p.bind(DEV, "button", "7", "Default");
+    let tempo = p
+        .add_child(&root, "actions", gob_core::Action::new(&NewAction::Tempo))
+        .unwrap();
+    let desc = p
+        .add_child(
+            &tempo,
+            "short-actions",
+            gob_core::Action::new(&NewAction::Description),
+        )
+        .unwrap();
+    assert!(
+        !p.add_ref(&desc, "actions", &tempo),
+        "tempo contains desc: loop"
+    );
+    assert!(!p.add_ref(&tempo, "long-actions", &tempo), "self");
+    assert!(
+        p.add_ref(&tempo, "long-actions", &desc),
+        "shared inside is fine"
+    );
+
+    let before = p.library.len();
+    let copy = p.duplicate(&tempo).unwrap();
+    assert_ne!(copy, tempo);
+    assert_eq!(
+        p.library.len(),
+        before + 2,
+        "tempo and its one (shared) child"
+    );
+    let other = p.bind(DEV, "button", "8", "Default");
+    assert!(p.add_ref(&other, "actions", &copy));
+    let p = reload(&p);
+    let copied = p.action(&copy).unwrap();
+    let child = copied.child_ids()[0].to_string();
+    assert_ne!(child, desc, "children are copies too");
+    assert_eq!(
+        copied.child_ids(),
+        [child.as_str(), child.as_str()],
+        "sharing kept"
+    );
+}

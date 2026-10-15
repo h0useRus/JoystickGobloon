@@ -1,7 +1,7 @@
 //! Profile editing. New actions are written exactly like Gremlin R14 writes
 //! them (property names, types and order), so edited profiles load in Gremlin.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
 
 use crate::action::{Action, InputType, Item, Property, HAT_BUTTONS};
@@ -79,6 +79,20 @@ pub fn new_uuid() -> String {
         b >> 48,
         b & 0xFFFF_FFFF_FFFF
     )
+}
+
+fn remap_refs(items: &mut [Item], ids: &HashMap<String, String>) {
+    for item in items {
+        match item {
+            Item::ActionRef(id) => {
+                if let Some(new) = ids.get(id.as_str()) {
+                    *id = new.clone();
+                }
+            }
+            Item::Group { items, .. } => remap_refs(items, ids),
+            _ => {}
+        }
+    }
 }
 
 fn prop(ty: &str, name: &str, value: impl Into<String>) -> Item {
@@ -409,8 +423,9 @@ impl Profile {
     }
 
     /// Appends an existing library action to `parent`'s `group` (Gremlin's action reuse).
+    /// Refused when it would create a loop (`parent` is `id` or lies under it).
     pub fn add_ref(&mut self, parent: &str, group: &str, id: &str) -> bool {
-        if self.action(id).is_none() || parent == id {
+        if self.action(id).is_none() || self.reaches(id, parent) {
             return false;
         }
         let Some(a) = self.action_mut(parent) else {
@@ -418,6 +433,53 @@ impl Profile {
         };
         a.group_mut(group).push(Item::ActionRef(id.into()));
         true
+    }
+
+    /// `id` is `target` or contains it somewhere below.
+    pub fn reaches(&self, id: &str, target: &str) -> bool {
+        let index = self.action_index();
+        let mut seen: HashSet<&str> = HashSet::new();
+        let mut stack = vec![id];
+        while let Some(cur) = stack.pop() {
+            if cur == target {
+                return true;
+            }
+            if seen.insert(cur) {
+                if let Some(a) = index.get(cur) {
+                    stack.extend(a.child_ids());
+                }
+            }
+        }
+        false
+    }
+
+    /// Deep copy of `id` and everything below it under new ids (Gremlin's "duplicate"
+    /// in the reference action). Returns the copy's id.
+    pub fn duplicate(&mut self, id: &str) -> Option<String> {
+        let index = self.action_index();
+        let mut order: Vec<String> = Vec::new();
+        let mut stack = vec![id.to_string()];
+        while let Some(cur) = stack.pop() {
+            if order.contains(&cur) {
+                continue;
+            }
+            let a = index.get(cur.as_str())?;
+            stack.extend(a.child_ids().into_iter().map(String::from));
+            order.push(cur);
+        }
+        let ids: HashMap<String, String> =
+            order.iter().map(|old| (old.clone(), new_uuid())).collect();
+        let copies: Vec<Action> = order
+            .iter()
+            .filter_map(|old| {
+                let mut a = (*index.get(old.as_str())?).clone();
+                a.id = ids[old].clone();
+                remap_refs(&mut a.items, &ids);
+                Some(a)
+            })
+            .collect();
+        self.library.extend(copies);
+        ids.get(id).cloned()
     }
 
     /// Removes the `index`-th child of `parent`'s `group` and actions left unreferenced.
