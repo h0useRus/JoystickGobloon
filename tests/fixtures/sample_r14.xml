@@ -1,0 +1,192 @@
+<?xml version="1.0" ?>
+<profile version="14">
+    <inputs>
+        <input>
+            <device-id>11111111-0000-0000-0000-000000000001</device-id>
+            <input-type>button</input-type>
+            <mode>Default</mode>
+            <input-id>1</input-id>
+            <action-configuration>
+                <root-action>00000000-0000-0000-0000-00000000r001</root-action>
+                <behavior>button</behavior>
+            </action-configuration>
+        </input>
+        <input>
+            <device-id>11111111-0000-0000-0000-000000000001</device-id>
+            <input-type>axis</input-type>
+            <mode>Combat</mode>
+            <input-id>2</input-id>
+            <action-configuration>
+                <root-action>00000000-0000-0000-0000-00000000r002</root-action>
+                <behavior>axis</behavior>
+            </action-configuration>
+        </input>
+    </inputs>
+    <settings>
+        <startup-mode>Default</startup-mode>
+        <macro-default-delay>0.05</macro-default-delay>
+    </settings>
+    <logical-device/>
+    <library>
+        <action id="00000000-0000-0000-0000-00000000r001" type="root">
+            <actions>
+                <action-id>00000000-0000-0000-0000-00000000t001</action-id>
+                <action-id>00000000-0000-0000-0000-00000000d001</action-id>
+            </actions>
+            <property type="string">
+                <name>action-label</name>
+                <value>Root</value>
+            </property>
+            <property type="activation-mode">
+                <name>activation-mode</name>
+                <value>disallowed</value>
+            </property>
+        </action>
+        <action id="00000000-0000-0000-0000-00000000t001" type="tempo">
+            <short-actions>
+                <action-id>00000000-0000-0000-0000-00000000v001</action-id>
+            </short-actions>
+            <long-actions>
+                <action-id>00000000-0000-0000-0000-00000000c001</action-id>
+                <action-id>00000000-0000-0000-0000-00000000m001</action-id>
+            </long-actions>
+            <property type="float">
+                <name>threshold</name>
+                <value>0.5</value>
+            </property>
+            <property type="string">
+                <name>activate-on</name>
+                <value>press</value>
+            </property>
+        </action>
+        <action id="00000000-0000-0000-0000-00000000v001" type="map-to-vjoy">
+            <property type="int">
+                <name>vjoy-device-id</name>
+                <value>1</value>
+            </property>
+            <property type="int">
+                <name>vjoy-input-id</name>
+                <value>3</value>
+            </property>
+            <property type="input_type">
+                <name>vjoy-input-type</name>
+                <value>button</value>
+            </property>
+            <property type="bool">
+                <name>button-inverted</name>
+                <value>True</value>
+            </property>
+            <property type="string">
+                <name>action-label</name>
+                <value>Fire &amp; "forget" &lt;group&gt;</value>
+            </property>
+            <property type="activation-mode">
+                <name>activation-mode</name>
+                <value>press</value>
+            </property>
+        </action>
+        <action id="00000000-0000-0000-0000-00000000c001" type="change-mode">
+            <property type="string">
+                <name>change-type</name>
+                <value>Temporary</value>
+            </property>
+            <target-mode>
+                <property type="string">
+                    <name>name</name>
+                    <value>Combat</value>
+                </property>
+            </target-mode>
+        </action>
+        <action id="00000000-0000-0000-0000-00000000m001" type="macro">
+            <property type="string">
+                <name>repeat-mode</name>
+                <value>Single</value>
+            </property>
+            <macro-action type="key">
+                <property type="int">
+                    <name>scan-code</name>
+                    <value>62</value>
+                </property>
+            </macro-action>
+            <macro-action type="pause">
+                <property type="float">
+                    <name>duration</name>
+                    <value>0.1</value>
+                </property>
+            </macro-action>
+        </action>
+        <action id="00000000-0000-0000-0000-00000000d001" type="description">
+            <property type="string">
+                <name>description</name>
+                <value/>
+            </property>
+        </action>
+        <action id="00000000-0000-0000-0000-00000000r002" type="root">
+            <actions>
+                <action-id>00000000-0000-0000-0000-00000000k001</action-id>
+                <action-id>00000000-0000-0000-0000-00000000x001</action-id>
+            </actions>
+        </action>
+        <action id="00000000-0000-0000-0000-00000000k001" type="response-curve">
+            <deadzone>
+                <property type="float">
+                    <name>low</name>
+                    <value>-0.9</value>
+                </property>
+                <property type="float">
+                    <name>center-low</name>
+                    <value>-0.05</value>
+                </property>
+                <property type="float">
+                    <name>center-high</name>
+                    <value>0.05</value>
+                </property>
+                <property type="float">
+                    <name>high</name>
+                    <value>0.9</value>
+                </property>
+            </deadzone>
+            <control-points>
+                <property type="point2d">
+                    <name>point</name>
+                    <value>-1.0,-1.0</value>
+                </property>
+                <property type="point2d">
+                    <name>point</name>
+                    <value>0.0,0.2</value>
+                </property>
+                <property type="point2d">
+                    <name>point</name>
+                    <value>1.0,1.0</value>
+                </property>
+            </control-points>
+            <property type="string">
+                <name>curve-type</name>
+                <value>PiecewiseLinear</value>
+            </property>
+        </action>
+        <action id="00000000-0000-0000-0000-00000000x001" type="future-action">
+            <property type="string" extra="odd">
+                <name>weird</name>
+                <value>kept verbatim</value>
+            </property>
+            <note>free text</note>
+        </action>
+    </library>
+    <modes>
+        <mode>Default</mode>
+        <mode parent="Default">Combat</mode>
+    </modes>
+    <scripts>
+        <script path="C:\plugins\my_plugin.py" name="My plugin"/>
+    </scripts>
+    <future-section attr="1">
+        <thing>value</thing>
+    </future-section>
+    <devices>
+        <device>
+            <device-id>11111111-0000-0000-0000-000000000001</device-id>
+            <device-name> Test Stick  </device-name>
+        </device>
+    </devices>
+</profile>

@@ -1,0 +1,187 @@
+use gob_core::{ActionKind, ActivationMode, InputType, Item, Profile, Section};
+use gob_gremlin::{profile_to_element, report, xmltext, Warning};
+
+const SAMPLE: &str = include_str!("../../../tests/fixtures/sample_r14.xml");
+const LOCAL_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/local");
+
+/// Import -> export must reproduce the same XML tree, and export must be stable.
+fn assert_round_trip(text: &str) -> Profile {
+    let original = xmltext::parse(text).unwrap();
+    let profile = gob_gremlin::from_str(text).unwrap();
+    assert_eq!(
+        profile_to_element(&profile),
+        original,
+        "tree changed on round-trip"
+    );
+
+    let written = gob_gremlin::to_string(&profile);
+    assert_eq!(
+        xmltext::parse(&written).unwrap(),
+        original,
+        "written XML parses differently"
+    );
+    assert_eq!(
+        gob_gremlin::to_string(&gob_gremlin::from_str(&written).unwrap()),
+        written,
+        "export not stable"
+    );
+    profile
+}
+
+#[test]
+fn sample_round_trips() {
+    let p = assert_round_trip(SAMPLE);
+    assert_eq!(p.inputs.len(), 2);
+    assert_eq!(p.library.len(), 9);
+    assert_eq!(p.startup_mode().as_deref(), Some("Default"));
+    assert_eq!(p.modes[1].parent.as_deref(), Some("Default"));
+    assert_eq!(p.devices[0].name, " Test Stick  ");
+    assert_eq!(p.device_name(&p.devices[0].id), Some("Test Stick"));
+    assert!(p.has_scripts());
+    assert_eq!(
+        p.order
+            .iter()
+            .filter(|s| matches!(s, Section::Extra(_)))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn sample_typed_views() {
+    let p = gob_gremlin::from_str(SAMPLE).unwrap();
+    let get = |suffix: &str| p.library.iter().find(|a| a.id.ends_with(suffix)).unwrap();
+
+    let root = get("r001");
+    assert_eq!(root.activation_mode(), ActivationMode::Disallowed);
+    assert!(matches!(root.kind(), ActionKind::Root { children } if children.len() == 2));
+
+    let vjoy = get("v001");
+    assert_eq!(vjoy.label(), Some(r#"Fire & "forget" <group>"#));
+    assert_eq!(vjoy.activation_mode(), ActivationMode::Press);
+    assert_eq!(
+        vjoy.kind(),
+        ActionKind::MapToVjoy {
+            device: 1,
+            input_type: InputType::Button,
+            input_id: 3,
+            inverted: true
+        }
+    );
+
+    assert_eq!(
+        get("c001").kind(),
+        ActionKind::ChangeMode {
+            change_type: "Temporary",
+            target: Some("Combat")
+        }
+    );
+    match get("t001").kind() {
+        ActionKind::Tempo {
+            short,
+            long,
+            threshold,
+            activate_on,
+        } => {
+            assert_eq!(
+                (short.len(), long.len(), threshold, activate_on),
+                (1, 2, 0.5, "press")
+            );
+        }
+        k => panic!("unexpected {k:?}"),
+    }
+    match get("k001").kind() {
+        ActionKind::ResponseCurve {
+            deadzone, points, ..
+        } => {
+            assert_eq!(deadzone, [-0.9, -0.05, 0.05, 0.9]);
+            assert_eq!(points, vec![(-1.0, -1.0), (0.0, 0.2), (1.0, 1.0)]);
+        }
+        k => panic!("unexpected {k:?}"),
+    }
+    assert_eq!(get("d001").kind(), ActionKind::Description { text: "" });
+    assert_eq!(get("m001").kind(), ActionKind::Other);
+
+    let odd = get("x001");
+    assert!(
+        odd.items.iter().all(|i| matches!(i, Item::Raw(_))),
+        "odd shapes must stay raw"
+    );
+}
+
+#[test]
+fn sample_report() {
+    let r = report(&gob_gremlin::from_str(SAMPLE).unwrap());
+    assert_eq!((r.inputs, r.actions, r.devices, r.modes), (2, 9, 1, 2));
+    assert_eq!(r.by_kind["root"], 2);
+    assert!(r.warnings.contains(&Warning::HasScripts));
+    assert!(r.warnings.contains(&Warning::NotExecutable {
+        kind: "macro".into(),
+        count: 1
+    }));
+    assert!(r.warnings.contains(&Warning::NotExecutable {
+        kind: "future-action".into(),
+        count: 1
+    }));
+    assert!(!r
+        .warnings
+        .iter()
+        .any(|w| matches!(w, Warning::DanglingRef { .. } | Warning::UnknownMode(_))));
+}
+
+#[test]
+fn report_finds_broken_references() {
+    let broken = SAMPLE
+        .replace("<mode>Combat</mode>", "<mode>Missing</mode>")
+        .replace("00000000c001</action-id>", "deadbeefc001</action-id>");
+    let r = report(&gob_gremlin::from_str(&broken).unwrap());
+    assert!(r.warnings.contains(&Warning::UnknownMode("Missing".into())));
+    assert!(r
+        .warnings
+        .iter()
+        .any(|w| matches!(w, Warning::DanglingRef { to, .. } if to.ends_with("deadbeefc001"))));
+}
+
+#[test]
+fn rejects_old_and_foreign_files() {
+    assert!(matches!(
+        gob_gremlin::from_str(r#"<profile version="9"><devices/></profile>"#),
+        Err(gob_gremlin::Error::UnsupportedVersion(_))
+    ));
+    assert!(matches!(
+        gob_gremlin::from_str("<html/>"),
+        Err(gob_gremlin::Error::NotAProfile)
+    ));
+    assert!(gob_gremlin::from_str("<profile").is_err());
+}
+
+/// Real-world profiles in `tests/fixtures/local/` (gitignored) must round-trip too.
+#[test]
+fn local_profiles_round_trip() {
+    let Ok(entries) = std::fs::read_dir(LOCAL_DIR) else {
+        return;
+    };
+    for path in entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "xml"))
+    {
+        let text = std::fs::read_to_string(&path).unwrap();
+        let p = assert_round_trip(&text);
+        let r = report(&p);
+        assert!(
+            !r.warnings
+                .iter()
+                .any(|w| matches!(w, Warning::DanglingRef { .. })),
+            "{}: dangling references",
+            path.display()
+        );
+        println!(
+            "{}: {} inputs, {} actions {:?}",
+            path.display(),
+            r.inputs,
+            r.actions,
+            r.by_kind
+        );
+    }
+}

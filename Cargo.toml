@@ -9,11 +9,15 @@ license = "MIT"
 
 [workspace.dependencies]
 gob-i18n = { path = "crates/gob-i18n" }
+gob-core = { path = "crates/gob-core" }
+gob-gremlin = { path = "crates/gob-gremlin" }
+quick-xml = "0.37"
 eframe = "0.31"
 fluent-bundle = "0.15"
 unic-langid = "0.9"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
+rfd = "0.15"
 
 [profile.release]
 lto = true

@@ -1,2 +1,5 @@
 /target
 /ref
+
+# personal / unlicensed Gremlin profiles used by tests when present
+/tests/fixtures/local/
