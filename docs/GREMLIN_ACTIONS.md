@@ -24,7 +24,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `merge-axis` | A B | done |
 | `axis-delta` | A | done |
 | `dual-axis-deadzone` | A | done |
-| `condition` | A B H K | todo |
+| `condition` | A B H K | done (keyboard conditions run but are not editable yet; logical devices are false) |
 | `reference` | A B H K | done (editor only: link / copy existing action) |
 | `pause-resume` | B K | done |
 | `load-profile` | B K | todo |
@@ -132,3 +132,19 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - JoyGob: the add menu has "Link an existing action" and "Copy an existing action". Roots and actions that
   would create a loop (the list's own action or one containing it) are not offered; `Profile::add_ref`
   refuses loops too. A copy duplicates the whole subtree with new ids, keeping sharing inside it.
+
+## condition
+
+- `logical-operator` `all`/`any`; `<condition>` groups with `condition-type` (`current_input`, `joystick`,
+  `keyboard`, `vjoy`, `logical_device`) and a `<comparator>` (`range`: `lower-limit`/`upper-limit`;
+  `pressed`: `is-pressed`; `direction`: `direction` hat names). Joystick: `<input>` groups with
+  `device-guid`, `input-type`, `input-id`; keyboard: `<input>` with `scan-code`, `is-extended`; vJoy:
+  `vjoy-id`, `input-type`, `input-id` on the condition. Children `true-actions`, `false-actions`.
+  Activation both (activation-mode honoured).
+- Comparators: range uses the first state (bools count as 0/1), pressed needs every state equal
+  (Python's `1.0 == True`), direction the first state in the list. No conditions: all -> true, any -> false.
+- Button: the branch chosen on press also gets the release. Hat: center goes to the cached branch; a
+  direction that switches branch first sends center to the old one. Axis: evaluated every event.
+- Joystick states are JoyGob's latest physical values (the runner seeds buttons/hats/axes at start),
+  device GUIDs follow the substitution; vJoy states are the last values JoyGob wrote; keys via
+  GetAsyncKeyState.

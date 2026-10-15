@@ -77,4 +77,12 @@ pub trait Output {
     fn key(&mut self, _scan_code: u16, _extended: bool, _pressed: bool) {}
     /// Starts a program (run-command action).
     fn run_command(&mut self, _executable: &str, _arguments: &[String]) {}
+    /// Last value sent to a vJoy input, for conditions; `None` if never set.
+    fn vjoy_state(&self, _device: u32, _kind: InputKind, _id: u32) -> Option<Value> {
+        None
+    }
+    /// Whether a keyboard key is held right now, for conditions.
+    fn key_pressed(&self, _scan_code: u16, _extended: bool) -> bool {
+        false
+    }
 }

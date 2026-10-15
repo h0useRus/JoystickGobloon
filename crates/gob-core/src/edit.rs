@@ -22,6 +22,8 @@ pub enum NewAction {
     /// Four directions plus center.
     HatButtons,
     AxisDelta,
+    /// No conditions yet: like Gremlin, true until some are added.
+    Condition,
     /// Starts with `axis` of `device` in both slots, like [`NewAction::MergeAxis`].
     DualAxisDeadzone {
         device: String,
@@ -52,6 +54,7 @@ pub fn child_groups(kind: &str) -> &'static [&'static str] {
         "smart-toggle" => &["actions"],
         "split-axis" => &["lower-actions", "upper-actions"],
         "axis-delta" => &["positive-actions", "negative-actions"],
+        "condition" => &["true-actions", "false-actions"],
         _ => &[],
     }
 }
@@ -79,6 +82,15 @@ pub fn new_uuid() -> String {
         b >> 48,
         b & 0xFFFF_FFFF_FFFF
     )
+}
+
+fn condition_positions(items: &[Item]) -> Vec<usize> {
+    items
+        .iter()
+        .enumerate()
+        .filter(|(_, i)| matches!(i, Item::Group { tag, .. } if tag == "condition"))
+        .map(|(n, _)| n)
+        .collect()
 }
 
 fn remap_refs(items: &mut [Item], ids: &HashMap<String, String>) {
@@ -213,6 +225,15 @@ impl Action {
                     group("output2-actions", Vec::new()),
                 ],
                 "disallowed",
+            ),
+            NewAction::Condition => Self::build(
+                "condition",
+                vec![
+                    prop("string", "logical-operator", "all"),
+                    group("true-actions", Vec::new()),
+                    group("false-actions", Vec::new()),
+                ],
+                "both",
             ),
             NewAction::AxisDelta => Self::build(
                 "axis-delta",
@@ -433,6 +454,42 @@ impl Profile {
         };
         a.group_mut(group).push(Item::ActionRef(id.into()));
         true
+    }
+
+    /// Replaces the `index`-th `<condition>` of a condition action; `index` = count appends.
+    pub fn set_condition(&mut self, id: &str, index: usize, condition: &crate::Condition) {
+        let Some(a) = self.action_mut(id) else {
+            return;
+        };
+        let items = condition.to_items();
+        let positions: Vec<usize> = condition_positions(&a.items);
+        match positions.get(index) {
+            Some(&pos) => {
+                if let Item::Group { items: old, .. } = &mut a.items[pos] {
+                    *old = items;
+                }
+            }
+            None => {
+                // After the last condition, else after `logical-operator` (Gremlin's order).
+                let at = positions.last().map(|p| p + 1).unwrap_or_else(|| {
+                    a.items
+                        .iter()
+                        .position(
+                            |i| matches!(i, Item::Property(p) if p.name == "logical-operator"),
+                        )
+                        .map_or(0, |p| p + 1)
+                });
+                a.items.insert(at, group("condition", items));
+            }
+        }
+    }
+
+    pub fn remove_condition(&mut self, id: &str, index: usize) {
+        if let Some(a) = self.action_mut(id) {
+            if let Some(&pos) = condition_positions(&a.items).get(index) {
+                a.items.remove(pos);
+            }
+        }
     }
 
     /// `id` is `target` or contains it somewhere below.

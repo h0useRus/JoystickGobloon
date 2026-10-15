@@ -249,3 +249,18 @@ edit-dual-second = Выход второй оси
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Связать с существующим действием
 edit-copy-existing = Копировать существующее действие
+
+# Condition
+kind-condition = Условие
+edit-cond-all = Должны выполняться все условия
+edit-cond-any = Достаточно любого условия
+edit-cond-add = Условие
+edit-cond-true = Если да
+edit-cond-false = Иначе
+cond-current = Этот вход
+cond-joystick = Вход джойстика
+cond-vjoy = Выход vJoy
+cond-keyboard = Зажатые клавиши
+cond-range = Ось в диапазоне
+cond-pressed = Нажата
+cond-released = Отпущена

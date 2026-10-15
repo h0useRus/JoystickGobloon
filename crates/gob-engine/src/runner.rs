@@ -30,6 +30,8 @@ pub struct Runner {
 
 struct SystemOutput {
     devices: HashMap<u32, gob_vjoy::Device>,
+    /// Last values written, read back by vJoy conditions.
+    written: HashMap<(u32, InputKind, u32), Value>,
 }
 
 impl Output for SystemOutput {
@@ -37,18 +39,32 @@ impl Output for SystemOutput {
         if let Some(d) = self.devices.get(&device) {
             d.set_axis(axis, value);
         }
+        let key = (device, InputKind::Axis, u32::from(axis));
+        self.written.insert(key, Value::Axis(value));
     }
 
     fn button(&mut self, device: u32, button: u8, pressed: bool) {
         if let Some(d) = self.devices.get(&device) {
             d.set_button(button, pressed);
         }
+        let key = (device, InputKind::Button, u32::from(button));
+        self.written.insert(key, Value::Button(pressed));
     }
 
     fn hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
         if let Some(d) = self.devices.get(&device) {
             d.set_hat(hat, direction);
         }
+        let key = (device, InputKind::Hat, u32::from(hat));
+        self.written.insert(key, Value::Hat(direction));
+    }
+
+    fn vjoy_state(&self, device: u32, kind: InputKind, id: u32) -> Option<Value> {
+        self.written.get(&(device, kind, id)).copied()
+    }
+
+    fn key_pressed(&self, scan_code: u16, extended: bool) -> bool {
+        crate::sendinput::key_pressed(scan_code, extended)
     }
 
     fn mouse_move(&mut self, dx: i32, dy: i32) {
@@ -89,6 +105,7 @@ impl Runner {
         let vjoy = VJoy::load().map_err(|e| e.to_string())?;
         let mut out = SystemOutput {
             devices: HashMap::new(),
+            written: HashMap::new(),
         };
         for id in engine.vjoy_devices() {
             out.devices
@@ -97,6 +114,14 @@ impl Runner {
 
         let now = Instant::now();
         for d in initial.iter().filter(|d| !d.info.is_vjoy()) {
+            for (i, &b) in d.buttons.iter().enumerate() {
+                let key = InputKey::new(&d.info.guid, InputKind::Button, i as u32 + 1);
+                engine.seed(&key, Value::Button(b));
+            }
+            for (i, &h) in d.hats.iter().enumerate() {
+                let key = InputKey::new(&d.info.guid, InputKind::Hat, i as u32 + 1);
+                engine.seed(&key, Value::Hat(h));
+            }
             for &axis in &d.info.axes {
                 let key = InputKey::new(&d.info.guid, InputKind::Axis, u32::from(axis));
                 engine.process(

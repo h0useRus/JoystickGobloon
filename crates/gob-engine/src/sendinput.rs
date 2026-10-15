@@ -8,8 +8,8 @@ mod imp {
 
     use gob_core::MouseButton;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT,
-        KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VSC_TO_VK_EX,
+        GetAsyncKeyState, MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE,
+        KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VSC_TO_VK_EX,
         MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP,
         MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL,
         MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY,
@@ -86,6 +86,13 @@ mod imp {
             SendInput(&[input], size_of::<INPUT>() as i32);
         }
     }
+
+    /// Current key state, like Gremlin's keyboard condition.
+    pub fn key_pressed(scan_code: u16, extended: bool) -> bool {
+        let prefix = if extended { 0xE000 } else { 0 };
+        let vk = unsafe { MapVirtualKeyW(u32::from(scan_code) | prefix, MAPVK_VSC_TO_VK_EX) };
+        vk != 0 && unsafe { GetAsyncKeyState(vk as i32) } < 0
+    }
 }
 
 #[cfg(not(windows))]
@@ -96,6 +103,9 @@ mod imp {
     pub fn mouse_button(_button: MouseButton, _pressed: bool) {}
     pub fn mouse_wheel(_notches: i32) {}
     pub fn key(_scan_code: u16, _extended: bool, _pressed: bool) {}
+    pub fn key_pressed(_scan_code: u16, _extended: bool) -> bool {
+        false
+    }
 }
 
 pub fn mouse_move(dx: i32, dy: i32) {
@@ -112,4 +122,8 @@ pub fn mouse_wheel(notches: i32) {
 
 pub fn key(scan_code: u16, extended: bool, pressed: bool) {
     imp::key(scan_code, extended, pressed);
+}
+
+pub fn key_pressed(scan_code: u16, extended: bool) -> bool {
+    imp::key_pressed(scan_code, extended)
 }

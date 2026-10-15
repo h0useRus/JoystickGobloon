@@ -292,3 +292,46 @@ fn link_refuses_loops_and_duplicate_copies_the_subtree() {
         "sharing kept"
     );
 }
+
+#[test]
+fn conditions_are_edited_in_place() {
+    use gob_core::{Comparator, Condition, ConditionSource};
+    let mut p = sample();
+    let root = p.bind(DEV, "hat", "1", "Default");
+    let cond = p
+        .add_child(
+            &root,
+            "actions",
+            gob_core::Action::new(&NewAction::Condition),
+        )
+        .unwrap();
+    let hat = Condition {
+        source: ConditionSource::CurrentInput,
+        comparator: Comparator::Direction(vec![Some(0), None]),
+    };
+    let vjoy = Condition {
+        source: ConditionSource::Vjoy {
+            device: 2,
+            input_type: InputType::Button,
+            id: 7,
+        },
+        comparator: Comparator::Pressed(false),
+    };
+    p.set_condition(&cond, 0, &hat);
+    p.set_condition(&cond, 1, &vjoy);
+    let p2 = reload(&p);
+    let ActionKind::Condition {
+        all, conditions, ..
+    } = p2.action(&cond).unwrap().kind()
+    else {
+        panic!("not a condition");
+    };
+    assert!(all);
+    assert_eq!(conditions, [hat.clone(), vjoy.clone()]);
+
+    p.remove_condition(&cond, 0);
+    let ActionKind::Condition { conditions, .. } = reload(&p).action(&cond).unwrap().kind() else {
+        panic!("not a condition");
+    };
+    assert_eq!(conditions, [vjoy]);
+}

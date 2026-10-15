@@ -207,6 +207,46 @@ fn profile() -> String {
         root("r-h1", &["hb4"]),
         root("r-a6", &["merge"]),
         root("r-a8", &["delta"]),
+        root("r-b19", &["cond"]),
+        root("r-a11", &["cond-axis"]),
+        act(
+            "cond",
+            "condition",
+            &format!(
+                "{}<condition>{}<comparator>{}{}</comparator>\
+                 <input>{}{}{}</input></condition>\
+                 <true-actions><action-id>v50</action-id></true-actions>\
+                 <false-actions><action-id>v51</action-id></false-actions>",
+                prop("string", "logical-operator", "all"),
+                prop("string", "condition-type", "joystick"),
+                prop("string", "comparator-type", "pressed"),
+                prop("bool", "is-pressed", "True"),
+                prop("uuid", "device-guid", DEV),
+                prop("input_type", "input-type", "button"),
+                prop("int", "input-id", "20"),
+            ),
+        ),
+        act(
+            "cond-axis",
+            "condition",
+            &format!(
+                "{}<condition>{}<comparator>{}{}{}</comparator></condition>\
+                 <condition>{}<comparator>{}{}{}</comparator></condition>\
+                 <true-actions><action-id>va5</action-id></true-actions>",
+                prop("string", "logical-operator", "any"),
+                prop("string", "condition-type", "current_input"),
+                prop("string", "comparator-type", "range"),
+                prop("float", "lower-limit", "0.5"),
+                prop("float", "upper-limit", "1.0"),
+                prop("string", "condition-type", "current_input"),
+                prop("string", "comparator-type", "range"),
+                prop("float", "lower-limit", "-1.0"),
+                prop("float", "upper-limit", "-0.5"),
+            ),
+        ),
+        vjoy("v50", "button", 50),
+        vjoy("v51", "button", 51),
+        vjoy("va5", "axis", 5),
         root("r-a9", &["dual"]),
         act(
             "dual",
@@ -483,6 +523,8 @@ fn profile() -> String {
         input("axis", 6, "Default", "r-a6", ""),
         input("axis", 7, "Default", "r-a6", ""),
         input("axis", 8, "Default", "r-a8", ""),
+        input("button", 19, "Default", "r-b19", ""),
+        input("axis", 11, "Default", "r-a11", ""),
         input("axis", 9, "Default", "r-a9", ""),
         input("axis", 10, "Default", "r-a9", ""),
         input("hat", 2, "Default", "r-h2", ""),
@@ -1106,4 +1148,38 @@ fn dual_axis_deadzone_outputs_both_axes() {
     r.axis(10, -0.95);
     let out = r.take();
     assert_eq!(out[1], Out::Axis(4, -1.0));
+}
+
+#[test]
+fn condition_on_another_button_releases_where_it_pressed() {
+    let mut r = Rig::new();
+    r.button(19, true, 0);
+    assert_eq!(
+        r.take(),
+        [Out::Button(51, true)],
+        "button 20 not held: false branch"
+    );
+    r.button(20, true, 10);
+    r.button(19, false, 20);
+    assert_eq!(
+        r.take(),
+        [Out::Button(51, false)],
+        "release follows the press"
+    );
+    r.button(19, true, 30);
+    assert_eq!(r.take(), [Out::Button(50, true)]);
+    r.button(20, false, 40);
+    r.button(19, false, 50);
+    assert_eq!(r.take(), [Out::Button(50, false)]);
+}
+
+#[test]
+fn condition_any_of_two_axis_ranges() {
+    let mut r = Rig::new();
+    r.axis(11, 0.2);
+    assert!(r.take().is_empty(), "no false actions");
+    r.axis(11, 0.7);
+    assert_eq!(r.take(), [Out::Axis(5, 0.7)]);
+    r.axis(11, -0.9);
+    assert_eq!(r.take(), [Out::Axis(5, -0.9)]);
 }

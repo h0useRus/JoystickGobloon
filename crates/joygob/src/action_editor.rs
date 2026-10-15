@@ -99,6 +99,16 @@ pub enum Op {
         action: String,
         targets: Vec<String>,
     },
+    /// Replaces (or appends, at the end index) a condition of a condition action.
+    SetCondition {
+        action: String,
+        index: usize,
+        condition: gob_core::Condition,
+    },
+    RemoveCondition {
+        action: String,
+        index: usize,
+    },
     /// hat-buttons: 4 or 8 directions.
     HatButtonCount {
         action: String,
@@ -165,6 +175,12 @@ pub fn apply(p: &mut Profile, op: Op) {
             }
         }
         Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
+        Op::SetCondition {
+            action,
+            index,
+            condition,
+        } => p.set_condition(&action, index, &condition),
+        Op::RemoveCondition { action, index } => p.remove_condition(&action, index),
         Op::SetInGroup {
             action,
             group,
@@ -268,6 +284,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "merge-axis" => icon::ARROWS_IN_SIMPLE,
         "axis-delta" => icon::ARROWS_DOWN_UP,
         "dual-axis-deadzone" => icon::CIRCLE_DASHED,
+        "condition" => icon::GIT_BRANCH,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -338,6 +355,7 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             NewAction::AxisDelta,
         ));
     }
+    list.push((icon::GIT_BRANCH, "kind-condition", NewAction::Condition));
     list.push((icon::NOTE, "kind-description", NewAction::Description));
     list
 }
@@ -555,6 +573,9 @@ impl Editor<'_> {
                         .collect();
                     self.nested(ui, &action.id, &groups, InputType::Button, depth);
                 }
+                ActionKind::Condition {
+                    all, conditions, ..
+                } => self.condition(ui, action, all, &conditions, depth),
                 ActionKind::DualAxisDeadzone {
                     axis1,
                     axis2,
@@ -791,7 +812,7 @@ impl Editor<'_> {
         ui.add_space(4.0);
     }
 
-    fn set(&mut self, action: &str, name: &str, ty: &str, value: impl Into<String>) {
+    pub(crate) fn set(&mut self, action: &str, name: &str, ty: &str, value: impl Into<String>) {
         self.ops.push(Op::Set {
             action: action.into(),
             name: name.into(),
@@ -1211,8 +1232,8 @@ impl Editor<'_> {
     }
 
     /// Device and axis dropdowns for `axis1-*` / `axis2-*` (merge-axis, dual-axis-deadzone).
-    fn axis_pickers(&mut self, ui: &mut egui::Ui, id: &str, axes: [(&str, u32); 2]) {
-        // Profile devices first, then attached ones the profile does not know yet.
+    /// (GUID, name) of profile devices, then attached ones the profile does not know yet.
+    pub(crate) fn device_choices(&self) -> Vec<(String, String)> {
         let mut devices: Vec<(String, String)> = self
             .profile
             .devices
@@ -1224,6 +1245,11 @@ impl Editor<'_> {
                 devices.push((d.info.guid.clone(), d.info.name.trim().to_string()));
             }
         }
+        devices
+    }
+
+    fn axis_pickers(&mut self, ui: &mut egui::Ui, id: &str, axes: [(&str, u32); 2]) {
+        let devices = self.device_choices();
         for (n, (device, axis)) in axes.into_iter().enumerate() {
             let device = device.to_ascii_lowercase();
             let name = devices
@@ -1265,7 +1291,7 @@ impl Editor<'_> {
     }
 
     /// Child action lists of a container, each under an icon caption.
-    fn nested(
+    pub(crate) fn nested(
         &mut self,
         ui: &mut egui::Ui,
         id: &str,

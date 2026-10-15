@@ -131,6 +131,14 @@ pub enum ActionKind<'a> {
         first: Vec<&'a str>,
         second: Vec<&'a str>,
     },
+    /// Runs `true_actions` when the conditions hold (all of them, or any with `all` false),
+    /// otherwise `false_actions`. With no conditions it is true.
+    Condition {
+        all: bool,
+        conditions: Vec<crate::condition::Condition>,
+        true_actions: Vec<&'a str>,
+        false_actions: Vec<&'a str>,
+    },
     /// Pulses `positive` / `negative` each time the axis moved `threshold` that way.
     AxisDelta {
         threshold: f64,
@@ -389,6 +397,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "merge-axis",
     "axis-delta",
     "dual-axis-deadzone",
+    "condition",
     "smart-toggle",
     "split-axis",
     "pause-resume",
@@ -517,6 +526,23 @@ impl Action {
                 directions.push(("Center", None, self.refs_in("Center")));
                 ActionKind::HatButtons { directions }
             }
+            "condition" => ActionKind::Condition {
+                all: !self
+                    .str("logical-operator")
+                    .is_some_and(|o| o.trim().eq_ignore_ascii_case("any")),
+                conditions: self
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        Item::Group { tag, items, .. } if tag == "condition" => {
+                            Some(crate::condition::Condition::parse(items))
+                        }
+                        _ => None,
+                    })
+                    .collect(),
+                true_actions: self.refs_in("true-actions"),
+                false_actions: self.refs_in("false-actions"),
+            },
             "dual-axis-deadzone" => ActionKind::DualAxisDeadzone {
                 axis1: self.axis_ref(1),
                 axis2: self.axis_ref(2),

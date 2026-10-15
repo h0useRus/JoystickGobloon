@@ -249,3 +249,18 @@ edit-dual-second = Second axis output
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Link an existing action
 edit-copy-existing = Copy an existing action
+
+# Condition
+kind-condition = Condition
+edit-cond-all = All conditions must hold
+edit-cond-any = Any condition is enough
+edit-cond-add = Condition
+edit-cond-true = If true
+edit-cond-false = Otherwise
+cond-current = This input
+cond-joystick = Joystick input
+cond-vjoy = vJoy output
+cond-keyboard = Keys held
+cond-range = Axis between
+cond-pressed = Pressed
+cond-released = Released

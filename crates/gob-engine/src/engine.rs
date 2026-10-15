@@ -2,8 +2,8 @@ use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use gob_core::{
-    Action, ActionKind, ActivationMode, AxisDirection, InputType, Item, Key, MacroRepeat,
-    MacroStep, MergeOp, MouseAction, MouseButton, Profile, VirtualButton,
+    Action, ActionKind, ActivationMode, AxisDirection, Comparator, ConditionSource, InputType,
+    Item, Key, MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton, Profile, VirtualButton,
 };
 
 use crate::modes::ModeStack;
@@ -103,6 +103,13 @@ enum Node {
     },
     /// Hat direction (`None` = center) -> actions run as a button while the hat points exactly there.
     HatButtons(Vec<(Option<u16>, Vec<NodeId>)>),
+    /// Gremlin's condition action: `branches[0]` when true, `branches[1]` when false.
+    Condition {
+        all: bool,
+        conditions: Vec<Cond>,
+        branches: [Vec<NodeId>; 2],
+        act: ActivationMode,
+    },
     /// Radial inner deadzone and square outer limit over two axes, each result to its list.
     DualDeadzone {
         axes: [InputKey; 2],
@@ -130,6 +137,22 @@ enum Node {
     },
     /// Description and action types JoyGob does not execute yet.
     Noop,
+}
+
+#[derive(Debug, Clone)]
+enum CondSource {
+    Current,
+    Inputs(Vec<InputKey>),
+    Keys(Vec<Key>),
+    Vjoy(u32, InputKind, u32),
+    /// Logical devices and unknown sources.
+    Never,
+}
+
+#[derive(Debug, Clone)]
+struct Cond {
+    source: CondSource,
+    comparator: Comparator,
 }
 
 /// Where an event came from and the mode it was processed in.
@@ -354,6 +377,11 @@ pub struct Engine {
     macros: HashMap<NodeId, MacroRun>,
     taps: HashMap<NodeId, TapState>,
     chains: HashMap<NodeId, ChainState>,
+    /// Physical button and hat states, for conditions.
+    buttons: HashMap<InputKey, bool>,
+    hats: HashMap<InputKey, Option<u16>>,
+    /// Condition branch (true = 0) chosen on press, reused on release / hat center.
+    cond_cache: HashMap<NodeId, usize>,
     /// axis-delta: last raw value and the change accumulated since the last pulse.
     deltas: HashMap<NodeId, (Option<f32>, f32)>,
     /// Pressed state of each hat-buttons direction.
@@ -416,6 +444,9 @@ impl Engine {
             chains: HashMap::new(),
             hat_buttons: HashMap::new(),
             deltas: HashMap::new(),
+            buttons: HashMap::new(),
+            hats: HashMap::new(),
+            cond_cache: HashMap::new(),
             keys_down: HashSet::new(),
             macro_delay: profile
                 .settings
@@ -634,6 +665,60 @@ impl Engine {
                         })
                         .collect(),
                 ),
+                ActionKind::Condition {
+                    all,
+                    conditions,
+                    true_actions,
+                    false_actions,
+                } => Node::Condition {
+                    all,
+                    conditions: conditions
+                        .into_iter()
+                        .map(|c| Cond {
+                            source: match c.source {
+                                ConditionSource::CurrentInput => CondSource::Current,
+                                ConditionSource::Joystick(inputs) => CondSource::Inputs(
+                                    inputs
+                                        .into_iter()
+                                        .filter_map(|(device, ty, id)| {
+                                            let kind = match ty {
+                                                InputType::Axis => InputKind::Axis,
+                                                InputType::Button => InputKind::Button,
+                                                InputType::Hat => InputKind::Hat,
+                                                InputType::Other => return None,
+                                            };
+                                            Some(InputKey {
+                                                device: self.device(&device),
+                                                kind,
+                                                id,
+                                            })
+                                        })
+                                        .collect(),
+                                ),
+                                ConditionSource::Keyboard(keys) => CondSource::Keys(keys),
+                                ConditionSource::Vjoy {
+                                    device,
+                                    input_type,
+                                    id,
+                                } => match input_type {
+                                    InputType::Axis => {
+                                        CondSource::Vjoy(device, InputKind::Axis, id)
+                                    }
+                                    InputType::Hat => CondSource::Vjoy(device, InputKind::Hat, id),
+                                    _ => CondSource::Vjoy(device, InputKind::Button, id),
+                                },
+                                ConditionSource::Other(_) => CondSource::Never,
+                            },
+                            comparator: c.comparator,
+                        })
+                        .collect(),
+                    branches: [true_actions, false_actions].map(|ids| {
+                        ids.iter()
+                            .map(|c| self.compile(index, c, depth + 1))
+                            .collect()
+                    }),
+                    act: action.activation_mode(),
+                },
                 ActionKind::DualAxisDeadzone {
                     axis1,
                     axis2,
@@ -786,11 +871,24 @@ impl Engine {
             .min()
     }
 
+    /// Records an input's state without running anything (initial positions for conditions).
+    pub fn seed(&mut self, key: &InputKey, value: Value) {
+        match value {
+            Value::Axis(v) => {
+                self.axes.insert(key.clone(), v);
+            }
+            Value::Button(b) => {
+                self.buttons.insert(key.clone(), b);
+            }
+            Value::Hat(d) => {
+                self.hats.insert(key.clone(), d);
+            }
+        }
+    }
+
     /// Handles one physical input change.
     pub fn process(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
-        if let (InputKind::Axis, Value::Axis(v)) = (key.kind, value) {
-            self.axes.insert(key.clone(), v);
-        }
+        self.seed(key, value);
         let before = self.modes.current().to_string();
         self.dispatch(key, value, now, out);
         self.after_mode_change(&before, now, out);
@@ -1118,6 +1216,51 @@ impl Engine {
                     );
                 } else {
                     self.release_keys(node, out);
+                }
+            }
+            Node::Condition {
+                all,
+                conditions,
+                branches,
+                act,
+            } => {
+                if !should_execute(act, *value) {
+                    return;
+                }
+                let truth = |e: &Self, value: Value| {
+                    let mut outcomes = conditions.iter().map(|c| e.cond_holds(c, value, out));
+                    usize::from(!if all {
+                        outcomes.all(|o| o)
+                    } else {
+                        outcomes.any(|o| o)
+                    })
+                };
+                let branch = match *value {
+                    Value::Axis(_) => truth(self, *value),
+                    Value::Button(true) => {
+                        let b = truth(self, *value);
+                        self.cond_cache.insert(node, b);
+                        b
+                    }
+                    // Release and hat center go where the press went (Gremlin's functor cache).
+                    Value::Button(false) | Value::Hat(None) => self
+                        .cond_cache
+                        .remove(&node)
+                        .unwrap_or_else(|| truth(self, *value)),
+                    Value::Hat(Some(_)) => {
+                        let b = truth(self, *value);
+                        if let Some(prev) = self.cond_cache.insert(node, b) {
+                            if prev != b {
+                                for &c in &branches[prev] {
+                                    self.run(c, src, &mut Value::Hat(None), now, out, depth + 1);
+                                }
+                            }
+                        }
+                        b
+                    }
+                };
+                for &c in &branches[branch] {
+                    self.run(c, src, value, now, out, depth + 1);
                 }
             }
             Node::DualDeadzone {
@@ -1579,6 +1722,36 @@ impl Engine {
         );
     }
 
+    /// One condition of a condition action (Gremlin's comparators on the source states).
+    fn cond_holds(&self, cond: &Cond, value: Value, out: &dyn Output) -> bool {
+        let states: Vec<Value> = match &cond.source {
+            CondSource::Current => vec![value],
+            CondSource::Inputs(keys) => keys
+                .iter()
+                .map(|k| match k.kind {
+                    InputKind::Axis => Value::Axis(self.axes.get(k).copied().unwrap_or(0.0)),
+                    InputKind::Button => {
+                        Value::Button(self.buttons.get(k).copied().unwrap_or(false))
+                    }
+                    InputKind::Hat => Value::Hat(self.hats.get(k).copied().flatten()),
+                })
+                .collect(),
+            CondSource::Keys(keys) => keys
+                .iter()
+                .map(|k| Value::Button(out.key_pressed(k.scan_code, k.extended)))
+                .collect(),
+            CondSource::Vjoy(device, kind, id) => {
+                vec![out.vjoy_state(*device, *kind, *id).unwrap_or(match kind {
+                    InputKind::Axis => Value::Axis(0.0),
+                    InputKind::Button => Value::Button(false),
+                    InputKind::Hat => Value::Hat(None),
+                })]
+            }
+            CondSource::Never => return false,
+        };
+        compare(&cond.comparator, &states)
+    }
+
     /// Gremlin's HatButtonsFunctor: every direction is a button pressed while the hat
     /// points exactly there (4-button mode ignores diagonals), centered presses `Center`.
     #[allow(clippy::too_many_arguments)]
@@ -1860,6 +2033,28 @@ impl Engine {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Gremlin's comparators. Python compares bools and floats as numbers (True == 1.0).
+fn compare(comparator: &Comparator, states: &[Value]) -> bool {
+    match comparator {
+        Comparator::Range { lower, upper } => {
+            let v = match states.first() {
+                Some(Value::Axis(v)) => f64::from(*v),
+                Some(Value::Button(b)) => f64::from(u8::from(*b)),
+                _ => return false,
+            };
+            (*lower..=*upper).contains(&v)
+        }
+        Comparator::Pressed(p) => states.iter().all(|s| match *s {
+            Value::Button(b) => b == *p,
+            Value::Axis(v) => v == f32::from(u8::from(*p)),
+            Value::Hat(_) => false,
+        }),
+        Comparator::Direction(dirs) => {
+            matches!(states.first(), Some(Value::Hat(d)) if dirs.contains(d))
         }
     }
 }
