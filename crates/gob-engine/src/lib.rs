@@ -73,6 +73,8 @@ pub trait Output {
     fn mouse_button(&mut self, _button: gob_core::MouseButton, _pressed: bool) {}
     /// Wheel notches: positive scrolls up.
     fn mouse_wheel(&mut self, _notches: i32) {}
+    /// Keyboard key by set 1 scan code; `extended` adds the E0 prefix.
+    fn key(&mut self, _scan_code: u16, _extended: bool, _pressed: bool) {}
     /// Starts a program (run-command action).
     fn run_command(&mut self, _executable: &str, _arguments: &[String]) {}
 }

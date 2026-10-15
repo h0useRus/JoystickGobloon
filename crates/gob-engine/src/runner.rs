@@ -63,6 +63,10 @@ impl Output for SystemOutput {
         crate::sendinput::mouse_wheel(notches);
     }
 
+    fn key(&mut self, scan_code: u16, extended: bool, pressed: bool) {
+        crate::sendinput::key(scan_code, extended, pressed);
+    }
+
     fn run_command(&mut self, executable: &str, arguments: &[String]) {
         // Detached: the program keeps running after JoyGob stops.
         let _ = std::process::Command::new(executable)

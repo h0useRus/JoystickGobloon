@@ -14,7 +14,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `tempo` | B K | done |
 | `description` | A B H K | done |
 | `map-to-mouse` | A B H K | done |
-| `macro` | B K | todo (keys, mouse, vJoy, pauses; repeat modes) |
+| `macro` | B K | done (keys, mouse, vJoy, pauses, repeat modes; not exclusive/preemptive, joystick, logical-device) |
 | `map-to-keyboard` | B K | todo |
 | `chain` | B K | todo |
 | `double-tap` | B K | todo |
@@ -45,3 +45,20 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - All contributions are summed every 10 ms (100 Hz), sub-pixel residual carried, at most 5 ticks integrated
   after a stall. Motion stops on a mode change unless the input keeps the same binding.
 - Wheel Up/Down send one notch (+/-120) on press. Back = XBUTTON1, Forward = XBUTTON2.
+
+## macro
+
+- Properties: `is-exclusive`, `is-preemptive` (bool), `repeat-mode` (`Single`, `Count`, `Hold`, `Toggle`,
+  case-insensitive), `repeat-count` int, `repeat-delay` float (s). Steps are `<macro-action type=...>` groups:
+  `key` (`scan-code`, `is-extended`, `is-pressed`), `mouse-button` (`button`, `is-pressed`), `mouse-motion`
+  (`dx`, `dy`), `pause` (`duration`), `vjoy` (`vjoy-id`, `input-type`, `input-id`, `value` bool / float /
+  hat name like `north-east`, axis `axis-mode` absolute/relative), `joystick`, `logical-device`.
+- Between two consecutive non-pause steps the profile's `<macro-default-delay>` (default 0.05 s) is inserted.
+- Runs when `activation-mode` allows; inside a tempo with `activate-on=release` and the macro on `release`,
+  a long press fires it when the button is let go.
+- An activation while the same macro runs is queued and started after it (Toggle: stops it instead).
+  Count runs N rounds with `repeat-delay` after each; Hold repeats until the input is released; Toggle until
+  the next activation. Termination is checked between rounds, so the current round always completes.
+- Wheel Up/Down steps scroll one notch regardless of `is-pressed`. Keys go through SendInput with
+  virtual key + scan code like Gremlin's `keybd_event`.
+- vJoy devices used only by macros are acquired too.

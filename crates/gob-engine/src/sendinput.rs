@@ -1,4 +1,4 @@
-//! Mouse output through the Windows `SendInput` API.
+//! Mouse and keyboard output through the Windows `SendInput` API.
 
 use gob_core::MouseButton;
 
@@ -8,10 +8,11 @@ mod imp {
 
     use gob_core::MouseButton;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
-        MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN,
-        MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL, MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, MOUSEINPUT,
-        MOUSE_EVENT_FLAGS,
+        MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT,
+        KEYBD_EVENT_FLAGS, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VSC_TO_VK_EX,
+        MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP,
+        MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL,
+        MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY,
     };
 
     const WHEEL_DELTA: i32 = 120;
@@ -57,6 +58,34 @@ mod imp {
     pub fn mouse_wheel(notches: i32) {
         send(MOUSEEVENTF_WHEEL, 0, 0, notches * WHEEL_DELTA);
     }
+
+    /// Sends both virtual key and scan code like Gremlin's keybd_event call.
+    pub fn key(scan_code: u16, extended: bool, pressed: bool) {
+        let prefix = if extended { 0xE000 } else { 0 };
+        let vk = unsafe { MapVirtualKeyW(u32::from(scan_code) | prefix, MAPVK_VSC_TO_VK_EX) };
+        let mut flags = KEYBD_EVENT_FLAGS(0);
+        if extended {
+            flags |= KEYEVENTF_EXTENDEDKEY;
+        }
+        if !pressed {
+            flags |= KEYEVENTF_KEYUP;
+        }
+        let input = INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: VIRTUAL_KEY(vk as u16),
+                    wScan: scan_code,
+                    dwFlags: flags,
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        };
+        unsafe {
+            SendInput(&[input], size_of::<INPUT>() as i32);
+        }
+    }
 }
 
 #[cfg(not(windows))]
@@ -66,6 +95,7 @@ mod imp {
     pub fn mouse_move(_dx: i32, _dy: i32) {}
     pub fn mouse_button(_button: MouseButton, _pressed: bool) {}
     pub fn mouse_wheel(_notches: i32) {}
+    pub fn key(_scan_code: u16, _extended: bool, _pressed: bool) {}
 }
 
 pub fn mouse_move(dx: i32, dy: i32) {
@@ -78,4 +108,8 @@ pub fn mouse_button(button: MouseButton, pressed: bool) {
 
 pub fn mouse_wheel(notches: i32) {
     imp::mouse_wheel(notches);
+}
+
+pub fn key(scan_code: u16, extended: bool, pressed: bool) {
+    imp::key(scan_code, extended, pressed);
 }

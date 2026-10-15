@@ -2,8 +2,8 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 use gob_core::{
-    Action, ActionKind, ActivationMode, AxisDirection, InputType, Item, MouseAction, MouseButton,
-    Profile, VirtualButton,
+    Action, ActionKind, ActivationMode, AxisDirection, InputType, Item, MacroRepeat, MacroStep,
+    MouseAction, MouseButton, Profile, VirtualButton,
 };
 
 use crate::modes::ModeStack;
@@ -15,6 +15,10 @@ const PULSE: Duration = Duration::from_millis(50);
 /// Guards against reference cycles in broken profiles.
 const MAX_DEPTH: usize = 32;
 const VIRTUAL_DEVICE: &str = "virtual";
+/// Gremlin's default pause between macro steps without an explicit pause.
+const MACRO_DELAY: f64 = 0.05;
+/// Lower bound between macro repetitions so a zero delay cannot spin `tick`.
+const MACRO_MIN_REPEAT: Duration = Duration::from_millis(1);
 
 type NodeId = usize;
 
@@ -80,6 +84,12 @@ enum Node {
         threshold: Duration,
         on_press: bool,
     },
+    /// Steps already include the default delay between non-pause steps.
+    Macro {
+        steps: Vec<MacroStep>,
+        repeat: MacroRepeat,
+        act: ActivationMode,
+    },
     /// Description and action types JoyGob does not execute yet.
     Noop,
 }
@@ -130,8 +140,24 @@ struct TempoState {
     press: Option<(Value, Source)>,
 }
 
+/// A macro being executed (Gremlin's MacroManager entry, driven by timers instead of a thread).
+#[derive(Debug, Default)]
+struct MacroRun {
+    /// Next step to execute.
+    pos: usize,
+    /// Completed repetitions.
+    rounds: u32,
+    /// Waiting out the repeat delay: check whether to go on before the next round.
+    between_rounds: bool,
+    /// Termination requested; honored between rounds like Gremlin.
+    stop: bool,
+    /// Activations received while running, started one after another.
+    queued: u32,
+}
+
 #[derive(Debug)]
 enum TimerKind {
+    MacroStep(NodeId),
     TempoTimeout(NodeId),
     ToggleTimeout(NodeId),
     PulseRelease { nodes: Vec<NodeId>, src: Source },
@@ -149,6 +175,7 @@ enum ReleaseAction {
     VjoyButton(u32, u8),
     LeaveTemporary(String),
     TempoRelease(NodeId),
+    StopMacro(NodeId),
 }
 
 /// Runs when the physical input that registered it is released (Gremlin's ButtonReleaseActions).
@@ -258,6 +285,11 @@ pub struct Engine {
     /// Cursor motion per (action, input), tagged with the mode it started in.
     motion: Motion<(NodeId, InputKey), String>,
     toggles: HashMap<NodeId, ToggleState>,
+    macros: HashMap<NodeId, MacroRun>,
+    /// Profile's `macro-default-delay` in seconds.
+    macro_delay: f64,
+    /// Last value written to each vJoy axis, for relative macro steps.
+    vjoy_axes: HashMap<(u32, u8), f32>,
     /// Paused by a pause-resume action: only bindings containing one still run.
     paused: bool,
 }
@@ -303,6 +335,14 @@ impl Engine {
             relative: HashMap::new(),
             motion: Motion::default(),
             toggles: HashMap::new(),
+            macros: HashMap::new(),
+            macro_delay: profile
+                .settings
+                .child_text("macro-default-delay")
+                .and_then(|d| d.trim().parse().ok())
+                .filter(|d: &f64| *d >= 0.0)
+                .unwrap_or(MACRO_DELAY),
+            vjoy_axes: HashMap::new(),
             paused: false,
         };
 
@@ -501,6 +541,11 @@ impl Engine {
                     arguments: split_command(arguments),
                     act: action.activation_mode(),
                 },
+                ActionKind::Macro { steps, repeat, .. } => Node::Macro {
+                    steps: with_default_delay(&steps, self.macro_delay),
+                    repeat,
+                    act: action.activation_mode(),
+                },
                 ActionKind::Description { .. } | ActionKind::Other => Node::Noop,
             },
         };
@@ -520,9 +565,18 @@ impl Engine {
     pub fn vjoy_devices(&self) -> BTreeSet<u32> {
         self.nodes
             .iter()
-            .filter_map(|n| match n {
-                Node::Vjoy { device, .. } => Some(*device),
-                _ => None,
+            .flat_map(|n| match n {
+                Node::Vjoy { device, .. } => vec![*device],
+                Node::Macro { steps, .. } => steps
+                    .iter()
+                    .filter_map(|s| match *s {
+                        MacroStep::VjoyButton { device, .. }
+                        | MacroStep::VjoyAxis { device, .. }
+                        | MacroStep::VjoyHat { device, .. } => Some(device),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
             })
             .collect()
     }
@@ -559,6 +613,7 @@ impl Engine {
         while let Some(pos) = self.timers.iter().position(|t| t.at <= now) {
             let timer = self.timers.remove(pos);
             match timer.kind {
+                TimerKind::MacroStep(node) => self.macro_advance(node, now, out),
                 TimerKind::TempoTimeout(node) => self.tempo_timeout(node, now, out),
                 TimerKind::ToggleTimeout(node) => {
                     let state = self.toggles.entry(node).or_default();
@@ -593,6 +648,7 @@ impl Engine {
             r.value = (r.value + r.delta * steps.floor()).clamp(-1.0, 1.0);
             r.last_step += RELATIVE_STEP.mul_f32(steps.floor());
             out.axis(device, axis, r.value);
+            self.vjoy_axes.insert((device, axis), r.value);
             if r.stopping && now.saturating_duration_since(r.last_update) > RELATIVE_STOP {
                 r.active = false;
             }
@@ -706,8 +762,10 @@ impl Engine {
                 }
                 match target {
                     VjoyTarget::Axis(id) => match *value {
-                        Value::Axis(v) => out.axis(device, id, v),
-                        Value::Button(b) => out.axis(device, id, if b { 1.0 } else { 0.0 }),
+                        Value::Axis(v) => self.set_axis(device, id, v, out),
+                        Value::Button(b) => {
+                            self.set_axis(device, id, if b { 1.0 } else { 0.0 }, out)
+                        }
                         Value::Hat(_) => {}
                     },
                     VjoyTarget::Button(id) => {
@@ -827,7 +885,163 @@ impl Engine {
                     self.mouse(node, action, src, *value, now, out);
                 }
             }
+            Node::Macro { repeat, act, .. } => {
+                if should_execute(act, *value) {
+                    self.macro_trigger(node, repeat, src, now, out);
+                }
+            }
             Node::Noop => {}
+        }
+    }
+
+    fn set_axis(&mut self, device: u32, axis: u8, value: f32, out: &mut dyn Output) {
+        out.axis(device, axis, value);
+        self.vjoy_axes.insert((device, axis), value);
+    }
+
+    /// Gremlin's MacroFunctor + MacroManager.queue_macro.
+    fn macro_trigger(
+        &mut self,
+        node: NodeId,
+        repeat: MacroRepeat,
+        src: &Source,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        match self.macros.get_mut(&node) {
+            // A second activation stops a running toggle macro.
+            Some(run) if matches!(repeat, MacroRepeat::Toggle { .. }) => {
+                run.stop = true;
+                run.queued = 0;
+                return;
+            }
+            Some(run) => run.queued += 1,
+            None => {
+                self.macros.insert(node, MacroRun::default());
+                self.macro_advance(node, now, out);
+            }
+        }
+        if matches!(repeat, MacroRepeat::Hold { .. }) {
+            self.register(
+                &src.key,
+                ReleaseEntry {
+                    mode: src.mode.clone(),
+                    any_mode: true,
+                    on_press: false,
+                    action: ReleaseAction::StopMacro(node),
+                },
+            );
+        }
+    }
+
+    /// Executes steps until the next pause, the end of the macro or its termination.
+    fn macro_advance(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
+        let Node::Macro { steps, repeat, .. } = &self.nodes[node] else {
+            return;
+        };
+        let (steps, repeat) = (steps.clone(), *repeat);
+        loop {
+            let Some(run) = self.macros.get_mut(&node) else {
+                return;
+            };
+            if run.between_rounds {
+                run.between_rounds = false;
+                let more = match repeat {
+                    MacroRepeat::Single => false,
+                    MacroRepeat::Count { count, .. } => run.rounds < count,
+                    MacroRepeat::Hold { .. } | MacroRepeat::Toggle { .. } => true,
+                };
+                if run.stop || !more {
+                    self.macro_finish(node, now, out);
+                    return;
+                }
+            }
+            let Some(&step) = steps.get(run.pos) else {
+                let delay = match repeat {
+                    MacroRepeat::Single => {
+                        self.macro_finish(node, now, out);
+                        return;
+                    }
+                    MacroRepeat::Count { delay, .. }
+                    | MacroRepeat::Hold { delay }
+                    | MacroRepeat::Toggle { delay } => delay,
+                };
+                run.pos = 0;
+                run.rounds += 1;
+                run.between_rounds = true;
+                let wait = Duration::from_secs_f64(delay.max(0.0)).max(MACRO_MIN_REPEAT);
+                self.add_timer(now + wait, TimerKind::MacroStep(node));
+                return;
+            };
+            run.pos += 1;
+            if let MacroStep::Pause(d) = step {
+                self.add_timer(
+                    now + Duration::from_secs_f64(d.max(0.0)),
+                    TimerKind::MacroStep(node),
+                );
+                return;
+            }
+            self.macro_step(step, out);
+        }
+    }
+
+    /// Ends a run and starts the next queued activation, if any.
+    fn macro_finish(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
+        let queued = self.macros.remove(&node).map_or(0, |r| r.queued);
+        if queued > 0 {
+            self.macros.insert(
+                node,
+                MacroRun {
+                    queued: queued - 1,
+                    ..MacroRun::default()
+                },
+            );
+            self.macro_advance(node, now, out);
+        }
+    }
+
+    fn macro_step(&mut self, step: MacroStep, out: &mut dyn Output) {
+        let id = |n: u32| n.min(255) as u8;
+        match step {
+            MacroStep::Key {
+                scan_code,
+                extended,
+                pressed,
+            } => out.key(scan_code, extended, pressed),
+            // Wheel steps scroll one notch whatever their pressed flag says.
+            MacroStep::MouseButton {
+                button: MouseButton::WheelUp,
+                ..
+            } => out.mouse_wheel(1),
+            MacroStep::MouseButton {
+                button: MouseButton::WheelDown,
+                ..
+            } => out.mouse_wheel(-1),
+            MacroStep::MouseButton { button, pressed } => out.mouse_button(button, pressed),
+            MacroStep::MouseMotion { dx, dy } => out.mouse_move(dx, dy),
+            MacroStep::VjoyButton {
+                device,
+                id: n,
+                pressed,
+            } => out.button(device, id(n), pressed),
+            MacroStep::VjoyAxis {
+                device,
+                id: n,
+                value,
+                relative,
+            } => {
+                let mut v = value as f32;
+                if relative {
+                    v += self.vjoy_axes.get(&(device, id(n))).copied().unwrap_or(0.0);
+                }
+                self.set_axis(device, id(n), v.clamp(-1.0, 1.0), out);
+            }
+            MacroStep::VjoyHat {
+                device,
+                id: n,
+                direction,
+            } => out.hat(device, id(n), direction),
+            MacroStep::Pause(_) | MacroStep::Other => {}
         }
     }
 
@@ -1109,6 +1323,12 @@ impl Engine {
             match entry.action {
                 ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
                 ReleaseAction::LeaveTemporary(mode) => self.leave_temporary(&mode),
+                ReleaseAction::StopMacro(node) => {
+                    if let Some(run) = self.macros.get_mut(&node) {
+                        run.stop = true;
+                        run.queued = 0;
+                    }
+                }
                 ReleaseAction::TempoRelease(node) => {
                     let phase = self.tempo.get(&node).map(|s| s.phase).unwrap_or_default();
                     if phase != Phase::Wait {
@@ -1123,6 +1343,20 @@ impl Engine {
             }
         }
     }
+}
+
+/// Inserts `delay` seconds between consecutive steps that are not pauses
+/// (Gremlin's MacroManager._preprocess_macro).
+fn with_default_delay(steps: &[MacroStep], delay: f64) -> Vec<MacroStep> {
+    let pause = |s: &MacroStep| matches!(s, MacroStep::Pause(_));
+    let mut out = Vec::with_capacity(steps.len() * 2);
+    for (i, &step) in steps.iter().enumerate() {
+        if i > 0 && !pause(&step) && !pause(&steps[i - 1]) {
+            out.push(MacroStep::Pause(delay));
+        }
+        out.push(step);
+    }
+    out
 }
 
 fn should_execute(act: ActivationMode, value: Value) -> bool {

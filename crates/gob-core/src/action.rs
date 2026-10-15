@@ -114,6 +114,13 @@ pub enum ActionKind<'a> {
         executable: &'a str,
         arguments: &'a str,
     },
+    /// Sequence of timed steps; `exclusive`/`preemptive` are kept but not executed.
+    Macro {
+        steps: Vec<MacroStep>,
+        repeat: MacroRepeat,
+        exclusive: bool,
+        preemptive: bool,
+    },
     /// Preserved in the profile but not executed (yet).
     Other,
 }
@@ -171,6 +178,65 @@ pub enum MouseAction {
     },
 }
 
+/// One `<macro-action>` of a macro.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MacroStep {
+    /// Seconds.
+    Pause(f64),
+    /// Set 1 scan code; `extended` adds the E0 prefix.
+    Key {
+        scan_code: u16,
+        extended: bool,
+        pressed: bool,
+    },
+    MouseButton {
+        button: MouseButton,
+        pressed: bool,
+    },
+    MouseMotion {
+        dx: i32,
+        dy: i32,
+    },
+    VjoyButton {
+        device: u32,
+        id: u32,
+        pressed: bool,
+    },
+    /// `relative` adds `value` to the current position.
+    VjoyAxis {
+        device: u32,
+        id: u32,
+        value: f64,
+        relative: bool,
+    },
+    /// Hundredths of a degree, `None` when centered.
+    VjoyHat {
+        device: u32,
+        id: u32,
+        direction: Option<u16>,
+    },
+    /// `joystick` and `logical-device` steps, not executed.
+    Other,
+}
+
+/// How often a macro runs; delays are seconds between repetitions.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MacroRepeat {
+    Single,
+    Count {
+        count: u32,
+        delay: f64,
+    },
+    /// Repeats while the input stays pressed.
+    Hold {
+        delay: f64,
+    },
+    /// Starts on one activation, stops on the next.
+    Toggle {
+        delay: f64,
+    },
+}
+
 /// Action types decoded by [`Action::kind`].
 pub const SUPPORTED_KINDS: &[&str] = &[
     "root",
@@ -184,6 +250,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "split-axis",
     "pause-resume",
     "run-command",
+    "macro",
 ];
 
 impl Action {
@@ -302,6 +369,38 @@ impl Action {
                         .unwrap_or(MouseButton::Left),
                 ),
             }),
+            "macro" => {
+                let delay = self.parse("repeat-delay").unwrap_or(0.1);
+                let repeat = match self
+                    .str("repeat-mode")
+                    .map(|m| m.trim().to_ascii_lowercase())
+                {
+                    Some(m) if m == "count" => MacroRepeat::Count {
+                        count: self.parse("repeat-count").unwrap_or(1),
+                        delay,
+                    },
+                    Some(m) if m == "hold" => MacroRepeat::Hold { delay },
+                    Some(m) if m == "toggle" => MacroRepeat::Toggle { delay },
+                    _ => MacroRepeat::Single,
+                };
+                let steps = self
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        Item::Group { tag, attrs, items } if tag == "macro-action" => {
+                            let ty = attrs.iter().find(|(k, _)| k == "type")?.1.as_str();
+                            Some(macro_step(ty, items))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                ActionKind::Macro {
+                    steps,
+                    repeat,
+                    exclusive: self.bool("is-exclusive"),
+                    preemptive: self.bool("is-preemptive"),
+                }
+            }
             _ => ActionKind::Other,
         }
     }
@@ -346,6 +445,74 @@ fn collect_refs<'a>(items: &'a [Item], out: &mut Vec<&'a str>) {
             _ => {}
         }
     }
+}
+
+fn macro_step(ty: &str, items: &[Item]) -> MacroStep {
+    let str = |n| find_property(items, n).map(|p| p.value.trim());
+    let num = |n| str(n).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+    let flag = |n| str(n).is_some_and(|v| v.eq_ignore_ascii_case("true"));
+    match ty {
+        "pause" => MacroStep::Pause(num("duration")),
+        "key" => MacroStep::Key {
+            scan_code: num("scan-code") as u16,
+            extended: flag("is-extended"),
+            pressed: flag("is-pressed"),
+        },
+        "mouse-button" => match str("button").and_then(MouseButton::parse) {
+            Some(button) => MacroStep::MouseButton {
+                button,
+                pressed: flag("is-pressed"),
+            },
+            None => MacroStep::Other,
+        },
+        "mouse-motion" => MacroStep::MouseMotion {
+            dx: num("dx") as i32,
+            dy: num("dy") as i32,
+        },
+        "vjoy" => {
+            let device = num("vjoy-id") as u32;
+            let id = num("input-id") as u32;
+            match InputType::parse(str("input-type").unwrap_or_default()) {
+                InputType::Button => MacroStep::VjoyButton {
+                    device,
+                    id,
+                    pressed: flag("value"),
+                },
+                InputType::Axis => MacroStep::VjoyAxis {
+                    device,
+                    id,
+                    value: num("value"),
+                    relative: str("axis-mode").is_some_and(|m| m.eq_ignore_ascii_case("relative")),
+                },
+                InputType::Hat => MacroStep::VjoyHat {
+                    device,
+                    id,
+                    direction: str("value").and_then(hat_direction),
+                },
+                InputType::Other => MacroStep::Other,
+            }
+        }
+        _ => MacroStep::Other,
+    }
+}
+
+/// Gremlin hat direction name (`north-east`) to hundredths of a degree.
+fn hat_direction(name: &str) -> Option<u16> {
+    const NAMES: [&str; 8] = [
+        "north",
+        "north-east",
+        "east",
+        "south-east",
+        "south",
+        "south-west",
+        "west",
+        "north-west",
+    ];
+    let name = name.to_ascii_lowercase();
+    NAMES
+        .iter()
+        .position(|n| *n == name)
+        .map(|i| i as u16 * 4500)
 }
 
 fn parse_point(s: &str) -> Option<(f64, f64)> {

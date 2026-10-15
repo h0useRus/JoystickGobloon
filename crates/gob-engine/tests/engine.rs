@@ -15,6 +15,9 @@ enum Out {
     Mouse(gob_core::MouseButton, bool),
     Wheel(i32),
     Run(String, Vec<String>),
+    /// vJoy button on a device other than 1.
+    DevButton(u32, u8, bool),
+    Key(u16, bool),
 }
 
 #[derive(Default)]
@@ -25,8 +28,11 @@ impl Output for Recorder {
         self.0
             .push(Out::Axis(axis, (value * 1000.0).round() / 1000.0));
     }
-    fn button(&mut self, _device: u32, button: u8, pressed: bool) {
-        self.0.push(Out::Button(button, pressed));
+    fn button(&mut self, device: u32, button: u8, pressed: bool) {
+        self.0.push(match device {
+            1 => Out::Button(button, pressed),
+            d => Out::DevButton(d, button, pressed),
+        });
     }
     fn hat(&mut self, _device: u32, _hat: u8, _direction: Option<u16>) {}
     fn mouse_move(&mut self, dx: i32, dy: i32) {
@@ -40,6 +46,9 @@ impl Output for Recorder {
     }
     fn run_command(&mut self, executable: &str, arguments: &[String]) {
         self.0.push(Out::Run(executable.into(), arguments.to_vec()));
+    }
+    fn key(&mut self, scan_code: u16, _extended: bool, pressed: bool) {
+        self.0.push(Out::Key(scan_code, pressed));
     }
 }
 
@@ -90,6 +99,47 @@ fn change_mode(id: &str, change: &str, targets: &[&str], activation: &str) -> St
         "change-mode",
         &format!("{}{t}", prop("string", "change-type", change)),
         activation,
+    )
+}
+
+fn macro_act(id: &str, repeat: &str, activation: &str, steps: &[String]) -> String {
+    act_on(
+        id,
+        "macro",
+        &format!(
+            "{}{}{}{}",
+            prop("string", "repeat-mode", repeat),
+            prop("int", "repeat-count", "3"),
+            prop("float", "repeat-delay", "0.1"),
+            steps.concat()
+        ),
+        activation,
+    )
+}
+
+fn step_vjoy(device: u32, button: u32, pressed: bool) -> String {
+    format!(
+        r#"<macro-action type="vjoy">{}{}{}{}</macro-action>"#,
+        prop("int", "vjoy-id", &device.to_string()),
+        prop("input_type", "input-type", "button"),
+        prop("int", "input-id", &button.to_string()),
+        prop("bool", "value", if pressed { "True" } else { "False" })
+    )
+}
+
+fn step_key(scan_code: u16, pressed: bool) -> String {
+    format!(
+        r#"<macro-action type="key">{}{}{}</macro-action>"#,
+        prop("int", "scan-code", &scan_code.to_string()),
+        prop("bool", "is-extended", "False"),
+        prop("bool", "is-pressed", if pressed { "True" } else { "False" })
+    )
+}
+
+fn step_pause(seconds: &str) -> String {
+    format!(
+        r#"<macro-action type="pause">{}</macro-action>"#,
+        prop("float", "duration", seconds)
     )
 }
 
@@ -145,6 +195,62 @@ fn profile() -> String {
         root("r-b8", &["pause"]),
         root("r-a5", &["split"]),
         root("r-b9", &["run"]),
+        root("r-b10", &["mtempo"]),
+        root("r-b11", &["mkeys"]),
+        root("r-b12", &["mhold"]),
+        root("r-b13", &["mtoggle"]),
+        root("r-b14", &["mcount"]),
+        // Tap: vJoy button 26; hold: macro pulsing vJoy 2 button 46 on release
+        // (Star Citizen scan / light amplification bind).
+        act(
+            "mtempo",
+            "tempo",
+            &format!(
+                "<short-actions><action-id>v26</action-id></short-actions>\
+                 <long-actions><action-id>mnight</action-id></long-actions>{}{}",
+                prop("float", "threshold", "0.5"),
+                prop("string", "activate-on", "release")
+            ),
+        ),
+        vjoy("v26", "button", 26),
+        macro_act(
+            "mnight",
+            "Single",
+            "release",
+            &[
+                step_vjoy(2, 46, true),
+                step_pause("0.1"),
+                step_vjoy(2, 46, false),
+            ],
+        ),
+        macro_act(
+            "mkeys",
+            "Single",
+            "press",
+            &[step_key(30, true), step_key(30, false)],
+        ),
+        macro_act(
+            "mhold",
+            "Hold",
+            "press",
+            &[step_vjoy(1, 40, true), step_vjoy(1, 40, false)],
+        ),
+        macro_act(
+            "mtoggle",
+            "Toggle",
+            "press",
+            &[step_vjoy(1, 41, true), step_vjoy(1, 41, false)],
+        ),
+        macro_act(
+            "mcount",
+            "Count",
+            "press",
+            &[
+                step_vjoy(1, 42, true),
+                step_pause("0.02"),
+                step_vjoy(1, 42, false),
+            ],
+        ),
         act(
             "toggle",
             "smart-toggle",
@@ -249,6 +355,11 @@ fn profile() -> String {
         input("button", 8, "Default", "r-b8", ""),
         input("axis", 5, "Default", "r-a5", ""),
         input("button", 9, "Default", "r-b9", ""),
+        input("button", 10, "Default", "r-b10", ""),
+        input("button", 11, "Default", "r-b11", ""),
+        input("button", 12, "Default", "r-b12", ""),
+        input("button", 13, "Default", "r-b13", ""),
+        input("button", 14, "Default", "r-b14", ""),
     ]
     .concat();
     format!(
@@ -568,4 +679,121 @@ fn run_command_on_press() {
             vec!["a".into(), "b c".into()]
         )]
     );
+}
+
+#[test]
+fn tempo_long_press_runs_macro_on_release() {
+    let mut r = Rig::new();
+    assert!(
+        r.engine.vjoy_devices().contains(&2),
+        "macro-only vJoy device"
+    );
+    r.button(10, true, 0);
+    r.tick(600);
+    assert!(
+        r.take().is_empty(),
+        "release-activated macro waits for release"
+    );
+    r.button(10, false, 900);
+    assert_eq!(r.take(), [Out::DevButton(2, 46, true)]);
+    r.tick(950);
+    assert!(r.take().is_empty());
+    r.tick(1000);
+    assert_eq!(r.take(), [Out::DevButton(2, 46, false)]);
+
+    r.button(10, true, 2000);
+    r.button(10, false, 2200);
+    assert_eq!(r.take(), [Out::Button(26, true)]);
+    r.tick(2300);
+    assert_eq!(
+        r.take(),
+        [Out::Button(26, false)],
+        "tap stays a short pulse"
+    );
+}
+
+#[test]
+fn macro_default_delay_and_queueing() {
+    let mut r = Rig::new();
+    r.button(11, true, 0);
+    r.button(11, false, 5);
+    assert_eq!(r.take(), [Out::Key(30, true)]);
+    r.button(11, true, 10);
+    r.button(11, false, 15);
+    assert!(
+        r.take().is_empty(),
+        "second activation waits for the first run"
+    );
+    r.tick(49);
+    assert!(r.take().is_empty());
+    r.tick(50);
+    assert_eq!(r.take(), [Out::Key(30, false), Out::Key(30, true)]);
+    r.tick(100);
+    assert_eq!(r.take(), [Out::Key(30, false)]);
+    r.tick(1000);
+    assert!(r.take().is_empty());
+}
+
+#[test]
+fn macro_hold_repeats_until_release() {
+    let mut r = Rig::new();
+    r.button(12, true, 0);
+    r.tick(50);
+    r.tick(150);
+    assert_eq!(
+        r.take(),
+        [
+            Out::Button(40, true),
+            Out::Button(40, false),
+            Out::Button(40, true)
+        ]
+    );
+    r.button(12, false, 160);
+    r.tick(200);
+    r.tick(400);
+    assert_eq!(
+        r.take(),
+        [Out::Button(40, false)],
+        "current round completes"
+    );
+}
+
+#[test]
+fn macro_toggle_stops_on_second_activation() {
+    let mut r = Rig::new();
+    r.button(13, true, 0);
+    r.button(13, false, 10);
+    r.tick(50);
+    r.tick(150);
+    assert_eq!(
+        r.take(),
+        [
+            Out::Button(41, true),
+            Out::Button(41, false),
+            Out::Button(41, true)
+        ]
+    );
+    r.button(13, true, 160);
+    r.button(13, false, 170);
+    r.tick(200);
+    r.tick(400);
+    assert_eq!(r.take(), [Out::Button(41, false)]);
+    r.button(13, true, 500);
+    assert_eq!(r.take(), [Out::Button(41, true)], "restarts afterwards");
+}
+
+#[test]
+fn macro_count_runs_n_times() {
+    let mut r = Rig::new();
+    r.button(14, true, 0);
+    r.button(14, false, 5);
+    for ms in (0..1000).step_by(5) {
+        r.tick(ms);
+    }
+    let presses = r
+        .take()
+        .iter()
+        .filter(|o| **o == Out::Button(42, true))
+        .count();
+    assert_eq!(presses, 3);
 }
