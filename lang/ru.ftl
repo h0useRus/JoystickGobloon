@@ -141,3 +141,19 @@ status-undone = Отменено
 status-redone = Повторено
 edit-curve-help = Тяните точку, чтобы сдвинуть · Клик по пустому месту — инверсия · Двойной клик — новая точка · Правый клик по точке — удалить
 edit-curve-select = Кликните по точке, чтобы изменить её координаты.
+
+# vJoy mapping
+vjoy-device-n = vJoy устройство { $n }
+vjoy-axis-1 = Ось X
+vjoy-axis-2 = Ось Y
+vjoy-axis-3 = Ось Z
+vjoy-axis-4 = Вращение X
+vjoy-axis-5 = Вращение Y
+vjoy-axis-6 = Вращение Z
+vjoy-axis-7 = Ползунок
+vjoy-axis-8 = Колёсико
+vjoy-button-n = Кнопка { $n }
+vjoy-hat-n = Хатка { $n }
+vjoy-absolute = Абсолютная
+vjoy-relative = Относительная
+vjoy-speed = Скорость

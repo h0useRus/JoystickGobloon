@@ -479,8 +479,15 @@ impl JoyGobApp {
         }
         let devices = self.input.devices();
         let mut ops = Vec::new();
-        self.devices_view
-            .show(ui, &self.i18n, self.profile.as_ref(), &devices, &mut ops);
+        let vjoy = self.vjoy_view.device_list();
+        self.devices_view.show(
+            ui,
+            &self.i18n,
+            self.profile.as_ref(),
+            &devices,
+            &mut ops,
+            &vjoy,
+        );
         drop(devices);
         self.apply_ops(ops);
     }

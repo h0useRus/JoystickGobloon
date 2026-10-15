@@ -150,6 +150,17 @@ impl VJoyView {
         }
     }
 
+    /// Configured devices, refreshed at most every [`REFRESH`].
+    pub fn device_list(&mut self) -> Vec<DeviceInfo> {
+        if let Ok(vjoy) = &self.vjoy {
+            if self.refreshed.is_none_or(|t| t.elapsed() > REFRESH * 4) {
+                self.devices = vjoy.devices();
+                self.refreshed = Some(Instant::now());
+            }
+        }
+        self.devices.clone()
+    }
+
     fn toggle_test(&mut self, vjoy: &Arc<VJoy>, info: &DeviceInfo, i18n: &I18n) {
         self.error = None;
         if self.test.take().is_some() {

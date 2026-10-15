@@ -41,6 +41,8 @@ enum Node {
         target: VjoyTarget,
         inverted: bool,
         act: ActivationMode,
+        /// Relative axis mode: speed (Gremlin's axis-scaling); absolute when `None`.
+        relative: Option<f32>,
     },
     ChangeMode {
         kind: ChangeKind,
@@ -204,7 +206,25 @@ pub struct Engine {
     timers: Vec<Timer>,
     next_timer: u64,
     axes: HashMap<InputKey, f32>,
+    relative: HashMap<(u32, u8), RelativeAxis>,
 }
+
+/// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
+#[derive(Debug)]
+struct RelativeAxis {
+    value: f32,
+    /// Change per [`RELATIVE_STEP`].
+    delta: f32,
+    active: bool,
+    /// Input is near center: stop after [`RELATIVE_STOP`] without updates.
+    stopping: bool,
+    last_update: Instant,
+    last_step: Instant,
+}
+
+/// Relative axes advance in steps of this length (Gremlin's 10 ms thread).
+const RELATIVE_STEP: Duration = Duration::from_millis(10);
+const RELATIVE_STOP: Duration = Duration::from_secs(1);
 
 impl Engine {
     /// Compiles `profile`. `aliases` maps profile device GUIDs to attached ones
@@ -227,6 +247,7 @@ impl Engine {
             timers: Vec::new(),
             next_timer: 0,
             axes: HashMap::new(),
+            relative: HashMap::new(),
         };
 
         let mut virtual_id = 0;
@@ -330,11 +351,18 @@ impl Engine {
                         InputType::Hat => Some(VjoyTarget::Hat(id)),
                         InputType::Other => None,
                     };
+                    let relative = (action.str("axis-mode") == Some("relative")).then(|| {
+                        action
+                            .str("axis-scaling")
+                            .and_then(|s| s.trim().parse().ok())
+                            .unwrap_or(1.0)
+                    });
                     target.map_or(Node::Noop, |target| Node::Vjoy {
                         device,
                         target,
                         inverted,
                         act: action.activation_mode(),
+                        relative,
                     })
                 }
                 ActionKind::ChangeMode { change_type, .. } => Node::ChangeMode {
@@ -400,7 +428,13 @@ impl Engine {
 
     /// Earliest pending timer; call [`Engine::tick`] at that time.
     pub fn next_deadline(&self) -> Option<Instant> {
-        self.timers.iter().map(|t| t.at).min()
+        let relative = self
+            .relative
+            .values()
+            .filter(|r| r.active)
+            .map(|r| r.last_step + RELATIVE_STEP)
+            .min();
+        self.timers.iter().map(|t| t.at).chain(relative).min()
     }
 
     /// Handles one physical input change.
@@ -427,7 +461,24 @@ impl Engine {
                 }
             }
         }
+        self.step_relative(now, out);
         self.after_mode_change(&before, now, out);
+    }
+
+    fn step_relative(&mut self, now: Instant, out: &mut dyn Output) {
+        for (&(device, axis), r) in self.relative.iter_mut().filter(|(_, r)| r.active) {
+            let steps = now.saturating_duration_since(r.last_step).as_secs_f32()
+                / RELATIVE_STEP.as_secs_f32();
+            if steps < 1.0 {
+                continue;
+            }
+            r.value = (r.value + r.delta * steps.floor()).clamp(-1.0, 1.0);
+            r.last_step += RELATIVE_STEP.mul_f32(steps.floor());
+            out.axis(device, axis, r.value);
+            if r.stopping && now.saturating_duration_since(r.last_update) > RELATIVE_STOP {
+                r.active = false;
+            }
+        }
     }
 
     /// Re-sends current axis positions in the new mode (Gremlin's refresh on mode change).
@@ -498,8 +549,29 @@ impl Engine {
                 target,
                 inverted,
                 act,
+                relative,
             } => {
                 if !should_execute(act, *value) {
+                    return;
+                }
+                if let (VjoyTarget::Axis(id), Some(speed), Value::Axis(v)) =
+                    (target, relative, *value)
+                {
+                    let r = self.relative.entry((device, id)).or_insert(RelativeAxis {
+                        value: 0.0,
+                        delta: 0.0,
+                        active: false,
+                        stopping: false,
+                        last_update: now,
+                        last_step: now,
+                    });
+                    r.delta = v * speed * 0.001;
+                    r.stopping = v.abs() < 0.05;
+                    r.last_update = now;
+                    if !r.active {
+                        r.active = true;
+                        r.last_step = now;
+                    }
                     return;
                 }
                 match target {

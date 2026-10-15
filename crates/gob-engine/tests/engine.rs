@@ -121,6 +121,19 @@ fn profile() -> String {
         root("r-b3", &["tempo"]),
         root("r-a2", &["v20"]),
         root("r-b4", &["cycle"]),
+        root("r-a3", &["vrel"]),
+        act(
+            "vrel",
+            "map-to-vjoy",
+            &format!(
+                "{}{}{}{}{}",
+                prop("int", "vjoy-device-id", "1"),
+                prop("int", "vjoy-input-id", "3"),
+                prop("input_type", "vjoy-input-type", "axis"),
+                prop("axis_mode", "axis-mode", "relative"),
+                prop("float", "axis-scaling", "1.0")
+            ),
+        ),
         vjoy("v1", "button", 1),
         vjoy("v5", "button", 5),
         vjoy("v10", "button", 10),
@@ -141,6 +154,7 @@ fn profile() -> String {
         input("button", 3, "Default", "r-b3", ""),
         input("axis", 2, "Default", "r-a2", vb),
         input("button", 4, "Default", "r-b4", ""),
+        input("axis", 3, "Default", "r-a3", ""),
     ]
     .concat();
     format!(
@@ -182,6 +196,16 @@ impl Rig {
 
     fn axis(&mut self, id: u32, value: f32) {
         let now = self.t0;
+        self.engine.process(
+            &InputKey::new(DEV, InputKind::Axis, id),
+            Value::Axis(value),
+            now,
+            &mut self.out,
+        );
+    }
+
+    fn axis_at(&mut self, id: u32, value: f32, ms: u64) {
+        let now = self.at(ms);
         self.engine.process(
             &InputKey::new(DEV, InputKind::Axis, id),
             Value::Axis(value),
@@ -331,4 +355,34 @@ fn vkb_profile_compiles_and_runs() {
         !out.0.is_empty(),
         "pressing VKB buttons must produce vJoy output"
     );
+}
+
+#[test]
+fn relative_axis_moves_by_speed() {
+    let mut r = Rig::new();
+    r.axis_at(3, 0.5, 0);
+    assert!(
+        r.take().is_empty(),
+        "relative mode does not set the position directly"
+    );
+    assert!(
+        r.engine.next_deadline().is_some(),
+        "needs ticks while moving"
+    );
+    r.tick(100);
+    // 10 steps of 0.5 * 1.0 * 0.001
+    assert_eq!(r.take(), [Out::Axis(3, 0.005)]);
+    r.axis_at(3, 0.0, 100);
+    r.tick(1200);
+    assert_eq!(
+        r.take(),
+        [Out::Axis(3, 0.005)],
+        "holds its value when centered"
+    );
+    r.tick(1300);
+    assert!(
+        r.take().is_empty(),
+        "stops a second after returning to center"
+    );
+    assert!(r.engine.next_deadline().is_none());
 }

@@ -46,10 +46,6 @@ pub enum Op {
         ty: String,
         value: String,
     },
-    Unset {
-        action: String,
-        name: String,
-    },
     /// Property inside a group, e.g. a deadzone limit.
     SetInGroup {
         action: String,
@@ -121,11 +117,6 @@ pub fn apply(p: &mut Profile, op: Op) {
         } => {
             if let Some(a) = p.action_mut(&action) {
                 a.set(&name, &ty, value);
-            }
-        }
-        Op::Unset { action, name } => {
-            if let Some(a) = p.action_mut(&action) {
-                a.unset(&name);
             }
         }
         Op::SetInGroup {
@@ -245,6 +236,8 @@ pub struct Editor<'a> {
     pub ops: &'a mut Vec<Op>,
     /// How the input is interpreted; decides which actions make sense.
     pub behavior: InputType,
+    /// Configured vJoy devices (empty when vJoy is unavailable).
+    pub vjoy: &'a [gob_vjoy::DeviceInfo],
 }
 
 impl Editor<'_> {
@@ -434,90 +427,117 @@ impl Editor<'_> {
         inverted: bool,
     ) {
         let id = action.id.clone();
+        // Configured vJoy devices; without vJoy, offer the ids a profile may use.
+        let devices: Vec<gob_vjoy::DeviceInfo> = if self.vjoy.is_empty() {
+            (1..=gob_vjoy::MAX_DEVICES)
+                .map(|n| gob_vjoy::DeviceInfo {
+                    id: n,
+                    status: gob_vjoy::Status::Unknown,
+                    axes: (1..=8).collect(),
+                    buttons: 128,
+                    cont_hats: 4,
+                    disc_hats: 0,
+                })
+                .collect()
+        } else {
+            self.vjoy.to_vec()
+        };
+        let ty = if input_type == InputType::Other {
+            self.behavior
+        } else {
+            input_type
+        };
+        let current = devices.iter().find(|d| d.id == device);
+        let inputs: Vec<u32> = match (ty, current) {
+            (InputType::Axis, Some(d)) => d.axes.iter().map(|&a| u32::from(a)).collect(),
+            (InputType::Axis, None) => (1..=8).collect(),
+            (InputType::Hat, Some(d)) => (1..=d.hats().max(1)).collect(),
+            (InputType::Hat, None) => (1..=4).collect(),
+            (_, Some(d)) => (1..=d.buttons.max(1)).collect(),
+            (_, None) => (1..=128).collect(),
+        };
+        let name = |n: u32| match ty {
+            InputType::Axis => self.i18n.tr(&format!("vjoy-axis-{n}")),
+            InputType::Hat => self.i18n.trf("vjoy-hat-n", &[("n", n.into())]),
+            _ => self.i18n.trf("vjoy-button-n", &[("n", n.into())]),
+        };
+        let device_name = |n: u32| self.i18n.trf("vjoy-device-n", &[("n", n.into())]);
+
+        let mut set_device = None;
+        let mut set_input = None;
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("vJoy").weak());
-            let mut dev = device;
-            if ui
-                .add(egui::DragValue::new(&mut dev).range(1..=16).prefix("#"))
-                .changed()
-            {
-                self.set(&id, "vjoy-device-id", "int", dev.to_string());
-            }
-            let types = [
-                (InputType::Axis, icon::ARROWS_OUT_LINE_HORIZONTAL, "axis"),
-                (InputType::Button, icon::RADIO_BUTTON, "button"),
-                (InputType::Hat, icon::ARROWS_OUT_CARDINAL, "hat"),
-            ];
-            for (ty, glyph, name) in types {
-                if style::icon_toggle(
-                    ui,
-                    input_type == ty,
-                    glyph,
-                    &self.i18n.tr(&format!("input-{name}-kind")),
-                )
-                .clicked()
-                    && input_type != ty
-                {
-                    self.set(&id, "vjoy-input-type", "input_type", name);
-                    // Keep the type-specific properties Gremlin expects.
-                    if ty == InputType::Axis {
-                        self.ops.push(Op::Unset {
-                            action: id.clone(),
-                            name: "button-inverted".into(),
-                        });
-                        self.set(&id, "axis-mode", "axis_mode", "absolute");
-                        self.set(&id, "axis-scaling", "float", "1.0");
-                    } else {
-                        self.ops.push(Op::Unset {
-                            action: id.clone(),
-                            name: "axis-mode".into(),
-                        });
-                        self.ops.push(Op::Unset {
-                            action: id.clone(),
-                            name: "axis-scaling".into(),
-                        });
-                        if ty == InputType::Button {
-                            self.set(&id, "button-inverted", "bool", "False");
-                        } else {
-                            self.ops.push(Op::Unset {
-                                action: id.clone(),
-                                name: "button-inverted".into(),
-                            });
+            egui::ComboBox::from_id_salt(("vjoy-device", &id))
+                .selected_text(device_name(device))
+                .show_ui(ui, |ui| {
+                    for d in &devices {
+                        if ui
+                            .selectable_label(d.id == device, device_name(d.id))
+                            .clicked()
+                        {
+                            set_device = Some(d.id);
                         }
+                    }
+                });
+            egui::ComboBox::from_id_salt(("vjoy-input", &id))
+                .selected_text(name(input_id))
+                .height(320.0)
+                .show_ui(ui, |ui| {
+                    for &n in &inputs {
+                        if ui.selectable_label(n == input_id, name(n)).clicked() {
+                            set_input = Some(n);
+                        }
+                    }
+                });
+        });
+        if let Some(d) = set_device {
+            self.set(&id, "vjoy-device-id", "int", d.to_string());
+        }
+        if let Some(n) = set_input {
+            self.set(&id, "vjoy-input-id", "int", n.to_string());
+        }
+
+        ui.horizontal_wrapped(|ui| match ty {
+            InputType::Axis => {
+                let relative = action.str("axis-mode") == Some("relative");
+                if ui.radio(!relative, self.i18n.tr("vjoy-absolute")).clicked() && relative {
+                    self.set(&id, "axis-mode", "axis_mode", "absolute");
+                }
+                if ui.radio(relative, self.i18n.tr("vjoy-relative")).clicked() && !relative {
+                    self.set(&id, "axis-mode", "axis_mode", "relative");
+                }
+                if relative {
+                    let mut speed: f32 = action
+                        .str("axis-scaling")
+                        .and_then(|s| s.trim().parse().ok())
+                        .unwrap_or(1.0);
+                    ui.label(RichText::new(self.i18n.tr("vjoy-speed")).weak());
+                    let drag = egui::DragValue::new(&mut speed)
+                        .range(0.1..=50.0)
+                        .speed(0.05)
+                        .fixed_decimals(2);
+                    if ui.add(drag).changed() {
+                        self.set(&id, "axis-scaling", "float", py_float(speed));
                     }
                 }
             }
-            let mut n = input_id;
-            let max = if input_type == InputType::Button {
-                128
-            } else if input_type == InputType::Axis {
-                8
-            } else {
-                4
-            };
-            if ui
-                .add(egui::DragValue::new(&mut n).range(1..=max))
-                .changed()
-            {
-                self.set(&id, "vjoy-input-id", "int", n.to_string());
-            }
-            if input_type == InputType::Button {
-                let mut inv = inverted;
-                if ui
-                    .toggle_value(&mut inv, icon::SWAP)
-                    .on_hover_text(self.i18n.tr("edit-inverted"))
-                    .changed()
-                {
-                    self.set(
-                        &id,
-                        "button-inverted",
-                        "bool",
-                        if inv { "True" } else { "False" },
-                    );
+            _ => {
+                if ty == InputType::Button {
+                    let mut inv = inverted;
+                    if ui
+                        .checkbox(&mut inv, self.i18n.tr("edit-inverted"))
+                        .changed()
+                    {
+                        self.set(
+                            &id,
+                            "button-inverted",
+                            "bool",
+                            if inv { "True" } else { "False" },
+                        );
+                    }
+                    ui.separator();
                 }
+                self.activation(ui, action);
             }
-            ui.separator();
-            self.activation(ui, action);
         });
     }
 

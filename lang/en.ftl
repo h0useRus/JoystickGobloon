@@ -141,3 +141,19 @@ status-undone = Undone
 status-redone = Redone
 edit-curve-help = Drag a point to move it · Click empty space to invert · Double-click to add a point · Right-click a point to remove it
 edit-curve-select = Click a point to edit its position.
+
+# vJoy mapping
+vjoy-device-n = vJoy Device { $n }
+vjoy-axis-1 = X Axis
+vjoy-axis-2 = Y Axis
+vjoy-axis-3 = Z Axis
+vjoy-axis-4 = X Rotation
+vjoy-axis-5 = Y Rotation
+vjoy-axis-6 = Z Rotation
+vjoy-axis-7 = Slider
+vjoy-axis-8 = Dial
+vjoy-button-n = Button { $n }
+vjoy-hat-n = Hat { $n }
+vjoy-absolute = Absolute
+vjoy-relative = Relative
+vjoy-speed = Speed

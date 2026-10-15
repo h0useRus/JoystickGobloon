@@ -92,6 +92,7 @@ impl DevicesView {
         profile: Option<&LoadedProfile>,
         devices: &[DeviceState],
         ops: &mut Vec<Op>,
+        vjoy: &[gob_vjoy::DeviceInfo],
     ) {
         let mut tabs: Vec<Tab> = devices
             .iter()
@@ -259,7 +260,7 @@ impl DevicesView {
             .auto_shrink(false)
             .show(ui, |ui| {
                 for (key, bound) in rows {
-                    self.row(ui, i18n, profile, ops, tab, key, bound, &index);
+                    self.row(ui, i18n, profile, ops, vjoy, tab, key, bound, &index);
                 }
             });
     }
@@ -271,6 +272,7 @@ impl DevicesView {
         i18n: &I18n,
         profile: Option<&LoadedProfile>,
         ops: &mut Vec<Op>,
+        vjoy: &[gob_vjoy::DeviceInfo],
         tab: &Tab,
         key: Key,
         bound: Bound,
@@ -342,6 +344,7 @@ impl DevicesView {
                                     i18n,
                                     ops,
                                     behavior,
+                                    vjoy,
                                 };
                                 editor.add_menu(ui, |kind| bind(Some(kind)));
                             }
@@ -373,6 +376,7 @@ impl DevicesView {
                                 i18n,
                                 ops,
                                 behavior,
+                                vjoy,
                             };
                             for cfg in &b.configs {
                                 editor.container(ui, &cfg.root_action, "actions", 0);
