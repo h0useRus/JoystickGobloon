@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::action::{Action, InputType, Item};
 use crate::xml::Element;
 
-/// A physical input bound to a tree of actions in one mode.
+/// A physical input bound to one or more action sequences in one mode.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InputBinding {
     /// DirectInput instance GUID of the device.
@@ -11,9 +11,8 @@ pub struct InputBinding {
     pub input_type: String,
     pub mode: String,
     pub input_id: String,
-    pub root_action: String,
-    /// How the input is interpreted by its actions (`button`, `axis`, `hat`).
-    pub behavior: String,
+    /// One entry per `<action-configuration>`; all of them run for every event.
+    pub configs: Vec<ActionConfig>,
     /// Unknown children of `<input>`, kept verbatim.
     pub extra: Vec<Element>,
 }
@@ -22,6 +21,104 @@ impl InputBinding {
     pub fn input_type(&self) -> InputType {
         InputType::parse(&self.input_type)
     }
+}
+
+/// One action sequence of an input (`<action-configuration>`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActionConfig {
+    pub root_action: String,
+    /// How the input is interpreted by its actions (`button`, `axis`, `hat`).
+    pub behavior: String,
+    /// `<virtual-button>` used when an axis or hat behaves as a button; kept verbatim.
+    pub virtual_button: Option<Element>,
+    /// Unknown children, kept verbatim.
+    pub extra: Vec<Element>,
+}
+
+/// Direction an axis has to move in for a virtual button to trigger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AxisDirection {
+    Anywhere,
+    Above,
+    Below,
+}
+
+/// Turns an axis range or a set of hat directions into a button.
+#[derive(Debug, Clone, PartialEq)]
+pub enum VirtualButton {
+    Axis {
+        lower: f32,
+        upper: f32,
+        direction: AxisDirection,
+    },
+    /// Hat directions in hundredths of a degree; `None` is the center position.
+    Hat { directions: Vec<Option<u16>> },
+}
+
+impl ActionConfig {
+    pub fn behavior(&self) -> InputType {
+        InputType::parse(&self.behavior)
+    }
+
+    /// Decodes the virtual button for `input_type` when this config needs one.
+    pub fn virtual_button(&self, input_type: InputType) -> Option<VirtualButton> {
+        if self.behavior() != InputType::Button {
+            return None;
+        }
+        let vb = self.virtual_button.as_ref()?;
+        match input_type {
+            InputType::Axis => {
+                let num = |n: &str, d: f32| {
+                    vb.child_text(n)
+                        .and_then(|t| t.trim().parse().ok())
+                        .unwrap_or(d)
+                };
+                let direction = match vb
+                    .child_text("axis-button-direction")
+                    .as_deref()
+                    .map(str::trim)
+                {
+                    Some("above") => AxisDirection::Above,
+                    Some("below") => AxisDirection::Below,
+                    _ => AxisDirection::Anywhere,
+                };
+                Some(VirtualButton::Axis {
+                    lower: num("lower-limit", 0.0),
+                    upper: num("upper-limit", 1.0),
+                    direction,
+                })
+            }
+            InputType::Hat => Some(VirtualButton::Hat {
+                directions: vb
+                    .elements()
+                    .filter(|e| e.name == "hat-direction")
+                    .filter_map(|e| hat_direction(e.text().trim()))
+                    .collect(),
+            }),
+            _ => None,
+        }
+    }
+}
+
+/// Gremlin hat direction name -> direction (`Some(None)` is center).
+fn hat_direction(name: &str) -> Option<Option<u16>> {
+    const NAMES: [&str; 8] = [
+        "north",
+        "north-east",
+        "east",
+        "south-east",
+        "south",
+        "south-west",
+        "west",
+        "north-west",
+    ];
+    if name == "center" {
+        return Some(None);
+    }
+    NAMES
+        .iter()
+        .position(|&n| n == name)
+        .map(|i| Some(i as u16 * 4500))
 }
 
 #[derive(Debug, Clone, PartialEq)]

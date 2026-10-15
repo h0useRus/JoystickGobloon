@@ -217,3 +217,37 @@ fn device_names_match_ignoring_padding() {
         "VKBsim Gladiator EVO R"
     ));
 }
+
+#[test]
+fn multiple_configs_and_virtual_buttons_round_trip() {
+    let extra = r#"<action-configuration>
+                <root-action>00000000-0000-0000-0000-00000000r001</root-action>
+                <behavior>button</behavior>
+                <virtual-button>
+                    <lower-limit>0.5</lower-limit>
+                    <upper-limit>1.0</upper-limit>
+                    <axis-button-direction>above</axis-button-direction>
+                </virtual-button>
+            </action-configuration>
+        </input>"#;
+    // Give the axis input (second <input>) a second, button-like sequence.
+    let at = SAMPLE.match_indices("</input>").nth(1).unwrap().0;
+    let text = format!(
+        "{}{}{}",
+        &SAMPLE[..at],
+        extra,
+        &SAMPLE[at + "</input>".len()..]
+    );
+    let p = assert_round_trip(&text);
+    let axis = &p.inputs[1];
+    assert_eq!(axis.configs.len(), 2);
+    assert_eq!(
+        axis.configs[1].virtual_button(axis.input_type()),
+        Some(gob_core::VirtualButton::Axis {
+            lower: 0.5,
+            upper: 1.0,
+            direction: gob_core::AxisDirection::Above
+        })
+    );
+    assert_eq!(axis.configs[0].virtual_button(axis.input_type()), None);
+}

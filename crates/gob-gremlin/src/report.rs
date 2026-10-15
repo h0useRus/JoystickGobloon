@@ -50,10 +50,12 @@ pub fn report(p: &Profile) -> ImportReport {
         }
     };
     for b in &p.inputs {
-        dangling(
-            &format!("{} {} {}", b.device_id, b.input_type, b.input_id),
-            &b.root_action,
-        );
+        for cfg in &b.configs {
+            dangling(
+                &format!("{} {} {}", b.device_id, b.input_type, b.input_id),
+                &cfg.root_action,
+            );
+        }
     }
     for a in &p.library {
         for child in a.child_ids() {

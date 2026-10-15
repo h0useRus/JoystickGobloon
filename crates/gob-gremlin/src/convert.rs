@@ -1,7 +1,8 @@
 //! [`Element`] tree <-> [`Profile`] for Gremlin R14+ profiles.
 
 use gob_core::{
-    Action, Device, Element, InputBinding, Item, Mode, Node, Profile, Property, Section,
+    Action, ActionConfig, Device, Element, InputBinding, Item, Mode, Node, Profile, Property,
+    Section,
 };
 
 use crate::Error;
@@ -132,8 +133,7 @@ fn input_from(e: &Element) -> InputBinding {
         input_type: String::new(),
         mode: String::new(),
         input_id: String::new(),
-        root_action: String::new(),
-        behavior: String::new(),
+        configs: Vec::new(),
         extra: Vec::new(),
     };
     for c in e.elements() {
@@ -142,24 +142,44 @@ fn input_from(e: &Element) -> InputBinding {
             "input-type" => b.input_type = c.text(),
             "mode" => b.mode = c.text(),
             "input-id" => b.input_id = c.text(),
-            "action-configuration" => {
-                b.root_action = c.child_text("root-action").unwrap_or_default();
-                b.behavior = c.child_text("behavior").unwrap_or_default();
-            }
+            "action-configuration" => b.configs.push(config_from(c)),
             _ => b.extra.push(c.clone()),
         }
     }
     b
 }
 
+fn config_from(e: &Element) -> ActionConfig {
+    let mut cfg = ActionConfig {
+        root_action: String::new(),
+        behavior: String::new(),
+        virtual_button: None,
+        extra: Vec::new(),
+    };
+    for c in e.elements() {
+        match c.name.as_str() {
+            "root-action" => cfg.root_action = c.text(),
+            "behavior" => cfg.behavior = c.text(),
+            "virtual-button" => cfg.virtual_button = Some(c.clone()),
+            _ => cfg.extra.push(c.clone()),
+        }
+    }
+    cfg
+}
+
 fn input_to(b: &InputBinding) -> Element {
-    let config = container(
-        "action-configuration",
-        [
-            leaf("root-action", &b.root_action),
-            leaf("behavior", &b.behavior),
-        ],
-    );
+    let configs = b.configs.iter().map(|cfg| {
+        container(
+            "action-configuration",
+            [
+                leaf("root-action", &cfg.root_action),
+                leaf("behavior", &cfg.behavior),
+            ]
+            .into_iter()
+            .chain(cfg.virtual_button.iter().cloned())
+            .chain(cfg.extra.iter().cloned()),
+        )
+    });
     container(
         "input",
         [
@@ -167,9 +187,9 @@ fn input_to(b: &InputBinding) -> Element {
             leaf("input-type", &b.input_type),
             leaf("mode", &b.mode),
             leaf("input-id", &b.input_id),
-            config,
         ]
         .into_iter()
+        .chain(configs)
         .chain(b.extra.iter().cloned()),
     )
 }

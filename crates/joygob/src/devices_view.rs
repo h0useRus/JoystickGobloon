@@ -270,7 +270,10 @@ impl DevicesView {
                         egui::Label::new(RichText::new(key.1.to_string()).monospace()),
                     );
                     live_widget(ui, tab.live, key);
-                    if let Some(text) = binding.and_then(|b| summary(index, &b.root_action)) {
+                    if let Some(text) = binding
+                        .and_then(|b| b.configs.first())
+                        .and_then(|c| summary(index, &c.root_action))
+                    {
                         ui.label(text);
                     }
                 };
@@ -283,7 +286,11 @@ impl DevicesView {
                             false,
                         )
                         .show_header(ui, header)
-                        .body(|ui| action_tree(ui, index, &b.root_action, 0));
+                        .body(|ui| {
+                            for cfg in &b.configs {
+                                action_tree(ui, index, &cfg.root_action, 0);
+                            }
+                        });
                     }
                     None => {
                         ui.horizontal(|ui| {
