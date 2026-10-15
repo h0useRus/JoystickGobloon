@@ -3,13 +3,32 @@
 
 use eframe::egui::{self, Align2, FontId, Pos2, RichText, Sense, Stroke, Vec2};
 use gob_core::{
-    child_groups, Action, ActionKind, InputType, Item, MouseAction, MouseButton, NewAction,
-    Profile, Property,
+    child_groups, Action, ActionKind, InputType, Item, MergeOp, MouseAction, MouseButton,
+    NewAction, Profile, Property,
 };
 use gob_i18n::I18n;
 
 use crate::devices_view::hat_glyph;
 use crate::style::{self, icon};
+
+/// What the add menu puts into a list.
+#[derive(Debug, Clone)]
+pub enum AddKind {
+    New(NewAction),
+    /// An existing library action, shared (merge-axis is bound to both of its axes).
+    Reuse(String),
+}
+
+fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
+    match kind {
+        AddKind::New(kind) => {
+            p.add_child(parent, group, Action::new(kind));
+        }
+        AddKind::Reuse(id) => {
+            p.add_ref(parent, group, id);
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Op {
@@ -20,7 +39,7 @@ pub enum Op {
         input_type: String,
         input_id: String,
         mode: String,
-        add: Option<NewAction>,
+        add: Option<AddKind>,
     },
     Unbind {
         device: String,
@@ -31,7 +50,7 @@ pub enum Op {
     Add {
         parent: String,
         group: String,
-        action: NewAction,
+        action: AddKind,
     },
     Remove {
         parent: String,
@@ -95,7 +114,7 @@ pub fn apply(p: &mut Profile, op: Op) {
             }
             let root = p.bind(&device, &input_type, &input_id, &mode);
             if let Some(kind) = add {
-                p.add_child(&root, "actions", Action::new(&kind));
+                add_to(p, &root, "actions", &kind);
             }
         }
         Op::Unbind {
@@ -108,9 +127,7 @@ pub fn apply(p: &mut Profile, op: Op) {
             parent,
             group,
             action,
-        } => {
-            p.add_child(&parent, &group, Action::new(&action));
-        }
+        } => add_to(p, &parent, &group, &action),
         Op::Remove {
             parent,
             group,
@@ -206,6 +223,18 @@ pub fn py_float(v: f32) -> String {
     }
 }
 
+/// Merge-axis actions are told apart by their own `label` property.
+fn merge_label(a: &Action, i18n: &I18n) -> String {
+    match a.str("label").map(str::trim).filter(|l| !l.is_empty()) {
+        Some(l) => l.to_string(),
+        None => format!(
+            "{} {}",
+            i18n.tr("kind-merge-axis"),
+            &a.id[..a.id.len().min(8)]
+        ),
+    }
+}
+
 pub fn kind_icon(kind: &str) -> &'static str {
     match kind {
         "map-to-vjoy" => icon::GAME_CONTROLLER,
@@ -223,6 +252,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "double-tap" => icon::NUMBER_CIRCLE_TWO,
         "chain" => icon::LIST_NUMBERS,
         "hat-buttons" => icon::COMPASS,
+        "merge-axis" => icon::ARROWS_IN_SIMPLE,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -300,11 +330,15 @@ pub struct Editor<'a> {
     pub behavior: InputType,
     /// Configured vJoy devices (empty when vJoy is unavailable).
     pub vjoy: &'a [gob_vjoy::DeviceInfo],
+    /// Attached controllers, for actions that name physical inputs.
+    pub inputs: &'a [gob_input::DeviceState],
+    /// Input being edited (profile device id, input id), for templates that refer to it.
+    pub input: Option<(&'a str, u32)>,
 }
 
 impl Editor<'_> {
     /// "Add action" menu button; `make` turns the chosen template into an op.
-    pub fn add_menu(&mut self, ui: &mut egui::Ui, make: impl Fn(NewAction) -> Op) {
+    pub fn add_menu(&mut self, ui: &mut egui::Ui, make: impl Fn(AddKind) -> Op) {
         let mode = self.profile.modes.first().map_or("", |m| m.name.as_str());
         ui.menu_button(
             RichText::new(icon::PLUS_CIRCLE).size(style::ICON_SIZE),
@@ -314,9 +348,12 @@ impl Editor<'_> {
                         .button(format!("{glyph}  {}", self.i18n.tr(key)))
                         .clicked()
                     {
-                        self.ops.push(make(kind));
+                        self.ops.push(make(AddKind::New(kind)));
                         ui.close_menu();
                     }
+                }
+                if self.behavior == InputType::Axis {
+                    self.merge_menu(ui, &make);
                 }
             },
         )
@@ -334,7 +371,7 @@ impl Editor<'_> {
             self.card(ui, parent, group, i, children.len(), id, depth);
         }
         let (parent, group) = (parent.to_string(), group.to_string());
-        self.add_menu(ui, |kind| Op::Add {
+        self.add_menu(ui, |kind: AddKind| Op::Add {
             parent: parent.clone(),
             group: group.clone(),
             action: kind,
@@ -490,6 +527,21 @@ impl Editor<'_> {
                         .map(|((tag, d, _), key)| (*tag, hat_glyph(*d), key.as_str()))
                         .collect();
                     self.nested(ui, &action.id, &groups, InputType::Button, depth);
+                }
+                ActionKind::MergeAxis {
+                    axis1,
+                    axis2,
+                    operation,
+                    ..
+                } => {
+                    self.merge_axis(ui, action, [axis1, axis2], operation);
+                    self.nested(
+                        ui,
+                        &action.id,
+                        &[("actions", icon::ARROWS_IN_SIMPLE, "edit-merged")],
+                        InputType::Axis,
+                        depth,
+                    );
                 }
                 ActionKind::MapToMouse(mouse) => self.mouse(ui, action, mouse),
                 ActionKind::SmartToggle { delay, .. } => {
@@ -911,6 +963,119 @@ impl Editor<'_> {
                 self.set(id, name, "float", py_float(v));
             }
         });
+    }
+
+    /// New merge-axis on the edited input, or one already in the profile: Gremlin binds
+    /// a single merge-axis action to both of its axes.
+    fn merge_menu(&mut self, ui: &mut egui::Ui, make: &impl Fn(AddKind) -> Op) {
+        if let Some((device, axis)) = self.input {
+            let text = format!(
+                "{}  {}",
+                icon::ARROWS_IN_SIMPLE,
+                self.i18n.tr("kind-merge-axis")
+            );
+            if ui.button(text).clicked() {
+                self.ops.push(make(AddKind::New(NewAction::MergeAxis {
+                    device: device.to_string(),
+                    axis,
+                })));
+                ui.close_menu();
+            }
+        }
+        for a in self
+            .profile
+            .library
+            .iter()
+            .filter(|a| a.kind == "merge-axis")
+        {
+            let text = format!("{}  {}", icon::LINK, merge_label(a, self.i18n));
+            if ui
+                .button(text)
+                .on_hover_text(self.i18n.tr("edit-reuse"))
+                .clicked()
+            {
+                self.ops.push(make(AddKind::Reuse(a.id.clone())));
+                ui.close_menu();
+            }
+        }
+    }
+
+    fn merge_axis(
+        &mut self,
+        ui: &mut egui::Ui,
+        action: &Action,
+        axes: [(&str, u32); 2],
+        operation: MergeOp,
+    ) {
+        let id = action.id.clone();
+        ui.horizontal(|ui| {
+            ui.label(self.i18n.tr("edit-merge-name"));
+            let mut label = action.str("label").unwrap_or_default().to_string();
+            let edit = egui::TextEdit::singleline(&mut label).desired_width(180.0);
+            if ui.add(edit).changed() {
+                self.set(&id, "label", "string", label);
+            }
+            egui::ComboBox::from_id_salt(("merge-op", &id))
+                .selected_text(self.i18n.tr(&format!("merge-{}", operation.name())))
+                .show_ui(ui, |ui| {
+                    for op in MergeOp::ALL {
+                        let text = self.i18n.tr(&format!("merge-{}", op.name()));
+                        if ui.selectable_label(op == operation, text).clicked() {
+                            self.set(&id, "operation", "string", op.name());
+                        }
+                    }
+                });
+        });
+        // Profile devices first, then attached ones the profile does not know yet.
+        let mut devices: Vec<(String, String)> = self
+            .profile
+            .devices
+            .iter()
+            .map(|d| (d.id.to_ascii_lowercase(), d.name.trim().to_string()))
+            .collect();
+        for d in self.inputs.iter().filter(|d| !d.info.is_vjoy()) {
+            if !devices.iter().any(|(g, _)| *g == d.info.guid) {
+                devices.push((d.info.guid.clone(), d.info.name.trim().to_string()));
+            }
+        }
+        for (n, (device, axis)) in axes.into_iter().enumerate() {
+            let device = device.to_ascii_lowercase();
+            let name = devices
+                .iter()
+                .find(|(g, _)| *g == device)
+                .map_or_else(|| self.i18n.tr("edit-merge-no-device"), |(_, n)| n.clone());
+            let live = self
+                .inputs
+                .iter()
+                .find(|d| d.info.guid == device || gob_core::same_device_name(&d.info.name, &name));
+            let slots: Vec<u32> = live.map_or((1..=8).collect(), |d| {
+                d.info.axes.iter().map(|&a| u32::from(a)).collect()
+            });
+            let prefix = format!("axis{}", n + 1);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new((n + 1).to_string()).strong());
+                egui::ComboBox::from_id_salt((&prefix, "device", &id))
+                    .selected_text(&name)
+                    .width(220.0)
+                    .show_ui(ui, |ui| {
+                        for (g, label) in &devices {
+                            if ui.selectable_label(*g == device, label).clicked() {
+                                self.set(&id, &format!("{prefix}-guid"), "uuid", g.clone());
+                            }
+                        }
+                    });
+                egui::ComboBox::from_id_salt((&prefix, "axis", &id))
+                    .selected_text(self.i18n.tr(&format!("vjoy-axis-{axis}")))
+                    .show_ui(ui, |ui| {
+                        for s in slots {
+                            let text = self.i18n.tr(&format!("vjoy-axis-{s}"));
+                            if ui.selectable_label(s == axis, text).clicked() {
+                                self.set(&id, &format!("{prefix}-axis"), "int", s.to_string());
+                            }
+                        }
+                    });
+            });
+        }
     }
 
     /// Child action lists of a container, each under an icon caption.

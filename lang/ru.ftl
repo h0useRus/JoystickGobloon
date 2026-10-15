@@ -215,3 +215,17 @@ hat-south-west = Юго-запад
 hat-west = Запад
 hat-north-west = Северо-запад
 hat-center = Центр
+
+# Merge axis
+kind-merge-axis = Объединение осей
+edit-reuse = Добавить сюда и это объединение осей (общее действие)
+edit-merge-name = Название
+edit-merge-no-device = (нет устройства)
+edit-merged = Объединённая ось
+merge-average = Среднее
+merge-minimum = Минимум
+merge-maximum = Максимум
+merge-sum = Сумма
+merge-bidirectional = Двунаправленное (ось 2 минус ось 1)
+merge-maximum-deflection = Наибольшее отклонение
+merge-closest-to-center = Ближайшее к центру

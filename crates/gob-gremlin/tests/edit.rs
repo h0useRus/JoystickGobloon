@@ -215,3 +215,35 @@ fn hat_button_count_keeps_shared_directions() {
         "dropped diagonal actions are collected"
     );
 }
+
+#[test]
+fn merge_axis_is_shared_by_both_axes() {
+    let mut p = sample();
+    let r1 = p.bind(DEV, "axis", "6", "Default");
+    let r2 = p.bind(DEV, "axis", "7", "Default");
+    let merge = p
+        .add_child(
+            &r1,
+            "actions",
+            gob_core::Action::new(&NewAction::MergeAxis {
+                device: DEV.into(),
+                axis: 6,
+            }),
+        )
+        .unwrap();
+    assert!(p.add_ref(&r2, "actions", &merge));
+    p.action_mut(&merge).unwrap().set("axis2-axis", "int", "7");
+    p.remove_child(&r1, "actions", 0);
+
+    let p = reload(&p);
+    assert_eq!(
+        p.action(&merge).unwrap().kind(),
+        ActionKind::MergeAxis {
+            axis1: (DEV, 6),
+            axis2: (DEV, 7),
+            operation: gob_core::MergeOp::Average,
+            children: Vec::new(),
+        },
+        "still reachable through the second axis"
+    );
+}

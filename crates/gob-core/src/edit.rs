@@ -21,6 +21,11 @@ pub enum NewAction {
     DoubleTap,
     /// Four directions plus center.
     HatButtons,
+    /// Averages `axis` of `device` with itself until the second axis is picked.
+    MergeAxis {
+        device: String,
+        axis: u32,
+    },
     Description,
     /// Button inputs map to a mouse button, axes and hats to cursor motion.
     MapToMouse {
@@ -180,6 +185,19 @@ impl Action {
                 );
                 Self::build("hat-buttons", items, "disallowed")
             }
+            NewAction::MergeAxis { device, axis } => Self::build(
+                "merge-axis",
+                vec![
+                    prop("string", "label", ""),
+                    prop("uuid", "axis1-guid", device.clone()),
+                    prop("int", "axis1-axis", axis.to_string()),
+                    prop("uuid", "axis2-guid", device.clone()),
+                    prop("int", "axis2-axis", axis.to_string()),
+                    prop("string", "operation", "average"),
+                    group("actions", Vec::new()),
+                ],
+                "disallowed",
+            ),
             NewAction::MapToMouse { input_type } => {
                 let items = if *input_type == InputType::Button {
                     vec![
@@ -357,6 +375,18 @@ impl Profile {
             .push(Item::ActionRef(id.clone()));
         self.library.push(action);
         Some(id)
+    }
+
+    /// Appends an existing library action to `parent`'s `group` (Gremlin's action reuse).
+    pub fn add_ref(&mut self, parent: &str, group: &str, id: &str) -> bool {
+        if self.action(id).is_none() || parent == id {
+            return false;
+        }
+        let Some(a) = self.action_mut(parent) else {
+            return false;
+        };
+        a.group_mut(group).push(Item::ActionRef(id.into()));
+        true
     }
 
     /// Removes the `index`-th child of `parent`'s `group` and actions left unreferenced.

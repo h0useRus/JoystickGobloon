@@ -21,7 +21,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `smart-toggle` | B K | done |
 | `hat-buttons` | H | done |
 | `split-axis` | A | done |
-| `merge-axis` | A B | todo |
+| `merge-axis` | A B | done |
 | `axis-delta` | A | todo |
 | `dual-axis-deadzone` | A | todo |
 | `condition` | A B H K | todo |
@@ -95,3 +95,14 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   presses none of them. Centered presses `Center`. Children get button values (press, release).
 - JoyGob addition: if the hat is centered in a mode where it is bound differently, what the directions
   pressed (vJoy buttons, keys) is still released.
+
+## merge-axis
+
+- Properties: `label` string (its own name, shown when reusing), `axis1-guid`/`axis2-guid` uuid,
+  `axis1-axis`/`axis2-axis` int, `operation` (`average`, `minimum`, `maximum`, `sum` (clamped),
+  `bidirectional` = (axis2 - axis1) / 2, `maximum-deflection`, `closest-to-center`; ties go to axis 2),
+  `actions` children. Activation disabled.
+- Gremlin reuses one action on both axes' bindings; JoyGob's add menu offers existing merge-axis actions
+  (shared reference) next to a new one, which starts with the edited axis in both slots.
+- On any event it reads the latest values of both axes (0 until seen; the runner feeds the initial
+  positions), sets the value and runs the children. Axis devices go through the device substitution.

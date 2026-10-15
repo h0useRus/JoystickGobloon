@@ -205,6 +205,21 @@ fn profile() -> String {
         root("r-b17", &["dtx"]),
         root("r-b18", &["dtc"]),
         root("r-h1", &["hb4"]),
+        root("r-a6", &["merge"]),
+        act(
+            "merge",
+            "merge-axis",
+            &format!(
+                "{}{}{}{}{}{}<actions><action-id>va2</action-id></actions>",
+                prop("string", "label", "Pedals"),
+                prop("uuid", "axis1-guid", &DEV.to_uppercase()),
+                prop("int", "axis1-axis", "6"),
+                prop("uuid", "axis2-guid", DEV),
+                prop("int", "axis2-axis", "7"),
+                prop("string", "operation", "bidirectional"),
+            ),
+        ),
+        vjoy("va2", "axis", 2),
         root("r-h2", &["hb8"]),
         act(
             "hb4",
@@ -435,6 +450,8 @@ fn profile() -> String {
         input("button", 17, "Default", "r-b17", ""),
         input("button", 18, "Default", "r-b18", ""),
         input("hat", 1, "Default", "r-h1", ""),
+        input("axis", 6, "Default", "r-a6", ""),
+        input("axis", 7, "Default", "r-a6", ""),
         input("hat", 2, "Default", "r-h2", ""),
         input("hat", 2, "Combat", "r-b1c", ""),
     ]
@@ -1007,4 +1024,28 @@ fn hat_buttons_release_when_centered_in_another_mode() {
     r.button(2, true, 10);
     r.hat(2, None);
     assert_eq!(r.take(), [Out::Button(5, false), Out::Button(34, false)]);
+}
+
+#[test]
+fn merge_axis_combines_both_inputs() {
+    let mut r = Rig::new();
+    r.axis(6, 1.0);
+    assert_eq!(r.take(), [Out::Axis(2, -0.5)]);
+    r.axis(7, 1.0);
+    assert_eq!(r.take(), [Out::Axis(2, 0.0)]);
+    r.axis(6, -1.0);
+    assert_eq!(r.take(), [Out::Axis(2, 1.0)]);
+}
+
+#[test]
+fn merge_operations() {
+    use gob_core::MergeOp::*;
+    assert_eq!(Average.apply(0.2, 0.6), 0.4);
+    assert_eq!(Sum.apply(0.8, 0.6), 1.0);
+    assert_eq!(MaximumDeflection.apply(-0.9, 0.5), -0.9);
+    assert_eq!(ClosestToCenter.apply(0.5, -0.5), -0.5);
+    assert_eq!(
+        gob_core::MergeOp::parse("Maximum-Deflection"),
+        Some(MaximumDeflection)
+    );
 }

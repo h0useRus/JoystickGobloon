@@ -260,7 +260,9 @@ impl DevicesView {
             .auto_shrink(false)
             .show(ui, |ui| {
                 for (key, bound) in rows {
-                    self.row(ui, i18n, profile, ops, vjoy, tab, key, bound, &index);
+                    self.row(
+                        ui, i18n, profile, ops, vjoy, devices, tab, key, bound, &index,
+                    );
                 }
             });
     }
@@ -273,6 +275,7 @@ impl DevicesView {
         profile: Option<&LoadedProfile>,
         ops: &mut Vec<Op>,
         vjoy: &[gob_vjoy::DeviceInfo],
+        inputs: &[DeviceState],
         tab: &Tab,
         key: Key,
         bound: Bound,
@@ -345,6 +348,8 @@ impl DevicesView {
                                     ops,
                                     behavior,
                                     vjoy,
+                                    inputs,
+                                    input: Some((&device, key.1)),
                                 };
                                 editor.add_menu(ui, |kind| bind(Some(kind)));
                             }
@@ -377,6 +382,8 @@ impl DevicesView {
                                 ops,
                                 behavior,
                                 vjoy,
+                                inputs,
+                                input: Some((&b.device_id, key.1)),
                             };
                             for cfg in &b.configs {
                                 editor.container(ui, &cfg.root_action, "actions", 0);

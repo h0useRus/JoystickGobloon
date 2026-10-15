@@ -113,6 +113,14 @@ pub enum ActionKind<'a> {
     HatButtons {
         directions: Vec<(&'static str, Option<u16>, Vec<&'a str>)>,
     },
+    /// Combines two physical axes (device GUID, axis id) into the value its children see.
+    /// Usually the same action is bound to both axes.
+    MergeAxis {
+        axis1: (&'a str, u32),
+        axis2: (&'a str, u32),
+        operation: MergeOp,
+        children: Vec<&'a str>,
+    },
     MapToMouse(MouseAction),
     /// Keys pressed in order on press and released in reverse on release.
     MapToKeyboard {
@@ -146,6 +154,76 @@ pub enum ActionKind<'a> {
     },
     /// Preserved in the profile but not executed (yet).
     Other,
+}
+
+/// How merge-axis combines its two axes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeOp {
+    Average,
+    Minimum,
+    Maximum,
+    /// Clamped to -1..1.
+    Sum,
+    /// `(axis2 - axis1) / 2`: two pedals into one left/right axis.
+    Bidirectional,
+    /// Axis furthest from center; ties go to the second.
+    MaximumDeflection,
+    /// Axis closest to center; ties go to the second.
+    ClosestToCenter,
+}
+
+impl MergeOp {
+    pub const ALL: [MergeOp; 7] = [
+        Self::Average,
+        Self::Minimum,
+        Self::Maximum,
+        Self::Sum,
+        Self::Bidirectional,
+        Self::MaximumDeflection,
+        Self::ClosestToCenter,
+    ];
+
+    /// Value of the `operation` property.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Average => "average",
+            Self::Minimum => "minimum",
+            Self::Maximum => "maximum",
+            Self::Sum => "sum",
+            Self::Bidirectional => "bidirectional",
+            Self::MaximumDeflection => "maximum-deflection",
+            Self::ClosestToCenter => "closest-to-center",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim().to_ascii_lowercase();
+        Self::ALL.into_iter().find(|o| o.name() == s)
+    }
+
+    pub fn apply(self, a: f32, b: f32) -> f32 {
+        match self {
+            Self::Average => (a + b) / 2.0,
+            Self::Minimum => a.min(b),
+            Self::Maximum => a.max(b),
+            Self::Sum => (a + b).clamp(-1.0, 1.0),
+            Self::Bidirectional => (b - a) / 2.0,
+            Self::MaximumDeflection => {
+                if a.abs() > b.abs() {
+                    a
+                } else {
+                    b
+                }
+            }
+            Self::ClosestToCenter => {
+                if a.abs() < b.abs() {
+                    a
+                } else {
+                    b
+                }
+            }
+        }
+    }
 }
 
 /// Mouse buttons as Gremlin names them in profiles.
@@ -292,6 +370,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "chain",
     "double-tap",
     "hat-buttons",
+    "merge-axis",
     "smart-toggle",
     "split-axis",
     "pause-resume",
@@ -420,6 +499,21 @@ impl Action {
                 directions.push(("Center", None, self.refs_in("Center")));
                 ActionKind::HatButtons { directions }
             }
+            "merge-axis" => ActionKind::MergeAxis {
+                axis1: (
+                    self.str("axis1-guid").unwrap_or_default().trim(),
+                    self.parse("axis1-axis").unwrap_or(0),
+                ),
+                axis2: (
+                    self.str("axis2-guid").unwrap_or_default().trim(),
+                    self.parse("axis2-axis").unwrap_or(0),
+                ),
+                operation: self
+                    .str("operation")
+                    .and_then(MergeOp::parse)
+                    .unwrap_or(MergeOp::Average),
+                children: self.refs_in("actions"),
+            },
             "description" => ActionKind::Description {
                 text: self.str("description").unwrap_or_default(),
             },

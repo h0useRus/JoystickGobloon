@@ -10,8 +10,8 @@ pub mod profile;
 pub mod xml;
 
 pub use action::{
-    Action, ActionKind, ActivationMode, InputType, Item, Key, MacroRepeat, MacroStep, MouseAction,
-    MouseButton, Property, SUPPORTED_KINDS,
+    Action, ActionKind, ActivationMode, InputType, Item, Key, MacroRepeat, MacroStep, MergeOp,
+    MouseAction, MouseButton, Property, SUPPORTED_KINDS,
 };
 pub use edit::{child_groups, new_uuid, NewAction};
 pub use profile::{

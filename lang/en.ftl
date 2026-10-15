@@ -215,3 +215,17 @@ hat-south-west = South-west
 hat-west = West
 hat-north-west = North-west
 hat-center = Center
+
+# Merge axis
+kind-merge-axis = Merge axis
+edit-reuse = Add this existing merge axis here too (shared action)
+edit-merge-name = Name
+edit-merge-no-device = (no device)
+edit-merged = Merged axis
+merge-average = Average
+merge-minimum = Minimum
+merge-maximum = Maximum
+merge-sum = Sum
+merge-bidirectional = Bidirectional (axis 2 minus axis 1)
+merge-maximum-deflection = Maximum deflection
+merge-closest-to-center = Closest to center

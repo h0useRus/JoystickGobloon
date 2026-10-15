@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use gob_core::{
     Action, ActionKind, ActivationMode, AxisDirection, InputType, Item, Key, MacroRepeat,
-    MacroStep, MouseAction, MouseButton, Profile, VirtualButton,
+    MacroStep, MergeOp, MouseAction, MouseButton, Profile, VirtualButton,
 };
 
 use crate::modes::ModeStack;
@@ -103,6 +103,12 @@ enum Node {
     },
     /// Hat direction (`None` = center) -> actions run as a button while the hat points exactly there.
     HatButtons(Vec<(Option<u16>, Vec<NodeId>)>),
+    /// The two axes' latest values combined; children see the result.
+    Merge {
+        axes: [InputKey; 2],
+        op: MergeOp,
+        children: Vec<NodeId>,
+    },
     /// Steps already include the default delay between non-pause steps.
     Macro {
         steps: Vec<MacroStep>,
@@ -345,6 +351,8 @@ pub struct Engine {
     vjoy_axes: HashMap<(u32, u8), f32>,
     /// Paused by a pause-resume action: only bindings containing one still run.
     paused: bool,
+    /// Profile device GUID -> attached device GUID, lowercase.
+    aliases: HashMap<String, String>,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -401,6 +409,10 @@ impl Engine {
                 .unwrap_or(MACRO_DELAY),
             vjoy_axes: HashMap::new(),
             paused: false,
+            aliases: aliases
+                .iter()
+                .map(|(k, v)| (k.to_ascii_lowercase(), v.to_ascii_lowercase()))
+                .collect(),
         };
 
         let mut virtual_id = 0;
@@ -414,11 +426,11 @@ impl Engine {
             let Ok(id) = b.input_id.trim().parse() else {
                 continue;
             };
-            let device = b.device_id.to_ascii_lowercase();
-            let device = aliases
-                .get(&device)
-                .map_or(device, |a| a.to_ascii_lowercase());
-            let key = InputKey { device, kind, id };
+            let key = InputKey {
+                device: engine.device(&b.device_id),
+                kind,
+                id,
+            };
             for cfg in &b.configs {
                 let root = engine.compile(&index, &cfg.root_action, 0);
                 virtual_id += 1;
@@ -456,6 +468,12 @@ impl Engine {
         }
         engine.inherit_modes(profile);
         engine
+    }
+
+    /// Attached device for a profile device GUID.
+    fn device(&self, guid: &str) -> String {
+        let guid = guid.trim().to_ascii_lowercase();
+        self.aliases.get(&guid).cloned().unwrap_or(guid)
     }
 
     /// Child modes use their parent's binding (the very same one) unless they override it.
@@ -600,6 +618,23 @@ impl Engine {
                         })
                         .collect(),
                 ),
+                ActionKind::MergeAxis {
+                    axis1,
+                    axis2,
+                    operation,
+                    children,
+                } => Node::Merge {
+                    axes: [axis1, axis2].map(|(device, id)| InputKey {
+                        device: self.device(device),
+                        kind: InputKind::Axis,
+                        id,
+                    }),
+                    op: operation,
+                    children: children
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                },
                 ActionKind::MapToKeyboard { keys } => Node::Keys {
                     keys,
                     act: action.activation_mode(),
@@ -1031,6 +1066,13 @@ impl Engine {
                     );
                 } else {
                     self.release_keys(node, out);
+                }
+            }
+            Node::Merge { axes, op, children } => {
+                let [a, b] = axes.map(|k| self.axes.get(&k).copied().unwrap_or(0.0));
+                *value = Value::Axis(op.apply(a, b));
+                for c in children {
+                    self.run(c, src, value, now, out, depth + 1);
                 }
             }
             Node::HatButtons(buttons) => {
