@@ -1427,6 +1427,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gob-vjoy"
+version = "0.1.0"
+dependencies = [
+ "libloading",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "gpu-alloc"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1749,6 +1757,7 @@ dependencies = [
  "gob-gremlin",
  "gob-i18n",
  "gob-input",
+ "gob-vjoy",
  "rfd",
  "serde",
  "toml 0.8.23",
