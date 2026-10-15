@@ -1404,6 +1404,16 @@ name = "gob-core"
 version = "0.1.0"
 
 [[package]]
+name = "gob-engine"
+version = "0.1.0"
+dependencies = [
+ "gob-core",
+ "gob-gremlin",
+ "gob-input",
+ "gob-vjoy",
+]
+
+[[package]]
 name = "gob-gremlin"
 version = "0.1.0"
 dependencies = [

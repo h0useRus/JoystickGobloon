@@ -1,0 +1,13 @@
+[package]
+name = "gob-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gob-core.workspace = true
+gob-input.workspace = true
+gob-vjoy.workspace = true
+
+[dev-dependencies]
+gob-gremlin.workspace = true

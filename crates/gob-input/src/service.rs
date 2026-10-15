@@ -1,8 +1,8 @@
 //! Background polling thread with a shared snapshot and an event channel.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, SyncSender};
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
+use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -13,8 +13,31 @@ const POLL_INTERVAL: Duration = Duration::from_millis(4);
 const RESCAN_EVERY: u32 = 500;
 const EVENT_BUFFER: usize = 4096;
 
+/// Fan-out of input events to every subscriber; dead subscribers are dropped.
+#[derive(Clone, Default)]
+struct Broadcast(Arc<Mutex<Vec<SyncSender<InputEvent>>>>);
+
+impl Broadcast {
+    fn subscribe(&self) -> Receiver<InputEvent> {
+        let (tx, rx) = mpsc::sync_channel(EVENT_BUFFER);
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).push(tx);
+        rx
+    }
+
+    fn send(&self, event: InputEvent) {
+        let mut subs = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        subs.retain(|tx| {
+            !matches!(
+                tx.try_send(event.clone()),
+                Err(TrySendError::Disconnected(_))
+            )
+        });
+    }
+}
+
 pub struct InputService {
     snapshot: Arc<RwLock<Vec<DeviceState>>>,
+    broadcast: Broadcast,
     events: Receiver<InputEvent>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -26,9 +49,10 @@ impl InputService {
     pub fn start(on_change: impl Fn() + Send + 'static) -> Self {
         let snapshot = Arc::new(RwLock::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
-        let (tx, events) = mpsc::sync_channel(EVENT_BUFFER);
+        let broadcast = Broadcast::default();
+        let events = broadcast.subscribe();
         let thread = {
-            let (snapshot, stop) = (snapshot.clone(), stop.clone());
+            let (snapshot, stop, tx) = (snapshot.clone(), stop.clone(), broadcast.clone());
             std::thread::Builder::new()
                 .name("gob-input".into())
                 .spawn(move || run(&snapshot, &stop, &tx, &on_change))
@@ -36,6 +60,7 @@ impl InputService {
         };
         Self {
             snapshot,
+            broadcast,
             events,
             stop,
             thread,
@@ -45,6 +70,11 @@ impl InputService {
     /// Current state of every attached device.
     pub fn devices(&self) -> RwLockReadGuard<'_, Vec<DeviceState>> {
         self.snapshot.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// A separate event stream, e.g. for the mapping engine. Drop the receiver to unsubscribe.
+    pub fn subscribe(&self) -> Receiver<InputEvent> {
+        self.broadcast.subscribe()
     }
 
     /// Changes since the last call. Events are dropped when nobody drains them.
@@ -63,13 +93,13 @@ impl Drop for InputService {
 }
 
 #[cfg(not(windows))]
-fn run(_: &RwLock<Vec<DeviceState>>, _: &AtomicBool, _: &SyncSender<InputEvent>, _: &dyn Fn()) {}
+fn run(_: &RwLock<Vec<DeviceState>>, _: &AtomicBool, _: &Broadcast, _: &dyn Fn()) {}
 
 #[cfg(windows)]
 fn run(
     snapshot: &RwLock<Vec<DeviceState>>,
     stop: &AtomicBool,
-    tx: &SyncSender<InputEvent>,
+    tx: &Broadcast,
     on_change: &dyn Fn(),
 ) {
     use crate::dinput::{Device, DirectInput};
@@ -91,7 +121,7 @@ fn run(
                 }
             }
             if devices.len() != before || tick == 0 {
-                let _ = tx.try_send(InputEvent::DevicesChanged);
+                tx.send(InputEvent::DevicesChanged);
                 changed = true;
             }
         }
@@ -125,7 +155,7 @@ fn guid_of(inst: &windows::Win32::Devices::HumanInterfaceDevice::DIDEVICEINSTANC
 }
 
 /// Sends one event per changed input; returns whether anything changed.
-fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &SyncSender<InputEvent>) -> bool {
+fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &Broadcast) -> bool {
     let device = || new.info.guid.clone();
     let mut changed = false;
     for &id in &new.info.axes {
@@ -133,7 +163,7 @@ fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &SyncSender<InputEvent
         // Ignore sensor noise below ~0.05%.
         if (old.axes[i] - new.axes[i]).abs() > 0.0005 {
             changed = true;
-            let _ = tx.try_send(InputEvent::Axis {
+            tx.send(InputEvent::Axis {
                 device: device(),
                 id,
                 value: new.axes[i],
@@ -143,7 +173,7 @@ fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &SyncSender<InputEvent
     for (i, (&a, &b)) in old.buttons.iter().zip(&new.buttons).enumerate() {
         if a != b {
             changed = true;
-            let _ = tx.try_send(InputEvent::Button {
+            tx.send(InputEvent::Button {
                 device: device(),
                 id: i as u16 + 1,
                 pressed: b,
@@ -153,7 +183,7 @@ fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &SyncSender<InputEvent
     for (i, (&a, &b)) in old.hats.iter().zip(&new.hats).enumerate() {
         if a != b {
             changed = true;
-            let _ = tx.try_send(InputEvent::Hat {
+            tx.send(InputEvent::Hat {
                 device: device(),
                 id: i as u8 + 1,
                 direction: b,
