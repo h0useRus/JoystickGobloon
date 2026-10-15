@@ -646,98 +646,233 @@ impl Editor<'_> {
     ) {
         let id = action.id.clone();
         let pts: Vec<(f32, f32)> = points.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
-        ui.horizontal(|ui| {
-            if let Some(new) = curve_widget(ui, &id, &pts, &self.i18n.tr("edit-curve-help")) {
+        let dz = deadzone.map(|d| d as f32);
+        let sel_id = ui.make_persistent_id(("curve-selected", &id));
+        let mut selected: Option<usize> = ui
+            .data(|d| d.get_temp(sel_id))
+            .filter(|&i: &usize| i < pts.len());
+        // The graph takes what is left next to the point editor, like Gremlin's.
+        let size = (ui.available_width() - 200.0).clamp(220.0, 460.0);
+
+        ui.horizontal_top(|ui| {
+            let help = self.i18n.tr("edit-curve-help");
+            let (new, sel) = curve_widget(ui, &id, &pts, dz, size, selected, &help);
+            if sel != selected {
+                selected = sel;
+                ui.data_mut(|d| d.insert_temp(sel_id, sel));
+            }
+            if let Some(new) = new {
                 self.ops.push(Op::SetPoints {
                     action: id.clone(),
                     points: new,
                 });
             }
             ui.vertical(|ui| {
-                ui.label(RichText::new(self.i18n.tr("edit-deadzone")).weak());
-                for (i, name) in ["low", "center-low", "center-high", "high"]
-                    .into_iter()
-                    .enumerate()
-                {
-                    let mut v = deadzone[i] as f32;
-                    let range = if i < 2 { -1.0..=0.0 } else { 0.0..=1.0 };
-                    if ui
-                        .add(
-                            egui::DragValue::new(&mut v)
-                                .range(range)
-                                .speed(0.005)
-                                .fixed_decimals(2),
-                        )
-                        .changed()
-                    {
-                        self.ops.push(Op::SetInGroup {
-                            action: id.clone(),
-                            group: "deadzone".into(),
-                            name: name.into(),
-                            ty: "float".into(),
-                            value: py_float(v),
-                        });
-                    }
-                }
-                if ui
-                    .button(format!(
-                        "{}  {}",
-                        icon::FLIP_VERTICAL,
-                        self.i18n.tr("edit-invert")
-                    ))
-                    .clicked()
-                {
+                let invert = format!("{}  {}", icon::FLIP_VERTICAL, self.i18n.tr("edit-invert"));
+                if ui.button(invert).clicked() {
                     let inverted = pts.iter().map(|&(x, y)| (x, -y)).collect();
                     self.ops.push(Op::SetPoints {
                         action: id.clone(),
                         points: inverted,
                     });
                 }
+                ui.add_space(12.0);
+                let Some(i) = selected else {
+                    ui.label(RichText::new(self.i18n.tr("edit-curve-select")).weak());
+                    return;
+                };
+                let last = pts.len() - 1;
+                let (mut x, mut y) = pts[i];
+                let (lo, hi) = if i == 0 || i == last {
+                    (x, x)
+                } else {
+                    (pts[i - 1].0 + 0.01, pts[i + 1].0 - 0.01)
+                };
+                let mut changed = false;
+                egui::Grid::new(("curve-point", &id))
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        ui.label("X");
+                        let drag = egui::DragValue::new(&mut x)
+                            .range(lo..=hi)
+                            .speed(0.005)
+                            .fixed_decimals(4);
+                        changed |= ui.add_enabled(i != 0 && i != last, drag).changed();
+                        ui.end_row();
+                        ui.label("Y");
+                        let drag = egui::DragValue::new(&mut y)
+                            .range(-1.0..=1.0)
+                            .speed(0.005)
+                            .fixed_decimals(4);
+                        changed |= ui.add(drag).changed();
+                        ui.end_row();
+                    });
+                if changed {
+                    let mut new = pts.clone();
+                    new[i] = (x, y);
+                    self.ops.push(Op::SetPoints {
+                        action: id.clone(),
+                        points: new,
+                    });
+                }
             });
         });
+
+        ui.label(RichText::new(self.i18n.tr("edit-deadzone")).weak());
+        let [mut low, mut center_low, mut center_high, mut high] = dz;
+        ui.horizontal(|ui| {
+            let slider = ((size - 140.0) / 2.0).max(60.0);
+            let field = |ui: &mut egui::Ui, v: &mut f32, range: std::ops::RangeInclusive<f32>| {
+                ui.add(
+                    egui::DragValue::new(v)
+                        .range(range)
+                        .speed(0.005)
+                        .fixed_decimals(4),
+                );
+            };
+            field(ui, &mut low, -1.0..=center_low);
+            range_slider(ui, slider, &mut low, &mut center_low, -1.0, 0.0);
+            field(ui, &mut center_low, low..=0.0);
+            ui.add_space(8.0);
+            field(ui, &mut center_high, 0.0..=high);
+            range_slider(ui, slider, &mut center_high, &mut high, 0.0, 1.0);
+            field(ui, &mut high, center_high..=1.0);
+        });
+        let v = [low, center_low, center_high, high];
+        let changed: Vec<bool> = v.iter().zip(dz).map(|(a, b)| *a != b).collect();
+        for (i, name) in ["low", "center-low", "center-high", "high"]
+            .into_iter()
+            .enumerate()
+        {
+            if changed[i] {
+                self.ops.push(Op::SetInGroup {
+                    action: id.clone(),
+                    group: "deadzone".into(),
+                    name: name.into(),
+                    ty: "float".into(),
+                    value: py_float(v[i]),
+                });
+            }
+        }
     }
+}
+
+/// Slider with two handles for a `lo..=hi` sub-range of `min..=max`.
+fn range_slider(
+    ui: &mut egui::Ui,
+    width: f32,
+    lo: &mut f32,
+    hi: &mut f32,
+    min: f32,
+    max: f32,
+) -> bool {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 20.0), Sense::click_and_drag());
+    let pad = 8.0;
+    let to_x = |v: f32| rect.left() + pad + (v - min) / (max - min) * (rect.width() - 2.0 * pad);
+    let to_v = |x: f32| {
+        (min + (x - rect.left() - pad) / (rect.width() - 2.0 * pad) * (max - min)).clamp(min, max)
+    };
+    let handle_id = response.id.with("handle");
+    let mut changed = false;
+    if response.drag_started() {
+        if let Some(p) = response.interact_pointer_pos() {
+            let upper = (p.x - to_x(*hi)).abs() < (p.x - to_x(*lo)).abs();
+            ui.data_mut(|d| d.insert_temp(handle_id, upper));
+        }
+    }
+    if response.dragged() {
+        let upper: Option<bool> = ui.data(|d| d.get_temp(handle_id));
+        if let (Some(upper), Some(p)) = (upper, response.interact_pointer_pos()) {
+            let v = (to_v(p.x) * 10_000.0).round() / 10_000.0;
+            if upper {
+                *hi = v.max(*lo);
+            } else {
+                *lo = v.min(*hi);
+            }
+            changed = true;
+        }
+    }
+    let accent = style::accent(ui);
+    let painter = ui.painter();
+    let y = rect.center().y;
+    painter.line_segment(
+        [Pos2::new(to_x(min), y), Pos2::new(to_x(max), y)],
+        Stroke::new(4.0, ui.visuals().widgets.inactive.bg_fill),
+    );
+    painter.line_segment(
+        [Pos2::new(to_x(*lo), y), Pos2::new(to_x(*hi), y)],
+        Stroke::new(4.0, accent),
+    );
+    for v in [*lo, *hi] {
+        painter.circle(
+            Pos2::new(to_x(v), y),
+            7.0,
+            ui.visuals().panel_fill,
+            Stroke::new(1.5, ui.visuals().text_color()),
+        );
+    }
+    changed
 }
 
 /// Drag points to move them, click empty space to invert, double-click to add
 /// a point, right-click a point to remove it. End points stay at x = -1 and
-/// x = 1. Returns the new points when changed.
+/// x = 1. Returns the new points when changed and the selected point.
 fn curve_widget(
     ui: &mut egui::Ui,
     id: &str,
     points: &[(f32, f32)],
+    deadzone: [f32; 4],
+    size: f32,
+    selected: Option<usize>,
     help: &str,
-) -> Option<Vec<(f32, f32)>> {
-    const SIZE: f32 = 200.0;
-    let (rect, response) = ui.allocate_exact_size(Vec2::splat(SIZE), Sense::click_and_drag());
+) -> (Option<Vec<(f32, f32)>>, Option<usize>) {
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click_and_drag());
     let response = response.on_hover_text(help);
-    let to_screen = |(x, y): (f32, f32)| {
-        Pos2::new(
-            rect.center().x + x * SIZE / 2.0,
-            rect.center().y - y * SIZE / 2.0,
-        )
-    };
+    let half = size / 2.0;
+    let to_screen =
+        |(x, y): (f32, f32)| Pos2::new(rect.center().x + x * half, rect.center().y - y * half);
     let to_curve = |p: Pos2| {
         (
-            ((p.x - rect.center().x) / (SIZE / 2.0)).clamp(-1.0, 1.0),
-            ((rect.center().y - p.y) / (SIZE / 2.0)).clamp(-1.0, 1.0),
+            ((p.x - rect.center().x) / half).clamp(-1.0, 1.0),
+            ((rect.center().y - p.y) / half).clamp(-1.0, 1.0),
         )
     };
     let accent = style::accent(ui);
     let weak = ui.visuals().weak_text_color();
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, style::RADIUS, ui.visuals().extreme_bg_color);
-    painter.line_segment(
-        [rect.left_center(), rect.right_center()],
-        Stroke::new(1.0, weak.gamma_multiply(0.4)),
-    );
-    painter.line_segment(
-        [rect.center_top(), rect.center_bottom()],
-        Stroke::new(1.0, weak.gamma_multiply(0.4)),
-    );
+
+    // Deadzones: input ranges that produce no change, shaded across the graph.
+    let band = |a: f32, b: f32| {
+        if b > a {
+            let r = egui::Rect::from_x_y_ranges(
+                to_screen((a, 0.0)).x..=to_screen((b, 0.0)).x,
+                rect.y_range(),
+            );
+            painter.rect_filled(r, 0.0, accent.gamma_multiply(0.08));
+        }
+    };
+    let [low, center_low, center_high, high] = deadzone;
+    band(-1.0, low);
+    band(center_low, center_high);
+    band(high, 1.0);
+
+    for i in 1..8 {
+        let t = -1.0 + i as f32 * 0.25;
+        let strength = if i == 4 { 0.45 } else { 0.15 };
+        let stroke = Stroke::new(1.0, weak.gamma_multiply(strength));
+        painter.line_segment([to_screen((t, -1.0)), to_screen((t, 1.0))], stroke);
+        painter.line_segment([to_screen((-1.0, t)), to_screen((1.0, t))], stroke);
+    }
     let line: Vec<Pos2> = points.iter().map(|&p| to_screen(p)).collect();
     painter.add(egui::Shape::line(line.clone(), Stroke::new(2.0, accent)));
-    for p in &line {
-        painter.circle(*p, 5.0, ui.visuals().panel_fill, Stroke::new(2.0, accent));
+    for (i, p) in line.iter().enumerate() {
+        let fill = if Some(i) == selected {
+            accent
+        } else {
+            ui.visuals().panel_fill
+        };
+        painter.circle(*p, 6.0, fill, Stroke::new(2.0, accent));
     }
     painter.text(
         rect.left_top() + Vec2::splat(4.0),
@@ -747,20 +882,22 @@ fn curve_widget(
         weak,
     );
 
-    let drag_id = ui.make_persistent_id(("curve-drag", id));
     let nearest = |pos: Pos2| {
         line.iter()
             .enumerate()
             .map(|(i, p)| (i, p.distance(pos)))
-            .filter(|(_, d)| *d < 10.0)
+            .filter(|(_, d)| *d < 12.0)
             .min_by(|a, b| a.1.total_cmp(&b.1))
             .map(|(i, _)| i)
     };
+    let drag_id = ui.make_persistent_id(("curve-drag", id));
+    let mut selected = selected;
     let mut pts = points.to_vec();
     let last = pts.len().saturating_sub(1);
     if response.drag_started() {
         if let Some(i) = response.interact_pointer_pos().and_then(nearest) {
             ui.data_mut(|d| d.insert_temp(drag_id, i));
+            selected = Some(i);
         }
     }
     if response.dragged() {
@@ -775,48 +912,52 @@ fn curve_widget(
                 x.clamp(pts[i - 1].0 + 0.01, pts[i + 1].0 - 0.01)
             };
             pts[i] = (x, y);
-            return Some(pts);
+            return (Some(pts), selected);
         }
     }
     if response.drag_stopped() {
         ui.data_mut(|d| d.remove::<usize>(drag_id));
     }
-    // A single click inverts, but only once it is clear it was not the first
-    // half of a double-click (which adds a point instead).
+    let on_point = response.interact_pointer_pos().and_then(nearest);
+    if response.clicked() {
+        if let Some(i) = on_point {
+            selected = Some(i);
+        }
+    }
+    // A single click on empty space inverts, but only once it is clear it was
+    // not the first half of a double-click (which adds a point instead).
     const DOUBLE_CLICK: f64 = 0.3;
     let pending_id = ui.make_persistent_id(("curve-invert", id));
     let now = ui.input(|i| i.time);
-    let on_point = response.interact_pointer_pos().and_then(nearest).is_some();
     if response.double_clicked() {
         ui.data_mut(|d| d.remove::<f64>(pending_id));
-        if let Some(pos) = response.interact_pointer_pos().filter(|_| !on_point) {
+        if let Some(pos) = response
+            .interact_pointer_pos()
+            .filter(|_| on_point.is_none())
+        {
             let p = to_curve(pos);
             if let Some(at) = pts.iter().position(|q| q.0 > p.0).filter(|&at| at > 0) {
                 pts.insert(at, p);
-                return Some(pts);
+                return (Some(pts), Some(at));
             }
         }
-    } else if response.clicked() && !on_point {
+    } else if response.clicked() && on_point.is_none() {
         ui.data_mut(|d| d.insert_temp(pending_id, now));
     }
     if let Some(clicked_at) = ui.data(|d| d.get_temp::<f64>(pending_id)) {
         if now - clicked_at >= DOUBLE_CLICK {
             ui.data_mut(|d| d.remove::<f64>(pending_id));
             pts.iter_mut().for_each(|p| p.1 = -p.1);
-            return Some(pts);
+            return (Some(pts), selected);
         }
         ui.ctx()
             .request_repaint_after(std::time::Duration::from_secs_f64(DOUBLE_CLICK));
     }
     if response.secondary_clicked() {
-        if let Some(i) = response
-            .interact_pointer_pos()
-            .and_then(nearest)
-            .filter(|&i| i > 0 && i < last)
-        {
+        if let Some(i) = on_point.filter(|&i| i > 0 && i < last) {
             pts.remove(i);
-            return Some(pts);
+            return (Some(pts), None);
         }
     }
-    None
+    (None, selected)
 }

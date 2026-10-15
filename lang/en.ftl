@@ -140,3 +140,4 @@ action-redo = Redo (Ctrl+Y)
 status-undone = Undone
 status-redone = Redone
 edit-curve-help = Drag a point to move it · Click empty space to invert · Double-click to add a point · Right-click a point to remove it
+edit-curve-select = Click a point to edit its position.
