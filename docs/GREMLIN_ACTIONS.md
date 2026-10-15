@@ -18,19 +18,19 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `map-to-keyboard` | B K | todo |
 | `chain` | B K | todo |
 | `double-tap` | B K | todo |
-| `smart-toggle` | B K | todo |
+| `smart-toggle` | B K | done |
 | `hat-buttons` | H | todo |
-| `split-axis` | A | todo |
+| `split-axis` | A | done |
 | `merge-axis` | A B | todo |
 | `axis-delta` | A | todo |
 | `dual-axis-deadzone` | A | todo |
 | `condition` | A B H K | todo |
 | `reference` | A B H K | todo (reuses another library action) |
-| `pause-resume` | B K | todo |
+| `pause-resume` | B K | done |
 | `load-profile` | B K | todo |
 | `play-sound` | B K | todo |
 | `text-to-speech` | B | todo |
-| `run-command` | B K | todo |
+| `run-command` | B K | done |
 | `map-to-logical-device` | A B H K | todo (needs logical devices) |
 
 ## map-to-mouse

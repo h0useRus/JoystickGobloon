@@ -19,6 +19,7 @@ const IDLE: Duration = Duration::from_millis(20);
 #[derive(Debug, Clone, Default)]
 pub struct RunnerStatus {
     pub mode: String,
+    pub paused: bool,
 }
 
 pub struct Runner {
@@ -61,6 +62,13 @@ impl Output for SystemOutput {
     fn mouse_wheel(&mut self, notches: i32) {
         crate::sendinput::mouse_wheel(notches);
     }
+
+    fn run_command(&mut self, executable: &str, arguments: &[String]) {
+        // Detached: the program keeps running after JoyGob stops.
+        let _ = std::process::Command::new(executable)
+            .args(arguments)
+            .spawn();
+    }
 }
 
 impl Runner {
@@ -98,6 +106,7 @@ impl Runner {
 
         let status = Arc::new(Mutex::new(RunnerStatus {
             mode: engine.current_mode().to_string(),
+            paused: false,
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
@@ -156,8 +165,9 @@ fn run(
         engine.tick(Instant::now(), &mut out);
 
         let mut s = status.lock().unwrap_or_else(|e| e.into_inner());
-        if s.mode != engine.current_mode() {
+        if s.mode != engine.current_mode() || s.paused != engine.is_paused() {
             s.mode = engine.current_mode().to_string();
+            s.paused = engine.is_paused();
             on_change();
         }
     }

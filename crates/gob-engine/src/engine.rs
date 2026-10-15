@@ -59,6 +59,21 @@ enum Node {
         action: MouseAction,
         act: ActivationMode,
     },
+    SmartToggle {
+        children: Vec<NodeId>,
+        delay: Duration,
+    },
+    Split {
+        split: f32,
+        lower: Vec<NodeId>,
+        upper: Vec<NodeId>,
+    },
+    Pause(PauseOp),
+    Run {
+        executable: String,
+        arguments: Vec<String>,
+        act: ActivationMode,
+    },
     Tempo {
         short: Vec<NodeId>,
         long: Vec<NodeId>,
@@ -74,6 +89,30 @@ enum Node {
 struct Source {
     key: InputKey,
     mode: String,
+    /// Set inside smart-toggle: vJoy presses are not auto-released.
+    no_auto_release: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PauseOp {
+    Pause,
+    Resume,
+    Toggle,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum TogglePhase {
+    #[default]
+    Wait,
+    Down,
+    Held,
+    Latched,
+}
+
+#[derive(Debug, Default)]
+struct ToggleState {
+    phase: TogglePhase,
+    timer: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -94,6 +133,7 @@ struct TempoState {
 #[derive(Debug)]
 enum TimerKind {
     TempoTimeout(NodeId),
+    ToggleTimeout(NodeId),
     PulseRelease { nodes: Vec<NodeId>, src: Source },
 }
 
@@ -197,6 +237,8 @@ impl VButton {
 
 struct Config {
     root: NodeId,
+    /// Runs while paused: the root holds a pause-resume action.
+    always: bool,
     vbutton: Option<VButton>,
     virtual_id: u32,
 }
@@ -215,6 +257,9 @@ pub struct Engine {
     relative: HashMap<(u32, u8), RelativeAxis>,
     /// Cursor motion per (action, input), tagged with the mode it started in.
     motion: Motion<(NodeId, InputKey), String>,
+    toggles: HashMap<NodeId, ToggleState>,
+    /// Paused by a pause-resume action: only bindings containing one still run.
+    paused: bool,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -257,6 +302,8 @@ impl Engine {
             axes: HashMap::new(),
             relative: HashMap::new(),
             motion: Motion::default(),
+            toggles: HashMap::new(),
+            paused: false,
         };
 
         let mut virtual_id = 0;
@@ -301,7 +348,9 @@ impl Engine {
                     engine.sets.push(Vec::new());
                     engine.sets.len() - 1
                 });
+                let always = matches!(&engine.nodes[root], Node::Seq(c) if c.iter().any(|&n| matches!(engine.nodes[n], Node::Pause(_))));
                 engine.sets[set].push(Config {
+                    always,
                     root,
                     vbutton,
                     virtual_id,
@@ -417,11 +466,50 @@ impl Engine {
                     action: action_kind,
                     act: action.activation_mode(),
                 },
+                ActionKind::SmartToggle { children, delay } => Node::SmartToggle {
+                    children: children
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                    delay: Duration::from_secs_f64(delay.max(0.0)),
+                },
+                ActionKind::SplitAxis {
+                    split,
+                    lower,
+                    upper,
+                } => Node::Split {
+                    split: split as f32,
+                    lower: lower
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                    upper: upper
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                },
+                ActionKind::PauseResume { operation } => Node::Pause(match operation.trim() {
+                    "Resume" => PauseOp::Resume,
+                    "Toggle" => PauseOp::Toggle,
+                    _ => PauseOp::Pause,
+                }),
+                ActionKind::RunCommand {
+                    executable,
+                    arguments,
+                } => Node::Run {
+                    executable: executable.to_string(),
+                    arguments: split_command(arguments),
+                    act: action.activation_mode(),
+                },
                 ActionKind::Description { .. } | ActionKind::Other => Node::Noop,
             },
         };
         self.nodes.push(node);
         self.nodes.len() - 1
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused
     }
 
     pub fn current_mode(&self) -> &str {
@@ -472,6 +560,13 @@ impl Engine {
             let timer = self.timers.remove(pos);
             match timer.kind {
                 TimerKind::TempoTimeout(node) => self.tempo_timeout(node, now, out),
+                TimerKind::ToggleTimeout(node) => {
+                    let state = self.toggles.entry(node).or_default();
+                    state.timer = None;
+                    if state.phase == TogglePhase::Down {
+                        state.phase = TogglePhase::Held;
+                    }
+                }
                 TimerKind::PulseRelease { nodes, src } => {
                     for n in nodes {
                         self.run(n, &src, &mut Value::Button(false), now, out, 0);
@@ -526,9 +621,13 @@ impl Engine {
         let src = Source {
             key: key.clone(),
             mode: self.modes.current().to_string(),
+            no_auto_release: false,
         };
         if let Some(&set) = self.lookup.get(key).and_then(|m| m.get(&src.mode)) {
             for ci in 0..self.sets[set].len() {
+                if self.paused && !self.sets[set][ci].always {
+                    continue;
+                }
                 let (root, virtual_id) = (self.sets[set][ci].root, self.sets[set][ci].virtual_id);
                 let states = match self.sets[set][ci].vbutton.as_mut() {
                     None => {
@@ -544,6 +643,7 @@ impl Engine {
                         id: virtual_id,
                     },
                     mode: src.mode.clone(),
+                    no_auto_release: false,
                 };
                 for pressed in states {
                     self.run(root, &vsrc, &mut Value::Button(pressed), now, out, 0);
@@ -617,7 +717,7 @@ impl Engine {
                             Value::Hat(d) => d.is_some(),
                         } != inverted;
                         out.button(device, id, pressed);
-                        if pressed {
+                        if pressed && !src.no_auto_release {
                             self.register(
                                 &src.key,
                                 ReleaseEntry {
@@ -682,6 +782,46 @@ impl Engine {
                 }
             }
             Node::Tempo { .. } => self.tempo_event(node, src, *value, now, out),
+            Node::SmartToggle { children, delay } => {
+                if let Value::Button(pressed) = *value {
+                    self.smart_toggle(node, &children, delay, src, pressed, now, out);
+                }
+            }
+            Node::Split {
+                split,
+                lower,
+                upper,
+            } => {
+                if let Value::Axis(v) = *value {
+                    let (scaled, nodes) = if v < split {
+                        (-axis_interpolation(v, -1.0, split), lower)
+                    } else {
+                        (axis_interpolation(v, split, 1.0), upper)
+                    };
+                    *value = Value::Axis(scaled);
+                    for n in nodes {
+                        self.run(n, src, value, now, out, depth + 1);
+                    }
+                }
+            }
+            Node::Pause(op) => {
+                if value.truthy() {
+                    self.paused = match op {
+                        PauseOp::Pause => true,
+                        PauseOp::Resume => false,
+                        PauseOp::Toggle => !self.paused,
+                    };
+                }
+            }
+            Node::Run {
+                executable,
+                arguments,
+                act,
+            } => {
+                if should_execute(act, *value) && !executable.trim().is_empty() {
+                    out.run_command(&executable, &arguments);
+                }
+            }
             Node::Mouse { action, act } => {
                 if should_execute(act, *value) {
                     self.mouse(node, action, src, *value, now, out);
@@ -756,6 +896,38 @@ impl Engine {
                 );
             }
             Value::Hat(None) | Value::Button(false) => self.motion.clear(&key),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn smart_toggle(
+        &mut self,
+        node: NodeId,
+        children: &[NodeId],
+        delay: Duration,
+        src: &Source,
+        pressed: bool,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        let inner = Source {
+            no_auto_release: true,
+            ..src.clone()
+        };
+        let phase = self.toggles.entry(node).or_default().phase;
+        let (next, run) = match (phase, pressed) {
+            (TogglePhase::Wait, true) => {
+                let timer = self.add_timer(now + delay, TimerKind::ToggleTimeout(node));
+                self.toggles.entry(node).or_default().timer = Some(timer);
+                (TogglePhase::Down, true)
+            }
+            (TogglePhase::Down, false) => (TogglePhase::Latched, false),
+            (TogglePhase::Held | TogglePhase::Latched, false) => (TogglePhase::Wait, true),
+            (p, _) => (p, false),
+        };
+        self.toggles.entry(node).or_default().phase = next;
+        if run {
+            self.run_all(children, &inner, Value::Button(pressed), now, out);
         }
     }
 
@@ -943,6 +1115,7 @@ impl Engine {
                         let src = Source {
                             key: key.clone(),
                             mode: current.clone(),
+                            no_auto_release: false,
                         };
                         self.tempo_reset(node, &src, Value::Button(false), now, out);
                     }
@@ -975,6 +1148,36 @@ fn target_modes(action: &Action) -> Vec<String> {
             _ => None,
         })
         .collect()
+}
+
+/// Maps `value` from `low..=high` to -1..=1 (Gremlin's linear_axis_value_interpolation).
+fn axis_interpolation(value: f32, low: f32, high: f32) -> f32 {
+    if high - low <= f32::EPSILON {
+        return 0.0;
+    }
+    (value.clamp(low, high) - low) / (high - low) * 2.0 - 1.0
+}
+
+/// Splits command-line arguments on whitespace, keeping double-quoted parts together.
+fn split_command(args: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let mut quoted = false;
+    for c in args.chars() {
+        match c {
+            '"' => quoted = !quoted,
+            c if c.is_whitespace() && !quoted => {
+                if !current.is_empty() {
+                    out.push(std::mem::take(&mut current));
+                }
+            }
+            c => current.push(c),
+        }
+    }
+    if !current.is_empty() {
+        out.push(current);
+    }
+    out
 }
 
 /// Gremlin's deadzone: `[low, center_low, center_high, high]`.

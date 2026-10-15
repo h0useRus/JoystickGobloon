@@ -207,6 +207,10 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "tempo" => icon::TIMER,
         "description" => icon::NOTE,
         "macro" => icon::KEYBOARD,
+        "smart-toggle" => icon::TOGGLE_RIGHT,
+        "split-axis" => icon::ARROWS_SPLIT,
+        "pause-resume" => icon::PLAY_PAUSE,
+        "run-command" => icon::TERMINAL_WINDOW,
         "map-to-mouse" => icon::MOUSE,
         _ => icon::PUZZLE_PIECE,
     }
@@ -245,6 +249,26 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             input_type: behavior,
         },
     ));
+    if behavior == InputType::Button {
+        list.push((
+            icon::TOGGLE_RIGHT,
+            "kind-smart-toggle",
+            NewAction::SmartToggle,
+        ));
+        list.push((
+            icon::PLAY_PAUSE,
+            "kind-pause-resume",
+            NewAction::PauseResume,
+        ));
+        list.push((
+            icon::TERMINAL_WINDOW,
+            "kind-run-command",
+            NewAction::RunCommand,
+        ));
+    }
+    if behavior == InputType::Axis {
+        list.push((icon::ARROWS_SPLIT, "kind-split-axis", NewAction::SplitAxis));
+    }
     list.push((icon::NOTE, "kind-description", NewAction::Description));
     list
 }
@@ -389,6 +413,104 @@ impl Editor<'_> {
                     ..
                 } => self.tempo(ui, action, threshold, activate_on, depth),
                 ActionKind::MapToMouse(mouse) => self.mouse(ui, action, mouse),
+                ActionKind::SmartToggle { delay, .. } => {
+                    self.seconds(ui, &action.id, "delay", "edit-delay", delay);
+                    self.nested(
+                        ui,
+                        &action.id,
+                        &[("actions", icon::TOGGLE_RIGHT, "kind-smart-toggle")],
+                        InputType::Button,
+                        depth,
+                    );
+                }
+                ActionKind::SplitAxis { split, .. } => {
+                    ui.horizontal(|ui| {
+                        ui.label(self.i18n.tr("edit-split"));
+                        let mut v = split as f32;
+                        let drag = egui::DragValue::new(&mut v)
+                            .range(-1.0..=1.0)
+                            .speed(0.005)
+                            .fixed_decimals(3);
+                        if ui.add(drag).changed() {
+                            self.set(&action.id, "split-value", "float", py_float(v));
+                        }
+                    });
+                    self.nested(
+                        ui,
+                        &action.id,
+                        &[
+                            ("lower-actions", icon::ARROW_LINE_DOWN, "edit-lower"),
+                            ("upper-actions", icon::ARROW_LINE_UP, "edit-upper"),
+                        ],
+                        InputType::Axis,
+                        depth,
+                    );
+                }
+                ActionKind::PauseResume { operation } => {
+                    ui.horizontal(|ui| {
+                        for op in ["Pause", "Resume", "Toggle"] {
+                            if ui
+                                .radio(
+                                    operation.trim() == op,
+                                    self.i18n.tr(&format!("pause-op-{}", op.to_lowercase())),
+                                )
+                                .clicked()
+                            {
+                                self.set(&action.id, "operation", "string", op);
+                            }
+                        }
+                        ui.separator();
+                        self.activation(ui, action);
+                    });
+                }
+                ActionKind::RunCommand {
+                    executable,
+                    arguments,
+                } => {
+                    egui::Grid::new(("run", &action.id))
+                        .num_columns(2)
+                        .spacing([10.0, 6.0])
+                        .show(ui, |ui| {
+                            ui.label(self.i18n.tr("run-executable"));
+                            ui.horizontal(|ui| {
+                                let mut exe = executable.to_string();
+                                if ui
+                                    .add(egui::TextEdit::singleline(&mut exe).desired_width(320.0))
+                                    .changed()
+                                {
+                                    self.set(&action.id, "executable", "string", exe);
+                                }
+                                if style::icon_button(
+                                    ui,
+                                    true,
+                                    icon::FOLDER_OPEN,
+                                    &self.i18n.tr("run-browse"),
+                                )
+                                .clicked()
+                                {
+                                    if let Some(path) = rfd::FileDialog::new().pick_file() {
+                                        self.set(
+                                            &action.id,
+                                            "executable",
+                                            "string",
+                                            path.display().to_string(),
+                                        );
+                                    }
+                                }
+                            });
+                            ui.end_row();
+                            ui.label(self.i18n.tr("run-arguments"));
+                            let mut args = arguments.to_string();
+                            if ui
+                                .add(egui::TextEdit::singleline(&mut args).desired_width(320.0))
+                                .changed()
+                            {
+                                self.set(&action.id, "arguments", "string", args);
+                            }
+                            ui.end_row();
+                        });
+                    ui.horizontal(|ui| self.activation(ui, action));
+                }
                 ActionKind::Description { text } => {
                     let mut text = text.to_string();
                     if ui
@@ -691,6 +813,46 @@ impl Editor<'_> {
                         }
                     });
             }
+        }
+    }
+
+    fn seconds(&mut self, ui: &mut egui::Ui, id: &str, name: &str, key: &str, value: f64) {
+        ui.horizontal(|ui| {
+            ui.label(self.i18n.tr(key));
+            let mut v = value as f32;
+            if ui
+                .add(
+                    egui::DragValue::new(&mut v)
+                        .range(0.05..=10.0)
+                        .speed(0.01)
+                        .suffix(" s"),
+                )
+                .changed()
+            {
+                self.set(id, name, "float", py_float(v));
+            }
+        });
+    }
+
+    /// Child action lists of a container, each under an icon caption.
+    fn nested(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: &str,
+        groups: &[(&str, &str, &str)],
+        behavior: InputType,
+        depth: usize,
+    ) {
+        if depth > 8 {
+            return;
+        }
+        for &(group, glyph, key) in groups {
+            ui.label(RichText::new(format!("{glyph}  {}", self.i18n.tr(key))).strong());
+            ui.indent((group, id), |ui| {
+                let saved = std::mem::replace(&mut self.behavior, behavior);
+                self.container(ui, id, group, depth + 1);
+                self.behavior = saved;
+            });
         }
     }
 

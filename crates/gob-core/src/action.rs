@@ -95,6 +95,25 @@ pub enum ActionKind<'a> {
         text: &'a str,
     },
     MapToMouse(MouseAction),
+    /// Short press latches the children on, hold acts momentarily.
+    SmartToggle {
+        children: Vec<&'a str>,
+        delay: f64,
+    },
+    /// Splits an axis at `split`; each half is rescaled to -1..1.
+    SplitAxis {
+        split: f64,
+        lower: Vec<&'a str>,
+        upper: Vec<&'a str>,
+    },
+    /// `Pause`, `Resume` or `Toggle` the whole profile.
+    PauseResume {
+        operation: &'a str,
+    },
+    RunCommand {
+        executable: &'a str,
+        arguments: &'a str,
+    },
     /// Preserved in the profile but not executed (yet).
     Other,
 }
@@ -161,6 +180,10 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "tempo",
     "description",
     "map-to-mouse",
+    "smart-toggle",
+    "split-axis",
+    "pause-resume",
+    "run-command",
 ];
 
 impl Action {
@@ -249,6 +272,22 @@ impl Action {
             },
             "description" => ActionKind::Description {
                 text: self.str("description").unwrap_or_default(),
+            },
+            "smart-toggle" => ActionKind::SmartToggle {
+                children: self.refs_in("actions"),
+                delay: self.parse("delay").unwrap_or(0.5),
+            },
+            "split-axis" => ActionKind::SplitAxis {
+                split: self.parse("split-value").unwrap_or(0.0),
+                lower: self.refs_in("lower-actions"),
+                upper: self.refs_in("upper-actions"),
+            },
+            "pause-resume" => ActionKind::PauseResume {
+                operation: self.str("operation").unwrap_or("Pause"),
+            },
+            "run-command" => ActionKind::RunCommand {
+                executable: self.str("executable").unwrap_or_default(),
+                arguments: self.str("arguments").unwrap_or_default(),
             },
             "map-to-mouse" => ActionKind::MapToMouse(match self.str("mode").map(str::trim) {
                 Some("Motion") => MouseAction::Motion {

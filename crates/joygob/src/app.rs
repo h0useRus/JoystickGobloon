@@ -588,7 +588,16 @@ impl eframe::App for JoyGobApp {
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if let Some(runner) = &self.runner {
-                    let mode = runner.status().mode;
+                    let status = runner.status();
+                    let mode = status.mode;
+                    if status.paused {
+                        ui.label(
+                            RichText::new(icon::PAUSE)
+                                .size(12.0)
+                                .color(ui.visuals().warn_fg_color),
+                        )
+                        .on_hover_text(self.i18n.tr("status-paused"));
+                    }
                     ui.label(
                         RichText::new(icon::PLAY)
                             .size(12.0)

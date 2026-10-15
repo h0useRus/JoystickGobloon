@@ -73,4 +73,6 @@ pub trait Output {
     fn mouse_button(&mut self, _button: gob_core::MouseButton, _pressed: bool) {}
     /// Wheel notches: positive scrolls up.
     fn mouse_wheel(&mut self, _notches: i32) {}
+    /// Starts a program (run-command action).
+    fn run_command(&mut self, _executable: &str, _arguments: &[String]) {}
 }

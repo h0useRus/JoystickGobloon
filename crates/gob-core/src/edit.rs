@@ -23,6 +23,10 @@ pub enum NewAction {
     MapToMouse {
         input_type: InputType,
     },
+    SmartToggle,
+    SplitAxis,
+    PauseResume,
+    RunCommand,
 }
 
 /// Child lists of container actions: `(group tag, is ordered list of actions)`.
@@ -30,6 +34,8 @@ pub fn child_groups(kind: &str) -> &'static [&'static str] {
     match kind {
         "root" => &["actions"],
         "tempo" => &["short-actions", "long-actions"],
+        "smart-toggle" => &["actions"],
+        "split-axis" => &["lower-actions", "upper-actions"],
         _ => &[],
     }
 }
@@ -170,6 +176,33 @@ impl Action {
                 };
                 Self::build("map-to-mouse", items, "both")
             }
+            NewAction::SmartToggle => Self::build(
+                "smart-toggle",
+                vec![group("actions", Vec::new()), prop("float", "delay", "0.5")],
+                "disallowed",
+            ),
+            NewAction::SplitAxis => Self::build(
+                "split-axis",
+                vec![
+                    prop("float", "split-value", "0.0"),
+                    group("lower-actions", Vec::new()),
+                    group("upper-actions", Vec::new()),
+                ],
+                "disallowed",
+            ),
+            NewAction::PauseResume => Self::build(
+                "pause-resume",
+                vec![prop("string", "operation", "Pause")],
+                "press",
+            ),
+            NewAction::RunCommand => Self::build(
+                "run-command",
+                vec![
+                    prop("string", "executable", ""),
+                    prop("string", "arguments", ""),
+                ],
+                "press",
+            ),
             NewAction::Description => Self::build(
                 "description",
                 vec![prop("string", "description", "")],

@@ -173,3 +173,20 @@ mouse-direction = Направление
 mouse-min-speed = Минимальная скорость
 mouse-max-speed = Максимальная скорость
 mouse-time-to-max = Время разгона
+
+# Toggle, split, pause, run
+kind-smart-toggle = Умный переключатель
+kind-split-axis = Разделить ось
+kind-pause-resume = Пауза / продолжить
+kind-run-command = Запустить программу
+edit-delay = Удержание для режима «пока нажато»
+edit-split = Разделить в точке
+edit-lower = Нижняя часть
+edit-upper = Верхняя часть
+pause-op-pause = Пауза
+pause-op-resume = Продолжить
+pause-op-toggle = Переключить
+run-executable = Программа
+run-arguments = Аргументы
+run-browse = Выбрать программу
+status-paused = Профиль на паузе

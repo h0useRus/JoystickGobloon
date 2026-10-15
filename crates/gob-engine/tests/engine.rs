@@ -14,6 +14,7 @@ enum Out {
     Move(i32, i32),
     Mouse(gob_core::MouseButton, bool),
     Wheel(i32),
+    Run(String, Vec<String>),
 }
 
 #[derive(Default)]
@@ -36,6 +37,9 @@ impl Output for Recorder {
     }
     fn mouse_wheel(&mut self, notches: i32) {
         self.0.push(Out::Wheel(notches));
+    }
+    fn run_command(&mut self, executable: &str, arguments: &[String]) {
+        self.0.push(Out::Run(executable.into(), arguments.to_vec()));
     }
 }
 
@@ -137,6 +141,44 @@ fn profile() -> String {
         root("r-b5", &["mlb"]),
         root("r-b6", &["mwu"]),
         root("r-a4", &["mmove"]),
+        root("r-b7", &["toggle"]),
+        root("r-b8", &["pause"]),
+        root("r-a5", &["split"]),
+        root("r-b9", &["run"]),
+        act(
+            "toggle",
+            "smart-toggle",
+            &format!(
+                "<actions><action-id>v1</action-id></actions>{}",
+                prop("float", "delay", "0.5")
+            ),
+        ),
+        act_on(
+            "pause",
+            "pause-resume",
+            &prop("string", "operation", "Toggle"),
+            "press",
+        ),
+        act(
+            "split",
+            "split-axis",
+            &format!(
+                "{}<lower-actions><action-id>vsplit</action-id></lower-actions>\
+                 <upper-actions><action-id>vsplit</action-id></upper-actions>",
+                prop("float", "split-value", "0.0")
+            ),
+        ),
+        vjoy("vsplit", "axis", 2),
+        act_on(
+            "run",
+            "run-command",
+            &format!(
+                "{}{}",
+                prop("string", "executable", "notepad.exe"),
+                prop("string", "arguments", "a \"b c\"")
+            ),
+            "press",
+        ),
         act(
             "mlb",
             "map-to-mouse",
@@ -203,6 +245,10 @@ fn profile() -> String {
         input("button", 5, "Default", "r-b5", ""),
         input("button", 6, "Default", "r-b6", ""),
         input("axis", 4, "Default", "r-a4", ""),
+        input("button", 7, "Default", "r-b7", ""),
+        input("button", 8, "Default", "r-b8", ""),
+        input("axis", 5, "Default", "r-a5", ""),
+        input("button", 9, "Default", "r-b9", ""),
     ]
     .concat();
     format!(
@@ -460,4 +506,66 @@ fn map_to_mouse_buttons_wheel_and_motion() {
     r.tick(30);
     assert!(r.take().is_empty(), "centered axis stops the cursor");
     assert!(r.engine.next_deadline().is_none());
+}
+
+#[test]
+fn smart_toggle_latches_on_short_press() {
+    let mut r = Rig::new();
+    r.button(7, true, 0);
+    r.button(7, false, 100);
+    assert_eq!(r.take(), [Out::Button(1, true)], "short press latches");
+    r.tick(600);
+    r.button(7, true, 1000);
+    assert!(r.take().is_empty());
+    r.button(7, false, 1100);
+    assert_eq!(r.take(), [Out::Button(1, false)], "next press releases");
+    // Held past the delay: momentary.
+    r.button(7, true, 2000);
+    r.tick(2600);
+    r.button(7, false, 3000);
+    assert_eq!(r.take(), [Out::Button(1, true), Out::Button(1, false)]);
+}
+
+#[test]
+fn pause_toggle_stops_other_bindings() {
+    let mut r = Rig::new();
+    r.button(8, true, 0);
+    r.button(8, false, 10);
+    assert!(r.engine.is_paused());
+    r.button(1, true, 20);
+    assert!(r.take().is_empty(), "paused");
+    r.button(8, true, 30);
+    assert!(
+        !r.engine.is_paused(),
+        "pause-resume still runs while paused"
+    );
+    r.button(1, true, 40);
+    assert_eq!(r.take(), [Out::Button(1, true)]);
+}
+
+#[test]
+fn split_axis_rescales_halves() {
+    let mut r = Rig::new();
+    r.axis(5, 0.5);
+    r.axis(5, -1.0);
+    r.axis(5, -0.5);
+    // Upper half 0..1 -> -1..1; lower half -1..0 -> 1..-1.
+    assert_eq!(
+        r.take(),
+        [Out::Axis(2, 0.0), Out::Axis(2, 1.0), Out::Axis(2, 0.0)]
+    );
+}
+
+#[test]
+fn run_command_on_press() {
+    let mut r = Rig::new();
+    r.button(9, true, 0);
+    r.button(9, false, 10);
+    assert_eq!(
+        r.take(),
+        [Out::Run(
+            "notepad.exe".into(),
+            vec!["a".into(), "b c".into()]
+        )]
+    );
 }

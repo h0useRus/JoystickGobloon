@@ -128,6 +128,10 @@ fn kind_icon(kind: &str) -> &'static str {
         "tempo" => icon::TIMER,
         "description" => icon::NOTE,
         "macro" => icon::KEYBOARD,
+        "smart-toggle" => icon::TOGGLE_RIGHT,
+        "split-axis" => icon::ARROWS_SPLIT,
+        "pause-resume" => icon::PLAY_PAUSE,
+        "run-command" => icon::TERMINAL_WINDOW,
         "map-to-mouse" => icon::MOUSE,
         _ => icon::PUZZLE_PIECE,
     }
