@@ -2,6 +2,7 @@
 
 mod app;
 mod devices_view;
+mod hidhide_view;
 mod profile_view;
 mod settings;
 mod settings_view;

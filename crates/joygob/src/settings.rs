@@ -17,6 +17,8 @@ pub struct Settings {
     pub language: String,
     /// Reopen the last profile on startup.
     pub reopen_last: bool,
+    /// Add JoyGob to the HidHide whitelist on startup so it can read hidden devices.
+    pub hidhide_whitelist_self: bool,
     pub last_profile: Option<PathBuf>,
 }
 
@@ -26,6 +28,7 @@ impl Default for Settings {
             theme: Theme::default(),
             language: gob_i18n::DEFAULT_LANG.into(),
             reopen_last: true,
+            hidhide_whitelist_self: true,
             last_profile: None,
         }
     }

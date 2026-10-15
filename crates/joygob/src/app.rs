@@ -4,6 +4,7 @@ use eframe::egui::{self, Align, Layout, RichText, Vec2};
 use gob_i18n::I18n;
 
 use crate::devices_view::DevicesView;
+use crate::hidhide_view::HidHideView;
 use crate::profile_view::{report_window, LoadedProfile};
 use crate::settings::Settings;
 use crate::settings_view::{self, Change, SettingsTab};
@@ -34,6 +35,7 @@ pub struct JoyGobApp {
     devices_view: DevicesView,
     substitute: Option<SubstituteDialog>,
     vjoy_view: VJoyView,
+    hidhide_view: HidHideView,
 }
 
 impl JoyGobApp {
@@ -79,7 +81,15 @@ impl JoyGobApp {
             devices_view: DevicesView::default(),
             substitute: None,
             vjoy_view: VJoyView::new(),
+            hidhide_view: HidHideView::new(),
         };
+        if app.settings.hidhide_whitelist_self {
+            match app.hidhide_view.whitelist_self() {
+                Some(Ok(true)) => app.status = app.i18n.tr("status-whitelisted"),
+                Some(Err(e)) => app.status = e,
+                _ => {}
+            }
+        }
         if let Some(path) = reopen {
             app.open_profile(path, false);
         }
@@ -290,9 +300,7 @@ impl eframe::App for JoyGobApp {
             .frame(frame)
             .show(ctx, |ui| match self.page {
                 Page::Devices => self.devices_page(ui),
-                Page::HidHide => {
-                    empty_state(ui, icon::EYE_SLASH, &self.i18n.tr("placeholder-hidhide"))
-                }
+                Page::HidHide => self.hidhide_view.show(ui, &self.i18n),
                 Page::VJoy => self.vjoy_view.show(ui, &self.i18n),
                 Page::Settings => {
                     let change = settings_view::show(

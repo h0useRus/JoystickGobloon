@@ -54,10 +54,12 @@ pub fn show(
     match tab {
         SettingsTab::Appearance => appearance(ui, i18n, settings),
         SettingsTab::General => {
-            if ui
-                .checkbox(&mut settings.reopen_last, i18n.tr("settings-reopen-last"))
-                .changed()
-            {
+            let reopen = ui.checkbox(&mut settings.reopen_last, i18n.tr("settings-reopen-last"));
+            let whitelist = ui.checkbox(
+                &mut settings.hidhide_whitelist_self,
+                i18n.tr("settings-hidhide-self"),
+            );
+            if reopen.changed() || whitelist.changed() {
                 settings.save();
             }
             None

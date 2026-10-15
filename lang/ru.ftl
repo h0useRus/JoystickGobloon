@@ -25,7 +25,6 @@ no-profile = Профиль не загружен
 device-linked = Назначения устройства профиля с тем же именем. Нажмите «Замена устройств», чтобы сохранить связь.
 device-disconnected = Не подключено
 no-devices-attached = Игровые контроллеры не найдены
-placeholder-hidhide = Скрытие физических устройств от игр (драйвер HidHide).
 
 # Status bar
 status-ready = Готово
@@ -67,3 +66,19 @@ vjoy-own = Управляется JoyGob
 vjoy-busy = Занято другой программой (например, Joystick Gremlin)
 vjoy-unknown = Неизвестное состояние
 vjoy-error = Не удалось взять устройство: { $error }
+
+# Device hiding
+hidhide-missing = HidHide не установлен.
+hidhide-toggle = Включить или выключить скрытие устройств
+hidhide-on = Скрытие включено
+hidhide-off = Скрытие выключено
+hidhide-devices = Устройства
+hidhide-apps = Программы
+hidhide-hidden = Скрыто: его видят только программы из белого списка
+hidhide-visible = Видно всем программам
+hidhide-add-app = Добавить программу
+hidhide-remove-app = Убрать из белого списка
+hidhide-app-missing = Файл не найден
+action-refresh = Обновить
+settings-hidhide-self = Добавлять JoyGob в белый список HidHide при запуске
+status-whitelisted = JoyGob добавлен в белый список HidHide.
