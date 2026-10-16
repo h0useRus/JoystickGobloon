@@ -16,6 +16,7 @@ mod settings_view;
 mod style;
 mod substitute_view;
 mod tray;
+mod viewer_view;
 mod vjoy_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";

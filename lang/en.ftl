@@ -4,6 +4,7 @@ language-name = English
 nav-devices = Devices and bindings
 nav-hidhide = Device hiding
 nav-vjoy = Virtual joysticks
+nav-viewer = Input viewer
 nav-settings = Settings
 action-open = Import Joystick Gremlin profile
 action-save = Save
@@ -345,3 +346,9 @@ about-issues = Report a problem
 about-releases = Releases
 about-credits = Uses the HidHide and vJoy drivers; profiles are compatible with Joystick Gremlin.
 about-license = Free and open source under the MIT license.
+
+# Input viewer
+viewer-history = Axes over time
+viewer-current = Axes now
+viewer-buttons = Buttons and hats
+viewer-axis = Axis { $n }

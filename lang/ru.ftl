@@ -4,6 +4,7 @@ language-name = Русский
 nav-devices = Устройства и назначения
 nav-hidhide = Скрытие устройств
 nav-vjoy = Виртуальные джойстики
+nav-viewer = Просмотр входов
 nav-settings = Настройки
 action-open = Импорт профиля Joystick Gremlin
 action-save = Сохранить
@@ -345,3 +346,9 @@ about-issues = Сообщить о проблеме
 about-releases = Выпуски
 about-credits = Использует драйверы HidHide и vJoy; профили совместимы с Joystick Gremlin.
 about-license = Свободная программа с открытым кодом под лицензией MIT.
+
+# Input viewer
+viewer-history = Оси во времени
+viewer-current = Оси сейчас
+viewer-buttons = Кнопки и хатки
+viewer-axis = Ось { $n }

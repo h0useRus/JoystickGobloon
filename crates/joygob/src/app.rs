@@ -19,6 +19,7 @@ enum Page {
     Devices,
     HidHide,
     VJoy,
+    Viewer,
     Settings,
 }
 
@@ -36,6 +37,7 @@ pub struct JoyGobApp {
     devices_view: DevicesView,
     substitute: Option<SubstituteDialog>,
     vjoy_view: VJoyView,
+    viewer_view: crate::viewer_view::ViewerView,
     hidhide_view: HidHideView,
     /// Running profile, if activated.
     runner: Option<gob_engine::Runner>,
@@ -122,6 +124,7 @@ impl JoyGobApp {
             devices_view: DevicesView::default(),
             substitute: None,
             vjoy_view: VJoyView::new(),
+            viewer_view: Default::default(),
             hidhide_view: HidHideView::new(),
             runner: None,
             edited: None,
@@ -152,6 +155,7 @@ impl JoyGobApp {
         match std::env::var("JOYGOB_START_PAGE").as_deref() {
             Ok("hidhide") => app.page = Page::HidHide,
             Ok("vjoy") => app.page = Page::VJoy,
+            Ok("viewer") => app.page = Page::Viewer,
             Ok("settings") => app.page = Page::Settings,
             Ok("about") => {
                 app.page = Page::Settings;
@@ -459,6 +463,7 @@ impl JoyGobApp {
                 (Page::Devices, icon::JOYSTICK, "nav-devices"),
                 (Page::HidHide, icon::EYE_SLASH, "nav-hidhide"),
                 (Page::VJoy, icon::GAME_CONTROLLER, "nav-vjoy"),
+                (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
             ] {
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
@@ -845,6 +850,10 @@ impl eframe::App for JoyGobApp {
                 Page::Devices => self.devices_page(ui),
                 Page::HidHide => self.hidhide_view.show(ui, &self.i18n),
                 Page::VJoy => self.vjoy_view.show(ui, &self.i18n),
+                Page::Viewer => {
+                    let devices = self.input.devices().clone();
+                    self.viewer_view.show(ui, &self.i18n, &devices);
+                }
                 Page::Settings => {
                     let change = settings_view::show(
                         ui,
