@@ -11,12 +11,14 @@ use gob_i18n::I18n;
 use gob_input::{DeviceState, InputEvent};
 
 use crate::action_editor::{Editor, Op};
-use crate::profile_view::{action_tree, summary, LoadedProfile};
+use crate::profile_view::{action_tree, LoadedProfile};
 use crate::style::{self, icon};
 
 /// How long a row stays highlighted after its input was used.
 const HIGHLIGHT: Duration = Duration::from_millis(700);
 const LIVE_WIDTH: f32 = 110.0;
+/// Width of the input name in the list.
+const NAME_WIDTH: f32 = 104.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Kind {
@@ -39,6 +41,8 @@ pub struct DevicesView {
     mode: Option<String>,
     activity: HashMap<(String, Key), Instant>,
     scroll_to: Option<(String, Key)>,
+    /// Selected input per device tab (the one the right panel edits).
+    selected_input: HashMap<String, Key>,
     /// The mode icon was clicked: the app opens the modes window.
     pub open_modes: bool,
 }
@@ -309,8 +313,81 @@ impl DevicesView {
             }
         }
 
-        if is_keyboard(tab) && profile.is_some() {
-            // Bind a key by recording it; the row then lists it like any input.
+        // Logical inputs come from the profile; they are listed even when unbound.
+        let mut labels: HashMap<Key, String> = HashMap::new();
+        if let (true, Some(p)) = (tab.logical, profile) {
+            for i in p.profile.logical_inputs() {
+                let kind = match i.input_type {
+                    InputType::Axis => Kind::Axis,
+                    InputType::Hat => Kind::Hat,
+                    _ => Kind::Button,
+                };
+                rows.entry((kind, i.id)).or_insert(Bound::None);
+                labels.insert((kind, i.id), i.label);
+            }
+        }
+        let index = profile
+            .map(|p| p.profile.action_index())
+            .unwrap_or_default();
+
+        // The selected input of this tab: kept per device, else the first row.
+        let selected = self
+            .selected_input
+            .get(tab.guid)
+            .copied()
+            .filter(|k| rows.contains_key(k))
+            .or_else(|| rows.keys().copied().find(|&k| debug_expanded(k)))
+            .or_else(|| rows.keys().next().copied());
+
+        // Left: the inputs as cards. Right: the selected input's actions.
+        egui::SidePanel::left(egui::Id::new(("inputs", tab.guid)))
+            .resizable(true)
+            .default_width(420.0)
+            .min_width(280.0)
+            .show_inside(ui, |ui| {
+                self.list_tools(ui, i18n, profile, ops, tab, rows.is_empty());
+                egui::ScrollArea::vertical()
+                    .auto_shrink(false)
+                    .show(ui, |ui| {
+                        for (&key, &bound) in &rows {
+                            let label = labels.get(&key).map(String::as_str);
+                            let is_sel = selected == Some(key);
+                            if self.card(ui, i18n, tab, key, bound, &index, label, is_sel) {
+                                self.selected_input.insert(tab.guid.to_string(), key);
+                            }
+                        }
+                    });
+            });
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().inner_margin(Margin::symmetric(10, 4)))
+            .show_inside(ui, |ui| {
+                let Some(key) = selected else {
+                    return;
+                };
+                let bound = rows.get(&key).copied().unwrap_or(Bound::None);
+                let label = labels.get(&key).map(String::as_str);
+                egui::ScrollArea::vertical()
+                    .auto_shrink(false)
+                    .show(ui, |ui| {
+                        self.detail(
+                            ui, i18n, profile, ops, vjoy, devices, tab, key, bound, &index, label,
+                        );
+                    });
+            });
+    }
+
+    /// Above the list: record a key (Keyboard tab) or add logical inputs (Logical device).
+    fn list_tools(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        profile: Option<&LoadedProfile>,
+        ops: &mut Vec<Op>,
+        tab: &Tab,
+        empty: bool,
+    ) {
+        let Some(p) = profile else { return };
+        if is_keyboard(tab) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(i18n.tr("keyboard-add")).weak());
                 let field = egui::Id::new("keyboard-add-key");
@@ -328,22 +405,13 @@ impl DevicesView {
                     }
                 }
             });
-            if rows.is_empty() {
+            if empty {
                 ui.label(RichText::new(i18n.tr("keyboard-empty")).weak());
             }
+            ui.separator();
         }
-        let mut labels: HashMap<Key, String> = HashMap::new();
-        if let (true, Some(p)) = (tab.logical, profile) {
-            for i in p.profile.logical_inputs() {
-                let kind = match i.input_type {
-                    InputType::Axis => Kind::Axis,
-                    InputType::Hat => Kind::Hat,
-                    _ => Kind::Button,
-                };
-                rows.entry((kind, i.id)).or_insert(Bound::None);
-                labels.insert((kind, i.id), i.label);
-            }
-            ui.horizontal(|ui| {
+        if tab.logical {
+            ui.horizontal_wrapped(|ui| {
                 for (ty, glyph, key, name) in [
                     (
                         InputType::Axis,
@@ -370,27 +438,121 @@ impl DevicesView {
                     }
                 }
             });
-            if labels.is_empty() {
+            if p.profile.logical_inputs().is_empty() {
                 ui.label(RichText::new(i18n.tr("logical-empty")).weak());
             }
+            ui.separator();
         }
-        let index = profile
-            .map(|p| p.profile.action_index())
-            .unwrap_or_default();
-        egui::ScrollArea::vertical()
-            .auto_shrink(false)
-            .show(ui, |ui| {
-                for (key, bound) in rows {
-                    let label = labels.get(&key).map(String::as_str);
-                    self.row(
-                        ui, i18n, profile, ops, vjoy, devices, tab, key, bound, &index, label,
-                    );
-                }
-            });
     }
 
+    /// One input in the list: name, live state and description on the first line, the
+    /// actions on the second. Returns true when clicked.
     #[allow(clippy::too_many_arguments)]
-    fn row(
+    fn card(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        tab: &Tab,
+        key: Key,
+        bound: Bound,
+        index: &HashMap<&str, &Action>,
+        label: Option<&str>,
+        selected: bool,
+    ) -> bool {
+        let active = self
+            .activity
+            .get(&(tab.guid.to_string(), key))
+            .is_some_and(|t| t.elapsed() < HIGHLIGHT);
+        let visuals = ui.visuals();
+        let fill = if active {
+            visuals.selection.bg_fill
+        } else if selected {
+            visuals.faint_bg_color
+        } else {
+            Color32::TRANSPARENT
+        };
+        let stroke = if selected {
+            Stroke::new(1.5, style::accent(ui))
+        } else {
+            visuals.widgets.noninteractive.bg_stroke
+        };
+        let binding = match bound {
+            Bound::Own(b) | Bound::Inherited(b) => Some(b),
+            Bound::None => None,
+        };
+        let root = binding
+            .and_then(|b| b.configs.first())
+            .and_then(|c| index.get(c.root_action.as_str()).copied());
+        let inherited = matches!(bound, Bound::Inherited(_));
+        let response = egui::Frame::new()
+            .fill(fill)
+            .stroke(stroke)
+            .corner_radius(6)
+            .inner_margin(Margin::symmetric(8, 5))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(kind_glyph(key.0)).size(15.0));
+                    // Fixed-width name column so the live bars line up.
+                    let name = input_name(i18n, key, label);
+                    let used = ui.label(RichText::new(name).strong()).rect.width();
+                    ui.add_space((NAME_WIDTH - used).max(0.0));
+                    if tab.live.is_some() {
+                        live_widget(ui, tab.live, key);
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if inherited {
+                            let mode = binding.map(|b| b.mode.clone()).unwrap_or_default();
+                            ui.label(RichText::new(icon::ARROW_BEND_UP_LEFT).weak())
+                                .on_hover_text(
+                                    i18n.trf("edit-inherited", &[("mode", mode.into())]),
+                                );
+                        }
+                        if let Some(text) = root.and_then(description) {
+                            ui.add(egui::Label::new(RichText::new(text).weak()).truncate());
+                        }
+                    });
+                });
+                if let Some(root) = root {
+                    let children: Vec<&Action> = root
+                        .child_ids()
+                        .into_iter()
+                        .filter_map(|id| index.get(id).copied())
+                        .collect();
+                    if !children.is_empty() {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
+                            for a in children {
+                                chip(ui, &chip_text(i18n, a), inherited);
+                            }
+                        });
+                    }
+                }
+            })
+            .response;
+        let response = ui.interact(
+            response.rect,
+            ui.id().with(("card", tab.guid, key)),
+            Sense::click(),
+        );
+        if self
+            .scroll_to
+            .as_ref()
+            .is_some_and(|(g, k)| g == tab.guid && *k == key)
+        {
+            response.scroll_to_me(Some(Align::Center));
+            self.scroll_to = None;
+        }
+        if active {
+            ui.ctx().request_repaint_after(HIGHLIGHT);
+        }
+        ui.add_space(2.0);
+        response.clicked()
+    }
+
+    /// The selected input's editor (what used to open under its row).
+    #[allow(clippy::too_many_arguments)]
+    fn detail(
         &mut self,
         ui: &mut egui::Ui,
         i18n: &I18n,
@@ -405,19 +567,6 @@ impl DevicesView {
         // Logical device input label: editable, with a delete button.
         label: Option<&str>,
     ) {
-        let active = self
-            .activity
-            .get(&(tab.guid.to_string(), key))
-            .is_some_and(|t| t.elapsed() < HIGHLIGHT);
-        let fill = if active {
-            ui.visuals().selection.bg_fill
-        } else {
-            Color32::TRANSPARENT
-        };
-        let frame = egui::Frame::new()
-            .fill(fill)
-            .corner_radius(6)
-            .inner_margin(Margin::symmetric(4, 1));
         // Bindings are written for the profile's device id (the alias when linked by name).
         let device = tab.alias.unwrap_or(tab.guid).to_string();
         let input_type = match key.0 {
@@ -440,165 +589,196 @@ impl DevicesView {
             mode: mode.clone(),
             add,
         };
-        let response = frame
-            .show(ui, |ui| {
-                let summary_of = |b: &InputBinding| {
-                    b.configs
-                        .first()
-                        .and_then(|c| summary(index, &c.root_action))
-                };
-                let header = |ui: &mut egui::Ui, ops: &mut Vec<Op>| {
-                    ui.label(RichText::new(kind_glyph(key.0)).size(16.0));
-                    if key.0 == Kind::Key {
-                        let name = crate::key_capture::name(gob_core::key_from_input_id(key.1));
-                        ui.add_sized(
-                            [110.0, 18.0],
-                            egui::Label::new(RichText::new(name).strong()),
-                        );
-                    } else {
-                        ui.add_sized(
-                            [28.0, 18.0],
-                            egui::Label::new(RichText::new(key.1.to_string()).monospace()),
-                        );
-                    }
-                    match label {
-                        Some(text) => {
-                            let ty = InputType::parse(input_type);
-                            // Edited text lives in egui memory; it is applied on Enter / focus loss.
-                            let buf_id = egui::Id::new(("logical-label", key));
-                            let mut edited: String = ui
-                                .data(|d| d.get_temp(buf_id))
-                                .unwrap_or_else(|| text.to_string());
-                            let r = ui
-                                .add_sized([150.0, 20.0], egui::TextEdit::singleline(&mut edited));
-                            if r.lost_focus() {
-                                ui.data_mut(|d| d.remove::<String>(buf_id));
-                                if edited.trim() != text {
-                                    ops.push(Op::RenameLogicalInput {
-                                        input_type: ty,
-                                        id: key.1,
-                                        label: edited,
-                                    });
-                                }
-                            } else if r.has_focus() {
-                                ui.data_mut(|d| d.insert_temp(buf_id, edited));
-                            }
-                            if style::icon_button(ui, true, icon::TRASH, &i18n.tr("logical-remove"))
-                                .clicked()
-                            {
-                                ops.push(Op::RemoveLogicalInput {
-                                    input_type: ty,
-                                    id: key.1,
-                                });
-                            }
+
+        // Title: input name (a logical input's label is editable here).
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(kind_glyph(key.0)).size(18.0));
+            match label {
+                Some(text) => {
+                    let ty = InputType::parse(input_type);
+                    // Edited text lives in egui memory; it is applied on Enter / focus loss.
+                    let buf_id = egui::Id::new(("logical-label", key));
+                    let mut edited: String = ui
+                        .data(|d| d.get_temp(buf_id))
+                        .unwrap_or_else(|| text.to_string());
+                    let r = ui.add_sized([200.0, 22.0], egui::TextEdit::singleline(&mut edited));
+                    if r.lost_focus() {
+                        ui.data_mut(|d| d.remove::<String>(buf_id));
+                        if edited.trim() != text {
+                            ops.push(Op::RenameLogicalInput {
+                                input_type: ty,
+                                id: key.1,
+                                label: edited,
+                            });
                         }
-                        None => live_widget(ui, tab.live, key),
+                    } else if r.has_focus() {
+                        ui.data_mut(|d| d.insert_temp(buf_id, edited));
                     }
-                    match bound {
-                        Bound::Own(b) => {
-                            if let Some(text) = summary_of(b) {
-                                ui.label(text);
-                            }
-                        }
-                        Bound::Inherited(b) => {
-                            ui.label(RichText::new(icon::ARROW_BEND_UP_LEFT).weak())
-                                .on_hover_text(
-                                    i18n.trf("edit-inherited", &[("mode", b.mode.clone().into())]),
-                                );
-                            if let Some(text) = summary_of(b) {
-                                ui.label(RichText::new(text).weak());
-                            }
-                        }
-                        Bound::None => {
-                            if let Some(p) = profile {
-                                let mut editor = Editor {
-                                    profile: &p.profile,
-                                    i18n,
-                                    ops,
-                                    behavior,
-                                    vjoy,
-                                    inputs,
-                                    input: Some((&device, key.1)),
-                                };
-                                editor.add_menu(ui, None, |kind| bind(Some(kind)));
-                            }
-                        }
-                    }
-                };
-                let id = ui.make_persistent_id((tab.guid, key));
-                match (bound, profile) {
-                    (Bound::Own(b), Some(p)) => {
-                        egui::collapsing_header::CollapsingState::load_with_default_open(
-                            ui.ctx(),
-                            id,
-                            debug_expanded(key),
-                        )
-                        .show_header(ui, |ui| header(ui, ops))
-                        .body(|ui| {
-                            let text = format!("{}  {}", icon::TRASH, i18n.tr("edit-unbind"));
-                            if ui.button(text).clicked() {
-                                ops.push(Op::Unbind {
-                                    device: b.device_id.clone(),
-                                    input_type: b.input_type.clone(),
-                                    input_id: b.input_id.clone(),
-                                    mode: b.mode.clone(),
-                                });
-                            }
-                            let behavior = b.configs.first().map_or(behavior, |c| c.behavior());
-                            let mut editor = Editor {
-                                profile: &p.profile,
-                                i18n,
-                                ops,
-                                behavior,
-                                vjoy,
-                                inputs,
-                                input: Some((&b.device_id, key.1)),
-                            };
-                            for cfg in &b.configs {
-                                editor.container(ui, &cfg.root_action, "actions", 0);
-                            }
-                        });
-                    }
-                    (Bound::Inherited(b), _) => {
-                        egui::collapsing_header::CollapsingState::load_with_default_open(
-                            ui.ctx(),
-                            id,
-                            false,
-                        )
-                        .show_header(ui, |ui| header(ui, ops))
-                        .body(|ui| {
-                            for cfg in &b.configs {
-                                action_tree(ui, index, &cfg.root_action, 0);
-                            }
-                            let text =
-                                format!("{}  {}", icon::PENCIL_SIMPLE, i18n.tr("edit-override"));
-                            if ui.button(text).clicked() {
-                                ops.push(bind(None));
-                            }
-                        });
-                    }
-                    _ => {
-                        ui.horizontal(|ui| {
-                            ui.add_space(ui.spacing().indent);
-                            header(ui, ops);
+                    if style::icon_button(ui, true, icon::TRASH, &i18n.tr("logical-remove"))
+                        .clicked()
+                    {
+                        ops.push(Op::RemoveLogicalInput {
+                            input_type: ty,
+                            id: key.1,
                         });
                     }
                 }
-            })
-            .response;
+                None => {
+                    ui.heading(input_name(i18n, key, None));
+                }
+            }
+            if tab.live.is_some() {
+                live_widget(ui, tab.live, key);
+            }
+        });
+        ui.add_space(4.0);
 
-        if self
-            .scroll_to
-            .as_ref()
-            .is_some_and(|(g, k)| g == tab.guid && *k == key)
-        {
-            response.scroll_to_me(Some(Align::Center));
-            self.scroll_to = None;
-        }
-        if active {
-            ui.ctx().request_repaint_after(HIGHLIGHT);
+        let Some(p) = profile else { return };
+        match bound {
+            Bound::Own(b) => {
+                let root = b.configs.first().map(|c| c.root_action.clone());
+                ui.horizontal(|ui| {
+                    // The binding's description: the root action's label, like Gremlin.
+                    if let Some(root_id) = &root {
+                        if let Some(a) = p.profile.action(root_id) {
+                            let mut text = a
+                                .label()
+                                .filter(|l| *l != "None")
+                                .unwrap_or_default()
+                                .to_string();
+                            let edit = egui::TextEdit::singleline(&mut text)
+                                .hint_text(i18n.tr("edit-binding-description"))
+                                .desired_width((ui.available_width() - 40.0).max(120.0));
+                            if ui.add(edit).changed() {
+                                ops.push(Op::Set {
+                                    action: root_id.clone(),
+                                    name: "action-label".into(),
+                                    ty: "string".into(),
+                                    value: text,
+                                });
+                            }
+                        }
+                    }
+                    if style::icon_button(ui, true, icon::TRASH, &i18n.tr("edit-unbind")).clicked()
+                    {
+                        ops.push(Op::Unbind {
+                            device: b.device_id.clone(),
+                            input_type: b.input_type.clone(),
+                            input_id: b.input_id.clone(),
+                            mode: b.mode.clone(),
+                        });
+                    }
+                });
+                ui.add_space(4.0);
+                let behavior = b.configs.first().map_or(behavior, |c| c.behavior());
+                let mut editor = Editor {
+                    profile: &p.profile,
+                    i18n,
+                    ops,
+                    behavior,
+                    vjoy,
+                    inputs,
+                    input: Some((&b.device_id, key.1)),
+                };
+                for cfg in &b.configs {
+                    editor.container(ui, &cfg.root_action, "actions", 0);
+                }
+            }
+            Bound::Inherited(b) => {
+                ui.label(
+                    RichText::new(format!(
+                        "{}  {}",
+                        icon::ARROW_BEND_UP_LEFT,
+                        i18n.trf("edit-inherited", &[("mode", b.mode.clone().into())])
+                    ))
+                    .weak(),
+                );
+                for cfg in &b.configs {
+                    action_tree(ui, index, &cfg.root_action, 0);
+                }
+                ui.add_space(6.0);
+                let text = format!("{}  {}", icon::PENCIL_SIMPLE, i18n.tr("edit-override"));
+                if ui.button(text).clicked() {
+                    ops.push(bind(None));
+                }
+            }
+            Bound::None => {
+                ui.label(RichText::new(i18n.tr("edit-unbound")).weak());
+                let mut editor = Editor {
+                    profile: &p.profile,
+                    i18n,
+                    ops,
+                    behavior,
+                    vjoy,
+                    inputs,
+                    input: Some((&device, key.1)),
+                };
+                editor.add_menu(ui, None, |kind| bind(Some(kind)));
+            }
         }
     }
+}
+
+/// Name like Gremlin shows it: X Axis ... Slider, Dial; Button 3; Hat 1; key name.
+fn input_name(i18n: &I18n, (kind, id): Key, label: Option<&str>) -> String {
+    if let Some(l) = label {
+        return l.to_string();
+    }
+    match kind {
+        Kind::Axis if (1..=8).contains(&id) => i18n.tr(&format!("vjoy-axis-{id}")),
+        Kind::Axis => i18n.trf("viewer-axis", &[("n", id.into())]),
+        Kind::Button => i18n.trf("vjoy-button-n", &[("n", id.into())]),
+        Kind::Hat => i18n.trf("vjoy-hat-n", &[("n", id.into())]),
+        Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id)),
+        Kind::Other => id.to_string(),
+    }
+}
+
+/// The binding's description: the root action's label (Gremlin shows it there too).
+fn description(root: &Action) -> Option<String> {
+    root.label()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && *l != "None")
+        .map(String::from)
+}
+
+/// Short action name for the list, e.g. "Response curve" or "vJoy 1 A2".
+fn chip_text(i18n: &I18n, a: &Action) -> String {
+    if let gob_core::ActionKind::MapToVjoy {
+        device,
+        input_type,
+        input_id,
+        ..
+    } = a.kind()
+    {
+        let t = match input_type {
+            InputType::Axis => "A",
+            InputType::Hat => "H",
+            _ => "B",
+        };
+        return format!("vJoy {device} {t}{input_id}");
+    }
+    let key = format!("kind-{}", a.kind);
+    let name = i18n.tr(&key);
+    if name == key {
+        a.kind.clone()
+    } else {
+        name
+    }
+}
+
+fn chip(ui: &mut egui::Ui, text: &str, weak: bool) {
+    let visuals = ui.visuals();
+    let text = if weak {
+        RichText::new(text).small().weak()
+    } else {
+        RichText::new(text).small()
+    };
+    egui::Frame::new()
+        .stroke(visuals.widgets.noninteractive.bg_stroke)
+        .corner_radius(3)
+        .inner_margin(Margin::symmetric(5, 1))
+        .show(ui, |ui| ui.label(text));
 }
 
 #[derive(Clone, Copy)]

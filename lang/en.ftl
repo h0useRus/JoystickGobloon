@@ -401,3 +401,5 @@ keyboard-device = Keyboard
 keyboard-tip = Keyboard keys as inputs: bind actions to keys like to joystick buttons
 keyboard-add = Bind a key
 keyboard-empty = No keys bound yet: record one with the button above.
+edit-binding-description = Description of this input
+edit-unbound = No actions yet: add one.
