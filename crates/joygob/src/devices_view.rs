@@ -17,6 +17,8 @@ use crate::style::{self, icon};
 /// How long a row stays highlighted after its input was used.
 const HIGHLIGHT: Duration = Duration::from_millis(700);
 const LIVE_WIDTH: f32 = 110.0;
+/// Axis change (of -1..1) that counts as using the axis, like pressing a button.
+const AXIS_MOVE: f32 = 0.25;
 /// Width of the input name in the list.
 const NAME_WIDTH: f32 = 104.0;
 
@@ -41,6 +43,8 @@ pub struct DevicesView {
     mode: Option<String>,
     activity: HashMap<(String, Key), Instant>,
     scroll_to: Option<(String, Key)>,
+    /// Axis value when it last counted as moved (per device and axis).
+    axis_ref: HashMap<(String, u8), f32>,
     /// Selected input per device tab (the one the right panel edits).
     selected_input: HashMap<String, Key>,
     /// The mode icon was clicked: the app opens the modes window.
@@ -58,7 +62,8 @@ struct Tab<'a> {
 }
 
 impl DevicesView {
-    /// Pressing a button or moving a hat selects its device and highlights the row.
+    /// Pressing a button, moving a hat or clearly moving an axis selects its device,
+    /// highlights the input and scrolls the list to it.
     pub fn handle_events(
         &mut self,
         events: impl Iterator<Item = InputEvent>,
@@ -76,6 +81,15 @@ impl DevicesView {
                     id,
                     direction: Some(_),
                 } => (device, (Kind::Hat, u32::from(id))),
+                // An axis counts once it really moved, not on jitter.
+                InputEvent::Axis { device, id, value } => {
+                    let reference = self.axis_ref.entry((device.clone(), id)).or_insert(value);
+                    if (value - *reference).abs() < AXIS_MOVE {
+                        continue;
+                    }
+                    *reference = value;
+                    (device, (Kind::Axis, u32::from(id)))
+                }
                 // Typing must not switch tabs: keys only light up their row.
                 InputEvent::Key {
                     scan_code,
