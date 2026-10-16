@@ -207,7 +207,7 @@ fn history_graph(
         let y = y_of(v);
         painter.line_segment(
             [Pos2::new(plot.left(), y), Pos2::new(plot.right(), y)],
-            Stroke::new(1.0, grid),
+            Stroke::new(1.0_f32, grid),
         );
         painter.text(
             Pos2::new(plot.left() - 6.0, y),
@@ -221,7 +221,7 @@ fn history_graph(
         let x = plot.left() + (1.0 - s as f32 / HISTORY as f32) * plot.width();
         painter.line_segment(
             [Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())],
-            Stroke::new(1.0, grid),
+            Stroke::new(1.0_f32, grid),
         );
         painter.text(
             Pos2::new(x, plot.bottom() + 3.0),
@@ -242,7 +242,7 @@ fn history_graph(
         if points.len() > 1 {
             painter.add(egui::Shape::line(
                 points,
-                Stroke::new(1.8, AXIS_COLORS[i % 8]),
+                Stroke::new(1.8_f32, AXIS_COLORS[i % 8]),
             ));
         }
     }

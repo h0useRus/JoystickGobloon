@@ -98,7 +98,7 @@ impl SubstituteDialog {
                 }
             }
         }
-        pairs.sort_by(|a, b| b.0.cmp(&a.0));
+        pairs.sort_by_key(|p| std::cmp::Reverse(p.0));
         let mut mapped = 0;
         for &(score, ri, di) in &pairs {
             let guid = &self.free[di].0;

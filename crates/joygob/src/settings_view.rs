@@ -210,7 +210,7 @@ fn about(ui: &mut egui::Ui, i18n: &I18n, logo: &egui::TextureHandle) {
                 .color(ui.visuals().strong_text_color()),
         )
         .fill(accent.gamma_multiply(0.45))
-        .stroke(egui::Stroke::new(1.0, accent))
+        .stroke(egui::Stroke::new(1.0_f32, accent))
         .corner_radius(style::RADIUS)
         .min_size(Vec2::new(220.0, 36.0));
         if ui

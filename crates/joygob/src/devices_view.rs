@@ -609,7 +609,7 @@ impl DevicesView {
             Color32::TRANSPARENT
         };
         let stroke = if selected {
-            Stroke::new(1.5, style::accent(ui))
+            Stroke::new(1.5_f32, style::accent(ui))
         } else {
             visuals.widgets.noninteractive.bg_stroke
         };
@@ -960,7 +960,7 @@ fn live_widget(ui: &mut egui::Ui, live: Option<&DeviceState>, (kind, id): Key) {
             painter.rect_filled(fill, 2.0, accent);
             painter.line_segment(
                 [bar.center_top(), bar.center_bottom()],
-                Stroke::new(1.0, weak),
+                Stroke::new(1.0_f32, weak),
             );
         }
         Kind::Button => {
@@ -974,7 +974,7 @@ fn live_widget(ui: &mut egui::Ui, live: Option<&DeviceState>, (kind, id): Key) {
                 anchor,
                 6.0,
                 fill,
-                Stroke::new(1.5, if pressed { accent } else { weak }),
+                Stroke::new(1.5_f32, if pressed { accent } else { weak }),
             );
         }
         Kind::Hat => {

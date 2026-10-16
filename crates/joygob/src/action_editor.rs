@@ -1322,7 +1322,7 @@ impl Editor<'_> {
         if candidates.is_empty() {
             return;
         }
-        candidates.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        candidates.sort_by_key(|a| a.0.to_lowercase());
         ui.separator();
         let menus: [(&str, &str, MakeAdd); 2] = [
             (icon::LINK, "edit-link-existing", AddKind::Reuse),

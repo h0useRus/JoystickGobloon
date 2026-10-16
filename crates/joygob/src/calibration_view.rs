@@ -349,7 +349,7 @@ fn bar(ui: &mut egui::Ui, width: f32, t: f32, range: Option<&Calibration>, color
             let px = x(v);
             painter.line_segment(
                 [Pos2::new(px, rect.top()), Pos2::new(px, rect.bottom())],
-                egui::Stroke::new(2.0, ui.visuals().text_color()),
+                egui::Stroke::new(2.0_f32, ui.visuals().text_color()),
             );
         }
     }

@@ -231,7 +231,7 @@ fn chart(
     for i in 1..8 {
         let t = -1.0 + f64::from(i) * 0.25;
         let strength = if i == 4 { 0.45 } else { 0.15 };
-        let stroke = Stroke::new(1.0, weak.gamma_multiply(strength));
+        let stroke = Stroke::new(1.0_f32, weak.gamma_multiply(strength));
         painter.line_segment([to_screen((t, -1.0)), to_screen((t, 1.0))], stroke);
         painter.line_segment([to_screen((-1.0, t)), to_screen((1.0, t))], stroke);
     }
@@ -244,7 +244,7 @@ fn chart(
             to_screen((x, curve.eval(x)))
         })
         .collect();
-    painter.add(egui::Shape::line(line, Stroke::new(2.0, accent)));
+    painter.add(egui::Shape::line(line, Stroke::new(2.0_f32, accent)));
 
     let knots = Editable::knots(kind, points.len());
     let screen: Vec<Pos2> = points.iter().map(|&p| to_screen(p)).collect();
@@ -256,7 +256,7 @@ fn chart(
                 } else {
                     i - 1
                 };
-                painter.line_segment([screen[knot], *p], Stroke::new(1.0, weak));
+                painter.line_segment([screen[knot], *p], Stroke::new(1.0_f32, weak));
             }
         }
     }
@@ -267,13 +267,13 @@ fn chart(
             ui.visuals().panel_fill
         };
         if knots.contains(&i) {
-            painter.circle(*p, 6.0, fill, Stroke::new(2.0, accent));
+            painter.circle(*p, 6.0, fill, Stroke::new(2.0_f32, accent));
         } else {
             painter.rect(
                 Rect::from_center_size(*p, Vec2::splat(8.0)),
                 1.0,
                 fill,
-                Stroke::new(1.5, weak),
+                Stroke::new(1.5_f32, weak),
                 egui::StrokeKind::Middle,
             );
         }
@@ -404,18 +404,18 @@ fn range_slider(
     let y = rect.center().y;
     painter.line_segment(
         [Pos2::new(to_x(min), y), Pos2::new(to_x(max), y)],
-        Stroke::new(4.0, ui.visuals().widgets.inactive.bg_fill),
+        Stroke::new(4.0_f32, ui.visuals().widgets.inactive.bg_fill),
     );
     painter.line_segment(
         [Pos2::new(to_x(*lo), y), Pos2::new(to_x(*hi), y)],
-        Stroke::new(4.0, accent),
+        Stroke::new(4.0_f32, accent),
     );
     for v in [*lo, *hi] {
         painter.circle(
             Pos2::new(to_x(v), y),
             7.0,
             ui.visuals().panel_fill,
-            Stroke::new(1.5, ui.visuals().text_color()),
+            Stroke::new(1.5_f32, ui.visuals().text_color()),
         );
     }
     changed

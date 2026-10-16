@@ -222,7 +222,11 @@ pub fn record_button(ui: &mut egui::Ui, tooltip: &str) -> egui::Response {
     } else {
         Color32::from_rgb(0xe5, 0x48, 0x4d)
     };
-    painter.circle_stroke(c, h * 0.32, egui::Stroke::new(1.5, visuals.fg_stroke.color));
+    painter.circle_stroke(
+        c,
+        h * 0.32,
+        egui::Stroke::new(1.5_f32, visuals.fg_stroke.color),
+    );
     painter.circle_filled(c, h * 0.18, red);
     response.on_hover_text(tooltip)
 }
