@@ -238,15 +238,8 @@ pub fn tab_with_info(
 ) -> (egui::Response, bool) {
     // A normal egui Button (same look as [`tab`]) with the icon in its right-hand slot.
     let button = egui::Button::new(format!("{glyph}  {caption}"))
-        .shortcut_text({
-            // On the selected tab the icon takes the tab's text colour; otherwise dimmed.
-            let icon = RichText::new(icon::INFO).size(ICON_SIZE);
-            if selected {
-                icon.color(ui.visuals().selection.stroke.color)
-            } else {
-                icon
-            }
-        })
+        // The info icon is always in the accent green, selected tab or not.
+        .shortcut_text(RichText::new(icon::INFO).size(ICON_SIZE).color(accent(ui)))
         .selected(selected)
         .corner_radius(RADIUS)
         .min_size(Vec2::new(0.0, 32.0));
