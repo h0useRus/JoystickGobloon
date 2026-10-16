@@ -20,6 +20,7 @@ enum Page {
     HidHide,
     VJoy,
     Viewer,
+    Calibration,
     Settings,
 }
 
@@ -40,6 +41,11 @@ pub struct JoyGobApp {
     viewer_view: crate::viewer_view::ViewerView,
     /// The input viewer is shown in its own window.
     viewer_window: bool,
+    calibration_view: crate::calibration_view::CalibrationView,
+    /// The calibration is shown in its own window.
+    calibration_window: bool,
+    /// Saved axis calibrations (also applied in the input service).
+    calibrations: gob_input::Calibrations,
     hidhide_view: HidHideView,
     /// Running profile, if activated.
     runner: Option<gob_engine::Runner>,
@@ -128,6 +134,9 @@ impl JoyGobApp {
             vjoy_view: VJoyView::new(),
             viewer_view: Default::default(),
             viewer_window: false,
+            calibration_view: Default::default(),
+            calibration_window: false,
+            calibrations: Default::default(),
             hidhide_view: HidHideView::new(),
             runner: None,
             edited: None,
@@ -144,6 +153,10 @@ impl JoyGobApp {
             hwnd: crate::tray::window_handle(cc),
         };
         app.update_tray(&cc.egui_ctx);
+        app.calibrations = app.settings.calibrations();
+        for ((device, slot), c) in &app.calibrations {
+            app.input.set_calibration(device, *slot, Some(*c));
+        }
         if let Some(hwnd) = app.hwnd {
             let (restored, ctx) = (app.restored.clone(), cc.egui_ctx.clone());
             crate::instance::listen(instance, move || {
@@ -159,6 +172,7 @@ impl JoyGobApp {
             Ok("hidhide") => app.page = Page::HidHide,
             Ok("vjoy") => app.page = Page::VJoy,
             Ok("viewer") => app.page = Page::Viewer,
+            Ok("calibration") => app.page = Page::Calibration,
             Ok("viewer-window") => {
                 app.page = Page::Viewer;
                 app.viewer_window = true;
@@ -369,33 +383,48 @@ impl JoyGobApp {
         }
     }
 
-    /// The input viewer in its own native window (multi-viewport), when detached.
-    fn viewer_window(&mut self, ctx: &egui::Context) {
-        if !self.viewer_window {
-            return;
-        }
+    /// The input viewer and the calibration in their own native windows, when detached.
+    fn detached_windows(&mut self, ctx: &egui::Context) {
         let devices = self.input.devices().clone();
-        let (viewer, i18n) = (&mut self.viewer_view, &self.i18n);
-        let mut builder = egui::ViewportBuilder::default()
-            .with_title(format!("{} | {}", crate::APP_NAME, i18n.tr("nav-viewer")))
-            .with_inner_size([1000.0, 700.0])
-            .with_min_inner_size([480.0, 320.0]);
-        if let Ok(icon) = eframe::icon_data::from_png_bytes(LOGO_PNG) {
-            builder = builder.with_icon(icon);
+        if self.viewer_window {
+            let (viewer, i18n) = (&mut self.viewer_view, &self.i18n);
+            let title = i18n.tr("nav-viewer");
+            let attach = detached_window(ctx, "input-viewer", &title, |ui| {
+                viewer.show(ui, i18n, &devices, true)
+            });
+            if attach {
+                self.viewer_window = false;
+            }
         }
-        let mut attach = false;
-        ctx.show_viewport_immediate(
-            egui::ViewportId::from_hash_of("input-viewer"),
-            builder,
-            |ctx, _class| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    attach |= viewer.show(ui, i18n, &devices, true);
-                });
-                attach |= ctx.input(|i| i.viewport().close_requested());
-            },
-        );
-        if attach {
-            self.viewer_window = false;
+        if self.calibration_window {
+            let (view, i18n, saved) = (&mut self.calibration_view, &self.i18n, &self.calibrations);
+            let title = i18n.tr("nav-calibration");
+            let mut out = crate::calibration_view::Output::default();
+            let attach = detached_window(ctx, "calibration", &title, |ui| {
+                out = view.show(ui, i18n, &devices, saved, true);
+                out.toggle_window
+            });
+            self.apply_calibration(out);
+            if attach {
+                self.calibration_window = false;
+            }
+        }
+    }
+
+    /// Saves and applies calibrations from the calibration page.
+    fn apply_calibration(&mut self, out: crate::calibration_view::Output) {
+        for (device, slot, c) in out.save {
+            log::info!("calibration saved: {device} axis {slot}: {c:?}");
+            self.settings
+                .calibration
+                .entry(device.clone())
+                .or_default()
+                .insert(slot.to_string(), c.into());
+            self.input.set_calibration(&device, slot, Some(c));
+            self.calibrations.insert((device, slot), c);
+        }
+        if !self.calibrations.is_empty() {
+            self.settings.save();
         }
     }
 
@@ -501,6 +530,7 @@ impl JoyGobApp {
                 (Page::HidHide, icon::EYE_SLASH, "nav-hidhide"),
                 (Page::VJoy, icon::GAME_CONTROLLER, "nav-vjoy"),
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
+                (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
             ] {
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
@@ -913,6 +943,37 @@ impl eframe::App for JoyGobApp {
                         self.viewer_window = true;
                     }
                 }
+                Page::Calibration if self.calibration_window => {
+                    empty_state(
+                        ui,
+                        icon::ARROW_SQUARE_OUT,
+                        &self.i18n.tr("calibration-in-window"),
+                    );
+                    ui.vertical_centered(|ui| {
+                        let text = format!(
+                            "{}  {}",
+                            icon::ARROW_SQUARE_IN,
+                            self.i18n.tr("viewer-attach")
+                        );
+                        if ui.button(text).clicked() {
+                            self.calibration_window = false;
+                        }
+                    });
+                }
+                Page::Calibration => {
+                    let devices = self.input.devices().clone();
+                    let out = self.calibration_view.show(
+                        ui,
+                        &self.i18n,
+                        &devices,
+                        &self.calibrations,
+                        false,
+                    );
+                    if out.toggle_window {
+                        self.calibration_window = true;
+                    }
+                    self.apply_calibration(out);
+                }
                 Page::Settings => {
                     let change = settings_view::show(
                         ui,
@@ -963,7 +1024,7 @@ impl eframe::App for JoyGobApp {
         }
         self.unsaved_dialog(ctx);
         self.alert_dialog(ctx);
-        self.viewer_window(ctx);
+        self.detached_windows(ctx);
     }
 }
 
@@ -988,6 +1049,35 @@ fn load_plugins() -> gob_plugin::Registry {
         );
     }
     registry
+}
+
+/// Shows `content` in its own native window (egui viewport) titled "<app> | <title>".
+/// Returns true when it should go back into the main window (its button or closing it).
+fn detached_window(
+    ctx: &egui::Context,
+    id: &str,
+    title: &str,
+    mut content: impl FnMut(&mut egui::Ui) -> bool,
+) -> bool {
+    let mut builder = egui::ViewportBuilder::default()
+        .with_title(format!("{} | {title}", crate::APP_NAME))
+        .with_inner_size([1000.0, 700.0])
+        .with_min_inner_size([480.0, 320.0]);
+    if let Ok(icon) = eframe::icon_data::from_png_bytes(LOGO_PNG) {
+        builder = builder.with_icon(icon);
+    }
+    let mut attach = false;
+    ctx.show_viewport_immediate(
+        egui::ViewportId::from_hash_of(id),
+        builder,
+        |ctx, _class| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                attach |= content(ui);
+            });
+            attach |= ctx.input(|i| i.viewport().close_requested());
+        },
+    );
+    attach
 }
 
 /// Big faded icon with a hint, for pages without content.

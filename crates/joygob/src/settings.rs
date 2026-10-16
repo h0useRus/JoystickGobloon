@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -30,6 +31,57 @@ pub struct Settings {
     pub start_with_windows: bool,
     /// Activate the reopened profile on startup.
     pub activate_on_start: bool,
+    /// Axis calibrations: device GUID -> axis slot ("1".."8") -> values.
+    pub calibration: BTreeMap<String, BTreeMap<String, AxisCalibration>>,
+}
+
+/// One axis calibration in raw DirectInput units (see `gob_input::Calibration`).
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub struct AxisCalibration {
+    pub low: i32,
+    pub center_low: i32,
+    pub center_high: i32,
+    pub high: i32,
+    pub with_center: bool,
+}
+
+impl From<gob_input::Calibration> for AxisCalibration {
+    fn from(c: gob_input::Calibration) -> Self {
+        Self {
+            low: c.low,
+            center_low: c.center_low,
+            center_high: c.center_high,
+            high: c.high,
+            with_center: c.with_center,
+        }
+    }
+}
+
+impl From<AxisCalibration> for gob_input::Calibration {
+    fn from(c: AxisCalibration) -> Self {
+        Self {
+            low: c.low,
+            center_low: c.center_low,
+            center_high: c.center_high,
+            high: c.high,
+            with_center: c.with_center,
+        }
+    }
+}
+
+impl Settings {
+    /// Saved calibrations by (device, slot).
+    pub fn calibrations(&self) -> gob_input::Calibrations {
+        let mut map = gob_input::Calibrations::new();
+        for (device, axes) in &self.calibration {
+            for (slot, c) in axes {
+                if let Ok(slot) = slot.parse() {
+                    map.insert((device.to_ascii_lowercase(), slot), (*c).into());
+                }
+            }
+        }
+        map
+    }
 }
 
 impl Default for Settings {
@@ -44,6 +96,7 @@ impl Default for Settings {
             close_to_tray: false,
             start_with_windows: false,
             activate_on_start: false,
+            calibration: BTreeMap::new(),
         }
     }
 }

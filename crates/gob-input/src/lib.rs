@@ -10,7 +10,7 @@ mod dinput;
 mod keyboard;
 mod service;
 
-pub use service::InputService;
+pub use service::{Calibrations, InputService};
 
 /// Number of DirectInput axis slots: X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1.
 pub const AXIS_SLOTS: usize = 8;
@@ -35,11 +35,70 @@ impl DeviceInfo {
     }
 }
 
+/// Per-axis calibration in raw DirectInput units (Gremlin's calibration data).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Calibration {
+    pub low: i32,
+    pub center_low: i32,
+    pub center_high: i32,
+    pub high: i32,
+    /// Centered axis (stick); `false` for sliders and throttles, which use low..high only.
+    pub with_center: bool,
+}
+
+impl Default for Calibration {
+    /// DirectInput's full range, centered.
+    fn default() -> Self {
+        Self {
+            low: -32768,
+            center_low: 0,
+            center_high: 0,
+            high: 32767,
+            with_center: true,
+        }
+    }
+}
+
+impl Calibration {
+    /// Raw value -> -1..1 (Gremlin's with_center_calibration / no_center_calibration).
+    pub fn apply(&self, raw: i32) -> f32 {
+        let v = f64::from(raw.clamp(self.low.min(self.high), self.high.max(self.low)));
+        let (low, cl, ch, high) = (
+            f64::from(self.low),
+            f64::from(self.center_low),
+            f64::from(self.center_high),
+            f64::from(self.high),
+        );
+        let out = if self.with_center {
+            if v < cl {
+                if cl > low {
+                    (v - cl) / (cl - low)
+                } else {
+                    0.0
+                }
+            } else if v <= ch {
+                0.0
+            } else if high > ch {
+                (v - ch) / (high - ch)
+            } else {
+                0.0
+            }
+        } else if high > low {
+            (v - low) / (high - low) * 2.0 - 1.0
+        } else {
+            0.0
+        };
+        out.clamp(-1.0, 1.0) as f32
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceState {
     pub info: DeviceInfo,
-    /// Indexed by slot id - 1; values in -1.0..=1.0 (0.0 for missing axes).
+    /// Indexed by slot id - 1; values in -1.0..=1.0 (0.0 for missing axes), calibrated.
     pub axes: [f32; AXIS_SLOTS],
+    /// Raw DirectInput axis values (-32768..=32767), for calibration.
+    pub raw: [i32; AXIS_SLOTS],
     pub buttons: Vec<bool>,
     /// Hat direction in hundredths of a degree (0 = up, clockwise); `None` when centered.
     pub hats: Vec<Option<u16>>,
@@ -49,6 +108,7 @@ impl DeviceState {
     pub fn new(info: DeviceInfo) -> Self {
         Self {
             axes: [0.0; AXIS_SLOTS],
+            raw: [0; AXIS_SLOTS],
             buttons: vec![false; info.buttons],
             hats: vec![None; info.hats],
             info,
@@ -115,6 +175,31 @@ pub fn normalize_axis(raw: i32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn calibration_like_gremlin() {
+        let c = Calibration {
+            low: -30000,
+            center_low: -1000,
+            center_high: 1000,
+            high: 30000,
+            with_center: true,
+        };
+        assert_eq!(c.apply(0), 0.0);
+        assert_eq!(c.apply(500), 0.0, "inside the center band");
+        assert_eq!(c.apply(30000), 1.0);
+        assert_eq!(c.apply(-32768), -1.0, "clamped below low");
+        assert!((c.apply(15500) - 0.5).abs() < 1e-3);
+        let slider = Calibration {
+            low: 0,
+            high: 20000,
+            with_center: false,
+            ..c
+        };
+        assert_eq!(slider.apply(0), -1.0);
+        assert_eq!(slider.apply(10000), 0.0);
+        assert_eq!(slider.apply(25000), 1.0);
+    }
 
     #[test]
     fn guid_matches_gremlin_format() {

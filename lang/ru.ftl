@@ -5,6 +5,7 @@ nav-devices = Устройства и назначения
 nav-hidhide = Скрытие устройств
 nav-vjoy = Виртуальные джойстики
 nav-viewer = Просмотр входов
+nav-calibration = Калибровка
 nav-settings = Настройки
 action-open = Импорт профиля Joystick Gremlin
 action-save = Сохранить
@@ -406,3 +407,15 @@ edit-unbound = Действий пока нет: добавьте действи
 viewer-detach = Открыть в отдельном окне
 viewer-attach = Вернуть в главное окно
 viewer-in-window = Просмотр входов открыт в отдельном окне.
+
+# Calibration
+calibration-device = Устройство для калибровки
+calibration-raw = Сырое
+calibration-with-center = С центром
+calibration-reset = Сбросить
+calibration-save = Сохранить калибровку
+calibration-center = Калибровать центр
+calibration-center-tip = Отпустите ручку, слегка покачайте её у центра, затем нажмите ещё раз
+calibration-extrema = Калибровать края
+calibration-extrema-tip = Доведите ось до обоих краёв, затем нажмите ещё раз
+calibration-in-window = Калибровка открыта в отдельном окне.

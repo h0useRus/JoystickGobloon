@@ -5,6 +5,7 @@ nav-devices = Devices and bindings
 nav-hidhide = Device hiding
 nav-vjoy = Virtual joysticks
 nav-viewer = Input viewer
+nav-calibration = Calibration
 nav-settings = Settings
 action-open = Import Joystick Gremlin profile
 action-save = Save
@@ -406,3 +407,15 @@ edit-unbound = No actions yet: add one.
 viewer-detach = Open in a separate window
 viewer-attach = Back into the main window
 viewer-in-window = The input viewer is open in its own window.
+
+# Calibration
+calibration-device = Device to calibrate
+calibration-raw = Raw
+calibration-with-center = With center
+calibration-reset = Reset
+calibration-save = Save this calibration
+calibration-center = Calibrate center
+calibration-center-tip = Let the stick rest, wiggle it slightly around the center, then click again
+calibration-extrema = Calibrate extrema
+calibration-extrema-tip = Move the axis to both ends, then click again
+calibration-in-window = The calibration is open in its own window.

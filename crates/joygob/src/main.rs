@@ -2,6 +2,7 @@
 
 mod action_editor;
 mod app;
+mod calibration_view;
 mod condition_editor;
 mod curve_editor;
 mod devices_view;
