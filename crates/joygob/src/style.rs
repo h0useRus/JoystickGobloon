@@ -121,6 +121,44 @@ fn toggle(
     response.on_hover_text(tooltip)
 }
 
+/// Icons of the main toolbar: larger than the ones in rows of controls.
+const TOOLBAR_ICON_SIZE: f32 = 22.0;
+/// Main toolbar buttons fill most of its 44 px row.
+const TOOLBAR_BUTTON: f32 = 36.0;
+
+/// Main toolbar push button.
+pub fn toolbar_button(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    glyph: &str,
+    tooltip: &str,
+) -> egui::Response {
+    ui.add_enabled(
+        enabled,
+        egui::Button::new(RichText::new(glyph).size(TOOLBAR_ICON_SIZE))
+            .frame(false)
+            .min_size(Vec2::splat(TOOLBAR_BUTTON)),
+    )
+    .on_hover_text(tooltip)
+}
+
+/// Main toolbar toggle (activate / stop), same size as [`toolbar_button`].
+pub fn toolbar_toggle(
+    ui: &mut egui::Ui,
+    selected: bool,
+    glyph: &str,
+    tooltip: &str,
+) -> egui::Response {
+    toggle(
+        ui,
+        selected,
+        glyph,
+        tooltip,
+        TOOLBAR_ICON_SIZE,
+        Vec2::splat(TOOLBAR_BUTTON),
+    )
+}
+
 /// Icon-only push button with a tooltip, as tall as text fields.
 pub fn icon_button(ui: &mut egui::Ui, enabled: bool, glyph: &str, tooltip: &str) -> egui::Response {
     let h = ui.spacing().interact_size.y;

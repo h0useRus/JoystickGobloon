@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
 use eframe::egui::{
-    self, Align, Align2, Color32, FontId, Margin, Rect, RichText, Sense, Stroke, Vec2,
+    self, Align, Align2, Color32, FontId, Layout, Margin, Rect, RichText, Sense, Stroke, Vec2,
 };
 use gob_core::{same_device_name, Action, InputBinding, InputType};
 use gob_i18n::I18n;
@@ -164,36 +164,42 @@ impl DevicesView {
             }
         }
 
-        ui.horizontal_wrapped(|ui| {
-            if let (Some(p), Some(mode)) = (profile, self.mode.as_mut()) {
-                if style::icon_button(ui, true, icon::STACK, &i18n.tr("modes-edit")).clicked() {
-                    self.open_modes = true;
+        // Device tabs on the left (wrapping), the mode selector pinned to the right.
+        ui.horizontal(|ui| {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if let (Some(p), Some(mode)) = (profile, self.mode.as_mut()) {
+                    egui::ComboBox::from_id_salt("mode")
+                        .selected_text(mode.as_str())
+                        .show_ui(ui, |ui| {
+                            for m in &p.profile.modes {
+                                ui.selectable_value(mode, m.name.clone(), &m.name);
+                            }
+                        });
+                    if style::icon_button(ui, true, icon::STACK, &i18n.tr("modes-edit")).clicked() {
+                        self.open_modes = true;
+                    }
+                    ui.separator();
                 }
-                egui::ComboBox::from_id_salt("mode")
-                    .selected_text(mode.as_str())
-                    .show_ui(ui, |ui| {
-                        for m in &p.profile.modes {
-                            ui.selectable_value(mode, m.name.clone(), &m.name);
+                let tabs_layout = Layout::left_to_right(Align::Center).with_main_wrap(true);
+                ui.with_layout(tabs_layout, |ui| {
+                    for t in &tabs {
+                        let selected = self.selected.as_deref() == Some(t.guid);
+                        let (glyph, hint) = match (t.live, t.alias) {
+                            (Some(_), Some(_)) => (icon::LINK, Some("device-linked")),
+                            (Some(_), None) => (icon::JOYSTICK, None),
+                            (None, _) => (icon::PLUGS, Some("device-disconnected")),
+                        };
+                        let mut r = style::tab(ui, selected, glyph, t.name);
+                        if let Some(key) = hint {
+                            r = r.on_hover_text(i18n.tr(key));
                         }
-                    });
-                ui.separator();
-            }
-            for t in &tabs {
-                let selected = self.selected.as_deref() == Some(t.guid);
-                let (glyph, hint) = match (t.live, t.alias) {
-                    (Some(_), Some(_)) => (icon::LINK, Some("device-linked")),
-                    (Some(_), None) => (icon::JOYSTICK, None),
-                    (None, _) => (icon::PLUGS, Some("device-disconnected")),
-                };
-                let mut r = style::tab(ui, selected, glyph, t.name);
-                if let Some(key) = hint {
-                    r = r.on_hover_text(i18n.tr(key));
-                }
-                if r.clicked() {
-                    self.selected = Some(t.guid.to_string());
-                    self.user_selected = true;
-                }
-            }
+                        if r.clicked() {
+                            self.selected = Some(t.guid.to_string());
+                            self.user_selected = true;
+                        }
+                    }
+                });
+            });
         });
         ui.separator();
 

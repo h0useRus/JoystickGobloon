@@ -467,14 +467,14 @@ impl JoyGobApp {
 
     fn devices_page(&mut self, ui: &mut egui::Ui) {
         let loaded = self.profile.is_some();
-        // Center vertically: the play toggle is taller than the plain icon buttons.
         let row = Vec2::new(ui.available_width(), 44.0);
         ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
-            if style::icon_button(ui, true, icon::FILE_PLUS, &self.i18n.tr("action-new")).clicked()
+            if style::toolbar_button(ui, true, icon::FILE_PLUS, &self.i18n.tr("action-new"))
+                .clicked()
             {
                 self.request(Pending::New, ui.ctx());
             }
-            if style::icon_button(ui, true, icon::FOLDER_OPEN, &self.i18n.tr("action-open"))
+            if style::toolbar_button(ui, true, icon::FOLDER_OPEN, &self.i18n.tr("action-open"))
                 .clicked()
             {
                 self.request(Pending::Open, ui.ctx());
@@ -485,10 +485,10 @@ impl JoyGobApp {
             } else {
                 icon::FLOPPY_DISK
             };
-            if style::icon_button(ui, loaded, save, &self.i18n.tr("action-save")).clicked() {
+            if style::toolbar_button(ui, loaded, save, &self.i18n.tr("action-save")).clicked() {
                 self.save();
             }
-            if style::icon_button(
+            if style::toolbar_button(
                 ui,
                 loaded,
                 icon::FILE_ARROW_DOWN,
@@ -503,7 +503,7 @@ impl JoyGobApp {
                 .profile
                 .as_ref()
                 .map_or((false, false), |p| (p.can_undo(), p.can_redo()));
-            if style::icon_button(
+            if style::toolbar_button(
                 ui,
                 can_undo,
                 icon::ARROW_COUNTER_CLOCKWISE,
@@ -513,7 +513,7 @@ impl JoyGobApp {
             {
                 self.history(true);
             }
-            if style::icon_button(
+            if style::toolbar_button(
                 ui,
                 can_redo,
                 icon::ARROW_CLOCKWISE,
@@ -531,7 +531,7 @@ impl JoyGobApp {
                 (icon::PLAY, "action-activate")
             };
             let toggle = ui.add_enabled_ui(loaded, |ui| {
-                style::icon_toggle(ui, active, glyph, &self.i18n.tr(tip))
+                style::toolbar_toggle(ui, active, glyph, &self.i18n.tr(tip))
             });
             if toggle.inner.clicked() {
                 self.toggle_runner(ui.ctx());
