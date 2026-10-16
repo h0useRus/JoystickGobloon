@@ -24,6 +24,28 @@ pub fn apply(ctx: &egui::Context, theme: Theme) {
     ctx.set_visuals_of(egui::Theme::Light, visuals(false));
     ctx.set_visuals_of(egui::Theme::Dark, visuals(true));
     ctx.all_styles_mut(|s| {
+        // egui's sizes + 1 pt; absolute so applying the style again does not grow them.
+        use egui::{FontFamily, FontId, TextStyle};
+        s.text_styles = [
+            (
+                TextStyle::Small,
+                FontId::new(10.0, FontFamily::Proportional),
+            ),
+            (TextStyle::Body, FontId::new(13.5, FontFamily::Proportional)),
+            (
+                TextStyle::Button,
+                FontId::new(13.5, FontFamily::Proportional),
+            ),
+            (
+                TextStyle::Monospace,
+                FontId::new(13.0, FontFamily::Monospace),
+            ),
+            (
+                TextStyle::Heading,
+                FontId::new(19.0, FontFamily::Proportional),
+            ),
+        ]
+        .into();
         s.spacing.item_spacing = Vec2::new(8.0, 6.0);
         s.spacing.button_padding = Vec2::new(10.0, 5.0);
         s.spacing.interact_size.y = 26.0;
