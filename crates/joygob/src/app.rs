@@ -47,6 +47,8 @@ pub struct JoyGobApp {
     allow_close: bool,
     show_modes: bool,
     modes_window: crate::modes_view::ModesWindow,
+    /// Sound and speech previews from the editor.
+    media: gob_engine::Media,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -117,6 +119,7 @@ impl JoyGobApp {
             show_modes: false,
             modes_window: Default::default(),
             title: crate::APP_NAME.into(),
+            media: Default::default(),
         };
         if app.settings.hidhide_whitelist_self {
             match app.hidhide_view.whitelist_self() {
@@ -614,6 +617,17 @@ impl JoyGobApp {
 
     /// Applies queued edits, marks the profile unsaved and restarts a running profile.
     fn apply_ops(&mut self, ops: Vec<crate::action_editor::Op>) {
+        use crate::action_editor::Op;
+        let (previews, ops): (Vec<Op>, Vec<Op>) = ops
+            .into_iter()
+            .partition(|op| matches!(op, Op::PreviewSound { .. } | Op::PreviewSpeech(_)));
+        for op in previews {
+            match op {
+                Op::PreviewSound { file, volume } => self.media.play(&file, volume),
+                Op::PreviewSpeech(request) => self.media.speak(request),
+                _ => {}
+            }
+        }
         let Some(loaded) = &mut self.profile else {
             return;
         };

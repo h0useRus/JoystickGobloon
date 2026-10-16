@@ -161,3 +161,6 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   `${current_mode}` become the active mode. Spoken by Windows SAPI with per-request XML (rate and pitch
   scaled to -10..10, volume to 0..100); `interrupt` purges, `queue-front` cannot reorder SAPI's queue and
   behaves like `queue-back`.
+- JoyGob addition: `voice` string property (installed voice name, classic SAPI and OneCore voices); Gremlin
+  ignores it on load and drops it when it saves. Missing voice -> system default. The editor previews
+  sounds and speech (speech interrupts the previous preview).

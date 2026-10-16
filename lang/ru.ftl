@@ -278,3 +278,7 @@ edit-tts-pitch = Высота голоса
 edit-tts-back = В конец очереди
 edit-tts-front = Следующим (в речи Windows — как в конец очереди)
 edit-tts-interrupt = Прервать текущую речь
+edit-preview = Прослушать
+edit-tts-voice = Голос
+edit-tts-default-voice = Голос по умолчанию
+edit-tts-voice-missing = не установлен

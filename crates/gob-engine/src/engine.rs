@@ -692,6 +692,7 @@ impl Engine {
                 },
                 ActionKind::TextToSpeech {
                     text,
+                    voice,
                     queue_mode,
                     rate,
                     volume,
@@ -699,6 +700,7 @@ impl Engine {
                 } => Node::Speak {
                     request: SpeechRequest {
                         text: text.to_string(),
+                        voice: voice.map(String::from),
                         rate: rate as f32,
                         volume: volume as f32,
                         pitch: pitch as f32,

@@ -109,6 +109,13 @@ pub enum Op {
         action: String,
         index: usize,
     },
+    /// Preview in the editor; not an edit.
+    PreviewSound {
+        file: String,
+        volume: u8,
+    },
+    /// Preview in the editor; not an edit.
+    PreviewSpeech(gob_engine::SpeechRequest),
     /// hat-buttons: 4 or 8 directions.
     HatButtonCount {
         action: String,
@@ -175,6 +182,8 @@ pub fn apply(p: &mut Profile, op: Op) {
             }
         }
         Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
+        // Handled by the app before edits are applied.
+        Op::PreviewSound { .. } | Op::PreviewSpeech(_) => {}
         Op::SetCondition {
             action,
             index,
@@ -599,6 +608,15 @@ impl Editor<'_> {
                     let filter = ("file-filter-sound", &["wav", "mp3", "ogg", "flac"][..]);
                     self.file_field(ui, &action.id, "filename", file, Some(filter));
                     ui.horizontal(|ui| {
+                        let can = std::path::Path::new(file).is_file();
+                        if style::icon_button(ui, can, icon::PLAY, &self.i18n.tr("edit-preview"))
+                            .clicked()
+                        {
+                            self.ops.push(Op::PreviewSound {
+                                file: file.to_string(),
+                                volume,
+                            });
+                        }
                         ui.label(RichText::new(icon::SPEAKER_HIGH).size(style::ICON_SIZE))
                             .on_hover_text(self.i18n.tr("edit-volume"));
                         let mut v = volume;
@@ -611,11 +629,12 @@ impl Editor<'_> {
                 }
                 ActionKind::TextToSpeech {
                     text,
+                    voice,
                     queue_mode,
                     rate,
                     volume,
                     pitch,
-                } => self.speech(ui, action, text, queue_mode, [rate, volume, pitch]),
+                } => self.speech(ui, action, text, voice, queue_mode, [rate, volume, pitch]),
                 ActionKind::DualAxisDeadzone {
                     axis1,
                     axis2,
@@ -1310,10 +1329,56 @@ impl Editor<'_> {
         ui: &mut egui::Ui,
         action: &Action,
         text: &str,
+        voice: Option<&str>,
         queue_mode: &str,
         [rate, volume, pitch]: [f64; 3],
     ) {
         let id = action.id.clone();
+        ui.horizontal(|ui| {
+            let can = !text.trim().is_empty();
+            if style::icon_button(ui, can, icon::PLAY, &self.i18n.tr("edit-preview")).clicked() {
+                let mode = self
+                    .profile
+                    .startup_mode()
+                    .unwrap_or_else(|| "Default".into());
+                let text = text
+                    .replace("${current_mode}", &mode)
+                    .replace("$current_mode", &mode);
+                self.ops.push(Op::PreviewSpeech(gob_engine::SpeechRequest {
+                    text,
+                    voice: voice.map(String::from),
+                    rate: rate as f32,
+                    volume: volume as f32,
+                    pitch: pitch as f32,
+                    queue: gob_engine::SpeechQueue::Interrupt,
+                }));
+            }
+            ui.label(RichText::new(icon::USER_SOUND).size(style::ICON_SIZE))
+                .on_hover_text(self.i18n.tr("edit-tts-voice"));
+            let default = self.i18n.tr("edit-tts-default-voice");
+            let voices = gob_engine::voices();
+            let shown = match voice {
+                Some(v) if voices.iter().any(|x| x == v) => v.to_string(),
+                Some(v) => format!("{v} ({})", self.i18n.tr("edit-tts-voice-missing")),
+                None => default.clone(),
+            };
+            egui::ComboBox::from_id_salt(("tts-voice", &id))
+                .selected_text(shown)
+                .width(260.0)
+                .show_ui(ui, |ui| {
+                    if ui.selectable_label(voice.is_none(), &default).clicked() && voice.is_some() {
+                        self.ops.push(Op::Unset {
+                            action: id.clone(),
+                            name: "voice".into(),
+                        });
+                    }
+                    for v in voices {
+                        if ui.selectable_label(voice == Some(v.as_str()), v).clicked() {
+                            self.set(&id, "voice", "string", v.clone());
+                        }
+                    }
+                });
+        });
         let mut t = text.to_string();
         let edit = egui::TextEdit::multiline(&mut t)
             .desired_rows(2)

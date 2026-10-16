@@ -34,8 +34,7 @@ struct SystemOutput {
     devices: HashMap<u32, gob_vjoy::Device>,
     /// Last values written, read back by vJoy conditions.
     written: HashMap<(u32, InputKind, u32), Value>,
-    audio: crate::media::Audio,
-    speech: crate::media::Speech,
+    media: crate::media::Media,
     load_profile: Option<String>,
 }
 
@@ -65,11 +64,11 @@ impl Output for SystemOutput {
     }
 
     fn play_sound(&mut self, file: &str, volume: u8) {
-        self.audio.play(file, volume);
+        self.media.play(file, volume);
     }
 
     fn speak(&mut self, request: crate::SpeechRequest) {
-        self.speech.speak(request);
+        self.media.speak(request);
     }
 
     fn load_profile(&mut self, file: &str) {
@@ -123,8 +122,7 @@ impl Runner {
         let mut out = SystemOutput {
             devices: HashMap::new(),
             written: HashMap::new(),
-            audio: Default::default(),
-            speech: Default::default(),
+            media: Default::default(),
             load_profile: None,
         };
         for id in engine.vjoy_devices() {

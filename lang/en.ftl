@@ -278,3 +278,7 @@ edit-tts-pitch = Pitch
 edit-tts-back = Queue after everything else
 edit-tts-front = Queue next (Windows speech: same as after everything else)
 edit-tts-interrupt = Interrupt what is being said
+edit-preview = Preview
+edit-tts-voice = Voice
+edit-tts-default-voice = Default voice
+edit-tts-voice-missing = not installed

@@ -141,8 +141,10 @@ pub enum ActionKind<'a> {
         volume: u8,
     },
     /// Speaks `text` (`$current_mode` is replaced); rate/pitch -1..1, volume 0..1.
+    /// `voice` is a JoyGob addition (Gremlin ignores it): an installed voice name.
     TextToSpeech {
         text: &'a str,
+        voice: Option<&'a str>,
         queue_mode: &'a str,
         rate: f64,
         volume: f64,
@@ -558,6 +560,7 @@ impl Action {
             },
             "text-to-speech" => ActionKind::TextToSpeech {
                 text: self.str("text").unwrap_or_default(),
+                voice: self.str("voice").map(str::trim).filter(|v| !v.is_empty()),
                 queue_mode: self.str("queue-mode").unwrap_or("queue-back").trim(),
                 rate: self.parse("playback-rate").unwrap_or(0.0),
                 volume: self.parse("playback-volume").unwrap_or(1.0),
