@@ -1,4 +1,4 @@
-; Joystick Gobloon installer (Inno Setup 6).
+﻿; Joystick Gobloon installer (Inno Setup 6).
 ; Build: iscc /DAppVersion=0.1.0 installer\joygob.iss  (after `cargo build --release`)
 ; Output: target\installer\JoystickGobloon-<version>-setup.exe
 
