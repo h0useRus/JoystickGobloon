@@ -144,8 +144,7 @@ action-undo = Undo (Ctrl+Z)
 action-redo = Redo (Ctrl+Y)
 status-undone = Undone
 status-redone = Redone
-edit-curve-help = Drag a point to move it · Click empty space to invert · Double-click to add a point · Right-click a point to remove it
-edit-curve-select = Click a point to edit its position.
+edit-curve-help = Drag a point or handle to move it · Click empty space to invert · Double-click to add a point · Right-click a point to remove it
 
 # vJoy mapping
 vjoy-device-n = vJoy Device { $n }
@@ -386,3 +385,13 @@ vjoy-config-done = vJoy configuration changed.
 vjoy-config-error = Could not change the vJoy configuration: { $error }
 vjoy-remove-title = Remove vJoy device { $n }?
 vjoy-remove-text = Games and profiles that use this device lose it until it is created again.
+
+# Response curve
+curve-type = Curve type
+curve-linear = Piecewise linear
+curve-cubic = Cubic spline
+curve-bezier = Cubic Bezier spline
+curve-symmetric = Symmetric
+curve-symmetric-tip = Mirror the curve and the deadzone through the center while editing
+curve-point = Point
+curve-handle = Handle

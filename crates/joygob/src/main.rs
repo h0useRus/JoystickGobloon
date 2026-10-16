@@ -3,6 +3,7 @@
 mod action_editor;
 mod app;
 mod condition_editor;
+mod curve_editor;
 mod devices_view;
 mod hidhide_view;
 mod instance;

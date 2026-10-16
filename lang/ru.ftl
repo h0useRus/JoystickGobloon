@@ -144,8 +144,7 @@ action-undo = Отменить (Ctrl+Z)
 action-redo = Повторить (Ctrl+Y)
 status-undone = Отменено
 status-redone = Повторено
-edit-curve-help = Тяните точку, чтобы сдвинуть · Клик по пустому месту — инверсия · Двойной клик — новая точка · Правый клик по точке — удалить
-edit-curve-select = Кликните по точке, чтобы изменить её координаты.
+edit-curve-help = Перетащите точку или маркер · Щелчок по пустому месту инвертирует · Двойной щелчок добавляет точку · Правый щелчок по точке удаляет её
 
 # vJoy mapping
 vjoy-device-n = vJoy устройство { $n }
@@ -386,3 +385,13 @@ vjoy-config-done = Конфигурация vJoy изменена.
 vjoy-config-error = Не удалось изменить конфигурацию vJoy: { $error }
 vjoy-remove-title = Удалить устройство vJoy { $n }?
 vjoy-remove-text = Игры и профили, использующие это устройство, потеряют его, пока оно не будет создано снова.
+
+# Response curve
+curve-type = Тип кривой
+curve-linear = Ломаная
+curve-cubic = Кубический сплайн
+curve-bezier = Кубический сплайн Безье
+curve-symmetric = Симметричная
+curve-symmetric-tip = При правке отражать кривую и мёртвые зоны относительно центра
+curve-point = Точка
+curve-handle = Маркер

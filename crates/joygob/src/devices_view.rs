@@ -462,7 +462,7 @@ impl DevicesView {
                         egui::collapsing_header::CollapsingState::load_with_default_open(
                             ui.ctx(),
                             id,
-                            false,
+                            debug_expanded(key),
                         )
                         .show_header(ui, |ui| header(ui, ops))
                         .body(|ui| {
@@ -620,4 +620,19 @@ pub(crate) fn hat_glyph(direction: Option<u16>) -> &'static str {
         Some(d) => ARROWS[((usize::from(d) + 2250) / 4500) % 8],
         None => icon::CIRCLE,
     }
+}
+
+/// Debug builds: `JOYGOB_EXPAND=axis1` (or button3, hat1) opens that row at start, for
+/// screenshot checks of editors without clicking.
+fn debug_expanded((kind, id): Key) -> bool {
+    if !cfg!(debug_assertions) {
+        return false;
+    }
+    let name = match kind {
+        Kind::Axis => "axis",
+        Kind::Button => "button",
+        Kind::Hat => "hat",
+        Kind::Other => "other",
+    };
+    std::env::var("JOYGOB_EXPAND").is_ok_and(|v| v == format!("{name}{id}"))
 }

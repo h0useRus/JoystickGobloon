@@ -6,6 +6,7 @@
 
 pub mod action;
 pub mod condition;
+pub mod curve;
 pub mod edit;
 pub mod logical;
 pub mod profile;

@@ -60,7 +60,8 @@ enum Node {
     },
     Curve {
         deadzone: [f32; 4],
-        points: Vec<(f32, f32)>,
+        /// Gremlin's three curve types, precomputed.
+        curve: gob_core::curve::Curve,
     },
     Mouse {
         action: MouseAction,
@@ -654,16 +655,16 @@ impl Engine {
                     act: action.activation_mode(),
                 },
                 ActionKind::ResponseCurve {
-                    deadzone, points, ..
-                } => {
-                    let mut points: Vec<(f32, f32)> =
-                        points.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
-                    points.sort_by(|a, b| a.0.total_cmp(&b.0));
-                    Node::Curve {
-                        deadzone: deadzone.map(|d| d as f32),
-                        points,
-                    }
-                }
+                    curve_type,
+                    deadzone,
+                    points,
+                } => Node::Curve {
+                    deadzone: deadzone.map(|d| d as f32),
+                    curve: gob_core::curve::Curve::new(
+                        gob_core::curve::CurveType::parse(curve_type),
+                        &points,
+                    ),
+                },
                 ActionKind::Tempo {
                     short,
                     long,
@@ -1248,9 +1249,9 @@ impl Engine {
                     }
                 }
             }
-            Node::Curve { deadzone, points } => {
+            Node::Curve { deadzone, curve } => {
                 if let Value::Axis(v) = value {
-                    *v = curve(&points, apply_deadzone(*v, deadzone));
+                    *v = curve.eval(f64::from(apply_deadzone(*v, deadzone))) as f32;
                 }
             }
             Node::Tempo { .. } => self.tempo_event(node, src, *value, now, out),
@@ -2431,27 +2432,6 @@ fn apply_deadzone(value: f32, [low, center_low, center_high, high]: [f32; 4]) ->
     }
 }
 
-/// Piecewise linear interpolation through sorted control points.
-fn curve(points: &[(f32, f32)], x: f32) -> f32 {
-    let (Some(&first), Some(&last)) = (points.first(), points.last()) else {
-        return x;
-    };
-    if x <= first.0 {
-        return first.1;
-    }
-    if x >= last.0 {
-        return last.1;
-    }
-    points.windows(2).find(|w| x <= w[1].0).map_or(x, |w| {
-        let ((x0, y0), (x1, y1)) = (w[0], w[1]);
-        if x1 - x0 <= f32::EPSILON {
-            y1
-        } else {
-            y0 + (x - x0) * (y1 - y0) / (x1 - x0)
-        }
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2472,9 +2452,10 @@ mod tests {
         assert_eq!(apply_deadzone(0.05, [-1.0, -0.1, 0.1, 1.0]), 0.0);
         assert!((apply_deadzone(0.55, [-1.0, -0.1, 0.1, 1.0]) - 0.5).abs() < 1e-6);
         let pts = [(-1.0, -1.0), (0.0, 0.2), (1.0, 1.0)];
-        assert!((curve(&pts, 0.0) - 0.2).abs() < 1e-6);
-        assert!((curve(&pts, 0.5) - 0.6).abs() < 1e-6);
-        assert_eq!(curve(&pts, 2.0), 1.0);
+        let curve = gob_core::curve::Curve::new(gob_core::curve::CurveType::PiecewiseLinear, &pts);
+        assert!((curve.eval(0.0) - 0.2).abs() < 1e-6);
+        assert!((curve.eval(0.5) - 0.6).abs() < 1e-6);
+        assert_eq!(curve.eval(2.0), 1.0);
     }
 
     #[test]
