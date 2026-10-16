@@ -7,7 +7,7 @@
 - Формат **Gremlin R14+** (`<profile version="14">`): `<inputs>` (устройство по DirectInput GUID → input-type button/axis/hat → mode → root action-id), `<library>` (действия по UUID с вложенными `<actions>` и `<property type=...>`), `<modes>`, `<settings>` (`startup-mode`, `macro-default-delay`), `<logical-device/>`.
 - Типы действий: `root`, `map-to-vjoy`, `change-mode` (Temporary/Cycle), `response-curve` (PiecewiseLinear), `tempo`, `description`. Свойство `activation-mode`.
 - **Python-плагинов нет** → профиль импортируется полностью без плагинов. Плагины: делаем только API/точку расширения, без реализации.
-- Старый формат R13 (version ≤ 13, `<devices>/<device>/<mode>/<button>/<container>`) — отдельная поздняя фаза.
+- Старый формат R13 (version ≤ 13) не поддерживается: только R14+.
 
 ## Архитектура (Cargo workspace)
 ```
@@ -16,7 +16,7 @@ JoystickGobloon/
   CLAUDE.md                 (краткие правила проекта для ИИ — экономия токенов)
   crates/
     gob-core/      модель профиля (Profile, Mode, Input, Action enum, Property), без зависимостей от Windows
-    gob-gremlin/   парсер/сериализатор Gremlin XML (quick-xml + serde), R14; позже R13
+    gob-gremlin/   парсер/сериализатор Gremlin XML (quick-xml + serde), R14+
     gob-input/     чтение устройств: DirectInput8 через crate `windows` (GUID совпадают с Gremlin)
     gob-vjoy/      FFI к vJoyInterface.dll (libloading): AcquireVJD, SetAxis/SetBtn/SetContPov, конфиг устройств
     gob-hidhide/   IOCTL к \\.\HidHide: blacklist/whitelist, cloak on/off, авто-whitelist JoyGob.exe
@@ -52,8 +52,7 @@ JoystickGobloon/
 | 6 | GUI-редакторы профиля (дерево действий, кривые, режимы), сохранение в Gremlin-XML | редактирование + сохранение, открывается в самом Gremlin |
 | 7 | Остальные действия Gremlin R14 (chain, macro, map-to-keyboard/mouse, condition, smart-toggle, split/merge-axis, hat-buttons, load-profile и т.д.) | fixture-тест на каждый тип |
 | 8 | `gob-plugin` API (trait + реестр, загрузка dll через `libloading` — заготовка) | пример-заглушка компилируется |
-| 9 | Импорт R13 (старый формат) → конвертация в модель | fixture R13 |
-| 10 | Трей, автозапуск, инсталлятор (cargo-wix/Inno Setup с ссылками на HidHide/vJoy) | установка на чистую систему |
+| 9 | Трей, автозапуск, инсталлятор (cargo-wix/Inno Setup с ссылками на HidHide/vJoy) | установка на чистую систему |
 
 MVP для замены всех трёх программ на вашем профиле = фазы 0–5 (~8–12 сессий).
 
