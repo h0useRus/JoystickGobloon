@@ -131,6 +131,23 @@ pub enum ActionKind<'a> {
         first: Vec<&'a str>,
         second: Vec<&'a str>,
     },
+    /// Switches to another profile file and activates it.
+    LoadProfile {
+        file: &'a str,
+    },
+    /// Plays a sound file; `volume` 0..=100.
+    PlaySound {
+        file: &'a str,
+        volume: u8,
+    },
+    /// Speaks `text` (`$current_mode` is replaced); rate/pitch -1..1, volume 0..1.
+    TextToSpeech {
+        text: &'a str,
+        queue_mode: &'a str,
+        rate: f64,
+        volume: f64,
+        pitch: f64,
+    },
     /// Runs `true_actions` when the conditions hold (all of them, or any with `all` false),
     /// otherwise `false_actions`. With no conditions it is true.
     Condition {
@@ -398,6 +415,9 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "axis-delta",
     "dual-axis-deadzone",
     "condition",
+    "load-profile",
+    "play-sound",
+    "text-to-speech",
     "smart-toggle",
     "split-axis",
     "pause-resume",
@@ -526,6 +546,23 @@ impl Action {
                 directions.push(("Center", None, self.refs_in("Center")));
                 ActionKind::HatButtons { directions }
             }
+            "load-profile" => ActionKind::LoadProfile {
+                file: self.str("load-profile").unwrap_or_default().trim(),
+            },
+            "play-sound" => ActionKind::PlaySound {
+                file: self.str("filename").unwrap_or_default().trim(),
+                volume: self
+                    .parse::<f64>("volume")
+                    .unwrap_or(50.0)
+                    .clamp(0.0, 100.0) as u8,
+            },
+            "text-to-speech" => ActionKind::TextToSpeech {
+                text: self.str("text").unwrap_or_default(),
+                queue_mode: self.str("queue-mode").unwrap_or("queue-back").trim(),
+                rate: self.parse("playback-rate").unwrap_or(0.0),
+                volume: self.parse("playback-volume").unwrap_or(1.0),
+                pitch: self.parse("playback-pitch").unwrap_or(0.0),
+            },
             "condition" => ActionKind::Condition {
                 all: !self
                     .str("logical-operator")

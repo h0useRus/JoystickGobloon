@@ -264,3 +264,17 @@ cond-keyboard = Зажатые клавиши
 cond-range = Ось в диапазоне
 cond-pressed = Нажата
 cond-released = Отпущена
+
+# Sound, speech, load profile
+kind-play-sound = Воспроизвести звук
+kind-text-to-speech = Озвучить текст
+kind-load-profile = Загрузить профиль
+file-filter-sound = Звуковой файл
+edit-volume = Громкость
+edit-file-missing = Файл не найден
+edit-tts-hint = Текст для озвучивания; $current_mode заменяется активным режимом
+edit-tts-rate = Скорость
+edit-tts-pitch = Высота голоса
+edit-tts-back = В конец очереди
+edit-tts-front = Следующим (в речи Windows — как в конец очереди)
+edit-tts-interrupt = Прервать текущую речь

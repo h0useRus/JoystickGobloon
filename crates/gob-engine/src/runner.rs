@@ -20,6 +20,8 @@ const IDLE: Duration = Duration::from_millis(20);
 pub struct RunnerStatus {
     pub mode: String,
     pub paused: bool,
+    /// Profile file a load-profile action asked for; the GUI takes it.
+    pub load_profile: Option<String>,
 }
 
 pub struct Runner {
@@ -32,6 +34,9 @@ struct SystemOutput {
     devices: HashMap<u32, gob_vjoy::Device>,
     /// Last values written, read back by vJoy conditions.
     written: HashMap<(u32, InputKind, u32), Value>,
+    audio: crate::media::Audio,
+    speech: crate::media::Speech,
+    load_profile: Option<String>,
 }
 
 impl Output for SystemOutput {
@@ -57,6 +62,18 @@ impl Output for SystemOutput {
         }
         let key = (device, InputKind::Hat, u32::from(hat));
         self.written.insert(key, Value::Hat(direction));
+    }
+
+    fn play_sound(&mut self, file: &str, volume: u8) {
+        self.audio.play(file, volume);
+    }
+
+    fn speak(&mut self, request: crate::SpeechRequest) {
+        self.speech.speak(request);
+    }
+
+    fn load_profile(&mut self, file: &str) {
+        self.load_profile = Some(file.to_string());
     }
 
     fn vjoy_state(&self, device: u32, kind: InputKind, id: u32) -> Option<Value> {
@@ -106,6 +123,9 @@ impl Runner {
         let mut out = SystemOutput {
             devices: HashMap::new(),
             written: HashMap::new(),
+            audio: Default::default(),
+            speech: Default::default(),
+            load_profile: None,
         };
         for id in engine.vjoy_devices() {
             out.devices
@@ -136,6 +156,7 @@ impl Runner {
         let status = Arc::new(Mutex::new(RunnerStatus {
             mode: engine.current_mode().to_string(),
             paused: false,
+            load_profile: None,
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
@@ -150,6 +171,15 @@ impl Runner {
             thread: Some(thread),
             status,
         })
+    }
+
+    /// Profile file requested by a load-profile action, once.
+    pub fn take_load_request(&self) -> Option<String> {
+        self.status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .load_profile
+            .take()
     }
 
     pub fn status(&self) -> RunnerStatus {
@@ -194,9 +224,13 @@ fn run(
         engine.tick(Instant::now(), &mut out);
 
         let mut s = status.lock().unwrap_or_else(|e| e.into_inner());
-        if s.mode != engine.current_mode() || s.paused != engine.is_paused() {
+        let load = out.load_profile.take();
+        if s.mode != engine.current_mode() || s.paused != engine.is_paused() || load.is_some() {
             s.mode = engine.current_mode().to_string();
             s.paused = engine.is_paused();
+            if load.is_some() {
+                s.load_profile = load;
+            }
             on_change();
         }
     }

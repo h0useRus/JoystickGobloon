@@ -18,6 +18,9 @@ enum Out {
     /// vJoy button on a device other than 1.
     DevButton(u32, u8, bool),
     Key(u16, bool),
+    Sound(String, u8),
+    Speak(String),
+    Load(String),
 }
 
 #[derive(Default)]
@@ -49,6 +52,15 @@ impl Output for Recorder {
     }
     fn key(&mut self, scan_code: u16, _extended: bool, pressed: bool) {
         self.0.push(Out::Key(scan_code, pressed));
+    }
+    fn play_sound(&mut self, file: &str, volume: u8) {
+        self.0.push(Out::Sound(file.into(), volume));
+    }
+    fn speak(&mut self, request: gob_engine::SpeechRequest) {
+        self.0.push(Out::Speak(request.text));
+    }
+    fn load_profile(&mut self, file: &str) {
+        self.0.push(Out::Load(file.into()));
     }
 }
 
@@ -208,6 +220,24 @@ fn profile() -> String {
         root("r-a6", &["merge"]),
         root("r-a8", &["delta"]),
         root("r-b19", &["cond"]),
+        root("r-b21", &["sound", "say", "load"]),
+        act_on(
+            "sound",
+            "play-sound",
+            &format!("{}{}", prop("string", "filename", "beep.wav"), prop("int", "volume", "80")),
+            "press",
+        ),
+        act_on(
+            "say",
+            "text-to-speech",
+            &format!(
+                "{}{}",
+                prop("string", "text", "Mode ${current_mode}"),
+                prop("string", "queue-mode", "interrupt")
+            ),
+            "press",
+        ),
+        act_on("load", "load-profile", &prop("string", "load-profile", "other.xml"), "release"),
         root("r-a11", &["cond-axis"]),
         act(
             "cond",
@@ -524,6 +554,7 @@ fn profile() -> String {
         input("axis", 7, "Default", "r-a6", ""),
         input("axis", 8, "Default", "r-a8", ""),
         input("button", 19, "Default", "r-b19", ""),
+        input("button", 21, "Default", "r-b21", ""),
         input("axis", 11, "Default", "r-a11", ""),
         input("axis", 9, "Default", "r-a9", ""),
         input("axis", 10, "Default", "r-a9", ""),
@@ -1182,4 +1213,19 @@ fn condition_any_of_two_axis_ranges() {
     assert_eq!(r.take(), [Out::Axis(5, 0.7)]);
     r.axis(11, -0.9);
     assert_eq!(r.take(), [Out::Axis(5, -0.9)]);
+}
+
+#[test]
+fn sound_speech_and_load_profile() {
+    let mut r = Rig::new();
+    r.button(21, true, 0);
+    assert_eq!(
+        r.take(),
+        [
+            Out::Sound("beep.wav".into(), 80),
+            Out::Speak("Mode Default".into())
+        ]
+    );
+    r.button(21, false, 10);
+    assert_eq!(r.take(), [Out::Load("other.xml".into())]);
 }

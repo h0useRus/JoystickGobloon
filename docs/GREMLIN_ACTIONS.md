@@ -27,9 +27,9 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `condition` | A B H K | done (keyboard conditions run but are not editable yet; logical devices are false) |
 | `reference` | A B H K | done (editor only: link / copy existing action) |
 | `pause-resume` | B K | done |
-| `load-profile` | B K | todo |
-| `play-sound` | B K | todo |
-| `text-to-speech` | B | todo |
+| `load-profile` | B K | done |
+| `play-sound` | B K | done |
+| `text-to-speech` | B | done |
 | `run-command` | B K | done |
 | `map-to-logical-device` | A B H K | todo (needs logical devices) |
 
@@ -148,3 +148,16 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - Joystick states are JoyGob's latest physical values (the runner seeds buttons/hats/axes at start),
   device GUIDs follow the substitution; vJoy states are the last values JoyGob wrote; keys via
   GetAsyncKeyState.
+
+## load-profile, play-sound, text-to-speech
+
+- load-profile: `load-profile` string (absolute path), activation press. Runs while paused too (Gremlin's
+  AlwaysExecute). The engine asks the GUI (`Output::load_profile` -> `RunnerStatus::load_profile`), which
+  loads the file (asking to save unsaved edits first) and activates it.
+- play-sound: `filename`, `volume` int 0..100 (default 50), activation press. Played one after another
+  (Gremlin's default "Sequential" mode) with rodio: wav, mp3, ogg vorbis, flac.
+- text-to-speech: `text`, `queue-mode` (`queue-back`, `queue-front`, `interrupt`), `playback-rate` and
+  `playback-pitch` -1..1, `playback-volume` 0..1 (Qt ranges), activation press. `$current_mode` /
+  `${current_mode}` become the active mode. Spoken by Windows SAPI with per-request XML (rate and pitch
+  scaled to -10..10, volume to 0..100); `interrupt` purges, `queue-front` cannot reorder SAPI's queue and
+  behaves like `queue-back`.

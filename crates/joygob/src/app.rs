@@ -57,9 +57,11 @@ struct Alert {
     lines: Vec<String>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Pending {
     Close,
+    /// A load-profile action asked for this file; it is activated after loading.
+    Load(PathBuf),
     New,
     Open,
 }
@@ -271,10 +273,16 @@ impl JoyGobApp {
             }
             Pending::New => self.new_profile(),
             Pending::Open => self.import_dialog(),
+            Pending::Load(path) => {
+                self.open_profile(path, true);
+                if self.profile.is_some() && self.runner.is_none() {
+                    self.toggle_runner(ctx);
+                }
+            }
         }
     }
 
-    /// "Save changes?" dialog for a pending action.
+    /// Warning/error dialogs, one at a time.
     fn alert_dialog(&mut self, ctx: &egui::Context) {
         let Some(alert) = self.alerts.first() else {
             return;
@@ -316,8 +324,11 @@ impl JoyGobApp {
         }
     }
 
+    /// "Save changes?" dialog for a pending action.
     fn unsaved_dialog(&mut self, ctx: &egui::Context) {
-        let Some(action) = self.pending else { return };
+        let Some(action) = self.pending.clone() else {
+            return;
+        };
         let file = self
             .profile
             .as_ref()
@@ -636,6 +647,9 @@ impl JoyGobApp {
 impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.update_title(ctx);
+        if let Some(file) = self.runner.as_ref().and_then(|r| r.take_load_request()) {
+            self.request(Pending::Load(PathBuf::from(file)), ctx);
+        }
         let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
         if ctx.input(|i| i.viewport().close_requested()) && dirty && !self.allow_close {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);

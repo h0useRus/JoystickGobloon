@@ -24,6 +24,9 @@ pub enum NewAction {
     AxisDelta,
     /// No conditions yet: like Gremlin, true until some are added.
     Condition,
+    LoadProfile,
+    PlaySound,
+    TextToSpeech,
     /// Starts with `axis` of `device` in both slots, like [`NewAction::MergeAxis`].
     DualAxisDeadzone {
         device: String,
@@ -225,6 +228,27 @@ impl Action {
                     group("output2-actions", Vec::new()),
                 ],
                 "disallowed",
+            ),
+            NewAction::LoadProfile => Self::build(
+                "load-profile",
+                vec![prop("string", "load-profile", "")],
+                "press",
+            ),
+            NewAction::PlaySound => Self::build(
+                "play-sound",
+                vec![prop("string", "filename", ""), prop("int", "volume", "50")],
+                "press",
+            ),
+            NewAction::TextToSpeech => Self::build(
+                "text-to-speech",
+                vec![
+                    prop("string", "text", ""),
+                    prop("string", "queue-mode", "queue-back"),
+                    prop("float", "playback-rate", "0.0"),
+                    prop("float", "playback-volume", "1.0"),
+                    prop("float", "playback-pitch", "0.0"),
+                ],
+                "press",
             ),
             NewAction::Condition => Self::build(
                 "condition",

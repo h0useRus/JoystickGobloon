@@ -285,6 +285,9 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "axis-delta" => icon::ARROWS_DOWN_UP,
         "dual-axis-deadzone" => icon::CIRCLE_DASHED,
         "condition" => icon::GIT_BRANCH,
+        "load-profile" => icon::FILE_ARROW_UP,
+        "play-sound" => icon::SPEAKER_HIGH,
+        "text-to-speech" => icon::CHAT_TEXT,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -342,6 +345,17 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             icon::TERMINAL_WINDOW,
             "kind-run-command",
             NewAction::RunCommand,
+        ));
+        list.push((icon::SPEAKER_HIGH, "kind-play-sound", NewAction::PlaySound));
+        list.push((
+            icon::CHAT_TEXT,
+            "kind-text-to-speech",
+            NewAction::TextToSpeech,
+        ));
+        list.push((
+            icon::FILE_ARROW_UP,
+            "kind-load-profile",
+            NewAction::LoadProfile,
         ));
     }
     if behavior == InputType::Hat {
@@ -576,6 +590,32 @@ impl Editor<'_> {
                 ActionKind::Condition {
                     all, conditions, ..
                 } => self.condition(ui, action, all, &conditions, depth),
+                ActionKind::LoadProfile { file } => {
+                    let filter = ("file-filter-gremlin", &["xml"][..]);
+                    self.file_field(ui, &action.id, "load-profile", file, Some(filter));
+                    self.activation(ui, action);
+                }
+                ActionKind::PlaySound { file, volume } => {
+                    let filter = ("file-filter-sound", &["wav", "mp3", "ogg", "flac"][..]);
+                    self.file_field(ui, &action.id, "filename", file, Some(filter));
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(icon::SPEAKER_HIGH).size(style::ICON_SIZE))
+                            .on_hover_text(self.i18n.tr("edit-volume"));
+                        let mut v = volume;
+                        if ui.add(egui::Slider::new(&mut v, 0..=100)).changed() {
+                            self.set(&action.id, "volume", "int", v.to_string());
+                        }
+                        ui.separator();
+                        self.activation(ui, action);
+                    });
+                }
+                ActionKind::TextToSpeech {
+                    text,
+                    queue_mode,
+                    rate,
+                    volume,
+                    pitch,
+                } => self.speech(ui, action, text, queue_mode, [rate, volume, pitch]),
                 ActionKind::DualAxisDeadzone {
                     axis1,
                     axis2,
@@ -1232,6 +1272,106 @@ impl Editor<'_> {
     }
 
     /// Device and axis dropdowns for `axis1-*` / `axis2-*` (merge-axis, dual-axis-deadzone).
+    /// Path text field with a browse button for the string property `name`.
+    fn file_field(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: &str,
+        name: &str,
+        value: &str,
+        filter: Option<(&str, &[&str])>,
+    ) {
+        ui.horizontal(|ui| {
+            let mut path = value.to_string();
+            let edit = egui::TextEdit::singleline(&mut path).desired_width(380.0);
+            if ui.add(edit).changed() {
+                self.set(id, name, "string", path);
+            }
+            if style::icon_button(ui, true, icon::FOLDER_OPEN, &self.i18n.tr("run-browse"))
+                .clicked()
+            {
+                let mut dialog = rfd::FileDialog::new();
+                if let Some((key, ext)) = filter {
+                    dialog = dialog.add_filter(self.i18n.tr(key), ext);
+                }
+                if let Some(path) = dialog.pick_file() {
+                    self.set(id, name, "string", path.display().to_string());
+                }
+            }
+            if !value.is_empty() && !std::path::Path::new(value).is_file() {
+                ui.label(RichText::new(icon::WARNING).color(ui.visuals().warn_fg_color))
+                    .on_hover_text(self.i18n.tr("edit-file-missing"));
+            }
+        });
+    }
+
+    fn speech(
+        &mut self,
+        ui: &mut egui::Ui,
+        action: &Action,
+        text: &str,
+        queue_mode: &str,
+        [rate, volume, pitch]: [f64; 3],
+    ) {
+        let id = action.id.clone();
+        let mut t = text.to_string();
+        let edit = egui::TextEdit::multiline(&mut t)
+            .desired_rows(2)
+            .desired_width(f32::INFINITY)
+            .hint_text(self.i18n.tr("edit-tts-hint"));
+        if ui.add(edit).changed() {
+            self.set(&id, "text", "string", t);
+        }
+        ui.horizontal_wrapped(|ui| {
+            for (name, value, range, glyph, key) in [
+                (
+                    "playback-rate",
+                    rate,
+                    -1.0..=1.0,
+                    icon::GAUGE,
+                    "edit-tts-rate",
+                ),
+                (
+                    "playback-volume",
+                    volume,
+                    0.0..=1.0,
+                    icon::SPEAKER_HIGH,
+                    "edit-volume",
+                ),
+                (
+                    "playback-pitch",
+                    pitch,
+                    -1.0..=1.0,
+                    icon::WAVE_SINE,
+                    "edit-tts-pitch",
+                ),
+            ] {
+                ui.label(RichText::new(glyph).size(style::ICON_SIZE))
+                    .on_hover_text(self.i18n.tr(key));
+                let mut v = value as f32;
+                let drag = egui::DragValue::new(&mut v)
+                    .range(range)
+                    .speed(0.01)
+                    .fixed_decimals(2);
+                if ui.add(drag).changed() {
+                    self.set(&id, name, "float", py_float(v));
+                }
+            }
+            ui.separator();
+            for (mode, glyph, key) in [
+                ("queue-back", icon::QUEUE, "edit-tts-back"),
+                ("queue-front", icon::ARROW_LINE_UP, "edit-tts-front"),
+                ("interrupt", icon::HAND_PALM, "edit-tts-interrupt"),
+            ] {
+                if style::icon_toggle(ui, queue_mode == mode, glyph, &self.i18n.tr(key)).clicked() {
+                    self.set(&id, "queue-mode", "string", mode);
+                }
+            }
+            ui.separator();
+            self.activation(ui, action);
+        });
+    }
+
     /// (GUID, name) of profile devices, then attached ones the profile does not know yet.
     pub(crate) fn device_choices(&self) -> Vec<(String, String)> {
         let mut devices: Vec<(String, String)> = self

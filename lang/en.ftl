@@ -264,3 +264,17 @@ cond-keyboard = Keys held
 cond-range = Axis between
 cond-pressed = Pressed
 cond-released = Released
+
+# Sound, speech, load profile
+kind-play-sound = Play sound
+kind-text-to-speech = Text to speech
+kind-load-profile = Load profile
+file-filter-sound = Sound file
+edit-volume = Volume
+edit-file-missing = File not found
+edit-tts-hint = Text to speak; $current_mode is replaced with the active mode
+edit-tts-rate = Speed
+edit-tts-pitch = Pitch
+edit-tts-back = Queue after everything else
+edit-tts-front = Queue next (Windows speech: same as after everything else)
+edit-tts-interrupt = Interrupt what is being said

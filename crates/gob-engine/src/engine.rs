@@ -6,6 +6,7 @@ use gob_core::{
     Item, Key, MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton, Profile, VirtualButton,
 };
 
+use crate::media::{SpeechQueue, SpeechRequest};
 use crate::modes::ModeStack;
 use crate::motion::{compass, Motion};
 use crate::{InputKey, InputKind, Output, Value};
@@ -103,6 +104,20 @@ enum Node {
     },
     /// Hat direction (`None` = center) -> actions run as a button while the hat points exactly there.
     HatButtons(Vec<(Option<u16>, Vec<NodeId>)>),
+    LoadProfile {
+        file: String,
+        act: ActivationMode,
+    },
+    PlaySound {
+        file: String,
+        volume: u8,
+        act: ActivationMode,
+    },
+    /// `request.text` still holds `$current_mode` placeholders.
+    Speak {
+        request: SpeechRequest,
+        act: ActivationMode,
+    },
     /// Gremlin's condition action: `branches[0]` when true, `branches[1]` when false.
     Condition {
         all: bool,
@@ -504,7 +519,8 @@ impl Engine {
                     engine.sets.push(Vec::new());
                     engine.sets.len() - 1
                 });
-                let always = matches!(&engine.nodes[root], Node::Seq(c) if c.iter().any(|&n| matches!(engine.nodes[n], Node::Pause(_))));
+                // pause-resume and load-profile (Gremlin's AlwaysExecute) also run while paused.
+                let always = matches!(&engine.nodes[root], Node::Seq(c) if c.iter().any(|&n| matches!(engine.nodes[n], Node::Pause(_) | Node::LoadProfile { .. })));
                 engine.sets[set].push(Config {
                     always,
                     root,
@@ -665,6 +681,31 @@ impl Engine {
                         })
                         .collect(),
                 ),
+                ActionKind::LoadProfile { file } => Node::LoadProfile {
+                    file: file.to_string(),
+                    act: action.activation_mode(),
+                },
+                ActionKind::PlaySound { file, volume } => Node::PlaySound {
+                    file: file.to_string(),
+                    volume,
+                    act: action.activation_mode(),
+                },
+                ActionKind::TextToSpeech {
+                    text,
+                    queue_mode,
+                    rate,
+                    volume,
+                    pitch,
+                } => Node::Speak {
+                    request: SpeechRequest {
+                        text: text.to_string(),
+                        rate: rate as f32,
+                        volume: volume as f32,
+                        pitch: pitch as f32,
+                        queue: SpeechQueue::parse(queue_mode),
+                    },
+                    act: action.activation_mode(),
+                },
                 ActionKind::Condition {
                     all,
                     conditions,
@@ -1216,6 +1257,27 @@ impl Engine {
                     );
                 } else {
                     self.release_keys(node, out);
+                }
+            }
+            Node::LoadProfile { file, act } => {
+                if should_execute(act, *value) && !file.is_empty() {
+                    log::info!("load-profile action: {file}");
+                    out.load_profile(&file);
+                }
+            }
+            Node::PlaySound { file, volume, act } => {
+                if should_execute(act, *value) && !file.is_empty() {
+                    out.play_sound(&file, volume);
+                }
+            }
+            Node::Speak { mut request, act } => {
+                if should_execute(act, *value) && !request.text.trim().is_empty() {
+                    let mode = self.modes.current();
+                    request.text = request
+                        .text
+                        .replace("${current_mode}", mode)
+                        .replace("$current_mode", mode);
+                    out.speak(request);
                 }
             }
             Node::Condition {
