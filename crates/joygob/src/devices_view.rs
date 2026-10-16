@@ -288,16 +288,27 @@ impl DevicesView {
                 labels.insert((kind, i.id), i.label);
             }
             ui.horizontal(|ui| {
-                for (ty, glyph, key) in [
+                for (ty, glyph, key, name) in [
                     (
                         InputType::Axis,
                         icon::ARROWS_OUT_LINE_HORIZONTAL,
                         "logical-add-axis",
+                        "input-axis-kind",
                     ),
-                    (InputType::Button, icon::CIRCLE, "logical-add-button"),
-                    (InputType::Hat, icon::CROSSHAIR, "logical-add-hat"),
+                    (
+                        InputType::Button,
+                        icon::CIRCLE,
+                        "logical-add-button",
+                        "input-button-kind",
+                    ),
+                    (
+                        InputType::Hat,
+                        icon::CROSSHAIR,
+                        "logical-add-hat",
+                        "input-hat-kind",
+                    ),
                 ] {
-                    let text = format!("{}  {glyph}", icon::PLUS);
+                    let text = format!("{} {glyph} {}", icon::PLUS, i18n.tr(name));
                     if ui.button(text).on_hover_text(i18n.tr(key)).clicked() {
                         ops.push(Op::AddLogicalInput(ty));
                     }
