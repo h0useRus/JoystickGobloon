@@ -129,30 +129,20 @@ fn appearance(ui: &mut egui::Ui, i18n: &I18n, settings: &Settings) -> Option<Cha
         for (theme, glyph, key) in [
             (Theme::Light, icon::SUN, "theme-light"),
             (Theme::Dark, icon::MOON, "theme-dark"),
+            (Theme::System, icon::MONITOR, "theme-system"),
         ] {
             let selected = settings.theme == theme;
-            let mut job = egui::text::LayoutJob {
-                halign: egui::Align::Center,
-                ..Default::default()
-            };
-            let style = ui.style();
-            RichText::new(glyph).size(30.0).append_to(
-                &mut job,
-                style,
-                egui::FontSelection::Default,
-                egui::Align::Center,
-            );
-            RichText::new(format!("\n{}", i18n.tr(key))).append_to(
-                &mut job,
-                style,
-                egui::FontSelection::Default,
-                egui::Align::Center,
-            );
-            let card = egui::Button::new(job)
+            let text = RichText::new(format!("{glyph}  {}", i18n.tr(key)));
+            let button = egui::Button::new(text)
                 .selected(selected)
                 .corner_radius(style::RADIUS)
-                .min_size(Vec2::new(120.0, 80.0));
-            if ui.add(card).clicked() && !selected {
+                .min_size(Vec2::new(96.0, 30.0));
+            let tip = if theme == Theme::System {
+                i18n.tr("theme-system-tip")
+            } else {
+                i18n.tr(key)
+            };
+            if ui.add(button).on_hover_text(tip).clicked() && !selected {
                 change = Some(Change::Theme(theme));
             }
         }

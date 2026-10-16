@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
     Light,
-    #[default]
     Dark,
+    /// Follows the Windows light/dark setting.
+    #[default]
+    System,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -18,25 +18,44 @@ pub fn install_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
+/// Installs both palettes and picks one; [`Theme::System`] lets egui follow the
+/// Windows light/dark setting, also when it changes while the app runs.
 pub fn apply(ctx: &egui::Context, theme: Theme) {
-    let mut v = match theme {
-        Theme::Light => egui::Visuals::light(),
-        Theme::Dark => egui::Visuals::dark(),
+    ctx.set_visuals_of(egui::Theme::Light, visuals(false));
+    ctx.set_visuals_of(egui::Theme::Dark, visuals(true));
+    ctx.all_styles_mut(|s| {
+        s.spacing.item_spacing = Vec2::new(8.0, 6.0);
+        s.spacing.button_padding = Vec2::new(10.0, 5.0);
+        s.spacing.interact_size.y = 26.0;
+    });
+    ctx.set_theme(match theme {
+        Theme::Light => egui::ThemePreference::Light,
+        Theme::Dark => egui::ThemePreference::Dark,
+        Theme::System => egui::ThemePreference::System,
+    });
+}
+
+fn visuals(dark: bool) -> egui::Visuals {
+    let mut v = if dark {
+        egui::Visuals::dark()
+    } else {
+        egui::Visuals::light()
     };
     // Goblin green accent, taken from the app icon.
-    let (accent, panel, window, faint) = match theme {
-        Theme::Light => (
-            Color32::from_rgb(0x6f, 0x9e, 0x1e),
-            Color32::from_rgb(0xf4, 0xf5, 0xf7),
-            Color32::from_rgb(0xff, 0xff, 0xff),
-            Color32::from_rgb(0xe8, 0xea, 0xee),
-        ),
-        Theme::Dark => (
+    let (accent, panel, window, faint) = if dark {
+        (
             Color32::from_rgb(0x8c, 0xc8, 0x2c),
             Color32::from_rgb(0x1b, 0x1d, 0x22),
             Color32::from_rgb(0x23, 0x26, 0x2c),
             Color32::from_rgb(0x2a, 0x2d, 0x34),
-        ),
+        )
+    } else {
+        (
+            Color32::from_rgb(0x6f, 0x9e, 0x1e),
+            Color32::from_rgb(0xf4, 0xf5, 0xf7),
+            Color32::from_rgb(0xff, 0xff, 0xff),
+            Color32::from_rgb(0xe8, 0xea, 0xee),
+        )
     };
     v.selection.bg_fill = accent.gamma_multiply(0.35);
     v.selection.stroke.color = accent;
@@ -55,12 +74,7 @@ pub fn apply(ctx: &egui::Context, theme: Theme) {
     ] {
         w.corner_radius = CornerRadius::same(RADIUS);
     }
-    ctx.set_visuals(v);
-    ctx.style_mut(|s| {
-        s.spacing.item_spacing = Vec2::new(8.0, 6.0);
-        s.spacing.button_padding = Vec2::new(10.0, 5.0);
-        s.spacing.interact_size.y = 26.0;
-    });
+    v
 }
 
 /// Accent color of the current theme.

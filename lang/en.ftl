@@ -17,6 +17,8 @@ settings-language = Language
 settings-reopen-last = Reopen the last profile on startup
 theme-light = Light
 theme-dark = Dark
+theme-system = System
+theme-system-tip = Follow the Windows light or dark setting
 about-text = Device hiding, virtual joysticks and input mapping in one app.
 
 # Empty states

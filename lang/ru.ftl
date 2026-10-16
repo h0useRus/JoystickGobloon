@@ -17,6 +17,8 @@ settings-language = Язык
 settings-reopen-last = Открывать последний профиль при запуске
 theme-light = Светлая
 theme-dark = Тёмная
+theme-system = Как в системе
+theme-system-tip = Светлая или тёмная, как выбрано в Windows
 about-text = Скрытие устройств, виртуальные джойстики и назначения в одной программе.
 
 # Empty states
