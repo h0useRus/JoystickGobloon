@@ -123,7 +123,8 @@ impl DirectInput {
 
 impl Device {
     /// Reads the current state; returns false when the device is gone.
-    pub fn poll(&mut self) -> bool {
+    /// `calibrations` replace the default scaling for the axes they cover.
+    pub fn poll(&mut self, calibrations: &crate::Calibrations) -> bool {
         let mut raw = DIJOYSTATE2::default();
         let read = |dev: &IDirectInputDevice8W, raw: &mut DIJOYSTATE2| unsafe {
             let _ = dev.Poll();
@@ -152,7 +153,11 @@ impl Device {
         let s = &mut self.state;
         for &id in &s.info.axes {
             let i = usize::from(id) - 1;
-            s.axes[i] = normalize_axis(values[i]);
+            s.raw[i] = values[i];
+            s.axes[i] = match calibrations.get(&(s.info.guid.clone(), id)) {
+                Some(c) => c.apply(values[i]),
+                None => normalize_axis(values[i]),
+            };
         }
         for (i, b) in s.buttons.iter_mut().enumerate() {
             *b = raw.rgbButtons[i] & 0x80 != 0;

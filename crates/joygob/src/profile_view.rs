@@ -92,21 +92,6 @@ impl LoadedProfile {
     }
 }
 
-/// Label of the first meaningful action under a root, shown on the collapsed input row.
-pub fn summary(index: &HashMap<&str, &Action>, root: &str) -> Option<String> {
-    let children: Vec<&Action> = index
-        .get(root)?
-        .child_ids()
-        .into_iter()
-        .filter_map(|id| index.get(id).copied())
-        .collect();
-    let first = children
-        .iter()
-        .find(|a| a.kind != "description")
-        .or(children.first())?;
-    Some(display_name(first))
-}
-
 /// Kind icon plus the user's label (or the Gremlin type name when there is none).
 pub(crate) fn display_name(action: &Action) -> String {
     let text = action

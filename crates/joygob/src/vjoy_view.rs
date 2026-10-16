@@ -1,4 +1,5 @@
-//! vJoy page: driver status, configured devices and a manual output tester.
+//! vJoy page: driver status, configured devices, their configuration (add / change /
+//! remove, like "Configure vJoy") and a manual output tester.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -32,6 +33,11 @@ pub struct VJoyView {
     /// Device under manual test, with the values last sent to it.
     test: Option<Tester>,
     error: Option<String>,
+    config: crate::vjoy_config_view::VJoyConfig,
+    /// Device number being created.
+    adding: Option<u32>,
+    /// The configuration editor is open instead of the tester.
+    configure: bool,
 }
 
 struct Tester {
@@ -43,17 +49,30 @@ struct Tester {
 
 impl VJoyView {
     pub fn new() -> Self {
+        let vjoy = VJoy::load().map_err(|e| e.to_string());
+        let config = crate::vjoy_config_view::VJoyConfig::new(
+            vjoy.as_ref().ok().map(|v| v.dll_path.as_path()),
+        );
         Self {
-            vjoy: VJoy::load().map_err(|e| e.to_string()),
+            vjoy,
             devices: Vec::new(),
             refreshed: None,
             selected: 1,
             test: None,
             error: None,
+            config,
+            adding: None,
+            configure: false,
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
+    /// `locked`: a profile is active and holds vJoy devices, so they cannot be reconfigured.
+    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, locked: bool) {
+        if self.config.poll(i18n) {
+            self.refreshed = None;
+            self.test = None;
+            self.adding = None;
+        }
         let vjoy = match &self.vjoy {
             Ok(v) => v.clone(),
             Err(e) => {
@@ -82,11 +101,51 @@ impl VJoyView {
             ui.label(format!("vJoy {}", vjoy.version()))
                 .on_hover_text(vjoy.dll_path.display().to_string());
             ui.label(RichText::new(i18n.tr(key)).weak());
+            if self.config.available() {
+                let on = vjoy.enabled();
+                let tip = i18n.tr(if on { "vjoy-disable" } else { "vjoy-enable" });
+                let can = !locked && !self.config.busy();
+                if style::icon_button(ui, can, icon::POWER, &tip).clicked() {
+                    self.test = None;
+                    self.config.enable(!on, i18n);
+                }
+            }
+            if self.config.busy() {
+                ui.spinner();
+            }
         });
+        self.config.message(ui);
         ui.separator();
 
+        let used: Vec<u32> = self.devices.iter().map(|d| d.id).collect();
+        let free = self.config.free_id(&used);
+        if let Some(id) = self.adding {
+            ui.label(
+                RichText::new(format!(
+                    "{}  {}",
+                    icon::PLUS_CIRCLE,
+                    i18n.trf("vjoy-new-device", &[("n", id.into())])
+                ))
+                .strong(),
+            );
+            ui.add_space(6.0);
+            self.config.editor(ui, i18n, id, true, locked);
+            if self.config.edit.is_none() && !self.config.busy() {
+                self.adding = None;
+            }
+            return;
+        }
         if self.devices.is_empty() {
             crate::app::empty_state(ui, icon::GAME_CONTROLLER, &i18n.tr("vjoy-no-devices"));
+            if let (true, Some(id)) = (self.config.available(), free) {
+                ui.vertical_centered(|ui| {
+                    let text = format!("{}  {}", icon::PLUS, i18n.tr("vjoy-add"));
+                    if ui.add_enabled(!locked, egui::Button::new(text)).clicked() {
+                        self.adding = Some(id);
+                        self.config.start_new(id);
+                    }
+                });
+            }
             return;
         }
         if !self.devices.iter().any(|d| d.id == self.selected) {
@@ -101,6 +160,17 @@ impl VJoyView {
                     self.selected = d.id;
                     self.test = None;
                     self.error = None;
+                    self.config.edit = None;
+                }
+            }
+            if self.config.available() {
+                let can = free.is_some() && !locked && !self.config.busy();
+                if style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add")).clicked() {
+                    if let Some(id) = free {
+                        self.test = None;
+                        self.adding = Some(id);
+                        self.config.start_new(id);
+                    }
                 }
             }
         });
@@ -133,7 +203,18 @@ impl VJoyView {
                 icon::FLASK
             };
             if style::icon_toggle(ui, testing, glyph, &i18n.tr("vjoy-test")).clicked() {
+                self.configure = false;
                 self.toggle_test(&vjoy, &info, i18n);
+            }
+            if self.config.available() {
+                let tip = i18n.tr("vjoy-configure");
+                if style::icon_toggle(ui, self.configure, icon::SLIDERS_HORIZONTAL, &tip).clicked()
+                {
+                    self.configure = !self.configure;
+                    // The tester holds the device; release it before reconfiguring.
+                    self.test = None;
+                    self.config.edit = None;
+                }
             }
         });
         if let Some(e) = &self.error {
@@ -141,7 +222,13 @@ impl VJoyView {
         }
         ui.separator();
 
-        if let Some(test) = &mut self.test {
+        if self.configure {
+            egui::ScrollArea::vertical()
+                .auto_shrink(false)
+                .show(ui, |ui| {
+                    self.config.editor(ui, i18n, info.id, false, locked)
+                });
+        } else if let Some(test) = &mut self.test {
             egui::ScrollArea::vertical()
                 .auto_shrink(false)
                 .show(ui, |ui| test.show(ui, &info));

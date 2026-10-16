@@ -2,9 +2,12 @@
 
 mod action_editor;
 mod app;
+mod calibration_view;
 mod condition_editor;
+mod curve_editor;
 mod devices_view;
 mod hidhide_view;
+mod instance;
 mod key_capture;
 mod logfile;
 mod macro_editor;
@@ -15,6 +18,8 @@ mod settings_view;
 mod style;
 mod substitute_view;
 mod tray;
+mod viewer_view;
+mod vjoy_config_view;
 mod vjoy_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
@@ -26,6 +31,10 @@ pub const VERSION: &str = match option_env!("JOYGOB_VERSION") {
 };
 
 fn main() -> eframe::Result {
+    // Already running: that copy was woken and comes to the front; this one quits.
+    let Some(instance) = instance::claim() else {
+        return Ok(());
+    };
     logfile::init();
     // Started by Windows at logon: hidden in the tray, or minimized without one.
     let minimized = std::env::args().any(|a| a == tray::autostart::ARG);
@@ -47,6 +56,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         APP_NAME,
         options,
-        Box::new(|cc| Ok(Box::new(app::JoyGobApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(app::JoyGobApp::new(cc, instance)))),
     )
 }

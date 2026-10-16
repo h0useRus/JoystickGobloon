@@ -257,6 +257,24 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
             InputKey::new(device, InputKind::Hat, u32::from(*id)),
             Value::Hat(*direction),
         ),
+        InputEvent::Key {
+            scan_code,
+            extended,
+            pressed,
+        } => {
+            let key = gob_core::Key {
+                scan_code: *scan_code,
+                extended: *extended,
+            };
+            (
+                InputKey::new(
+                    gob_core::KEYBOARD_GUID,
+                    InputKind::Button,
+                    gob_core::key_input_id(key),
+                ),
+                Value::Button(*pressed),
+            )
+        }
         InputEvent::DevicesChanged => return None,
     })
 }

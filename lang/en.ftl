@@ -4,6 +4,8 @@ language-name = English
 nav-devices = Devices and bindings
 nav-hidhide = Device hiding
 nav-vjoy = Virtual joysticks
+nav-viewer = Input viewer
+nav-calibration = Calibration
 nav-settings = Settings
 action-open = Import Joystick Gremlin profile
 action-save = Save
@@ -17,6 +19,8 @@ settings-language = Language
 settings-reopen-last = Reopen the last profile on startup
 theme-light = Light
 theme-dark = Dark
+theme-system = System
+theme-system-tip = Follow the Windows light or dark setting
 about-text = Device hiding, virtual joysticks and input mapping in one app.
 
 # Empty states
@@ -38,7 +42,7 @@ alert-error = Something went wrong
 alert-import = Some actions in { $file } will not work
 alert-open-log = Open the log
 ok = OK
-hidhide-whitelist-error = Could not add JoyGob to the HidHide whitelist: { $error }
+hidhide-whitelist-error = Could not add Joystick Gobloon to the HidHide whitelist: { $error }
 warn-not-executable = “{ $kind }” × { $count }: kept in the profile, but not executed yet
 warn-scripts = The profile contains Python plugins: they are kept, but not run
 
@@ -55,14 +59,14 @@ status-substituted = Controls mapped. Save the profile to keep the change.
 vjoy-missing = vJoy is not installed or could not be loaded.
 vjoy-enabled = Driver enabled
 vjoy-disabled = Driver disabled
-vjoy-no-devices = No vJoy devices configured. Add one in “Configure vJoy”.
+vjoy-no-devices = No vJoy devices configured yet.
 vjoy-axes = Axes
 vjoy-buttons = Buttons
 vjoy-hats = Hats
 vjoy-test = Test output: take control of this device
 vjoy-test-hint = Press the flask to take control of this device and test its output.
 vjoy-free = Free
-vjoy-own = Controlled by JoyGob
+vjoy-own = Controlled by Joystick Gobloon
 vjoy-busy = Used by another program (e.g. Joystick Gremlin)
 vjoy-unknown = Unknown state
 vjoy-error = Could not take the device: { $error }
@@ -80,8 +84,8 @@ hidhide-add-app = Add application
 hidhide-remove-app = Remove from the whitelist
 hidhide-app-missing = File not found
 action-refresh = Refresh
-settings-hidhide-self = Add JoyGob to the HidHide whitelist on startup
-status-whitelisted = JoyGob was added to the HidHide whitelist.
+settings-hidhide-self = Add Joystick Gobloon to the HidHide whitelist on startup
+status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
 
 # Engine
 action-activate = Activate the profile
@@ -141,8 +145,7 @@ action-undo = Undo (Ctrl+Z)
 action-redo = Redo (Ctrl+Y)
 status-undone = Undone
 status-redone = Redone
-edit-curve-help = Drag a point to move it · Click empty space to invert · Double-click to add a point · Right-click a point to remove it
-edit-curve-select = Click a point to edit its position.
+edit-curve-help = Drag a point or handle to move it · Click empty space to invert · Double-click to add a point · Right-click a point to remove it
 
 # vJoy mapping
 vjoy-device-n = vJoy Device { $n }
@@ -324,10 +327,107 @@ kind-map-to-logical-device = Map to logical device
 cond-logical = Logical device input
 
 # Tray and startup
-settings-tray = Show an icon in the notification area
-settings-close-to-tray = The close button hides JoyGob to the notification area
+settings-tray = Show the tray icon
+settings-close-to-tray = The close button hides Joystick Gobloon to the tray
+settings-tray-title = Tray icon
 settings-autostart = Start with Windows (minimized)
 settings-activate-on-start = Activate the profile on startup
 tray-show = Show Joystick Gobloon
 tray-quit = Quit
 autostart-error = Could not change starting with Windows: { $error }
+
+# About
+about-alpha = alpha build
+about-created = Created by { $name }
+about-support = Support development
+about-support-tip = Contribute via PayPal
+about-source = Source code
+about-issues = Report a problem
+about-releases = Releases
+about-credits = Uses the HidHide and vJoy drivers; profiles are compatible with Joystick Gremlin.
+about-license = Free and open source under the MIT license.
+
+# Input viewer
+viewer-history = Axes over time
+viewer-current = Axes now
+viewer-buttons = Buttons and hats
+viewer-axis = Axis { $n }
+
+# vJoy configuration
+vjoy-add = Add a vJoy device
+vjoy-new-device = New vJoy device { $n }
+vjoy-configure = Configure this device (axes, buttons, hats, force feedback)
+vjoy-enable = Enable the vJoy driver
+vjoy-disable = Disable the vJoy driver
+vjoy-hat-continuous = Continuous
+vjoy-hat-discrete = 4 directions
+vjoy-ffb = Force feedback
+vjoy-ffb-enable = Enabled
+vjoy-ffb-const = Constant
+vjoy-ffb-ramp = Ramp
+vjoy-ffb-sq = Square
+vjoy-ffb-sine = Sine
+vjoy-ffb-tr = Triangle
+vjoy-ffb-stup = Sawtooth up
+vjoy-ffb-stdn = Sawtooth down
+vjoy-ffb-spr = Spring
+vjoy-ffb-dm = Damper
+vjoy-ffb-inr = Inertia
+vjoy-ffb-fric = Friction
+vjoy-config-create = Create
+vjoy-config-apply = Apply
+vjoy-config-revert = Revert
+vjoy-config-remove = Remove device
+vjoy-config-admin = Windows asks for administrator rights to change vJoy
+vjoy-config-locked = Stop the profile to change vJoy devices.
+vjoy-config-reading = Reading the vJoy configuration...
+vjoy-config-label = configure device { $n }
+vjoy-config-done = vJoy configuration changed.
+vjoy-config-error = Could not change the vJoy configuration: { $error }
+vjoy-remove-title = Remove vJoy device { $n }?
+vjoy-remove-text = Games and profiles that use this device lose it until it is created again.
+
+# Response curve
+curve-type = Curve type
+curve-linear = Piecewise linear
+curve-cubic = Cubic spline
+curve-bezier = Cubic Bezier spline
+curve-symmetric = Symmetric
+curve-symmetric-tip = Mirror the curve through the center while editing
+curve-point = Point
+curve-handle = Handle
+
+# Keyboard device
+keyboard-device = Keyboard
+keyboard-tip = Keyboard keys as inputs: bind actions to keys like to joystick buttons
+keyboard-add = Bind a key
+keyboard-empty = No keys bound yet: record one with the button above.
+edit-binding-description = Description of this input
+edit-unbound = No actions yet: add one.
+viewer-detach = Open in a separate window
+viewer-attach = Back into the main window
+viewer-in-window = The input viewer is open in its own window.
+
+# Calibration
+calibration-device = Device to calibrate
+calibration-raw = Raw
+calibration-with-center = With center
+calibration-reset = Reset
+calibration-save = Save this calibration
+calibration-center = Calibrate center
+calibration-center-tip = Let the stick rest, wiggle it slightly around the center, then click again
+calibration-extrema = Calibrate extrema
+calibration-extrema-tip = Move the axis to both ends, then click again
+calibration-in-window = The calibration is open in its own window.
+
+# Device info
+device-info = Device information
+device-info-name = Device name
+device-info-axes = Axes
+device-info-buttons = Buttons
+device-info-hats = Hats
+device-info-vid = VID
+device-info-pid = PID
+device-info-joystick-id = Joystick ID
+device-info-guid = Device GUID
+device-info-copy = Copy to clipboard

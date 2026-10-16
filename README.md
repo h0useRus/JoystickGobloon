@@ -10,7 +10,7 @@
 
 ---
 
-**Joystick Gobloon** (JoyGob) is a Windows utility written in Rust for flight-sim and space-sim players
+**Joystick Gobloon** is a Windows utility written in Rust for flight-sim and space-sim players
 who use HOTAS, joysticks and other game controllers. Today this usually needs three separate tools:
 
 - [HidHide](https://github.com/nefarius/HidHide) hides physical devices from games;

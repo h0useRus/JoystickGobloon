@@ -1,15 +1,15 @@
 # Joystick Gremlin R14 actions
 
-Reference for implementing actions in JoyGob. Source: `ref/JoystickGremlin/action_plugins/<name>/__init__.py`
+Reference for implementing actions in Joystick Gobloon. Source: `ref/JoystickGremlin/action_plugins/<name>/__init__.py`
 (read the `*Data._to_xml`, defaults in `*Data.__init__` and `*Functor.__call__`).
 
 Input types: A = axis, B = button, H = hat, K = keyboard.
 
-| Action (XML `type`) | Inputs | JoyGob |
+| Action (XML `type`) | Inputs | Joystick Gobloon |
 |---|---|---|
 | `root` | A B H K | done |
 | `map-to-vjoy` | A B H K | done (absolute + relative axis) |
-| `response-curve` | A | done (piecewise linear only; Gremlin also has cubic spline / bezier, symmetric) |
+| `response-curve` | A | done (piecewise linear, cubic spline, cubic Bezier; symmetric editing) |
 | `change-mode` | B K | done |
 | `tempo` | B K | done |
 | `description` | A B H K | done |
@@ -74,7 +74,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - Editor: keys are recorded by polling Windows key states (GetAsyncKeyState + MapVirtualKey), so left/right
   modifiers and the E0 flag are exact; every key pressed until all are released is recorded, in press
   order. Names come from GetKeyNameText (current layout). Keyboard conditions use the same recorder.
-- JoyGob addition: if the input is released in a mode where it is bound differently, the keys are still
+- Joystick Gobloon addition: if the input is released in a mode where it is bound differently, the keys are still
   released (Gremlin would leave them stuck). Each press releases at most once.
 
 ## chain
@@ -101,7 +101,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   plus `Center`, each with `<action-id>` lists. Activation disabled.
 - Every direction is a virtual button pressed while the hat points exactly there; with 4 buttons a diagonal
   presses none of them. Centered presses `Center`. Children get button values (press, release).
-- JoyGob addition: if the hat is centered in a mode where it is bound differently, what the directions
+- Joystick Gobloon addition: if the hat is centered in a mode where it is bound differently, what the directions
   pressed (vJoy buttons, keys) is still released.
 
 ## merge-axis
@@ -110,7 +110,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   `axis1-axis`/`axis2-axis` int, `operation` (`average`, `minimum`, `maximum`, `sum` (clamped),
   `bidirectional` = (axis2 - axis1) / 2, `maximum-deflection`, `closest-to-center`; ties go to axis 2),
   `actions` children. Activation disabled.
-- Gremlin reuses one action on both axes' bindings; JoyGob's add menu offers existing merge-axis actions
+- Gremlin reuses one action on both axes' bindings; Joystick Gobloon's add menu offers existing merge-axis actions
   (shared reference) next to a new one, which starts with the edited axis in both slots.
 - On any event it reads the latest values of both axes (0 until seen; the runner feeds the initial
   positions), sets the value and runs the children. Axis devices go through the device substitution.
@@ -121,7 +121,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - Uses the raw axis value (not one changed by earlier actions). The first event only sets the reference;
   an exact 0.0 is skipped without updating it (Gremlin's Python falsiness). Changes accumulate; reaching
   +threshold pulses the positive list, -threshold the negative list (press, release 50 ms later), then the
-  accumulator resets. Gremlin sleeps 50 ms in the event thread; JoyGob uses a timer.
+  accumulator resets. Gremlin sleeps 50 ms in the event thread; Joystick Gobloon uses a timer.
 
 ## dual-axis-deadzone
 
@@ -137,7 +137,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 
 - Not a runtime action: in Gremlin's editor it is a placeholder that is replaced by an existing library
   action, either the same one (shared) or a deep copy, and it writes nothing to the profile.
-- JoyGob: the add menu has "Link an existing action" and "Copy an existing action". Roots and actions that
+- Joystick Gobloon: the add menu has "Link an existing action" and "Copy an existing action". Roots and actions that
   would create a loop (the list's own action or one containing it) are not offered; `Profile::add_ref`
   refuses loops too. A copy duplicates the whole subtree with new ids, keeping sharing inside it.
 
@@ -153,8 +153,8 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   (Python's `1.0 == True`), direction the first state in the list. No conditions: all -> true, any -> false.
 - Button: the branch chosen on press also gets the release. Hat: center goes to the cached branch; a
   direction that switches branch first sends center to the old one. Axis: evaluated every event.
-- Joystick states are JoyGob's latest physical values (the runner seeds buttons/hats/axes at start),
-  device GUIDs follow the substitution; vJoy states are the last values JoyGob wrote; keys via
+- Joystick states are Joystick Gobloon's latest physical values (the runner seeds buttons/hats/axes at start),
+  device GUIDs follow the substitution; vJoy states are the last values Joystick Gobloon wrote; keys via
   GetAsyncKeyState.
 
 ## load-profile, play-sound, text-to-speech
@@ -169,7 +169,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   `${current_mode}` become the active mode. Spoken by Windows SAPI with per-request XML (rate and pitch
   scaled to -10..10, volume to 0..100); `interrupt` purges, `queue-front` cannot reorder SAPI's queue and
   behaves like `queue-back`.
-- JoyGob addition: `voice` string property (installed voice name, classic SAPI and OneCore voices); Gremlin
+- Joystick Gobloon addition: `voice` string property (installed voice name, classic SAPI and OneCore voices); Gremlin
   ignores it on load and drops it when it saves. Missing voice -> system default. The editor previews
   sounds and speech (speech interrupts the previous preview).
 
@@ -185,3 +185,14 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   the source input is released in another mode. Relative axes step every 10 ms by
   value * scaling / 1000 and stop 1 s after the input returned near center, like vJoy relative axes.
 - Conditions on logical inputs (`logical_device`: `input-type`, `input-id`) read the stored states.
+
+## response-curve
+
+- `curve-type` `PiecewiseLinear` / `CubicSpline` / `CubicBezierSpline`; `<deadzone>` low, center-low,
+  center-high, high; `<control-points>` `point` "x,y". Linear and cubic store the knots; Bezier stores the
+  flat list center, right handle, (left handle, center, right handle)*, left handle, center.
+- Evaluation follows gremlin/spline.py (gob-core `curve`): natural cubic spline (z0 = zn = 0) clamped to
+  -1..1; Bezier via 101 samples per segment, binary search and linear interpolation. Deadzone first.
+- Gremlin keeps "symmetric" only while editing; Joystick Gobloon saves it as a `symmetric` bool property
+  (Gremlin ignores it). Symmetric: mirrored knots/handles through the origin, a fixed center knot, paired
+  add/remove; the deadzone is not affected. Changing the type starts from that type's identity line.

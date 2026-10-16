@@ -9,6 +9,8 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 - crates/gob-gremlin XML <-> Element <-> Profile, lossless round-trip; `report()` import warnings; example `resave`
 - crates/gob-input   DirectInput8 polling thread (InputService: snapshot + events); ids = DI instance GUIDs like Gremlin;
   links dinput8.lib/dxguid.lib statically (-bundle) for c_dfDIJoystick2; example `monitor`
+  + low-level keyboard hook -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
+  use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine
 - crates/gob-vjoy    runtime-loaded vJoyInterface.dll (path from vJoy uninstall key); VJoy::acquire -> Device
   (reset+release on drop); axis slots 1..8 like gob-input; example `vjoy_info --sweep <id>`
 - crates/gob-hidhide wraps HidHideCLI.exe (path from HKLM\SOFTWARE\Nefarius Software Solutions e.U.\HidHide):
@@ -27,6 +29,8 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 - UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; helpers in joygob/src/style.rs.
   Layout: left icon nav rail; all options live in settings_view.rs under horizontal tabs.
 - All user-visible strings go through i18n keys; add key to lang/en.ftl AND lang/ru.ftl.
+- The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words);
+  "JoyGob" is internal only (code, comments, this file); "JoystickGobloon" only in file names.
 - Gremlin import must round-trip: unknown actions kept as raw XML.
 - GUI never blocks; engine runs on its own thread, talks via channels.
 - Settings: TOML in %APPDATA%\JoystickGobloon\settings.toml.
@@ -47,6 +51,14 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
+  Debug builds open a page at start with env `JOYGOB_START_PAGE` = hidhide | vjoy | viewer | viewer-window | calibration | settings | about,
+  select an input with `JOYGOB_EXPAND` = axis1 | button3 | hat1 ..., a tab with `JOYGOB_TAB` = keyboard | logical,
+  the first device's info window with `JOYGOB_INFO=1`
+- tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
+  window stays responsive; needs "close button hides to tray" on.
+- One instance per user (named mutex/event, separate names for debug builds): a second start shows the
+  running window and exits, so a second debug launch while one runs only brings it up.
+  tools/single_instance.ps1 checks it.
 - HidHide hides the VKB sticks; target\debug\JoystickGobloon.exe and examples\monitor.exe are whitelisted.
 - Profile device GUIDs come from another PC: use "Map controls" (banner on the Devices page).
 - JoyGob whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.

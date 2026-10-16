@@ -36,6 +36,7 @@ pub fn missing_devices<'a>(
         .iter()
         .filter(|d| {
             !d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
+                && !d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
                 && !devices
                     .iter()
                     .any(|s| s.info.guid.eq_ignore_ascii_case(&d.id))
@@ -97,7 +98,7 @@ impl SubstituteDialog {
                 }
             }
         }
-        pairs.sort_by(|a, b| b.0.cmp(&a.0));
+        pairs.sort_by_key(|p| std::cmp::Reverse(p.0));
         let mut mapped = 0;
         for &(score, ri, di) in &pairs {
             let guid = &self.free[di].0;
