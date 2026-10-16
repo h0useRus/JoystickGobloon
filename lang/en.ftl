@@ -403,3 +403,6 @@ keyboard-add = Bind a key
 keyboard-empty = No keys bound yet: record one with the button above.
 edit-binding-description = Description of this input
 edit-unbound = No actions yet: add one.
+viewer-detach = Open in a separate window
+viewer-attach = Back into the main window
+viewer-in-window = The input viewer is open in its own window.

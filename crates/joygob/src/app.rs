@@ -38,6 +38,8 @@ pub struct JoyGobApp {
     substitute: Option<SubstituteDialog>,
     vjoy_view: VJoyView,
     viewer_view: crate::viewer_view::ViewerView,
+    /// The input viewer is shown in its own window.
+    viewer_window: bool,
     hidhide_view: HidHideView,
     /// Running profile, if activated.
     runner: Option<gob_engine::Runner>,
@@ -125,6 +127,7 @@ impl JoyGobApp {
             substitute: None,
             vjoy_view: VJoyView::new(),
             viewer_view: Default::default(),
+            viewer_window: false,
             hidhide_view: HidHideView::new(),
             runner: None,
             edited: None,
@@ -156,6 +159,10 @@ impl JoyGobApp {
             Ok("hidhide") => app.page = Page::HidHide,
             Ok("vjoy") => app.page = Page::VJoy,
             Ok("viewer") => app.page = Page::Viewer,
+            Ok("viewer-window") => {
+                app.page = Page::Viewer;
+                app.viewer_window = true;
+            }
             Ok("settings") => app.page = Page::Settings,
             Ok("about") => {
                 app.page = Page::Settings;
@@ -359,6 +366,36 @@ impl JoyGobApp {
                     self.toggle_runner(ctx);
                 }
             }
+        }
+    }
+
+    /// The input viewer in its own native window (multi-viewport), when detached.
+    fn viewer_window(&mut self, ctx: &egui::Context) {
+        if !self.viewer_window {
+            return;
+        }
+        let devices = self.input.devices().clone();
+        let (viewer, i18n) = (&mut self.viewer_view, &self.i18n);
+        let mut builder = egui::ViewportBuilder::default()
+            .with_title(format!("{} | {}", crate::APP_NAME, i18n.tr("nav-viewer")))
+            .with_inner_size([1000.0, 700.0])
+            .with_min_inner_size([480.0, 320.0]);
+        if let Ok(icon) = eframe::icon_data::from_png_bytes(LOGO_PNG) {
+            builder = builder.with_icon(icon);
+        }
+        let mut attach = false;
+        ctx.show_viewport_immediate(
+            egui::ViewportId::from_hash_of("input-viewer"),
+            builder,
+            |ctx, _class| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    attach |= viewer.show(ui, i18n, &devices, true);
+                });
+                attach |= ctx.input(|i| i.viewport().close_requested());
+            },
+        );
+        if attach {
+            self.viewer_window = false;
         }
     }
 
@@ -853,9 +890,28 @@ impl eframe::App for JoyGobApp {
                     let locked = self.runner.is_some();
                     self.vjoy_view.show(ui, &self.i18n, locked);
                 }
+                Page::Viewer if self.viewer_window => {
+                    empty_state(
+                        ui,
+                        icon::ARROW_SQUARE_OUT,
+                        &self.i18n.tr("viewer-in-window"),
+                    );
+                    ui.vertical_centered(|ui| {
+                        let text = format!(
+                            "{}  {}",
+                            icon::ARROW_SQUARE_IN,
+                            self.i18n.tr("viewer-attach")
+                        );
+                        if ui.button(text).clicked() {
+                            self.viewer_window = false;
+                        }
+                    });
+                }
                 Page::Viewer => {
                     let devices = self.input.devices().clone();
-                    self.viewer_view.show(ui, &self.i18n, &devices);
+                    if self.viewer_view.show(ui, &self.i18n, &devices, false) {
+                        self.viewer_window = true;
+                    }
                 }
                 Page::Settings => {
                     let change = settings_view::show(
@@ -907,6 +963,7 @@ impl eframe::App for JoyGobApp {
         }
         self.unsaved_dialog(ctx);
         self.alert_dialog(ctx);
+        self.viewer_window(ctx);
     }
 }
 

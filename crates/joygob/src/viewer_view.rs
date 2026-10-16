@@ -56,12 +56,33 @@ pub struct ViewerView {
 }
 
 impl ViewerView {
-    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, devices: &[DeviceState]) {
+    /// `detached`: shown in its own window. Returns true when the user switches between
+    /// the page and the separate window.
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        devices: &[DeviceState],
+        detached: bool,
+    ) -> bool {
         self.sample(devices);
         ui.ctx().request_repaint_after(REFRESH);
+        let (glyph, key) = if detached {
+            (icon::ARROW_SQUARE_IN, "viewer-attach")
+        } else {
+            (icon::ARROW_SQUARE_OUT, "viewer-detach")
+        };
+        let mut toggle = false;
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(i18n.tr("nav-viewer")).strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                toggle = style::icon_button(ui, true, glyph, &i18n.tr(key)).clicked();
+            });
+        });
+        ui.separator();
         if devices.is_empty() {
             crate::app::empty_state(ui, icon::JOYSTICK, &i18n.tr("no-devices-attached"));
-            return;
+            return toggle;
         }
 
         egui::SidePanel::left("viewer-devices")
@@ -110,6 +131,7 @@ impl ViewerView {
                     }
                 }
             });
+        toggle
     }
 
     fn now(&mut self) -> f64 {
