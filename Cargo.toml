@@ -18,6 +18,7 @@ libloading = "0.8"
 gob-vjoy = { path = "crates/gob-vjoy" }
 gob-hidhide = { path = "crates/gob-hidhide" }
 gob-engine = { path = "crates/gob-engine" }
+gob-plugin = { path = "crates/gob-plugin" }
 serde_json = "1"
 eframe = "0.31"
 fluent-bundle = "0.15"

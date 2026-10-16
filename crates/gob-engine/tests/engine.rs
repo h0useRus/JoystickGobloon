@@ -1258,3 +1258,58 @@ fn logical_device_button_runs_its_own_binding() {
     r.button(22, false, 10);
     assert_eq!(r.take(), [Out::Button(52, false)]);
 }
+
+/// In-process plugin for a made-up action type: presses vJoy button 60 while released.
+struct InvertPlugin;
+
+struct InvertFunctor(u8);
+
+impl gob_plugin::Functor for InvertFunctor {
+    fn process(&mut self, value: gob_plugin::Value, out: &mut Vec<gob_plugin::Command>) {
+        if let gob_plugin::Value::Button(b) = value {
+            out.push(gob_plugin::Command::VjoyButton {
+                device: 1,
+                button: self.0,
+                pressed: !b,
+            });
+        }
+    }
+}
+
+impl gob_plugin::ActionPlugin for InvertPlugin {
+    fn kind(&self) -> &str {
+        "test-invert"
+    }
+    fn create(&self, action: &gob_core::Action) -> Box<dyn gob_plugin::Functor> {
+        let button = action
+            .str("button")
+            .and_then(|b| b.parse().ok())
+            .unwrap_or(60);
+        Box::new(InvertFunctor(button))
+    }
+}
+
+#[test]
+fn unknown_action_types_run_through_plugins() {
+    let xml = format!(
+        r#"<profile version="14"><inputs>{}</inputs><settings/><library>{}{}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        input("button", 1, "Default", "r", ""),
+        root("r", &["inv"]),
+        act("inv", "test-invert", &prop("int", "button", "61")),
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut registry = gob_plugin::Registry::default();
+    registry.register(Box::new(InvertPlugin));
+    let mut engine = Engine::with_plugins(&p, &HashMap::new(), &registry);
+    let mut out = Recorder::default();
+    let key = InputKey::new(DEV, InputKind::Button, 1);
+    engine.process(&key, Value::Button(true), Instant::now(), &mut out);
+    engine.process(&key, Value::Button(false), Instant::now(), &mut out);
+    assert_eq!(out.0, [Out::Button(61, false), Out::Button(61, true)]);
+    // Without the plugin the action is kept but does nothing.
+    let mut plain = Engine::new(&p, &HashMap::new());
+    let mut out = Recorder::default();
+    plain.process(&key, Value::Button(true), Instant::now(), &mut out);
+    assert!(out.0.is_empty());
+}

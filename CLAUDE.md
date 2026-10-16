@@ -1,6 +1,6 @@
 # Joystick Gobloon (JoyGob)
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
-Plan: phases 0-9 in docs/ROADMAP.md (phases 0-7 done; R14+ profiles only, no R13). Work on ONE crate per session.
+Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13). Work on ONE crate per session.
 
 ## Layout
 - crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default), other `lang/*.ftl` embedded or loaded from `<exe>/lang/`.
@@ -17,7 +17,9 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-7 done; R14+ profiles only, no R13
   semantics (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy;
   examples `dry_run` (profile -> printed vJoy output) and `runner_check`
 - docs/GREMLIN_ACTIONS.md  all Gremlin actions, inputs, JoyGob status and per-action notes; update when adding one
-- planned: gob-plugin
+- crates/gob-plugin  ActionPlugin/Functor traits + Registry (in-process); Engine::with_plugins runs unknown action
+  types through it. DLL plugins = stub: `joygob_plugin_info` C entry, ABI_VERSION, info only (examples
+  `stub_plugin` cdylib, `list_plugins`); the app loads `<exe>/plugins/*.dll` and logs them
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
 

@@ -49,6 +49,8 @@ pub struct JoyGobApp {
     modes_window: crate::modes_view::ModesWindow,
     /// Sound and speech previews from the editor.
     media: gob_engine::Media,
+    /// Plugin DLLs from `<exe folder>\plugins`, kept loaded while the app runs.
+    _plugins: gob_plugin::Registry,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -120,6 +122,7 @@ impl JoyGobApp {
             modes_window: Default::default(),
             title: crate::APP_NAME.into(),
             media: Default::default(),
+            _plugins: load_plugins(),
         };
         if app.settings.hidhide_whitelist_self {
             match app.hidhide_view.whitelist_self() {
@@ -783,6 +786,29 @@ impl eframe::App for JoyGobApp {
         self.unsaved_dialog(ctx);
         self.alert_dialog(ctx);
     }
+}
+
+/// Loads the plugin DLLs next to the exe and logs what was found (plugins are a stub so far).
+fn load_plugins() -> gob_plugin::Registry {
+    let mut registry = gob_plugin::Registry::default();
+    let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(|d| d.join("plugins")))
+    else {
+        return registry;
+    };
+    for e in registry.load_dir(&dir) {
+        log::warn!("plugin skipped: {e}");
+    }
+    for p in registry.loaded() {
+        log::info!(
+            "plugin loaded: {} {} ({})",
+            p.name,
+            p.version,
+            p.path.display()
+        );
+    }
+    registry
 }
 
 /// Big faded icon with a hint, for pages without content.

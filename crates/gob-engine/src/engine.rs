@@ -158,6 +158,8 @@ enum Node {
         repeat: MacroRepeat,
         act: ActivationMode,
     },
+    /// Action type handled by a plugin: index into [`Engine::plugins`].
+    Plugin(usize),
     /// Description and action types JoyGob does not execute yet.
     Noop,
 }
@@ -425,6 +427,9 @@ pub struct Engine {
     paused: bool,
     /// Profile device GUID -> attached device GUID, lowercase.
     aliases: HashMap<String, String>,
+    /// Functors of plugin actions, one per library action (shared references share it).
+    plugins: Vec<Box<dyn gob_plugin::Functor>>,
+    plugin_ids: HashMap<String, usize>,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -448,6 +453,15 @@ impl Engine {
     /// Compiles `profile`. `aliases` maps profile device GUIDs to attached ones
     /// (same stick under another GUID on this PC).
     pub fn new(profile: &Profile, aliases: &HashMap<String, String>) -> Self {
+        Self::with_plugins(profile, aliases, &gob_plugin::Registry::default())
+    }
+
+    /// Like [`Engine::new`]; action types JoyGob does not know run through `registry`.
+    pub fn with_plugins(
+        profile: &Profile,
+        aliases: &HashMap<String, String>,
+        registry: &gob_plugin::Registry,
+    ) -> Self {
         let index = profile.action_index();
         let start = profile
             .startup_mode()
@@ -491,7 +505,18 @@ impl Engine {
                 .iter()
                 .map(|(k, v)| (k.to_ascii_lowercase(), v.to_ascii_lowercase()))
                 .collect(),
+            plugins: Vec::new(),
+            plugin_ids: HashMap::new(),
         };
+        for a in &profile.library {
+            if gob_core::SUPPORTED_KINDS.contains(&a.kind.as_str()) {
+                continue;
+            }
+            if let Some(plugin) = registry.get(&a.kind) {
+                engine.plugin_ids.insert(a.id.clone(), engine.plugins.len());
+                engine.plugins.push(plugin.create(a));
+            }
+        }
 
         let mut virtual_id = 0;
         for b in &profile.inputs {
@@ -914,7 +939,11 @@ impl Engine {
                     repeat,
                     act: action.activation_mode(),
                 },
-                ActionKind::Description { .. } | ActionKind::Other => Node::Noop,
+                ActionKind::Other => self
+                    .plugin_ids
+                    .get(id)
+                    .map_or(Node::Noop, |&i| Node::Plugin(i)),
+                ActionKind::Description { .. } => Node::Noop,
             },
         };
         self.nodes.push(node);
@@ -1502,6 +1531,40 @@ impl Engine {
             Node::Macro { repeat, act, .. } => {
                 if should_execute(act, *value) {
                     self.macro_trigger(node, repeat, src, now, out);
+                }
+            }
+            Node::Plugin(i) => {
+                let v = match *value {
+                    Value::Button(b) => gob_plugin::Value::Button(b),
+                    Value::Axis(a) => gob_plugin::Value::Axis(a),
+                    Value::Hat(d) => gob_plugin::Value::Hat(d),
+                };
+                let mut commands = Vec::new();
+                self.plugins[i].process(v, &mut commands);
+                for c in commands {
+                    match c {
+                        gob_plugin::Command::VjoyAxis {
+                            device,
+                            axis,
+                            value,
+                        } => self.set_axis(device, axis, value, out),
+                        gob_plugin::Command::VjoyButton {
+                            device,
+                            button,
+                            pressed,
+                        } => out.button(device, button, pressed),
+                        gob_plugin::Command::VjoyHat {
+                            device,
+                            hat,
+                            direction,
+                        } => out.hat(device, hat, direction),
+                        gob_plugin::Command::Key {
+                            scan_code,
+                            extended,
+                            pressed,
+                        } => out.key(scan_code, extended, pressed),
+                        gob_plugin::Command::Log(line) => log::info!("plugin: {line}"),
+                    }
                 }
             }
             Node::Noop => {}

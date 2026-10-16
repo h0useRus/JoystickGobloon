@@ -1572,6 +1572,7 @@ dependencies = [
  "gob-core",
  "gob-gremlin",
  "gob-input",
+ "gob-plugin",
  "gob-vjoy",
  "log",
  "rodio",
@@ -1608,6 +1609,14 @@ name = "gob-input"
 version = "0.1.0"
 dependencies = [
  "windows 0.61.3",
+]
+
+[[package]]
+name = "gob-plugin"
+version = "0.1.0"
+dependencies = [
+ "gob-core",
+ "libloading",
 ]
 
 [[package]]
@@ -1974,6 +1983,7 @@ dependencies = [
  "gob-hidhide",
  "gob-i18n",
  "gob-input",
+ "gob-plugin",
  "gob-vjoy",
  "log",
  "rfd",
