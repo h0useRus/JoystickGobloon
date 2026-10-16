@@ -439,9 +439,8 @@ impl JoyGobApp {
 
     fn nav_rail(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
+            // The logo is in the window title bar; the rail starts with the pages.
             ui.add_space(8.0);
-            ui.add(egui::Image::new(&self.logo).fit_to_exact_size(Vec2::splat(34.0)));
-            ui.add_space(12.0);
             for (page, glyph, key) in [
                 (Page::Devices, icon::JOYSTICK, "nav-devices"),
                 (Page::HidHide, icon::EYE_SLASH, "nav-hidhide"),
