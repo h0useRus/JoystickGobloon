@@ -120,7 +120,7 @@ pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) ->
         }
         match recording {
             None => {
-                if style::icon_button(ui, true, icon::RECORD, &i18n.tr("keys-record")).clicked() {
+                if style::record_button(ui, &i18n.tr("keys-record")).clicked() {
                     // Typing must not reach a focused text field meanwhile.
                     ui.memory_mut(|m| {
                         if let Some(f) = m.focused() {

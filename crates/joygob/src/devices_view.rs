@@ -198,6 +198,18 @@ impl DevicesView {
                 logical: false,
             });
         }
+        // Debug builds: JOYGOB_TAB=keyboard | logical opens that tab at start (screenshots).
+        if cfg!(debug_assertions) && self.selected.is_none() {
+            let guid = match std::env::var("JOYGOB_TAB").as_deref() {
+                Ok("keyboard") => Some(gob_core::KEYBOARD_GUID),
+                Ok("logical") => Some(gob_core::LOGICAL_DEVICE_GUID),
+                _ => None,
+            };
+            if let Some(g) = guid.filter(|g| tabs.iter().any(|t| t.guid == *g)) {
+                self.selected = Some(g.to_string());
+                self.user_selected = true;
+            }
+        }
         let valid = self
             .selected
             .as_ref()

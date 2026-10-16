@@ -207,6 +207,26 @@ pub fn icon_button(ui: &mut egui::Ui, enabled: bool, glyph: &str, tooltip: &str)
     .on_hover_text(tooltip)
 }
 
+/// Record button: a ring with a red dot in the middle, as tall as text fields.
+pub fn record_button(ui: &mut egui::Ui, tooltip: &str) -> egui::Response {
+    let h = ui.spacing().interact_size.y;
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(h), egui::Sense::click());
+    let visuals = ui.style().interact(&response);
+    let painter = ui.painter();
+    if response.hovered() {
+        painter.rect_filled(rect, RADIUS, visuals.bg_fill);
+    }
+    let c = rect.center();
+    let red = if response.hovered() {
+        Color32::from_rgb(0xff, 0x4d, 0x4f)
+    } else {
+        Color32::from_rgb(0xe5, 0x48, 0x4d)
+    };
+    painter.circle_stroke(c, h * 0.32, egui::Stroke::new(1.5, visuals.fg_stroke.color));
+    painter.circle_filled(c, h * 0.18, red);
+    response.on_hover_text(tooltip)
+}
+
 /// Horizontal tab with icon and short caption.
 pub fn tab(ui: &mut egui::Ui, selected: bool, glyph: &str, caption: &str) -> egui::Response {
     ui.add(
