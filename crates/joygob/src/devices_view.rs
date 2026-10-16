@@ -47,6 +47,8 @@ struct Tab<'a> {
     live: Option<&'a DeviceState>,
     /// Profile device (different GUID, same name) whose bindings are shown on this live device.
     alias: Option<&'a str>,
+    /// The profile's logical device: inputs come from the profile and can be edited.
+    logical: bool,
 }
 
 impl DevicesView {
@@ -104,8 +106,10 @@ impl DevicesView {
                 name: &d.info.name,
                 live: Some(d),
                 alias: None,
+                logical: false,
             })
             .collect();
+        let logical_name = i18n.tr("logical-device");
         if let Some(p) = profile {
             let known = |guid: &str| {
                 p.profile
@@ -114,7 +118,8 @@ impl DevicesView {
                     .any(|d| d.id.eq_ignore_ascii_case(guid))
             };
             for d in &p.profile.devices {
-                if tabs.iter().any(|t| t.guid.eq_ignore_ascii_case(&d.id)) {
+                let logical = d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID);
+                if logical || tabs.iter().any(|t| t.guid.eq_ignore_ascii_case(&d.id)) {
                     continue;
                 }
                 // Same stick on this PC under another GUID: show its bindings on the live tab.
@@ -135,9 +140,17 @@ impl DevicesView {
                         name: d.name.trim(),
                         live: None,
                         alias: None,
+                        logical: false,
                     });
                 }
             }
+            tabs.push(Tab {
+                guid: gob_core::LOGICAL_DEVICE_GUID,
+                name: &logical_name,
+                live: None,
+                alias: None,
+                logical: true,
+            });
         }
         let valid = self
             .selected
@@ -145,7 +158,7 @@ impl DevicesView {
             .is_some_and(|s| tabs.iter().any(|t| t.guid == s));
         let on_ghost = tabs
             .iter()
-            .any(|t| self.selected.as_deref() == Some(t.guid) && t.live.is_none());
+            .any(|t| self.selected.as_deref() == Some(t.guid) && t.live.is_none() && !t.logical);
         if !valid || (!self.user_selected && on_ghost) {
             let first = tabs.iter().find(|t| t.live.is_some()).or(tabs.first());
             self.selected = first.map(|t| t.guid.to_string());
@@ -185,6 +198,7 @@ impl DevicesView {
                     for t in &tabs {
                         let selected = self.selected.as_deref() == Some(t.guid);
                         let (glyph, hint) = match (t.live, t.alias) {
+                            _ if t.logical => (icon::CPU, Some("logical-device-tip")),
                             (Some(_), Some(_)) => (icon::LINK, Some("device-linked")),
                             (Some(_), None) => (icon::JOYSTICK, None),
                             (None, _) => (icon::PLUGS, Some("device-disconnected")),
@@ -262,6 +276,37 @@ impl DevicesView {
             }
         }
 
+        let mut labels: HashMap<Key, String> = HashMap::new();
+        if let (true, Some(p)) = (tab.logical, profile) {
+            for i in p.profile.logical_inputs() {
+                let kind = match i.input_type {
+                    InputType::Axis => Kind::Axis,
+                    InputType::Hat => Kind::Hat,
+                    _ => Kind::Button,
+                };
+                rows.entry((kind, i.id)).or_insert(Bound::None);
+                labels.insert((kind, i.id), i.label);
+            }
+            ui.horizontal(|ui| {
+                for (ty, glyph, key) in [
+                    (
+                        InputType::Axis,
+                        icon::ARROWS_OUT_LINE_HORIZONTAL,
+                        "logical-add-axis",
+                    ),
+                    (InputType::Button, icon::CIRCLE, "logical-add-button"),
+                    (InputType::Hat, icon::CROSSHAIR, "logical-add-hat"),
+                ] {
+                    let text = format!("{}  {glyph}", icon::PLUS);
+                    if ui.button(text).on_hover_text(i18n.tr(key)).clicked() {
+                        ops.push(Op::AddLogicalInput(ty));
+                    }
+                }
+            });
+            if labels.is_empty() {
+                ui.label(RichText::new(i18n.tr("logical-empty")).weak());
+            }
+        }
         let index = profile
             .map(|p| p.profile.action_index())
             .unwrap_or_default();
@@ -269,8 +314,9 @@ impl DevicesView {
             .auto_shrink(false)
             .show(ui, |ui| {
                 for (key, bound) in rows {
+                    let label = labels.get(&key).map(String::as_str);
                     self.row(
-                        ui, i18n, profile, ops, vjoy, devices, tab, key, bound, &index,
+                        ui, i18n, profile, ops, vjoy, devices, tab, key, bound, &index, label,
                     );
                 }
             });
@@ -289,6 +335,8 @@ impl DevicesView {
         key: Key,
         bound: Bound,
         index: &HashMap<&str, &Action>,
+        // Logical device input label: editable, with a delete button.
+        label: Option<&str>,
     ) {
         let active = self
             .activity
@@ -333,7 +381,39 @@ impl DevicesView {
                         [28.0, 18.0],
                         egui::Label::new(RichText::new(key.1.to_string()).monospace()),
                     );
-                    live_widget(ui, tab.live, key);
+                    match label {
+                        Some(text) => {
+                            let ty = InputType::parse(input_type);
+                            // Edited text lives in egui memory; it is applied on Enter / focus loss.
+                            let buf_id = egui::Id::new(("logical-label", key));
+                            let mut edited: String = ui
+                                .data(|d| d.get_temp(buf_id))
+                                .unwrap_or_else(|| text.to_string());
+                            let r = ui
+                                .add_sized([150.0, 20.0], egui::TextEdit::singleline(&mut edited));
+                            if r.lost_focus() {
+                                ui.data_mut(|d| d.remove::<String>(buf_id));
+                                if edited.trim() != text {
+                                    ops.push(Op::RenameLogicalInput {
+                                        input_type: ty,
+                                        id: key.1,
+                                        label: edited,
+                                    });
+                                }
+                            } else if r.has_focus() {
+                                ui.data_mut(|d| d.insert_temp(buf_id, edited));
+                            }
+                            if style::icon_button(ui, true, icon::TRASH, &i18n.tr("logical-remove"))
+                                .clicked()
+                            {
+                                ops.push(Op::RemoveLogicalInput {
+                                    input_type: ty,
+                                    id: key.1,
+                                });
+                            }
+                        }
+                        None => live_widget(ui, tab.live, key),
+                    }
                     match bound {
                         Bound::Own(b) => {
                             if let Some(text) = summary_of(b) {

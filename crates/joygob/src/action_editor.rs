@@ -26,6 +26,20 @@ pub enum AddKind {
 
 fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
     match kind {
+        // Id 0: the first logical input of that type, created when there is none.
+        AddKind::New(NewAction::MapToLogicalDevice { input_type, id: 0 }) => {
+            let existing = p
+                .logical_inputs()
+                .into_iter()
+                .find(|i| i.input_type == *input_type)
+                .map(|i| i.id);
+            let id = existing.unwrap_or_else(|| p.add_logical_input(*input_type));
+            let kind = NewAction::MapToLogicalDevice {
+                input_type: *input_type,
+                id,
+            };
+            p.add_child(parent, group, Action::new(&kind));
+        }
         AddKind::New(kind) => {
             p.add_child(parent, group, Action::new(kind));
         }
@@ -124,6 +138,16 @@ pub enum Op {
         action: String,
         index: usize,
     },
+    AddLogicalInput(InputType),
+    RenameLogicalInput {
+        input_type: InputType,
+        id: u32,
+        label: String,
+    },
+    RemoveLogicalInput {
+        input_type: InputType,
+        id: u32,
+    },
     AddChainStep(String),
     RemoveChainStep {
         action: String,
@@ -158,7 +182,8 @@ pub fn apply(p: &mut Profile, op: Op) {
             mode,
             add,
         } => {
-            if !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(&device)) {
+            let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID);
+            if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(&device)) {
                 p.devices.push(gob_core::Device {
                     id: device.clone(),
                     name,
@@ -209,6 +234,17 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
         Op::SetKeys { action, keys } => p.set_keys(&action, &keys),
         Op::AddChainStep(action) => p.add_chain_step(&action),
+        Op::AddLogicalInput(input_type) => {
+            p.add_logical_input(input_type);
+        }
+        Op::RenameLogicalInput {
+            input_type,
+            id,
+            label,
+        } => {
+            p.rename_logical_input(input_type, id, &label);
+        }
+        Op::RemoveLogicalInput { input_type, id } => p.remove_logical_input(input_type, id),
         Op::SetMacroStep {
             action,
             index,
@@ -330,6 +366,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "dual-axis-deadzone" => icon::CIRCLE_DASHED,
         "condition" => icon::GIT_BRANCH,
         "load-profile" => icon::FILE_ARROW_UP,
+        "map-to-logical-device" => icon::CPU,
         "play-sound" => icon::SPEAKER_HIGH,
         "text-to-speech" => icon::CHAT_TEXT,
         _ => icon::PUZZLE_PIECE,
@@ -420,6 +457,16 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             icon::ARROWS_DOWN_UP,
             "kind-axis-delta",
             NewAction::AxisDelta,
+        ));
+    }
+    if behavior != InputType::Other {
+        list.push((
+            icon::CPU,
+            "kind-map-to-logical-device",
+            NewAction::MapToLogicalDevice {
+                input_type: behavior,
+                id: 0,
+            },
         ));
     }
     list.push((icon::GIT_BRANCH, "kind-condition", NewAction::Condition));
@@ -662,6 +709,12 @@ impl Editor<'_> {
                 ActionKind::Condition {
                     all, conditions, ..
                 } => self.condition(ui, action, all, &conditions, depth),
+                ActionKind::MapToLogicalDevice {
+                    input_type,
+                    id,
+                    inverted,
+                    relative,
+                } => self.logical_target(ui, action, input_type, id, inverted, relative),
                 ActionKind::LoadProfile { file } => {
                     let filter = ("file-filter-gremlin", &["xml"][..]);
                     self.file_field(ui, &action.id, "load-profile", file, Some(filter));
@@ -1368,6 +1421,81 @@ impl Editor<'_> {
     }
 
     /// Device and axis dropdowns for `axis1-*` / `axis2-*` (merge-axis, dual-axis-deadzone).
+    /// Logical input picker (same type) plus button / axis options.
+    fn logical_target(
+        &mut self,
+        ui: &mut egui::Ui,
+        action: &Action,
+        input_type: InputType,
+        id: u32,
+        inverted: bool,
+        relative: Option<f64>,
+    ) {
+        let aid = action.id.clone();
+        let inputs: Vec<gob_core::LogicalInput> = self
+            .profile
+            .logical_inputs()
+            .into_iter()
+            .filter(|i| i.input_type == input_type)
+            .collect();
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(icon::CPU).size(style::ICON_SIZE))
+                .on_hover_text(self.i18n.tr("logical-device"));
+            let shown = inputs
+                .iter()
+                .find(|i| i.id == id)
+                .map_or_else(|| format!("#{id} ?"), |i| i.label.clone());
+            egui::ComboBox::from_id_salt(("logical", &aid))
+                .selected_text(shown)
+                .width(180.0)
+                .show_ui(ui, |ui| {
+                    for i in &inputs {
+                        if ui.selectable_label(i.id == id, &i.label).clicked() {
+                            self.set(&aid, "logical-input-id", "int", i.id.to_string());
+                        }
+                    }
+                });
+            match input_type {
+                InputType::Button => {
+                    let mut inv = inverted;
+                    if ui
+                        .checkbox(&mut inv, self.i18n.tr("edit-inverted"))
+                        .changed()
+                    {
+                        let v = if inv { "True" } else { "False" };
+                        self.set(&aid, "button-inverted", "bool", v);
+                    }
+                }
+                InputType::Axis => {
+                    let rel = relative.is_some();
+                    if ui.radio(!rel, self.i18n.tr("vjoy-absolute")).clicked() && rel {
+                        self.set(&aid, "axis-mode", "axis_mode", "absolute");
+                    }
+                    if ui.radio(rel, self.i18n.tr("vjoy-relative")).clicked() && !rel {
+                        self.set(&aid, "axis-mode", "axis_mode", "relative");
+                    }
+                    if let Some(speed) = relative {
+                        let mut v = speed as f32;
+                        let drag = egui::DragValue::new(&mut v)
+                            .range(0.1..=50.0)
+                            .speed(0.05)
+                            .fixed_decimals(2);
+                        if ui
+                            .add(drag)
+                            .on_hover_text(self.i18n.tr("vjoy-speed"))
+                            .changed()
+                        {
+                            self.set(&aid, "axis-scaling", "float", py_float(v));
+                        }
+                    }
+                }
+                _ => {}
+            }
+            ui.separator();
+            self.activation(ui, action);
+        });
+    }
+
     /// Path text field with a browse button for the string property `name`.
     fn file_field(
         &mut self,

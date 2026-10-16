@@ -104,6 +104,14 @@ enum Node {
     },
     /// Hat direction (`None` = center) -> actions run as a button while the hat points exactly there.
     HatButtons(Vec<(Option<u16>, Vec<NodeId>)>),
+    /// Writes to a logical device input, which then runs its own bindings.
+    Logical {
+        key: InputKey,
+        inverted: bool,
+        /// Relative axis speed (Gremlin's axis-scaling); absolute when `None`.
+        relative: Option<f32>,
+        act: ActivationMode,
+    },
     LoadProfile {
         file: String,
         act: ActivationMode,
@@ -280,6 +288,8 @@ enum ReleaseAction {
     TapRelease(NodeId),
     ReleaseKeys(NodeId),
     HatButtons(NodeId),
+    /// Releases a logical device button.
+    Logical(InputKey),
 }
 
 /// Runs when the physical input that registered it is released (Gremlin's ButtonReleaseActions).
@@ -392,6 +402,10 @@ pub struct Engine {
     macros: HashMap<NodeId, MacroRun>,
     taps: HashMap<NodeId, TapState>,
     chains: HashMap<NodeId, ChainState>,
+    /// Logical axes moved by speed (relative map-to-logical-device).
+    logical_relative: HashMap<InputKey, RelativeAxis>,
+    /// Nesting of logical device dispatches, against loops in broken profiles.
+    logical_depth: usize,
     /// Physical button and hat states, for conditions.
     buttons: HashMap<InputKey, bool>,
     hats: HashMap<InputKey, Option<u16>>,
@@ -461,6 +475,8 @@ impl Engine {
             deltas: HashMap::new(),
             buttons: HashMap::new(),
             hats: HashMap::new(),
+            logical_relative: HashMap::new(),
+            logical_depth: 0,
             cond_cache: HashMap::new(),
             keys_down: HashSet::new(),
             macro_delay: profile
@@ -681,6 +697,29 @@ impl Engine {
                         })
                         .collect(),
                 ),
+                ActionKind::MapToLogicalDevice {
+                    input_type,
+                    id,
+                    inverted,
+                    relative,
+                } => {
+                    let kind = match input_type {
+                        InputType::Axis => Some(InputKind::Axis),
+                        InputType::Button => Some(InputKind::Button),
+                        InputType::Hat => Some(InputKind::Hat),
+                        InputType::Other => None,
+                    };
+                    kind.map_or(Node::Noop, |kind| Node::Logical {
+                        key: InputKey {
+                            device: gob_core::LOGICAL_DEVICE_GUID.into(),
+                            kind,
+                            id,
+                        },
+                        inverted,
+                        relative: relative.map(|r| r as f32),
+                        act: action.activation_mode(),
+                    })
+                }
                 ActionKind::LoadProfile { file } => Node::LoadProfile {
                     file: file.to_string(),
                     act: action.activation_mode(),
@@ -750,6 +789,18 @@ impl Engine {
                                     InputType::Hat => CondSource::Vjoy(device, InputKind::Hat, id),
                                     _ => CondSource::Vjoy(device, InputKind::Button, id),
                                 },
+                                ConditionSource::Logical { input_type, id } => {
+                                    let kind = match input_type {
+                                        InputType::Axis => InputKind::Axis,
+                                        InputType::Hat => InputKind::Hat,
+                                        _ => InputKind::Button,
+                                    };
+                                    CondSource::Inputs(vec![InputKey {
+                                        device: gob_core::LOGICAL_DEVICE_GUID.into(),
+                                        kind,
+                                        id,
+                                    }])
+                                }
                                 ConditionSource::Other(_) => CondSource::Never,
                             },
                             comparator: c.comparator,
@@ -961,6 +1012,7 @@ impl Engine {
             }
         }
         self.step_relative(now, out);
+        self.step_logical(now, out);
         if let Some((dx, dy)) = self.motion.step(now) {
             if dx != 0 || dy != 0 {
                 out.mouse_move(dx, dy);
@@ -1259,6 +1311,63 @@ impl Engine {
                     );
                 } else {
                     self.release_keys(node, out);
+                }
+            }
+            Node::Logical {
+                key,
+                inverted,
+                relative,
+                act,
+            } => {
+                if !should_execute(act, *value) {
+                    return;
+                }
+                match (key.kind, *value) {
+                    (InputKind::Axis, Value::Axis(v)) if relative.is_some() => {
+                        let speed = relative.unwrap_or(1.0);
+                        let r = self.logical_relative.entry(key).or_insert(RelativeAxis {
+                            value: 0.0,
+                            delta: 0.0,
+                            active: false,
+                            stopping: false,
+                            last_update: now,
+                            last_step: now,
+                        });
+                        r.delta = v * speed * 0.001;
+                        r.stopping = v.abs() < 0.05;
+                        r.last_update = now;
+                        if !r.active {
+                            r.active = true;
+                            r.last_step = now;
+                        }
+                    }
+                    (InputKind::Axis, v) => {
+                        let v = match v {
+                            Value::Axis(v) => v,
+                            Value::Button(b) => f32::from(u8::from(b)),
+                            Value::Hat(_) => return,
+                        };
+                        self.feed_logical(&key, Value::Axis(v), now, out);
+                    }
+                    (InputKind::Button, v) => {
+                        let pressed = v.truthy() != inverted;
+                        self.feed_logical(&key, Value::Button(pressed), now, out);
+                        if pressed && !src.no_auto_release {
+                            self.register(
+                                &src.key,
+                                ReleaseEntry {
+                                    mode: src.mode.clone(),
+                                    any_mode: false,
+                                    on_press: inverted,
+                                    action: ReleaseAction::Logical(key),
+                                },
+                            );
+                        }
+                    }
+                    (InputKind::Hat, Value::Hat(d)) => {
+                        self.feed_logical(&key, Value::Hat(d), now, out)
+                    }
+                    _ => {}
                 }
             }
             Node::LoadProfile { file, act } => {
@@ -1786,6 +1895,39 @@ impl Engine {
         );
     }
 
+    /// A logical device input changed: record it and run its bindings like a device event.
+    fn feed_logical(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
+        if self.logical_depth >= 8 {
+            return;
+        }
+        self.logical_depth += 1;
+        self.seed(key, value);
+        self.dispatch(key, value, now, out);
+        self.logical_depth -= 1;
+    }
+
+    /// Advances relative logical axes like [`Engine::step_relative`] does for vJoy.
+    fn step_logical(&mut self, now: Instant, out: &mut dyn Output) {
+        let mut moved = Vec::new();
+        for (key, r) in self.logical_relative.iter_mut().filter(|(_, r)| r.active) {
+            let steps = (now.saturating_duration_since(r.last_step).as_secs_f32()
+                / RELATIVE_STEP.as_secs_f32())
+            .floor();
+            if steps < 1.0 {
+                continue;
+            }
+            r.value = (r.value + r.delta * steps).clamp(-1.0, 1.0);
+            r.last_step += RELATIVE_STEP.mul_f32(steps);
+            moved.push((key.clone(), r.value));
+            if r.stopping && now.saturating_duration_since(r.last_update) > RELATIVE_STOP {
+                r.active = false;
+            }
+        }
+        for (key, v) in moved {
+            self.feed_logical(&key, Value::Axis(v), now, out);
+        }
+    }
+
     /// One condition of a condition action (Gremlin's comparators on the source states).
     fn cond_holds(&self, cond: &Cond, value: Value, out: &dyn Output) -> bool {
         let states: Vec<Value> = match &cond.source {
@@ -2057,6 +2199,9 @@ impl Engine {
                 ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
                 ReleaseAction::LeaveTemporary(mode) => self.leave_temporary(&mode),
                 ReleaseAction::ReleaseKeys(node) => self.release_keys(node, out),
+                ReleaseAction::Logical(key) => {
+                    self.feed_logical(&key, Value::Button(false), now, out)
+                }
                 ReleaseAction::HatButtons(node) => {
                     let Some(state) = self.hat_buttons.get_mut(&node) else {
                         continue;

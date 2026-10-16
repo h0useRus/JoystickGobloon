@@ -311,3 +311,14 @@ macro-step-vjoy-axis = Ось vJoy
 macro-step-vjoy-hat = Хатка vJoy
 macro-press = Нажать
 macro-release = Отпустить
+
+# Logical device
+logical-device = Логическое устройство
+logical-device-tip = Виртуальные входы профиля: назначьте на них входы, затем настройте их как джойстик
+logical-add-axis = Добавить ось
+logical-add-button = Добавить кнопку
+logical-add-hat = Добавить хатку
+logical-remove = Удалить вход и его назначения
+logical-empty = Логических входов пока нет: добавьте кнопками выше.
+kind-map-to-logical-device = Назначить на логическое устройство
+cond-logical = Вход логического устройства

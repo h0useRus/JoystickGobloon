@@ -20,7 +20,9 @@ pub enum Source {
         input_type: InputType,
         id: u32,
     },
-    /// `logical_device` and anything newer; evaluates to false.
+    /// A logical device input.
+    Logical { input_type: InputType, id: u32 },
+    /// Anything newer; evaluates to false.
     Other(String),
 }
 
@@ -105,6 +107,10 @@ impl Condition {
                 input_type: InputType::parse(prop(items, "input-type").unwrap_or_default()),
                 id: num(items, "input-id", 1.0) as u32,
             },
+            "logical_device" => Source::Logical {
+                input_type: InputType::parse(prop(items, "input-type").unwrap_or_default()),
+                id: num(items, "input-id", 1.0) as u32,
+            },
             other => Source::Other(other.to_string()),
         };
         Self { source, comparator }
@@ -117,6 +123,7 @@ impl Condition {
             Source::Joystick(_) => "joystick",
             Source::Keyboard(_) => "keyboard",
             Source::Vjoy { .. } => "vjoy",
+            Source::Logical { .. } => "logical_device",
             Source::Other(k) => k,
         };
         let mut items = vec![p("string", "condition-type", kind)];
@@ -169,6 +176,10 @@ impl Condition {
                 id,
             } => {
                 items.push(p("int", "vjoy-id", &device.to_string()));
+                items.push(p("input_type", "input-type", input_type_name(*input_type)));
+                items.push(p("int", "input-id", &id.to_string()));
+            }
+            Source::Logical { input_type, id } => {
                 items.push(p("input_type", "input-type", input_type_name(*input_type)));
                 items.push(p("int", "input-id", &id.to_string()));
             }

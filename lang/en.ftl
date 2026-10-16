@@ -311,3 +311,14 @@ macro-step-vjoy-axis = vJoy axis
 macro-step-vjoy-hat = vJoy hat
 macro-press = Press
 macro-release = Release
+
+# Logical device
+logical-device = Logical device
+logical-device-tip = Virtual inputs of this profile: map inputs to them, then bind them like a stick
+logical-add-axis = Add an axis
+logical-add-button = Add a button
+logical-add-hat = Add a hat
+logical-remove = Remove this input and its bindings
+logical-empty = No logical inputs yet: add one with the buttons above.
+kind-map-to-logical-device = Map to logical device
+cond-logical = Logical device input

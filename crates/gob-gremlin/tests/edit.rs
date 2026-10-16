@@ -460,3 +460,44 @@ fn macro_steps_round_trip_and_keep_unknown_ones() {
     want.push(MacroStep::Other);
     assert_eq!(got, want);
 }
+
+#[test]
+fn logical_device_inputs_round_trip() {
+    use gob_core::{LogicalInput, LOGICAL_DEVICE_GUID};
+    let mut p = sample();
+    assert_eq!(p.add_logical_input(InputType::Axis), 1);
+    assert_eq!(p.add_logical_input(InputType::Button), 1);
+    assert_eq!(p.add_logical_input(InputType::Button), 2);
+    assert!(p.rename_logical_input(InputType::Button, 2, "Fire"));
+    assert!(
+        !p.rename_logical_input(InputType::Axis, 1, "Fire"),
+        "labels are unique"
+    );
+    let root = p.bind(LOGICAL_DEVICE_GUID, "button", "1", "Default");
+    p.add_child(
+        &root,
+        "actions",
+        gob_core::Action::new(&NewAction::Description),
+    );
+    p.remove_logical_input(InputType::Button, 1);
+    let p = reload(&p);
+    assert_eq!(
+        p.logical_inputs(),
+        [
+            LogicalInput {
+                input_type: InputType::Axis,
+                id: 1,
+                label: "Axis 1".into()
+            },
+            LogicalInput {
+                input_type: InputType::Button,
+                id: 2,
+                label: "Fire".into()
+            },
+        ]
+    );
+    assert!(
+        !p.inputs.iter().any(|b| b.device_id == LOGICAL_DEVICE_GUID),
+        "bindings of a removed input go too"
+    );
+}

@@ -7,6 +7,7 @@
 pub mod action;
 pub mod condition;
 pub mod edit;
+pub mod logical;
 pub mod profile;
 pub mod xml;
 
@@ -16,6 +17,7 @@ pub use action::{
 };
 pub use condition::{Comparator, Condition, Source as ConditionSource};
 pub use edit::{child_groups, new_uuid, NewAction};
+pub use logical::{LogicalInput, LOGICAL_DEVICE_GUID};
 pub use profile::{
     same_device_name, ActionConfig, AxisDirection, Device, InputBinding, Mode, Profile, Section,
     VirtualButton,

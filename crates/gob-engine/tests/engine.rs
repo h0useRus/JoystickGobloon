@@ -220,6 +220,19 @@ fn profile() -> String {
         root("r-a6", &["merge"]),
         root("r-a8", &["delta"]),
         root("r-b19", &["cond"]),
+        root("r-b22", &["to-logical"]),
+        root("r-l1", &["v52"]),
+        act(
+            "to-logical",
+            "map-to-logical-device",
+            &format!(
+                "{}{}{}",
+                prop("int", "logical-input-id", "1"),
+                prop("input_type", "logical-input-type", "button"),
+                prop("bool", "button-inverted", "False")
+            ),
+        ),
+        vjoy("v52", "button", 52),
         root("r-b21", &["sound", "say", "load"]),
         act_on(
             "sound",
@@ -555,6 +568,13 @@ fn profile() -> String {
         input("axis", 8, "Default", "r-a8", ""),
         input("button", 19, "Default", "r-b19", ""),
         input("button", 21, "Default", "r-b21", ""),
+        input("button", 22, "Default", "r-b22", ""),
+        format!(
+            "<input><device-id>{}</device-id><input-type>button</input-type><mode>Default</mode>\
+             <input-id>1</input-id><action-configuration><root-action>r-l1</root-action>\
+             <behavior>button</behavior></action-configuration></input>",
+            gob_core::LOGICAL_DEVICE_GUID
+        ),
         input("axis", 11, "Default", "r-a11", ""),
         input("axis", 9, "Default", "r-a9", ""),
         input("axis", 10, "Default", "r-a9", ""),
@@ -1228,4 +1248,13 @@ fn sound_speech_and_load_profile() {
     );
     r.button(21, false, 10);
     assert_eq!(r.take(), [Out::Load("other.xml".into())]);
+}
+
+#[test]
+fn logical_device_button_runs_its_own_binding() {
+    let mut r = Rig::new();
+    r.button(22, true, 0);
+    assert_eq!(r.take(), [Out::Button(52, true)]);
+    r.button(22, false, 10);
+    assert_eq!(r.take(), [Out::Button(52, false)]);
 }

@@ -26,7 +26,7 @@ pub struct SubstituteDialog {
 /// One accepted substitution: old GUID, new GUID, new device name.
 pub type Substitution = (String, String, String);
 
-/// Profile devices that no attached controller matches.
+/// Profile devices that no attached controller matches (the logical device never does).
 pub fn missing_devices<'a>(
     profile: &'a Profile,
     devices: &[DeviceState],
@@ -35,9 +35,10 @@ pub fn missing_devices<'a>(
         .devices
         .iter()
         .filter(|d| {
-            !devices
-                .iter()
-                .any(|s| s.info.guid.eq_ignore_ascii_case(&d.id))
+            !d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
+                && !devices
+                    .iter()
+                    .any(|s| s.info.guid.eq_ignore_ascii_case(&d.id))
         })
         .collect()
 }

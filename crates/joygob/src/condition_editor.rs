@@ -106,6 +106,11 @@ impl Editor<'_> {
             RichText::new(format!("{}  {}", icon::PLUS, self.i18n.tr("edit-cond-add"))),
             |ui| {
                 let device = self.input.map(|(d, _)| d.to_string()).unwrap_or_default();
+                let first_logical = self
+                    .profile
+                    .logical_inputs()
+                    .first()
+                    .map_or((InputType::Button, 1), |i| (i.input_type, i.id));
                 let choices = [
                     (
                         icon::CURSOR_CLICK,
@@ -124,6 +129,15 @@ impl Editor<'_> {
                         "cond-keyboard",
                         ConditionSource::Keyboard(Vec::new()),
                         InputType::Button,
+                    ),
+                    (
+                        icon::CPU,
+                        "cond-logical",
+                        ConditionSource::Logical {
+                            input_type: first_logical.0,
+                            id: first_logical.1,
+                        },
+                        first_logical.0,
                     ),
                     (
                         icon::GAME_CONTROLLER,
@@ -222,6 +236,37 @@ impl Editor<'_> {
                 let field = egui::Id::new(("cond-keys", &salt));
                 if let Some(new) = crate::key_capture::keys_field(ui, field, keys, self.i18n) {
                     *keys = new;
+                }
+            }
+            ConditionSource::Logical {
+                input_type,
+                id: input,
+            } => {
+                ui.label(RichText::new(icon::CPU).size(style::ICON_SIZE))
+                    .on_hover_text(self.i18n.tr("cond-logical"));
+                let inputs = self.profile.logical_inputs();
+                let shown = inputs
+                    .iter()
+                    .find(|i| i.input_type == *input_type && i.id == *input)
+                    .map_or_else(|| format!("#{input} ?"), |i| i.label.clone());
+                let mut picked = None;
+                egui::ComboBox::from_id_salt(("cond-logical", &salt))
+                    .selected_text(shown)
+                    .width(180.0)
+                    .show_ui(ui, |ui| {
+                        for i in &inputs {
+                            let on = i.input_type == *input_type && i.id == *input;
+                            if ui.selectable_label(on, &i.label).clicked() {
+                                picked = Some((i.input_type, i.id));
+                            }
+                        }
+                    });
+                if let Some((t, n)) = picked {
+                    if t != *input_type {
+                        cond.comparator = Condition::default_comparator(t);
+                    }
+                    *input_type = t;
+                    *input = n;
                 }
             }
             ConditionSource::Other(kind) => {

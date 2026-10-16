@@ -131,6 +131,13 @@ pub enum ActionKind<'a> {
         first: Vec<&'a str>,
         second: Vec<&'a str>,
     },
+    /// Writes to a logical device input; `relative` is the axis speed (absolute when `None`).
+    MapToLogicalDevice {
+        input_type: InputType,
+        id: u32,
+        inverted: bool,
+        relative: Option<f64>,
+    },
     /// Switches to another profile file and activates it.
     LoadProfile {
         file: &'a str,
@@ -418,6 +425,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "dual-axis-deadzone",
     "condition",
     "load-profile",
+    "map-to-logical-device",
     "play-sound",
     "text-to-speech",
     "smart-toggle",
@@ -548,6 +556,15 @@ impl Action {
                 directions.push(("Center", None, self.refs_in("Center")));
                 ActionKind::HatButtons { directions }
             }
+            "map-to-logical-device" => ActionKind::MapToLogicalDevice {
+                input_type: InputType::parse(
+                    self.str("logical-input-type").unwrap_or_default().trim(),
+                ),
+                id: self.parse("logical-input-id").unwrap_or(1),
+                inverted: self.bool("button-inverted"),
+                relative: (self.str("axis-mode").map(str::trim) == Some("relative"))
+                    .then(|| self.parse("axis-scaling").unwrap_or(1.0)),
+            },
             "load-profile" => ActionKind::LoadProfile {
                 file: self.str("load-profile").unwrap_or_default().trim(),
             },

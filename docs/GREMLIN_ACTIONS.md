@@ -14,7 +14,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `tempo` | B K | done |
 | `description` | A B H K | done |
 | `map-to-mouse` | A B H K | done |
-| `macro` | B K | done (keys, mouse, vJoy, pauses, repeat modes; not exclusive/preemptive, joystick, logical-device) |
+| `macro` | B K | done (keys, mouse, vJoy, pauses, repeat modes; not exclusive/preemptive, joystick and logical-device steps) |
 | `map-to-keyboard` | B K | done |
 | `chain` | B K | done |
 | `double-tap` | B K | done |
@@ -24,14 +24,14 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `merge-axis` | A B | done |
 | `axis-delta` | A | done |
 | `dual-axis-deadzone` | A | done |
-| `condition` | A B H K | done (logical devices are false) |
+| `condition` | A B H K | done |
 | `reference` | A B H K | done (editor only: link / copy existing action) |
 | `pause-resume` | B K | done |
 | `load-profile` | B K | done |
 | `play-sound` | B K | done |
 | `text-to-speech` | B | done |
 | `run-command` | B K | done |
-| `map-to-logical-device` | A B H K | todo (needs logical devices) |
+| `map-to-logical-device` | A B H K | done |
 
 ## map-to-mouse
 
@@ -172,3 +172,16 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - JoyGob addition: `voice` string property (installed voice name, classic SAPI and OneCore voices); Gremlin
   ignores it on load and drops it when it saves. Missing voice -> system default. The editor previews
   sounds and speech (speech interrupts the previous preview).
+
+## logical device, map-to-logical-device
+
+- `<logical-device>` lists `<input>` elements with `input-type`, `input-id` (unique per type) and `label`
+  (unique). Bindings of logical inputs use device id `f0af472f-8e17-493b-a1eb-7333ee8543f2`
+  (`dill.UUID_LogicalDevice`); the Devices page shows them on a "Logical device" tab, where inputs are
+  added, renamed and removed (removing also drops their bindings). The device is not listed in `<devices>`.
+- map-to-logical-device: `logical-input-id`, `logical-input-type`; axis: `axis-mode`, `axis-scaling`;
+  button: `button-inverted`. Activation both. Writing an input stores its state and dispatches it to the
+  input's bindings like a device event (nesting limited to 8 against loops). Buttons auto-release when
+  the source input is released in another mode. Relative axes step every 10 ms by
+  value * scaling / 1000 and stop 1 s after the input returned near center, like vJoy relative axes.
+- Conditions on logical inputs (`logical_device`: `input-type`, `input-id`) read the stored states.
