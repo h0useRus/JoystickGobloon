@@ -14,7 +14,9 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 - crates/gob-vjoy    runtime-loaded vJoyInterface.dll (path from vJoy uninstall key); VJoy::acquire -> Device
   (reset+release on drop); axis slots 1..8 like gob-input; example `vjoy_info --sweep <id>`
 - crates/gob-hidhide wraps HidHideCLI.exe (path from HKLM\SOFTWARE\Nefarius Software Solutions e.U.\HidHide):
-  cloak, hidden devices (HID + USB container), app whitelist, `--dev-gaming` JSON; example `hidhide_info`
+  cloak, hidden devices (HID + USB container), app whitelist, `--dev-gaming` JSON; example `hidhide_info`.
+  Moving to IOCTL (docs/HIDHIDE_PLAN.md) for the signed 1.5.x driver only; session blacklist waits for a
+  signed 1.7.x - check nefarius/HidHide#217 and its releases before each gob-hidhide session
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
   semantics (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy;
   examples `dry_run` (profile -> printed vJoy output) and `runner_check`
