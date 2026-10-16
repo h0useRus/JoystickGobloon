@@ -3,6 +3,7 @@
 //! The DLL is loaded at runtime from the vJoy installation, so JoyGob still
 //! starts when vJoy is missing.
 
+pub mod config;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

@@ -849,7 +849,10 @@ impl eframe::App for JoyGobApp {
             .show(ctx, |ui| match self.page {
                 Page::Devices => self.devices_page(ui),
                 Page::HidHide => self.hidhide_view.show(ui, &self.i18n),
-                Page::VJoy => self.vjoy_view.show(ui, &self.i18n),
+                Page::VJoy => {
+                    let locked = self.runner.is_some();
+                    self.vjoy_view.show(ui, &self.i18n, locked);
+                }
                 Page::Viewer => {
                     let devices = self.input.devices().clone();
                     self.viewer_view.show(ui, &self.i18n, &devices);
