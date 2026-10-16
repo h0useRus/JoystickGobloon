@@ -65,6 +65,15 @@ impl ModesWindow {
             .pivot(egui::Align2::CENTER_CENTER)
             .default_pos(ctx.screen_rect().center())
             .show(ctx, |ui| {
+                // Room for 100 characters of a mode name, within the screen.
+                let char_w =
+                    ui.fonts(|f| f.glyph_width(&egui::TextStyle::Body.resolve(ui.style()), 'n'));
+                let rest = 420.0;
+                let name_w = (char_w * 100.0)
+                    .min(ctx.screen_rect().width() * 0.9 - rest)
+                    .max(240.0);
+                // An auto-sized window starts narrow and would squeeze the fields.
+                ui.set_min_width(name_w + rest);
                 egui::Grid::new("modes")
                     .num_columns(4)
                     .spacing([10.0, 6.0])
@@ -89,7 +98,7 @@ impl ModesWindow {
                                 .names
                                 .entry(mode.name.clone())
                                 .or_insert_with(|| mode.name.clone());
-                            let r = ui.add(egui::TextEdit::singleline(text).desired_width(180.0));
+                            let r = ui.add(egui::TextEdit::singleline(text).desired_width(name_w));
                             if r.lost_focus() && *text != mode.name {
                                 ops.push(ModeOp::Rename {
                                     old: mode.name.clone(),
@@ -100,6 +109,7 @@ impl ModesWindow {
                             let parent = mode.parent.clone().unwrap_or_else(|| "—".into());
                             egui::ComboBox::from_id_salt(("parent", &mode.name))
                                 .selected_text(parent)
+                                .width(240.0)
                                 .show_ui(ui, |ui| {
                                     if ui.selectable_label(mode.parent.is_none(), "—").clicked() {
                                         ops.push(ModeOp::SetParent {
@@ -138,7 +148,7 @@ impl ModesWindow {
                 ui.horizontal(|ui| {
                     let edit = egui::TextEdit::singleline(&mut self.new_name)
                         .hint_text(i18n.tr("modes-new"))
-                        .desired_width(180.0);
+                        .desired_width(name_w);
                     let r = ui.add(edit);
                     let valid = !self.new_name.trim().is_empty()
                         && !names.iter().any(|n| n == self.new_name.trim());
