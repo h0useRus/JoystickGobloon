@@ -34,6 +34,14 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
   %APPDATA%\JoystickGobloon\joygob.log via the `log` crate (English, not i18n; joygob/src/logfile.rs).
   Only warnings/errors that matter to a general user become dialogs (`JoyGobApp::error` / `alerts`),
   translated; routine info goes to the status bar. No report/diagnostics windows.
+- Branches: development happens on `dev`; every work branch is created from `dev` and merged back into it
+  by pull request. `main` only receives release requests: a pull request from `dev` whose title contains
+  the final version, with `[workspace.package] version` in Cargo.toml bumped to that x.y.z (checked by
+  .github/workflows/release-request.yml). Never commit directly to `main`.
+- Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
+  pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/joygob.iss) and a
+  portable zip. `JOYGOB_VERSION` (env at build time) is the version the app shows. CI (ci.yml) runs fmt,
+  clippy -D warnings and tests on pull requests and work branches.
 - Commits: Conventional Commits (feat/fix/docs/refactor/test/chore/build/ci; scope = crate, e.g. `feat(gob-gremlin): parse R14 library`).
 
 ## Testing notes

@@ -162,7 +162,7 @@ fn about(ui: &mut egui::Ui, i18n: &I18n, logo: &egui::TextureHandle) {
         ui.add(egui::Image::new(logo).fit_to_exact_size(Vec2::splat(96.0)));
         ui.vertical(|ui| {
             ui.heading("Joystick Gobloon");
-            ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
+            ui.label(format!("v{}", crate::VERSION));
             ui.add_space(4.0);
             ui.label(i18n.tr("about-text"));
             ui.add_space(4.0);

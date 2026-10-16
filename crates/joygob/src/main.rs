@@ -18,6 +18,12 @@ mod tray;
 mod vjoy_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
+/// Version shown to users: CI sets `JOYGOB_VERSION` for alpha builds (`0.2.0-alpha.12`),
+/// otherwise the crate version.
+pub const VERSION: &str = match option_env!("JOYGOB_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 fn main() -> eframe::Result {
     logfile::init();

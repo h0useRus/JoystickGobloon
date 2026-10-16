@@ -1,0 +1,46 @@
+# Pull requests into main are release requests: they come from dev and carry the final
+# version of the release (workspace version in Cargo.toml, no pre-release suffix, newer
+# than the latest release).
+name: Release request
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: From dev
+        shell: bash
+        run: |
+          if [ "${{ github.head_ref }}" != "dev" ]; then
+            echo "::error::Pull requests into main must come from dev (this one is from ${{ github.head_ref }})."
+            exit 1
+          fi
+      - name: Final, new version
+        shell: bash
+        run: |
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          echo "Release version: $version"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Cargo.toml version '$version' is not a final x.y.z version."
+            exit 1
+          fi
+          last=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -V | tail -n1)
+          echo "Latest release: ${last:-none}"
+          if [ -n "$last" ]; then
+            newest=$(printf '%s\n%s\n' "$last" "$version" | sort -V | tail -n1)
+            if [ "$version" = "$last" ] || [ "$newest" != "$version" ]; then
+              echo "::error::Version $version must be newer than the latest release $last."
+              exit 1
+            fi
+          fi
+          if ! grep -q "$version" <<< "${{ github.event.pull_request.title }}"; then
+            echo "::error::The pull request title must contain the release version $version."
+            exit 1
+          fi

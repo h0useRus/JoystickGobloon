@@ -58,7 +58,7 @@ pub fn init() {
     if log::set_boxed_logger(Box::new(FileLog(Mutex::new(file)))).is_ok() {
         log::set_max_level(LevelFilter::Debug);
     }
-    log::info!("{} {} started", crate::APP_NAME, env!("CARGO_PKG_VERSION"));
+    log::info!("{} {} started", crate::APP_NAME, crate::VERSION);
 }
 
 /// Local time like `2026-10-16 14:03:27.512`.
