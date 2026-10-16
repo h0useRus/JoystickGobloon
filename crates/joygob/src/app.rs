@@ -524,17 +524,6 @@ impl JoyGobApp {
                 self.history(false);
             }
             ui.separator();
-            if style::icon_button(
-                ui,
-                loaded,
-                icon::TREE_STRUCTURE,
-                &self.i18n.tr("modes-title"),
-            )
-            .clicked()
-            {
-                self.show_modes = true;
-            }
-            ui.separator();
             let active = self.runner.is_some();
             let (glyph, tip) = if active {
                 (icon::STOP, "action-deactivate")
@@ -596,6 +585,9 @@ impl JoyGobApp {
             &vjoy,
         );
         drop(devices);
+        if std::mem::take(&mut self.devices_view.open_modes) {
+            self.show_modes = true;
+        }
         self.apply_ops(ops);
     }
 

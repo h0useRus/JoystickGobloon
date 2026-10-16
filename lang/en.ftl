@@ -128,6 +128,7 @@ unsaved-text = Save changes to { $file }?
 unsaved-save = Save
 unsaved-discard = Don't save
 cancel = Cancel
+modes-edit = Edit modes
 modes-title = Modes
 modes-name = Name
 modes-parent = Inherits from

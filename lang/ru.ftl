@@ -128,6 +128,7 @@ unsaved-text = Сохранить изменения в { $file }?
 unsaved-save = Сохранить
 unsaved-discard = Не сохранять
 cancel = Отмена
+modes-edit = Изменить режимы
 modes-title = Режимы
 modes-name = Название
 modes-parent = Наследует от

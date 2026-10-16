@@ -37,6 +37,8 @@ pub struct DevicesView {
     mode: Option<String>,
     activity: HashMap<(String, Key), Instant>,
     scroll_to: Option<(String, Key)>,
+    /// The mode icon was clicked: the app opens the modes window.
+    pub open_modes: bool,
 }
 
 struct Tab<'a> {
@@ -164,8 +166,9 @@ impl DevicesView {
 
         ui.horizontal_wrapped(|ui| {
             if let (Some(p), Some(mode)) = (profile, self.mode.as_mut()) {
-                ui.label(RichText::new(icon::STACK).size(style::ICON_SIZE))
-                    .on_hover_text(i18n.tr("label-mode"));
+                if style::icon_button(ui, true, icon::STACK, &i18n.tr("modes-edit")).clicked() {
+                    self.open_modes = true;
+                }
                 egui::ComboBox::from_id_salt("mode")
                     .selected_text(mode.as_str())
                     .show_ui(ui, |ui| {
