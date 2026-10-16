@@ -10,8 +10,57 @@ use eframe::egui;
 use tray_icon::menu::{Menu, MenuEvent, MenuItem};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
+/// Tray images (assets/icon/tray-*.svg): the logo's joystick on a green circle while a
+/// profile is active, on a light grey one otherwise; one per Windows tray size.
+const ICONS: [(u32, &[u8], &[u8]); 4] = [
+    (
+        16,
+        include_bytes!("../../../assets/icon/tray/active-16.png"),
+        include_bytes!("../../../assets/icon/tray/idle-16.png"),
+    ),
+    (
+        20,
+        include_bytes!("../../../assets/icon/tray/active-20.png"),
+        include_bytes!("../../../assets/icon/tray/idle-20.png"),
+    ),
+    (
+        24,
+        include_bytes!("../../../assets/icon/tray/active-24.png"),
+        include_bytes!("../../../assets/icon/tray/idle-24.png"),
+    ),
+    (
+        32,
+        include_bytes!("../../../assets/icon/tray/active-32.png"),
+        include_bytes!("../../../assets/icon/tray/idle-32.png"),
+    ),
+];
+
+/// The tray image for the current display scaling (16 px at 100 %, 20 at 125 %, ...).
+fn tray_image(active: bool) -> Result<tray_icon::Icon, String> {
+    #[cfg(windows)]
+    // SAFETY: a plain metrics query.
+    let want = unsafe {
+        windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(
+            windows::Win32::UI::WindowsAndMessaging::SM_CXSMICON,
+        )
+    }
+    .max(16) as u32;
+    #[cfg(not(windows))]
+    let want = 16;
+    let (_, on, off) = ICONS
+        .iter()
+        .rev()
+        .find(|(size, ..)| *size <= want)
+        .unwrap_or(&ICONS[0]);
+    let png = eframe::icon_data::from_png_bytes(if active { on } else { off })
+        .map_err(|e| e.to_string())?;
+    tray_icon::Icon::from_rgba(png.rgba, png.width, png.height).map_err(|e| e.to_string())
+}
+
 pub struct Tray {
-    _icon: TrayIcon,
+    icon: TrayIcon,
+    /// Profile state the icon and tooltip show; `None` until the first update.
+    active: Option<bool>,
     /// "Quit" was chosen in the tray menu; the app closes (asking to save first).
     pub quit: Arc<AtomicBool>,
 }
@@ -25,12 +74,7 @@ impl Tray {
         show: &str,
         quit: &str,
     ) -> Result<Self, String> {
-        let png = eframe::icon_data::from_png_bytes(include_bytes!(
-            "../../../assets/icon/joygob-256.png"
-        ))
-        .map_err(|e| e.to_string())?;
-        let icon = tray_icon::Icon::from_rgba(png.rgba, png.width, png.height)
-            .map_err(|e| e.to_string())?;
+        let icon = tray_image(false)?;
         let show_item = MenuItem::new(show, true, None);
         let quit_item = MenuItem::new(quit, true, None);
         let menu = Menu::new();
@@ -74,9 +118,25 @@ impl Tray {
             }));
         }
         Ok(Self {
-            _icon: tray,
+            icon: tray,
+            active: None,
             quit: quit_flag,
         })
+    }
+
+    /// Green circle and `tooltip` while a profile runs, grey otherwise; no-op if unchanged.
+    pub fn set_active(&mut self, active: bool, tooltip: &str) {
+        if self.active == Some(active) {
+            return;
+        }
+        self.active = Some(active);
+        match tray_image(active) {
+            Ok(icon) => {
+                let _ = self.icon.set_icon(Some(icon));
+            }
+            Err(e) => log::error!("tray icon: {e}"),
+        }
+        let _ = self.icon.set_tooltip(Some(tooltip));
     }
 
     pub fn take_quit(&self) -> bool {

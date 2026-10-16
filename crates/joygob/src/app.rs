@@ -725,6 +725,15 @@ impl eframe::App for JoyGobApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             ctx.request_repaint();
         }
+        if let Some(tray) = &mut self.tray {
+            let active = self.runner.is_some();
+            let state = self.i18n.tr(if active {
+                "title-active"
+            } else {
+                "title-inactive"
+            });
+            tray.set_active(active, &format!("{} | {state}", crate::APP_NAME));
+        }
         if self.tray.as_ref().is_some_and(|t| t.take_quit()) {
             self.request(Pending::Close, ctx);
         }
