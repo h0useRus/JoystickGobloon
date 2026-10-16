@@ -1,4 +1,4 @@
-//! Modes window: add, rename, re-parent, remove modes and pick the startup mode.
+//! Modes window: add, rename, re-parent and remove modes (like Gremlin's mode editor).
 
 use std::collections::HashMap;
 
@@ -19,7 +19,6 @@ pub enum ModeOp {
         name: String,
         parent: Option<String>,
     },
-    SetStartup(String),
 }
 
 pub fn apply(p: &mut Profile, op: ModeOp) {
@@ -36,9 +35,13 @@ pub fn apply(p: &mut Profile, op: ModeOp) {
         ModeOp::SetParent { name, parent } => {
             p.set_mode_parent(&name, parent.as_deref());
         }
-        ModeOp::SetStartup(name) => p.set_startup_mode(&name),
     }
 }
+
+/// Width of the name field and the parent dropdown.
+const FIELD_WIDTH: f32 = 100.0;
+/// egui's default text field margin: where the text starts inside it.
+const TEXT_INSET: f32 = 4.0;
 
 /// Text being edited per mode, so renames apply on Enter / focus loss only.
 #[derive(Default)]
@@ -56,7 +59,6 @@ impl ModesWindow {
         open: &mut bool,
     ) -> Vec<ModeOp> {
         let mut ops = Vec::new();
-        let startup = profile.startup_mode();
         let names: Vec<String> = profile.modes.iter().map(|m| m.name.clone()).collect();
         egui::Window::new(i18n.tr("modes-title"))
             .open(open)
@@ -69,35 +71,23 @@ impl ModesWindow {
                 // column width, so they never grow.
                 let h = ui.spacing().interact_size.y;
                 let gap = ui.spacing().item_spacing.x;
-                let star_w = h + 4.0;
-                let parent_w = 240.0;
-                let rest = star_w + parent_w + h + gap * 3.0;
-                // Room for 100 characters of a mode name, within the screen.
-                let char_w =
-                    ui.fonts(|f| f.glyph_width(&egui::TextStyle::Body.resolve(ui.style()), 'n'));
-                let name_w = (char_w * 100.0)
-                    .min(ctx.screen_rect().width() * 0.9 - rest - 32.0)
-                    .max(240.0);
-                ui.set_width(name_w + rest);
+                let (name_w, parent_w) = (FIELD_WIDTH, FIELD_WIDTH);
+                ui.set_width(name_w + gap + parent_w + gap + h);
                 let left = egui::Layout::left_to_right(egui::Align::Center);
 
+                // Captions start where the text inside the field / dropdown starts.
+                let header = |ui: &mut egui::Ui, width: f32, inset: f32, key: &str| {
+                    ui.allocate_ui_with_layout(egui::vec2(width, h), left, |ui| {
+                        ui.add_space(inset);
+                        ui.label(RichText::new(i18n.tr(key)).weak());
+                    });
+                };
                 ui.horizontal(|ui| {
-                    ui.add_space(star_w + gap);
-                    ui.allocate_ui_with_layout(egui::vec2(name_w, h), left, |ui| {
-                        ui.label(RichText::new(i18n.tr("modes-name")).weak());
-                    });
-                    ui.allocate_ui_with_layout(egui::vec2(parent_w, h), left, |ui| {
-                        ui.label(RichText::new(i18n.tr("modes-parent")).weak());
-                    });
+                    header(ui, name_w, TEXT_INSET, "modes-name");
+                    header(ui, parent_w, ui.spacing().button_padding.x, "modes-parent");
                 });
                 for mode in &profile.modes {
                     ui.horizontal(|ui| {
-                        let is_startup = startup.as_deref() == Some(mode.name.as_str());
-                        if style::icon_toggle(ui, is_startup, icon::STAR, &i18n.tr("modes-startup"))
-                            .clicked()
-                        {
-                            ops.push(ModeOp::SetStartup(mode.name.clone()));
-                        }
                         let text = self
                             .names
                             .entry(mode.name.clone())
@@ -144,7 +134,6 @@ impl ModesWindow {
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    ui.add_space(star_w + gap);
                     let edit = egui::TextEdit::singleline(&mut self.new_name)
                         .hint_text(i18n.tr("modes-new"));
                     let r = ui.add_sized([name_w, h], edit);

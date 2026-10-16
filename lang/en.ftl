@@ -131,7 +131,6 @@ cancel = Cancel
 modes-title = Modes
 modes-name = Name
 modes-parent = Inherits from
-modes-startup = Mode on startup
 modes-remove = Remove mode and its bindings
 modes-new = New mode
 modes-add = Add mode

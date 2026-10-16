@@ -131,7 +131,6 @@ cancel = Отмена
 modes-title = Режимы
 modes-name = Название
 modes-parent = Наследует от
-modes-startup = Режим при запуске
 modes-remove = Удалить режим и его назначения
 modes-new = Новый режим
 modes-add = Добавить режим
