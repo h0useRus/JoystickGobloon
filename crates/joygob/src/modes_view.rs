@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use eframe::egui::{self, RichText};
+use eframe::egui;
 use gob_core::Profile;
 use gob_i18n::I18n;
 
@@ -38,8 +38,8 @@ pub fn apply(p: &mut Profile, op: ModeOp) {
     }
 }
 
-/// Width of the name field and the parent dropdown.
-const FIELD_WIDTH: f32 = 100.0;
+/// Narrowest the name field and the parent dropdown get; they grow with the window.
+const MIN_FIELD_WIDTH: f32 = 150.0;
 /// egui's default text field margin: where the text starts inside it.
 const TEXT_INSET: f32 = 4.0;
 
@@ -60,32 +60,29 @@ impl ModesWindow {
     ) -> Vec<ModeOp> {
         let mut ops = Vec::new();
         let names: Vec<String> = profile.modes.iter().map(|m| m.name.clone()).collect();
+        let style = ctx.style();
+        let (h, gap) = (style.spacing.interact_size.y, style.spacing.item_spacing.x);
+        let min_width = MIN_FIELD_WIDTH * 2.0 + h + gap * 2.0;
         egui::Window::new(i18n.tr("modes-title"))
             .open(open)
             .collapsible(false)
-            .resizable(false)
+            .resizable([true, false])
+            .min_width(min_width)
+            .default_width(min_width)
             .pivot(egui::Align2::CENTER_CENTER)
             .default_pos(ctx.screen_rect().center())
             .show(ctx, |ui| {
-                // Fixed columns instead of a Grid: a Grid limits text fields to last frame's
-                // column width, so they never grow.
-                let h = ui.spacing().interact_size.y;
-                let gap = ui.spacing().item_spacing.x;
-                let (name_w, parent_w) = (FIELD_WIDTH, FIELD_WIDTH);
-                ui.set_width(name_w + gap + parent_w + gap + h);
-                let left = egui::Layout::left_to_right(egui::Align::Center);
+                // Invisible grid: two equal columns (name, parent) share the window width,
+                // the delete button keeps its size. Not egui's Grid: it limits text fields to
+                // last frame's column width, so they would never grow.
+                let field_w = ((ui.available_width() - h - gap * 2.0) / 2.0).max(MIN_FIELD_WIDTH);
+                let (name_w, parent_w) = (field_w, field_w);
 
-                // Captions start where the text inside the field / dropdown starts.
-                let header = |ui: &mut egui::Ui, width: f32, inset: f32, key: &str| {
-                    ui.allocate_ui_with_layout(egui::vec2(width, h), left, |ui| {
-                        ui.add_space(inset);
-                        ui.label(RichText::new(i18n.tr(key)).weak());
-                    });
-                };
-                ui.horizontal(|ui| {
-                    header(ui, name_w, TEXT_INSET, "modes-name");
-                    header(ui, parent_w, ui.spacing().button_padding.x, "modes-parent");
-                });
+                // Captions are painted after the rows, where the first row's field and
+                // dropdown text really starts.
+                let (header, _) = ui
+                    .allocate_exact_size(egui::vec2(ui.available_width(), h), egui::Sense::hover());
+                let mut columns: Option<[f32; 2]> = None;
                 for mode in &profile.modes {
                     ui.horizontal(|ui| {
                         let text = self
@@ -93,6 +90,7 @@ impl ModesWindow {
                             .entry(mode.name.clone())
                             .or_insert_with(|| mode.name.clone());
                         let r = ui.add_sized([name_w, h], egui::TextEdit::singleline(text));
+                        let name_x = r.rect.left() + TEXT_INSET;
                         if r.lost_focus() && *text != mode.name {
                             ops.push(ModeOp::Rename {
                                 old: mode.name.clone(),
@@ -101,6 +99,7 @@ impl ModesWindow {
                             self.names.clear();
                         }
                         let parent = mode.parent.clone().unwrap_or_else(|| "—".into());
+                        let combo_x = ui.cursor().left() + ui.spacing().button_padding.x;
                         egui::ComboBox::from_id_salt(("parent", &mode.name))
                             .selected_text(parent)
                             .width(parent_w)
@@ -123,6 +122,7 @@ impl ModesWindow {
                                     }
                                 }
                             });
+                        columns.get_or_insert([name_x, combo_x]);
                         let removable = profile.modes.len() > 1;
                         if style::icon_button(ui, removable, icon::TRASH, &i18n.tr("modes-remove"))
                             .clicked()
@@ -132,11 +132,25 @@ impl ModesWindow {
                         }
                     });
                 }
+                if let Some(xs) = columns {
+                    let color = ui.visuals().weak_text_color();
+                    let font = egui::TextStyle::Body.resolve(ui.style());
+                    for (x, key) in xs.into_iter().zip(["modes-name", "modes-parent"]) {
+                        ui.painter().text(
+                            egui::pos2(x, header.center().y),
+                            egui::Align2::LEFT_CENTER,
+                            i18n.tr(key),
+                            font.clone(),
+                            color,
+                        );
+                    }
+                }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
+                    // Spans both columns; the add button sits in the delete column.
                     let edit = egui::TextEdit::singleline(&mut self.new_name)
                         .hint_text(i18n.tr("modes-new"));
-                    let r = ui.add_sized([name_w, h], edit);
+                    let r = ui.add_sized([name_w + gap + parent_w, h], edit);
                     let valid = !self.new_name.trim().is_empty()
                         && !names.iter().any(|n| n == self.new_name.trim());
                     let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
