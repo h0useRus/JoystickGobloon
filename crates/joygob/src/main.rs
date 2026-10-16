@@ -14,14 +14,19 @@ mod settings;
 mod settings_view;
 mod style;
 mod substitute_view;
+mod tray;
 mod vjoy_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
 
 fn main() -> eframe::Result {
     logfile::init();
+    // Started by Windows at logon: hidden in the tray, or minimized without one.
+    let minimized = std::env::args().any(|a| a == tray::autostart::ARG);
+    let to_tray = minimized && settings::Settings::load().show_tray;
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
+            .with_visible(!to_tray)
             .with_title(APP_NAME)
             .with_inner_size([1100.0, 700.0])
             .with_min_inner_size([640.0, 400.0])

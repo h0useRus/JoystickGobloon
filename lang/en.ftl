@@ -322,3 +322,12 @@ logical-remove = Remove this input and its bindings
 logical-empty = No logical inputs yet: add one with the buttons above.
 kind-map-to-logical-device = Map to logical device
 cond-logical = Logical device input
+
+# Tray and startup
+settings-tray = Show an icon in the notification area
+settings-close-to-tray = The close button hides JoyGob to the notification area
+settings-autostart = Start with Windows (minimized)
+settings-activate-on-start = Activate the profile on startup
+tray-show = Show Joystick Gobloon
+tray-quit = Quit
+autostart-error = Could not change starting with Windows: { $error }

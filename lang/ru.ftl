@@ -322,3 +322,12 @@ logical-remove = Удалить вход и его назначения
 logical-empty = Логических входов пока нет: добавьте кнопками выше.
 kind-map-to-logical-device = Назначить на логическое устройство
 cond-logical = Вход логического устройства
+
+# Tray and startup
+settings-tray = Показывать значок в области уведомлений
+settings-close-to-tray = Кнопка закрытия прячет JoyGob в область уведомлений
+settings-autostart = Запускать вместе с Windows (свёрнутым)
+settings-activate-on-start = Активировать профиль при запуске
+tray-show = Показать Joystick Gobloon
+tray-quit = Выход
+autostart-error = Не удалось изменить автозапуск: { $error }

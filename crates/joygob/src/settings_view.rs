@@ -20,6 +20,10 @@ pub enum SettingsTab {
 pub enum Change {
     Theme(Theme),
     Language(String),
+    /// The tray icon was switched on or off.
+    Tray,
+    /// Start with Windows was switched: update the registry.
+    Autostart(bool),
 }
 
 pub fn show(
@@ -59,10 +63,36 @@ pub fn show(
                 &mut settings.hidhide_whitelist_self,
                 i18n.tr("settings-hidhide-self"),
             );
-            if reopen.changed() || whitelist.changed() {
+            ui.add_space(8.0);
+            let tray = ui.checkbox(&mut settings.show_tray, i18n.tr("settings-tray"));
+            let close = ui.add_enabled(
+                settings.show_tray,
+                egui::Checkbox::new(
+                    &mut settings.close_to_tray,
+                    i18n.tr("settings-close-to-tray"),
+                ),
+            );
+            let autostart = ui.checkbox(
+                &mut settings.start_with_windows,
+                i18n.tr("settings-autostart"),
+            );
+            let activate = ui.checkbox(
+                &mut settings.activate_on_start,
+                i18n.tr("settings-activate-on-start"),
+            );
+            let changed = [&reopen, &whitelist, &tray, &close, &autostart, &activate]
+                .iter()
+                .any(|r| r.changed());
+            if changed {
                 settings.save();
             }
-            None
+            if tray.changed() {
+                Some(Change::Tray)
+            } else if autostart.changed() {
+                Some(Change::Autostart(settings.start_with_windows))
+            } else {
+                None
+            }
         }
         SettingsTab::About => {
             about(ui, i18n, logo);

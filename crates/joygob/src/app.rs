@@ -49,6 +49,12 @@ pub struct JoyGobApp {
     modes_window: crate::modes_view::ModesWindow,
     /// Sound and speech previews from the editor.
     media: gob_engine::Media,
+    tray: Option<crate::tray::Tray>,
+    /// Started at logon with a tray icon: frames left in which the window is hidden again
+    /// (eframe shows it after its first frame whatever the viewport said).
+    hide_frames: u8,
+    /// Main window handle, for showing it from the tray.
+    hwnd: Option<isize>,
     /// Plugin DLLs from `<exe folder>\plugins`, kept loaded while the app runs.
     _plugins: gob_plugin::Registry,
     /// Window title last sent to the viewport.
@@ -123,7 +129,23 @@ impl JoyGobApp {
             title: crate::APP_NAME.into(),
             media: Default::default(),
             _plugins: load_plugins(),
+            tray: None,
+            hide_frames: 0,
+            hwnd: crate::tray::window_handle(cc),
         };
+        app.update_tray(&cc.egui_ctx);
+        // Started at logon without a (working) tray icon: show the window, minimized, so it
+        // can never stay hidden with no way back.
+        let at_logon = std::env::args().any(|a| a == crate::tray::autostart::ARG);
+        if at_logon && app.tray.is_some() {
+            app.hide_frames = 3;
+        }
+        if at_logon && app.tray.is_none() {
+            cc.egui_ctx
+                .send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            cc.egui_ctx
+                .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        }
         if app.settings.hidhide_whitelist_self {
             match app.hidhide_view.whitelist_self() {
                 Some(Ok(true)) => {
@@ -141,8 +163,30 @@ impl JoyGobApp {
         }
         if let Some(path) = reopen {
             app.open_profile(path, false);
+            if app.settings.activate_on_start && app.profile.is_some() {
+                app.toggle_runner(&cc.egui_ctx);
+            }
         }
         app
+    }
+
+    /// Creates or drops the tray icon to match the settings.
+    fn update_tray(&mut self, ctx: &egui::Context) {
+        match (self.settings.show_tray, self.tray.is_some(), self.hwnd) {
+            (true, false, Some(hwnd)) => {
+                let (show, quit) = (self.i18n.tr("tray-show"), self.i18n.tr("tray-quit"));
+                match crate::tray::Tray::new(ctx, hwnd, crate::APP_NAME, &show, &quit) {
+                    Ok(t) => {
+                        log::info!("tray icon shown");
+                        self.tray = Some(t);
+                    }
+                    Err(e) => log::error!("tray icon: {e}"),
+                }
+            }
+            (true, false, None) => log::error!("tray icon: no window handle"),
+            (false, true, _) => self.tray = None,
+            _ => {}
+        }
     }
 
     /// Logs an error and shows it to the user.
@@ -643,6 +687,15 @@ impl JoyGobApp {
                 self.settings.theme = theme;
                 style::apply(ctx, theme);
             }
+            Change::Tray => self.update_tray(ctx),
+            Change::Autostart(on) => {
+                if let Err(e) = crate::tray::autostart::set(on) {
+                    let text = self.i18n.trf("autostart-error", &[("error", e.into())]);
+                    self.error(text);
+                } else {
+                    log::info!("start with Windows: {on}");
+                }
+            }
             Change::Language(code) => {
                 self.i18n.set_language(&code);
                 self.settings.language = self.i18n.language().to_string();
@@ -656,11 +709,25 @@ impl JoyGobApp {
 impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.update_title(ctx);
+        if self.hide_frames > 0 {
+            self.hide_frames -= 1;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            ctx.request_repaint();
+        }
+        if self.tray.as_ref().is_some_and(|t| t.take_quit()) {
+            self.request(Pending::Close, ctx);
+        }
+        // Close button with "close to tray": hide instead of quitting (Quit is in the tray menu).
+        let to_tray = self.settings.close_to_tray && self.tray.is_some() && !self.allow_close;
+        if to_tray && ctx.input(|i| i.viewport().close_requested()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        }
         if let Some(file) = self.runner.as_ref().and_then(|r| r.take_load_request()) {
             self.request(Pending::Load(PathBuf::from(file)), ctx);
         }
         let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
-        if ctx.input(|i| i.viewport().close_requested()) && dirty && !self.allow_close {
+        if ctx.input(|i| i.viewport().close_requested()) && dirty && !self.allow_close && !to_tray {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.pending = Some(Pending::Close);
         }
