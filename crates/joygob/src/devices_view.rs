@@ -603,7 +603,8 @@ impl DevicesView {
         let fill = if active {
             visuals.selection.bg_fill
         } else if selected {
-            visuals.faint_bg_color
+            // A light accent tint: the live bar's track uses faint_bg_color and must show.
+            style::accent(ui).gamma_multiply(0.08)
         } else {
             Color32::TRANSPARENT
         };
