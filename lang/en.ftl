@@ -291,3 +291,23 @@ keys-none = No keys
 keys-cancel = Cancel recording
 edit-chain-add = Add step
 edit-chain-remove = Remove this step and its actions
+kind-macro = Macro
+
+# Macro editor
+macro-repeat = Repeat
+macro-repeat-single = Once
+macro-repeat-count = Number of times
+macro-repeat-hold = While held
+macro-repeat-toggle = Until pressed again
+macro-repeat-count-tip = How many times
+macro-repeat-delay = Pause between repetitions
+macro-add-step = Step
+macro-step-key = Key
+macro-step-pause = Pause
+macro-step-mouse-button = Mouse button
+macro-step-mouse-motion = Mouse motion
+macro-step-vjoy-button = vJoy button
+macro-step-vjoy-axis = vJoy axis
+macro-step-vjoy-hat = vJoy hat
+macro-press = Press
+macro-release = Release

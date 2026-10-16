@@ -31,6 +31,8 @@ pub enum NewAction {
     MapToKeyboard,
     /// One empty step, no timeout (Gremlin's defaults).
     Chain,
+    /// No steps, runs once.
+    Macro,
     /// Starts with `axis` of `device` in both slots, like [`NewAction::MergeAxis`].
     DualAxisDeadzone {
         device: String,
@@ -89,6 +91,92 @@ pub fn new_uuid() -> String {
         b >> 48,
         b & 0xFFFF_FFFF_FFFF
     )
+}
+
+fn macro_positions(items: &[Item]) -> Vec<usize> {
+    items
+        .iter()
+        .enumerate()
+        .filter(|(_, i)| matches!(i, Item::Group { tag, .. } if tag == "macro-action"))
+        .map(|(n, _)| n)
+        .collect()
+}
+
+/// Gremlin's `<macro-action type=...>` content for a step.
+fn macro_step_xml(step: &crate::MacroStep) -> Option<(&'static str, Vec<Item>)> {
+    use crate::MacroStep as S;
+    let b = |v: bool| if v { "True" } else { "False" };
+    let vjoy = |device: u32, ty: &str, id: u32| {
+        vec![
+            prop("int", "vjoy-id", device.to_string()),
+            prop("input_type", "input-type", ty),
+            prop("int", "input-id", id.to_string()),
+        ]
+    };
+    Some(match *step {
+        S::Pause(d) => ("pause", vec![prop("float", "duration", format!("{d:?}"))]),
+        S::Key {
+            scan_code,
+            extended,
+            pressed,
+        } => (
+            "key",
+            vec![
+                prop("int", "scan-code", scan_code.to_string()),
+                prop("bool", "is-extended", b(extended)),
+                prop("bool", "is-pressed", b(pressed)),
+            ],
+        ),
+        S::MouseButton { button, pressed } => (
+            "mouse-button",
+            vec![
+                prop("string", "button", button.name()),
+                prop("bool", "is-pressed", b(pressed)),
+            ],
+        ),
+        S::MouseMotion { dx, dy } => (
+            "mouse-motion",
+            vec![
+                prop("int", "dx", dx.to_string()),
+                prop("int", "dy", dy.to_string()),
+            ],
+        ),
+        S::VjoyButton {
+            device,
+            id,
+            pressed,
+        } => {
+            let mut items = vjoy(device, "button", id);
+            items.push(prop("bool", "value", b(pressed)));
+            ("vjoy", items)
+        }
+        S::VjoyAxis {
+            device,
+            id,
+            value,
+            relative,
+        } => {
+            let mut items = vjoy(device, "axis", id);
+            items.push(prop("float", "value", format!("{value:?}")));
+            let mode = if relative { "relative" } else { "absolute" };
+            items.push(prop("axis_mode", "axis-mode", mode));
+            ("vjoy", items)
+        }
+        S::VjoyHat {
+            device,
+            id,
+            direction,
+        } => {
+            let mut items = vjoy(device, "hat", id);
+            items.push(prop(
+                "hat_direction",
+                "value",
+                crate::profile::hat_direction_name(direction),
+            ));
+            ("vjoy", items)
+        }
+        S::Other => return None,
+    })
 }
 
 /// (step number, item position) of `chain-N` groups, in step order.
@@ -257,6 +345,17 @@ impl Action {
                 "disallowed",
             ),
             NewAction::MapToKeyboard => Self::build("map-to-keyboard", Vec::new(), "both"),
+            NewAction::Macro => Self::build(
+                "macro",
+                vec![
+                    prop("bool", "is-exclusive", "False"),
+                    prop("bool", "is-preemptive", "False"),
+                    prop("string", "repeat-mode", "Single"),
+                    prop("int", "repeat-count", "1"),
+                    prop("float", "repeat-delay", "0.1"),
+                ],
+                "press",
+            ),
             NewAction::Chain => Self::build(
                 "chain",
                 vec![
@@ -514,6 +613,54 @@ impl Profile {
         };
         a.group_mut(group).push(Item::ActionRef(id.into()));
         true
+    }
+
+    /// Replaces the `index`-th step of a macro (`index` = step count appends). Steps JoyGob
+    /// cannot represent ([`MacroStep::Other`]) are never written.
+    pub fn set_macro_step(&mut self, id: &str, index: usize, step: &crate::MacroStep) {
+        let Some((ty, items)) = macro_step_xml(step) else {
+            return;
+        };
+        let Some(a) = self.action_mut(id) else {
+            return;
+        };
+        let steps = macro_positions(&a.items);
+        let node = Item::Group {
+            tag: "macro-action".into(),
+            attrs: vec![("type".into(), ty.into())],
+            items,
+        };
+        match steps.get(index) {
+            Some(&pos) => a.items[pos] = node,
+            None => {
+                // After the last step, else after the repeat settings (Gremlin's order).
+                let at = steps.last().map(|p| p + 1).unwrap_or_else(|| {
+                    a.items
+                        .iter()
+                        .rposition(|i| matches!(i, Item::Property(p) if p.name.starts_with("repeat-") || p.name.starts_with("is-")))
+                        .map_or(0, |p| p + 1)
+                });
+                a.items.insert(at, node);
+            }
+        }
+    }
+
+    pub fn remove_macro_step(&mut self, id: &str, index: usize) {
+        if let Some(a) = self.action_mut(id) {
+            if let Some(&pos) = macro_positions(&a.items).get(index) {
+                a.items.remove(pos);
+            }
+        }
+    }
+
+    /// Swaps step `index` with the next one.
+    pub fn swap_macro_steps(&mut self, id: &str, index: usize) {
+        if let Some(a) = self.action_mut(id) {
+            let steps = macro_positions(&a.items);
+            if let (Some(&x), Some(&y)) = (steps.get(index), steps.get(index + 1)) {
+                a.items.swap(x, y);
+            }
+        }
     }
 
     /// Appends an empty step to a chain action.

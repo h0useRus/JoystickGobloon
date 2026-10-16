@@ -7,6 +7,7 @@ mod devices_view;
 mod hidhide_view;
 mod key_capture;
 mod logfile;
+mod macro_editor;
 mod modes_view;
 mod profile_view;
 mod settings;

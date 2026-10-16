@@ -109,6 +109,21 @@ pub enum Op {
         action: String,
         index: usize,
     },
+    /// Replaces (or appends, at the end index) a macro step.
+    SetMacroStep {
+        action: String,
+        index: usize,
+        step: gob_core::MacroStep,
+    },
+    RemoveMacroStep {
+        action: String,
+        index: usize,
+    },
+    /// Swaps step `index` with the next one.
+    SwapMacroSteps {
+        action: String,
+        index: usize,
+    },
     AddChainStep(String),
     RemoveChainStep {
         action: String,
@@ -194,6 +209,13 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
         Op::SetKeys { action, keys } => p.set_keys(&action, &keys),
         Op::AddChainStep(action) => p.add_chain_step(&action),
+        Op::SetMacroStep {
+            action,
+            index,
+            step,
+        } => p.set_macro_step(&action, index, &step),
+        Op::RemoveMacroStep { action, index } => p.remove_macro_step(&action, index),
+        Op::SwapMacroSteps { action, index } => p.swap_macro_steps(&action, index),
         Op::RemoveChainStep { action, index } => p.remove_chain_step(&action, index),
         // Handled by the app before edits are applied.
         Op::PreviewSound { .. } | Op::PreviewSpeech(_) => {}
@@ -345,6 +367,7 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             NewAction::DoubleTap,
         ));
         list.push((icon::LIST_NUMBERS, "kind-chain", NewAction::Chain));
+        list.push((icon::KEYBOARD, "kind-macro", NewAction::Macro));
     }
     if behavior == InputType::Button {
         list.push((
@@ -913,7 +936,11 @@ impl Editor<'_> {
                     }
                     ui.horizontal(|ui| self.activation(ui, action));
                 }
-                ActionKind::Macro { .. } | ActionKind::Other => {
+                ActionKind::Macro { steps, repeat, .. } => {
+                    self.macro_editor(ui, action, &steps, repeat);
+                    ui.horizontal(|ui| self.activation(ui, action));
+                }
+                ActionKind::Other => {
                     ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
                 }
             }

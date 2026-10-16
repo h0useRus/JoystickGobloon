@@ -291,3 +291,23 @@ keys-none = Нет клавиш
 keys-cancel = Отменить запись
 edit-chain-add = Добавить шаг
 edit-chain-remove = Удалить шаг и его действия
+kind-macro = Макрос
+
+# Macro editor
+macro-repeat = Повтор
+macro-repeat-single = Один раз
+macro-repeat-count = Несколько раз
+macro-repeat-hold = Пока нажата
+macro-repeat-toggle = До повторного нажатия
+macro-repeat-count-tip = Сколько раз
+macro-repeat-delay = Пауза между повторами
+macro-add-step = Шаг
+macro-step-key = Клавиша
+macro-step-pause = Пауза
+macro-step-mouse-button = Кнопка мыши
+macro-step-mouse-motion = Движение мыши
+macro-step-vjoy-button = Кнопка vJoy
+macro-step-vjoy-axis = Ось vJoy
+macro-step-vjoy-hat = Хатка vJoy
+macro-press = Нажать
+macro-release = Отпустить

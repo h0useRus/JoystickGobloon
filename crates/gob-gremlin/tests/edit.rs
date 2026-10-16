@@ -401,3 +401,62 @@ fn chain_steps_are_added_and_removed() {
     };
     assert_eq!(chains, [vec![], vec![third.as_str()]], "renumbered from 0");
 }
+
+#[test]
+fn macro_steps_round_trip_and_keep_unknown_ones() {
+    use gob_core::{MacroStep, MouseButton};
+    let mut p = sample();
+    let root = p.bind(DEV, "button", "11", "Default");
+    let m = p
+        .add_child(&root, "actions", gob_core::Action::new(&NewAction::Macro))
+        .unwrap();
+    let steps = [
+        MacroStep::Key {
+            scan_code: 0x1D,
+            extended: true,
+            pressed: true,
+        },
+        MacroStep::Pause(0.25),
+        MacroStep::MouseButton {
+            button: MouseButton::WheelUp,
+            pressed: true,
+        },
+        MacroStep::MouseMotion { dx: -5, dy: 7 },
+        MacroStep::VjoyButton {
+            device: 2,
+            id: 9,
+            pressed: false,
+        },
+        MacroStep::VjoyAxis {
+            device: 1,
+            id: 3,
+            value: -0.5,
+            relative: true,
+        },
+        MacroStep::VjoyHat {
+            device: 1,
+            id: 1,
+            direction: Some(13500),
+        },
+    ];
+    for (i, s) in steps.iter().enumerate() {
+        p.set_macro_step(&m, i, s);
+    }
+    // A step JoyGob cannot represent, as Gremlin would write it.
+    p.action_mut(&m).unwrap().items.push(gob_core::Item::Group {
+        tag: "macro-action".into(),
+        attrs: vec![("type".into(), "joystick".into())],
+        items: Vec::new(),
+    });
+    p.swap_macro_steps(&m, 0);
+    p.remove_macro_step(&m, 2);
+    let p = reload(&p);
+    let ActionKind::Macro { steps: got, .. } = p.action(&m).unwrap().kind() else {
+        panic!("not a macro");
+    };
+    let mut want = steps.to_vec();
+    want.swap(0, 1);
+    want.remove(2);
+    want.push(MacroStep::Other);
+    assert_eq!(got, want);
+}

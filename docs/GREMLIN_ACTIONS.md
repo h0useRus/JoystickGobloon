@@ -62,6 +62,9 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - Wheel Up/Down steps scroll one notch regardless of `is-pressed`. Keys go through SendInput with
   virtual key + scan code like Gremlin's `keybd_event`.
 - vJoy devices used only by macros are acquired too.
+- Editor: repeat mode/count/delay and the steps (key, pause, mouse button/motion, vJoy button/axis/hat),
+  reorder and remove. Each change rewrites only that `<macro-action>`; `joystick` and `logical-device`
+  steps are shown as not editable and kept. Exclusive/preemptive flags are kept but not shown.
 
 ## map-to-keyboard
 
