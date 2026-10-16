@@ -27,6 +27,8 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 - UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; helpers in joygob/src/style.rs.
   Layout: left icon nav rail; all options live in settings_view.rs under horizontal tabs.
 - All user-visible strings go through i18n keys; add key to lang/en.ftl AND lang/ru.ftl.
+- The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words);
+  "JoyGob" is internal only (code, comments, this file); "JoystickGobloon" only in file names.
 - Gremlin import must round-trip: unknown actions kept as raw XML.
 - GUI never blocks; engine runs on its own thread, talks via channels.
 - Settings: TOML in %APPDATA%\JoystickGobloon\settings.toml.

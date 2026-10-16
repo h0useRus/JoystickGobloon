@@ -38,7 +38,7 @@ alert-error = Something went wrong
 alert-import = Some actions in { $file } will not work
 alert-open-log = Open the log
 ok = OK
-hidhide-whitelist-error = Could not add JoyGob to the HidHide whitelist: { $error }
+hidhide-whitelist-error = Could not add Joystick Gobloon to the HidHide whitelist: { $error }
 warn-not-executable = “{ $kind }” × { $count }: kept in the profile, but not executed yet
 warn-scripts = The profile contains Python plugins: they are kept, but not run
 
@@ -62,7 +62,7 @@ vjoy-hats = Hats
 vjoy-test = Test output: take control of this device
 vjoy-test-hint = Press the flask to take control of this device and test its output.
 vjoy-free = Free
-vjoy-own = Controlled by JoyGob
+vjoy-own = Controlled by Joystick Gobloon
 vjoy-busy = Used by another program (e.g. Joystick Gremlin)
 vjoy-unknown = Unknown state
 vjoy-error = Could not take the device: { $error }
@@ -80,8 +80,8 @@ hidhide-add-app = Add application
 hidhide-remove-app = Remove from the whitelist
 hidhide-app-missing = File not found
 action-refresh = Refresh
-settings-hidhide-self = Add JoyGob to the HidHide whitelist on startup
-status-whitelisted = JoyGob was added to the HidHide whitelist.
+settings-hidhide-self = Add Joystick Gobloon to the HidHide whitelist on startup
+status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
 
 # Engine
 action-activate = Activate the profile
@@ -324,8 +324,9 @@ kind-map-to-logical-device = Map to logical device
 cond-logical = Logical device input
 
 # Tray and startup
-settings-tray = Show an icon in the notification area
-settings-close-to-tray = The close button hides JoyGob to the notification area
+settings-tray = Show the tray icon
+settings-close-to-tray = The close button hides Joystick Gobloon to the tray
+settings-tray-title = Tray icon
 settings-autostart = Start with Windows (minimized)
 settings-activate-on-start = Activate the profile on startup
 tray-show = Show Joystick Gobloon

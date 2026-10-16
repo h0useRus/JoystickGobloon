@@ -59,7 +59,11 @@ pub fn show(
     ui.add_space(8.0);
 
     match tab {
-        SettingsTab::Appearance => appearance(ui, i18n, settings),
+        SettingsTab::Appearance => {
+            let change = appearance(ui, i18n, settings);
+            ui.add_space(18.0);
+            tray_section(ui, i18n, settings).or(change)
+        }
         SettingsTab::General => {
             let reopen = ui.checkbox(&mut settings.reopen_last, i18n.tr("settings-reopen-last"));
             let whitelist = ui.checkbox(
@@ -67,14 +71,6 @@ pub fn show(
                 i18n.tr("settings-hidhide-self"),
             );
             ui.add_space(8.0);
-            let tray = ui.checkbox(&mut settings.show_tray, i18n.tr("settings-tray"));
-            let close = ui.add_enabled(
-                settings.show_tray,
-                egui::Checkbox::new(
-                    &mut settings.close_to_tray,
-                    i18n.tr("settings-close-to-tray"),
-                ),
-            );
             let autostart = ui.checkbox(
                 &mut settings.start_with_windows,
                 i18n.tr("settings-autostart"),
@@ -83,15 +79,13 @@ pub fn show(
                 &mut settings.activate_on_start,
                 i18n.tr("settings-activate-on-start"),
             );
-            let changed = [&reopen, &whitelist, &tray, &close, &autostart, &activate]
+            let changed = [&reopen, &whitelist, &autostart, &activate]
                 .iter()
                 .any(|r| r.changed());
             if changed {
                 settings.save();
             }
-            if tray.changed() {
-                Some(Change::Tray)
-            } else if autostart.changed() {
+            if autostart.changed() {
                 Some(Change::Autostart(settings.start_with_windows))
             } else {
                 None
@@ -102,6 +96,31 @@ pub fn show(
             None
         }
     }
+}
+
+/// Tray icon options (Appearance tab).
+fn tray_section(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Change> {
+    ui.label(
+        RichText::new(format!(
+            "{}  {}",
+            icon::TRAY,
+            i18n.tr("settings-tray-title")
+        ))
+        .strong(),
+    );
+    ui.add_space(4.0);
+    let tray = ui.checkbox(&mut settings.show_tray, i18n.tr("settings-tray"));
+    let close = ui.add_enabled(
+        settings.show_tray,
+        egui::Checkbox::new(
+            &mut settings.close_to_tray,
+            i18n.tr("settings-close-to-tray"),
+        ),
+    );
+    if tray.changed() || close.changed() {
+        settings.save();
+    }
+    tray.changed().then_some(Change::Tray)
 }
 
 fn appearance(ui: &mut egui::Ui, i18n: &I18n, settings: &Settings) -> Option<Change> {

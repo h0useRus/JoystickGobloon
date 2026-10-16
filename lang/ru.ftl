@@ -38,7 +38,7 @@ alert-error = Что-то пошло не так
 alert-import = Часть действий в { $file } не будет работать
 alert-open-log = Открыть журнал
 ok = ОК
-hidhide-whitelist-error = Не удалось добавить JoyGob в белый список HidHide: { $error }
+hidhide-whitelist-error = Не удалось добавить Joystick Gobloon в белый список HidHide: { $error }
 warn-not-executable = «{ $kind }» × { $count }: сохраняется в профиле, но пока не выполняется
 warn-scripts = В профиле есть Python-плагины: они сохраняются, но не запускаются
 
@@ -62,7 +62,7 @@ vjoy-hats = Хатки
 vjoy-test = Проверка вывода: взять управление устройством
 vjoy-test-hint = Нажмите на колбу, чтобы взять управление устройством и проверить его вывод.
 vjoy-free = Свободно
-vjoy-own = Управляется JoyGob
+vjoy-own = Управляется Joystick Gobloon
 vjoy-busy = Занято другой программой (например, Joystick Gremlin)
 vjoy-unknown = Неизвестное состояние
 vjoy-error = Не удалось взять устройство: { $error }
@@ -80,8 +80,8 @@ hidhide-add-app = Добавить программу
 hidhide-remove-app = Убрать из белого списка
 hidhide-app-missing = Файл не найден
 action-refresh = Обновить
-settings-hidhide-self = Добавлять JoyGob в белый список HidHide при запуске
-status-whitelisted = JoyGob добавлен в белый список HidHide.
+settings-hidhide-self = Добавлять Joystick Gobloon в белый список HidHide при запуске
+status-whitelisted = Joystick Gobloon добавлен в белый список HidHide.
 
 # Engine
 action-activate = Активировать профиль
@@ -324,8 +324,9 @@ kind-map-to-logical-device = Назначить на логическое уст
 cond-logical = Вход логического устройства
 
 # Tray and startup
-settings-tray = Показывать значок в области уведомлений
-settings-close-to-tray = Кнопка закрытия прячет JoyGob в область уведомлений
+settings-tray = Показывать значок в трее
+settings-close-to-tray = Кнопка закрытия прячет Joystick Gobloon в трей
+settings-tray-title = Значок в трее
 settings-autostart = Запускать вместе с Windows (свёрнутым)
 settings-activate-on-start = Активировать профиль при запуске
 tray-show = Показать Joystick Gobloon

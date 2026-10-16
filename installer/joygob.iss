@@ -56,7 +56,7 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
-; JoyGob writes this value itself ("Start with Windows"); only remove it on uninstall.
+; Joystick Gobloon writes this value itself ("Start with Windows"); only remove it on uninstall.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "JoystickGobloon"; Flags: uninsdeletevalue
 
 [Run]
@@ -106,7 +106,7 @@ var
   Cli: String;
   Code: Integer;
 begin
-  // JoyGob adds itself to the HidHide whitelist; take it off again.
+  // Joystick Gobloon adds itself to the HidHide whitelist; take it off again.
   if CurUninstallStep <> usUninstall then
     Exit;
   Cli := HidHideCli();
