@@ -9,7 +9,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 |---|---|---|
 | `root` | A B H K | done |
 | `map-to-vjoy` | A B H K | done (absolute + relative axis) |
-| `response-curve` | A | done (piecewise linear only; Gremlin also has cubic spline / bezier, symmetric) |
+| `response-curve` | A | done (piecewise linear, cubic spline, cubic Bezier; symmetric editing) |
 | `change-mode` | B K | done |
 | `tempo` | B K | done |
 | `description` | A B H K | done |
@@ -185,3 +185,14 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   the source input is released in another mode. Relative axes step every 10 ms by
   value * scaling / 1000 and stop 1 s after the input returned near center, like vJoy relative axes.
 - Conditions on logical inputs (`logical_device`: `input-type`, `input-id`) read the stored states.
+
+## response-curve
+
+- `curve-type` `PiecewiseLinear` / `CubicSpline` / `CubicBezierSpline`; `<deadzone>` low, center-low,
+  center-high, high; `<control-points>` `point` "x,y". Linear and cubic store the knots; Bezier stores the
+  flat list center, right handle, (left handle, center, right handle)*, left handle, center.
+- Evaluation follows gremlin/spline.py (gob-core `curve`): natural cubic spline (z0 = zn = 0) clamped to
+  -1..1; Bezier via 101 samples per segment, binary search and linear interpolation. Deadzone first.
+- Gremlin keeps "symmetric" only while editing; Joystick Gobloon saves it as a `symmetric` bool property
+  (Gremlin ignores it). Symmetric: mirrored knots/handles through the origin, a fixed center knot, paired
+  add/remove, and the deadzone mirrored too. Changing the type starts from that type's identity line.
