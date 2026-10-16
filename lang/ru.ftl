@@ -331,3 +331,14 @@ settings-activate-on-start = Активировать профиль при за
 tray-show = Показать Joystick Gobloon
 tray-quit = Выход
 autostart-error = Не удалось изменить автозапуск: { $error }
+
+# About
+about-alpha = альфа-версия
+about-created = Автор: { $name }
+about-support = Поддержать разработку
+about-support-tip = Внести вклад через PayPal
+about-source = Исходный код
+about-issues = Сообщить о проблеме
+about-releases = Выпуски
+about-credits = Использует драйверы HidHide и vJoy; профили совместимы с Joystick Gremlin.
+about-license = Свободная программа с открытым кодом под лицензией MIT.

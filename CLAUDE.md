@@ -47,6 +47,7 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
+  Debug builds open a page at start with env `JOYGOB_START_PAGE` = hidhide | vjoy | settings | about.
 - HidHide hides the VKB sticks; target\debug\JoystickGobloon.exe and examples\monitor.exe are whitelisted.
 - Profile device GUIDs come from another PC: use "Map controls" (banner on the Devices page).
 - JoyGob whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.

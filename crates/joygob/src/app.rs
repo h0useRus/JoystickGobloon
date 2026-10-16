@@ -134,6 +134,18 @@ impl JoyGobApp {
             hwnd: crate::tray::window_handle(cc),
         };
         app.update_tray(&cc.egui_ctx);
+        // Debug builds: open a page at start for screenshot checks without clicking.
+        #[cfg(debug_assertions)]
+        match std::env::var("JOYGOB_START_PAGE").as_deref() {
+            Ok("hidhide") => app.page = Page::HidHide,
+            Ok("vjoy") => app.page = Page::VJoy,
+            Ok("settings") => app.page = Page::Settings,
+            Ok("about") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::About;
+            }
+            _ => {}
+        }
         // Started at logon without a (working) tray icon: show the window, minimized, so it
         // can never stay hidden with no way back.
         let at_logon = std::env::args().any(|a| a == crate::tray::autostart::ARG);

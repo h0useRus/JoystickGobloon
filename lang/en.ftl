@@ -331,3 +331,14 @@ settings-activate-on-start = Activate the profile on startup
 tray-show = Show Joystick Gobloon
 tray-quit = Quit
 autostart-error = Could not change starting with Windows: { $error }
+
+# About
+about-alpha = alpha build
+about-created = Created by { $name }
+about-support = Support development
+about-support-tip = Contribute via PayPal
+about-source = Source code
+about-issues = Report a problem
+about-releases = Releases
+about-credits = Uses the HidHide and vJoy drivers; profiles are compatible with Joystick Gremlin.
+about-license = Free and open source under the MIT license.

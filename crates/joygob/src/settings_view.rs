@@ -7,6 +7,9 @@ use crate::settings::{Settings, Theme};
 use crate::style::{self, icon};
 
 const REPO_URL: &str = "https://github.com/h0useRus/JoystickGobloon";
+const DONATE_URL: &str = "https://www.paypal.com/paypalme/h0userus";
+/// The author's name is not translated.
+const AUTHOR: &str = "Denis Ibragimov";
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum SettingsTab {
@@ -158,15 +161,90 @@ fn appearance(ui: &mut egui::Ui, i18n: &I18n, settings: &Settings) -> Option<Cha
 }
 
 fn about(ui: &mut egui::Ui, i18n: &I18n, logo: &egui::TextureHandle) {
-    ui.horizontal(|ui| {
-        ui.add(egui::Image::new(logo).fit_to_exact_size(Vec2::splat(96.0)));
-        ui.vertical(|ui| {
-            ui.heading("Joystick Gobloon");
-            ui.label(format!("v{}", crate::VERSION));
-            ui.add_space(4.0);
-            ui.label(i18n.tr("about-text"));
-            ui.add_space(4.0);
-            ui.hyperlink_to(format!("{}  GitHub", icon::GITHUB_LOGO), REPO_URL);
+    let accent = style::accent(ui);
+    ui.add_space(12.0);
+    ui.vertical_centered(|ui| {
+        ui.set_max_width(480.0);
+        ui.add(egui::Image::new(logo).fit_to_exact_size(Vec2::splat(112.0)));
+        ui.add_space(8.0);
+        ui.label(RichText::new(crate::APP_NAME).size(26.0).strong());
+        // Version chip; alpha builds (x.y.z-alpha.n) are marked.
+        let alpha = crate::VERSION.contains('-');
+        // A non-interactive button: frames stretch to the column width here.
+        let text = if alpha {
+            format!("v{}  ·  {}", crate::VERSION, i18n.tr("about-alpha"))
+        } else {
+            format!("v{}", crate::VERSION)
+        };
+        let fill = if alpha {
+            ui.visuals().warn_fg_color.gamma_multiply(0.18)
+        } else {
+            accent.gamma_multiply(0.18)
+        };
+        ui.add(
+            egui::Button::new(RichText::new(text).small().strong())
+                .fill(fill)
+                .stroke(egui::Stroke::NONE)
+                .corner_radius(10)
+                .sense(egui::Sense::hover()),
+        );
+        ui.add_space(10.0);
+        ui.label(RichText::new(i18n.tr("about-text")).size(15.0));
+        ui.add_space(6.0);
+        ui.label(RichText::new(i18n.trf("about-created", &[("name", AUTHOR.into())])).weak());
+
+        ui.add_space(16.0);
+        // Support: the one accented call to action.
+        let support = egui::Button::new(
+            RichText::new(format!("{}  {}", icon::HEART, i18n.tr("about-support")))
+                .size(15.0)
+                .color(ui.visuals().strong_text_color()),
+        )
+        .fill(accent.gamma_multiply(0.45))
+        .stroke(egui::Stroke::new(1.0, accent))
+        .corner_radius(style::RADIUS)
+        .min_size(Vec2::new(220.0, 36.0));
+        if ui
+            .add(support)
+            .on_hover_text(i18n.tr("about-support-tip"))
+            .clicked()
+        {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(DONATE_URL));
+        }
+        ui.add_space(12.0);
+        ui.horizontal(|ui| {
+            // Center the row of links under the button.
+            let links = [
+                (icon::GITHUB_LOGO, "about-source", REPO_URL.to_string()),
+                (icon::BUG, "about-issues", format!("{REPO_URL}/issues")),
+                (
+                    icon::DOWNLOAD_SIMPLE,
+                    "about-releases",
+                    format!("{REPO_URL}/releases"),
+                ),
+            ];
+            let width: f32 = links
+                .iter()
+                .map(|(g, k, _)| {
+                    let text = format!("{g}  {}", i18n.tr(k));
+                    ui.fonts(|f| {
+                        f.layout_no_wrap(text, egui::TextStyle::Body.resolve(ui.style()), accent)
+                            .size()
+                            .x
+                    }) + 24.0
+                })
+                .sum();
+            ui.add_space(((ui.available_width() - width) / 2.0).max(0.0));
+            for (glyph, key, url) in links {
+                ui.hyperlink_to(format!("{glyph}  {}", i18n.tr(key)), url);
+                ui.add_space(12.0);
+            }
         });
+
+        ui.add_space(20.0);
+        ui.separator();
+        ui.add_space(6.0);
+        ui.label(RichText::new(i18n.tr("about-credits")).weak());
+        ui.label(RichText::new(i18n.tr("about-license")).weak());
     });
 }
