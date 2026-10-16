@@ -308,7 +308,7 @@ impl DevicesView {
                         "input-hat-kind",
                     ),
                 ] {
-                    let text = format!("{} {glyph} {}", icon::PLUS, i18n.tr(name));
+                    let text = format!("{} {} {glyph}", icon::PLUS, i18n.tr(name));
                     if ui.button(text).on_hover_text(i18n.tr(key)).clicked() {
                         ops.push(Op::AddLogicalInput(ty));
                     }
