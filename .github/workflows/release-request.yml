@@ -31,7 +31,8 @@ jobs:
             echo "::error::Cargo.toml version '$version' is not a final x.y.z version."
             exit 1
           fi
-          last=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -V | tail -n1)
+          # No final release yet is fine (grep finds nothing; the step runs with pipefail).
+          last=$(git tag -l 'v*' | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sed 's/^v//' | sort -V | tail -n1)
           echo "Latest release: ${last:-none}"
           if [ -n "$last" ]; then
             newest=$(printf '%s\n%s\n' "$last" "$version" | sort -V | tail -n1)
