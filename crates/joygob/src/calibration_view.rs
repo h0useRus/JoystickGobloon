@@ -104,6 +104,9 @@ impl CalibrationView {
             return out;
         };
 
+        // One width for every block, measured once: blocks sized from what is left after
+        // the previous one would creep wider down the list.
+        let width = ui.available_width() - 24.0;
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
@@ -123,7 +126,17 @@ impl CalibrationView {
                         .filter(|(k, _)| *k == key)
                         .map(|(_, c)| *c);
                     let mut action = None;
-                    axis_block(ui, i18n, slot, raw, &mut cal, unsaved, capture, &mut action);
+                    axis_block(
+                        ui,
+                        i18n,
+                        width,
+                        slot,
+                        raw,
+                        &mut cal,
+                        unsaved,
+                        capture,
+                        &mut action,
+                    );
                     match action {
                         Some(Action::Reset) => cal = Calibration::default(),
                         Some(Action::Save) => {
@@ -195,6 +208,7 @@ enum Action {
 fn axis_block(
     ui: &mut egui::Ui,
     i18n: &I18n,
+    width: f32,
     slot: u8,
     raw: i32,
     cal: &mut Calibration,
@@ -207,72 +221,100 @@ fn axis_block(
         .corner_radius(6)
         .inner_margin(8);
     frame.show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        // Name, raw value, with center.
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(i18n.tr(&format!("vjoy-axis-{slot}"))).strong());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.checkbox(&mut cal.with_center, i18n.tr("calibration-with-center"));
-                ui.add_space(12.0);
-                ui.label(RichText::new(raw.to_string()).monospace());
-                ui.label(RichText::new(i18n.tr("calibration-raw")).weak());
-            });
-        });
-        let bar_w = (ui.available_width() - BUTTONS - 8.0).max(120.0);
+        // `width` is the block's outer width; the frame adds 8 px margins on both sides.
+        let inner = width - 16.0;
+        ui.set_width(inner);
+        // Two columns: bars and values on the left, buttons on the right (same width).
+        let gap = ui.spacing().item_spacing.x;
+        let bar_w = (inner - BUTTONS - gap).max(160.0);
+        let h = ui.spacing().interact_size.y;
         let accent = style::accent(ui);
-        let button_w = BUTTONS;
-        // Raw position, with the calibrated range marked.
+        let text_color = ui.visuals().text_color();
+        let weak = ui.visuals().weak_text_color();
+
+        // Name on the left, "Raw <value>" centered over the bars; "With center" starts
+        // where the button column starts.
+        ui.horizontal(|ui| {
+            let (rect, _) = ui.allocate_exact_size(Vec2::new(bar_w, h), Sense::hover());
+            let painter = ui.painter();
+            let body = egui::TextStyle::Body.resolve(ui.style());
+            painter.text(
+                rect.left_center(),
+                egui::Align2::LEFT_CENTER,
+                i18n.tr(&format!("vjoy-axis-{slot}")),
+                egui::FontId::new(body.size, body.family.clone()),
+                text_color,
+            );
+            let raw_text = format!("{}  {raw}", i18n.tr("calibration-raw"));
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                raw_text,
+                body,
+                weak,
+            );
+            ui.checkbox(&mut cal.with_center, i18n.tr("calibration-with-center"));
+        });
+        // Raw position with the calibration marks | Reset + Save.
         ui.horizontal(|ui| {
             let raw_t = |v: i32| (v - RAW_MIN) as f32 / (RAW_MAX - RAW_MIN) as f32;
             bar(ui, bar_w, raw_t(raw), Some(cal), accent.gamma_multiply(0.6));
-            ui.add_sized(
-                [button_w / 2.0 - 4.0, 22.0],
-                egui::Button::new(i18n.tr("calibration-reset")),
-            )
-            .clicked()
-            .then(|| *action = Some(Action::Reset));
-            let save = egui::Button::new(icon::FLOPPY_DISK);
+            let reset =
+                egui::Button::new(i18n.tr("calibration-reset")).corner_radius(style::RADIUS);
+            // Save keeps its natural width (icon + padding); Reset takes the rest of the column.
+            let save_w = 34.0_f32.max(h);
+            if ui.add_sized([BUTTONS - save_w - gap, h], reset).clicked() {
+                *action = Some(Action::Reset);
+            }
+            let save = egui::Button::new(icon::FLOPPY_DISK).corner_radius(style::RADIUS);
             if ui
-                .add_enabled(unsaved, save)
+                .add_enabled_ui(unsaved, |ui| ui.add_sized([save_w, h], save))
+                .inner
                 .on_hover_text(i18n.tr("calibration-save"))
                 .clicked()
             {
                 *action = Some(Action::Save);
             }
         });
-        // Calibrated output.
+        // Calibrated output | Calibrate center.
         ui.horizontal(|ui| {
-            let v = cal.apply(raw);
-            bar(ui, bar_w, (v + 1.0) / 2.0, None, accent);
+            bar(ui, bar_w, (cal.apply(raw) + 1.0) / 2.0, None, accent);
             let on = matches!(capture, Some(Capture::Center { .. }));
-            let center = egui::Button::new(i18n.tr("calibration-center")).selected(on);
-            if ui
-                .add_enabled(cal.with_center, center)
-                .on_hover_text(i18n.tr("calibration-center-tip"))
-                .clicked()
-            {
+            let center = egui::Button::new(i18n.tr("calibration-center"))
+                .selected(on)
+                .corner_radius(style::RADIUS);
+            let r = ui
+                .add_enabled_ui(cal.with_center, |ui| ui.add_sized([BUTTONS, h], center))
+                .inner
+                .on_hover_text(i18n.tr("calibration-center-tip"));
+            if r.clicked() {
                 *action = Some(Action::Center);
             }
         });
-        // Values.
+        // Values under the bars | Calibrate extrema.
         ui.horizontal(|ui| {
-            let field = |ui: &mut egui::Ui, v: &mut i32| {
-                ui.add(egui::DragValue::new(v).range(RAW_MIN..=RAW_MAX).speed(16.0));
-            };
-            field(ui, &mut cal.low);
+            let (row, _) = ui.allocate_exact_size(Vec2::new(bar_w, h), Sense::hover());
+            let w = 72.0;
+            let mid = row.center().x;
+            let mut fields: Vec<(f32, &mut i32)> = vec![(row.left(), &mut cal.low)];
             if cal.with_center {
-                ui.add_space(((bar_w - 4.0 * 72.0) / 2.0).max(8.0));
-                field(ui, &mut cal.center_low);
-                field(ui, &mut cal.center_high);
-                ui.add_space(((bar_w - 4.0 * 72.0) / 2.0).max(8.0));
-            } else {
-                ui.add_space((bar_w - 2.0 * 72.0).max(8.0));
+                fields.push((mid - w - gap / 2.0, &mut cal.center_low));
+                fields.push((mid + gap / 2.0, &mut cal.center_high));
             }
-            field(ui, &mut cal.high);
+            fields.push((row.right() - w, &mut cal.high));
+            for (left, v) in fields {
+                let rect = Rect::from_min_size(Pos2::new(left, row.top()), Vec2::new(w, h));
+                ui.put(
+                    rect,
+                    egui::DragValue::new(v).range(RAW_MIN..=RAW_MAX).speed(16.0),
+                );
+            }
             let on = matches!(capture, Some(Capture::Extrema { .. }));
-            let extrema = egui::Button::new(i18n.tr("calibration-extrema")).selected(on);
+            let extrema = egui::Button::new(i18n.tr("calibration-extrema"))
+                .selected(on)
+                .corner_radius(style::RADIUS);
             if ui
-                .add(extrema)
+                .add_sized([BUTTONS, h], extrema)
                 .on_hover_text(i18n.tr("calibration-extrema-tip"))
                 .clicked()
             {
