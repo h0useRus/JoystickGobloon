@@ -282,3 +282,10 @@ edit-preview = Preview
 edit-tts-voice = Voice
 edit-tts-default-voice = Default voice
 edit-tts-voice-missing = not installed
+kind-map-to-keyboard = Map to keyboard
+
+# Key recording
+keys-record = Record keys: press them together, recording ends when all are released
+keys-press = Press the keys…
+keys-none = No keys
+keys-cancel = Cancel recording

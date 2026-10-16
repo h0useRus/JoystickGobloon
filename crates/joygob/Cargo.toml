@@ -24,7 +24,11 @@ toml.workspace = true
 log.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows = { workspace = true, features = ["Win32_System_SystemInformation", "Win32_Foundation"] }
+windows = { workspace = true, features = [
+    "Win32_System_SystemInformation",
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
 
 [build-dependencies]
 winresource = "0.1"

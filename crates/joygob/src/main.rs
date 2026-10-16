@@ -5,6 +5,7 @@ mod app;
 mod condition_editor;
 mod devices_view;
 mod hidhide_view;
+mod key_capture;
 mod logfile;
 mod modes_view;
 mod profile_view;

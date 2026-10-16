@@ -335,3 +335,34 @@ fn conditions_are_edited_in_place() {
     };
     assert_eq!(conditions, [vjoy]);
 }
+
+#[test]
+fn map_to_keyboard_keys_are_replaced() {
+    use gob_core::Key;
+    let mut p = sample();
+    let root = p.bind(DEV, "button", "9", "Default");
+    let keys = p
+        .add_child(
+            &root,
+            "actions",
+            gob_core::Action::new(&NewAction::MapToKeyboard),
+        )
+        .unwrap();
+    let ctrl_r = Key {
+        scan_code: 0x1D,
+        extended: true,
+    };
+    let a = Key {
+        scan_code: 0x1E,
+        extended: false,
+    };
+    p.set_keys(&keys, &[ctrl_r, a]);
+    p.set_keys(&keys, &[a, ctrl_r]);
+    let p = reload(&p);
+    assert_eq!(
+        p.action(&keys).unwrap().kind(),
+        ActionKind::MapToKeyboard {
+            keys: vec![a, ctrl_r]
+        }
+    );
+}

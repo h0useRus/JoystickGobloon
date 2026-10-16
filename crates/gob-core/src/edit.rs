@@ -27,6 +27,8 @@ pub enum NewAction {
     LoadProfile,
     PlaySound,
     TextToSpeech,
+    /// No keys yet; they are recorded in the editor.
+    MapToKeyboard,
     /// Starts with `axis` of `device` in both slots, like [`NewAction::MergeAxis`].
     DualAxisDeadzone {
         device: String,
@@ -229,6 +231,7 @@ impl Action {
                 ],
                 "disallowed",
             ),
+            NewAction::MapToKeyboard => Self::build("map-to-keyboard", Vec::new(), "both"),
             NewAction::LoadProfile => Self::build(
                 "load-profile",
                 vec![prop("string", "load-profile", "")],
@@ -478,6 +481,29 @@ impl Profile {
         };
         a.group_mut(group).push(Item::ActionRef(id.into()));
         true
+    }
+
+    /// Replaces the keys of a map-to-keyboard action (`<input>` groups, written first like Gremlin).
+    pub fn set_keys(&mut self, id: &str, keys: &[crate::Key]) {
+        let Some(a) = self.action_mut(id) else {
+            return;
+        };
+        a.items
+            .retain(|i| !matches!(i, Item::Group { tag, .. } if tag == "input"));
+        let groups = keys.iter().map(|k| {
+            group(
+                "input",
+                vec![
+                    prop("int", "scan-code", k.scan_code.to_string()),
+                    prop(
+                        "bool",
+                        "is-extended",
+                        if k.extended { "True" } else { "False" },
+                    ),
+                ],
+            )
+        });
+        a.items.splice(0..0, groups);
     }
 
     /// Replaces the `index`-th `<condition>` of a condition action; `index` = count appends.

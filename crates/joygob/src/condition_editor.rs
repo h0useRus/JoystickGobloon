@@ -120,6 +120,12 @@ impl Editor<'_> {
                         InputType::Button,
                     ),
                     (
+                        icon::KEYBOARD,
+                        "cond-keyboard",
+                        ConditionSource::Keyboard(Vec::new()),
+                        InputType::Button,
+                    ),
+                    (
                         icon::GAME_CONTROLLER,
                         "cond-vjoy",
                         ConditionSource::Vjoy {
@@ -211,13 +217,12 @@ impl Editor<'_> {
                 ui.add(egui::DragValue::new(input).range(1..=128).prefix("#"));
             }
             ConditionSource::Keyboard(keys) => {
-                let text = keys
-                    .iter()
-                    .map(|k| format!("{:#04x}{}", k.scan_code, if k.extended { "e" } else { "" }))
-                    .collect::<Vec<_>>()
-                    .join(" + ");
-                ui.label(format!("{}  {text}", icon::KEYBOARD))
+                ui.label(RichText::new(icon::KEYBOARD).size(style::ICON_SIZE))
                     .on_hover_text(self.i18n.tr("cond-keyboard"));
+                let field = egui::Id::new(("cond-keys", &salt));
+                if let Some(new) = crate::key_capture::keys_field(ui, field, keys, self.i18n) {
+                    *keys = new;
+                }
             }
             ConditionSource::Other(kind) => {
                 ui.label(format!("{}  {kind}", icon::PUZZLE_PIECE))

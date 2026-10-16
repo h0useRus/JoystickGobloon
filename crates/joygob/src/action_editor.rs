@@ -109,6 +109,11 @@ pub enum Op {
         action: String,
         index: usize,
     },
+    /// Keys of a map-to-keyboard action.
+    SetKeys {
+        action: String,
+        keys: Vec<gob_core::Key>,
+    },
     /// Preview in the editor; not an edit.
     PreviewSound {
         file: String,
@@ -182,6 +187,7 @@ pub fn apply(p: &mut Profile, op: Op) {
             }
         }
         Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
+        Op::SetKeys { action, keys } => p.set_keys(&action, &keys),
         // Handled by the app before edits are applied.
         Op::PreviewSound { .. } | Op::PreviewSpeech(_) => {}
         Op::SetCondition {
@@ -330,6 +336,13 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             icon::NUMBER_CIRCLE_TWO,
             "kind-double-tap",
             NewAction::DoubleTap,
+        ));
+    }
+    if behavior == InputType::Button {
+        list.push((
+            icon::KEYBOARD,
+            "kind-map-to-keyboard",
+            NewAction::MapToKeyboard,
         ));
     }
     list.push((
@@ -863,7 +876,17 @@ impl Editor<'_> {
                         self.container(ui, id, g, depth + 1);
                     }
                 }
-                ActionKind::Macro { .. } | ActionKind::MapToKeyboard { .. } | ActionKind::Other => {
+                ActionKind::MapToKeyboard { keys } => {
+                    let id = egui::Id::new(("keys", &action.id));
+                    if let Some(keys) = crate::key_capture::keys_field(ui, id, &keys, self.i18n) {
+                        self.ops.push(Op::SetKeys {
+                            action: action.id.clone(),
+                            keys,
+                        });
+                    }
+                    ui.horizontal(|ui| self.activation(ui, action));
+                }
+                ActionKind::Macro { .. } | ActionKind::Other => {
                     ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
                 }
             }

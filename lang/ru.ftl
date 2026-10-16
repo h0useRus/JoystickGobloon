@@ -282,3 +282,10 @@ edit-preview = Прослушать
 edit-tts-voice = Голос
 edit-tts-default-voice = Голос по умолчанию
 edit-tts-voice-missing = не установлен
+kind-map-to-keyboard = Назначить клавиши
+
+# Key recording
+keys-record = Записать клавиши: нажмите их вместе, запись закончится, когда все будут отпущены
+keys-press = Нажмите клавиши…
+keys-none = Нет клавиш
+keys-cancel = Отменить запись

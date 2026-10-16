@@ -15,7 +15,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `description` | A B H K | done |
 | `map-to-mouse` | A B H K | done |
 | `macro` | B K | done (keys, mouse, vJoy, pauses, repeat modes; not exclusive/preemptive, joystick, logical-device) |
-| `map-to-keyboard` | B K | done (engine; editor todo) |
+| `map-to-keyboard` | B K | done |
 | `chain` | B K | done (editor: timeout + existing steps; adding steps todo) |
 | `double-tap` | B K | done |
 | `smart-toggle` | B K | done |
@@ -24,7 +24,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `merge-axis` | A B | done |
 | `axis-delta` | A | done |
 | `dual-axis-deadzone` | A | done |
-| `condition` | A B H K | done (keyboard conditions run but are not editable yet; logical devices are false) |
+| `condition` | A B H K | done (logical devices are false) |
 | `reference` | A B H K | done (editor only: link / copy existing action) |
 | `pause-resume` | B K | done |
 | `load-profile` | B K | done |
@@ -68,6 +68,9 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - One `<input>` group per key with `scan-code` int and `is-extended` bool.
 - Press sends key-down for each key in order, release sends key-up in reverse order (Gremlin queues two
   macros with zero pauses, so no default delay).
+- Editor: keys are recorded by polling Windows key states (GetAsyncKeyState + MapVirtualKey), so left/right
+  modifiers and the E0 flag are exact; every key pressed until all are released is recorded, in press
+  order. Names come from GetKeyNameText (current layout). Keyboard conditions use the same recorder.
 - JoyGob addition: if the input is released in a mode where it is bound differently, the keys are still
   released (Gremlin would leave them stuck). Each press releases at most once.
 
