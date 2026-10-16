@@ -9,6 +9,8 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 - crates/gob-gremlin XML <-> Element <-> Profile, lossless round-trip; `report()` import warnings; example `resave`
 - crates/gob-input   DirectInput8 polling thread (InputService: snapshot + events); ids = DI instance GUIDs like Gremlin;
   links dinput8.lib/dxguid.lib statically (-bundle) for c_dfDIJoystick2; example `monitor`
+  + low-level keyboard hook -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
+  use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine
 - crates/gob-vjoy    runtime-loaded vJoyInterface.dll (path from vJoy uninstall key); VJoy::acquire -> Device
   (reset+release on drop); axis slots 1..8 like gob-input; example `vjoy_info --sweep <id>`
 - crates/gob-hidhide wraps HidHideCLI.exe (path from HKLM\SOFTWARE\Nefarius Software Solutions e.U.\HidHide):

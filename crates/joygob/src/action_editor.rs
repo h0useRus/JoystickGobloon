@@ -182,7 +182,9 @@ pub fn apply(p: &mut Profile, op: Op) {
             mode,
             add,
         } => {
-            let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID);
+            // Neither the logical device nor the keyboard is listed in <devices>.
+            let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
+                || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID);
             if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(&device)) {
                 p.devices.push(gob_core::Device {
                     id: device.clone(),

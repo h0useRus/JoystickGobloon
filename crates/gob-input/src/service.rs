@@ -41,22 +41,37 @@ pub struct InputService {
     events: Receiver<InputEvent>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    /// Keyboard keys as events (low-level hook); `None` if it could not be installed.
+    _keyboard: Option<crate::keyboard::Hook>,
 }
 
 impl InputService {
     /// Starts polling in a background thread. `on_change` is called after every
     /// change (e.g. to request a GUI repaint).
-    pub fn start(on_change: impl Fn() + Send + 'static) -> Self {
+    pub fn start(on_change: impl Fn() + Send + Sync + 'static) -> Self {
+        let on_change = Arc::new(on_change);
         let snapshot = Arc::new(RwLock::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let broadcast = Broadcast::default();
         let events = broadcast.subscribe();
         let thread = {
             let (snapshot, stop, tx) = (snapshot.clone(), stop.clone(), broadcast.clone());
+            let on_change = on_change.clone();
             std::thread::Builder::new()
                 .name("gob-input".into())
-                .spawn(move || run(&snapshot, &stop, &tx, &on_change))
+                .spawn(move || run(&snapshot, &stop, &tx, &*on_change))
                 .ok()
+        };
+        let keyboard = {
+            let tx = broadcast.clone();
+            crate::keyboard::start(Arc::new(move |scan_code, extended, pressed| {
+                tx.send(InputEvent::Key {
+                    scan_code,
+                    extended,
+                    pressed,
+                });
+                on_change();
+            }))
         };
         Self {
             snapshot,
@@ -64,6 +79,7 @@ impl InputService {
             events,
             stop,
             thread,
+            _keyboard: keyboard,
         }
     }
 

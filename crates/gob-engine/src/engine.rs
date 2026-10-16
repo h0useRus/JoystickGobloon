@@ -525,6 +525,8 @@ impl Engine {
                 InputType::Axis => InputKind::Axis,
                 InputType::Button => InputKind::Button,
                 InputType::Hat => InputKind::Hat,
+                // Keyboard keys (Gremlin's "key" inputs) behave like buttons.
+                InputType::Other if b.input_type.trim() == "key" => InputKind::Button,
                 InputType::Other => continue,
             };
             let Ok(id) = b.input_id.trim().parse() else {

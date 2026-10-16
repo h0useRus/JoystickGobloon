@@ -7,6 +7,7 @@
 
 #[cfg(windows)]
 mod dinput;
+mod keyboard;
 mod service;
 
 pub use service::InputService;
@@ -79,6 +80,14 @@ pub enum InputEvent {
         device: String,
         id: u8,
         direction: Option<u16>,
+    },
+    /// A keyboard key (first press or release; auto-repeat is not reported).
+    Key {
+        /// Set 1 scan code.
+        scan_code: u16,
+        /// E0 prefix (right Ctrl/Alt, arrows, ...).
+        extended: bool,
+        pressed: bool,
     },
     /// Devices were attached or removed.
     DevicesChanged,

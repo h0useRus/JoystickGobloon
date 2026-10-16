@@ -1313,3 +1313,29 @@ fn unknown_action_types_run_through_plugins() {
     plain.process(&key, Value::Button(true), Instant::now(), &mut out);
     assert!(out.0.is_empty());
 }
+
+#[test]
+fn keyboard_key_bindings_act_like_buttons() {
+    // Right Ctrl: scan code 0x1D with the E0 prefix -> input id 0x11D.
+    let xml = format!(
+        r#"<profile version="14"><inputs><input><device-id>{}</device-id><input-type>key</input-type>
+        <mode>Default</mode><input-id>285</input-id><action-configuration><root-action>r</root-action>
+        <behavior>button</behavior></action-configuration></input></inputs><settings/><library>{}{}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        gob_core::KEYBOARD_GUID,
+        root("r", &["v"]),
+        vjoy("v", "button", 7),
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut engine = Engine::new(&p, &HashMap::new());
+    let mut out = Recorder::default();
+    let id = gob_core::key_input_id(gob_core::Key {
+        scan_code: 0x1D,
+        extended: true,
+    });
+    assert_eq!(id, 285);
+    let key = InputKey::new(gob_core::KEYBOARD_GUID, InputKind::Button, id);
+    engine.process(&key, Value::Button(true), Instant::now(), &mut out);
+    engine.process(&key, Value::Button(false), Instant::now(), &mut out);
+    assert_eq!(out.0, [Out::Button(7, true), Out::Button(7, false)]);
+}

@@ -395,3 +395,9 @@ curve-symmetric = Симметричная
 curve-symmetric-tip = При правке отражать кривую относительно центра
 curve-point = Точка
 curve-handle = Маркер
+
+# Keyboard device
+keyboard-device = Клавиатура
+keyboard-tip = Клавиши как входы: назначайте действия на клавиши, как на кнопки джойстика
+keyboard-add = Назначить клавишу
+keyboard-empty = Клавиши ещё не назначены: запишите клавишу кнопкой выше.

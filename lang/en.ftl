@@ -395,3 +395,9 @@ curve-symmetric = Symmetric
 curve-symmetric-tip = Mirror the curve through the center while editing
 curve-point = Point
 curve-handle = Handle
+
+# Keyboard device
+keyboard-device = Keyboard
+keyboard-tip = Keyboard keys as inputs: bind actions to keys like to joystick buttons
+keyboard-add = Bind a key
+keyboard-empty = No keys bound yet: record one with the button above.

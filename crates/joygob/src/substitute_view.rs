@@ -36,6 +36,7 @@ pub fn missing_devices<'a>(
         .iter()
         .filter(|d| {
             !d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
+                && !d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
                 && !devices
                     .iter()
                     .any(|s| s.info.guid.eq_ignore_ascii_case(&d.id))

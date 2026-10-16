@@ -23,6 +23,8 @@ enum Kind {
     Axis,
     Button,
     Hat,
+    /// Keyboard key; the id is Gremlin's `extended << 8 | scan code`.
+    Key,
     Other,
 }
 
@@ -70,6 +72,23 @@ impl DevicesView {
                     id,
                     direction: Some(_),
                 } => (device, (Kind::Hat, u32::from(id))),
+                // Typing must not switch tabs: keys only light up their row.
+                InputEvent::Key {
+                    scan_code,
+                    extended,
+                    pressed: true,
+                } => {
+                    let id = gob_core::key_input_id(gob_core::Key {
+                        scan_code,
+                        extended,
+                    });
+                    let key = (gob_core::KEYBOARD_GUID.to_string(), (Kind::Key, id));
+                    if self.selected.as_deref() == Some(gob_core::KEYBOARD_GUID) {
+                        self.scroll_to = Some(key.clone());
+                    }
+                    self.activity.insert(key, Instant::now());
+                    continue;
+                }
                 _ => continue,
             };
             if devices
@@ -110,6 +129,7 @@ impl DevicesView {
             })
             .collect();
         let logical_name = i18n.tr("logical-device");
+        let keyboard_name = i18n.tr("keyboard-device");
         if let Some(p) = profile {
             let known = |guid: &str| {
                 p.profile
@@ -118,7 +138,8 @@ impl DevicesView {
                     .any(|d| d.id.eq_ignore_ascii_case(guid))
             };
             for d in &p.profile.devices {
-                let logical = d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID);
+                let logical = d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
+                    || d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID);
                 if logical || tabs.iter().any(|t| t.guid.eq_ignore_ascii_case(&d.id)) {
                     continue;
                 }
@@ -151,14 +172,24 @@ impl DevicesView {
                 alias: None,
                 logical: true,
             });
+            tabs.push(Tab {
+                guid: gob_core::KEYBOARD_GUID,
+                name: &keyboard_name,
+                live: None,
+                alias: None,
+                logical: false,
+            });
         }
         let valid = self
             .selected
             .as_ref()
             .is_some_and(|s| tabs.iter().any(|t| t.guid == s));
-        let on_ghost = tabs
-            .iter()
-            .any(|t| self.selected.as_deref() == Some(t.guid) && t.live.is_none() && !t.logical);
+        let on_ghost = tabs.iter().any(|t| {
+            self.selected.as_deref() == Some(t.guid)
+                && t.live.is_none()
+                && !t.logical
+                && !is_keyboard(t)
+        });
         if !valid || (!self.user_selected && on_ghost) {
             let first = tabs.iter().find(|t| t.live.is_some()).or(tabs.first());
             self.selected = first.map(|t| t.guid.to_string());
@@ -199,6 +230,7 @@ impl DevicesView {
                         let selected = self.selected.as_deref() == Some(t.guid);
                         let (glyph, hint) = match (t.live, t.alias) {
                             _ if t.logical => (icon::CPU, Some("logical-device-tip")),
+                            _ if is_keyboard(t) => (icon::KEYBOARD, Some("keyboard-tip")),
                             (Some(_), Some(_)) => (icon::LINK, Some("device-linked")),
                             (Some(_), None) => (icon::JOYSTICK, None),
                             (None, _) => (icon::PLUGS, Some("device-disconnected")),
@@ -261,6 +293,7 @@ impl DevicesView {
                         InputType::Axis => Kind::Axis,
                         InputType::Button => Kind::Button,
                         InputType::Hat => Kind::Hat,
+                        InputType::Other if b.input_type.trim() == "key" => Kind::Key,
                         InputType::Other => Kind::Other,
                     };
                     let key = (kind, b.input_id.parse().unwrap_or(0));
@@ -276,6 +309,29 @@ impl DevicesView {
             }
         }
 
+        if is_keyboard(tab) && profile.is_some() {
+            // Bind a key by recording it; the row then lists it like any input.
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(i18n.tr("keyboard-add")).weak());
+                let field = egui::Id::new("keyboard-add-key");
+                if let Some(keys) = crate::key_capture::keys_field(ui, field, &[], i18n) {
+                    let mode = self.mode.clone().unwrap_or_default();
+                    for k in keys {
+                        ops.push(Op::Bind {
+                            device: gob_core::KEYBOARD_GUID.into(),
+                            name: i18n.tr("keyboard-device"),
+                            input_type: "key".into(),
+                            input_id: gob_core::key_input_id(k).to_string(),
+                            mode: mode.clone(),
+                            add: None,
+                        });
+                    }
+                }
+            });
+            if rows.is_empty() {
+                ui.label(RichText::new(i18n.tr("keyboard-empty")).weak());
+            }
+        }
         let mut labels: HashMap<Key, String> = HashMap::new();
         if let (true, Some(p)) = (tab.logical, profile) {
             for i in p.profile.logical_inputs() {
@@ -367,9 +423,14 @@ impl DevicesView {
         let input_type = match key.0 {
             Kind::Axis => "axis",
             Kind::Hat => "hat",
+            Kind::Key => "key",
             Kind::Button | Kind::Other => "button",
         };
-        let behavior = InputType::parse(input_type);
+        // Keys act like buttons.
+        let behavior = match key.0 {
+            Kind::Key => InputType::Button,
+            _ => InputType::parse(input_type),
+        };
         let mode = self.mode.clone().unwrap_or_default();
         let bind = |add| Op::Bind {
             device: device.clone(),
@@ -388,10 +449,18 @@ impl DevicesView {
                 };
                 let header = |ui: &mut egui::Ui, ops: &mut Vec<Op>| {
                     ui.label(RichText::new(kind_glyph(key.0)).size(16.0));
-                    ui.add_sized(
-                        [28.0, 18.0],
-                        egui::Label::new(RichText::new(key.1.to_string()).monospace()),
-                    );
+                    if key.0 == Kind::Key {
+                        let name = crate::key_capture::name(gob_core::key_from_input_id(key.1));
+                        ui.add_sized(
+                            [110.0, 18.0],
+                            egui::Label::new(RichText::new(name).strong()),
+                        );
+                    } else {
+                        ui.add_sized(
+                            [28.0, 18.0],
+                            egui::Label::new(RichText::new(key.1.to_string()).monospace()),
+                        );
+                    }
                     match label {
                         Some(text) => {
                             let ty = InputType::parse(input_type);
@@ -545,6 +614,7 @@ fn kind_glyph(kind: Kind) -> &'static str {
         Kind::Axis => icon::ARROWS_OUT_LINE_HORIZONTAL,
         Kind::Button => icon::RADIO_BUTTON,
         Kind::Hat => icon::ARROWS_OUT_CARDINAL,
+        Kind::Key => icon::KEYBOARD,
         Kind::Other => icon::QUESTION,
     }
 }
@@ -601,7 +671,8 @@ fn live_widget(ui: &mut egui::Ui, live: Option<&DeviceState>, (kind, id): Key) {
                 color,
             );
         }
-        Kind::Other => {}
+        // Keys have no live state shown here; their row lights up when pressed.
+        Kind::Key | Kind::Other => {}
     }
 }
 
@@ -632,7 +703,12 @@ fn debug_expanded((kind, id): Key) -> bool {
         Kind::Axis => "axis",
         Kind::Button => "button",
         Kind::Hat => "hat",
+        Kind::Key => "key",
         Kind::Other => "other",
     };
     std::env::var("JOYGOB_EXPAND").is_ok_and(|v| v == format!("{name}{id}"))
+}
+
+fn is_keyboard(tab: &Tab) -> bool {
+    tab.guid == gob_core::KEYBOARD_GUID
 }

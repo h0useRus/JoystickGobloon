@@ -6,6 +6,23 @@ use crate::action::InputType;
 use crate::profile::Profile;
 use crate::xml::Element;
 
+/// Device id Gremlin uses for keyboard bindings (DirectInput's `GUID_SysKeyboard`).
+/// Their input type is `key` and the input id `extended << 8 | scan code`.
+pub const KEYBOARD_GUID: &str = "6f1d2b61-d5a0-11cf-bfc7-444553540000";
+
+/// Input id of a keyboard binding (Gremlin's encoding).
+pub fn key_input_id(key: crate::Key) -> u32 {
+    (u32::from(key.extended) << 8) | u32::from(key.scan_code & 0xFF)
+}
+
+/// Key of a keyboard binding's input id.
+pub fn key_from_input_id(id: u32) -> crate::Key {
+    crate::Key {
+        scan_code: (id & 0xFF) as u16,
+        extended: id >> 8 == 1,
+    }
+}
+
 /// Device id Gremlin uses for logical device bindings (`dill.UUID_LogicalDevice`).
 pub const LOGICAL_DEVICE_GUID: &str = "f0af472f-8e17-493b-a1eb-7333ee8543f2";
 
