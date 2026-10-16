@@ -86,3 +86,15 @@ jobs:
           files: |
             target/installer/JoystickGobloon-${{ steps.version.outputs.version }}-setup.exe
             target/JoystickGobloon-${{ steps.version.outputs.version }}-portable.zip
+
+      # Discord: final releases to DISCORD_WEBHOOK, alpha builds to DISCORD_WEBHOOK_ALPHA
+      # (each only when that secret is set). A failed post never fails the release.
+      - name: Announce on Discord
+        continue-on-error: true
+        shell: pwsh
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_ALPHA: ${{ secrets.DISCORD_WEBHOOK_ALPHA }}
+        run: |
+          $pre = "${{ steps.version.outputs.prerelease }}" -eq "true"
+          .github/scripts/discord-announce.ps1 -Version "${{ steps.version.outputs.version }}" -Repo "${{ github.repository }}" -Sha "${{ github.sha }}" -Prerelease:$pre
