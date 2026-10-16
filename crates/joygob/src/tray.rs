@@ -63,15 +63,15 @@ pub struct Tray {
     active: Option<bool>,
     /// "Quit" was chosen in the tray menu; the app closes (asking to save first).
     pub quit: Arc<AtomicBool>,
-    /// The window was shown from the tray; the app tells egui/winit on its next frame.
-    restored: Arc<AtomicBool>,
 }
 
 impl Tray {
     /// `hwnd` is the main window, `tooltip` the app name; `show`/`quit` are menu captions.
+    /// `restored` is set whenever the window is shown from the tray (see [`show_window`]).
     pub fn new(
         ctx: &egui::Context,
         hwnd: isize,
+        restored: Arc<AtomicBool>,
         tooltip: &str,
         show: &str,
         quit: &str,
@@ -91,7 +91,6 @@ impl Tray {
             .map_err(|e| e.to_string())?;
 
         let quit_flag = Arc::new(AtomicBool::new(false));
-        let restored = Arc::new(AtomicBool::new(false));
         {
             let ctx = ctx.clone();
             let restored = restored.clone();
@@ -112,7 +111,6 @@ impl Tray {
             let ctx = ctx.clone();
             let (show_id, quit_id) = (show_item.id().clone(), quit_item.id().clone());
             let quit_flag = quit_flag.clone();
-            let restored = restored.clone();
             MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
                 if event.id == quit_id {
                     quit_flag.store(true, Ordering::Relaxed);
@@ -128,13 +126,7 @@ impl Tray {
             icon: tray,
             active: None,
             quit: quit_flag,
-            restored,
         })
-    }
-
-    /// True once after the window was shown from the tray.
-    pub fn take_restored(&self) -> bool {
-        self.restored.swap(false, Ordering::Relaxed)
     }
 
     /// Green circle and `tooltip` while a profile runs, grey otherwise; no-op if unchanged.
@@ -159,17 +151,22 @@ impl Tray {
 
 /// Shows the hidden main window. Called from tray callbacks, which run inside the window
 /// message handling: the async variant only posts the request, so winit is not re-entered.
-/// The app then syncs winit's state on its next frame (`Tray::take_restored`); without
+/// The app then syncs winit's state on its next frame (its `restored` flag); without
 /// that winit still thinks the window is hidden and ignores the next hide request.
 pub fn show_window(hwnd: isize) {
     #[cfg(windows)]
     {
         use windows::Win32::Foundation::HWND;
-        use windows::Win32::UI::WindowsAndMessaging::{ShowWindowAsync, SW_SHOW};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            IsIconic, ShowWindowAsync, SW_RESTORE, SW_SHOW,
+        };
         let hwnd = HWND(hwnd as *mut _);
         // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
         unsafe {
             let _ = ShowWindowAsync(hwnd, SW_SHOW);
+            if IsIconic(hwnd).as_bool() {
+                let _ = ShowWindowAsync(hwnd, SW_RESTORE);
+            }
         }
     }
     #[cfg(not(windows))]

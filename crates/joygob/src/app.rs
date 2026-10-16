@@ -50,6 +50,8 @@ pub struct JoyGobApp {
     /// Sound and speech previews from the editor.
     media: gob_engine::Media,
     tray: Option<crate::tray::Tray>,
+    /// The window was shown from outside winit (tray, second start): sync it next frame.
+    restored: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Started at logon with a tray icon: frames left in which the window is hidden again
     /// (eframe shows it after its first frame whatever the viewport said).
     hide_frames: u8,
@@ -77,7 +79,8 @@ enum Pending {
 }
 
 impl JoyGobApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    /// `instance`: the single-instance wake-up event (another start shows this window).
+    pub fn new(cc: &eframe::CreationContext<'_>, instance: crate::instance::Event) -> Self {
         let settings = Settings::load();
         let lang_dir = std::env::current_exe()
             .ok()
@@ -130,10 +133,20 @@ impl JoyGobApp {
             media: Default::default(),
             _plugins: load_plugins(),
             tray: None,
+            restored: Default::default(),
             hide_frames: 0,
             hwnd: crate::tray::window_handle(cc),
         };
         app.update_tray(&cc.egui_ctx);
+        if let Some(hwnd) = app.hwnd {
+            let (restored, ctx) = (app.restored.clone(), cc.egui_ctx.clone());
+            crate::instance::listen(instance, move || {
+                log::info!("started again: showing the running window");
+                restored.store(true, std::sync::atomic::Ordering::Relaxed);
+                crate::tray::show_window(hwnd);
+                ctx.request_repaint();
+            });
+        }
         // Debug builds: open a page at start for screenshot checks without clicking.
         #[cfg(debug_assertions)]
         match std::env::var("JOYGOB_START_PAGE").as_deref() {
@@ -187,7 +200,8 @@ impl JoyGobApp {
         match (self.settings.show_tray, self.tray.is_some(), self.hwnd) {
             (true, false, Some(hwnd)) => {
                 let (show, quit) = (self.i18n.tr("tray-show"), self.i18n.tr("tray-quit"));
-                match crate::tray::Tray::new(ctx, hwnd, crate::APP_NAME, &show, &quit) {
+                let restored = self.restored.clone();
+                match crate::tray::Tray::new(ctx, hwnd, restored, crate::APP_NAME, &show, &quit) {
                     Ok(t) => {
                         log::info!("tray icon shown");
                         self.tray = Some(t);
@@ -734,7 +748,10 @@ impl eframe::App for JoyGobApp {
             });
             tray.set_active(active, &format!("{} | {state}", crate::APP_NAME));
         }
-        if self.tray.as_ref().is_some_and(|t| t.take_restored()) {
+        if self
+            .restored
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+        {
             // Shown from the tray behind winit's back: make winit agree, and focus it.
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));

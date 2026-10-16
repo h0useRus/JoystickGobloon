@@ -13,7 +13,10 @@ fn main() {
             .set("InternalName", "JoystickGobloon")
             .set("OriginalFilename", "JoystickGobloon.exe")
             .set("CompanyName", "Denis Ibragimov")
-            .set("LegalCopyright", "Copyright (c) 2026 Denis Ibragimov. MIT License.")
+            .set(
+                "LegalCopyright",
+                "Copyright (c) 2026 Denis Ibragimov. MIT License.",
+            )
             .set("ProductVersion", &version);
         res.compile().expect("failed to embed Windows resources");
     }

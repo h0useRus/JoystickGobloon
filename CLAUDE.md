@@ -52,6 +52,9 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
   Debug builds open a page at start with env `JOYGOB_START_PAGE` = hidhide | vjoy | settings | about.
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
   window stays responsive; needs "close button hides to tray" on.
+- One instance per user (named mutex/event, separate names for debug builds): a second start shows the
+  running window and exits, so a second debug launch while one runs only brings it up.
+  tools/single_instance.ps1 checks it.
 - HidHide hides the VKB sticks; target\debug\JoystickGobloon.exe and examples\monitor.exe are whitelisted.
 - Profile device GUIDs come from another PC: use "Map controls" (banner on the Devices page).
 - JoyGob whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.
