@@ -109,6 +109,11 @@ pub enum Op {
         action: String,
         index: usize,
     },
+    AddChainStep(String),
+    RemoveChainStep {
+        action: String,
+        index: usize,
+    },
     /// Keys of a map-to-keyboard action.
     SetKeys {
         action: String,
@@ -188,6 +193,8 @@ pub fn apply(p: &mut Profile, op: Op) {
         }
         Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
         Op::SetKeys { action, keys } => p.set_keys(&action, &keys),
+        Op::AddChainStep(action) => p.add_chain_step(&action),
+        Op::RemoveChainStep { action, index } => p.remove_chain_step(&action, index),
         // Handled by the app before edits are applied.
         Op::PreviewSound { .. } | Op::PreviewSpeech(_) => {}
         Op::SetCondition {
@@ -337,6 +344,7 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             "kind-double-tap",
             NewAction::DoubleTap,
         ));
+        list.push((icon::LIST_NUMBERS, "kind-chain", NewAction::Chain));
     }
     if behavior == InputType::Button {
         list.push((
@@ -571,12 +579,31 @@ impl Editor<'_> {
                         for n in 0..chains.len() {
                             let group = format!("chain-{n}");
                             let title = self.i18n.trf("edit-chain-step", &[("n", (n + 1).into())]);
-                            ui.label(
-                                RichText::new(format!("{}  {title}", icon::LIST_NUMBERS)).strong(),
-                            );
-                            ui.indent((&group, &action.id), |ui| {
-                                self.container(ui, &action.id, &group, depth + 1);
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(format!("{}  {title}", icon::LIST_NUMBERS))
+                                        .strong(),
+                                );
+                                let can = chains.len() > 1;
+                                let tip = self.i18n.tr("edit-chain-remove");
+                                if style::icon_button(ui, can, icon::TRASH, &tip).clicked() {
+                                    self.ops.push(Op::RemoveChainStep {
+                                        action: action.id.clone(),
+                                        index: n,
+                                    });
+                                }
                             });
+                            ui.indent((&group, &action.id), |ui| {
+                                // Steps get button events, whatever the input is.
+                                let saved =
+                                    std::mem::replace(&mut self.behavior, InputType::Button);
+                                self.container(ui, &action.id, &group, depth + 1);
+                                self.behavior = saved;
+                            });
+                        }
+                        let text = format!("{}  {}", icon::PLUS, self.i18n.tr("edit-chain-add"));
+                        if ui.button(text).clicked() {
+                            self.ops.push(Op::AddChainStep(action.id.clone()));
                         }
                     }
                 }

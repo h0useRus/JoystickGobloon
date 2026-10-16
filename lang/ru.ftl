@@ -289,3 +289,5 @@ keys-record = Записать клавиши: нажмите их вместе,
 keys-press = Нажмите клавиши…
 keys-none = Нет клавиш
 keys-cancel = Отменить запись
+edit-chain-add = Добавить шаг
+edit-chain-remove = Удалить шаг и его действия

@@ -29,6 +29,8 @@ pub enum NewAction {
     TextToSpeech,
     /// No keys yet; they are recorded in the editor.
     MapToKeyboard,
+    /// One empty step, no timeout (Gremlin's defaults).
+    Chain,
     /// Starts with `axis` of `device` in both slots, like [`NewAction::MergeAxis`].
     DualAxisDeadzone {
         device: String,
@@ -87,6 +89,29 @@ pub fn new_uuid() -> String {
         b >> 48,
         b & 0xFFFF_FFFF_FFFF
     )
+}
+
+/// (step number, item position) of `chain-N` groups, in step order.
+fn chain_positions(items: &[Item]) -> Vec<(u32, usize)> {
+    let mut steps: Vec<(u32, usize)> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(pos, i)| match i {
+            Item::Group { tag, .. } => Some((tag.strip_prefix("chain-")?.parse().ok()?, pos)),
+            _ => None,
+        })
+        .collect();
+    steps.sort();
+    steps
+}
+
+/// Names steps `chain-0`, `chain-1`, ... in their current order (as Gremlin writes them).
+fn renumber_chain(items: &mut [Item]) {
+    for (n, (_, pos)) in chain_positions(items).into_iter().enumerate() {
+        if let Item::Group { tag, .. } = &mut items[pos] {
+            *tag = format!("chain-{n}");
+        }
+    }
 }
 
 fn condition_positions(items: &[Item]) -> Vec<usize> {
@@ -232,6 +257,14 @@ impl Action {
                 "disallowed",
             ),
             NewAction::MapToKeyboard => Self::build("map-to-keyboard", Vec::new(), "both"),
+            NewAction::Chain => Self::build(
+                "chain",
+                vec![
+                    group("chain-0", Vec::new()),
+                    prop("float", "timeout", "0.0"),
+                ],
+                "disallowed",
+            ),
             NewAction::LoadProfile => Self::build(
                 "load-profile",
                 vec![prop("string", "load-profile", "")],
@@ -481,6 +514,31 @@ impl Profile {
         };
         a.group_mut(group).push(Item::ActionRef(id.into()));
         true
+    }
+
+    /// Appends an empty step to a chain action.
+    pub fn add_chain_step(&mut self, id: &str) {
+        let Some(a) = self.action_mut(id) else {
+            return;
+        };
+        let steps = chain_positions(&a.items);
+        // After the last step, numbered after it even if the numbers have gaps.
+        let (next, at) = steps.last().map_or((0, 0), |&(n, pos)| (n + 1, pos + 1));
+        a.items
+            .insert(at, group(&format!("chain-{next}"), Vec::new()));
+        renumber_chain(&mut a.items);
+    }
+
+    /// Removes the `index`-th step of a chain action and renumbers the rest from 0.
+    pub fn remove_chain_step(&mut self, id: &str, index: usize) {
+        let Some(a) = self.action_mut(id) else {
+            return;
+        };
+        if let Some(&(_, pos)) = chain_positions(&a.items).get(index) {
+            a.items.remove(pos);
+        }
+        renumber_chain(&mut a.items);
+        self.collect_garbage();
     }
 
     /// Replaces the keys of a map-to-keyboard action (`<input>` groups, written first like Gremlin).

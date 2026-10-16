@@ -16,7 +16,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `map-to-mouse` | A B H K | done |
 | `macro` | B K | done (keys, mouse, vJoy, pauses, repeat modes; not exclusive/preemptive, joystick, logical-device) |
 | `map-to-keyboard` | B K | done |
-| `chain` | B K | done (editor: timeout + existing steps; adding steps todo) |
+| `chain` | B K | done |
 | `double-tap` | B K | done |
 | `smart-toggle` | B K | done |
 | `hat-buttons` | H | done |
@@ -77,6 +77,8 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 ## chain
 
 - Groups `chain-0`, `chain-1`, ... with `<action-id>` lists (ordered by number), `timeout` float (s, 0 = off).
+- Editor adds/removes steps and renumbers them from 0 like Gremlin writes them. Note: Gremlin only reads
+  steps that contain an action, so an empty step disappears when Gremlin loads the profile.
 - Each event runs the current step's actions; a release advances to the next step (wraps). With a timeout,
   an event more than `timeout` after the previous one (press or release) restarts from step 0.
 

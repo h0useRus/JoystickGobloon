@@ -289,3 +289,5 @@ keys-record = Record keys: press them together, recording ends when all are rele
 keys-press = Press the keys…
 keys-none = No keys
 keys-cancel = Cancel recording
+edit-chain-add = Add step
+edit-chain-remove = Remove this step and its actions

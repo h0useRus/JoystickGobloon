@@ -366,3 +366,38 @@ fn map_to_keyboard_keys_are_replaced() {
         }
     );
 }
+
+#[test]
+fn chain_steps_are_added_and_removed() {
+    let mut p = sample();
+    let root = p.bind(DEV, "button", "10", "Default");
+    let chain = p
+        .add_child(&root, "actions", gob_core::Action::new(&NewAction::Chain))
+        .unwrap();
+    p.add_chain_step(&chain);
+    p.add_chain_step(&chain);
+    let first = p
+        .add_child(
+            &chain,
+            "chain-0",
+            gob_core::Action::new(&NewAction::Description),
+        )
+        .unwrap();
+    let third = p
+        .add_child(
+            &chain,
+            "chain-2",
+            gob_core::Action::new(&NewAction::Description),
+        )
+        .unwrap();
+    p.remove_chain_step(&chain, 0);
+    assert!(
+        p.action(&first).is_none(),
+        "the removed step's actions are collected"
+    );
+    let p = reload(&p);
+    let ActionKind::Chain { chains, .. } = p.action(&chain).unwrap().kind() else {
+        panic!("not a chain");
+    };
+    assert_eq!(chains, [vec![], vec![third.as_str()]], "renumbered from 0");
+}
