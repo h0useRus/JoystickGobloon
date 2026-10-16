@@ -419,3 +419,15 @@ calibration-center-tip = Отпустите ручку, слегка покач�
 calibration-extrema = Калибровать края
 calibration-extrema-tip = Доведите ось до обоих краёв, затем нажмите ещё раз
 calibration-in-window = Калибровка открыта в отдельном окне.
+
+# Device info
+device-info = Сведения об устройстве
+device-info-name = Название
+device-info-axes = Оси
+device-info-buttons = Кнопки
+device-info-hats = Хатки
+device-info-vid = VID
+device-info-pid = PID
+device-info-joystick-id = ID джойстика
+device-info-guid = GUID устройства
+device-info-copy = Копировать в буфер обмена

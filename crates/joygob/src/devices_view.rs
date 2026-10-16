@@ -45,6 +45,10 @@ pub struct DevicesView {
     scroll_to: Option<(String, Key)>,
     /// Axis value when it last counted as moved (per device and axis).
     axis_ref: HashMap<(String, u8), f32>,
+    /// Device whose info window is open.
+    info: Option<String>,
+    /// JOYGOB_INFO was handled (debug builds).
+    info_shown: bool,
     /// Selected input per device tab (the one the right panel edits).
     selected_input: HashMap<String, Key>,
     /// The mode icon was clicked: the app opens the modes window.
@@ -273,9 +277,22 @@ impl DevicesView {
                             self.selected = Some(t.guid.to_string());
                             self.user_selected = true;
                         }
+                        // Real devices (connected or from the profile) have an info window.
+                        if !t.logical && !is_keyboard(t) {
+                            let tip = i18n.tr("device-info");
+                            if style::icon_button(ui, true, icon::INFO, &tip).clicked() {
+                                self.info = Some(t.guid.to_string());
+                            }
+                        }
                     }
                 });
             });
+            // Debug builds: JOYGOB_INFO=1 opens the first device's info at start (screenshots).
+        if cfg!(debug_assertions) && !self.info_shown && std::env::var("JOYGOB_INFO").is_ok() {
+            self.info_shown = true;
+            self.info = tabs.iter().find(|t| t.live.is_some()).map(|t| t.guid.to_string());
+        }
+        self.info_window(ui.ctx(), i18n, &tabs);
         });
         ui.separator();
 
@@ -400,6 +417,92 @@ impl DevicesView {
                         );
                     });
             });
+    }
+
+    /// Name, inputs, VID/PID, Windows joystick id and GUID of a device (copyable GUID).
+    fn info_window(&mut self, ctx: &egui::Context, i18n: &I18n, tabs: &[Tab]) {
+        let Some(guid) = self.info.clone() else {
+            return;
+        };
+        let Some(tab) = tabs.iter().find(|t| t.guid == guid) else {
+            self.info = None;
+            return;
+        };
+        let mut open = true;
+        egui::Window::new(format!("{}  {}", icon::INFO, tab.name))
+            .id(egui::Id::new("device-info"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .pivot(egui::Align2::CENTER_CENTER)
+            .default_pos(ctx.screen_rect().center())
+            .show(ctx, |ui| {
+                let none = || "—".to_string();
+                let live = tab.live.map(|d| &d.info);
+                let ids = live
+                    .map(|d| gob_input::joystick_ids(d.vendor_id, d.product_id))
+                    .unwrap_or_default();
+                let rows: [(&str, String); 7] = [
+                    ("device-info-name", tab.name.to_string()),
+                    (
+                        "device-info-axes",
+                        live.map_or_else(none, |d| d.axes.len().to_string()),
+                    ),
+                    (
+                        "device-info-buttons",
+                        live.map_or_else(none, |d| d.buttons.to_string()),
+                    ),
+                    (
+                        "device-info-hats",
+                        live.map_or_else(none, |d| d.hats.to_string()),
+                    ),
+                    (
+                        "device-info-vid",
+                        live.map_or_else(none, |d| format!("{:04X}", d.vendor_id)),
+                    ),
+                    (
+                        "device-info-pid",
+                        live.map_or_else(none, |d| format!("{:04X}", d.product_id)),
+                    ),
+                    (
+                        "device-info-joystick-id",
+                        if ids.is_empty() {
+                            none()
+                        } else {
+                            ids.iter()
+                                .map(u32::to_string)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        },
+                    ),
+                ];
+                egui::Grid::new("device-info-grid")
+                    .num_columns(2)
+                    .spacing([16.0, 6.0])
+                    .show(ui, |ui| {
+                        for (key, value) in rows {
+                            ui.label(RichText::new(i18n.tr(key)).weak());
+                            ui.label(RichText::new(value).monospace());
+                            ui.end_row();
+                        }
+                        ui.label(RichText::new(i18n.tr("device-info-guid")).weak());
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(tab.guid).monospace());
+                            let tip = i18n.tr("device-info-copy");
+                            if style::icon_button(ui, true, icon::COPY, &tip).clicked() {
+                                ui.ctx().copy_text(tab.guid.to_string());
+                            }
+                        });
+                        ui.end_row();
+                    });
+                if tab.live.is_none() {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(i18n.tr("device-disconnected")).weak());
+                }
+            });
+        if !open {
+            self.info = None;
+        }
     }
 
     /// Above the list: record a key (Keyboard tab) or add logical inputs (Logical device).

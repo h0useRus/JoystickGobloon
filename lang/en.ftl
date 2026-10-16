@@ -419,3 +419,15 @@ calibration-center-tip = Let the stick rest, wiggle it slightly around the cente
 calibration-extrema = Calibrate extrema
 calibration-extrema-tip = Move the axis to both ends, then click again
 calibration-in-window = The calibration is open in its own window.
+
+# Device info
+device-info = Device information
+device-info-name = Device name
+device-info-axes = Axes
+device-info-buttons = Buttons
+device-info-hats = Hats
+device-info-vid = VID
+device-info-pid = PID
+device-info-joystick-id = Joystick ID
+device-info-guid = Device GUID
+device-info-copy = Copy to clipboard

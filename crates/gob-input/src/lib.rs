@@ -153,6 +153,47 @@ pub enum InputEvent {
     DevicesChanged,
 }
 
+/// Windows game controller numbers (WinMM ids, as joy.cpl and many games use them) of the
+/// connected controllers with this vendor and product id.
+pub fn joystick_ids(vendor_id: u16, product_id: u16) -> Vec<u32> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Media::Multimedia::{
+            joyGetDevCapsW, joyGetNumDevs, joyGetPosEx, JOYCAPSW, JOYINFOEX, JOY_RETURNBUTTONS,
+        };
+        let mut ids = Vec::new();
+        // SAFETY: plain WinMM queries into locally owned structs of the right size.
+        unsafe {
+            for id in 0..joyGetNumDevs() {
+                let mut caps = JOYCAPSW::default();
+                if joyGetDevCapsW(
+                    id as usize,
+                    &mut caps,
+                    std::mem::size_of::<JOYCAPSW>() as u32,
+                ) != 0
+                {
+                    continue;
+                }
+                let mut info = JOYINFOEX {
+                    dwSize: std::mem::size_of::<JOYINFOEX>() as u32,
+                    dwFlags: JOY_RETURNBUTTONS as u32,
+                    ..Default::default()
+                };
+                let connected = joyGetPosEx(id, &mut info) == 0;
+                if connected && caps.wMid == vendor_id && caps.wPid == product_id {
+                    ids.push(id);
+                }
+            }
+        }
+        ids
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (vendor_id, product_id);
+        Vec::new()
+    }
+}
+
 /// Formats GUID parts the way Gremlin writes device ids.
 pub fn format_guid(data1: u32, data2: u16, data3: u16, data4: [u8; 8]) -> String {
     let d = data4;
