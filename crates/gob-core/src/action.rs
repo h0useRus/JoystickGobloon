@@ -94,7 +94,88 @@ pub enum ActionKind<'a> {
     Description {
         text: &'a str,
     },
+    /// Each activation (press + release) runs the next sequence; `timeout` > 0 restarts
+    /// from the first one after that many idle seconds.
+    Chain {
+        chains: Vec<Vec<&'a str>>,
+        timeout: f64,
+    },
+    /// `activate_on`: `exclusive` (single waits for the threshold) or `combined`.
+    DoubleTap {
+        single: Vec<&'a str>,
+        double: Vec<&'a str>,
+        threshold: f64,
+        activate_on: &'a str,
+    },
+    /// Each hat direction (and the center) acts as a button running its own actions.
+    /// `directions` holds 4 or 8 `(group tag, direction, actions)` entries plus the center
+    /// (`Center`, `None`), in Gremlin's order.
+    HatButtons {
+        directions: Vec<(&'static str, Option<u16>, Vec<&'a str>)>,
+    },
+    /// Combines two physical axes (device GUID, axis id) into the value its children see.
+    /// Usually the same action is bound to both axes.
+    MergeAxis {
+        axis1: (&'a str, u32),
+        axis2: (&'a str, u32),
+        operation: MergeOp,
+        children: Vec<&'a str>,
+    },
+    /// Two axes as one stick: circular `inner` deadzone, square `outer` limit; `first`
+    /// gets the first axis' result, `second` the second's.
+    DualAxisDeadzone {
+        axis1: (&'a str, u32),
+        axis2: (&'a str, u32),
+        inner: f64,
+        outer: f64,
+        first: Vec<&'a str>,
+        second: Vec<&'a str>,
+    },
+    /// Writes to a logical device input; `relative` is the axis speed (absolute when `None`).
+    MapToLogicalDevice {
+        input_type: InputType,
+        id: u32,
+        inverted: bool,
+        relative: Option<f64>,
+    },
+    /// Switches to another profile file and activates it.
+    LoadProfile {
+        file: &'a str,
+    },
+    /// Plays a sound file; `volume` 0..=100.
+    PlaySound {
+        file: &'a str,
+        volume: u8,
+    },
+    /// Speaks `text` (`$current_mode` is replaced); rate/pitch -1..1, volume 0..1.
+    /// `voice` is a JoyGob addition (Gremlin ignores it): an installed voice name.
+    TextToSpeech {
+        text: &'a str,
+        voice: Option<&'a str>,
+        queue_mode: &'a str,
+        rate: f64,
+        volume: f64,
+        pitch: f64,
+    },
+    /// Runs `true_actions` when the conditions hold (all of them, or any with `all` false),
+    /// otherwise `false_actions`. With no conditions it is true.
+    Condition {
+        all: bool,
+        conditions: Vec<crate::condition::Condition>,
+        true_actions: Vec<&'a str>,
+        false_actions: Vec<&'a str>,
+    },
+    /// Pulses `positive` / `negative` each time the axis moved `threshold` that way.
+    AxisDelta {
+        threshold: f64,
+        positive: Vec<&'a str>,
+        negative: Vec<&'a str>,
+    },
     MapToMouse(MouseAction),
+    /// Keys pressed in order on press and released in reverse on release.
+    MapToKeyboard {
+        keys: Vec<Key>,
+    },
     /// Short press latches the children on, hold acts momentarily.
     SmartToggle {
         children: Vec<&'a str>,
@@ -114,8 +195,85 @@ pub enum ActionKind<'a> {
         executable: &'a str,
         arguments: &'a str,
     },
+    /// Sequence of timed steps; `exclusive`/`preemptive` are kept but not executed.
+    Macro {
+        steps: Vec<MacroStep>,
+        repeat: MacroRepeat,
+        exclusive: bool,
+        preemptive: bool,
+    },
     /// Preserved in the profile but not executed (yet).
     Other,
+}
+
+/// How merge-axis combines its two axes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeOp {
+    Average,
+    Minimum,
+    Maximum,
+    /// Clamped to -1..1.
+    Sum,
+    /// `(axis2 - axis1) / 2`: two pedals into one left/right axis.
+    Bidirectional,
+    /// Axis furthest from center; ties go to the second.
+    MaximumDeflection,
+    /// Axis closest to center; ties go to the second.
+    ClosestToCenter,
+}
+
+impl MergeOp {
+    pub const ALL: [MergeOp; 7] = [
+        Self::Average,
+        Self::Minimum,
+        Self::Maximum,
+        Self::Sum,
+        Self::Bidirectional,
+        Self::MaximumDeflection,
+        Self::ClosestToCenter,
+    ];
+
+    /// Value of the `operation` property.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Average => "average",
+            Self::Minimum => "minimum",
+            Self::Maximum => "maximum",
+            Self::Sum => "sum",
+            Self::Bidirectional => "bidirectional",
+            Self::MaximumDeflection => "maximum-deflection",
+            Self::ClosestToCenter => "closest-to-center",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim().to_ascii_lowercase();
+        Self::ALL.into_iter().find(|o| o.name() == s)
+    }
+
+    pub fn apply(self, a: f32, b: f32) -> f32 {
+        match self {
+            Self::Average => (a + b) / 2.0,
+            Self::Minimum => a.min(b),
+            Self::Maximum => a.max(b),
+            Self::Sum => (a + b).clamp(-1.0, 1.0),
+            Self::Bidirectional => (b - a) / 2.0,
+            Self::MaximumDeflection => {
+                if a.abs() > b.abs() {
+                    a
+                } else {
+                    b
+                }
+            }
+            Self::ClosestToCenter => {
+                if a.abs() < b.abs() {
+                    a
+                } else {
+                    b
+                }
+            }
+        }
+    }
 }
 
 /// Mouse buttons as Gremlin names them in profiles.
@@ -171,6 +329,84 @@ pub enum MouseAction {
     },
 }
 
+/// A keyboard key as Gremlin stores it: set 1 scan code plus the E0 prefix flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Key {
+    pub scan_code: u16,
+    pub extended: bool,
+}
+
+/// One `<macro-action>` of a macro.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MacroStep {
+    /// Seconds.
+    Pause(f64),
+    /// Set 1 scan code; `extended` adds the E0 prefix.
+    Key {
+        scan_code: u16,
+        extended: bool,
+        pressed: bool,
+    },
+    MouseButton {
+        button: MouseButton,
+        pressed: bool,
+    },
+    MouseMotion {
+        dx: i32,
+        dy: i32,
+    },
+    VjoyButton {
+        device: u32,
+        id: u32,
+        pressed: bool,
+    },
+    /// `relative` adds `value` to the current position.
+    VjoyAxis {
+        device: u32,
+        id: u32,
+        value: f64,
+        relative: bool,
+    },
+    /// Hundredths of a degree, `None` when centered.
+    VjoyHat {
+        device: u32,
+        id: u32,
+        direction: Option<u16>,
+    },
+    /// `joystick` and `logical-device` steps, not executed.
+    Other,
+}
+
+/// How often a macro runs; delays are seconds between repetitions.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MacroRepeat {
+    Single,
+    Count {
+        count: u32,
+        delay: f64,
+    },
+    /// Repeats while the input stays pressed.
+    Hold {
+        delay: f64,
+    },
+    /// Starts on one activation, stops on the next.
+    Toggle {
+        delay: f64,
+    },
+}
+
+/// hat-buttons group tags, clockwise from north (45 degrees apart).
+pub(crate) const HAT_BUTTONS: [&str; 8] = [
+    "North",
+    "North-East",
+    "East",
+    "South-East",
+    "South",
+    "South-West",
+    "West",
+    "North-West",
+];
+
 /// Action types decoded by [`Action::kind`].
 pub const SUPPORTED_KINDS: &[&str] = &[
     "root",
@@ -180,10 +416,23 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "tempo",
     "description",
     "map-to-mouse",
+    "map-to-keyboard",
+    "chain",
+    "double-tap",
+    "hat-buttons",
+    "merge-axis",
+    "axis-delta",
+    "dual-axis-deadzone",
+    "condition",
+    "load-profile",
+    "map-to-logical-device",
+    "play-sound",
+    "text-to-speech",
     "smart-toggle",
     "split-axis",
     "pause-resume",
     "run-command",
+    "macro",
 ];
 
 impl Action {
@@ -270,6 +519,109 @@ impl Action {
                 threshold: self.parse("threshold").unwrap_or(0.5),
                 activate_on: self.str("activate-on").unwrap_or("release"),
             },
+            "chain" => {
+                let mut chains: Vec<(u32, Vec<&str>)> = self
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        Item::Group { tag, items, .. } => {
+                            let n = tag.strip_prefix("chain-")?.parse().ok()?;
+                            let mut refs = Vec::new();
+                            collect_refs(items, &mut refs);
+                            Some((n, refs))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                chains.sort_by_key(|(n, _)| *n);
+                ActionKind::Chain {
+                    chains: chains.into_iter().map(|(_, c)| c).collect(),
+                    timeout: self.parse("timeout").unwrap_or(0.0),
+                }
+            }
+            "double-tap" => ActionKind::DoubleTap {
+                single: self.refs_in("single-actions"),
+                double: self.refs_in("double-actions"),
+                threshold: self.parse("threshold").unwrap_or(0.5),
+                activate_on: self.str("activate-on").unwrap_or("exclusive"),
+            },
+            "hat-buttons" => {
+                let eight = self.parse("button-count") == Some(8);
+                let mut directions: Vec<_> = HAT_BUTTONS
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| eight || i % 2 == 0)
+                    .map(|(i, &name)| (name, Some(i as u16 * 4500), self.refs_in(name)))
+                    .collect();
+                directions.push(("Center", None, self.refs_in("Center")));
+                ActionKind::HatButtons { directions }
+            }
+            "map-to-logical-device" => ActionKind::MapToLogicalDevice {
+                input_type: InputType::parse(
+                    self.str("logical-input-type").unwrap_or_default().trim(),
+                ),
+                id: self.parse("logical-input-id").unwrap_or(1),
+                inverted: self.bool("button-inverted"),
+                relative: (self.str("axis-mode").map(str::trim) == Some("relative"))
+                    .then(|| self.parse("axis-scaling").unwrap_or(1.0)),
+            },
+            "load-profile" => ActionKind::LoadProfile {
+                file: self.str("load-profile").unwrap_or_default().trim(),
+            },
+            "play-sound" => ActionKind::PlaySound {
+                file: self.str("filename").unwrap_or_default().trim(),
+                volume: self
+                    .parse::<f64>("volume")
+                    .unwrap_or(50.0)
+                    .clamp(0.0, 100.0) as u8,
+            },
+            "text-to-speech" => ActionKind::TextToSpeech {
+                text: self.str("text").unwrap_or_default(),
+                voice: self.str("voice").map(str::trim).filter(|v| !v.is_empty()),
+                queue_mode: self.str("queue-mode").unwrap_or("queue-back").trim(),
+                rate: self.parse("playback-rate").unwrap_or(0.0),
+                volume: self.parse("playback-volume").unwrap_or(1.0),
+                pitch: self.parse("playback-pitch").unwrap_or(0.0),
+            },
+            "condition" => ActionKind::Condition {
+                all: !self
+                    .str("logical-operator")
+                    .is_some_and(|o| o.trim().eq_ignore_ascii_case("any")),
+                conditions: self
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        Item::Group { tag, items, .. } if tag == "condition" => {
+                            Some(crate::condition::Condition::parse(items))
+                        }
+                        _ => None,
+                    })
+                    .collect(),
+                true_actions: self.refs_in("true-actions"),
+                false_actions: self.refs_in("false-actions"),
+            },
+            "dual-axis-deadzone" => ActionKind::DualAxisDeadzone {
+                axis1: self.axis_ref(1),
+                axis2: self.axis_ref(2),
+                inner: self.parse("inner-deadzone").unwrap_or(0.0),
+                outer: self.parse("outer-deadzone").unwrap_or(1.0),
+                first: self.refs_in("output1-actions"),
+                second: self.refs_in("output2-actions"),
+            },
+            "axis-delta" => ActionKind::AxisDelta {
+                threshold: self.parse("threshold").unwrap_or(0.1),
+                positive: self.refs_in("positive-actions"),
+                negative: self.refs_in("negative-actions"),
+            },
+            "merge-axis" => ActionKind::MergeAxis {
+                axis1: self.axis_ref(1),
+                axis2: self.axis_ref(2),
+                operation: self
+                    .str("operation")
+                    .and_then(MergeOp::parse)
+                    .unwrap_or(MergeOp::Average),
+                children: self.refs_in("actions"),
+            },
             "description" => ActionKind::Description {
                 text: self.str("description").unwrap_or_default(),
             },
@@ -289,6 +641,24 @@ impl Action {
                 executable: self.str("executable").unwrap_or_default(),
                 arguments: self.str("arguments").unwrap_or_default(),
             },
+            "map-to-keyboard" => ActionKind::MapToKeyboard {
+                keys: self
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        Item::Group { tag, items, .. } if tag == "input" => Some(Key {
+                            scan_code: find_property(items, "scan-code")?
+                                .value
+                                .trim()
+                                .parse()
+                                .ok()?,
+                            extended: find_property(items, "is-extended")
+                                .is_some_and(|p| p.value.trim().eq_ignore_ascii_case("true")),
+                        }),
+                        _ => None,
+                    })
+                    .collect(),
+            },
             "map-to-mouse" => ActionKind::MapToMouse(match self.str("mode").map(str::trim) {
                 Some("Motion") => MouseAction::Motion {
                     direction: self.parse("direction").unwrap_or(0.0),
@@ -302,6 +672,38 @@ impl Action {
                         .unwrap_or(MouseButton::Left),
                 ),
             }),
+            "macro" => {
+                let delay = self.parse("repeat-delay").unwrap_or(0.1);
+                let repeat = match self
+                    .str("repeat-mode")
+                    .map(|m| m.trim().to_ascii_lowercase())
+                {
+                    Some(m) if m == "count" => MacroRepeat::Count {
+                        count: self.parse("repeat-count").unwrap_or(1),
+                        delay,
+                    },
+                    Some(m) if m == "hold" => MacroRepeat::Hold { delay },
+                    Some(m) if m == "toggle" => MacroRepeat::Toggle { delay },
+                    _ => MacroRepeat::Single,
+                };
+                let steps = self
+                    .items
+                    .iter()
+                    .filter_map(|i| match i {
+                        Item::Group { tag, attrs, items } if tag == "macro-action" => {
+                            let ty = attrs.iter().find(|(k, _)| k == "type")?.1.as_str();
+                            Some(macro_step(ty, items))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                ActionKind::Macro {
+                    steps,
+                    repeat,
+                    exclusive: self.bool("is-exclusive"),
+                    preemptive: self.bool("is-preemptive"),
+                }
+            }
             _ => ActionKind::Other,
         }
     }
@@ -313,6 +715,16 @@ impl Action {
     fn bool(&self, name: &str) -> bool {
         self.str(name)
             .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+    }
+
+    /// `axis{n}-guid` / `axis{n}-axis` of merge-axis and dual-axis-deadzone.
+    fn axis_ref(&self, n: u8) -> (&str, u32) {
+        (
+            self.str(&format!("axis{n}-guid"))
+                .unwrap_or_default()
+                .trim(),
+            self.parse(&format!("axis{n}-axis")).unwrap_or(0),
+        )
     }
 
     fn refs_in(&self, tag: &str) -> Vec<&str> {
@@ -346,6 +758,74 @@ fn collect_refs<'a>(items: &'a [Item], out: &mut Vec<&'a str>) {
             _ => {}
         }
     }
+}
+
+fn macro_step(ty: &str, items: &[Item]) -> MacroStep {
+    let str = |n| find_property(items, n).map(|p| p.value.trim());
+    let num = |n| str(n).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+    let flag = |n| str(n).is_some_and(|v| v.eq_ignore_ascii_case("true"));
+    match ty {
+        "pause" => MacroStep::Pause(num("duration")),
+        "key" => MacroStep::Key {
+            scan_code: num("scan-code") as u16,
+            extended: flag("is-extended"),
+            pressed: flag("is-pressed"),
+        },
+        "mouse-button" => match str("button").and_then(MouseButton::parse) {
+            Some(button) => MacroStep::MouseButton {
+                button,
+                pressed: flag("is-pressed"),
+            },
+            None => MacroStep::Other,
+        },
+        "mouse-motion" => MacroStep::MouseMotion {
+            dx: num("dx") as i32,
+            dy: num("dy") as i32,
+        },
+        "vjoy" => {
+            let device = num("vjoy-id") as u32;
+            let id = num("input-id") as u32;
+            match InputType::parse(str("input-type").unwrap_or_default()) {
+                InputType::Button => MacroStep::VjoyButton {
+                    device,
+                    id,
+                    pressed: flag("value"),
+                },
+                InputType::Axis => MacroStep::VjoyAxis {
+                    device,
+                    id,
+                    value: num("value"),
+                    relative: str("axis-mode").is_some_and(|m| m.eq_ignore_ascii_case("relative")),
+                },
+                InputType::Hat => MacroStep::VjoyHat {
+                    device,
+                    id,
+                    direction: str("value").and_then(hat_direction),
+                },
+                InputType::Other => MacroStep::Other,
+            }
+        }
+        _ => MacroStep::Other,
+    }
+}
+
+/// Gremlin hat direction name (`north-east`) to hundredths of a degree.
+fn hat_direction(name: &str) -> Option<u16> {
+    const NAMES: [&str; 8] = [
+        "north",
+        "north-east",
+        "east",
+        "south-east",
+        "south",
+        "south-west",
+        "west",
+        "north-west",
+    ];
+    let name = name.to_ascii_lowercase();
+    NAMES
+        .iter()
+        .position(|n| *n == name)
+        .map(|i| i as u16 * 4500)
 }
 
 fn parse_point(s: &str) -> Option<(f64, f64)> {

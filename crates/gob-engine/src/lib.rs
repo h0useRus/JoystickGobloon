@@ -9,12 +9,14 @@
 //! are auto-released when their input is released in another mode.
 
 mod engine;
+mod media;
 mod modes;
 mod motion;
 mod runner;
 mod sendinput;
 
 pub use engine::Engine;
+pub use media::{voices, Media, SpeechQueue, SpeechRequest};
 pub use runner::{Runner, RunnerStatus};
 
 /// Value flowing through an action tree.
@@ -73,6 +75,22 @@ pub trait Output {
     fn mouse_button(&mut self, _button: gob_core::MouseButton, _pressed: bool) {}
     /// Wheel notches: positive scrolls up.
     fn mouse_wheel(&mut self, _notches: i32) {}
+    /// Keyboard key by set 1 scan code; `extended` adds the E0 prefix.
+    fn key(&mut self, _scan_code: u16, _extended: bool, _pressed: bool) {}
     /// Starts a program (run-command action).
     fn run_command(&mut self, _executable: &str, _arguments: &[String]) {}
+    /// Plays a sound file, `volume` 0..=100 (play-sound action).
+    fn play_sound(&mut self, _file: &str, _volume: u8) {}
+    /// Text-to-speech action.
+    fn speak(&mut self, _request: SpeechRequest) {}
+    /// Load-profile action: the GUI switches to `file` and activates it.
+    fn load_profile(&mut self, _file: &str) {}
+    /// Last value sent to a vJoy input, for conditions; `None` if never set.
+    fn vjoy_state(&self, _device: u32, _kind: InputKind, _id: u32) -> Option<Value> {
+        None
+    }
+    /// Whether a keyboard key is held right now, for conditions.
+    fn key_pressed(&self, _scan_code: u16, _extended: bool) -> bool {
+        false
+    }
 }

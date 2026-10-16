@@ -100,8 +100,26 @@ impl ActionConfig {
     }
 }
 
+/// Gremlin hat direction name of a direction (`center` for `None`).
+pub(crate) fn hat_direction_name(d: Option<u16>) -> &'static str {
+    const NAMES: [&str; 8] = [
+        "north",
+        "north-east",
+        "east",
+        "south-east",
+        "south",
+        "south-west",
+        "west",
+        "north-west",
+    ];
+    match d {
+        None => "center",
+        Some(deg) => NAMES[((usize::from(deg) + 2250) / 4500) % 8],
+    }
+}
+
 /// Gremlin hat direction name -> direction (`Some(None)` is center).
-fn hat_direction(name: &str) -> Option<Option<u16>> {
+pub(crate) fn hat_direction(name: &str) -> Option<Option<u16>> {
     const NAMES: [&str; 8] = [
         "north",
         "north-east",

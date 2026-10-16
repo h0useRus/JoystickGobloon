@@ -1,4 +1,6 @@
-use gob_core::{ActionKind, ActivationMode, InputType, Item, Profile, Section};
+use gob_core::{
+    ActionKind, ActivationMode, InputType, Item, MacroRepeat, MacroStep, Profile, Section,
+};
 use gob_gremlin::{profile_to_element, report, xmltext, Warning};
 
 const SAMPLE: &str = include_str!("../../../tests/fixtures/sample_r14.xml");
@@ -100,7 +102,22 @@ fn sample_typed_views() {
         k => panic!("unexpected {k:?}"),
     }
     assert_eq!(get("d001").kind(), ActionKind::Description { text: "" });
-    assert_eq!(get("m001").kind(), ActionKind::Other);
+    assert_eq!(
+        get("m001").kind(),
+        ActionKind::Macro {
+            steps: vec![
+                MacroStep::Key {
+                    scan_code: 62,
+                    extended: false,
+                    pressed: false
+                },
+                MacroStep::Pause(0.1)
+            ],
+            repeat: MacroRepeat::Single,
+            exclusive: false,
+            preemptive: false
+        }
+    );
 
     let odd = get("x001");
     assert!(
@@ -115,10 +132,10 @@ fn sample_report() {
     assert_eq!((r.inputs, r.actions, r.devices, r.modes), (2, 9, 1, 2));
     assert_eq!(r.by_kind["root"], 2);
     assert!(r.warnings.contains(&Warning::HasScripts));
-    assert!(r.warnings.contains(&Warning::NotExecutable {
-        kind: "macro".into(),
-        count: 1
-    }));
+    assert!(!r
+        .warnings
+        .iter()
+        .any(|w| matches!(w, Warning::NotExecutable { kind, .. } if kind == "macro")));
     assert!(r.warnings.contains(&Warning::NotExecutable {
         kind: "future-action".into(),
         count: 1

@@ -1,4 +1,4 @@
-//! Device substitution: re-target profile devices that are not connected onto
+//! "Map controls": re-target profile devices that are not connected onto
 //! attached ones (DirectInput GUIDs differ between PCs).
 
 use std::collections::HashMap;
@@ -18,12 +18,15 @@ struct Row {
 
 pub struct SubstituteDialog {
     rows: Vec<Row>,
+    /// Attached physical devices: the candidates. One the profile already knows is a valid
+    /// target too: the old device's bindings are merged into it.
+    free: Vec<(String, String)>,
 }
 
 /// One accepted substitution: old GUID, new GUID, new device name.
 pub type Substitution = (String, String, String);
 
-/// Profile devices that no attached controller matches.
+/// Profile devices that no attached controller matches (the logical device never does).
 pub fn missing_devices<'a>(
     profile: &'a Profile,
     devices: &[DeviceState],
@@ -32,9 +35,11 @@ pub fn missing_devices<'a>(
         .devices
         .iter()
         .filter(|d| {
-            !devices
-                .iter()
-                .any(|s| s.info.guid.eq_ignore_ascii_case(&d.id))
+            !d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
+                && !d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
+                && !devices
+                    .iter()
+                    .any(|s| s.info.guid.eq_ignore_ascii_case(&d.id))
         })
         .collect()
 }
@@ -42,15 +47,10 @@ pub fn missing_devices<'a>(
 impl SubstituteDialog {
     /// Pre-selects an attached device with the same name when it is unambiguous.
     pub fn new(profile: &Profile, devices: &[DeviceState]) -> Self {
-        let free: Vec<&DeviceState> = devices
+        let free: Vec<&DeviceState> = devices.iter().filter(|s| !s.info.is_vjoy()).collect();
+        let free_ids = free
             .iter()
-            .filter(|s| {
-                !s.info.is_vjoy()
-                    && !profile
-                        .devices
-                        .iter()
-                        .any(|d| d.id.eq_ignore_ascii_case(&s.info.guid))
-            })
+            .map(|s| (s.info.guid.clone(), s.info.name.clone()))
             .collect();
         let mut taken: Vec<&str> = Vec::new();
         let rows = missing_devices(profile, devices)
@@ -74,7 +74,47 @@ impl SubstituteDialog {
                 }
             })
             .collect();
-        Self { rows }
+        Self {
+            rows,
+            free: free_ids,
+        }
+    }
+
+    /// Fills rows the user left on "keep" with the attached device whose name is most
+    /// similar; rows without a clear winner stay as they are. Returns how many were mapped.
+    fn auto_map(&mut self) -> usize {
+        let used = |rows: &[Row], g: &str| rows.iter().any(|r| r.target.as_deref() == Some(g));
+        let mut pairs: Vec<(u32, usize, usize)> = Vec::new();
+        for (ri, row) in self.rows.iter().enumerate() {
+            if row.target.is_some() {
+                continue;
+            }
+            for (di, (guid, name)) in self.free.iter().enumerate() {
+                if used(&self.rows, guid) {
+                    continue;
+                }
+                if let Some(score) = name_score(&row.old_name, name) {
+                    pairs.push((score, ri, di));
+                }
+            }
+        }
+        pairs.sort_by_key(|p| std::cmp::Reverse(p.0));
+        let mut mapped = 0;
+        for &(score, ri, di) in &pairs {
+            let guid = &self.free[di].0;
+            if self.rows[ri].target.is_some() || used(&self.rows, guid) {
+                continue;
+            }
+            // Another still free device scores the same for this row: ambiguous, leave it.
+            let tie = pairs.iter().any(|&(s, r, d)| {
+                s == score && r == ri && d != di && !used(&self.rows, &self.free[d].0)
+            });
+            if !tie {
+                self.rows[ri].target = Some(guid.clone());
+                mapped += 1;
+            }
+        }
+        mapped
     }
 
     /// Returns the chosen substitutions when the user applies; `open` is cleared on apply or close.
@@ -129,7 +169,22 @@ impl SubstituteDialog {
                         }
                     });
                 ui.add_space(8.0);
-                ui.vertical_centered(|ui| {
+                ui.horizontal(|ui| {
+                    let unmapped = self.rows.iter().any(|r| r.target.is_none());
+                    let auto = ui
+                        .add_enabled(
+                            unmapped,
+                            egui::Button::new(format!(
+                                "{}  {}",
+                                icon::MAGIC_WAND,
+                                i18n.tr("subst-auto")
+                            )),
+                        )
+                        .on_hover_text(i18n.tr("subst-auto-tip"));
+                    if auto.clicked() {
+                        let mapped = self.auto_map();
+                        log::info!("map controls: auto-mapped {mapped} device(s) by name");
+                    }
                     let any = self.rows.iter().any(|r| r.target.is_some());
                     apply = ui
                         .add_enabled(
@@ -158,6 +213,41 @@ impl SubstituteDialog {
                 .collect(),
         )
     }
+}
+
+/// Similarity of two device names: shared words, `None` when they clearly differ
+/// (too few shared words, or one is a left and the other a right stick).
+fn name_score(a: &str, b: &str) -> Option<u32> {
+    if same_device_name(a, b) {
+        return Some(u32::MAX);
+    }
+    let words = |s: &str| -> Vec<String> {
+        s.to_lowercase()
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(String::from)
+            .collect()
+    };
+    let (a, b) = (words(a), words(b));
+    let side = |w: &[String]| {
+        let has = |names: [&str; 2]| w.iter().any(|x| names.contains(&x.as_str()));
+        match (has(["l", "left"]), has(["r", "right"])) {
+            (true, false) => Some('l'),
+            (false, true) => Some('r'),
+            _ => None,
+        }
+    };
+    if let (Some(x), Some(y)) = (side(&a), side(&b)) {
+        if x != y {
+            return None;
+        }
+    }
+    let shared = a.iter().filter(|w| b.contains(w)).count();
+    let named = a
+        .iter()
+        .filter(|w| b.contains(w) && !["l", "r", "left", "right"].contains(&w.as_str()))
+        .count();
+    (named > 0 && shared * 2 >= a.len().max(b.len())).then_some(shared as u32)
 }
 
 /// Profile device GUID (lowercase) -> attached device with the same name, for
@@ -203,6 +293,83 @@ mod tests {
             buttons: 1,
             hats: 0,
         })
+    }
+
+    #[test]
+    fn similar_names() {
+        let nxt_l = "VKBsim Gladiator NXT EVO OT L";
+        assert!(name_score(nxt_l, "VKBsim Gladiator EVO OT L").is_some());
+        assert_eq!(
+            name_score(nxt_l, "VKBsim Gladiator EVO R"),
+            None,
+            "other side"
+        );
+        assert_eq!(name_score("Thrustmaster T.16000M", "Saitek X52"), None);
+        assert!(
+            name_score(nxt_l, "VKBsim Gladiator EVO OT L")
+                > name_score(nxt_l, "VKBsim Gladiator L")
+        );
+    }
+
+    #[test]
+    fn auto_map_skips_ambiguous_and_mapped_rows() {
+        let profile = Profile {
+            devices: vec![
+                gob_core::Device {
+                    id: "p1".into(),
+                    name: "VKBsim Gladiator NXT L".into(),
+                },
+                gob_core::Device {
+                    id: "p2".into(),
+                    name: "Generic Throttle".into(),
+                },
+                gob_core::Device {
+                    id: "p3".into(),
+                    name: "MFG Crosswind".into(),
+                },
+            ],
+            ..Default::default()
+        };
+        let devices = [
+            live("d1", "VKBsim Gladiator EVO L"),
+            live("d2", "Generic Throttle A"),
+            live("d3", "Generic Throttle B"),
+        ];
+        let mut dialog = SubstituteDialog::new(&profile, &devices);
+        assert!(dialog.rows.iter().all(|r| r.target.is_none()));
+        assert_eq!(dialog.auto_map(), 1);
+        assert_eq!(dialog.rows[0].target.as_deref(), Some("d1"));
+        assert_eq!(dialog.rows[1].target, None, "two equally similar throttles");
+        assert_eq!(dialog.rows[2].target, None, "no similar device");
+    }
+
+    #[test]
+    fn maps_onto_devices_the_profile_already_knows() {
+        // Gremlin on this PC already added the attached sticks; old entries remain.
+        let dev = |id: &str, name: &str| gob_core::Device {
+            id: id.into(),
+            name: name.into(),
+        };
+        let profile = Profile {
+            devices: vec![
+                dev("old-l", " VKBsim Gladiator EVO OT L  "),
+                dev("old-r", " VKBsim Gladiator EVO  R  "),
+                dev("new-l", " VKBsim Gladiator EVO OT L  "),
+                dev("new-r", " VKBsim Gladiator EVO R  "),
+            ],
+            ..Default::default()
+        };
+        let devices = [
+            live("new-l", "VKBsim Gladiator EVO OT L"),
+            live("new-r", "VKBsim Gladiator EVO R"),
+        ];
+        let mut dialog = SubstituteDialog::new(&profile, &devices);
+        for r in &mut dialog.rows {
+            r.target = None;
+        }
+        assert_eq!(dialog.auto_map(), 2);
+        assert_eq!(dialog.rows[0].target.as_deref(), Some("new-l"));
+        assert_eq!(dialog.rows[1].target.as_deref(), Some("new-r"));
     }
 
     #[test]

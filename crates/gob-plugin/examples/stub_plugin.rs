@@ -1,0 +1,21 @@
+//! Smallest plugin DLL: only tells JoyGob its name and version.
+//! Build: `cargo build -p gob-plugin --example stub_plugin`
+//! (target\debug\examples\stub_plugin.dll), then copy it to `<JoyGob folder>\plugins`.
+
+use gob_plugin::{PluginInfo, ABI_VERSION};
+
+struct Info(PluginInfo);
+
+// SAFETY: the info only points to static strings.
+unsafe impl Sync for Info {}
+
+static INFO: Info = Info(PluginInfo {
+    abi_version: ABI_VERSION,
+    name: c"Stub plugin".as_ptr(),
+    version: c"0.1.0".as_ptr(),
+});
+
+#[no_mangle]
+pub extern "C" fn joygob_plugin_info() -> *const PluginInfo {
+    &INFO.0
+}

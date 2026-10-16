@@ -6,7 +6,10 @@ use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::{DeviceState, InputEvent};
+use crate::{Calibration, DeviceState, InputEvent};
+
+/// Calibration per (device GUID, axis slot); axes without one use DirectInput's range.
+pub type Calibrations = std::collections::HashMap<(String, u8), Calibration>;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(4);
 /// Re-enumerate devices every this many polls (~2 s) to catch hot-plugging.
@@ -41,22 +44,39 @@ pub struct InputService {
     events: Receiver<InputEvent>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    calibrations: Arc<RwLock<Calibrations>>,
+    /// Keyboard keys as events (low-level hook); `None` if it could not be installed.
+    _keyboard: Option<crate::keyboard::Hook>,
 }
 
 impl InputService {
     /// Starts polling in a background thread. `on_change` is called after every
     /// change (e.g. to request a GUI repaint).
-    pub fn start(on_change: impl Fn() + Send + 'static) -> Self {
+    pub fn start(on_change: impl Fn() + Send + Sync + 'static) -> Self {
+        let on_change = Arc::new(on_change);
+        let calibrations: Arc<RwLock<Calibrations>> = Arc::default();
         let snapshot = Arc::new(RwLock::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let broadcast = Broadcast::default();
         let events = broadcast.subscribe();
         let thread = {
             let (snapshot, stop, tx) = (snapshot.clone(), stop.clone(), broadcast.clone());
+            let (on_change, cal) = (on_change.clone(), calibrations.clone());
             std::thread::Builder::new()
                 .name("gob-input".into())
-                .spawn(move || run(&snapshot, &stop, &tx, &on_change))
+                .spawn(move || run(&snapshot, &stop, &tx, &cal, &*on_change))
                 .ok()
+        };
+        let keyboard = {
+            let tx = broadcast.clone();
+            crate::keyboard::start(Arc::new(move |scan_code, extended, pressed| {
+                tx.send(InputEvent::Key {
+                    scan_code,
+                    extended,
+                    pressed,
+                });
+                on_change();
+            }))
         };
         Self {
             snapshot,
@@ -64,7 +84,19 @@ impl InputService {
             events,
             stop,
             thread,
+            calibrations,
+            _keyboard: keyboard,
         }
+    }
+
+    /// Sets (or with `None` removes) the calibration of one axis; applies from the next poll.
+    pub fn set_calibration(&self, device: &str, slot: u8, calibration: Option<Calibration>) {
+        let mut map = self.calibrations.write().unwrap_or_else(|e| e.into_inner());
+        let key = (device.to_ascii_lowercase(), slot);
+        match calibration {
+            Some(c) => map.insert(key, c),
+            None => map.remove(&key),
+        };
     }
 
     /// Current state of every attached device.
@@ -93,13 +125,21 @@ impl Drop for InputService {
 }
 
 #[cfg(not(windows))]
-fn run(_: &RwLock<Vec<DeviceState>>, _: &AtomicBool, _: &Broadcast, _: &dyn Fn()) {}
+fn run(
+    _: &RwLock<Vec<DeviceState>>,
+    _: &AtomicBool,
+    _: &Broadcast,
+    _: &RwLock<Calibrations>,
+    _: &dyn Fn(),
+) {
+}
 
 #[cfg(windows)]
 fn run(
     snapshot: &RwLock<Vec<DeviceState>>,
     stop: &AtomicBool,
     tx: &Broadcast,
+    calibrations: &RwLock<Calibrations>,
     on_change: &dyn Fn(),
 ) {
     use crate::dinput::{Device, DirectInput};
@@ -128,13 +168,19 @@ fn run(
         tick = tick.wrapping_add(1);
 
         let mut lost = false;
+        let cal = calibrations
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         for dev in &mut devices {
             let previous = dev.state.clone();
-            if !dev.poll() {
+            if !dev.poll(&cal) {
                 lost = true;
                 continue;
             }
             changed |= emit_changes(&previous, &dev.state, tx);
+            // Raw values matter to the calibration page even when the scaled value stays.
+            changed |= previous.raw != dev.state.raw;
         }
         if lost {
             tick = 0; // rescan right away

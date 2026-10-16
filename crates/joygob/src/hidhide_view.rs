@@ -56,6 +56,9 @@ impl HidHideView {
             self.apps = hh.apps()?;
             Ok::<_, gob_hidhide::Error>(())
         })();
+        if let Err(e) = &result {
+            log::error!("reading HidHide state: {e}");
+        }
         self.error = result.err().map(|e| e.to_string());
     }
 
@@ -63,6 +66,7 @@ impl HidHideView {
     fn apply(&mut self, change: impl FnOnce(&HidHide) -> Result<(), gob_hidhide::Error>) {
         if let Ok(hh) = &self.hh {
             if let Err(e) = change(hh) {
+                log::error!("changing HidHide state: {e}");
                 self.error = Some(e.to_string());
                 return;
             }

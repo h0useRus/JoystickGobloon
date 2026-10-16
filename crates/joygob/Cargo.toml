@@ -16,11 +16,26 @@ gob-input.workspace = true
 gob-vjoy.workspace = true
 gob-hidhide.workspace = true
 gob-engine.workspace = true
+gob-plugin.workspace = true
 rfd.workspace = true
 egui-phosphor.workspace = true
 eframe.workspace = true
 serde.workspace = true
 toml.workspace = true
+log.workspace = true
+tray-icon = "0.26"
+raw-window-handle = "0.6"
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_System_SystemInformation",
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_Security",
+] }
 
 [build-dependencies]
 winresource = "0.1"

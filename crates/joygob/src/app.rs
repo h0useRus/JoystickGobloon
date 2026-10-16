@@ -5,7 +5,7 @@ use gob_i18n::I18n;
 
 use crate::devices_view::DevicesView;
 use crate::hidhide_view::HidHideView;
-use crate::profile_view::{report_window, LoadedProfile};
+use crate::profile_view::{important_warnings, LoadedProfile};
 use crate::settings::Settings;
 use crate::settings_view::{self, Change, SettingsTab};
 use crate::style::{self, icon};
@@ -19,6 +19,8 @@ enum Page {
     Devices,
     HidHide,
     VJoy,
+    Viewer,
+    Calibration,
     Settings,
 }
 
@@ -27,7 +29,8 @@ pub struct JoyGobApp {
     settings: Settings,
     page: Page,
     settings_tab: SettingsTab,
-    show_report: bool,
+    /// Warnings and errors for the user, shown one at a time as dialogs.
+    alerts: Vec<Alert>,
     status: String,
     profile: Option<LoadedProfile>,
     logo: egui::TextureHandle,
@@ -35,6 +38,14 @@ pub struct JoyGobApp {
     devices_view: DevicesView,
     substitute: Option<SubstituteDialog>,
     vjoy_view: VJoyView,
+    viewer_view: crate::viewer_view::ViewerView,
+    /// The input viewer is shown in its own window.
+    viewer_window: bool,
+    calibration_view: crate::calibration_view::CalibrationView,
+    /// The calibration is shown in its own window.
+    calibration_window: bool,
+    /// Saved axis calibrations (also applied in the input service).
+    calibrations: gob_input::Calibrations,
     hidhide_view: HidHideView,
     /// Running profile, if activated.
     runner: Option<gob_engine::Runner>,
@@ -46,17 +57,40 @@ pub struct JoyGobApp {
     allow_close: bool,
     show_modes: bool,
     modes_window: crate::modes_view::ModesWindow,
+    /// Sound and speech previews from the editor.
+    media: gob_engine::Media,
+    tray: Option<crate::tray::Tray>,
+    /// The window was shown from outside winit (tray, second start): sync it next frame.
+    restored: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Started at logon with a tray icon: frames left in which the window is hidden again
+    /// (eframe shows it after its first frame whatever the viewport said).
+    hide_frames: u8,
+    /// Main window handle, for showing it from the tray.
+    hwnd: Option<isize>,
+    /// Plugin DLLs from `<exe folder>\plugins`, kept loaded while the app runs.
+    _plugins: gob_plugin::Registry,
+    /// Window title last sent to the viewport.
+    title: String,
 }
 
-#[derive(Clone, Copy)]
+/// A dialog with a title and lines of text; technical details go to the log file.
+struct Alert {
+    title: String,
+    lines: Vec<String>,
+}
+
+#[derive(Clone)]
 enum Pending {
     Close,
+    /// A load-profile action asked for this file; it is activated after loading.
+    Load(PathBuf),
     New,
     Open,
 }
 
 impl JoyGobApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    /// `instance`: the single-instance wake-up event (another start shows this window).
+    pub fn new(cc: &eframe::CreationContext<'_>, instance: crate::instance::Event) -> Self {
         let settings = Settings::load();
         let lang_dir = std::env::current_exe()
             .ok()
@@ -87,7 +121,7 @@ impl JoyGobApp {
             settings,
             page: Page::Devices,
             settings_tab: SettingsTab::default(),
-            show_report: false,
+            alerts: Vec::new(),
             status,
             profile: None,
             logo,
@@ -98,6 +132,11 @@ impl JoyGobApp {
             devices_view: DevicesView::default(),
             substitute: None,
             vjoy_view: VJoyView::new(),
+            viewer_view: Default::default(),
+            viewer_window: false,
+            calibration_view: Default::default(),
+            calibration_window: false,
+            calibrations: Default::default(),
             hidhide_view: HidHideView::new(),
             runner: None,
             edited: None,
@@ -105,28 +144,133 @@ impl JoyGobApp {
             allow_close: false,
             show_modes: false,
             modes_window: Default::default(),
+            title: crate::APP_NAME.into(),
+            media: Default::default(),
+            _plugins: load_plugins(),
+            tray: None,
+            restored: Default::default(),
+            hide_frames: 0,
+            hwnd: crate::tray::window_handle(cc),
         };
+        app.update_tray(&cc.egui_ctx);
+        app.calibrations = app.settings.calibrations();
+        for ((device, slot), c) in &app.calibrations {
+            app.input.set_calibration(device, *slot, Some(*c));
+        }
+        if let Some(hwnd) = app.hwnd {
+            let (restored, ctx) = (app.restored.clone(), cc.egui_ctx.clone());
+            crate::instance::listen(instance, move || {
+                log::info!("started again: showing the running window");
+                restored.store(true, std::sync::atomic::Ordering::Relaxed);
+                crate::tray::show_window(hwnd);
+                ctx.request_repaint();
+            });
+        }
+        // Debug builds: open a page at start for screenshot checks without clicking.
+        #[cfg(debug_assertions)]
+        match std::env::var("JOYGOB_START_PAGE").as_deref() {
+            Ok("hidhide") => app.page = Page::HidHide,
+            Ok("vjoy") => app.page = Page::VJoy,
+            Ok("viewer") => app.page = Page::Viewer,
+            Ok("calibration") => app.page = Page::Calibration,
+            Ok("viewer-window") => {
+                app.page = Page::Viewer;
+                app.viewer_window = true;
+            }
+            Ok("settings") => app.page = Page::Settings,
+            Ok("about") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::About;
+            }
+            _ => {}
+        }
+        // Started at logon without a (working) tray icon: show the window, minimized, so it
+        // can never stay hidden with no way back.
+        let at_logon = std::env::args().any(|a| a == crate::tray::autostart::ARG);
+        if at_logon && app.tray.is_some() {
+            app.hide_frames = 3;
+        }
+        if at_logon && app.tray.is_none() {
+            cc.egui_ctx
+                .send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            cc.egui_ctx
+                .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        }
         if app.settings.hidhide_whitelist_self {
             match app.hidhide_view.whitelist_self() {
-                Some(Ok(true)) => app.status = app.i18n.tr("status-whitelisted"),
-                Some(Err(e)) => app.status = e,
+                Some(Ok(true)) => {
+                    log::info!("added to the HidHide whitelist");
+                    app.status = app.i18n.tr("status-whitelisted");
+                }
+                Some(Err(e)) => {
+                    let text = app
+                        .i18n
+                        .trf("hidhide-whitelist-error", &[("error", e.into())]);
+                    app.error(text);
+                }
                 _ => {}
             }
         }
         if let Some(path) = reopen {
             app.open_profile(path, false);
+            if app.settings.activate_on_start && app.profile.is_some() {
+                app.toggle_runner(&cc.egui_ctx);
+            }
         }
         app
     }
 
-    fn open_profile(&mut self, path: PathBuf, show_report: bool) {
+    /// Creates or drops the tray icon to match the settings.
+    fn update_tray(&mut self, ctx: &egui::Context) {
+        match (self.settings.show_tray, self.tray.is_some(), self.hwnd) {
+            (true, false, Some(hwnd)) => {
+                let (show, quit) = (self.i18n.tr("tray-show"), self.i18n.tr("tray-quit"));
+                let restored = self.restored.clone();
+                match crate::tray::Tray::new(ctx, hwnd, restored, crate::APP_NAME, &show, &quit) {
+                    Ok(t) => {
+                        log::info!("tray icon shown");
+                        self.tray = Some(t);
+                    }
+                    Err(e) => log::error!("tray icon: {e}"),
+                }
+            }
+            (true, false, None) => log::error!("tray icon: no window handle"),
+            (false, true, _) => self.tray = None,
+            _ => {}
+        }
+    }
+
+    /// Logs an error and shows it to the user.
+    fn error(&mut self, text: String) {
+        log::error!("{text}");
+        self.alerts.push(Alert {
+            title: self.i18n.tr("alert-error"),
+            lines: vec![text],
+        });
+    }
+
+    /// `interactive`: opened by the user, so import warnings are shown, not only logged.
+    fn open_profile(&mut self, path: PathBuf, interactive: bool) {
         match gob_gremlin::load(&path) {
             Ok(profile) => {
+                let report = gob_gremlin::report(&profile);
+                log::info!("loaded {}: {report}", path.display());
+                for w in &report.warnings {
+                    log::warn!("{}: {w}", path.display());
+                }
                 let loaded = LoadedProfile::new(profile, Some(path.clone()));
                 self.status = self
                     .i18n
                     .trf("status-loaded", &[("file", loaded.file_name().into())]);
-                self.show_report = show_report;
+                let lines = important_warnings(&self.i18n, &report);
+                if interactive && !lines.is_empty() {
+                    self.alerts.push(Alert {
+                        title: self
+                            .i18n
+                            .trf("alert-import", &[("file", loaded.file_name().into())]),
+                        lines,
+                    });
+                }
                 self.profile = Some(loaded);
                 self.runner = None;
                 self.devices_view.reset_mode();
@@ -134,9 +278,11 @@ impl JoyGobApp {
                 self.settings.save();
             }
             Err(e) => {
-                self.status = self
+                log::error!("loading {}: {e}", path.display());
+                let text = self
                     .i18n
-                    .trf("import-error", &[("error", e.to_string().into())])
+                    .trf("import-error", &[("error", e.to_string().into())]);
+                self.error(text);
             }
         }
     }
@@ -180,6 +326,7 @@ impl JoyGobApp {
         };
         match gob_gremlin::save(&path, &loaded.profile) {
             Ok(()) => {
+                log::info!("saved {}", path.display());
                 self.status = self.i18n.trf(
                     "status-saved",
                     &[("file", path.display().to_string().into())],
@@ -191,9 +338,11 @@ impl JoyGobApp {
                 true
             }
             Err(e) => {
-                self.status = self
+                log::error!("saving {}: {e}", path.display());
+                let text = self
                     .i18n
                     .trf("save-error", &[("error", e.to_string().into())]);
+                self.error(text);
                 false
             }
         }
@@ -225,12 +374,107 @@ impl JoyGobApp {
             }
             Pending::New => self.new_profile(),
             Pending::Open => self.import_dialog(),
+            Pending::Load(path) => {
+                self.open_profile(path, true);
+                if self.profile.is_some() && self.runner.is_none() {
+                    self.toggle_runner(ctx);
+                }
+            }
+        }
+    }
+
+    /// The input viewer and the calibration in their own native windows, when detached.
+    fn detached_windows(&mut self, ctx: &egui::Context) {
+        let devices = self.input.devices().clone();
+        if self.viewer_window {
+            let (viewer, i18n) = (&mut self.viewer_view, &self.i18n);
+            let title = i18n.tr("nav-viewer");
+            let attach = detached_window(ctx, "input-viewer", &title, |ui| {
+                viewer.show(ui, i18n, &devices, true)
+            });
+            if attach {
+                self.viewer_window = false;
+            }
+        }
+        if self.calibration_window {
+            let (view, i18n, saved) = (&mut self.calibration_view, &self.i18n, &self.calibrations);
+            let title = i18n.tr("nav-calibration");
+            let mut out = crate::calibration_view::Output::default();
+            let attach = detached_window(ctx, "calibration", &title, |ui| {
+                out = view.show(ui, i18n, &devices, saved, true);
+                out.toggle_window
+            });
+            self.apply_calibration(out);
+            if attach {
+                self.calibration_window = false;
+            }
+        }
+    }
+
+    /// Saves and applies calibrations from the calibration page.
+    fn apply_calibration(&mut self, out: crate::calibration_view::Output) {
+        for (device, slot, c) in out.save {
+            log::info!("calibration saved: {device} axis {slot}: {c:?}");
+            self.settings
+                .calibration
+                .entry(device.clone())
+                .or_default()
+                .insert(slot.to_string(), c.into());
+            self.input.set_calibration(&device, slot, Some(c));
+            self.calibrations.insert((device, slot), c);
+        }
+        if !self.calibrations.is_empty() {
+            self.settings.save();
+        }
+    }
+
+    /// Warning/error dialogs, one at a time.
+    fn alert_dialog(&mut self, ctx: &egui::Context) {
+        let Some(alert) = self.alerts.first() else {
+            return;
+        };
+        let mut close = false;
+        egui::Modal::new(egui::Id::new("alert")).show(ctx, |ui| {
+            ui.set_width(420.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(icon::WARNING)
+                        .size(style::ICON_SIZE)
+                        .color(ui.visuals().warn_fg_color),
+                );
+                ui.heading(&alert.title);
+            });
+            ui.add_space(4.0);
+            for line in &alert.lines {
+                ui.label(line);
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button(self.i18n.tr("ok")).clicked() {
+                    close = true;
+                }
+                if let Some(path) = crate::logfile::path() {
+                    let text = format!("{}  {}", icon::FILE_TEXT, self.i18n.tr("alert-open-log"));
+                    if ui
+                        .button(text)
+                        .on_hover_text(path.display().to_string())
+                        .clicked()
+                    {
+                        let _ = std::process::Command::new("notepad.exe").arg(&path).spawn();
+                    }
+                }
+            });
+        });
+        if close {
+            self.alerts.remove(0);
         }
     }
 
     /// "Save changes?" dialog for a pending action.
     fn unsaved_dialog(&mut self, ctx: &egui::Context) {
-        let Some(action) = self.pending else { return };
+        let Some(action) = self.pending.clone() else {
+            return;
+        };
         let file = self
             .profile
             .as_ref()
@@ -279,15 +523,16 @@ impl JoyGobApp {
 
     fn nav_rail(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
+            // The logo is in the window title bar; the rail starts with the pages.
             ui.add_space(8.0);
-            ui.add(egui::Image::new(&self.logo).fit_to_exact_size(Vec2::splat(34.0)));
-            ui.add_space(12.0);
             for (page, glyph, key) in [
                 (Page::Devices, icon::JOYSTICK, "nav-devices"),
                 (Page::HidHide, icon::EYE_SLASH, "nav-hidhide"),
                 (Page::VJoy, icon::GAME_CONTROLLER, "nav-vjoy"),
+                (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
+                (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
             ] {
-                if style::icon_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
+                if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
                 }
             }
@@ -295,7 +540,7 @@ impl JoyGobApp {
         ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
             ui.add_space(8.0);
             let selected = self.page == Page::Settings;
-            if style::icon_toggle(ui, selected, icon::GEAR_SIX, &self.i18n.tr("nav-settings"))
+            if style::nav_toggle(ui, selected, icon::GEAR_SIX, &self.i18n.tr("nav-settings"))
                 .clicked()
             {
                 self.page = Page::Settings;
@@ -303,8 +548,34 @@ impl JoyGobApp {
         });
     }
 
+    /// "{app} | {profile file}[*] | {Active|Inactive}"; just the app name without a profile.
+    fn update_title(&mut self, ctx: &egui::Context) {
+        let title = match &self.profile {
+            None => crate::APP_NAME.to_string(),
+            Some(p) => {
+                let state = if self.runner.is_some() {
+                    "title-active"
+                } else {
+                    "title-inactive"
+                };
+                let modified = if p.dirty { "*" } else { "" };
+                format!(
+                    "{} | {}{modified} | {}",
+                    crate::APP_NAME,
+                    p.file_name(),
+                    self.i18n.tr(state)
+                )
+            }
+        };
+        if title != self.title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.title = title;
+        }
+    }
+
     fn toggle_runner(&mut self, ctx: &egui::Context) {
         if self.runner.take().is_some() {
+            log::info!("profile stopped");
             self.status = self.i18n.tr("status-stopped");
             return;
         }
@@ -323,23 +594,31 @@ impl JoyGobApp {
             repaint,
         ) {
             Ok(runner) => {
+                log::info!(
+                    "profile {} active, {} device substitution(s)",
+                    loaded.file_name(),
+                    aliases.len()
+                );
                 self.runner = Some(runner);
                 self.status = self.i18n.tr("status-active");
             }
-            Err(e) => self.status = self.i18n.trf("activate-error", &[("error", e.into())]),
+            Err(e) => {
+                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
+                self.error(text);
+            }
         }
     }
 
     fn devices_page(&mut self, ui: &mut egui::Ui) {
         let loaded = self.profile.is_some();
-        // Center vertically: the play toggle is taller than the plain icon buttons.
         let row = Vec2::new(ui.available_width(), 44.0);
         ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
-            if style::icon_button(ui, true, icon::FILE_PLUS, &self.i18n.tr("action-new")).clicked()
+            if style::toolbar_button(ui, true, icon::FILE_PLUS, &self.i18n.tr("action-new"))
+                .clicked()
             {
                 self.request(Pending::New, ui.ctx());
             }
-            if style::icon_button(ui, true, icon::FOLDER_OPEN, &self.i18n.tr("action-open"))
+            if style::toolbar_button(ui, true, icon::FOLDER_OPEN, &self.i18n.tr("action-open"))
                 .clicked()
             {
                 self.request(Pending::Open, ui.ctx());
@@ -350,10 +629,10 @@ impl JoyGobApp {
             } else {
                 icon::FLOPPY_DISK
             };
-            if style::icon_button(ui, loaded, save, &self.i18n.tr("action-save")).clicked() {
+            if style::toolbar_button(ui, loaded, save, &self.i18n.tr("action-save")).clicked() {
                 self.save();
             }
-            if style::icon_button(
+            if style::toolbar_button(
                 ui,
                 loaded,
                 icon::FILE_ARROW_DOWN,
@@ -368,7 +647,7 @@ impl JoyGobApp {
                 .profile
                 .as_ref()
                 .map_or((false, false), |p| (p.can_undo(), p.can_redo()));
-            if style::icon_button(
+            if style::toolbar_button(
                 ui,
                 can_undo,
                 icon::ARROW_COUNTER_CLOCKWISE,
@@ -378,7 +657,7 @@ impl JoyGobApp {
             {
                 self.history(true);
             }
-            if style::icon_button(
+            if style::toolbar_button(
                 ui,
                 can_redo,
                 icon::ARROW_CLOCKWISE,
@@ -389,29 +668,6 @@ impl JoyGobApp {
                 self.history(false);
             }
             ui.separator();
-            if style::icon_button(
-                ui,
-                loaded,
-                icon::TREE_STRUCTURE,
-                &self.i18n.tr("modes-title"),
-            )
-            .clicked()
-            {
-                self.show_modes = true;
-            }
-            let has_warnings = self
-                .profile
-                .as_ref()
-                .is_some_and(|p| !p.report.warnings.is_empty());
-            let glyph = if has_warnings {
-                icon::WARNING
-            } else {
-                icon::CLIPBOARD_TEXT
-            };
-            if style::icon_button(ui, loaded, glyph, &self.i18n.tr("action-report")).clicked() {
-                self.show_report = true;
-            }
-            ui.separator();
             let active = self.runner.is_some();
             let (glyph, tip) = if active {
                 (icon::STOP, "action-deactivate")
@@ -419,26 +675,10 @@ impl JoyGobApp {
                 (icon::PLAY, "action-activate")
             };
             let toggle = ui.add_enabled_ui(loaded, |ui| {
-                style::icon_toggle(ui, active, glyph, &self.i18n.tr(tip))
+                style::toolbar_toggle(ui, active, glyph, &self.i18n.tr(tip))
             });
             if toggle.inner.clicked() {
                 self.toggle_runner(ui.ctx());
-            }
-            if let Some(p) = &self.profile {
-                ui.separator();
-                ui.label(RichText::new(icon::FILE_TEXT).size(style::ICON_SIZE));
-                ui.strong(p.file_name()).on_hover_text(
-                    p.path
-                        .as_ref()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_default(),
-                );
-                if p.dirty {
-                    let (rect, r) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
-                    ui.painter()
-                        .circle_filled(rect.center(), 4.0, style::accent(ui));
-                    r.on_hover_text(self.i18n.tr("profile-modified"));
-                }
             }
         });
         ui.separator();
@@ -489,6 +729,9 @@ impl JoyGobApp {
             &vjoy,
         );
         drop(devices);
+        if std::mem::take(&mut self.devices_view.open_modes) {
+            self.show_modes = true;
+        }
         self.apply_ops(ops);
     }
 
@@ -510,6 +753,17 @@ impl JoyGobApp {
 
     /// Applies queued edits, marks the profile unsaved and restarts a running profile.
     fn apply_ops(&mut self, ops: Vec<crate::action_editor::Op>) {
+        use crate::action_editor::Op;
+        let (previews, ops): (Vec<Op>, Vec<Op>) = ops
+            .into_iter()
+            .partition(|op| matches!(op, Op::PreviewSound { .. } | Op::PreviewSpeech(_)));
+        for op in previews {
+            match op {
+                Op::PreviewSound { file, volume } => self.media.play(&file, volume),
+                Op::PreviewSpeech(request) => self.media.speak(request),
+                _ => {}
+            }
+        }
         let Some(loaded) = &mut self.profile else {
             return;
         };
@@ -530,6 +784,15 @@ impl JoyGobApp {
                 self.settings.theme = theme;
                 style::apply(ctx, theme);
             }
+            Change::Tray => self.update_tray(ctx),
+            Change::Autostart(on) => {
+                if let Err(e) = crate::tray::autostart::set(on) {
+                    let text = self.i18n.trf("autostart-error", &[("error", e.into())]);
+                    self.error(text);
+                } else {
+                    log::info!("start with Windows: {on}");
+                }
+            }
             Change::Language(code) => {
                 self.i18n.set_language(&code);
                 self.settings.language = self.i18n.language().to_string();
@@ -542,8 +805,44 @@ impl JoyGobApp {
 
 impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.update_title(ctx);
+        if self.hide_frames > 0 {
+            self.hide_frames -= 1;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            ctx.request_repaint();
+        }
+        if let Some(tray) = &mut self.tray {
+            let active = self.runner.is_some();
+            let state = self.i18n.tr(if active {
+                "title-active"
+            } else {
+                "title-inactive"
+            });
+            tray.set_active(active, &format!("{} | {state}", crate::APP_NAME));
+        }
+        if self
+            .restored
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+        {
+            // Shown from the tray behind winit's back: make winit agree, and focus it.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+        if self.tray.as_ref().is_some_and(|t| t.take_quit()) {
+            self.request(Pending::Close, ctx);
+        }
+        // Close button with "close to tray": hide instead of quitting (Quit is in the tray menu).
+        let to_tray = self.settings.close_to_tray && self.tray.is_some() && !self.allow_close;
+        if to_tray && ctx.input(|i| i.viewport().close_requested()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        }
+        if let Some(file) = self.runner.as_ref().and_then(|r| r.take_load_request()) {
+            self.request(Pending::Load(PathBuf::from(file)), ctx);
+        }
         let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
-        if ctx.input(|i| i.viewport().close_requested()) && dirty && !self.allow_close {
+        if ctx.input(|i| i.viewport().close_requested()) && dirty && !self.allow_close && !to_tray {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.pending = Some(Pending::Close);
         }
@@ -617,7 +916,64 @@ impl eframe::App for JoyGobApp {
             .show(ctx, |ui| match self.page {
                 Page::Devices => self.devices_page(ui),
                 Page::HidHide => self.hidhide_view.show(ui, &self.i18n),
-                Page::VJoy => self.vjoy_view.show(ui, &self.i18n),
+                Page::VJoy => {
+                    let locked = self.runner.is_some();
+                    self.vjoy_view.show(ui, &self.i18n, locked);
+                }
+                Page::Viewer if self.viewer_window => {
+                    empty_state(
+                        ui,
+                        icon::ARROW_SQUARE_OUT,
+                        &self.i18n.tr("viewer-in-window"),
+                    );
+                    ui.vertical_centered(|ui| {
+                        let text = format!(
+                            "{}  {}",
+                            icon::ARROW_SQUARE_IN,
+                            self.i18n.tr("viewer-attach")
+                        );
+                        if ui.button(text).clicked() {
+                            self.viewer_window = false;
+                        }
+                    });
+                }
+                Page::Viewer => {
+                    let devices = self.input.devices().clone();
+                    if self.viewer_view.show(ui, &self.i18n, &devices, false) {
+                        self.viewer_window = true;
+                    }
+                }
+                Page::Calibration if self.calibration_window => {
+                    empty_state(
+                        ui,
+                        icon::ARROW_SQUARE_OUT,
+                        &self.i18n.tr("calibration-in-window"),
+                    );
+                    ui.vertical_centered(|ui| {
+                        let text = format!(
+                            "{}  {}",
+                            icon::ARROW_SQUARE_IN,
+                            self.i18n.tr("viewer-attach")
+                        );
+                        if ui.button(text).clicked() {
+                            self.calibration_window = false;
+                        }
+                    });
+                }
+                Page::Calibration => {
+                    let devices = self.input.devices().clone();
+                    let out = self.calibration_view.show(
+                        ui,
+                        &self.i18n,
+                        &devices,
+                        &self.calibrations,
+                        false,
+                    );
+                    if out.toggle_window {
+                        self.calibration_window = true;
+                    }
+                    self.apply_calibration(out);
+                }
                 Page::Settings => {
                     let change = settings_view::show(
                         ui,
@@ -667,11 +1023,61 @@ impl eframe::App for JoyGobApp {
             }
         }
         self.unsaved_dialog(ctx);
-
-        if let (true, Some(loaded)) = (self.show_report, &self.profile) {
-            report_window(ctx, &self.i18n, &loaded.report, &mut self.show_report);
-        }
+        self.alert_dialog(ctx);
+        self.detached_windows(ctx);
     }
+}
+
+/// Loads the plugin DLLs next to the exe and logs what was found (plugins are a stub so far).
+fn load_plugins() -> gob_plugin::Registry {
+    let mut registry = gob_plugin::Registry::default();
+    let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(|d| d.join("plugins")))
+    else {
+        return registry;
+    };
+    for e in registry.load_dir(&dir) {
+        log::warn!("plugin skipped: {e}");
+    }
+    for p in registry.loaded() {
+        log::info!(
+            "plugin loaded: {} {} ({})",
+            p.name,
+            p.version,
+            p.path.display()
+        );
+    }
+    registry
+}
+
+/// Shows `content` in its own native window (egui viewport) titled "<app> | <title>".
+/// Returns true when it should go back into the main window (its button or closing it).
+fn detached_window(
+    ctx: &egui::Context,
+    id: &str,
+    title: &str,
+    mut content: impl FnMut(&mut egui::Ui) -> bool,
+) -> bool {
+    let mut builder = egui::ViewportBuilder::default()
+        .with_title(format!("{} | {title}", crate::APP_NAME))
+        .with_inner_size([1000.0, 700.0])
+        .with_min_inner_size([480.0, 320.0]);
+    if let Ok(icon) = eframe::icon_data::from_png_bytes(LOGO_PNG) {
+        builder = builder.with_icon(icon);
+    }
+    let mut attach = false;
+    ctx.show_viewport_immediate(
+        egui::ViewportId::from_hash_of(id),
+        builder,
+        |ctx, _class| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                attach |= content(ui);
+            });
+            attach |= ctx.input(|i| i.viewport().close_requested());
+        },
+    );
+    attach
 }
 
 /// Big faded icon with a hint, for pages without content.
