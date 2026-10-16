@@ -195,4 +195,4 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
   -1..1; Bezier via 101 samples per segment, binary search and linear interpolation. Deadzone first.
 - Gremlin keeps "symmetric" only while editing; Joystick Gobloon saves it as a `symmetric` bool property
   (Gremlin ignores it). Symmetric: mirrored knots/handles through the origin, a fixed center knot, paired
-  add/remove, and the deadzone mirrored too. Changing the type starts from that type's identity line.
+  add/remove; the deadzone is not affected. Changing the type starts from that type's identity line.

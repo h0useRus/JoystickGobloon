@@ -1,6 +1,5 @@
 //! Response curve editor: curve type, invert, symmetric editing, the chart with draggable
-//! knots (and Bezier handles), X/Y of the selected point, and the deadzone as one
-//! four-handle slider aligned under the chart's x axis.
+//! knots (and Bezier handles), X/Y of the selected point, and the deadzone fields.
 
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, RichText, Sense, Stroke, Vec2};
 use gob_core::curve::{Curve, CurveType, Editable};
@@ -70,9 +69,6 @@ impl Editor<'_> {
                 self.set(&id, "symmetric", "bool", if sym { "True" } else { "False" });
                 if sym {
                     self.set_points(&id, &Editable::symmetric(kind, points));
-                    let [low, cl, ch, high] = deadzone;
-                    let (outer, center) = ((high - low) / 2.0, (ch - cl) / 2.0);
-                    self.set_deadzone(&id, deadzone, [-outer, -center, center, outer]);
                 }
             }
         });
@@ -131,18 +127,29 @@ impl Editor<'_> {
             });
         });
 
-        // Deadzone: a slider aligned with the chart's x axis, its fields under the handles.
-        let mut dz = deadzone;
-        ui.add_space(2.0);
-        let (rect, slider) = deadzone_slider(ui, size, &mut dz, symmetric);
-        if slider {
-            self.set_deadzone(&id, deadzone, dz);
-        }
-        let fields = deadzone_fields(ui, rect, &mut dz, symmetric);
-        if fields {
-            self.set_deadzone(&id, deadzone, dz);
-        }
-        ui.label(RichText::new(self.i18n.tr("edit-deadzone")).weak().small());
+        ui.label(RichText::new(self.i18n.tr("edit-deadzone")).weak());
+        let dz = deadzone.map(|d| d as f32);
+        let [mut low, mut center_low, mut center_high, mut high] = dz;
+        ui.horizontal(|ui| {
+            let slider = ((size - 140.0) / 2.0).max(60.0);
+            let field = |ui: &mut egui::Ui, v: &mut f32, range: std::ops::RangeInclusive<f32>| {
+                ui.add(
+                    egui::DragValue::new(v)
+                        .range(range)
+                        .speed(0.005)
+                        .fixed_decimals(4),
+                );
+            };
+            field(ui, &mut low, -1.0..=center_low);
+            range_slider(ui, slider, &mut low, &mut center_low, -1.0, 0.0);
+            field(ui, &mut center_low, low..=0.0);
+            ui.add_space(8.0);
+            field(ui, &mut center_high, 0.0..=high);
+            range_slider(ui, slider, &mut center_high, &mut high, 0.0, 1.0);
+            field(ui, &mut high, center_high..=1.0);
+        });
+        let new = [low, center_low, center_high, high].map(f64::from);
+        self.set_deadzone(&id, dz.map(f64::from), new);
     }
 
     fn set_points(&mut self, id: &str, points: &[(f64, f64)]) {
@@ -213,21 +220,13 @@ fn chart(
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, style::RADIUS, ui.visuals().extreme_bg_color);
 
-    // Deadzones: input ranges that give no change, shaded with their edges marked.
+    // Deadzones: input ranges that produce no change, shaded across the graph.
     let [low, center_low, center_high, high] = deadzone;
-    let warn = ui.visuals().warn_fg_color;
     for (a, b) in [(-1.0, low), (center_low, center_high), (high, 1.0)] {
         if b > a {
             let r = Rect::from_x_y_ranges(x_of(rect, a)..=x_of(rect, b), rect.y_range());
-            painter.rect_filled(r, 0.0, warn.gamma_multiply(0.10));
+            painter.rect_filled(r, 0.0, accent.gamma_multiply(0.08));
         }
-    }
-    for v in deadzone {
-        let x = x_of(rect, v);
-        painter.line_segment(
-            [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
-            Stroke::new(1.0, warn.gamma_multiply(0.45)),
-        );
     }
     for i in 1..8 {
         let t = -1.0 + f64::from(i) * 0.25;
@@ -365,35 +364,38 @@ fn chart(
     (None, selected)
 }
 
-/// One slider over -1..1 with the four deadzone handles, as wide as the chart and right
-/// under it, so every handle sits below its deadzone edge. Symmetric: handles mirror.
-fn deadzone_slider(
+/// Slider with two handles for a `lo..=hi` sub-range of `min..=max`.
+fn range_slider(
     ui: &mut egui::Ui,
     width: f32,
-    dz: &mut [f64; 4],
-    symmetric: bool,
-) -> (Rect, bool) {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 22.0), Sense::click_and_drag());
-    let to_v = |x: f32| f64::from((x - rect.center().x) / (rect.width() / 2.0)).clamp(-1.0, 1.0);
+    lo: &mut f32,
+    hi: &mut f32,
+    min: f32,
+    max: f32,
+) -> bool {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 20.0), Sense::click_and_drag());
+    let pad = 8.0;
+    let to_x = |v: f32| rect.left() + pad + (v - min) / (max - min) * (rect.width() - 2.0 * pad);
+    let to_v = |x: f32| {
+        (min + (x - rect.left() - pad) / (rect.width() - 2.0 * pad) * (max - min)).clamp(min, max)
+    };
     let handle_id = response.id.with("handle");
     let mut changed = false;
     if response.drag_started() {
         if let Some(p) = response.interact_pointer_pos() {
-            let nearest = (0..4)
-                .min_by(|&a, &b| {
-                    let da = (x_of(rect, dz[a]) - p.x).abs();
-                    let db = (x_of(rect, dz[b]) - p.x).abs();
-                    da.total_cmp(&db)
-                })
-                .unwrap_or(0);
-            ui.data_mut(|d| d.insert_temp(handle_id, nearest));
+            let upper = (p.x - to_x(*hi)).abs() < (p.x - to_x(*lo)).abs();
+            ui.data_mut(|d| d.insert_temp(handle_id, upper));
         }
     }
     if response.dragged() {
-        let handle: Option<usize> = ui.data(|d| d.get_temp(handle_id));
-        if let (Some(h), Some(p)) = (handle, response.interact_pointer_pos()) {
+        let upper: Option<bool> = ui.data(|d| d.get_temp(handle_id));
+        if let (Some(upper), Some(p)) = (upper, response.interact_pointer_pos()) {
             let v = (to_v(p.x) * 10_000.0).round() / 10_000.0;
-            set_handle(dz, h, v, symmetric);
+            if upper {
+                *hi = v.max(*lo);
+            } else {
+                *lo = v.min(*hi);
+            }
             changed = true;
         }
     }
@@ -401,69 +403,20 @@ fn deadzone_slider(
     let painter = ui.painter();
     let y = rect.center().y;
     painter.line_segment(
-        [Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
+        [Pos2::new(to_x(min), y), Pos2::new(to_x(max), y)],
         Stroke::new(4.0, ui.visuals().widgets.inactive.bg_fill),
     );
-    // Live ranges (outside the deadzones) in the accent colour.
-    for (a, b) in [(dz[0], dz[1]), (dz[2], dz[3])] {
-        painter.line_segment(
-            [Pos2::new(x_of(rect, a), y), Pos2::new(x_of(rect, b), y)],
-            Stroke::new(4.0, accent),
-        );
-    }
-    for v in *dz {
+    painter.line_segment(
+        [Pos2::new(to_x(*lo), y), Pos2::new(to_x(*hi), y)],
+        Stroke::new(4.0, accent),
+    );
+    for v in [*lo, *hi] {
         painter.circle(
-            Pos2::new(x_of(rect, v), y),
+            Pos2::new(to_x(v), y),
             7.0,
             ui.visuals().panel_fill,
             Stroke::new(1.5, ui.visuals().text_color()),
         );
-    }
-    (rect, changed)
-}
-
-/// Sets deadzone value `h` (0 low, 1 center-low, 2 center-high, 3 high) keeping the order;
-/// symmetric mirrors the partner (low <-> high, center-low <-> center-high).
-fn set_handle(dz: &mut [f64; 4], h: usize, v: f64, symmetric: bool) {
-    let v = match h {
-        0 => v.clamp(-1.0, dz[1]),
-        1 => v.clamp(dz[0], 0.0),
-        2 => v.clamp(0.0, dz[3]),
-        _ => v.clamp(dz[2], 1.0),
-    };
-    dz[h] = v;
-    if symmetric {
-        let (partner, mirrored) = (3 - h, -v);
-        dz[partner] = mirrored;
-        // Keep the order after mirroring.
-        dz[1] = dz[1].clamp(dz[0], 0.0);
-        dz[2] = dz[2].clamp(0.0, dz[3]);
-    }
-}
-
-/// The four numbers right under their slider handles (centre ones beside the middle).
-fn deadzone_fields(ui: &mut egui::Ui, slider: Rect, dz: &mut [f64; 4], symmetric: bool) -> bool {
-    let (w, h) = (66.0, 20.0);
-    let (row, _) = ui.allocate_exact_size(Vec2::new(slider.width(), h), Sense::hover());
-    let mid = row.center().x;
-    let lefts = [
-        row.left(),
-        (x_of(slider, dz[1]) - w / 2.0).clamp(row.left() + w + 4.0, mid - w - 2.0),
-        (x_of(slider, dz[2]) - w / 2.0).clamp(mid + 2.0, row.right() - 2.0 * w - 4.0),
-        row.right() - w,
-    ];
-    let mut changed = false;
-    for (i, left) in lefts.into_iter().enumerate() {
-        let mut v = dz[i];
-        let rect = Rect::from_min_size(Pos2::new(left, row.top()), Vec2::new(w, h));
-        let drag = egui::DragValue::new(&mut v)
-            .range(-1.0..=1.0)
-            .speed(0.005)
-            .fixed_decimals(4);
-        if ui.put(rect, drag).changed() {
-            set_handle(dz, i, v, symmetric);
-            changed = true;
-        }
     }
     changed
 }

@@ -392,6 +392,6 @@ curve-linear = Piecewise linear
 curve-cubic = Cubic spline
 curve-bezier = Cubic Bezier spline
 curve-symmetric = Symmetric
-curve-symmetric-tip = Mirror the curve and the deadzone through the center while editing
+curve-symmetric-tip = Mirror the curve through the center while editing
 curve-point = Point
 curve-handle = Handle

@@ -392,6 +392,6 @@ curve-linear = Ломаная
 curve-cubic = Кубический сплайн
 curve-bezier = Кубический сплайн Безье
 curve-symmetric = Симметричная
-curve-symmetric-tip = При правке отражать кривую и мёртвые зоны относительно центра
+curve-symmetric-tip = При правке отражать кривую относительно центра
 curve-point = Точка
 curve-handle = Маркер
