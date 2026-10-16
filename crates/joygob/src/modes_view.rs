@@ -65,91 +65,89 @@ impl ModesWindow {
             .pivot(egui::Align2::CENTER_CENTER)
             .default_pos(ctx.screen_rect().center())
             .show(ctx, |ui| {
+                // Fixed columns instead of a Grid: a Grid limits text fields to last frame's
+                // column width, so they never grow.
+                let h = ui.spacing().interact_size.y;
+                let gap = ui.spacing().item_spacing.x;
+                let star_w = h + 4.0;
+                let parent_w = 240.0;
+                let rest = star_w + parent_w + h + gap * 3.0;
                 // Room for 100 characters of a mode name, within the screen.
                 let char_w =
                     ui.fonts(|f| f.glyph_width(&egui::TextStyle::Body.resolve(ui.style()), 'n'));
-                let rest = 420.0;
                 let name_w = (char_w * 100.0)
-                    .min(ctx.screen_rect().width() * 0.9 - rest)
+                    .min(ctx.screen_rect().width() * 0.9 - rest - 32.0)
                     .max(240.0);
-                // An auto-sized window starts narrow and would squeeze the fields.
-                ui.set_min_width(name_w + rest);
-                egui::Grid::new("modes")
-                    .num_columns(4)
-                    .spacing([10.0, 6.0])
-                    .show(ui, |ui| {
-                        ui.label("");
+                ui.set_width(name_w + rest);
+                let left = egui::Layout::left_to_right(egui::Align::Center);
+
+                ui.horizontal(|ui| {
+                    ui.add_space(star_w + gap);
+                    ui.allocate_ui_with_layout(egui::vec2(name_w, h), left, |ui| {
                         ui.label(RichText::new(i18n.tr("modes-name")).weak());
+                    });
+                    ui.allocate_ui_with_layout(egui::vec2(parent_w, h), left, |ui| {
                         ui.label(RichText::new(i18n.tr("modes-parent")).weak());
-                        ui.end_row();
-                        for mode in &profile.modes {
-                            let is_startup = startup.as_deref() == Some(mode.name.as_str());
-                            if style::icon_toggle(
-                                ui,
-                                is_startup,
-                                icon::STAR,
-                                &i18n.tr("modes-startup"),
-                            )
+                    });
+                });
+                for mode in &profile.modes {
+                    ui.horizontal(|ui| {
+                        let is_startup = startup.as_deref() == Some(mode.name.as_str());
+                        if style::icon_toggle(ui, is_startup, icon::STAR, &i18n.tr("modes-startup"))
                             .clicked()
-                            {
-                                ops.push(ModeOp::SetStartup(mode.name.clone()));
-                            }
-                            let text = self
-                                .names
-                                .entry(mode.name.clone())
-                                .or_insert_with(|| mode.name.clone());
-                            let r = ui.add(egui::TextEdit::singleline(text).desired_width(name_w));
-                            if r.lost_focus() && *text != mode.name {
-                                ops.push(ModeOp::Rename {
-                                    old: mode.name.clone(),
-                                    new: text.clone(),
-                                });
-                                self.names.clear();
-                            }
-                            let parent = mode.parent.clone().unwrap_or_else(|| "—".into());
-                            egui::ComboBox::from_id_salt(("parent", &mode.name))
-                                .selected_text(parent)
-                                .width(240.0)
-                                .show_ui(ui, |ui| {
-                                    if ui.selectable_label(mode.parent.is_none(), "—").clicked() {
+                        {
+                            ops.push(ModeOp::SetStartup(mode.name.clone()));
+                        }
+                        let text = self
+                            .names
+                            .entry(mode.name.clone())
+                            .or_insert_with(|| mode.name.clone());
+                        let r = ui.add_sized([name_w, h], egui::TextEdit::singleline(text));
+                        if r.lost_focus() && *text != mode.name {
+                            ops.push(ModeOp::Rename {
+                                old: mode.name.clone(),
+                                new: text.clone(),
+                            });
+                            self.names.clear();
+                        }
+                        let parent = mode.parent.clone().unwrap_or_else(|| "—".into());
+                        egui::ComboBox::from_id_salt(("parent", &mode.name))
+                            .selected_text(parent)
+                            .width(parent_w)
+                            .show_ui(ui, |ui| {
+                                if ui.selectable_label(mode.parent.is_none(), "—").clicked() {
+                                    ops.push(ModeOp::SetParent {
+                                        name: mode.name.clone(),
+                                        parent: None,
+                                    });
+                                }
+                                for n in names.iter().filter(|n| **n != mode.name) {
+                                    if ui
+                                        .selectable_label(mode.parent.as_ref() == Some(n), n)
+                                        .clicked()
+                                    {
                                         ops.push(ModeOp::SetParent {
                                             name: mode.name.clone(),
-                                            parent: None,
+                                            parent: Some(n.clone()),
                                         });
                                     }
-                                    for n in names.iter().filter(|n| **n != mode.name) {
-                                        if ui
-                                            .selectable_label(mode.parent.as_ref() == Some(n), n)
-                                            .clicked()
-                                        {
-                                            ops.push(ModeOp::SetParent {
-                                                name: mode.name.clone(),
-                                                parent: Some(n.clone()),
-                                            });
-                                        }
-                                    }
-                                });
-                            let removable = profile.modes.len() > 1;
-                            if style::icon_button(
-                                ui,
-                                removable,
-                                icon::TRASH,
-                                &i18n.tr("modes-remove"),
-                            )
+                                }
+                            });
+                        let removable = profile.modes.len() > 1;
+                        if style::icon_button(ui, removable, icon::TRASH, &i18n.tr("modes-remove"))
                             .clicked()
-                            {
-                                ops.push(ModeOp::Remove(mode.name.clone()));
-                                self.names.clear();
-                            }
-                            ui.end_row();
+                        {
+                            ops.push(ModeOp::Remove(mode.name.clone()));
+                            self.names.clear();
                         }
                     });
+                }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
+                    ui.add_space(star_w + gap);
                     let edit = egui::TextEdit::singleline(&mut self.new_name)
-                        .hint_text(i18n.tr("modes-new"))
-                        .desired_width(name_w);
-                    let r = ui.add(edit);
+                        .hint_text(i18n.tr("modes-new"));
+                    let r = ui.add_sized([name_w, h], edit);
                     let valid = !self.new_name.trim().is_empty()
                         && !names.iter().any(|n| n == self.new_name.trim());
                     let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
