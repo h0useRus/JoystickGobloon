@@ -1,8 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
 <g stroke="#fff" stroke-width="14" stroke-linejoin="round" fill="#fff">
   <circle cx="128" cy="124" r="84"/>
+  <circle cx="62.1" cy="68.7" r="30"/><circle cx="193.9" cy="68.7" r="30"/>
   <g transform="translate(12.0 -12.1) rotate(12 128 220) translate(256 0) scale(-1 1)"><path d="M80 212q0-12 12-12h72q12 0 12 12v16q0 8-8 8H88q-8 0-8-8z"/><path d="M112 178q-6-28-2-48q4-18 18-18q16 0 19 16q3 20-3 50z"/></g>
 </g>
+<circle cx="62.1" cy="68.7" r="30" fill="#9acd32"/><circle cx="62.1" cy="68.7" r="16.5" fill="#6f9a1c"/><circle cx="193.9" cy="68.7" r="30" fill="#9acd32"/><circle cx="193.9" cy="68.7" r="16.5" fill="#6f9a1c"/>
 <circle cx="128" cy="124" r="84" fill="#9acd32"/>
 <path d="M72 80l40 14" stroke="#3d5a0a" stroke-width="9" stroke-linecap="round"/>
 <ellipse cx="92" cy="110" rx="14" ry="10" fill="#fff"/><circle cx="94" cy="111" r="6" fill="#111"/>
