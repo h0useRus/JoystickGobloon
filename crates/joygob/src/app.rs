@@ -734,6 +734,12 @@ impl eframe::App for JoyGobApp {
             });
             tray.set_active(active, &format!("{} | {state}", crate::APP_NAME));
         }
+        if self.tray.as_ref().is_some_and(|t| t.take_restored()) {
+            // Shown from the tray behind winit's back: make winit agree, and focus it.
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
         if self.tray.as_ref().is_some_and(|t| t.take_quit()) {
             self.request(Pending::Close, ctx);
         }
