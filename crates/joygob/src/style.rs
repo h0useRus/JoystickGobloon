@@ -227,6 +227,42 @@ pub fn record_button(ui: &mut egui::Ui, tooltip: &str) -> egui::Response {
     response.on_hover_text(tooltip)
 }
 
+/// Tab like [`tab`] with a small info icon inside its right end. Returns the tab's
+/// response and whether the info icon (not the tab) was clicked.
+pub fn tab_with_info(
+    ui: &mut egui::Ui,
+    selected: bool,
+    glyph: &str,
+    caption: &str,
+    info_tip: &str,
+) -> (egui::Response, bool) {
+    // A normal egui Button (same look as [`tab`]) with the icon in its right-hand slot.
+    let button = egui::Button::new(format!("{glyph}  {caption}"))
+        .shortcut_text(RichText::new(icon::INFO).size(ICON_SIZE))
+        .selected(selected)
+        .corner_radius(RADIUS)
+        .min_size(Vec2::new(0.0, 32.0));
+    let response = ui.add(button);
+    // The icon area is registered after the button, so it gets the click there.
+    let pad = ui.spacing().button_padding.x;
+    let icon_w = ICON_SIZE + 8.0;
+    let icon_rect = egui::Rect::from_center_size(
+        egui::pos2(
+            response.rect.right() - pad - ICON_SIZE / 2.0,
+            response.rect.center().y,
+        ),
+        Vec2::new(icon_w, icon_w),
+    );
+    let info = ui
+        .interact(icon_rect, response.id.with("info"), egui::Sense::click())
+        .on_hover_text(info_tip);
+    if info.hovered() {
+        let hover = ui.visuals().widgets.hovered.bg_fill.gamma_multiply(0.5);
+        ui.painter().rect_filled(icon_rect, RADIUS, hover);
+    }
+    (response, info.clicked())
+}
+
 /// Horizontal tab with icon and short caption.
 pub fn tab(ui: &mut egui::Ui, selected: bool, glyph: &str, caption: &str) -> egui::Response {
     ui.add(

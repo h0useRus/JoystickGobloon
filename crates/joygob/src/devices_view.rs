@@ -269,7 +269,18 @@ impl DevicesView {
                             (Some(_), None) => (icon::JOYSTICK, None),
                             (None, _) => (icon::PLUGS, Some("device-disconnected")),
                         };
-                        let mut r = style::tab(ui, selected, glyph, t.name);
+                        // Real devices (connected or from the profile) have an info icon
+                        // inside their tab.
+                        let mut r = if !t.logical && !is_keyboard(t) {
+                            let tip = i18n.tr("device-info");
+                            let (r, info) = style::tab_with_info(ui, selected, glyph, t.name, &tip);
+                            if info {
+                                self.info = Some(t.guid.to_string());
+                            }
+                            r
+                        } else {
+                            style::tab(ui, selected, glyph, t.name)
+                        };
                         if let Some(key) = hint {
                             r = r.on_hover_text(i18n.tr(key));
                         }
@@ -277,22 +288,18 @@ impl DevicesView {
                             self.selected = Some(t.guid.to_string());
                             self.user_selected = true;
                         }
-                        // Real devices (connected or from the profile) have an info window.
-                        if !t.logical && !is_keyboard(t) {
-                            let tip = i18n.tr("device-info");
-                            if style::icon_button(ui, true, icon::INFO, &tip).clicked() {
-                                self.info = Some(t.guid.to_string());
-                            }
-                        }
                     }
                 });
             });
             // Debug builds: JOYGOB_INFO=1 opens the first device's info at start (screenshots).
-        if cfg!(debug_assertions) && !self.info_shown && std::env::var("JOYGOB_INFO").is_ok() {
-            self.info_shown = true;
-            self.info = tabs.iter().find(|t| t.live.is_some()).map(|t| t.guid.to_string());
-        }
-        self.info_window(ui.ctx(), i18n, &tabs);
+            if cfg!(debug_assertions) && !self.info_shown && std::env::var("JOYGOB_INFO").is_ok() {
+                self.info_shown = true;
+                self.info = tabs
+                    .iter()
+                    .find(|t| t.live.is_some())
+                    .map(|t| t.guid.to_string());
+            }
+            self.info_window(ui.ctx(), i18n, &tabs);
         });
         ui.separator();
 
