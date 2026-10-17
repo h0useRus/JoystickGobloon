@@ -557,14 +557,6 @@ impl JoyGobApp {
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
                 }
-                // Device hiding is a window next to the devices page, not a page.
-                if page == Page::Devices {
-                    let open = self.hidhide_window;
-                    let tip = self.i18n.tr("nav-hidhide");
-                    if style::nav_toggle(ui, open, icon::EYE_SLASH, &tip).clicked() {
-                        self.hidhide_window = !open;
-                    }
-                }
             }
         });
         ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
@@ -639,7 +631,8 @@ impl JoyGobApp {
         }
     }
 
-    fn devices_page(&mut self, ui: &mut egui::Ui) {
+    /// Main toolbar: always shown, above every page.
+    fn toolbar(&mut self, ui: &mut egui::Ui) {
         let loaded = self.profile.is_some();
         let row = Vec2::new(ui.available_width(), 44.0);
         ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
@@ -710,8 +703,18 @@ impl JoyGobApp {
             if toggle.inner.clicked() {
                 self.toggle_runner(ui.ctx());
             }
+            // Features in their own window, at the right end.
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let open = self.hidhide_window;
+                let tip = self.i18n.tr("nav-hidhide");
+                if style::toolbar_toggle(ui, open, icon::EYE_SLASH, &tip).clicked() {
+                    self.hidhide_window = !open;
+                }
+            });
         });
-        ui.separator();
+    }
+
+    fn devices_page(&mut self, ui: &mut egui::Ui) {
         let no_devices = self.input.devices().iter().all(|d| d.info.is_vjoy());
         if self.profile.is_none() && no_devices {
             empty_state(ui, icon::JOYSTICK, &self.i18n.tr("no-profile"));
@@ -913,6 +916,15 @@ impl eframe::App for JoyGobApp {
             .resizable(false)
             .exact_width(60.0)
             .show(ctx, |ui| self.nav_rail(ui));
+        let margin = egui::Margin {
+            left: 16,
+            right: 16,
+            top: 4,
+            bottom: 4,
+        };
+        egui::TopBottomPanel::top("toolbar")
+            .frame(egui::Frame::side_top_panel(&ctx.style()).inner_margin(margin))
+            .show(ctx, |ui| self.toolbar(ui));
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
