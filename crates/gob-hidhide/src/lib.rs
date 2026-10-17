@@ -212,6 +212,11 @@ impl HidHide {
             .map(drop)
     }
 
+    /// Removes programs whose file no longer exists from the list (the CLI cannot name them).
+    pub fn clean_apps(&self) -> Result<(), Error> {
+        self.run(&["--app-clean"]).map(drop)
+    }
+
     /// Adds `exe` to the whitelist unless it is there already; returns whether it was added.
     pub fn ensure_app(&self, exe: &Path) -> Result<bool, Error> {
         if self.apps()?.iter().any(|a| same_path(a, exe)) {
