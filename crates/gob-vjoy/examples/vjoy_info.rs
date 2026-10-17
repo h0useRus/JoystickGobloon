@@ -1,4 +1,5 @@
 //! Prints vJoy devices: `cargo run -p gob-vjoy --example vjoy_info [--sweep <id>]`.
+//! Lists them through vJoyInterface.dll and straight from the driver (read-only) to compare.
 //! With `--sweep`, moves X, blinks button 1 and spins hat 1 for 3 seconds.
 use std::time::{Duration, Instant};
 
@@ -13,8 +14,27 @@ fn main() {
         vjoy.enabled(),
         vjoy.version()
     );
-    for d in vjoy.devices() {
-        println!("{d:?}");
+    let dll = vjoy.devices();
+    for d in &dll {
+        println!("dll    {d:?}");
+    }
+    match gob_vjoy::direct::Direct::find() {
+        None => println!("driver: not found"),
+        Some(direct) => {
+            println!(
+                "driver version={:?} {:?}",
+                direct.version(),
+                direct.driver_info()
+            );
+            for c in direct.collections() {
+                println!("driver {c:?} {:?}", direct.device_stat(c.report_id));
+            }
+            let devices = direct.devices();
+            println!(
+                "same as the DLL: {}",
+                if devices == dll { "yes" } else { "NO" }
+            );
+        }
     }
     let args: Vec<String> = std::env::args().collect();
     if let [_, flag, id] = args.as_slice() {
