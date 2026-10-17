@@ -1134,7 +1134,7 @@ impl Editor<'_> {
                 if ty == InputType::Button {
                     let mut inv = inverted;
                     if ui
-                        .checkbox(&mut inv, self.i18n.tr("edit-inverted"))
+                        .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
                         .changed()
                     {
                         self.set(
@@ -1463,7 +1463,7 @@ impl Editor<'_> {
                 InputType::Button => {
                     let mut inv = inverted;
                     if ui
-                        .checkbox(&mut inv, self.i18n.tr("edit-inverted"))
+                        .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
                         .changed()
                     {
                         let v = if inv { "True" } else { "False" };
@@ -1771,7 +1771,7 @@ impl Editor<'_> {
                 "Cycle" => {
                     for m in &modes {
                         let mut on = targets.contains(m);
-                        if ui.checkbox(&mut on, m).changed() {
+                        if ui.add(style::switch(&mut on, m)).changed() {
                             let next: Vec<String> = modes
                                 .iter()
                                 .filter(|x| if *x == m { on } else { targets.contains(x) })

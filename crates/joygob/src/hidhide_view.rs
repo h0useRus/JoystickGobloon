@@ -85,20 +85,20 @@ impl HidHideView {
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
                         changed |= ui
-                            .checkbox(
+                            .add(style::switch(
                                 &mut settings.hidhide_hide_disconnected,
                                 i18n.tr("hidhide-filter-disconnected"),
-                            )
+                            ))
                             .changed();
                         changed |= ui
-                            .checkbox(
+                            .add(style::switch(
                                 &mut settings.hidhide_gaming_only,
                                 i18n.tr("hidhide-gaming-only"),
-                            )
+                            ))
                             .changed();
                         let mut cloaked = self.cloaked;
                         if ui
-                            .checkbox(&mut cloaked, i18n.tr("hidhide-enable"))
+                            .add(style::switch(&mut cloaked, i18n.tr("hidhide-enable")))
                             .changed()
                         {
                             self.apply(|hh| hh.set_cloaked(cloaked));
@@ -145,7 +145,7 @@ impl HidHideView {
                         let hidden = group.is_hidden(&self.hidden);
                         ui.horizontal(|ui| {
                             let mut checked = hidden;
-                            if ui.checkbox(&mut checked, "").changed() {
+                            if ui.add(style::switch(&mut checked, "")).changed() {
                                 toggle = Some((i, checked));
                             }
                             let (glyph, color) = if hidden {

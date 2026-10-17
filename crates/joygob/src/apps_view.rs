@@ -162,7 +162,7 @@ impl AppsView {
             let response = ui
                 .add_enabled(
                     self.hh.is_ok(),
-                    egui::Checkbox::new(&mut inverse, i18n.tr("apps-inverse")),
+                    style::switch(&mut inverse, i18n.tr("apps-inverse")),
                 )
                 .on_hover_text(i18n.tr("apps-inverse-tip"));
             if response.changed() {
@@ -209,11 +209,7 @@ impl AppsView {
                                 } else {
                                     i18n.tr("hidhide-missing")
                                 };
-                                let eye = ui
-                                    .add_enabled_ui(self.hh.is_ok(), |ui| {
-                                        style::icon_toggle(ui, sees, glyph, &tip)
-                                    })
-                                    .inner;
+                                let eye = style::icon_button(ui, self.hh.is_ok(), glyph, &tip);
                                 if eye.clicked() {
                                     toggle = Some((path.clone(), !listed));
                                 }

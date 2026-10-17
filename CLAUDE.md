@@ -29,6 +29,7 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 
 ## Rules
 - UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; helpers in joygob/src/style.rs.
+  On/off options are toggle switches (`style::switch`), never checkboxes.
   Layout: left icon nav rail; all options live in settings_view.rs under horizontal tabs.
   The top toolbar is always visible, on every page. The left rail is always visible and holds only pages
   shown inside the main window (some may detach into their own window as an option). Features that live

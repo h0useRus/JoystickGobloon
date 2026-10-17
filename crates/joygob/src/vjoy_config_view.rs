@@ -146,7 +146,7 @@ impl VJoyConfig {
                 ui.label(i18n.tr("vjoy-axes"));
                 ui.horizontal_wrapped(|ui| {
                     for (i, on) in edit.axes.iter_mut().enumerate() {
-                        ui.checkbox(on, i18n.tr(&format!("vjoy-axis-{}", i + 1)));
+                        ui.add(style::switch(on, i18n.tr(&format!("vjoy-axis-{}", i + 1))));
                     }
                 });
                 ui.end_row();
@@ -172,14 +172,17 @@ impl VJoyConfig {
                 ui.label(i18n.tr("vjoy-ffb"));
                 ui.vertical(|ui| {
                     let mut any = edit.effects.iter().any(|e| *e);
-                    if ui.checkbox(&mut any, i18n.tr("vjoy-ffb-enable")).changed() {
+                    if ui
+                        .add(style::switch(&mut any, i18n.tr("vjoy-ffb-enable")))
+                        .changed()
+                    {
                         edit.effects = [any; 11];
                     }
                     if any {
                         ui.horizontal_wrapped(|ui| {
                             for (i, on) in edit.effects.iter_mut().enumerate() {
                                 let key = format!("vjoy-ffb-{}", EFFECTS[i].to_lowercase());
-                                ui.checkbox(on, i18n.tr(&key));
+                                ui.add(style::switch(on, i18n.tr(&key)));
                             }
                         });
                     }

@@ -205,7 +205,7 @@ impl Editor<'_> {
                 {
                     *value = f64::from(v);
                 }
-                ui.checkbox(relative, self.i18n.tr("vjoy-relative"));
+                ui.add(style::switch(relative, self.i18n.tr("vjoy-relative")));
             }
             MacroStep::VjoyHat {
                 device,
