@@ -192,19 +192,20 @@ impl DevicesView {
                     });
                 }
             }
-            tabs.push(Tab {
-                guid: gob_core::LOGICAL_DEVICE_GUID,
-                name: &logical_name,
-                live: None,
-                alias: None,
-                logical: true,
-            });
+            // The keyboard, then the virtual (logical) device always last.
             tabs.push(Tab {
                 guid: gob_core::KEYBOARD_GUID,
                 name: &keyboard_name,
                 live: None,
                 alias: None,
                 logical: false,
+            });
+            tabs.push(Tab {
+                guid: gob_core::LOGICAL_DEVICE_GUID,
+                name: &logical_name,
+                live: None,
+                alias: None,
+                logical: true,
             });
         }
         // Debug builds: JOYGOB_TAB=keyboard | logical opens that tab at start (screenshots).
@@ -286,9 +287,10 @@ impl DevicesView {
                             });
                             let mut icons = Vec::new();
                             if let Some(hidden) = hidden {
+                                let (glyph, color) = style::eye(ui, hidden);
                                 icons.push(style::TabIcon {
-                                    glyph: if hidden { icon::EYE_CLOSED } else { icon::EYE },
-                                    color: None,
+                                    glyph,
+                                    color: Some(color),
                                     tip: &eye_tip,
                                 });
                             }

@@ -195,6 +195,36 @@ pub fn toolbar_toggle(
     )
 }
 
+/// Red of hidden devices and the record dot.
+pub const RED: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
+
+/// Device eye: closed and red when hidden by HidHide, open and green when visible.
+pub fn eye(ui: &egui::Ui, hidden: bool) -> (&'static str, Color32) {
+    if hidden {
+        (icon::EYE_CLOSED, RED)
+    } else {
+        (icon::EYE, accent(ui))
+    }
+}
+
+/// [`icon_button`] with a colored icon.
+pub fn icon_button_colored(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    glyph: &str,
+    color: Color32,
+    tooltip: &str,
+) -> egui::Response {
+    let h = ui.spacing().interact_size.y;
+    ui.add_enabled(
+        enabled,
+        egui::Button::new(RichText::new(glyph).size(ICON_SIZE).color(color))
+            .frame(false)
+            .min_size(Vec2::new(h, h)),
+    )
+    .on_hover_text(tooltip)
+}
+
 /// Icon-only push button with a tooltip, as tall as text fields.
 pub fn icon_button(ui: &mut egui::Ui, enabled: bool, glyph: &str, tooltip: &str) -> egui::Response {
     let h = ui.spacing().interact_size.y;
@@ -220,7 +250,7 @@ pub fn record_button(ui: &mut egui::Ui, tooltip: &str) -> egui::Response {
     let red = if response.hovered() {
         Color32::from_rgb(0xff, 0x4d, 0x4f)
     } else {
-        Color32::from_rgb(0xe5, 0x48, 0x4d)
+        RED
     };
     painter.circle_stroke(
         c,

@@ -210,12 +210,13 @@ impl HidHideView {
                         let hidden = group.is_hidden(&self.hidden);
                         ui.horizontal(|ui| {
                             // Closed eye: hidden from other programs; a click switches it.
-                            let (glyph, tip) = if hidden {
-                                (icon::EYE_CLOSED, "hidhide-hidden")
+                            let (glyph, color) = style::eye(ui, hidden);
+                            let tip = i18n.tr(if hidden {
+                                "hidhide-hidden"
                             } else {
-                                (icon::EYE, "hidhide-visible")
-                            };
-                            if style::icon_button(ui, true, glyph, &i18n.tr(tip)).clicked() {
+                                "hidhide-visible"
+                            });
+                            if style::icon_button_colored(ui, true, glyph, color, &tip).clicked() {
                                 toggle = Some((i, !hidden));
                             }
                             let name = RichText::new(group.name());
