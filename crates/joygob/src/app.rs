@@ -695,6 +695,13 @@ impl JoyGobApp {
                 self.history(false);
             }
             ui.separator();
+            // Device hiding (its own window).
+            let open = self.hidhide_window;
+            let tip = self.i18n.tr("nav-hidhide");
+            if style::toolbar_toggle(ui, open, icon::EYE_SLASH, &tip).clicked() {
+                self.hidhide_window = !open;
+            }
+            ui.separator();
             let active = self.runner.is_some();
             let (glyph, tip) = if active {
                 (icon::STOP, "action-deactivate")
@@ -707,14 +714,6 @@ impl JoyGobApp {
             if toggle.inner.clicked() {
                 self.toggle_runner(ui.ctx());
             }
-            // Features in their own window, at the right end.
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let open = self.hidhide_window;
-                let tip = self.i18n.tr("nav-hidhide");
-                if style::toolbar_toggle(ui, open, icon::EYE_SLASH, &tip).clicked() {
-                    self.hidhide_window = !open;
-                }
-            });
         });
     }
 
@@ -757,6 +756,15 @@ impl JoyGobApp {
         let devices = self.input.devices();
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
+        let gaming_only = self.settings.hidhide_gaming_only;
+        self.devices_view.hidden = devices
+            .iter()
+            .filter(|d| !d.info.is_vjoy())
+            .filter_map(|d| {
+                let hidden = self.hidhide_view.device_hidden(&d.info, gaming_only)?;
+                Some((d.info.guid.clone(), hidden))
+            })
+            .collect();
         self.devices_view.show(
             ui,
             &self.i18n,
@@ -765,6 +773,11 @@ impl JoyGobApp {
             &mut ops,
             &vjoy,
         );
+        if let Some((guid, hide)) = self.devices_view.hide_request.take() {
+            if let Some(d) = devices.iter().find(|d| d.info.guid == guid) {
+                self.hidhide_view.set_device_hidden(&d.info, hide);
+            }
+        }
         drop(devices);
         if std::mem::take(&mut self.devices_view.open_modes) {
             self.show_modes = true;

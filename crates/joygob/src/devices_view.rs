@@ -53,6 +53,11 @@ pub struct DevicesView {
     selected_input: HashMap<String, Key>,
     /// The mode icon was clicked: the app opens the modes window.
     pub open_modes: bool,
+    /// HidHide state of connected devices (GUID -> hidden), filled by the app; devices
+    /// without an entry have no eye icon.
+    pub hidden: HashMap<String, bool>,
+    /// The eye icon was clicked: (device GUID, hide). The app applies it.
+    pub hide_request: Option<(String, bool)>,
 }
 
 struct Tab<'a> {
@@ -270,12 +275,37 @@ impl DevicesView {
                             (None, _) => (icon::PLUGS, Some("device-disconnected")),
                         };
                         // Real devices (connected or from the profile) have an info icon
-                        // inside their tab.
+                        // inside their tab; connected ones known to HidHide also an eye.
                         let mut r = if !t.logical && !is_keyboard(t) {
-                            let tip = i18n.tr("device-info");
-                            let (r, info) = style::tab_with_info(ui, selected, glyph, t.name, &tip);
-                            if info {
-                                self.info = Some(t.guid.to_string());
+                            let info_tip = i18n.tr("device-info");
+                            let hidden = self.hidden.get(t.guid).copied();
+                            let eye_tip = i18n.tr(if hidden == Some(true) {
+                                "hidhide-hidden"
+                            } else {
+                                "hidhide-visible"
+                            });
+                            let mut icons = Vec::new();
+                            if let Some(hidden) = hidden {
+                                icons.push(style::TabIcon {
+                                    glyph: if hidden { icon::EYE_CLOSED } else { icon::EYE },
+                                    color: None,
+                                    tip: &eye_tip,
+                                });
+                            }
+                            icons.push(style::TabIcon {
+                                glyph: icon::INFO,
+                                // The info icon is always in the accent green.
+                                color: Some(style::accent(ui)),
+                                tip: &info_tip,
+                            });
+                            let (r, clicked) =
+                                style::tab_with_icons(ui, selected, glyph, t.name, &icons);
+                            match (clicked, hidden) {
+                                (Some(0), Some(hidden)) => {
+                                    self.hide_request = Some((t.guid.to_string(), !hidden));
+                                }
+                                (Some(_), _) => self.info = Some(t.guid.to_string()),
+                                _ => {}
                             }
                             r
                         } else {

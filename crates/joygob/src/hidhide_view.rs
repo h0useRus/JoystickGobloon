@@ -61,6 +61,55 @@ impl HidHideView {
         self.refresh(self.gaming_only);
     }
 
+    /// The connected group of a DirectInput device: same VID/PID, and the same product name
+    /// when several devices share them. `None` when not found or still ambiguous.
+    fn find_group(&self, info: &gob_input::DeviceInfo) -> Option<usize> {
+        let id = Some((info.vendor_id, info.product_id));
+        let matches: Vec<usize> = (0..self.groups.len())
+            .filter(|&i| {
+                let g = &self.groups[i];
+                g.present() && g.devices.iter().any(|d| d.present && d.vid_pid() == id)
+            })
+            .collect();
+        if matches.len() <= 1 {
+            return matches.first().copied();
+        }
+        let name = info.name.trim();
+        let named: Vec<usize> = matches
+            .into_iter()
+            .filter(|&i| {
+                self.groups[i]
+                    .devices
+                    .iter()
+                    .any(|d| d.product.trim().eq_ignore_ascii_case(name))
+            })
+            .collect();
+        (named.len() == 1).then(|| named[0])
+    }
+
+    /// Whether a connected device is hidden; `None` without HidHide or a matching device.
+    /// Reads HidHide's state the first time.
+    pub fn device_hidden(
+        &mut self,
+        info: &gob_input::DeviceInfo,
+        gaming_only: bool,
+    ) -> Option<bool> {
+        self.hh.as_ref().ok()?;
+        if !self.loaded {
+            self.refresh(gaming_only);
+        }
+        let i = self.find_group(info)?;
+        Some(self.groups[i].is_hidden(&self.hidden))
+    }
+
+    /// Hides or shows a connected device (all its collections and the USB container).
+    pub fn set_device_hidden(&mut self, info: &gob_input::DeviceInfo, hide: bool) {
+        if let Some(i) = self.find_group(info) {
+            let group = self.groups[i].clone();
+            self.apply(|hh| hh.set_group_hidden(&group, hide));
+        }
+    }
+
     /// Shows the window content; returns whether `settings` changed.
     pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
         let version = match &self.hh {

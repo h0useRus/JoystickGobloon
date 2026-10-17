@@ -231,41 +231,76 @@ pub fn record_button(ui: &mut egui::Ui, tooltip: &str) -> egui::Response {
     response.on_hover_text(tooltip)
 }
 
-/// Tab like [`tab`] with a small info icon inside its right end. Returns the tab's
-/// response and whether the info icon (not the tab) was clicked.
-pub fn tab_with_info(
+/// A clickable icon inside a tab, see [`tab_with_icons`].
+pub struct TabIcon<'a> {
+    pub glyph: &'a str,
+    /// `None`: the tab's text color.
+    pub color: Option<Color32>,
+    pub tip: &'a str,
+}
+
+/// Tab like [`tab`] with small clickable icons inside its right end, in the given order.
+/// Returns the tab's response and the index of the icon clicked (not the tab), if any.
+pub fn tab_with_icons(
     ui: &mut egui::Ui,
     selected: bool,
     glyph: &str,
     caption: &str,
-    info_tip: &str,
-) -> (egui::Response, bool) {
-    // A normal egui Button (same look as [`tab`]) with the icon in its right-hand slot.
+    icons: &[TabIcon],
+) -> (egui::Response, Option<usize>) {
+    // A normal egui Button (same look as [`tab`]) with the icons in its right-hand slot.
+    let font = egui::FontId::proportional(ICON_SIZE);
+    let text_color = ui.visuals().text_color();
+    let gap = "  ";
+    let mut job = egui::text::LayoutJob::default();
+    for (i, icon) in icons.iter().enumerate() {
+        if i > 0 {
+            job.append(gap, 0.0, egui::TextFormat::simple(font.clone(), text_color));
+        }
+        let color = icon.color.unwrap_or(text_color);
+        job.append(
+            icon.glyph,
+            0.0,
+            egui::TextFormat::simple(font.clone(), color),
+        );
+    }
     let button = egui::Button::new(format!("{glyph}  {caption}"))
-        // The info icon is always in the accent green, selected tab or not.
-        .shortcut_text(RichText::new(icon::INFO).size(ICON_SIZE).color(accent(ui)))
+        .shortcut_text(job)
         .selected(selected)
         .corner_radius(RADIUS)
         .min_size(Vec2::new(0.0, 32.0));
     let response = ui.add(button);
-    // The icon area is registered after the button, so it gets the click there.
-    let pad = ui.spacing().button_padding.x;
-    let icon_w = ICON_SIZE + 8.0;
-    let icon_rect = egui::Rect::from_center_size(
-        egui::pos2(
-            response.rect.right() - pad - ICON_SIZE / 2.0,
-            response.rect.center().y,
-        ),
-        Vec2::new(icon_w, icon_w),
-    );
-    let info = ui
-        .interact(icon_rect, response.id.with("info"), egui::Sense::click())
-        .on_hover_text(info_tip);
-    if info.hovered() {
-        let hover = ui.visuals().widgets.hovered.bg_fill.gamma_multiply(0.5);
-        ui.painter().rect_filled(icon_rect, RADIUS, hover);
+    // The icon areas are registered after the button, so they get the clicks there.
+    let width = |text: &str| {
+        ui.fonts(|f| {
+            f.layout_no_wrap(text.to_owned(), font.clone(), text_color)
+                .size()
+                .x
+        })
+    };
+    let gap_w = width(gap);
+    let mut right = response.rect.right() - ui.spacing().button_padding.x;
+    let mut clicked = None;
+    for (i, icon) in icons.iter().enumerate().rev() {
+        let w = width(icon.glyph);
+        let side = ICON_SIZE + 8.0;
+        let rect = egui::Rect::from_center_size(
+            egui::pos2(right - w / 2.0, response.rect.center().y),
+            Vec2::new(side, side),
+        );
+        let r = ui
+            .interact(rect, response.id.with(("icon", i)), egui::Sense::click())
+            .on_hover_text(icon.tip);
+        if r.hovered() {
+            let hover = ui.visuals().widgets.hovered.bg_fill.gamma_multiply(0.5);
+            ui.painter().rect_filled(rect, RADIUS, hover);
+        }
+        if r.clicked() {
+            clicked = Some(i);
+        }
+        right -= w + gap_w;
     }
-    (response, info.clicked())
+    (response, clicked)
 }
 
 /// Horizontal tab with icon and short caption.
