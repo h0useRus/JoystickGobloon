@@ -74,6 +74,9 @@ vjoy-error = Не удалось взять устройство: { $error }
 
 # Device hiding
 hidhide-missing = HidHide не установлен.
+hidhide-on = Скрытие устройств включено
+hidhide-turn-on = Включить скрытие устройств
+hidhide-turn-off = Выключить скрытие устройств
 hidhide-hidden = Скрыто: его видят только программы из белого списка
 hidhide-visible = Видно всем программам
 hidhide-filter-disconnected = Не показывать отключённые устройства
@@ -343,6 +346,7 @@ settings-tray-title = Значок в трее
 settings-autostart = Запускать вместе с Windows (свёрнутым)
 settings-activate-on-start = Активировать профиль при запуске
 tray-show = Показать Joystick Gobloon
+tray-hiding = Скрытие устройств
 tray-quit = Выход
 autostart-error = Не удалось изменить автозапуск: { $error }
 

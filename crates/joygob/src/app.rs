@@ -236,8 +236,18 @@ impl JoyGobApp {
         match (self.settings.show_tray, self.tray.is_some(), self.hwnd) {
             (true, false, Some(hwnd)) => {
                 let (show, quit) = (self.i18n.tr("tray-show"), self.i18n.tr("tray-quit"));
+                let hiding = self.i18n.tr("tray-hiding");
                 let restored = self.restored.clone();
-                match crate::tray::Tray::new(ctx, hwnd, restored, crate::APP_NAME, &show, &quit) {
+                let tray = crate::tray::Tray::new(
+                    ctx,
+                    hwnd,
+                    restored,
+                    crate::APP_NAME,
+                    &show,
+                    &hiding,
+                    &quit,
+                );
+                match tray {
                     Ok(t) => {
                         log::info!("tray icon shown");
                         self.tray = Some(t);
@@ -695,10 +705,24 @@ impl JoyGobApp {
                 self.history(false);
             }
             ui.separator();
-            // Device hiding (its own window).
+            // Device hiding: on/off like Activate, then its window with the device list.
+            let cloak = self.hidhide_view.cloak(self.settings.hidhide_gaming_only);
+            let on = cloak == Some(true);
+            let tip = match cloak {
+                None => self.i18n.tr("hidhide-missing"),
+                Some(true) => self.i18n.tr("hidhide-turn-off"),
+                Some(false) => self.i18n.tr("hidhide-turn-on"),
+            };
+            let glyph = if on { icon::EYE_SLASH } else { icon::EYE };
+            let toggle = ui.add_enabled_ui(cloak.is_some(), |ui| {
+                style::toolbar_toggle(ui, on, glyph, &tip)
+            });
+            if toggle.inner.clicked() {
+                self.hidhide_view.set_cloak(!on);
+            }
             let open = self.hidhide_window;
             let tip = self.i18n.tr("nav-hidhide");
-            if style::toolbar_toggle(ui, open, icon::EYE_SLASH, &tip).clicked() {
+            if style::toolbar_toggle(ui, open, icon::LIST_CHECKS, &tip).clicked() {
                 self.hidhide_window = !open;
             }
             ui.separator();
@@ -869,6 +893,12 @@ impl eframe::App for JoyGobApp {
                 "title-inactive"
             });
             tray.set_active(active, &format!("{} | {state}", crate::APP_NAME));
+            if tray.take_cloak_changed() {
+                self.hidhide_view.reload();
+            }
+            if let Some(on) = self.hidhide_view.cloak(self.settings.hidhide_gaming_only) {
+                tray.set_cloaked(on);
+            }
         }
         if self
             .restored
@@ -950,8 +980,18 @@ impl eframe::App for JoyGobApp {
             .frame(egui::Frame::side_top_panel(&ctx.style()).inner_margin(margin))
             .show(ctx, |ui| self.toolbar(ui));
 
+        let cloak = self.hidhide_view.cloak(self.settings.hidhide_gaming_only);
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                if cloak == Some(true) {
+                    ui.label(
+                        RichText::new(icon::EYE_SLASH)
+                            .size(12.0)
+                            .color(style::accent(ui)),
+                    )
+                    .on_hover_text(self.i18n.tr("hidhide-on"));
+                    ui.separator();
+                }
                 if let Some(runner) = &self.runner {
                     let status = runner.status();
                     let mode = status.mode;

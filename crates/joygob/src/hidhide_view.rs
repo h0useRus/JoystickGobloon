@@ -110,6 +110,24 @@ impl HidHideView {
         }
     }
 
+    /// Whether device hiding (cloak) is on; `None` without HidHide. Reads the state the first time.
+    pub fn cloak(&mut self, gaming_only: bool) -> Option<bool> {
+        self.hh.as_ref().ok()?;
+        if !self.loaded {
+            self.refresh(gaming_only);
+        }
+        Some(self.cloaked)
+    }
+
+    pub fn set_cloak(&mut self, on: bool) {
+        self.apply(|hh| hh.set_cloaked(on));
+    }
+
+    /// HidHide was changed elsewhere (tray menu): read it again when next needed.
+    pub fn reload(&mut self) {
+        self.loaded = false;
+    }
+
     /// Shows the window content; returns whether `settings` changed.
     pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
         let version = match &self.hh {
