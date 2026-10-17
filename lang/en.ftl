@@ -75,8 +75,7 @@ vjoy-error = Could not take the device: { $error }
 # Device hiding
 hidhide-missing = HidHide is not installed.
 hidhide-on = Device hiding is on
-hidhide-turn-on = Turn device hiding on
-hidhide-turn-off = Turn device hiding off
+hidhide-off = Device hiding is off
 hidhide-hidden = Hidden: only whitelisted applications see it
 hidhide-visible = Visible to every application
 hidhide-filter-disconnected = Hide disconnected devices

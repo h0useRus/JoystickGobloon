@@ -75,8 +75,7 @@ vjoy-error = Не удалось взять устройство: { $error }
 # Device hiding
 hidhide-missing = HidHide не установлен.
 hidhide-on = Скрытие устройств включено
-hidhide-turn-on = Включить скрытие устройств
-hidhide-turn-off = Выключить скрытие устройств
+hidhide-off = Скрытие устройств выключено
 hidhide-hidden = Скрыто: его видят только программы из белого списка
 hidhide-visible = Видно всем программам
 hidhide-filter-disconnected = Не показывать отключённые устройства

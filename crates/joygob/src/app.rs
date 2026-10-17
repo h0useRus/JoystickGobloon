@@ -705,24 +705,10 @@ impl JoyGobApp {
                 self.history(false);
             }
             ui.separator();
-            // Device hiding: on/off like Activate, then its window with the device list.
-            let cloak = self.hidhide_view.cloak(self.settings.hidhide_gaming_only);
-            let on = cloak == Some(true);
-            let tip = match cloak {
-                None => self.i18n.tr("hidhide-missing"),
-                Some(true) => self.i18n.tr("hidhide-turn-off"),
-                Some(false) => self.i18n.tr("hidhide-turn-on"),
-            };
-            let glyph = if on { icon::EYE_SLASH } else { icon::EYE };
-            let toggle = ui.add_enabled_ui(cloak.is_some(), |ui| {
-                style::toolbar_toggle(ui, on, glyph, &tip)
-            });
-            if toggle.inner.clicked() {
-                self.hidhide_view.set_cloak(!on);
-            }
+            // Device hiding configuration (its own window); on/off is in the status bar.
             let open = self.hidhide_window;
             let tip = self.i18n.tr("nav-hidhide");
-            if style::toolbar_toggle(ui, open, icon::LIST_CHECKS, &tip).clicked() {
+            if style::toolbar_toggle(ui, open, icon::EYE_SLASH, &tip).clicked() {
                 self.hidhide_window = !open;
             }
             ui.separator();
@@ -981,15 +967,28 @@ impl eframe::App for JoyGobApp {
             .show(ctx, |ui| self.toolbar(ui));
 
         let cloak = self.hidhide_view.cloak(self.settings.hidhide_gaming_only);
+        let mut switch_cloak = None;
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if cloak == Some(true) {
-                    ui.label(
-                        RichText::new(icon::EYE_SLASH)
-                            .size(12.0)
-                            .color(style::accent(ui)),
-                    )
-                    .on_hover_text(self.i18n.tr("hidhide-on"));
+                // Device hiding indicator, clicked to switch it: green crossed eye while on.
+                if let Some(on) = cloak {
+                    let (glyph, tip) = if on {
+                        (icon::EYE_SLASH, "hidhide-on")
+                    } else {
+                        (icon::EYE, "hidhide-off")
+                    };
+                    let text = RichText::new(glyph).size(14.0);
+                    let text = if on {
+                        text.color(style::accent(ui))
+                    } else {
+                        text.weak()
+                    };
+                    let response = ui
+                        .add(egui::Button::new(text).frame(false))
+                        .on_hover_text(self.i18n.tr(tip));
+                    if response.clicked() {
+                        switch_cloak = Some(!on);
+                    }
                     ui.separator();
                 }
                 if let Some(runner) = &self.runner {
@@ -1015,6 +1014,9 @@ impl eframe::App for JoyGobApp {
                 ui.label(RichText::new(&self.status).size(12.0).weak());
             });
         });
+        if let Some(on) = switch_cloak {
+            self.hidhide_view.set_cloak(on);
+        }
 
         let frame = egui::Frame::central_panel(&ctx.style()).inner_margin(16);
         egui::CentralPanel::default()
