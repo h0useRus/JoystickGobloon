@@ -167,6 +167,16 @@ impl HidHide {
             .map(drop)
     }
 
+    /// Inverse mode: listed applications are the ones that do NOT see hidden devices.
+    pub fn inverse(&self) -> Result<bool, Error> {
+        Ok(self.run(&["--inv-state"])?.contains("--inv-on"))
+    }
+
+    pub fn set_inverse(&self, on: bool) -> Result<(), Error> {
+        self.run(&[if on { "--inv-on" } else { "--inv-off" }])
+            .map(drop)
+    }
+
     /// Instance paths of hidden devices.
     pub fn hidden(&self) -> Result<Vec<String>, Error> {
         Ok(quoted_args(&self.run(&["--dev-list"])?, "--dev-hide"))

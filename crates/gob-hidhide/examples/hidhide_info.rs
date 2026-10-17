@@ -4,7 +4,12 @@ fn main() {
         Ok(h) => h,
         Err(e) => return eprintln!("{e}"),
     };
-    println!("HidHide {} cloaked={:?}", hh.version, hh.cloaked());
+    println!(
+        "HidHide {} cloaked={:?} inverse={:?}",
+        hh.version,
+        hh.cloaked(),
+        hh.inverse()
+    );
     let hidden = hh.hidden().unwrap_or_default();
     let gaming_only = !std::env::args().any(|a| a == "--all");
     for g in hh.device_groups(gaming_only).unwrap_or_default() {
