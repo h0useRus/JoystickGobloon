@@ -5,7 +5,8 @@
 //! - Capabilities (axes, buttons, hats) and the driver version come from the HID collections the
 //!   driver exposes (VID 0x1234, PID 0xBEAD), one per vJoy device, report id = device id.
 //!
-//! Read-only for now; output still goes through the DLL (`crate::VJoy`).
+//! - Output: opening `<namespace>device_NNN` acquires device N; `LOAD_POSITIONS` sends the whole
+//!   state (`Position`, `JOYSTICK_POSITION_V2`), `RESET_DEV` resets it, closing releases it.
 
 use crate::{DeviceInfo, Status, AXIS_USAGES, MAX_DEVICES};
 
@@ -15,6 +16,11 @@ const fn ioctl(f: u32, access: u32) -> u32 {
 }
 
 const FILE_ANY_ACCESS: u32 = 0;
+const FILE_READ_ACCESS: u32 = 1;
+const FILE_WRITE_ACCESS: u32 = 2;
+pub const LOAD_POSITIONS: u32 = ioctl(0x910, FILE_WRITE_ACCESS);
+pub const RESET_DEV: u32 = ioctl(0x91F, FILE_WRITE_ACCESS);
+pub const GET_POSITIONS: u32 = ioctl(0x920, FILE_READ_ACCESS);
 pub const GET_DEV_STAT: u32 = ioctl(0x91D, FILE_ANY_ACCESS);
 pub const GET_DRV_INFO: u32 = ioctl(0x91E, FILE_ANY_ACCESS);
 
@@ -66,6 +72,111 @@ impl DeviceStat {
 /// `2.1.9` from the HID version number `0x0219`, as the DLL formats it.
 pub fn format_version(v: u16) -> String {
     format!("{}.{}.{}", v >> 8, (v >> 4) & 0xF, v & 0xF)
+}
+
+/// `JOYSTICK_POSITION_V2` from vJoy's `public.h` (natural C alignment, 108 bytes): the whole
+/// state of one device, sent at once.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Position {
+    pub device: u8,
+    pub throttle: i32,
+    pub rudder: i32,
+    pub aileron: i32,
+    /// X, Y, Z, Rx, Ry, Rz, Slider, Dial: axis slots 1..=8.
+    pub axes: [i32; 8],
+    pub wheel: i32,
+    pub vx: i32,
+    pub vy: i32,
+    pub vz: i32,
+    pub vbrx: i32,
+    pub vbry: i32,
+    pub vbrz: i32,
+    /// Buttons 1..=32 (bit 0 = button 1).
+    pub buttons: u32,
+    /// Hat 1 (continuous), or the 4 discrete hats as nibbles.
+    pub hats: u32,
+    /// Continuous hats 2..=4.
+    pub hats_ex: [u32; 3],
+    /// Buttons 33..=128.
+    pub buttons_ex: [u32; 3],
+}
+
+impl Position {
+    pub fn set_button(&mut self, n: u8, pressed: bool) -> bool {
+        let i = usize::from(n.wrapping_sub(1));
+        let word = match i / 32 {
+            0 => &mut self.buttons,
+            1..=3 => &mut self.buttons_ex[i / 32 - 1],
+            _ => return false,
+        };
+        let bit = 1u32 << (i % 32);
+        if pressed {
+            *word |= bit;
+        } else {
+            *word &= !bit;
+        }
+        true
+    }
+
+    /// Continuous hat `n` (1..=4): hundredths of a degree, `u32::MAX` centered.
+    pub fn set_cont_hat(&mut self, n: u8, raw: u32) -> bool {
+        match n {
+            1 => self.hats = raw,
+            2..=4 => self.hats_ex[usize::from(n) - 2] = raw,
+            _ => return false,
+        }
+        true
+    }
+
+    /// Discrete hat `n` (1..=4): 0 up, 1 right, 2 down, 3 left, -1 centered (nibble 0xF).
+    pub fn set_disc_hat(&mut self, n: u8, value: i32) -> bool {
+        if !(1..=4).contains(&n) {
+            return false;
+        }
+        let shift = 4 * u32::from(n - 1);
+        self.hats = (self.hats & !(0xF << shift)) | (((value as u32) & 0xF) << shift);
+        true
+    }
+
+    fn to_bytes(self) -> [u8; size_of::<Position>()] {
+        // SAFETY: plain `repr(C)` integers; the padding after `device` is never read by the
+        // driver.
+        unsafe { std::mem::transmute(self) }
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let bytes: [u8; size_of::<Position>()] =
+            bytes.get(..size_of::<Position>())?.try_into().ok()?;
+        // SAFETY: every bit pattern is a valid `Position`.
+        Some(unsafe { std::mem::transmute::<[u8; size_of::<Position>()], Position>(bytes) })
+    }
+}
+
+/// An acquired device: its open handle and the state last sent. Released when dropped.
+pub struct Acquired {
+    handle: imp::Handle,
+    pub id: u8,
+    pub position: Position,
+}
+
+impl Acquired {
+    /// Sends `position` to the driver.
+    pub fn send(&mut self) -> bool {
+        self.position.device = self.id;
+        imp::ioctl(&self.handle, LOAD_POSITIONS, &self.position.to_bytes(), 0).is_some()
+    }
+
+    /// Driver reset (axes and hats to their start values, buttons up), then reads the state back.
+    pub fn reset(&mut self) -> bool {
+        let ok = imp::ioctl(&self.handle, RESET_DEV, &[], 0).is_some();
+        if let Some(p) = imp::ioctl(&self.handle, GET_POSITIONS, &[], size_of::<Position>())
+            .and_then(|b| Position::from_bytes(&b))
+        {
+            self.position = p;
+        }
+        ok
+    }
 }
 
 /// A vJoy HID collection as Windows sees it.
@@ -137,6 +248,18 @@ impl Direct {
         self.collections()
             .first()
             .map(|c| format_version(c.version))
+    }
+
+    /// Acquires device `id` (1..=16): `None` when it is missing or another program holds it.
+    pub fn acquire(&self, id: u8) -> Option<Acquired> {
+        let handle = imp::open_device(&self.namespace, id)?;
+        let mut device = Acquired {
+            handle,
+            id,
+            position: Position::default(),
+        };
+        device.reset();
+        Some(device)
     }
 
     /// Every configured device, like `VJoy::devices`.
@@ -237,6 +360,52 @@ mod imp {
             .next()?;
         let cut = path.rfind('\\')? + 1;
         Some(path[..cut].to_string())
+    }
+
+    /// An open device handle, closed on drop.
+    pub struct Handle(HANDLE);
+
+    // SAFETY: a file handle may be used from any thread; calls on it are synchronous.
+    unsafe impl Send for Handle {}
+
+    impl Drop for Handle {
+        fn drop(&mut self) {
+            // SAFETY: the handle came from CreateFileW and is closed once.
+            unsafe {
+                let _ = CloseHandle(self.0);
+            }
+        }
+    }
+
+    /// Opens `device_NNN` for writing: this acquires it. Fails while another program has it.
+    pub fn open_device(namespace: &str, id: u8) -> Option<Handle> {
+        open(
+            &format!("{namespace}device_{id:03}"),
+            GENERIC_READ.0 | GENERIC_WRITE.0,
+        )
+        .map(Handle)
+    }
+
+    /// One IOCTL on an open device; the bytes it returned (`None` on failure).
+    pub fn ioctl(handle: &Handle, code: u32, input: &[u8], out_len: usize) -> Option<Vec<u8>> {
+        let mut out = vec![0u8; out_len];
+        let mut returned = 0u32;
+        // SAFETY: buffers outlive the synchronous call.
+        unsafe {
+            DeviceIoControl(
+                handle.0,
+                code,
+                (!input.is_empty()).then(|| input.as_ptr().cast()),
+                input.len() as u32,
+                (out_len > 0).then(|| out.as_mut_ptr().cast()),
+                out_len as u32,
+                Some(&mut returned),
+                None,
+            )
+            .ok()?;
+        }
+        out.truncate(returned as usize);
+        Some(out)
     }
 
     fn open(path: &str, access: u32) -> Option<HANDLE> {
@@ -415,6 +584,13 @@ mod imp {
     pub fn collections() -> Vec<Collection> {
         Vec::new()
     }
+    pub struct Handle;
+    pub fn open_device(_: &str, _: u8) -> Option<Handle> {
+        None
+    }
+    pub fn ioctl(_: &Handle, _: u32, _: &[u8], _: usize) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -426,6 +602,9 @@ mod tests {
         // CTL_CODE(FILE_DEVICE_UNKNOWN, 0x91D, METHOD_BUFFERED, FILE_ANY_ACCESS)
         assert_eq!(GET_DEV_STAT, 0x0022_2474);
         assert_eq!(GET_DRV_INFO, 0x0022_2478);
+        assert_eq!(LOAD_POSITIONS, 0x0022_A440);
+        assert_eq!(RESET_DEV, 0x0022_A47C);
+        assert_eq!(GET_POSITIONS, 0x0022_6480);
     }
 
     #[test]
@@ -440,6 +619,26 @@ mod tests {
         assert_eq!(mine.status(0x1_002A), Status::Own);
         assert_eq!(mine.status(7), Status::Busy);
         assert!(DeviceStat::parse(&[1]).is_none());
+    }
+
+    #[test]
+    fn position_layout() {
+        // JOYSTICK_POSITION_V2 with natural alignment.
+        assert_eq!(size_of::<Position>(), 108);
+        assert_eq!(std::mem::offset_of!(Position, axes), 16);
+        assert_eq!(std::mem::offset_of!(Position, buttons), 76);
+        assert_eq!(std::mem::offset_of!(Position, buttons_ex), 96);
+        let mut p = Position::default();
+        assert!(p.set_button(1, true) && p.set_button(33, true) && p.set_button(128, true));
+        assert_eq!((p.buttons, p.buttons_ex), (1, [1, 0, 0x8000_0000]));
+        assert!(!p.set_button(0, true) && !p.set_button(129, true));
+        p.set_disc_hat(2, -1);
+        p.set_disc_hat(1, 3);
+        assert_eq!(p.hats, 0xF3);
+        assert!(p.set_cont_hat(4, 9000));
+        assert_eq!(p.hats_ex[2], 9000);
+        let bytes = p.to_bytes();
+        assert_eq!(Position::from_bytes(&bytes), Some(p));
     }
 
     #[test]

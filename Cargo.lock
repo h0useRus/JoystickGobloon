@@ -1868,7 +1868,6 @@ dependencies = [
 name = "gob-vjoy"
 version = "0.3.0"
 dependencies = [
- "libloading 0.8.9",
  "windows 0.61.3",
 ]
 
