@@ -65,20 +65,23 @@ pub fn show(
             tray_section(ui, i18n, settings).or(change)
         }
         SettingsTab::General => {
-            let reopen = ui.checkbox(&mut settings.reopen_last, i18n.tr("settings-reopen-last"));
-            let whitelist = ui.checkbox(
+            let reopen = ui.add(style::switch(
+                &mut settings.reopen_last,
+                i18n.tr("settings-reopen-last"),
+            ));
+            let whitelist = ui.add(style::switch(
                 &mut settings.hidhide_whitelist_self,
                 i18n.tr("settings-hidhide-self"),
-            );
+            ));
             ui.add_space(8.0);
-            let autostart = ui.checkbox(
+            let autostart = ui.add(style::switch(
                 &mut settings.start_with_windows,
                 i18n.tr("settings-autostart"),
-            );
-            let activate = ui.checkbox(
+            ));
+            let activate = ui.add(style::switch(
                 &mut settings.activate_on_start,
                 i18n.tr("settings-activate-on-start"),
-            );
+            ));
             let changed = [&reopen, &whitelist, &autostart, &activate]
                 .iter()
                 .any(|r| r.changed());
@@ -109,15 +112,25 @@ fn tray_section(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Opti
         .strong(),
     );
     ui.add_space(4.0);
-    let tray = ui.checkbox(&mut settings.show_tray, i18n.tr("settings-tray"));
+    let tray = ui.add(style::switch(
+        &mut settings.show_tray,
+        i18n.tr("settings-tray"),
+    ));
     let close = ui.add_enabled(
         settings.show_tray,
-        egui::Checkbox::new(
+        style::switch(
             &mut settings.close_to_tray,
             i18n.tr("settings-close-to-tray"),
         ),
     );
-    if tray.changed() || close.changed() {
+    let minimize = ui.add_enabled(
+        settings.show_tray,
+        style::switch(
+            &mut settings.minimize_to_tray,
+            i18n.tr("settings-minimize-to-tray"),
+        ),
+    );
+    if tray.changed() || close.changed() || minimize.changed() {
         settings.save();
     }
     tray.changed().then_some(Change::Tray)

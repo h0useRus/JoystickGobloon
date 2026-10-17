@@ -3,6 +3,7 @@ language-name = English
 # Navigation and toolbar tooltips
 nav-devices = Devices and bindings
 nav-hidhide = Device hiding
+nav-apps = Applications
 nav-vjoy = Virtual joysticks
 nav-viewer = Input viewer
 nav-calibration = Calibration
@@ -73,19 +74,29 @@ vjoy-error = Could not take the device: { $error }
 
 # Device hiding
 hidhide-missing = HidHide is not installed.
-hidhide-toggle = Turn device hiding on or off
-hidhide-on = Hiding is on
-hidhide-off = Hiding is off
-hidhide-devices = Devices
-hidhide-apps = Applications
+hidhide-on = Device hiding is on
+hidhide-off = Device hiding is off
 hidhide-hidden = Hidden: only whitelisted applications see it
 hidhide-visible = Visible to every application
-hidhide-add-app = Add application
-hidhide-remove-app = Remove from the whitelist
-hidhide-app-missing = File not found
+hidhide-filter-disconnected = Hide disconnected devices
+hidhide-gaming-only = Game controllers only
+hidhide-enable = Enable device hiding
+hidhide-hint = Click the eye to hide a device from other programs (closed eye). Reconnect it afterwards for the change to take effect.
+hidhide-no-devices = No devices to show.
 action-refresh = Refresh
 settings-hidhide-self = Add Joystick Gobloon to the HidHide whitelist on startup
 status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
+
+# Applications
+apps-add = Add application
+apps-empty = No applications yet. Add a game or a program to set it up.
+apps-missing = File not found
+apps-missing-text = The program is not there any more. Remove it from the list?
+apps-sees = Sees hidden devices
+apps-blind = Does not see hidden devices
+apps-inverse = Inverse application cloak
+apps-inverse-tip = Listed programs do not see hidden devices; all other programs do
+apps-remove = Remove from the list
 
 # Engine
 action-activate = Activate the profile
@@ -328,11 +339,13 @@ cond-logical = Logical device input
 
 # Tray and startup
 settings-tray = Show the tray icon
-settings-close-to-tray = The close button hides Joystick Gobloon to the tray
+settings-close-to-tray = Close to the tray
+settings-minimize-to-tray = Minimize to the tray
 settings-tray-title = Tray icon
 settings-autostart = Start with Windows (minimized)
 settings-activate-on-start = Activate the profile on startup
 tray-show = Show Joystick Gobloon
+tray-hiding = Device hiding
 tray-quit = Quit
 autostart-error = Could not change starting with Windows: { $error }
 

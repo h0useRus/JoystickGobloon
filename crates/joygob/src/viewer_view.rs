@@ -36,12 +36,13 @@ struct Shown {
     buttons: bool,
 }
 
+/// Nothing is shown until the user switches it on.
 impl Default for Shown {
     fn default() -> Self {
         Self {
-            history: true,
-            current: true,
-            buttons: true,
+            history: false,
+            current: false,
+            buttons: false,
         }
     }
 }
@@ -101,9 +102,18 @@ impl ViewerView {
                             .id_salt(&d.info.guid)
                             .default_open(true)
                             .show(ui, |ui| {
-                                ui.checkbox(&mut shown.history, i18n.tr("viewer-history"));
-                                ui.checkbox(&mut shown.current, i18n.tr("viewer-current"));
-                                ui.checkbox(&mut shown.buttons, i18n.tr("viewer-buttons"));
+                                ui.add(style::switch(
+                                    &mut shown.history,
+                                    i18n.tr("viewer-history"),
+                                ));
+                                ui.add(style::switch(
+                                    &mut shown.current,
+                                    i18n.tr("viewer-current"),
+                                ));
+                                ui.add(style::switch(
+                                    &mut shown.buttons,
+                                    i18n.tr("viewer-buttons"),
+                                ));
                             });
                     }
                 });

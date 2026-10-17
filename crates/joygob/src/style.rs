@@ -195,6 +195,36 @@ pub fn toolbar_toggle(
     )
 }
 
+/// Red of hidden devices and the record dot.
+pub const RED: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
+
+/// Device eye: closed and red when hidden by HidHide, open and green when visible.
+pub fn eye(ui: &egui::Ui, hidden: bool) -> (&'static str, Color32) {
+    if hidden {
+        (icon::EYE_CLOSED, RED)
+    } else {
+        (icon::EYE, accent(ui))
+    }
+}
+
+/// [`icon_button`] with a colored icon.
+pub fn icon_button_colored(
+    ui: &mut egui::Ui,
+    enabled: bool,
+    glyph: &str,
+    color: Color32,
+    tooltip: &str,
+) -> egui::Response {
+    let h = ui.spacing().interact_size.y;
+    ui.add_enabled(
+        enabled,
+        egui::Button::new(RichText::new(glyph).size(ICON_SIZE).color(color))
+            .frame(false)
+            .min_size(Vec2::new(h, h)),
+    )
+    .on_hover_text(tooltip)
+}
+
 /// Icon-only push button with a tooltip, as tall as text fields.
 pub fn icon_button(ui: &mut egui::Ui, enabled: bool, glyph: &str, tooltip: &str) -> egui::Response {
     let h = ui.spacing().interact_size.y;
@@ -220,7 +250,7 @@ pub fn record_button(ui: &mut egui::Ui, tooltip: &str) -> egui::Response {
     let red = if response.hovered() {
         Color32::from_rgb(0xff, 0x4d, 0x4f)
     } else {
-        Color32::from_rgb(0xe5, 0x48, 0x4d)
+        RED
     };
     painter.circle_stroke(
         c,
@@ -231,41 +261,76 @@ pub fn record_button(ui: &mut egui::Ui, tooltip: &str) -> egui::Response {
     response.on_hover_text(tooltip)
 }
 
-/// Tab like [`tab`] with a small info icon inside its right end. Returns the tab's
-/// response and whether the info icon (not the tab) was clicked.
-pub fn tab_with_info(
+/// A clickable icon inside a tab, see [`tab_with_icons`].
+pub struct TabIcon<'a> {
+    pub glyph: &'a str,
+    /// `None`: the tab's text color.
+    pub color: Option<Color32>,
+    pub tip: &'a str,
+}
+
+/// Tab like [`tab`] with small clickable icons inside its right end, in the given order.
+/// Returns the tab's response and the index of the icon clicked (not the tab), if any.
+pub fn tab_with_icons(
     ui: &mut egui::Ui,
     selected: bool,
     glyph: &str,
     caption: &str,
-    info_tip: &str,
-) -> (egui::Response, bool) {
-    // A normal egui Button (same look as [`tab`]) with the icon in its right-hand slot.
+    icons: &[TabIcon],
+) -> (egui::Response, Option<usize>) {
+    // A normal egui Button (same look as [`tab`]) with the icons in its right-hand slot.
+    let font = egui::FontId::proportional(ICON_SIZE);
+    let text_color = ui.visuals().text_color();
+    let gap = "  ";
+    let mut job = egui::text::LayoutJob::default();
+    for (i, icon) in icons.iter().enumerate() {
+        if i > 0 {
+            job.append(gap, 0.0, egui::TextFormat::simple(font.clone(), text_color));
+        }
+        let color = icon.color.unwrap_or(text_color);
+        job.append(
+            icon.glyph,
+            0.0,
+            egui::TextFormat::simple(font.clone(), color),
+        );
+    }
     let button = egui::Button::new(format!("{glyph}  {caption}"))
-        // The info icon is always in the accent green, selected tab or not.
-        .shortcut_text(RichText::new(icon::INFO).size(ICON_SIZE).color(accent(ui)))
+        .shortcut_text(job)
         .selected(selected)
         .corner_radius(RADIUS)
         .min_size(Vec2::new(0.0, 32.0));
     let response = ui.add(button);
-    // The icon area is registered after the button, so it gets the click there.
-    let pad = ui.spacing().button_padding.x;
-    let icon_w = ICON_SIZE + 8.0;
-    let icon_rect = egui::Rect::from_center_size(
-        egui::pos2(
-            response.rect.right() - pad - ICON_SIZE / 2.0,
-            response.rect.center().y,
-        ),
-        Vec2::new(icon_w, icon_w),
-    );
-    let info = ui
-        .interact(icon_rect, response.id.with("info"), egui::Sense::click())
-        .on_hover_text(info_tip);
-    if info.hovered() {
-        let hover = ui.visuals().widgets.hovered.bg_fill.gamma_multiply(0.5);
-        ui.painter().rect_filled(icon_rect, RADIUS, hover);
+    // The icon areas are registered after the button, so they get the clicks there.
+    let width = |text: &str| {
+        ui.fonts(|f| {
+            f.layout_no_wrap(text.to_owned(), font.clone(), text_color)
+                .size()
+                .x
+        })
+    };
+    let gap_w = width(gap);
+    let mut right = response.rect.right() - ui.spacing().button_padding.x;
+    let mut clicked = None;
+    for (i, icon) in icons.iter().enumerate().rev() {
+        let w = width(icon.glyph);
+        let side = ICON_SIZE + 8.0;
+        let rect = egui::Rect::from_center_size(
+            egui::pos2(right - w / 2.0, response.rect.center().y),
+            Vec2::new(side, side),
+        );
+        let r = ui
+            .interact(rect, response.id.with(("icon", i)), egui::Sense::click())
+            .on_hover_text(icon.tip);
+        if r.hovered() {
+            let hover = ui.visuals().widgets.hovered.bg_fill.gamma_multiply(0.5);
+            ui.painter().rect_filled(rect, RADIUS, hover);
+        }
+        if r.clicked() {
+            clicked = Some(i);
+        }
+        right -= w + gap_w;
     }
-    (response, info.clicked())
+    (response, clicked)
 }
 
 /// Horizontal tab with icon and short caption.
@@ -276,4 +341,79 @@ pub fn tab(ui: &mut egui::Ui, selected: bool, glyph: &str, caption: &str) -> egu
             .corner_radius(RADIUS)
             .min_size(Vec2::new(0.0, 32.0)),
     )
+}
+
+/// Toggle switch with an optional caption, used instead of checkboxes:
+/// `ui.add(style::switch(&mut on, "caption"))`.
+pub fn switch<'a>(on: &'a mut bool, text: impl Into<egui::WidgetText>) -> impl egui::Widget + 'a {
+    let text = text.into();
+    move |ui: &mut egui::Ui| {
+        let h = ui.spacing().interact_size.y * 0.8;
+        let track = Vec2::new(h * 1.8, h);
+        let gap = ui.spacing().icon_spacing * 2.0;
+        let galley = (!text.is_empty()).then(|| {
+            let wrap = ui.available_width() - track.x - gap;
+            text.into_galley(ui, None, wrap, egui::TextStyle::Button)
+        });
+        let width = track.x + galley.as_ref().map_or(0.0, |g| gap + g.size().x);
+        let height = galley
+            .as_ref()
+            .map_or(h, |g| g.size().y.max(h))
+            .max(ui.spacing().interact_size.y);
+        let (rect, mut response) =
+            ui.allocate_exact_size(Vec2::new(width, height), egui::Sense::click());
+        if response.clicked() {
+            *on = !*on;
+            response.mark_changed();
+        }
+        let checked = *on;
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(
+                egui::WidgetType::Checkbox,
+                ui.is_enabled(),
+                checked,
+                galley.as_ref().map_or("", |g| g.text()),
+            )
+        });
+        if ui.is_rect_visible(rect) {
+            let t = ui.ctx().animate_bool_responsive(response.id, checked);
+            let visuals = ui.style().interact(&response);
+            let track_rect = egui::Rect::from_min_size(
+                egui::pos2(rect.left(), rect.center().y - h / 2.0),
+                track,
+            );
+            let radius = 0.5 * h;
+            let fill = if checked {
+                accent(ui).gamma_multiply(if ui.is_enabled() { 1.0 } else { 0.5 })
+            } else {
+                visuals.bg_fill
+            };
+            let painter = ui.painter();
+            painter.rect(
+                track_rect,
+                radius,
+                fill,
+                visuals.bg_stroke,
+                egui::StrokeKind::Inside,
+            );
+            let x = egui::lerp(
+                (track_rect.left() + radius)..=(track_rect.right() - radius),
+                t,
+            );
+            let knob = if checked {
+                ui.visuals().extreme_bg_color
+            } else {
+                visuals.fg_stroke.color
+            };
+            painter.circle_filled(egui::pos2(x, track_rect.center().y), radius * 0.7, knob);
+            if let Some(galley) = galley {
+                let pos = egui::pos2(
+                    track_rect.right() + gap,
+                    rect.center().y - galley.size().y / 2.0,
+                );
+                painter.galley(pos, galley, visuals.text_color());
+            }
+        }
+        response
+    }
 }

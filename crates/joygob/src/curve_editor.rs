@@ -62,7 +62,7 @@ impl Editor<'_> {
             }
             let mut sym = symmetric;
             if ui
-                .checkbox(&mut sym, self.i18n.tr("curve-symmetric"))
+                .add(style::switch(&mut sym, self.i18n.tr("curve-symmetric")))
                 .on_hover_text(self.i18n.tr("curve-symmetric-tip"))
                 .changed()
             {

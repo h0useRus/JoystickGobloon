@@ -2,6 +2,7 @@
 
 mod action_editor;
 mod app;
+mod apps_view;
 mod calibration_view;
 mod condition_editor;
 mod curve_editor;
@@ -30,15 +31,32 @@ pub const VERSION: &str = match option_env!("JOYGOB_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
+/// Command-line switch for the uninstaller: take this exe off HidHide's application list
+/// (JoyGob adds itself on start) and quit without a window.
+const HIDHIDE_UNREGISTER: &str = "--hidhide-unregister";
+
 fn main() -> eframe::Result {
-    // Already running: that copy was woken and comes to the front; this one quits.
-    let Some(instance) = instance::claim() else {
+    if std::env::args().any(|a| a == HIDHIDE_UNREGISTER) {
+        if let (Ok(hh), Ok(exe)) = (gob_hidhide::HidHide::find(), std::env::current_exe()) {
+            let _ = hh.set_app(&exe, false);
+        }
         return Ok(());
+    }
+    let settings = settings::Settings::load();
+    // Already running: that copy was woken and comes to the front; this one quits.
+    // The hidden `multi_instance` setting lets copies run side by side.
+    let instance = if settings.multi_instance {
+        None
+    } else {
+        match instance::claim() {
+            Some(event) => Some(event),
+            None => return Ok(()),
+        }
     };
     logfile::init();
     // Started by Windows at logon: hidden in the tray, or minimized without one.
     let minimized = std::env::args().any(|a| a == tray::autostart::ARG);
-    let to_tray = minimized && settings::Settings::load().show_tray;
+    let to_tray = minimized && settings.show_tray;
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_visible(!to_tray)
