@@ -167,7 +167,8 @@ impl Acquired {
         imp::ioctl(&self.handle, LOAD_POSITIONS, &self.position.to_bytes(), 0).is_some()
     }
 
-    /// Driver reset (axes and hats to their start values, buttons up), then reads the state back.
+    /// Driver reset (axes and hats to their start values, buttons up). `RESET_DEV` only
+    /// changes the driver's copy: the state is read back and sent, so games see it too.
     pub fn reset(&mut self) -> bool {
         let ok = imp::ioctl(&self.handle, RESET_DEV, &[], 0).is_some();
         if let Some(p) = imp::ioctl(&self.handle, GET_POSITIONS, &[], size_of::<Position>())
@@ -175,7 +176,7 @@ impl Acquired {
         {
             self.position = p;
         }
-        ok
+        ok && self.send()
     }
 }
 
