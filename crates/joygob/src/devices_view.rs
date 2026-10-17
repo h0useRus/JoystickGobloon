@@ -913,7 +913,7 @@ fn description(root: &Action) -> Option<String> {
 }
 
 /// The chip's tooltip: the action's name, plus the target of a vJoy mapping
-/// (e.g. "Map to vJoy: vJoy 1 A2").
+/// (e.g. "Map to vJoy: vJoy 1 A2") or the text of a description.
 fn chip_text(i18n: &I18n, a: &Action) -> String {
     let key = format!("kind-{}", a.kind);
     let name = i18n.tr(&key);
@@ -931,6 +931,12 @@ fn chip_text(i18n: &I18n, a: &Action) -> String {
             _ => "B",
         };
         return format!("{name}: vJoy {device} {t}{input_id}");
+    }
+    if let gob_core::ActionKind::Description { text } = a.kind() {
+        let text = text.trim();
+        if !text.is_empty() {
+            return format!("{name}: {text}");
+        }
     }
     name
 }
