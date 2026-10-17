@@ -58,36 +58,43 @@
 
 ## План работ (сессии)
 
+**2026-10-17: разделы 1–4 сделаны** — gob-hidhide работает с драйвером напрямую (`driver.rs`, `volume.rs`,
+`devices.rs`), HidHideCLI и `serde_json` больше не нужны. Сверено с HidHideCLI `--dev-all`/`--dev-gaming`, `--dev-list`,
+`--app-list` на этой машине: те же группы, списки и программы. Отличия: имена групп без строк vendor/product
+берутся у USB-контейнера (`BusReportedDeviceDesc`), тип скрытых/отключённых устройств — из Hardware IDs
+(`UP:0001_U:0004`), поэтому они не пропадают из «только игровые». Версия — у файла `HidHide.sys`.
+Осталась ручная проверка записи (ниже).
+
 ### 1. IOCTL-ядро в gob-hidhide (сессия 1)
-- [ ] `src/driver.rs`: `Driver::open()`, get/set active, inverse, whitelist, blacklist; хелперы MULTI_SZ
+- [x] `src/driver.rs`: `Driver::open()`, get/set active, inverse, whitelist, blacklist; хелперы MULTI_SZ
       (`to_multi_sz`, `from_multi_sz`) с юнит-тестами (пустой список, один элемент, кириллица в пути).
-- [ ] Features `windows`: `Win32_Storage_FileSystem`, `Win32_System_IO`, `Win32_Foundation`.
-- [ ] Ошибки: `Error::NotInstalled` (нет устройства), `Error::Driver(String)` вместо `Error::Cli`
+- [x] Features `windows`: `Win32_Storage_FileSystem`, `Win32_System_IO`, `Win32_Foundation`.
+- [x] Ошибки: `Error::NotInstalled` (нет устройства), `Error::Driver(String)` вместо `Error::Cli`
       (сообщения в лог по-английски, в UI — существующие i18n-ключи).
-- [ ] Пример `hidhide_info` переводим на драйвер: печать active/inverse/whitelist/blacklist. **Только чтение.**
+- [x] Пример `hidhide_info` переводим на драйвер: печать active/inverse/whitelist/blacklist. **Только чтение.**
 
 ### 2. Пути приложений (сессия 1–2)
-- [ ] `src/volume.rs`: `to_image_name(C:\...) -> \Device\HarddiskVolumeN\...` и обратно
+- [x] `src/volume.rs`: `to_image_name(C:\...) -> \Device\HarddiskVolumeN\...` и обратно
       (`FindFirstVolumeW` / `GetVolumePathNamesForVolumeNameW` / `QueryDosDeviceW`, как в Volume.cpp).
-- [ ] Тест: путь к нашему exe туда и обратно совпадает; путь на несуществующем томе -> ошибка, а не паника.
-- [ ] `apps()` / `set_app()` / `ensure_app()` на новом коде; учесть inverse: при включённом inverse
+- [x] Тест: путь к нашему exe туда и обратно совпадает; путь на несуществующем томе -> ошибка, а не паника.
+- [x] `apps()` / `set_app()` / `ensure_app()` на новом коде; учесть inverse: при включённом inverse
       свой exe в список **не** добавляем (так делает CLI).
 
 ### 3. Поиск устройств вместо `--dev-all` / `--dev-gaming` (сессия 2)
-- [ ] Результат — `DeviceGroup` (уже есть в API): коллекции одного USB-контейнера, имя = friendlyName
+- [x] Результат — `DeviceGroup` (уже есть в API): коллекции одного USB-контейнера, имя = friendlyName
       контейнера, как строки в HidHide Configuration Client; окно скрытия фильтрует «только игровые».
-- [ ] `src/devices.rs`: все HID-интерфейсы, включая отсутствующие (SetupAPI `GUID_DEVINTERFACE_HID`,
+- [x] `src/devices.rs`: все HID-интерфейсы, включая отсутствующие (SetupAPI `GUID_DEVINTERFACE_HID`,
       без `DIGCF_PRESENT`) -> `HidDevice` с теми же полями.
-- [ ] Признак gaming как в HID.cpp: UsagePage 0x05, или UsagePage 0x01 с Usage 0x04/0x05, плюс Steam Controller/Deck.
-- [ ] Имя: `HidD_GetProductString` для присутствующих (мы в whitelist), иначе `DEVPKEY_Device_BusReportedDeviceDesc`
+- [x] Признак gaming как в HID.cpp: UsagePage 0x05, или UsagePage 0x01 с Usage 0x04/0x05, плюс Steam Controller/Deck.
+- [x] Имя: `HidD_GetProductString` для присутствующих (мы в whitelist), иначе `DEVPKEY_Device_BusReportedDeviceDesc`
       / `FriendlyName`.
-- [ ] Base container: `DEVPKEY_Device_ContainerId` + подъём по родителям до корня контейнера (как `BaseContainerDeviceInstancePath`).
-- [ ] Сверка: вывод нового кода == JSON `HidHideCLI --dev-all` на этой машине (одноразовый пример-сравнение).
+- [x] Base container: `DEVPKEY_Device_ContainerId` + подъём по родителям до корня контейнера (как `BaseContainerDeviceInstancePath`).
+- [x] Сверка: вывод нового кода == JSON `HidHideCLI --dev-all` на этой машине (одноразовый пример-сравнение).
 
 ### 4. Переключение и чистка (сессия 3)
-- [ ] `HidHide::find()` открывает драйвер, `HidHideCLI.exe` больше не нужен; `version` берём из реестра как сейчас.
-- [ ] Удалить `run()`, `quoted_args()`, разбор JSON и `serde_json` из зависимостей, если больше не нужны.
-- [ ] Обновить CLAUDE.md (строка про gob-hidhide) и ROADMAP.
+- [x] `HidHide::find()` открывает драйвер, `HidHideCLI.exe` больше не нужен; `version` берём из реестра как сейчас.
+- [x] Удалить `run()`, `quoted_args()`, разбор JSON и `serde_json` из зависимостей, если больше не нужны.
+- [x] Обновить CLAUDE.md (строка про gob-hidhide) и ROADMAP.
 - [ ] Ручная проверка с пользователем: скрыть/показать VKB, joy.cpl, whitelist своего exe. **Состояние HidHide
       меняем только с согласия** (CLAUDE.md, Testing notes).
 
@@ -106,7 +113,7 @@
       upper class filter `HidHide` для этих классов (SetupAPI / `DiInstallDriver` + реестр `UpperFilters`,
       либо nefconw, MIT). Удаление — в обратном порядке. Нужна перезагрузка: драйвер NOT_STOPPABLE.
 - [ ] Уже установленный HidHide от Nefarius не трогаем; ставим, только если драйвера нет.
-- [ ] Путь к драйверу и версию берём не из ключа реестра Nefarius (его не будет), а у самого `HidHide.sys`.
+- [x] Путь к драйверу и версию берём не из ключа реестра Nefarius (его не будет), а у самого `HidHide.sys`.
 
 ## Интерфейс (сделано 2026-10-17)
 - Страница «Программы» в рейле: свой список программ (`settings.apps`) + программы из whitelist HidHide.
