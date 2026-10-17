@@ -1,48 +1,45 @@
-//! HidHide control through the official `HidHideCLI.exe`.
-//!
-//! The CLI ships with the HidHide driver and converts application paths to
-//! the form the driver expects, so JoyGob does not talk to the driver directly.
+//! HidHide control straight through its driver (`\\.\HidHide` IOCTLs): no HidHideCLI or
+//! HidHide client needed. Works with the signed 1.5.x driver (IOCTL 2048-2055, see
+//! docs/HIDHIDE_PLAN.md).
+
+mod devices;
+mod driver;
+mod volume;
 
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-use serde::Deserialize;
+use driver::Driver;
 
 #[derive(Debug)]
 pub enum Error {
-    /// HidHide is not installed.
+    /// The HidHide driver is not installed.
     NotInstalled,
-    /// The CLI could not be started or reported an error.
-    Cli(String),
+    /// The driver reported an error.
+    Driver(String),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotInstalled => write!(f, "HidHide is not installed"),
-            Self::Cli(e) => write!(f, "HidHideCLI: {e}"),
+            Self::Driver(e) => write!(f, "HidHide: {e}"),
         }
     }
 }
 
 impl std::error::Error for Error {}
 
-/// A HID collection as reported by `--dev-all` / `--dev-gaming`.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+/// A HID collection known to Windows.
+#[derive(Debug, Clone, PartialEq)]
 pub struct HidDevice {
     pub present: bool,
     pub gaming_device: bool,
-    #[serde(default)]
     pub vendor: String,
-    #[serde(default)]
     pub product: String,
-    #[serde(default)]
     pub usage: String,
     pub device_instance_path: String,
     /// Parent USB device; HidHide's own client hides it together with the HID collection.
-    #[serde(default)]
     pub base_container_device_instance_path: String,
 }
 
@@ -72,10 +69,8 @@ impl HidDevice {
 }
 
 /// HID collections of one physical device (USB container), one row in HidHide's own client.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DeviceGroup {
-    #[serde(default)]
     pub friendly_name: String,
     pub devices: Vec<HidDevice>,
 }
@@ -120,101 +115,101 @@ impl DeviceGroup {
     }
 }
 
+/// The installed HidHide driver. Each call opens the driver briefly (see `driver`).
 pub struct HidHide {
-    cli: PathBuf,
+    /// Version of the running driver file (`HidHide.sys`), e.g. "1.5.230".
     pub version: String,
 }
 
 impl HidHide {
-    /// Locates HidHideCLI.exe through HidHide's registry key.
+    /// Finds the driver; `Error::NotInstalled` without it.
     pub fn find() -> Result<Self, Error> {
-        let (dir, version) = install_info().ok_or(Error::NotInstalled)?;
-        let cli = dir.join("x64").join("HidHideCLI.exe");
-        if !cli.exists() {
-            return Err(Error::NotInstalled);
-        }
-        Ok(Self { cli, version })
-    }
-
-    fn run(&self, args: &[&str]) -> Result<String, Error> {
-        let mut cmd = Command::new(&self.cli);
-        cmd.args(args);
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-            cmd.creation_flags(CREATE_NO_WINDOW);
-        }
-        let out = cmd.output().map_err(|e| Error::Cli(e.to_string()))?;
-        if !out.status.success() {
-            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            return Err(Error::Cli(if err.is_empty() {
-                format!("exit {}", out.status)
-            } else {
-                err
-            }));
-        }
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        drop(Driver::open()?);
+        Ok(Self {
+            version: driver_version().unwrap_or_default(),
+        })
     }
 
     /// Whether hiding is active.
     pub fn cloaked(&self) -> Result<bool, Error> {
-        Ok(self.run(&["--cloak-state"])?.contains("--cloak-on"))
+        Driver::open()?.get_bool(driver::GET_ACTIVE)
     }
 
     pub fn set_cloaked(&self, on: bool) -> Result<(), Error> {
-        self.run(&[if on { "--cloak-on" } else { "--cloak-off" }])
-            .map(drop)
+        Driver::open()?.set_bool(driver::SET_ACTIVE, on)
     }
 
     /// Inverse mode: listed applications are the ones that do NOT see hidden devices.
     pub fn inverse(&self) -> Result<bool, Error> {
-        Ok(self.run(&["--inv-state"])?.contains("--inv-on"))
+        Driver::open()?.get_bool(driver::GET_WLINVERSE)
     }
 
     pub fn set_inverse(&self, on: bool) -> Result<(), Error> {
-        self.run(&[if on { "--inv-on" } else { "--inv-off" }])
-            .map(drop)
+        Driver::open()?.set_bool(driver::SET_WLINVERSE, on)
     }
 
     /// Instance paths of hidden devices.
     pub fn hidden(&self) -> Result<Vec<String>, Error> {
-        Ok(quoted_args(&self.run(&["--dev-list"])?, "--dev-hide"))
+        Driver::open()?.get_list(driver::GET_BLACKLIST)
     }
 
     pub fn set_hidden(&self, instance_path: &str, hidden: bool) -> Result<(), Error> {
-        self.run(&[
-            if hidden { "--dev-hide" } else { "--dev-unhide" },
-            instance_path,
-        ])
-        .map(drop)
+        self.change_hidden(&[instance_path], hidden)
     }
 
     /// Hides or shows all collections of a device together with its USB container.
     pub fn set_group_hidden(&self, group: &DeviceGroup, hidden: bool) -> Result<(), Error> {
-        group
-            .instance_paths()
-            .into_iter()
-            .try_for_each(|p| self.set_hidden(p, hidden))
+        self.change_hidden(&group.instance_paths(), hidden)
     }
 
-    /// Applications allowed to see hidden devices.
+    /// One read-modify-write of the device list.
+    fn change_hidden(&self, paths: &[&str], hide: bool) -> Result<(), Error> {
+        let driver = Driver::open()?;
+        let list = driver.get_list(driver::GET_BLACKLIST)?;
+        let next = edit_list(&list, paths, hide);
+        if next != list {
+            driver.set_list(driver::SET_BLACKLIST, &next)?;
+        }
+        Ok(())
+    }
+
+    /// Applications in HidHide's list (whitelist, or blacklist in inverse mode). Entries on a
+    /// volume that is not mounted are returned as the driver's raw `\Device\...` path.
     pub fn apps(&self) -> Result<Vec<PathBuf>, Error> {
-        Ok(quoted_args(&self.run(&["--app-list"])?, "--app-reg")
-            .into_iter()
-            .map(PathBuf::from)
+        let list = Driver::open()?.get_list(driver::GET_WHITELIST)?;
+        let volumes = volume::volumes();
+        Ok(list
+            .iter()
+            .map(|image| {
+                volume::from_image_name_in(&volumes, image).unwrap_or_else(|| image.into())
+            })
             .collect())
     }
 
-    pub fn set_app(&self, exe: &Path, allowed: bool) -> Result<(), Error> {
-        let path = exe.to_string_lossy();
-        self.run(&[if allowed { "--app-reg" } else { "--app-unreg" }, &path])
-            .map(drop)
-    }
-
-    /// Removes programs whose file no longer exists from the list (the CLI cannot name them).
-    pub fn clean_apps(&self) -> Result<(), Error> {
-        self.run(&["--app-clean"]).map(drop)
+    /// Adds or removes a program. Removing works for files that no longer exist too.
+    pub fn set_app(&self, exe: &Path, listed: bool) -> Result<(), Error> {
+        let driver = Driver::open()?;
+        let list = driver.get_list(driver::GET_WHITELIST)?;
+        let volumes = volume::volumes();
+        let image = volume::to_image_name_in(&volumes, exe);
+        let matches = |entry: &String| {
+            image
+                .as_ref()
+                .is_some_and(|i| i.eq_ignore_ascii_case(entry))
+                || same_path(Path::new(entry), exe)
+                || volume::from_image_name_in(&volumes, entry).is_some_and(|p| same_path(&p, exe))
+        };
+        let mut next: Vec<String> = list.iter().filter(|e| !matches(e)).cloned().collect();
+        if listed {
+            let image = image.ok_or_else(|| {
+                Error::Driver(format!("{} is not on a mounted volume", exe.display()))
+            })?;
+            next.push(image);
+        }
+        if next != list {
+            driver.set_list(driver::SET_WHITELIST, &next)?;
+        }
+        Ok(())
     }
 
     /// Adds `exe` to the whitelist unless it is there already; returns whether it was added.
@@ -227,31 +222,30 @@ impl HidHide {
 
     /// HID devices known to Windows (present or not); only game controllers with `gaming_only`.
     pub fn device_groups(&self, gaming_only: bool) -> Result<Vec<DeviceGroup>, Error> {
-        parse_groups(&self.run(&[if gaming_only {
-            "--dev-gaming"
-        } else {
-            "--dev-all"
-        }])?)
+        Ok(devices::group(devices::find(), gaming_only))
     }
+}
+
+/// `list` with `paths` added (`hide`) or removed, compared without case; order kept.
+fn edit_list(list: &[String], paths: &[&str], hide: bool) -> Vec<String> {
+    let mut next: Vec<String> = list
+        .iter()
+        .filter(|e| hide || !paths.iter().any(|p| p.eq_ignore_ascii_case(e)))
+        .cloned()
+        .collect();
+    if hide {
+        for p in paths {
+            if !next.iter().any(|e| e.eq_ignore_ascii_case(p)) {
+                next.push((*p).to_string());
+            }
+        }
+    }
+    next
 }
 
 pub fn same_path(a: &Path, b: &Path) -> bool {
     a.to_string_lossy()
         .eq_ignore_ascii_case(&b.to_string_lossy())
-}
-
-fn parse_groups(json: &str) -> Result<Vec<DeviceGroup>, Error> {
-    serde_json::from_str(json).map_err(|e| Error::Cli(e.to_string()))
-}
-
-/// Values of `flag "value"` lines as printed by the CLI.
-fn quoted_args(output: &str, flag: &str) -> Vec<String> {
-    output
-        .lines()
-        .filter_map(|l| l.trim().strip_prefix(flag))
-        .map(|v| v.trim().trim_matches('"').to_string())
-        .filter(|v| !v.is_empty())
-        .collect()
 }
 
 fn vid_pid(instance_path: &str) -> Option<(u16, u16)> {
@@ -263,38 +257,53 @@ fn vid_pid(instance_path: &str) -> Option<(u16, u16)> {
     Some((hex("VID_")?, hex("PID_")?))
 }
 
+/// File version of `%SystemRoot%\System32\drivers\HidHide.sys` as "major.minor.build".
 #[cfg(windows)]
-fn install_info() -> Option<(PathBuf, String)> {
+fn driver_version() -> Option<String> {
     use windows::core::{w, PCWSTR};
-    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
-
-    let read = |name: PCWSTR| {
-        let mut buf = [0u16; 512];
-        let mut len = (buf.len() * 2) as u32;
-        unsafe {
-            RegGetValueW(
-                HKEY_LOCAL_MACHINE,
-                w!(r"SOFTWARE\Nefarius Software Solutions e.U.\HidHide"),
-                name,
-                RRF_RT_REG_SZ,
-                None,
-                Some(buf.as_mut_ptr().cast()),
-                Some(&mut len),
-            )
-        }
-        .ok()
-        .ok()?;
-        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
-        Some(String::from_utf16_lossy(&buf[..end]))
+    use windows::Win32::Storage::FileSystem::{
+        GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW, VS_FIXEDFILEINFO,
     };
-    Some((
-        PathBuf::from(read(w!("Path"))?),
-        read(w!("Version")).unwrap_or_default(),
-    ))
+    use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
+
+    let mut dir = [0u16; 260];
+    // SAFETY: the buffer outlives the call.
+    let n = unsafe { GetSystemDirectoryW(Some(&mut dir)) } as usize;
+    if n == 0 || n >= dir.len() {
+        return None;
+    }
+    let path = format!(
+        r"{}\drivers\HidHide.sys",
+        String::from_utf16_lossy(&dir[..n])
+    );
+    let path: Vec<u16> = path.encode_utf16().chain([0]).collect();
+    // SAFETY: standard version resource query; `info` points into `data`, alive here.
+    unsafe {
+        let size = GetFileVersionInfoSizeW(PCWSTR(path.as_ptr()), None);
+        if size == 0 {
+            return None;
+        }
+        let mut data = vec![0u8; size as usize];
+        GetFileVersionInfoW(PCWSTR(path.as_ptr()), None, size, data.as_mut_ptr().cast()).ok()?;
+        let mut info: *mut core::ffi::c_void = std::ptr::null_mut();
+        let mut len = 0u32;
+        if !VerQueryValueW(data.as_ptr().cast(), w!("\\"), &mut info, &mut len).as_bool()
+            || info.is_null()
+        {
+            return None;
+        }
+        let info = &*(info as *const VS_FIXEDFILEINFO);
+        Some(format!(
+            "{}.{}.{}",
+            info.dwFileVersionMS >> 16,
+            info.dwFileVersionMS & 0xffff,
+            info.dwFileVersionLS >> 16
+        ))
+    }
 }
 
 #[cfg(not(windows))]
-fn install_info() -> Option<(PathBuf, String)> {
+fn driver_version() -> Option<String> {
     None
 }
 
@@ -302,40 +311,32 @@ fn install_info() -> Option<(PathBuf, String)> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn parses_cli_lists() {
-        let out = "--dev-hide \"HID\\VID_231D&PID_0200\\a&2f28a505&1&0000\"\r\n--dev-hide \"USB\\VID_231D&PID_0200\\9&7B3A559&0&2\"\r\n";
-        assert_eq!(
-            quoted_args(out, "--dev-hide"),
-            [
-                "HID\\VID_231D&PID_0200\\a&2f28a505&1&0000",
-                "USB\\VID_231D&PID_0200\\9&7B3A559&0&2"
-            ]
-        );
-        assert!(quoted_args("--cloak-on", "--dev-hide").is_empty());
+    fn vkb() -> DeviceGroup {
+        DeviceGroup {
+            friendly_name: "VKB".into(),
+            devices: vec![HidDevice {
+                present: true,
+                gaming_device: true,
+                vendor: "VKB-Sim".into(),
+                product: " VKBsim Gladiator EVO R  ".into(),
+                usage: "Joystick".into(),
+                device_instance_path: r"HID\VID_231D&PID_0200\a&2f28a505&1&0000".into(),
+                base_container_device_instance_path: r"USB\VID_231D&PID_0200\9&7B3A559&0&2".into(),
+            }],
+        }
     }
 
     #[test]
-    fn parses_gaming_json() {
-        let json = r#" [ { "friendlyName" : "VKB" , "devices" : [
-            { "present" : true , "gamingDevice" : true , "symbolicLink" : "x" ,
-              "vendor" : "VKB-Sim" , "product" : " VKBsim Gladiator EVO R  " , "serialNumber" : "" ,
-              "usage" : "Joystick" , "description" : "HID-compliant game controller" ,
-              "deviceInstancePath" : "HID\\VID_231D&PID_0200\\a&2f28a505&1&0000" ,
-              "baseContainerDeviceInstancePath" : "USB\\VID_231D&PID_0200\\9&7B3A559&0&2" ,
-              "baseContainerClassGuid" : "{00000000-0000-0000-0000-000000000000}" ,
-              "baseContainerDeviceCount" : 1 } ] } ] "#;
-        let groups = parse_groups(json).unwrap();
-        assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].name(), "VKB");
-        assert!(groups[0].present() && groups[0].gaming());
-        let devices = &groups[0].devices;
-        assert_eq!(devices[0].name(), "VKBsim Gladiator EVO R");
-        assert_eq!(devices[0].vid_pid(), Some((0x231D, 0x0200)));
-        assert_eq!(devices[0].instance_paths().len(), 2);
+    fn group_state() {
+        let g = vkb();
+        assert_eq!(g.name(), "VKB");
+        assert!(g.present() && g.gaming());
+        assert_eq!(g.devices[0].name(), "VKBsim Gladiator EVO R");
+        assert_eq!(g.devices[0].vid_pid(), Some((0x231D, 0x0200)));
+        assert_eq!(g.instance_paths().len(), 2);
         let hidden = vec![r"hid\vid_231d&pid_0200\A&2F28A505&1&0000".to_string()];
-        assert!(groups[0].is_hidden(&hidden));
-        assert!(!groups[0].is_hidden(&[]));
+        assert!(g.is_hidden(&hidden));
+        assert!(!g.is_hidden(&[]));
     }
 
     #[test]
@@ -355,5 +356,13 @@ mod tests {
         };
         assert_eq!(group.instance_paths().len(), 3);
         assert_eq!(group.name(), group.devices[0].device_instance_path);
+    }
+
+    #[test]
+    fn edits_lists_without_case() {
+        let list = vec![r"HID\A\1".to_string(), r"USB\A\1".to_string()];
+        assert_eq!(edit_list(&list, &[r"hid\a\1", r"HID\B\1"], true).len(), 3);
+        assert_eq!(edit_list(&list, &[r"hid\a\1"], false), [r"USB\A\1"]);
+        assert_eq!(edit_list(&list, &[r"HID\C\1"], false), list);
     }
 }

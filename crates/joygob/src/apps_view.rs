@@ -94,16 +94,10 @@ impl AppsView {
         self.listed.iter().any(|a| same_path(a, exe))
     }
 
-    /// Takes a program out of HidHide's list. A missing file cannot be named to the CLI, so
-    /// then all missing programs are cleaned out (they stay on the page).
+    /// Takes a program out of HidHide's list (its file may be gone already).
     fn unlist(&mut self, path: &Path) {
-        if !self.is_listed(path) {
-            return;
-        }
-        if path.exists() {
+        if self.is_listed(path) {
             self.apply(|hh| hh.set_app(path, false));
-        } else {
-            self.apply(HidHide::clean_apps);
         }
     }
 
