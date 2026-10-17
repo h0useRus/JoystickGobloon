@@ -28,7 +28,7 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// A HID collection as reported by `--dev-gaming`.
+/// A HID collection as reported by `--dev-all` / `--dev-gaming`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HidDevice {
@@ -71,9 +71,53 @@ impl HidDevice {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct Group {
-    devices: Vec<HidDevice>,
+/// HID collections of one physical device (USB container), one row in HidHide's own client.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceGroup {
+    #[serde(default)]
+    pub friendly_name: String,
+    pub devices: Vec<HidDevice>,
+}
+
+impl DeviceGroup {
+    pub fn name(&self) -> &str {
+        match self.friendly_name.trim() {
+            "" => self.devices.first().map_or("", HidDevice::name),
+            name => name,
+        }
+    }
+
+    /// Whether any of its collections is connected.
+    pub fn present(&self) -> bool {
+        self.devices.iter().any(|d| d.present)
+    }
+
+    /// Whether any of its collections is a game controller.
+    pub fn gaming(&self) -> bool {
+        self.devices.iter().any(|d| d.gaming_device)
+    }
+
+    /// Instance paths to hide or unhide: every collection and the USB container, once each.
+    pub fn instance_paths(&self) -> Vec<&str> {
+        let mut paths: Vec<&str> = Vec::new();
+        for p in self.devices.iter().flat_map(HidDevice::instance_paths) {
+            if !paths.iter().any(|q| q.eq_ignore_ascii_case(p)) {
+                paths.push(p);
+            }
+        }
+        paths
+    }
+
+    /// Hidden when all its collections are in the `hidden` list.
+    pub fn is_hidden(&self, hidden: &[String]) -> bool {
+        !self.devices.is_empty()
+            && self.devices.iter().all(|d| {
+                hidden
+                    .iter()
+                    .any(|h| h.eq_ignore_ascii_case(&d.device_instance_path))
+            })
+    }
 }
 
 pub struct HidHide {
@@ -136,9 +180,9 @@ impl HidHide {
         .map(drop)
     }
 
-    /// Hides or shows a device together with its USB container.
-    pub fn set_device_hidden(&self, device: &HidDevice, hidden: bool) -> Result<(), Error> {
-        device
+    /// Hides or shows all collections of a device together with its USB container.
+    pub fn set_group_hidden(&self, group: &DeviceGroup, hidden: bool) -> Result<(), Error> {
+        group
             .instance_paths()
             .into_iter()
             .try_for_each(|p| self.set_hidden(p, hidden))
@@ -166,9 +210,13 @@ impl HidHide {
         self.set_app(exe, true).map(|()| true)
     }
 
-    /// Game controllers known to Windows (present or not).
-    pub fn gaming_devices(&self) -> Result<Vec<HidDevice>, Error> {
-        parse_gaming(&self.run(&["--dev-gaming"])?)
+    /// HID devices known to Windows (present or not); only game controllers with `gaming_only`.
+    pub fn device_groups(&self, gaming_only: bool) -> Result<Vec<DeviceGroup>, Error> {
+        parse_groups(&self.run(&[if gaming_only {
+            "--dev-gaming"
+        } else {
+            "--dev-all"
+        }])?)
     }
 }
 
@@ -177,9 +225,8 @@ pub fn same_path(a: &Path, b: &Path) -> bool {
         .eq_ignore_ascii_case(&b.to_string_lossy())
 }
 
-fn parse_gaming(json: &str) -> Result<Vec<HidDevice>, Error> {
-    let groups: Vec<Group> = serde_json::from_str(json).map_err(|e| Error::Cli(e.to_string()))?;
-    Ok(groups.into_iter().flat_map(|g| g.devices).collect())
+fn parse_groups(json: &str) -> Result<Vec<DeviceGroup>, Error> {
+    serde_json::from_str(json).map_err(|e| Error::Cli(e.to_string()))
 }
 
 /// Values of `flag "value"` lines as printed by the CLI.
@@ -263,10 +310,35 @@ mod tests {
               "baseContainerDeviceInstancePath" : "USB\\VID_231D&PID_0200\\9&7B3A559&0&2" ,
               "baseContainerClassGuid" : "{00000000-0000-0000-0000-000000000000}" ,
               "baseContainerDeviceCount" : 1 } ] } ] "#;
-        let devices = parse_gaming(json).unwrap();
-        assert_eq!(devices.len(), 1);
+        let groups = parse_groups(json).unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].name(), "VKB");
+        assert!(groups[0].present() && groups[0].gaming());
+        let devices = &groups[0].devices;
         assert_eq!(devices[0].name(), "VKBsim Gladiator EVO R");
         assert_eq!(devices[0].vid_pid(), Some((0x231D, 0x0200)));
         assert_eq!(devices[0].instance_paths().len(), 2);
+        let hidden = vec![r"hid\vid_231d&pid_0200\A&2F28A505&1&0000".to_string()];
+        assert!(groups[0].is_hidden(&hidden));
+        assert!(!groups[0].is_hidden(&[]));
+    }
+
+    #[test]
+    fn group_paths_once() {
+        let device = |col: &str| HidDevice {
+            present: true,
+            gaming_device: false,
+            vendor: String::new(),
+            product: String::new(),
+            usage: String::new(),
+            device_instance_path: format!(r"HID\VID_3329&PID_4B1E&{col}\0"),
+            base_container_device_instance_path: r"USB\VID_3329&PID_4B1E\0".into(),
+        };
+        let group = DeviceGroup {
+            friendly_name: " ".into(),
+            devices: vec![device("Col01"), device("Col02")],
+        };
+        assert_eq!(group.instance_paths().len(), 3);
+        assert_eq!(group.name(), group.devices[0].device_instance_path);
     }
 }
