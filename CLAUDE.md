@@ -14,7 +14,7 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 - crates/gob-vjoy    runtime-loaded vJoyInterface.dll (path from vJoy uninstall key); VJoy::acquire -> Device
   (reset+release on drop); axis slots 1..8 like gob-input; example `vjoy_info --sweep <id>`
 - crates/gob-hidhide wraps HidHideCLI.exe (path from HKLM\SOFTWARE\Nefarius Software Solutions e.U.\HidHide):
-  cloak, hidden devices (HID + USB container), app whitelist, `--dev-gaming` JSON; example `hidhide_info`.
+  cloak, device groups (HID collections + USB container, `--dev-all` / `--dev-gaming` JSON), app whitelist; example `hidhide_info`.
   Moving to IOCTL (docs/HIDHIDE_PLAN.md) for the signed 1.5.x driver only; session blacklist waits for a
   signed 1.7.x - check nefarius/HidHide#217 and its releases before each gob-hidhide session
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
@@ -60,7 +60,7 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYGOB_START_PAGE` = hidhide | vjoy | viewer | viewer-window | calibration | settings | about,
+  Debug builds open a page at start with env `JOYGOB_START_PAGE` = hidhide (window) | apps | vjoy | viewer | viewer-window | calibration | settings | about,
   select an input with `JOYGOB_EXPAND` = axis1 | button3 | hat1 ..., a tab with `JOYGOB_TAB` = keyboard | logical,
   the first device's info window with `JOYGOB_INFO=1`
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the

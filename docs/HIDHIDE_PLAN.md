@@ -2,6 +2,8 @@
 
 Цель: `gob-hidhide` говорит с драйвером HidHide напрямую через `DeviceIoControl` и больше не запускает
 `HidHideCLI.exe`. Драйвер остаётся от Nefarius (свой kernel-драйвер — вне рамок, см. ROADMAP).
+**Решение (2026-10-17): нативная среда HidHide не нужна** — ни CLI, ни Configuration Client. Запасного пути
+через HidHideCLI не будет; подписанный драйвер при необходимости ставим сами (раздел 6).
 Публичный API крейта по возможности не меняется, чтобы `joygob/src/hidhide_view.rs` и `app.rs` почти не трогать.
 
 Источник: `ref/HidHide` (github.com/nefarius/HidHide, master 2b950fd). Ключевые файлы:
@@ -71,14 +73,16 @@
 - [ ] `apps()` / `set_app()` / `ensure_app()` на новом коде; учесть inverse: при включённом inverse
       свой exe в список **не** добавляем (так делает CLI).
 
-### 3. Поиск игровых устройств вместо `--dev-gaming` (сессия 2)
+### 3. Поиск устройств вместо `--dev-all` / `--dev-gaming` (сессия 2)
+- [ ] Результат — `DeviceGroup` (уже есть в API): коллекции одного USB-контейнера, имя = friendlyName
+      контейнера, как строки в HidHide Configuration Client; окно скрытия фильтрует «только игровые».
 - [ ] `src/devices.rs`: все HID-интерфейсы, включая отсутствующие (SetupAPI `GUID_DEVINTERFACE_HID`,
       без `DIGCF_PRESENT`) -> `HidDevice` с теми же полями.
 - [ ] Признак gaming как в HID.cpp: UsagePage 0x05, или UsagePage 0x01 с Usage 0x04/0x05, плюс Steam Controller/Deck.
 - [ ] Имя: `HidD_GetProductString` для присутствующих (мы в whitelist), иначе `DEVPKEY_Device_BusReportedDeviceDesc`
       / `FriendlyName`.
 - [ ] Base container: `DEVPKEY_Device_ContainerId` + подъём по родителям до корня контейнера (как `BaseContainerDeviceInstancePath`).
-- [ ] Сверка: вывод нового кода == JSON `HidHideCLI --dev-gaming` на этой машине (одноразовый пример-сравнение).
+- [ ] Сверка: вывод нового кода == JSON `HidHideCLI --dev-all` на этой машине (одноразовый пример-сравнение).
 
 ### 4. Переключение и чистка (сессия 3)
 - [ ] `HidHide::find()` открывает драйвер, `HidHideCLI.exe` больше не нужен; `version` берём из реестра как сейчас.
@@ -96,11 +100,23 @@
       и в UI предупреждать, если выключен.
 - [ ] Старый драйвер: опция неактивна, в tooltip — какая версия HidHide нужна.
 
-### 6. Инсталлятор (позже, отдельно)
-- [ ] Решить: класть ли установщик HidHide (MIT) в наш Inno Setup или оставить ссылку.
+### 6. Установка драйвера своими силами (позже, отдельно)
+- [ ] Кладём в наш Inno Setup пакет подписанного драйвера 1.5.230 (`HidHide.sys/.inf/.cat`, MIT), без CLI и клиента.
+- [ ] Установка как в `ref/HidHide/Setup/install.cmd`: inf для HIDClass / XnaComposite / XboxComposite и
+      upper class filter `HidHide` для этих классов (SetupAPI / `DiInstallDriver` + реестр `UpperFilters`,
+      либо nefconw, MIT). Удаление — в обратном порядке. Нужна перезагрузка: драйвер NOT_STOPPABLE.
+- [ ] Уже установленный HidHide от Nefarius не трогаем; ставим, только если драйвера нет.
+- [ ] Путь к драйверу и версию берём не из ключа реестра Nefarius (его не будет), а у самого `HidHide.sys`.
+
+## Интерфейс (сделано 2026-10-17)
+- Страница «Программы» в рейле: свой список программ (`settings.apps`) + программы из whitelist HidHide.
+  Сейчас у программы одна опция — «видит скрытые устройства» (whitelist); дальше — автоактивация профиля
+  по программе и т.п. Скрытие (HidHide) везде опционально.
+- Окно «Скрытие устройств» (кнопка-глаз в рейле, отдельное нативное окно) повторяет Devices из HidHide
+  Configuration Client: группа = строка с чекбоксом и замком, внизу «не показывать отключённые»,
+  «только игровые» (обе в settings.toml) и «включить скрытие» (cloak).
 
 ## Открытые вопросы
 1. ~~Session blacklist: сразу или после IOCTL?~~ После — и только когда выйдет подписанный 1.7.x (#217).
 2. ~~Где брать 1.7.x?~~ Нигде: подписанной сборки нет, test-signed не используем.
-3. Оставляем ли fallback на HidHideCLI (для старых установок), или драйверный путь работает везде — по коду
-   IOCTL 2048–2055 не менялись, fallback, скорее всего, не нужен.
+3. ~~Fallback на HidHideCLI?~~ Нет: работаем с драйвером сами, при необходимости сами его ставим.
