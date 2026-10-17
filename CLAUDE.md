@@ -54,7 +54,9 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
   .github/workflows/release-request.yml). Never commit directly to `main`.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
   pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/joygob.iss) and a
-  portable zip. `JOYGOB_VERSION` (env at build time) is the version the app shows. CI (ci.yml) runs fmt,
+  portable zip. The installer bundles the signed HidHide installer (downloaded by release.yml, SHA-256
+  pinned) and runs it when the HidHide driver is missing; uninstall runs `JoystickGobloon.exe
+  --hidhide-unregister`. `JOYGOB_VERSION` (env at build time) is the version the app shows. CI (ci.yml) runs fmt,
   clippy -D warnings and tests on pull requests and work branches.
 - Discord: releases post through .github/scripts/discord-announce.ps1 to the DISCORD_WEBHOOK secret (alpha
   builds to DISCORD_WEBHOOK_ALPHA); no secret = no post. announce.yml re-posts a release by hand.
