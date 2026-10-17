@@ -1,13 +1,11 @@
 //! Device hiding window: HidHide's device list with the same options as its own client.
 
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
 use gob_hidhide::{DeviceGroup, HidHide};
 use gob_i18n::I18n;
 
 use crate::settings::Settings;
 use crate::style::{self, icon};
-
-const LOCK_RED: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
 
 pub struct HidHideView {
     hh: Result<HidHide, String>,
@@ -211,22 +209,15 @@ impl HidHideView {
                         let group = &self.groups[i];
                         let hidden = group.is_hidden(&self.hidden);
                         ui.horizontal(|ui| {
-                            let mut checked = hidden;
-                            if ui.add(style::switch(&mut checked, "")).changed() {
-                                toggle = Some((i, checked));
+                            // Closed eye: hidden from other programs; a click switches it.
+                            let (glyph, tip) = if hidden {
+                                (icon::EYE_CLOSED, "hidhide-hidden")
+                            } else {
+                                (icon::EYE, "hidhide-visible")
+                            };
+                            if style::icon_button(ui, true, glyph, &i18n.tr(tip)).clicked() {
+                                toggle = Some((i, !hidden));
                             }
-                            let (glyph, color) = if hidden {
-                                (icon::LOCK, LOCK_RED)
-                            } else {
-                                (icon::LOCK_OPEN, ui.visuals().weak_text_color())
-                            };
-                            let tip = if hidden {
-                                "hidhide-hidden"
-                            } else {
-                                "hidhide-visible"
-                            };
-                            ui.label(RichText::new(glyph).size(style::ICON_SIZE).color(color))
-                                .on_hover_text(i18n.tr(tip));
                             let name = RichText::new(group.name());
                             ui.label(if group.present() { name } else { name.weak() })
                                 .on_hover_text(group.instance_paths().join("\n"));
