@@ -1,6 +1,7 @@
 ﻿; Joystick Gobloon installer (Inno Setup 6).
 ; Build: iscc /DAppVersion=0.1.0 installer\joygob.iss  (after `cargo build --release`)
-; Output: target\installer\JoystickGobloon-<version>-setup.exe
+; Needs the HidHide installer in target\installer\deps (release.yml downloads it and checks
+; its hash). Output: target\installer\JoystickGobloon-<version>-setup.exe
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -8,7 +9,8 @@
 
 #define AppName "Joystick Gobloon"
 #define AppExe "JoystickGobloon.exe"
-#define HidHideUrl "https://github.com/nefarius/HidHide/releases"
+; Latest signed HidHide release (https://github.com/nefarius/HidHide/releases, MIT).
+#define HidHideSetup "HidHide_1.5.230_x64.exe"
 #define VJoyUrl "https://github.com/BrunnerInnovation/vJoy/releases"
 
 [Setup]
@@ -31,6 +33,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; Installs into Program Files and, when needed, the HidHide driver: asks for administrator rights.
 PrivilegesRequired=admin
 
 [Languages]
@@ -40,16 +43,28 @@ Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 [CustomMessages]
 en.DesktopIcon=Create a desktop shortcut
 ru.DesktopIcon=Создать ярлык на рабочем столе
-en.Missing=Joystick Gobloon uses the drivers of these programs, which are not installed:%n%n%1%nOpen their download pages now? You can install them later too.
-ru.Missing=Joystick Gobloon использует драйверы этих программ, но они не установлены:%n%n%1%nОткрыть страницы загрузки сейчас? Их можно установить и позже.
+en.Drivers=Drivers:
+ru.Drivers=Драйверы:
+en.InstallHidHide=Install the HidHide driver (hides game controllers from other programs; a restart may be needed)
+ru.InstallHidHide=Установить драйвер HidHide (скрывает игровые устройства от других программ; может понадобиться перезагрузка)
+en.InstallingHidHide=Installing the HidHide driver...
+ru.InstallingHidHide=Установка драйвера HidHide...
+en.HidHideFailed=The HidHide driver was not installed (code %1). Device hiding will not work until HidHide is installed.
+ru.HidHideFailed=Драйвер HidHide не установлен (код %1). Скрытие устройств не будет работать, пока HidHide не установлен.
+en.MissingVJoy=Joystick Gobloon outputs to the vJoy virtual joystick driver, which is not installed.%n%nOpen the vJoy download page now? You can install it later too.
+ru.MissingVJoy=Joystick Gobloon выводит на виртуальные джойстики через драйвер vJoy, но он не установлен.%n%nОткрыть страницу загрузки vJoy сейчас? Его можно установить и позже.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; Flags: unchecked
+; Offered (and ticked) only when the driver is missing.
+Name: "hidhide"; Description: "{cm:InstallHidHide}"; GroupDescription: "{cm:Drivers}"; Check: NeedHidHide
 
 [Files]
 Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\lang\*.ftl"; DestDir: "{app}\lang"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+; Extracted to {tmp} only when needed (InstallHidHide); not installed or uninstalled itself.
+Source: "..\target\installer\deps\{#HidHideSetup}"; Flags: dontcopy
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
@@ -63,13 +78,19 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-function HidHideCli(): String;
 var
-  Dir: String;
+  RestartNeeded: Boolean;
+
+{ The HidHide filter driver is installed (Joystick Gobloon talks to it directly). }
+function HidHideInstalled(): Boolean;
 begin
-  Result := '';
-  if RegQueryStringValue(HKLM, 'SOFTWARE\Nefarius Software Solutions e.U.\HidHide', 'Path', Dir) then
-    Result := AddBackslash(Dir) + 'x64\HidHideCLI.exe';
+  Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\HidHide')
+    or FileExists(ExpandConstant('{sys}\drivers\HidHide.sys'));
+end;
+
+function NeedHidHide(): Boolean;
+begin
+  Result := not HidHideInstalled();
 end;
 
 function VJoyInstalled(): Boolean;
@@ -78,38 +99,52 @@ begin
     or FileExists(ExpandConstant('{commonpf64}\vJoy\x64\vJoyInterface.dll'));
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
+{ Runs the signed HidHide installer and waits; 3010/1641 mean it wants a restart. }
+procedure InstallHidHide();
 var
-  Missing: String;
+  Params: String;
   Code: Integer;
 begin
-  if (CurStep <> ssPostInstall) or WizardSilent() then
+  WizardForm.StatusLabel.Caption := CustomMessage('InstallingHidHide');
+  ExtractTemporaryFile('{#HidHideSetup}');
+  Params := '';
+  if WizardSilent() then
+    Params := '/exenoui /qn /norestart';
+  if not Exec(ExpandConstant('{tmp}\{#HidHideSetup}'), Params, '', SW_SHOWNORMAL, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Log(Format('HidHide installer exit code: %d', [Code]));
+  if (Code = 3010) or (Code = 1641) then
+    RestartNeeded := True
+  else if (Code <> 0) and not WizardSilent() then
+    MsgBox(FmtMessage(CustomMessage('HidHideFailed'), [IntToStr(Code)]), mbError, MB_OK);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Code: Integer;
+begin
+  if CurStep <> ssPostInstall then
     Exit;
-  Missing := '';
-  if (HidHideCli() = '') or not FileExists(HidHideCli()) then
-    Missing := Missing + '- HidHide' + #13#10;
-  if not VJoyInstalled() then
-    Missing := Missing + '- vJoy' + #13#10;
-  if Missing = '' then
+  if WizardIsTaskSelected('hidhide') then
+    InstallHidHide();
+  if WizardSilent() or VJoyInstalled() then
     Exit;
-  if MsgBox(FmtMessage(CustomMessage('Missing'), [Missing]), mbConfirmation, MB_YESNO) = IDYES then
-  begin
-    if Pos('HidHide', Missing) > 0 then
-      ShellExec('open', '{#HidHideUrl}', '', '', SW_SHOWNORMAL, ewNoWait, Code);
-    if Pos('vJoy', Missing) > 0 then
-      ShellExec('open', '{#VJoyUrl}', '', '', SW_SHOWNORMAL, ewNoWait, Code);
-  end;
+  if MsgBox(CustomMessage('MissingVJoy'), mbConfirmation, MB_YESNO) = IDYES then
+    ShellExec('open', '{#VJoyUrl}', '', '', SW_SHOWNORMAL, ewNoWait, Code);
+end;
+
+function NeedRestart(): Boolean;
+begin
+  Result := RestartNeeded;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  Cli: String;
   Code: Integer;
 begin
-  // Joystick Gobloon adds itself to the HidHide whitelist; take it off again.
+  // Joystick Gobloon adds itself to HidHide's application list; it takes itself off again.
+  // The HidHide driver stays: other programs may use it.
   if CurUninstallStep <> usUninstall then
     Exit;
-  Cli := HidHideCli();
-  if (Cli <> '') and FileExists(Cli) then
-    Exec(Cli, '--app-unreg "' + ExpandConstant('{app}\{#AppExe}') + '"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Exec(ExpandConstant('{app}\{#AppExe}'), '--hidhide-unregister', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;

@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use eframe::egui;
-use tray_icon::menu::{Menu, MenuEvent, MenuItem};
+use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 /// Tray images (assets/icon/tray-*.svg): the logo's joystick on a green circle while a
@@ -63,17 +63,23 @@ pub struct Tray {
     active: Option<bool>,
     /// "Quit" was chosen in the tray menu; the app closes (asking to save first).
     pub quit: Arc<AtomicBool>,
+    /// "Device hiding" item, when HidHide is installed.
+    cloak_item: Option<CheckMenuItem>,
+    /// The tray menu switched device hiding; the app reloads HidHide's state.
+    cloak_changed: Arc<AtomicBool>,
 }
 
 impl Tray {
-    /// `hwnd` is the main window, `tooltip` the app name; `show`/`quit` are menu captions.
-    /// `restored` is set whenever the window is shown from the tray (see [`show_window`]).
+    /// `hwnd` is the main window, `tooltip` the app name; `show`/`hiding`/`quit` are menu
+    /// captions. `restored` is set whenever the window is shown from the tray (see
+    /// [`show_window`]).
     pub fn new(
         ctx: &egui::Context,
         hwnd: isize,
         restored: Arc<AtomicBool>,
         tooltip: &str,
         show: &str,
+        hiding: &str,
         quit: &str,
     ) -> Result<Self, String> {
         let icon = tray_image(false)?;
@@ -81,6 +87,15 @@ impl Tray {
         let quit_item = MenuItem::new(quit, true, None);
         let menu = Menu::new();
         menu.append(&show_item).map_err(|e| e.to_string())?;
+        // Device hiding on/off without opening the window (HidHide installed only).
+        let hidhide = gob_hidhide::HidHide::find().ok().map(Arc::new);
+        let cloak_item = hidhide.as_ref().map(|hh| {
+            let on = hh.cloaked().unwrap_or(false);
+            CheckMenuItem::new(hiding, true, on, None)
+        });
+        if let Some(item) = &cloak_item {
+            menu.append(item).map_err(|e| e.to_string())?;
+        }
         menu.append(&quit_item).map_err(|e| e.to_string())?;
         let tray = TrayIconBuilder::new()
             .with_tooltip(tooltip)
@@ -91,6 +106,7 @@ impl Tray {
             .map_err(|e| e.to_string())?;
 
         let quit_flag = Arc::new(AtomicBool::new(false));
+        let cloak_changed = Arc::new(AtomicBool::new(false));
         {
             let ctx = ctx.clone();
             let restored = restored.clone();
@@ -110,10 +126,26 @@ impl Tray {
         {
             let ctx = ctx.clone();
             let (show_id, quit_id) = (show_item.id().clone(), quit_item.id().clone());
+            let cloak_id = cloak_item.as_ref().map(|i| i.id().clone());
             let quit_flag = quit_flag.clone();
+            let cloak_changed = cloak_changed.clone();
             MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
                 if event.id == quit_id {
                     quit_flag.store(true, Ordering::Relaxed);
+                }
+                if Some(&event.id) == cloak_id.as_ref() {
+                    // HidHide runs a process: off the UI thread. The app syncs the check mark.
+                    if let Some(hh) = hidhide.clone() {
+                        let (ctx, changed) = (ctx.clone(), cloak_changed.clone());
+                        std::thread::spawn(move || {
+                            let result = hh.cloaked().and_then(|on| hh.set_cloaked(!on));
+                            if let Err(e) = result {
+                                log::error!("tray: switching device hiding: {e}");
+                            }
+                            changed.store(true, Ordering::Relaxed);
+                            ctx.request_repaint();
+                        });
+                    }
                 }
                 if event.id == show_id || event.id == quit_id {
                     restored.store(true, Ordering::Relaxed);
@@ -126,6 +158,8 @@ impl Tray {
             icon: tray,
             active: None,
             quit: quit_flag,
+            cloak_item,
+            cloak_changed,
         })
     }
 
@@ -142,6 +176,20 @@ impl Tray {
             Err(e) => log::error!("tray icon: {e}"),
         }
         let _ = self.icon.set_tooltip(Some(tooltip));
+    }
+
+    /// Check mark of the "Device hiding" item.
+    pub fn set_cloaked(&self, on: bool) {
+        if let Some(item) = &self.cloak_item {
+            if item.is_checked() != on {
+                item.set_checked(on);
+            }
+        }
+    }
+
+    /// Device hiding was switched from the tray menu since the last call.
+    pub fn take_cloak_changed(&self) -> bool {
+        self.cloak_changed.swap(false, Ordering::Relaxed)
     }
 
     pub fn take_quit(&self) -> bool {

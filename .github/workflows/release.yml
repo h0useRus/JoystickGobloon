@@ -55,6 +55,19 @@ jobs:
           JOYGOB_VERSION: ${{ steps.version.outputs.version }}
         run: cargo build --release -p joygob
 
+      # The installer installs the latest signed HidHide driver when it is missing. Pinned by
+      # hash: a changed file fails the release instead of shipping something unchecked.
+      - name: HidHide installer
+        shell: pwsh
+        run: |
+          $name = "HidHide_1.5.230_x64.exe"
+          $hash = "F4BBBCB82E6258641B887C74BC81C4C5F66E4AA811808DFC304347687B7605F6"
+          $dir = "target\installer\deps"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Invoke-WebRequest "https://github.com/nefarius/HidHide/releases/download/v1.5.230.0/$name" -OutFile "$dir\$name"
+          $got = (Get-FileHash "$dir\$name" -Algorithm SHA256).Hash
+          if ($got -ne $hash) { Write-Error "$name hash $got, expected $hash"; exit 1 }
+
       - name: Installer
         shell: pwsh
         run: |

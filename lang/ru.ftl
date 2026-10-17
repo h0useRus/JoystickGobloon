@@ -3,6 +3,7 @@ language-name = Русский
 # Navigation and toolbar tooltips
 nav-devices = Устройства и назначения
 nav-hidhide = Скрытие устройств
+nav-apps = Программы
 nav-vjoy = Виртуальные джойстики
 nav-viewer = Просмотр входов
 nav-calibration = Калибровка
@@ -73,19 +74,29 @@ vjoy-error = Не удалось взять устройство: { $error }
 
 # Device hiding
 hidhide-missing = HidHide не установлен.
-hidhide-toggle = Включить или выключить скрытие устройств
-hidhide-on = Скрытие включено
-hidhide-off = Скрытие выключено
-hidhide-devices = Устройства
-hidhide-apps = Программы
+hidhide-on = Скрытие устройств включено
+hidhide-off = Скрытие устройств выключено
 hidhide-hidden = Скрыто: его видят только программы из белого списка
 hidhide-visible = Видно всем программам
-hidhide-add-app = Добавить программу
-hidhide-remove-app = Убрать из белого списка
-hidhide-app-missing = Файл не найден
+hidhide-filter-disconnected = Не показывать отключённые устройства
+hidhide-gaming-only = Только игровые устройства
+hidhide-enable = Включить скрытие устройств
+hidhide-hint = Нажмите на глаз, чтобы скрыть устройство от других программ (закрытый глаз). Затем переподключите его, чтобы изменение вступило в силу.
+hidhide-no-devices = Нет устройств для показа.
 action-refresh = Обновить
 settings-hidhide-self = Добавлять Joystick Gobloon в белый список HidHide при запуске
 status-whitelisted = Joystick Gobloon добавлен в белый список HidHide.
+
+# Applications
+apps-add = Добавить программу
+apps-empty = Программ пока нет. Добавьте игру или программу, чтобы настроить её.
+apps-missing = Файл не найден
+apps-missing-text = Программы больше нет на этом месте. Убрать её из списка?
+apps-sees = Видит скрытые устройства
+apps-blind = Не видит скрытые устройства
+apps-inverse = Инвертировать список программ
+apps-inverse-tip = Программы из списка не видят скрытые устройства, все остальные видят
+apps-remove = Убрать из списка
 
 # Engine
 action-activate = Активировать профиль
@@ -328,11 +339,13 @@ cond-logical = Вход логического устройства
 
 # Tray and startup
 settings-tray = Показывать значок в трее
-settings-close-to-tray = Кнопка закрытия прячет Joystick Gobloon в трей
+settings-close-to-tray = Закрывать в трей
+settings-minimize-to-tray = Сворачивать в трей
 settings-tray-title = Значок в трее
 settings-autostart = Запускать вместе с Windows (свёрнутым)
 settings-activate-on-start = Активировать профиль при запуске
 tray-show = Показать Joystick Gobloon
+tray-hiding = Скрытие устройств
 tray-quit = Выход
 autostart-error = Не удалось изменить автозапуск: { $error }
 

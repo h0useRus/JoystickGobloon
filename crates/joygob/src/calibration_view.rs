@@ -253,7 +253,10 @@ fn axis_block(
                 body,
                 weak,
             );
-            ui.checkbox(&mut cal.with_center, i18n.tr("calibration-with-center"));
+            ui.add(style::switch(
+                &mut cal.with_center,
+                i18n.tr("calibration-with-center"),
+            ));
         });
         // Raw position with the calibration marks | Reset + Save.
         ui.horizontal(|ui| {
