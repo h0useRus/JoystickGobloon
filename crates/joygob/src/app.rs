@@ -59,6 +59,8 @@ pub struct JoyGobApp {
     pending: Option<Pending>,
     /// The user already agreed to close without saving.
     allow_close: bool,
+    /// The window was minimized last frame ("minimize to tray" acts once per minimize).
+    was_minimized: bool,
     show_modes: bool,
     modes_window: crate::modes_view::ModesWindow,
     /// Sound and speech previews from the editor.
@@ -149,6 +151,7 @@ impl JoyGobApp {
             edited: None,
             pending: None,
             allow_close: false,
+            was_minimized: false,
             show_modes: false,
             modes_window: Default::default(),
             title: crate::APP_NAME.into(),
@@ -872,6 +875,13 @@ impl eframe::App for JoyGobApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         }
+        // "Minimize to tray": a minimized window leaves the taskbar; the tray brings it back.
+        let minimized = ctx.input(|i| i.viewport().minimized) == Some(true);
+        if minimized && !self.was_minimized && self.settings.minimize_to_tray && self.tray.is_some()
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        }
+        self.was_minimized = minimized;
         if let Some(file) = self.runner.as_ref().and_then(|r| r.take_load_request()) {
             self.request(Pending::Load(PathBuf::from(file)), ctx);
         }

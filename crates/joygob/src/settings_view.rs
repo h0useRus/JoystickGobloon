@@ -123,7 +123,14 @@ fn tray_section(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Opti
             i18n.tr("settings-close-to-tray"),
         ),
     );
-    if tray.changed() || close.changed() {
+    let minimize = ui.add_enabled(
+        settings.show_tray,
+        style::switch(
+            &mut settings.minimize_to_tray,
+            i18n.tr("settings-minimize-to-tray"),
+        ),
+    );
+    if tray.changed() || close.changed() || minimize.changed() {
         settings.save();
     }
     tray.changed().then_some(Change::Tray)

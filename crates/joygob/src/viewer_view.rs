@@ -36,12 +36,13 @@ struct Shown {
     buttons: bool,
 }
 
+/// Nothing is shown until the user switches it on.
 impl Default for Shown {
     fn default() -> Self {
         Self {
-            history: true,
-            current: true,
-            buttons: true,
+            history: false,
+            current: false,
+            buttons: false,
         }
     }
 }

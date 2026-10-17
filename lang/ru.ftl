@@ -337,7 +337,8 @@ cond-logical = Вход логического устройства
 
 # Tray and startup
 settings-tray = Показывать значок в трее
-settings-close-to-tray = Кнопка закрытия прячет Joystick Gobloon в трей
+settings-close-to-tray = Закрывать в трей
+settings-minimize-to-tray = Сворачивать в трей
 settings-tray-title = Значок в трее
 settings-autostart = Запускать вместе с Windows (свёрнутым)
 settings-activate-on-start = Активировать профиль при запуске

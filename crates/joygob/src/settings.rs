@@ -36,6 +36,8 @@ pub struct Settings {
     pub show_tray: bool,
     /// The close button hides the window to the tray instead of quitting.
     pub close_to_tray: bool,
+    /// Minimizing hides the window to the tray (off the taskbar).
+    pub minimize_to_tray: bool,
     /// Windows starts JoyGob at logon (minimized).
     pub start_with_windows: bool,
     /// Activate the reopened profile on startup.
@@ -132,6 +134,7 @@ impl Default for Settings {
             last_profile: None,
             show_tray: true,
             close_to_tray: false,
+            minimize_to_tray: false,
             start_with_windows: false,
             activate_on_start: false,
             calibration: BTreeMap::new(),
