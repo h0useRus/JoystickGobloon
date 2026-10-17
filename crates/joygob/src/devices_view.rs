@@ -912,8 +912,12 @@ fn description(root: &Action) -> Option<String> {
         .map(String::from)
 }
 
-/// Short action name for the chip's tooltip, e.g. "Response curve" or "vJoy 1 A2".
+/// The chip's tooltip: the action's name, plus the target of a vJoy mapping
+/// (e.g. "Map to vJoy: vJoy 1 A2").
 fn chip_text(i18n: &I18n, a: &Action) -> String {
+    let key = format!("kind-{}", a.kind);
+    let name = i18n.tr(&key);
+    let name = if name == key { a.kind.clone() } else { name };
     if let gob_core::ActionKind::MapToVjoy {
         device,
         input_type,
@@ -926,15 +930,9 @@ fn chip_text(i18n: &I18n, a: &Action) -> String {
             InputType::Hat => "H",
             _ => "B",
         };
-        return format!("vJoy {device} {t}{input_id}");
+        return format!("{name}: vJoy {device} {t}{input_id}");
     }
-    let key = format!("kind-{}", a.kind);
-    let name = i18n.tr(&key);
-    if name == key {
-        a.kind.clone()
-    } else {
-        name
-    }
+    name
 }
 
 /// An action of a binding: its icon in a small frame, the name as tooltip.
@@ -946,9 +944,8 @@ fn chip(ui: &mut egui::Ui, glyph: &str, tooltip: &str, weak: bool) {
         .stroke(visuals.widgets.noninteractive.bg_stroke)
         .corner_radius(3)
         .inner_margin(Margin::symmetric(4, 1))
-        .show(ui, |ui| ui.label(text))
-        .response
-        .on_hover_text(tooltip);
+        // The label takes the hover, so the tooltip goes on it.
+        .show(ui, |ui| ui.label(text).on_hover_text(tooltip));
 }
 
 #[derive(Clone, Copy)]
