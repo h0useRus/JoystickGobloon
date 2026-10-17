@@ -39,9 +39,11 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
   "JoyGob" is internal only (code, comments, this file); "JoystickGobloon" only in file names.
 - Gremlin import must round-trip: unknown actions kept as raw XML.
 - GUI never blocks; engine runs on its own thread, talks via channels.
-- Settings: TOML in %APPDATA%\JoystickGobloon\settings.toml.
+- Settings: TOML text in %APPDATA%\JoystickGobloon\settings.gob (old settings.toml is read once), programs of
+  the Applications page in apps.gob next to it. If the exe's folder has its own settings.gob, that folder is
+  used instead for settings, apps and the log (joygob/src/settings.rs `data_dir`).
 - Messages: technical output (processing results, import/engine warnings, errors) goes to the log file
-  %APPDATA%\JoystickGobloon\joygob.log via the `log` crate (English, not i18n; joygob/src/logfile.rs).
+  joygob.log next to the settings via the `log` crate (English, not i18n; joygob/src/logfile.rs).
   Only warnings/errors that matter to a general user become dialogs (`JoyGobApp::error` / `alerts`),
   translated; routine info goes to the status bar. No report/diagnostics windows.
 - Branches: development happens on `dev`; every work branch is created from `dev` and merged back into it
@@ -66,8 +68,11 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
   window stays responsive; needs "close button hides to tray" on.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the
-  running window and exits, so a second debug launch while one runs only brings it up.
-  tools/single_instance.ps1 checks it.
+  running window and exits. tools/single_instance.ps1 checks it. Hidden setting `multi_instance = true`
+  (top of settings.gob, not in the UI) turns this off.
+- target\debug\settings.gob = local debug settings (copy of the user's + `multi_instance = true`): debug runs
+  never touch the installed copy's settings and may run next to the user's own debug window.
+  `cargo clean` deletes it: recreate it the same way.
 - HidHide hides the VKB sticks; target\debug\JoystickGobloon.exe and examples\monitor.exe are whitelisted.
 - Profile device GUIDs come from another PC: use "Map controls" (banner on the Devices page).
 - JoyGob whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.
