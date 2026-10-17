@@ -692,7 +692,8 @@ impl DevicesView {
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
                             for a in children {
-                                chip(ui, &chip_text(i18n, a), inherited);
+                                let glyph = crate::action_editor::kind_icon(&a.kind);
+                                chip(ui, glyph, &chip_text(i18n, a), inherited);
                             }
                         });
                     }
@@ -911,7 +912,7 @@ fn description(root: &Action) -> Option<String> {
         .map(String::from)
 }
 
-/// Short action name for the list, e.g. "Response curve" or "vJoy 1 A2".
+/// Short action name for the chip's tooltip, e.g. "Response curve" or "vJoy 1 A2".
 fn chip_text(i18n: &I18n, a: &Action) -> String {
     if let gob_core::ActionKind::MapToVjoy {
         device,
@@ -936,18 +937,18 @@ fn chip_text(i18n: &I18n, a: &Action) -> String {
     }
 }
 
-fn chip(ui: &mut egui::Ui, text: &str, weak: bool) {
+/// An action of a binding: its icon in a small frame, the name as tooltip.
+fn chip(ui: &mut egui::Ui, glyph: &str, tooltip: &str, weak: bool) {
     let visuals = ui.visuals();
-    let text = if weak {
-        RichText::new(text).small().weak()
-    } else {
-        RichText::new(text).small()
-    };
+    let text = RichText::new(glyph).size(style::ICON_SIZE - 2.0);
+    let text = if weak { text.weak() } else { text };
     egui::Frame::new()
         .stroke(visuals.widgets.noninteractive.bg_stroke)
         .corner_radius(3)
-        .inner_margin(Margin::symmetric(5, 1))
-        .show(ui, |ui| ui.label(text));
+        .inner_margin(Margin::symmetric(4, 1))
+        .show(ui, |ui| ui.label(text))
+        .response
+        .on_hover_text(tooltip);
 }
 
 #[derive(Clone, Copy)]
