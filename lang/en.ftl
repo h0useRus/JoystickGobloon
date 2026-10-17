@@ -89,9 +89,11 @@ status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
 apps-add = Add application
 apps-empty = No applications yet. Add a game or a program to set it up.
 apps-missing = File not found
-apps-access = Sees hidden devices
-apps-access-tip = Allow this program to see devices hidden by HidHide
-apps-remove = Remove
+apps-sees = Sees hidden devices
+apps-blind = Does not see hidden devices
+apps-inverse = Inverse application cloak
+apps-inverse-tip = Listed programs do not see hidden devices; all other programs do
+apps-remove = Remove from the list
 
 # Engine
 action-activate = Activate the profile

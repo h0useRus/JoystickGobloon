@@ -1,23 +1,23 @@
 //! Applications page: programs known to JoyGob and their options. For now the only option is
-//! access to devices hidden by HidHide (its whitelist); profiles per program come later.
+//! access to devices hidden by HidHide (its application list); profiles per program come later.
 
 use std::path::{Path, PathBuf};
 
-use eframe::egui::{self, RichText};
+use eframe::egui::{self, Align, Layout, RichText, Vec2};
 use gob_hidhide::{same_path, HidHide};
 use gob_i18n::I18n;
 
 use crate::settings::{AppEntry, Settings};
 use crate::style::{self, icon};
 
-const LIST_WIDTH: f32 = 260.0;
+const NAME_WIDTH: f32 = 220.0;
 
 pub struct AppsView {
     hh: Result<HidHide, String>,
     loaded: bool,
-    /// HidHide whitelist.
-    allowed: Vec<PathBuf>,
-    selected: Option<PathBuf>,
+    /// HidHide's application list: whitelist, or blacklist in inverse mode.
+    listed: Vec<PathBuf>,
+    inverse: bool,
     error: Option<String>,
 }
 
@@ -26,38 +26,46 @@ impl AppsView {
         Self {
             hh: HidHide::find().map_err(|e| e.to_string()),
             loaded: false,
-            allowed: Vec::new(),
-            selected: None,
+            listed: Vec::new(),
+            inverse: false,
             error: None,
         }
     }
 
-    /// Adds JoyGob itself to the whitelist so it can read hidden devices.
+    /// Lets JoyGob itself see hidden devices: adds it to the whitelist (not in inverse mode,
+    /// where the list blocks programs instead).
     pub fn whitelist_self(&self) -> Option<Result<bool, String>> {
         let hh = self.hh.as_ref().ok()?;
         let exe = std::env::current_exe().ok()?;
-        Some(hh.ensure_app(&exe).map_err(|e| e.to_string()))
+        let result = hh.inverse().and_then(|inverse| {
+            if inverse {
+                Ok(false)
+            } else {
+                hh.ensure_app(&exe)
+            }
+        });
+        Some(result.map_err(|e| e.to_string()))
     }
 
     fn refresh(&mut self) {
         self.loaded = true;
         let Ok(hh) = &self.hh else { return };
-        match hh.apps() {
-            Ok(apps) => {
-                self.allowed = apps;
-                self.error = None;
-            }
-            Err(e) => {
-                log::error!("reading the HidHide whitelist: {e}");
-                self.error = Some(e.to_string());
-            }
+        let result = (|| {
+            self.inverse = hh.inverse()?;
+            self.listed = hh.apps()?;
+            Ok::<_, gob_hidhide::Error>(())
+        })();
+        if let Err(e) = &result {
+            log::error!("reading the HidHide application list: {e}");
         }
+        self.error = result.err().map(|e| e.to_string());
     }
 
-    fn set_allowed(&mut self, exe: &Path, allowed: bool) {
+    /// Runs a change, then reloads the state from HidHide.
+    fn apply(&mut self, change: impl FnOnce(&HidHide) -> Result<(), gob_hidhide::Error>) {
         if let Ok(hh) = &self.hh {
-            if let Err(e) = hh.set_app(exe, allowed) {
-                log::error!("changing the HidHide whitelist: {e}");
+            if let Err(e) = change(hh) {
+                log::error!("changing the HidHide application list: {e}");
                 self.error = Some(e.to_string());
                 return;
             }
@@ -65,19 +73,36 @@ impl AppsView {
         self.refresh();
     }
 
-    fn is_allowed(&self, exe: &Path) -> bool {
-        self.allowed.iter().any(|a| same_path(a, exe))
+    fn is_listed(&self, exe: &Path) -> bool {
+        self.listed.iter().any(|a| same_path(a, exe))
     }
 
-    /// Our list, then whitelisted programs that are not in it.
+    /// Our list, then programs from HidHide's list that are not in it.
     fn rows(&self, apps: &[AppEntry]) -> Vec<PathBuf> {
         let mut rows: Vec<PathBuf> = apps.iter().map(|a| a.path.clone()).collect();
-        for a in &self.allowed {
+        for a in &self.listed {
             if !rows.iter().any(|r| same_path(r, a)) {
                 rows.push(a.clone());
             }
         }
         rows
+    }
+
+    /// Switches inverse mode, keeping JoyGob itself able to see hidden devices.
+    fn set_inverse(&mut self, on: bool, settings: &Settings) {
+        let own = std::env::current_exe().ok();
+        self.apply(|hh| {
+            if let Some(own) = &own {
+                if on {
+                    hh.set_app(own, false)?;
+                }
+            }
+            hh.set_inverse(on)?;
+            match &own {
+                Some(own) if !on && settings.hidhide_whitelist_self => hh.ensure_app(own).map(drop),
+                _ => Ok(()),
+            }
+        });
     }
 
     /// Shows the page; returns whether `settings` changed.
@@ -97,10 +122,10 @@ impl AppsView {
                         settings.apps.push(AppEntry { path: path.clone() });
                         changed = true;
                     }
-                    if self.hh.is_ok() && !self.is_allowed(&path) {
-                        self.set_allowed(&path, true);
+                    // A new program sees hidden devices: whitelisted, or not blocked when inverse.
+                    if self.hh.is_ok() && !self.inverse && !self.is_listed(&path) {
+                        self.apply(|hh| hh.set_app(&path, true));
                     }
-                    self.selected = Some(path);
                 }
             }
             if style::icon_button(ui, true, icon::ARROWS_CLOCKWISE, &i18n.tr("action-refresh"))
@@ -108,122 +133,133 @@ impl AppsView {
             {
                 self.refresh();
             }
+            ui.add_space(12.0);
+            let mut inverse = self.inverse;
+            let response = ui
+                .add_enabled(
+                    self.hh.is_ok(),
+                    egui::Checkbox::new(&mut inverse, i18n.tr("apps-inverse")),
+                )
+                .on_hover_text(i18n.tr("apps-inverse-tip"));
+            if response.changed() {
+                self.set_inverse(inverse, settings);
+            }
         });
         if let Some(e) = &self.error {
             ui.colored_label(ui.visuals().warn_fg_color, e);
         }
-        ui.add_space(4.0);
+        ui.add_space(6.0);
 
         let rows = self.rows(&settings.apps);
         if rows.is_empty() {
             crate::app::empty_state(ui, icon::APP_WINDOW, &i18n.tr("apps-empty"));
             return changed;
         }
-        if !self
-            .selected
-            .as_ref()
-            .is_some_and(|s| rows.iter().any(|r| same_path(r, s)))
-        {
-            self.selected = rows.first().cloned();
-        }
         let own = std::env::current_exe().ok();
-        let is_own = |p: &Path| own.as_deref().is_some_and(|o| same_path(o, p));
-
-        egui::SidePanel::left("apps-list")
-            .resizable(false)
-            .exact_width(LIST_WIDTH)
-            .show_inside(ui, |ui| {
-                egui::ScrollArea::vertical()
-                    .auto_shrink(false)
-                    .show(ui, |ui| {
-                        for path in &rows {
-                            let selected = self.selected.as_deref() == Some(path.as_path());
-                            let mut text = file_name(path);
-                            // Same file name in several folders: add the folder name.
-                            let twins = rows.iter().filter(|r| file_name(r) == text).count();
-                            if let Some(dir) = path.parent().and_then(Path::file_name) {
-                                if twins > 1 {
-                                    text = format!("{text}  ·  {}", dir.to_string_lossy());
+        let mut toggle = None;
+        let mut remove = None;
+        egui::ScrollArea::vertical()
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                for (i, path) in rows.iter().enumerate() {
+                    let fill = if i % 2 == 1 {
+                        ui.visuals().faint_bg_color
+                    } else {
+                        egui::Color32::TRANSPARENT
+                    };
+                    egui::Frame::new()
+                        .fill(fill)
+                        .corner_radius(4)
+                        .inner_margin(egui::Margin::symmetric(6, 2))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                let listed = self.is_listed(path);
+                                let sees = listed != self.inverse;
+                                let (glyph, tip) = if sees {
+                                    (icon::EYE, i18n.tr("apps-sees"))
+                                } else {
+                                    (icon::EYE_CLOSED, i18n.tr("apps-blind"))
+                                };
+                                let tip = if self.hh.is_ok() {
+                                    tip
+                                } else {
+                                    i18n.tr("hidhide-missing")
+                                };
+                                let eye = ui
+                                    .add_enabled_ui(self.hh.is_ok(), |ui| {
+                                        style::icon_toggle(ui, sees, glyph, &tip)
+                                    })
+                                    .inner;
+                                if eye.clicked() {
+                                    toggle = Some((path.clone(), !listed));
                                 }
-                            }
-                            if is_own(path) {
-                                text = format!("{}  {text}", icon::STAR);
-                            }
-                            if self.is_allowed(path) {
-                                text = format!("{text}  {}", icon::EYE);
-                            }
-                            let text = if path.exists() {
-                                RichText::new(text)
-                            } else {
-                                RichText::new(text).weak()
-                            };
-                            if ui
-                                .selectable_label(selected, text)
-                                .on_hover_text(path.display().to_string())
-                                .clicked()
-                            {
-                                self.selected = Some(path.clone());
-                            }
-                        }
-                    });
+                                row(ui, path, own.as_deref(), i18n, &mut remove);
+                            });
+                        });
+                }
             });
-
-        let Some(path) = self.selected.clone() else {
-            return changed;
-        };
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            ui.heading(file_name(&path));
-            if is_own(&path) {
-                ui.label(RichText::new(icon::STAR).color(style::accent(ui)))
-                    .on_hover_text(crate::APP_NAME);
-            }
-        });
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(path.display().to_string()).weak());
-            if !path.exists() {
-                ui.label(RichText::new(icon::FILE_X).weak())
-                    .on_hover_text(i18n.tr("apps-missing"));
-            }
-        });
-        ui.add_space(12.0);
-
-        ui.horizontal(|ui| {
-            let allowed = self.is_allowed(&path);
-            let tip = match &self.hh {
-                Ok(_) => i18n.tr("apps-access-tip"),
-                Err(_) => i18n.tr("hidhide-missing"),
-            };
-            let glyph = if allowed { icon::EYE } else { icon::EYE_CLOSED };
-            let response = ui
-                .add_enabled_ui(self.hh.is_ok(), |ui| {
-                    style::icon_toggle(ui, allowed, glyph, &tip)
-                })
-                .inner;
-            if response.clicked() {
-                self.set_allowed(&path, !allowed);
-            }
-            ui.label(i18n.tr("apps-access"));
-        });
-        ui.add_space(12.0);
-
-        let remove = format!("{}  {}", icon::TRASH, i18n.tr("apps-remove"));
-        if ui.button(remove).clicked() {
+        if let Some((path, listed)) = toggle {
+            self.apply(|hh| hh.set_app(&path, listed));
+        }
+        if let Some(path) = remove {
             let before = settings.apps.len();
             settings.apps.retain(|a| !same_path(&a.path, &path));
             changed |= settings.apps.len() != before;
-            if self.is_allowed(&path) {
-                self.set_allowed(&path, false);
+            if self.is_listed(&path) {
+                self.apply(|hh| hh.set_app(&path, false));
             }
-            self.selected = None;
         }
         changed
     }
 }
 
-fn file_name(path: &Path) -> String {
-    path.file_name().map_or_else(
-        || path.display().to_string(),
-        |n| n.to_string_lossy().into_owned(),
-    )
+/// Name, path (shortened, full in the tooltip) and the remove button of one program.
+fn row(
+    ui: &mut egui::Ui,
+    path: &Path,
+    own: Option<&Path>,
+    i18n: &I18n,
+    remove: &mut Option<PathBuf>,
+) {
+    let h = ui.spacing().interact_size.y;
+    let exists = path.exists();
+    let full = path.display().to_string();
+    let mut name = path
+        .file_name()
+        .map_or_else(|| full.clone(), |n| n.to_string_lossy().into_owned());
+    if own.is_some_and(|o| same_path(o, path)) {
+        name = format!("{}  {name}", icon::STAR);
+    }
+    let name = if exists {
+        RichText::new(name)
+    } else {
+        RichText::new(name).weak()
+    };
+    ui.allocate_ui_with_layout(
+        Vec2::new(NAME_WIDTH, h),
+        Layout::left_to_right(Align::Center),
+        |ui| {
+            ui.set_min_width(NAME_WIDTH);
+            ui.add(egui::Label::new(name).truncate())
+                .on_hover_text(&full);
+            if !exists {
+                ui.label(RichText::new(icon::FILE_X).weak())
+                    .on_hover_text(i18n.tr("apps-missing"));
+            }
+        },
+    );
+    let button = h + ui.spacing().item_spacing.x;
+    let width = (ui.available_width() - button).max(0.0);
+    ui.allocate_ui_with_layout(
+        Vec2::new(width, h),
+        Layout::left_to_right(Align::Center),
+        |ui| {
+            ui.set_min_width(width);
+            ui.add(egui::Label::new(RichText::new(&full).weak()).truncate())
+                .on_hover_text(&full);
+        },
+    );
+    if style::icon_button(ui, true, icon::TRASH, &i18n.tr("apps-remove")).clicked() {
+        *remove = Some(path.to_path_buf());
+    }
 }
