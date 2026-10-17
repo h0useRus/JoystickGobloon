@@ -32,14 +32,21 @@ pub const VERSION: &str = match option_env!("JOYGOB_VERSION") {
 };
 
 fn main() -> eframe::Result {
+    let settings = settings::Settings::load();
     // Already running: that copy was woken and comes to the front; this one quits.
-    let Some(instance) = instance::claim() else {
-        return Ok(());
+    // The hidden `multi_instance` setting lets copies run side by side.
+    let instance = if settings.multi_instance {
+        None
+    } else {
+        match instance::claim() {
+            Some(event) => Some(event),
+            None => return Ok(()),
+        }
     };
     logfile::init();
     // Started by Windows at logon: hidden in the tray, or minimized without one.
     let minimized = std::env::args().any(|a| a == tray::autostart::ARG);
-    let to_tray = minimized && settings::Settings::load().show_tray;
+    let to_tray = minimized && settings.show_tray;
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_visible(!to_tray)

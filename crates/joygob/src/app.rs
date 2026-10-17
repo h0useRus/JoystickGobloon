@@ -93,8 +93,9 @@ enum Pending {
 }
 
 impl JoyGobApp {
-    /// `instance`: the single-instance wake-up event (another start shows this window).
-    pub fn new(cc: &eframe::CreationContext<'_>, instance: crate::instance::Event) -> Self {
+    /// `instance`: the single-instance wake-up event (another start shows this window);
+    /// `None` when several copies may run.
+    pub fn new(cc: &eframe::CreationContext<'_>, instance: Option<crate::instance::Event>) -> Self {
         let settings = Settings::load();
         let lang_dir = std::env::current_exe()
             .ok()
@@ -163,7 +164,7 @@ impl JoyGobApp {
         for ((device, slot), c) in &app.calibrations {
             app.input.set_calibration(device, *slot, Some(*c));
         }
-        if let Some(hwnd) = app.hwnd {
+        if let (Some(hwnd), Some(instance)) = (app.hwnd, instance) {
             let (restored, ctx) = (app.restored.clone(), cc.egui_ctx.clone());
             crate::instance::listen(instance, move || {
                 log::info!("started again: showing the running window");
@@ -958,9 +959,7 @@ impl eframe::App for JoyGobApp {
             .show(ctx, |ui| match self.page {
                 Page::Devices => self.devices_page(ui),
                 Page::Apps => {
-                    if self.apps_view.show(ui, &self.i18n, &mut self.settings) {
-                        self.settings.save();
-                    }
+                    self.apps_view.show(ui, &self.i18n, &self.settings);
                 }
                 Page::VJoy => {
                     let locked = self.runner.is_some();

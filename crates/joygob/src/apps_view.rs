@@ -1,5 +1,6 @@
-//! Applications page: programs known to JoyGob and their options. For now the only option is
-//! access to devices hidden by HidHide (its application list); profiles per program come later.
+//! Applications page: programs known to JoyGob (`apps.gob`) and their options. For now the only
+//! option is access to devices hidden by HidHide (its application list); profiles per program
+//! come later. Switching access off keeps the program on the page.
 
 use std::path::{Path, PathBuf};
 
@@ -7,28 +8,33 @@ use eframe::egui::{self, Align, Layout, RichText, Vec2};
 use gob_hidhide::{same_path, HidHide};
 use gob_i18n::I18n;
 
-use crate::settings::{AppEntry, Settings};
+use crate::settings::{AppEntry, AppList, Settings};
 use crate::style::{self, icon};
 
 const NAME_WIDTH: f32 = 220.0;
 
 pub struct AppsView {
     hh: Result<HidHide, String>,
+    list: AppList,
     loaded: bool,
     /// HidHide's application list: whitelist, or blacklist in inverse mode.
     listed: Vec<PathBuf>,
     inverse: bool,
     error: Option<String>,
+    /// Program whose file is gone: asking whether to remove it.
+    confirm_remove: Option<PathBuf>,
 }
 
 impl AppsView {
     pub fn new() -> Self {
         Self {
             hh: HidHide::find().map_err(|e| e.to_string()),
+            list: AppList::load(),
             loaded: false,
             listed: Vec::new(),
             inverse: false,
             error: None,
+            confirm_remove: None,
         }
     }
 
@@ -47,6 +53,7 @@ impl AppsView {
         Some(result.map_err(|e| e.to_string()))
     }
 
+    /// Reads HidHide's state; programs in its list that are not on the page are added.
     fn refresh(&mut self) {
         self.loaded = true;
         let Ok(hh) = &self.hh else { return };
@@ -59,6 +66,16 @@ impl AppsView {
             log::error!("reading the HidHide application list: {e}");
         }
         self.error = result.err().map(|e| e.to_string());
+        let mut added = false;
+        for path in &self.listed {
+            if !self.list.apps.iter().any(|a| same_path(&a.path, path)) {
+                self.list.apps.push(AppEntry { path: path.clone() });
+                added = true;
+            }
+        }
+        if added {
+            self.list.save();
+        }
     }
 
     /// Runs a change, then reloads the state from HidHide.
@@ -77,15 +94,23 @@ impl AppsView {
         self.listed.iter().any(|a| same_path(a, exe))
     }
 
-    /// Our list, then programs from HidHide's list that are not in it.
-    fn rows(&self, apps: &[AppEntry]) -> Vec<PathBuf> {
-        let mut rows: Vec<PathBuf> = apps.iter().map(|a| a.path.clone()).collect();
-        for a in &self.listed {
-            if !rows.iter().any(|r| same_path(r, a)) {
-                rows.push(a.clone());
-            }
+    /// Takes a program out of HidHide's list. A missing file cannot be named to the CLI, so
+    /// then all missing programs are cleaned out (they stay on the page).
+    fn unlist(&mut self, path: &Path) {
+        if !self.is_listed(path) {
+            return;
         }
-        rows
+        if path.exists() {
+            self.apply(|hh| hh.set_app(path, false));
+        } else {
+            self.apply(HidHide::clean_apps);
+        }
+    }
+
+    fn remove(&mut self, path: &Path) {
+        self.unlist(path);
+        self.list.apps.retain(|a| !same_path(&a.path, path));
+        self.list.save();
     }
 
     /// Switches inverse mode, keeping JoyGob itself able to see hidden devices.
@@ -105,12 +130,10 @@ impl AppsView {
         });
     }
 
-    /// Shows the page; returns whether `settings` changed.
-    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
+    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &Settings) {
         if !self.loaded {
             self.refresh();
         }
-        let mut changed = false;
         ui.horizontal(|ui| {
             let add = format!("{}  {}", icon::PLUS, i18n.tr("apps-add"));
             if ui.button(add).clicked() {
@@ -118,9 +141,9 @@ impl AppsView {
                     .add_filter("exe", &["exe"])
                     .pick_file()
                 {
-                    if !settings.apps.iter().any(|a| same_path(&a.path, &path)) {
-                        settings.apps.push(AppEntry { path: path.clone() });
-                        changed = true;
+                    if !self.list.apps.iter().any(|a| same_path(&a.path, &path)) {
+                        self.list.apps.push(AppEntry { path: path.clone() });
+                        self.list.save();
                     }
                     // A new program sees hidden devices: whitelisted, or not blocked when inverse.
                     if self.hh.is_ok() && !self.inverse && !self.is_listed(&path) {
@@ -131,6 +154,7 @@ impl AppsView {
             if style::icon_button(ui, true, icon::ARROWS_CLOCKWISE, &i18n.tr("action-refresh"))
                 .clicked()
             {
+                self.list = AppList::load();
                 self.refresh();
             }
             ui.add_space(12.0);
@@ -150,11 +174,11 @@ impl AppsView {
         }
         ui.add_space(6.0);
 
-        let rows = self.rows(&settings.apps);
-        if rows.is_empty() {
+        if self.list.apps.is_empty() {
             crate::app::empty_state(ui, icon::APP_WINDOW, &i18n.tr("apps-empty"));
-            return changed;
+            return;
         }
+        let rows: Vec<PathBuf> = self.list.apps.iter().map(|a| a.path.clone()).collect();
         let own = std::env::current_exe().ok();
         let mut toggle = None;
         let mut remove = None;
@@ -199,17 +223,49 @@ impl AppsView {
                 }
             });
         if let Some((path, listed)) = toggle {
-            self.apply(|hh| hh.set_app(&path, listed));
-        }
-        if let Some(path) = remove {
-            let before = settings.apps.len();
-            settings.apps.retain(|a| !same_path(&a.path, &path));
-            changed |= settings.apps.len() != before;
-            if self.is_listed(&path) {
-                self.apply(|hh| hh.set_app(&path, false));
+            if !path.exists() {
+                self.confirm_remove = Some(path);
+            } else if listed {
+                self.apply(|hh| hh.set_app(&path, true));
+            } else {
+                self.unlist(&path);
             }
         }
-        changed
+        if let Some(path) = remove {
+            self.remove(&path);
+        }
+        self.remove_dialog(ui.ctx(), i18n);
+    }
+
+    /// The program's file is gone: offer to remove it from the page.
+    fn remove_dialog(&mut self, ctx: &egui::Context, i18n: &I18n) {
+        let Some(path) = self.confirm_remove.clone() else {
+            return;
+        };
+        let mut choice = None;
+        egui::Modal::new(egui::Id::new("apps-remove")).show(ctx, |ui| {
+            ui.set_width(420.0);
+            ui.heading(i18n.tr("apps-missing"));
+            ui.label(path.display().to_string());
+            ui.add_space(4.0);
+            ui.label(i18n.tr("apps-missing-text"));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                let remove = format!("{}  {}", icon::TRASH, i18n.tr("apps-remove"));
+                if ui.button(remove).clicked() {
+                    choice = Some(true);
+                }
+                if ui.button(i18n.tr("cancel")).clicked() {
+                    choice = Some(false);
+                }
+            });
+        });
+        if let Some(remove) = choice {
+            self.confirm_remove = None;
+            if remove {
+                self.remove(&path);
+            }
+        }
     }
 }
 
