@@ -1173,24 +1173,38 @@ fn detached_window(
     size: [f32; 2],
     mut content: impl FnMut(&mut egui::Ui) -> bool,
 ) -> bool {
+    let viewport = egui::ViewportId::from_hash_of(id);
+    // Opens centered over the main window. The position is fixed when it opens, so the
+    // window can be moved afterwards (egui re-applies only builder changes).
+    let pos_id = egui::Id::new(("window-pos", id));
+    let main = ctx.input(|i| i.viewport().outer_rect);
+    let pos = ctx.data(|d| d.get_temp::<egui::Pos2>(pos_id)).or_else(|| {
+        let r = main?;
+        let corner = (r.center() - egui::vec2(size[0], size[1]) / 2.0).max(r.min);
+        ctx.data_mut(|d| d.insert_temp(pos_id, corner));
+        Some(corner)
+    });
     let mut builder = egui::ViewportBuilder::default()
         .with_title(format!("{} | {title}", crate::APP_NAME))
         .with_inner_size(size)
         .with_min_inner_size([480.0, 320.0]);
+    if let Some(pos) = pos {
+        builder = builder.with_position(pos);
+    }
     if let Ok(icon) = eframe::icon_data::from_png_bytes(LOGO_PNG) {
         builder = builder.with_icon(icon);
     }
     let mut attach = false;
-    ctx.show_viewport_immediate(
-        egui::ViewportId::from_hash_of(id),
-        builder,
-        |ctx, _class| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                attach |= content(ui);
-            });
-            attach |= ctx.input(|i| i.viewport().close_requested());
-        },
-    );
+    ctx.show_viewport_immediate(viewport, builder, |ctx, _class| {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            attach |= content(ui);
+        });
+        attach |= ctx.input(|i| i.viewport().close_requested());
+    });
+    if attach {
+        // Next time it opens over the main window again.
+        ctx.data_mut(|d| d.remove::<egui::Pos2>(pos_id));
+    }
     attach
 }
 
