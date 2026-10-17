@@ -31,7 +31,17 @@ pub const VERSION: &str = match option_env!("JOYGOB_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
+/// Command-line switch for the uninstaller: take this exe off HidHide's application list
+/// (JoyGob adds itself on start) and quit without a window.
+const HIDHIDE_UNREGISTER: &str = "--hidhide-unregister";
+
 fn main() -> eframe::Result {
+    if std::env::args().any(|a| a == HIDHIDE_UNREGISTER) {
+        if let (Ok(hh), Ok(exe)) = (gob_hidhide::HidHide::find(), std::env::current_exe()) {
+            let _ = hh.set_app(&exe, false);
+        }
+        return Ok(());
+    }
     let settings = settings::Settings::load();
     // Already running: that copy was woken and comes to the front; this one quits.
     // The hidden `multi_instance` setting lets copies run side by side.
