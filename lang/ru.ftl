@@ -3,6 +3,7 @@ language-name = Русский
 # Navigation and toolbar tooltips
 nav-devices = Устройства и назначения
 nav-hidhide = Скрытие устройств
+nav-apps = Программы
 nav-vjoy = Виртуальные джойстики
 nav-viewer = Просмотр входов
 nav-calibration = Калибровка
@@ -73,19 +74,24 @@ vjoy-error = Не удалось взять устройство: { $error }
 
 # Device hiding
 hidhide-missing = HidHide не установлен.
-hidhide-toggle = Включить или выключить скрытие устройств
-hidhide-on = Скрытие включено
-hidhide-off = Скрытие выключено
-hidhide-devices = Устройства
-hidhide-apps = Программы
 hidhide-hidden = Скрыто: его видят только программы из белого списка
 hidhide-visible = Видно всем программам
-hidhide-add-app = Добавить программу
-hidhide-remove-app = Убрать из белого списка
-hidhide-app-missing = Файл не найден
+hidhide-filter-disconnected = Не показывать отключённые устройства
+hidhide-gaming-only = Только игровые устройства
+hidhide-enable = Включить скрытие устройств
+hidhide-hint = Отметьте устройство, чтобы скрыть его от других программ. Затем переподключите его, чтобы изменение вступило в силу.
+hidhide-no-devices = Нет устройств для показа.
 action-refresh = Обновить
 settings-hidhide-self = Добавлять Joystick Gobloon в белый список HidHide при запуске
 status-whitelisted = Joystick Gobloon добавлен в белый список HidHide.
+
+# Applications
+apps-add = Добавить программу
+apps-empty = Программ пока нет. Добавьте игру или программу, чтобы настроить её.
+apps-missing = Файл не найден
+apps-access = Видит скрытые устройства
+apps-access-tip = Разрешить этой программе видеть устройства, скрытые HidHide
+apps-remove = Убрать
 
 # Engine
 action-activate = Активировать профиль

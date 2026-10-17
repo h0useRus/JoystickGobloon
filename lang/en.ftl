@@ -3,6 +3,7 @@ language-name = English
 # Navigation and toolbar tooltips
 nav-devices = Devices and bindings
 nav-hidhide = Device hiding
+nav-apps = Applications
 nav-vjoy = Virtual joysticks
 nav-viewer = Input viewer
 nav-calibration = Calibration
@@ -73,19 +74,24 @@ vjoy-error = Could not take the device: { $error }
 
 # Device hiding
 hidhide-missing = HidHide is not installed.
-hidhide-toggle = Turn device hiding on or off
-hidhide-on = Hiding is on
-hidhide-off = Hiding is off
-hidhide-devices = Devices
-hidhide-apps = Applications
 hidhide-hidden = Hidden: only whitelisted applications see it
 hidhide-visible = Visible to every application
-hidhide-add-app = Add application
-hidhide-remove-app = Remove from the whitelist
-hidhide-app-missing = File not found
+hidhide-filter-disconnected = Hide disconnected devices
+hidhide-gaming-only = Game controllers only
+hidhide-enable = Enable device hiding
+hidhide-hint = Tick a device to hide it from other programs. Reconnect it afterwards for the change to take effect.
+hidhide-no-devices = No devices to show.
 action-refresh = Refresh
 settings-hidhide-self = Add Joystick Gobloon to the HidHide whitelist on startup
 status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
+
+# Applications
+apps-add = Add application
+apps-empty = No applications yet. Add a game or a program to set it up.
+apps-missing = File not found
+apps-access = Sees hidden devices
+apps-access-tip = Allow this program to see devices hidden by HidHide
+apps-remove = Remove
 
 # Engine
 action-activate = Activate the profile

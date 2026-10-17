@@ -22,6 +22,12 @@ pub struct Settings {
     pub reopen_last: bool,
     /// Add JoyGob to the HidHide whitelist on startup so it can read hidden devices.
     pub hidhide_whitelist_self: bool,
+    /// Device hiding window: leave out disconnected devices.
+    pub hidhide_hide_disconnected: bool,
+    /// Device hiding window: only game controllers.
+    pub hidhide_gaming_only: bool,
+    /// Applications known to JoyGob (Applications page); per-app options go here.
+    pub apps: Vec<AppEntry>,
     pub last_profile: Option<PathBuf>,
     /// Icon in the notification area (tray).
     pub show_tray: bool,
@@ -33,6 +39,11 @@ pub struct Settings {
     pub activate_on_start: bool,
     /// Axis calibrations: device GUID -> axis slot ("1".."8") -> values.
     pub calibration: BTreeMap<String, BTreeMap<String, AxisCalibration>>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct AppEntry {
+    pub path: PathBuf,
 }
 
 /// One axis calibration in raw DirectInput units (see `gob_input::Calibration`).
@@ -91,6 +102,9 @@ impl Default for Settings {
             language: gob_i18n::DEFAULT_LANG.into(),
             reopen_last: true,
             hidhide_whitelist_self: true,
+            hidhide_hide_disconnected: true,
+            hidhide_gaming_only: true,
+            apps: Vec::new(),
             last_profile: None,
             show_tray: true,
             close_to_tray: false,

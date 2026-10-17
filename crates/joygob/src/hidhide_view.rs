@@ -1,27 +1,22 @@
-//! Device hiding page: HidHide state, hidden devices and the application whitelist.
+//! Device hiding window: HidHide's device list with the same options as its own client.
 
-use std::path::PathBuf;
-
-use eframe::egui::{self, RichText};
-use gob_hidhide::{same_path, HidDevice, HidHide};
+use eframe::egui::{self, Color32, RichText};
+use gob_hidhide::{DeviceGroup, HidHide};
 use gob_i18n::I18n;
 
+use crate::settings::Settings;
 use crate::style::{self, icon};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Tab {
-    Devices,
-    Apps,
-}
+const LOCK_RED: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
 
 pub struct HidHideView {
     hh: Result<HidHide, String>,
-    tab: Tab,
     loaded: bool,
+    /// The list was read with this "gaming only" filter.
+    gaming_only: bool,
     cloaked: bool,
-    devices: Vec<HidDevice>,
+    groups: Vec<DeviceGroup>,
     hidden: Vec<String>,
-    apps: Vec<PathBuf>,
     error: Option<String>,
 }
 
@@ -29,31 +24,23 @@ impl HidHideView {
     pub fn new() -> Self {
         Self {
             hh: HidHide::find().map_err(|e| e.to_string()),
-            tab: Tab::Devices,
             loaded: false,
+            gaming_only: true,
             cloaked: false,
-            devices: Vec::new(),
+            groups: Vec::new(),
             hidden: Vec::new(),
-            apps: Vec::new(),
             error: None,
         }
     }
 
-    /// Adds JoyGob itself to the whitelist so it can read hidden devices.
-    pub fn whitelist_self(&self) -> Option<Result<bool, String>> {
-        let hh = self.hh.as_ref().ok()?;
-        let exe = std::env::current_exe().ok()?;
-        Some(hh.ensure_app(&exe).map_err(|e| e.to_string()))
-    }
-
-    fn refresh(&mut self) {
+    fn refresh(&mut self, gaming_only: bool) {
         self.loaded = true;
+        self.gaming_only = gaming_only;
         let Ok(hh) = &self.hh else { return };
         let result = (|| {
             self.cloaked = hh.cloaked()?;
             self.hidden = hh.hidden()?;
-            self.devices = hh.gaming_devices()?;
-            self.apps = hh.apps()?;
+            self.groups = hh.device_groups(gaming_only)?;
             Ok::<_, gob_hidhide::Error>(())
         })();
         if let Err(e) = &result {
@@ -71,16 +58,11 @@ impl HidHideView {
                 return;
             }
         }
-        self.refresh();
+        self.refresh(self.gaming_only);
     }
 
-    fn is_hidden(&self, d: &HidDevice) -> bool {
-        self.hidden
-            .iter()
-            .any(|h| h.eq_ignore_ascii_case(&d.device_instance_path))
-    }
-
-    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
+    /// Shows the window content; returns whether `settings` changed.
+    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
         let version = match &self.hh {
             Ok(hh) => hh.version.clone(),
             Err(_) => {
@@ -88,146 +70,111 @@ impl HidHideView {
                 ui.vertical_centered(|ui| {
                     ui.hyperlink("https://github.com/nefarius/HidHide/releases")
                 });
-                return;
+                return false;
             }
         };
-        if !self.loaded {
-            self.refresh();
+        if !self.loaded || self.gaming_only != settings.hidhide_gaming_only {
+            self.refresh(settings.hidhide_gaming_only);
         }
 
-        ui.horizontal(|ui| {
-            let glyph = if self.cloaked {
-                icon::EYE_SLASH
-            } else {
-                icon::EYE
-            };
-            let key = if self.cloaked {
-                "hidhide-on"
-            } else {
-                "hidhide-off"
-            };
-            if style::icon_toggle(ui, self.cloaked, glyph, &i18n.tr("hidhide-toggle")).clicked() {
-                let on = !self.cloaked;
-                self.apply(|hh| hh.set_cloaked(on));
-            }
-            ui.label(RichText::new(i18n.tr(key)).strong());
-            ui.label(RichText::new(format!("HidHide {version}")).weak());
-            if style::icon_button(ui, true, icon::ARROWS_CLOCKWISE, &i18n.tr("action-refresh"))
-                .clicked()
-            {
-                self.refresh();
-            }
-        });
+        let mut changed = false;
+        egui::TopBottomPanel::bottom("hidhide-options")
+            .show_separator_line(false)
+            .show_inside(ui, |ui| {
+                ui.add_space(6.0);
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        changed |= ui
+                            .checkbox(
+                                &mut settings.hidhide_hide_disconnected,
+                                i18n.tr("hidhide-filter-disconnected"),
+                            )
+                            .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut settings.hidhide_gaming_only,
+                                i18n.tr("hidhide-gaming-only"),
+                            )
+                            .changed();
+                        let mut cloaked = self.cloaked;
+                        if ui
+                            .checkbox(&mut cloaked, i18n.tr("hidhide-enable"))
+                            .changed()
+                        {
+                            self.apply(|hh| hh.set_cloaked(cloaked));
+                        }
+                    });
+                    ui.add_space(16.0);
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(format!("HidHide {version}")).weak());
+                            if style::icon_button(
+                                ui,
+                                true,
+                                icon::ARROWS_CLOCKWISE,
+                                &i18n.tr("action-refresh"),
+                            )
+                            .clicked()
+                            {
+                                self.refresh(settings.hidhide_gaming_only);
+                            }
+                        });
+                        ui.label(RichText::new(i18n.tr("hidhide-hint")).weak());
+                    });
+                });
+            });
+
         if let Some(e) = &self.error {
             ui.colored_label(ui.visuals().warn_fg_color, e);
         }
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            for (tab, glyph, key) in [
-                (Tab::Devices, icon::JOYSTICK, "hidhide-devices"),
-                (Tab::Apps, icon::APP_WINDOW, "hidhide-apps"),
-            ] {
-                if style::tab(ui, self.tab == tab, glyph, &i18n.tr(key)).clicked() {
-                    self.tab = tab;
-                }
-            }
-        });
-        ui.separator();
-
-        egui::ScrollArea::vertical()
-            .auto_shrink(false)
-            .show(ui, |ui| match self.tab {
-                Tab::Devices => self.devices_tab(ui, i18n),
-                Tab::Apps => self.apps_tab(ui, i18n),
-            });
-    }
-
-    fn devices_tab(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
-        if self.devices.is_empty() {
-            ui.label(RichText::new(i18n.tr("no-devices-attached")).weak());
-        }
         let mut toggle = None;
-        egui::Grid::new("hidhide-devices")
-            .num_columns(3)
-            .spacing([12.0, 6.0])
-            .show(ui, |ui| {
-                for (i, d) in self.devices.iter().enumerate() {
-                    let hidden = self.is_hidden(d);
-                    let (glyph, tip) = if hidden {
-                        (icon::EYE_SLASH, "hidhide-hidden")
-                    } else {
-                        (icon::EYE, "hidhide-visible")
-                    };
-                    if style::icon_toggle(ui, hidden, glyph, &i18n.tr(tip)).clicked() {
-                        toggle = Some((i, !hidden));
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .auto_shrink(false)
+                .show(ui, |ui| {
+                    let shown: Vec<usize> = (0..self.groups.len())
+                        .filter(|&i| {
+                            !settings.hidhide_hide_disconnected || self.groups[i].present()
+                        })
+                        .collect();
+                    if shown.is_empty() {
+                        ui.label(RichText::new(i18n.tr("hidhide-no-devices")).weak());
                     }
-                    let name = RichText::new(d.name());
-                    ui.label(if d.present { name } else { name.weak() })
-                        .on_hover_text(&d.device_instance_path);
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(d.vendor.trim()).weak());
-                        if !d.present {
-                            ui.label(RichText::new(icon::PLUGS).weak())
-                                .on_hover_text(i18n.tr("device-disconnected"));
-                        }
-                    });
-                    ui.end_row();
-                }
-            });
+                    for i in shown {
+                        let group = &self.groups[i];
+                        let hidden = group.is_hidden(&self.hidden);
+                        ui.horizontal(|ui| {
+                            let mut checked = hidden;
+                            if ui.checkbox(&mut checked, "").changed() {
+                                toggle = Some((i, checked));
+                            }
+                            let (glyph, color) = if hidden {
+                                (icon::LOCK, LOCK_RED)
+                            } else {
+                                (icon::LOCK_OPEN, ui.visuals().weak_text_color())
+                            };
+                            let tip = if hidden {
+                                "hidhide-hidden"
+                            } else {
+                                "hidhide-visible"
+                            };
+                            ui.label(RichText::new(glyph).size(style::ICON_SIZE).color(color))
+                                .on_hover_text(i18n.tr(tip));
+                            let name = RichText::new(group.name());
+                            ui.label(if group.present() { name } else { name.weak() })
+                                .on_hover_text(group.instance_paths().join("\n"));
+                            if !group.present() {
+                                ui.label(RichText::new(icon::PLUGS).weak())
+                                    .on_hover_text(i18n.tr("device-disconnected"));
+                            }
+                        });
+                    }
+                });
+        });
         if let Some((i, hide)) = toggle {
-            let device = self.devices[i].clone();
-            self.apply(|hh| hh.set_device_hidden(&device, hide));
+            let group = self.groups[i].clone();
+            self.apply(|hh| hh.set_group_hidden(&group, hide));
         }
-    }
-
-    fn apps_tab(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
-        let own = std::env::current_exe().ok();
-        let add = format!("{}  {}", icon::PLUS, i18n.tr("hidhide-add-app"));
-        if ui.button(add).clicked() {
-            let picked = rfd::FileDialog::new()
-                .add_filter("exe", &["exe"])
-                .pick_file();
-            if let Some(path) = picked {
-                self.apply(|hh| hh.set_app(&path, true));
-            }
-        }
-        ui.add_space(6.0);
-        let mut remove = None;
-        egui::Grid::new("hidhide-apps")
-            .num_columns(3)
-            .spacing([12.0, 6.0])
-            .show(ui, |ui| {
-                for app in &self.apps {
-                    if style::icon_button(ui, true, icon::TRASH, &i18n.tr("hidhide-remove-app"))
-                        .clicked()
-                    {
-                        remove = Some(app.clone());
-                    }
-                    let exists = app.exists();
-                    let name = app.file_name().map_or_else(
-                        || app.display().to_string(),
-                        |n| n.to_string_lossy().into_owned(),
-                    );
-                    let text = RichText::new(name);
-                    ui.label(if exists { text } else { text.weak() })
-                        .on_hover_text(app.display().to_string());
-                    ui.horizontal(|ui| {
-                        if own.as_deref().is_some_and(|o| same_path(o, app)) {
-                            ui.label(
-                                RichText::new(format!("{}  JoyGob", icon::STAR))
-                                    .color(style::accent(ui)),
-                            );
-                        }
-                        if !exists {
-                            ui.label(RichText::new(icon::FILE_X).weak())
-                                .on_hover_text(i18n.tr("hidhide-app-missing"));
-                        }
-                    });
-                    ui.end_row();
-                }
-            });
-        if let Some(app) = remove {
-            self.apply(|hh| hh.set_app(&app, false));
-        }
+        changed
     }
 }
