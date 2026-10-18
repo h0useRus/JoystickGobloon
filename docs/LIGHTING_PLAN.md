@@ -54,7 +54,7 @@
 
 | Слой | Что | Образец |
 | --- | --- | --- |
-| **gob-lighting** (новый крейт) | HID: найти LED-коллекцию устройства, `GetFeature`/`SetFeature 0x59`; трейт `Backend` (`supports`, `leds`, `set`, `clear`); бэкенд `Vkb`: кодирование записи и пакета, CRC, слияние с текущим списком, фиктивный LED 99 | gob-hidhide (HID, SetupAPI/CfgMgr), pyvkb |
+| **gob-lighting** (новый крейт) | lib.rs: общие `Device` / `Led` / `Mode`, `match` по `Vendor`; hid.rs: общий HID (поиск, `GetFeature`/`SetFeature`); **каждый производитель — свой файл**, `vkb.rs`: report `0x59`, кодирование записи и пакета, CRC, слияние с текущим списком, фиктивный LED 99 | gob-hidhide (HID, SetupAPI/CfgMgr), pyvkb |
 | **gob-input** | Для устройства DirectInput отдать путь HID (`DIPROP_GUIDANDPATH`): у VKB report `0x59` лежит в той же коллекции джойстика, путь совпадает с `gob_lighting::Device::path` (сравнивать без учёта регистра) | dinput.rs |
 | **gob-core** | `ActionKind::LightLed { device, led, color, mode, trigger }`, `trigger` = `press` / `release` / `activate`, `NewAction::LightLed`; своё действие `light-led` | `PlaySound` в action.rs / edit.rs |
 | **gob-gremlin** | `<action type="light-led">` ⇄ `LightLed`; round-trip-тест | — |
@@ -91,8 +91,9 @@
 ### 1. gob-lighting + бэкенд VKB
 
 - [x] Крейт, модуль `vkb`: кодирование записи и пакета, CRC16 — юнит-тесты на эталонные байты из pyvkb
-      (`led=1, CONSTANT, #f00/#0f0` → `01 07 70 04`), разбор ответа чтения. Трейт `Backend` — когда появится
-      второй производитель; пока `Device` = VKB.
+      (`led=1, CONSTANT, #f00/#0f0` → `01 07 70 04`), разбор ответа чтения. Каждый производитель — в своём
+      файле (`vkb.rs`, потом `winwing.rs`, …): там его протокол/SDK, поиск устройств и запись; lib.rs — общие
+      `Device` / `Led` / `Mode` и `match` по `Vendor`.
 - [x] Слияние с текущим списком, фиктивный LED 99, возврат (`release` / `release_all`).
 - [x] Пример `led_set <device> <led> <#RRGGBB> [mode]` / `led_set <device> clear [led]`.
 - [x] Проверка `led_set` на железе (EVO R, прошивка 2.20C, с согласия пользователя, 2026-10-19):

@@ -1,8 +1,8 @@
 //! WRITES to the device (temporary, until it is reconnected) - run only on purpose.
-//! `led_set <device index> <led> <#RRGGBB> [off|on|slow|fast|ultra]` sets one LED,
+//! `led_set <device index> <led> <#RRGGBB> [off|on|slow|fast|fastest]` sets one LED,
 //! `led_set <device index> clear [led]` drops one or every LED from the list.
 //! Device indexes as listed when run without arguments.
-use gob_lighting::{Color, LedConfig, LedMode};
+use gob_lighting::{Led, Mode, Vendor};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -30,32 +30,36 @@ fn main() {
                 "usage: led_set <device> <led> <#RRGGBB> [mode] | <device> clear [led]"
             );
         };
-        let led_mode = match args.get(3).map(String::as_str) {
-            Some("off") => LedMode::Off,
-            Some("slow") => LedMode::SlowBlink,
-            Some("fast") => LedMode::FastBlink,
-            Some("ultra") => LedMode::UltraBlink,
-            _ => LedMode::Constant,
+        let mode = match args.get(3).map(String::as_str) {
+            Some("off") => Mode::Off,
+            Some("slow") => Mode::SlowBlink,
+            Some("fast") => Mode::FastBlink,
+            Some("fastest") => Mode::FastestBlink,
+            _ => Mode::On,
         };
-        device.set(LedConfig {
-            led,
-            led_mode,
-            color1: color,
-            ..Default::default()
+        device.set(Led {
+            id: led,
+            color,
+            mode,
         })
     };
-    match result.and_then(|_| device.read()) {
-        Ok(list) => {
-            println!("set LEDs now:");
-            for c in list {
-                println!("    {c:?}");
+    if let Err(e) = result {
+        return eprintln!("{e}");
+    }
+    match device.vendor {
+        Vendor::Vkb => match gob_lighting::vkb::read(&device.hid) {
+            Ok(list) => {
+                println!("set LEDs now:");
+                for c in list {
+                    println!("    {c:?}");
+                }
             }
-        }
-        Err(e) => eprintln!("{e}"),
+            Err(e) => eprintln!("{e}"),
+        },
     }
 }
 
-fn parse_color(s: &str) -> Option<Color> {
+fn parse_color(s: &str) -> Option<[u8; 3]> {
     let v = u32::from_str_radix(s.trim_start_matches('#'), 16).ok()?;
-    Some(Color::from_rgb((v >> 16) as u8, (v >> 8) as u8, v as u8))
+    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
 }

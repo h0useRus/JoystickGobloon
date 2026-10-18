@@ -2,8 +2,14 @@
 //! vkb_led_jg_plugin): HID feature report `0x59`, 129 bytes.
 //!
 //! Write: `59 A5 0A` · CRC16 (LE) · 2 random bytes · N · N 4-byte LED configs · zeros.
-//! The list replaces the previous one; LEDs not in it follow the device profile again.
-//! The change lasts until the device is reconnected (firmware and VKBDevCfg settings stay).
+//! The list replaces the previous one; an LED dropped from it keeps its last state (EVO R,
+//! firmware 2.20). Everything lasts until the device is reconnected (firmware and VKBDevCfg
+//! settings stay). LEDs on Gladiator NXT / EVO: 0 base, 10 RGB on top of the grip, 11 hat.
+
+use std::io;
+
+use crate::hid::Collection;
+use crate::{Device, Led, Mode, Vendor};
 
 /// VKB vendor id.
 pub const VENDOR_ID: u16 = 0x231D;
@@ -216,6 +222,83 @@ pub fn random_bytes() -> [u8; 2] {
     [v as u8, (v >> 8) as u8]
 }
 
+/// VKB collections that have the LED report. It is the joystick collection DirectInput reads.
+pub fn devices() -> Vec<Device> {
+    crate::hid::collections(VENDOR_ID)
+        .into_iter()
+        .filter(|c| c.feature_ids.contains(&REPORT_ID))
+        .map(|hid| Device {
+            vendor: Vendor::Vkb,
+            hid,
+        })
+        .collect()
+}
+
+fn report_len(hid: &Collection) -> io::Result<usize> {
+    let len = hid.feature_len as usize;
+    if len < REPORT_LEN {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("feature report is {len} bytes, LEDs need {REPORT_LEN}"),
+        ));
+    }
+    Ok(len)
+}
+
+/// LEDs set by a write (ours or VKBDevCfg's LED test) since the device was connected.
+pub fn read(hid: &Collection) -> io::Result<Vec<LedConfig>> {
+    let report = crate::hid::get_feature(&hid.path, REPORT_ID, report_len(hid)?)?;
+    Ok(decode(&report))
+}
+
+/// Replaces the whole list of set LEDs.
+pub fn write(hid: &Collection, configs: &[LedConfig]) -> io::Result<()> {
+    let len = report_len(hid)?;
+    let report = encode(configs, random_bytes()).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("at most {} LEDs at once", MAX_CONFIGS - 1),
+        )
+    })?;
+    let mut buffer = vec![0u8; len];
+    buffer[..report.len()].copy_from_slice(&report);
+    crate::hid::set_feature(&hid.path, &buffer)
+}
+
+impl From<Led> for LedConfig {
+    fn from(led: Led) -> Self {
+        let [r, g, b] = led.color;
+        Self {
+            led: led.id,
+            color_mode: ColorMode::Color1,
+            led_mode: match led.mode {
+                Mode::Off => LedMode::Off,
+                Mode::On => LedMode::Constant,
+                Mode::SlowBlink => LedMode::SlowBlink,
+                Mode::FastBlink => LedMode::FastBlink,
+                Mode::FastestBlink => LedMode::UltraBlink,
+            },
+            color1: Color::from_rgb(r, g, b),
+            color2: Color::default(),
+        }
+    }
+}
+
+/// Sets one LED, keeping the others in the list.
+pub fn set(hid: &Collection, led: Led) -> io::Result<()> {
+    write(hid, &merge(&read(hid)?, led.into()))
+}
+
+/// Drops one LED from the list.
+pub fn release(hid: &Collection, id: u8) -> io::Result<()> {
+    let current = read(hid)?;
+    if current.iter().any(|c| c.led == id) {
+        write(hid, &remove(&current, id))
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,6 +367,19 @@ mod tests {
         assert_eq!(decode(&r), list);
         assert!(decode(&[0x59; REPORT_LEN]).is_empty());
         assert!(decode(&[0u8; 4]).is_empty());
+    }
+
+    #[test]
+    fn led_maps_to_color1() {
+        let c = LedConfig::from(Led {
+            id: 10,
+            color: [0, 255, 0],
+            mode: Mode::FastestBlink,
+        });
+        assert_eq!(c.led, 10);
+        assert_eq!(c.led_mode, LedMode::UltraBlink);
+        assert_eq!(c.color1, Color::new(0, 7, 0));
+        assert_eq!(c.color2, Color::default());
     }
 
     #[test]

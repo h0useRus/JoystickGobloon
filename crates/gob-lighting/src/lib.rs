@@ -1,30 +1,49 @@
-//! Joystick LEDs straight through HID feature reports. First (and only so far) vendor:
-//! VKB (`vkb`), protocol after pyvkb; see docs/LIGHTING_PLAN.md.
+//! Joystick LEDs. Vendor-neutral API here; each vendor's protocol/SDK lives in its own file
+//! (`vkb.rs`, later others) and `Device` dispatches on `Vendor`. See docs/LIGHTING_PLAN.md.
 //!
 //! Writes are temporary: they last until the device is reconnected and change neither the
-//! firmware nor its VKBDevCfg profile. LEDs never written follow the device profile; a written
-//! LED keeps its last state until reconnect even after it leaves the list (EVO R, firmware 2.20).
+//! firmware nor the vendor's own profile. A written LED keeps its last state until reconnect,
+//! so the profile sets the colors it needs when it starts.
 
 pub mod hid;
 pub mod vkb;
 
 use std::io;
 
-pub use vkb::{Color, ColorMode, LedConfig, LedMode};
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Vendor {
+    Vkb,
+}
 
-/// A HID collection whose LEDs can be set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Mode {
+    Off,
+    #[default]
+    On,
+    SlowBlink,
+    FastBlink,
+    FastestBlink,
+}
+
+/// What one LED should show. `color` is 8-bit RGB; the vendor scales it to what the LED
+/// can show (VKB: 8 levels per channel, single-color LEDs use red).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Led {
+    pub id: u8,
+    pub color: [u8; 3],
+    pub mode: Mode,
+}
+
+/// A device whose LEDs can be set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Device {
+    pub vendor: Vendor,
     pub hid: hid::Collection,
 }
 
-/// Present devices with LED control (VKB collections that have feature report `0x59`).
+/// Present devices with LED control, every vendor.
 pub fn devices() -> Vec<Device> {
-    hid::collections(vkb::VENDOR_ID)
-        .into_iter()
-        .filter(|c| c.feature_ids.contains(&vkb::REPORT_ID))
-        .map(|hid| Device { hid })
-        .collect()
+    vkb::devices()
 }
 
 impl Device {
@@ -32,62 +51,29 @@ impl Device {
         &self.hid.product
     }
 
-    /// Interface path, as DirectInput reports it in `DIPROP_GUIDANDPATH`.
+    /// HID interface path, as DirectInput reports it in `DIPROP_GUIDANDPATH`.
     pub fn path(&self) -> &str {
         &self.hid.path
     }
 
-    fn report_len(&self) -> io::Result<usize> {
-        let len = self.hid.feature_len as usize;
-        if len < vkb::REPORT_LEN {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "feature report is {len} bytes, LEDs need {}",
-                    vkb::REPORT_LEN
-                ),
-            ));
-        }
-        Ok(len)
-    }
-
-    /// LEDs set by a write (ours or VKBDevCfg's LED test) since the device was connected.
-    pub fn read(&self) -> io::Result<Vec<LedConfig>> {
-        let report = hid::get_feature(&self.hid.path, vkb::REPORT_ID, self.report_len()?)?;
-        Ok(vkb::decode(&report))
-    }
-
-    /// Replaces the whole list of set LEDs. LEDs dropped from it keep their last state.
-    pub fn write(&self, configs: &[LedConfig]) -> io::Result<()> {
-        let len = self.report_len()?;
-        let report = vkb::encode(configs, vkb::random_bytes()).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("at most {} LEDs at once", vkb::MAX_CONFIGS - 1),
-            )
-        })?;
-        let mut buffer = vec![0u8; len];
-        buffer[..report.len()].copy_from_slice(&report);
-        hid::set_feature(&self.hid.path, &buffer)
-    }
-
-    /// Sets one LED, keeping the others that were set.
-    pub fn set(&self, config: LedConfig) -> io::Result<()> {
-        self.write(&vkb::merge(&self.read()?, config))
-    }
-
-    /// Drops one LED from the list (it keeps its last state until reconnect).
-    pub fn release(&self, led: u8) -> io::Result<()> {
-        let current = self.read()?;
-        if current.iter().any(|c| c.led == led) {
-            self.write(&vkb::remove(&current, led))
-        } else {
-            Ok(())
+    /// Sets one LED, leaving the others as they are.
+    pub fn set(&self, led: Led) -> io::Result<()> {
+        match self.vendor {
+            Vendor::Vkb => vkb::set(&self.hid, led),
         }
     }
 
-    /// Empties the list (the LEDs keep their last state until reconnect).
+    /// Stops controlling one LED (VKB: it keeps its last state until reconnect).
+    pub fn release(&self, id: u8) -> io::Result<()> {
+        match self.vendor {
+            Vendor::Vkb => vkb::release(&self.hid, id),
+        }
+    }
+
+    /// Stops controlling every LED.
     pub fn release_all(&self) -> io::Result<()> {
-        self.write(&[])
+        match self.vendor {
+            Vendor::Vkb => vkb::write(&self.hid, &[]),
+        }
     }
 }
