@@ -18,7 +18,7 @@ JoystickGobloon/
     gob-core/      модель профиля (Profile, Mode, Input, Action enum, Property), без зависимостей от Windows
     gob-gremlin/   парсер/сериализатор Gremlin XML (quick-xml + serde), R14+
     gob-input/     чтение устройств: DirectInput8 через crate `windows` (GUID совпадают с Gremlin)
-    gob-vjoy/      FFI к vJoyInterface.dll (libloading): AcquireVJD, SetAxis/SetBtn/SetContPov, конфиг устройств
+    gob-vjoy/      драйвер vJoy напрямую (IOCTL + реестр, docs/VJOY_PLAN.md): вывод осей/кнопок/хаток, конфиг устройств
     gob-hidhide/   IOCTL к \\.\HidHide: blacklist/whitelist, cloak on/off, авто-whitelist JoystickGobloon.exe
     gob-engine/    runtime: event loop (отдельный поток), режимы, исполнение дерева действий, кривые, tempo, макросы
     gob-plugin/    trait `ActionPlugin` + регистрация (API для будущих плагинов; реализаций нет)

@@ -1,8 +1,6 @@
-//! vJoy virtual joystick output straight through the vJoy driver (`direct`), without
-//! vJoyInterface.dll. JoyGob still starts when vJoy is missing.
-//!
-//! Device configuration still runs vJoy's `vJoyConfig.exe` (`config`), found in the vJoy
-//! installation folder (docs/VJOY_PLAN.md, session 3 replaces it).
+//! vJoy virtual joystick output straight through the vJoy driver (`direct`), and its device
+//! configuration in the registry (`descriptor`, `configure`): neither vJoyInterface.dll nor
+//! vJoyConfig.exe is used, only the installed driver. JoyGob still starts when vJoy is missing.
 
 pub mod config;
 pub mod configure;
@@ -10,7 +8,6 @@ pub mod descriptor;
 pub mod direct;
 mod ffb_desc;
 use std::fmt;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use direct::{Acquired, Direct};
@@ -71,29 +68,19 @@ impl DeviceInfo {
     }
 }
 
-/// The installed vJoy; shared via [`Arc`]. The driver is looked up on each call, so a
+/// The installed vJoy driver; shared via [`Arc`]. The driver is looked up on each call, so a
 /// driver that is switched on or off later is noticed.
 pub struct VJoy {
-    /// `vJoyInterface.dll` in vJoy's `x64` folder; `vJoyConfig.exe` lives next to it
-    /// (`config::tool`). The DLL itself is not loaded.
-    pub dll_path: PathBuf,
+    _private: (),
 }
 
 impl VJoy {
-    /// Succeeds when vJoy is installed (its driver may be disabled).
+    /// Succeeds when the vJoy driver is installed (it may be disabled).
     pub fn load() -> Result<Arc<Self>, Error> {
-        let dll_path = install_dir()
-            .map(|d| d.join(arch()).join("vJoyInterface.dll"))
-            .unwrap_or_else(|| {
-                PathBuf::from(format!(
-                    r"C:\Program Files\vJoy\{}\vJoyInterface.dll",
-                    arch()
-                ))
-            });
-        if Direct::find().is_none() && !dll_path.exists() {
+        if Direct::find().is_none() && !service_installed() {
             return Err(Error::NotInstalled("vJoy driver not found".into()));
         }
-        Ok(Arc::new(Self { dll_path }))
+        Ok(Arc::new(Self { _private: () }))
     }
 
     /// The driver runs and has at least one device.
@@ -222,46 +209,31 @@ pub fn discrete_pov(direction: Option<u16>) -> i32 {
     direction.map_or(-1, |d| ((i32::from(d % 36000) + 4500) / 9000) % 4)
 }
 
-fn arch() -> &'static str {
-    if cfg!(target_pointer_width = "64") {
-        "x64"
-    } else {
-        "x86"
-    }
-}
-
-/// vJoy's install location from its uninstall entry.
+/// The `vjoy` driver service exists (the driver is installed, even when switched off).
 #[cfg(windows)]
-fn install_dir() -> Option<PathBuf> {
+fn service_installed() -> bool {
     use windows::core::w;
-    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_ANY};
 
-    let mut buf = [0u16; 512];
-    let mut len = (buf.len() * 2) as u32;
-    // SAFETY: the buffer and its length live across the call.
-    let result = unsafe {
+    let mut len = 0u32;
+    // SAFETY: a sizing call without a buffer.
+    unsafe {
         RegGetValueW(
             HKEY_LOCAL_MACHINE,
-            w!(
-                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8E31F76F-74C3-47F1-9550-E041EEDC5FBB}_is1"
-            ),
-            w!("InstallLocation"),
-            RRF_RT_REG_SZ,
+            w!(r"SYSTEM\CurrentControlSet\Services\vjoy"),
+            w!("ImagePath"),
+            RRF_RT_ANY,
             None,
-            Some(buf.as_mut_ptr().cast()),
+            None,
             Some(&mut len),
         )
-    };
-    if result.is_err() {
-        return None;
     }
-    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
-    Some(PathBuf::from(String::from_utf16_lossy(&buf[..end])))
+    .is_ok()
 }
 
 #[cfg(not(windows))]
-fn install_dir() -> Option<PathBuf> {
-    None
+fn service_installed() -> bool {
+    false
 }
 
 #[cfg(test)]

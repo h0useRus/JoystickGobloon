@@ -1,8 +1,7 @@
-//! vJoy device configuration through vJoy's own `vJoyConfig.exe` (the command-line side
-//! of "Configure vJoy"). Reading needs no rights; changes run elevated (UAC prompt).
+//! vJoy device configuration as "Configure vJoy" shows it, with vJoyConfig's command-line
+//! syntax (`<id> -f -a X Y ... -b 32 -p 1`) for the elevated `configure` step.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 /// Axis names in slot order (1 = X ... 8 = Slider 2), as vJoyConfig spells them.
 pub const AXES: [&str; 8] = ["X", "Y", "Z", "Rx", "Ry", "Rz", "Sl0", "Sl1"];
@@ -119,36 +118,6 @@ impl DeviceConfig {
             }
         }
         Some(c)
-    }
-}
-
-/// `vJoyConfig.exe` next to vJoyInterface.dll (`<vJoy>\x64`).
-pub fn tool(dll_path: &Path) -> Option<PathBuf> {
-    let exe = dll_path.parent()?.join("vJoyConfig.exe");
-    exe.exists().then_some(exe)
-}
-
-/// Current configuration of every existing device.
-pub fn read(tool: &Path) -> Result<Vec<DeviceConfig>, String> {
-    let mut cmd = Command::new(tool);
-    cmd.arg("-t").arg("-c");
-    cmd.args((1..=MAX_DEVICES).map(|n| n.to_string()));
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-    let out = cmd.output().map_err(|e| e.to_string())?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    Ok(text.lines().filter_map(DeviceConfig::parse).collect())
-}
-
-/// Runs vJoyConfig with administrator rights and waits for it. A refused UAC prompt is an error.
-pub fn run_elevated(tool: &Path, args: &[String]) -> Result<(), String> {
-    match run_as_admin(tool, args)? {
-        0 => Ok(()),
-        code => Err(format!("exit code {code}")),
     }
 }
 

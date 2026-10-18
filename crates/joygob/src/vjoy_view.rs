@@ -108,8 +108,7 @@ impl VJoyView {
                     .size(style::ICON_SIZE)
                     .color(style::accent(ui)),
             );
-            ui.label(format!("vJoy {}", vjoy.version()))
-                .on_hover_text(vjoy.dll_path.display().to_string());
+            ui.label(format!("vJoy {}", vjoy.version()));
             ui.label(RichText::new(i18n.tr(key)).weak());
             if self.config.available() {
                 let on = vjoy.enabled();

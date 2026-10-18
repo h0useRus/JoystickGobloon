@@ -1,6 +1,6 @@
 //! Prints vJoy devices: `cargo run -p gob-vjoy --example vjoy_info [--sweep <id>]`.
-//! Lists them through vJoyInterface.dll and straight from the driver (read-only) to compare,
-//! and the configuration from the registry next to `vJoyConfig -t`.
+//! Lists the driver's devices (read-only) and the configuration in the registry; the devices
+//! the driver reports must match the registry.
 //! With `--sweep`, moves X, blinks button 1 and spins hat 1 for 3 seconds.
 use std::time::{Duration, Instant};
 
@@ -9,32 +9,12 @@ fn main() {
         Ok(v) => v,
         Err(e) => return eprintln!("{e}"),
     };
-    println!(
-        "{} enabled={} version={}",
-        vjoy.dll_path.display(),
-        vjoy.enabled(),
-        vjoy.version()
-    );
-    let dll = vjoy.devices();
-    for d in &dll {
-        println!("dll    {d:?}");
-    }
-    match gob_vjoy::direct::Direct::find() {
-        None => println!("driver: not found"),
-        Some(direct) => {
-            println!(
-                "driver version={:?} {:?}",
-                direct.version(),
-                direct.driver_info()
-            );
-            for c in direct.collections() {
-                println!("driver {c:?} {:?}", direct.device_stat(c.report_id));
-            }
-            let devices = direct.devices();
-            println!(
-                "same as the DLL: {}",
-                if devices == dll { "yes" } else { "NO" }
-            );
+    println!("vJoy enabled={} version={}", vjoy.enabled(), vjoy.version());
+    let devices = vjoy.devices();
+    if let Some(direct) = gob_vjoy::direct::Direct::find() {
+        println!("driver {:?}", direct.driver_info());
+        for c in direct.collections() {
+            println!("driver {c:?} {:?}", direct.device_stat(c.report_id));
         }
     }
     match gob_vjoy::descriptor::read_registry() {
@@ -43,10 +23,20 @@ fn main() {
             for c in &reg {
                 println!("reg    {}", c.create_args().join(" "));
             }
-            if let Some(tool) = gob_vjoy::config::tool(&vjoy.dll_path) {
-                let same = gob_vjoy::config::read(&tool).is_ok_and(|t| t == reg);
-                println!("same as vJoyConfig -t: {}", if same { "yes" } else { "NO" });
-            }
+            let same = reg.len() == devices.len()
+                && reg.iter().zip(&devices).all(|(c, d)| {
+                    let axes: Vec<u8> = (1..=8u8).filter(|s| c.axes[usize::from(*s) - 1]).collect();
+                    let hats = if c.discrete_hats {
+                        d.disc_hats
+                    } else {
+                        d.cont_hats
+                    };
+                    c.id == d.id && axes == d.axes && c.buttons == d.buttons && c.hats == hats
+                });
+            println!(
+                "driver matches the registry: {}",
+                if same { "yes" } else { "NO" }
+            );
         }
     }
     let args: Vec<String> = std::env::args().collect();
