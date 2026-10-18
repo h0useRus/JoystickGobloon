@@ -1,6 +1,6 @@
 //! WRITES to the device (temporary, until it is reconnected) - run only on purpose.
 //! `led_set <device index> <led> <#RRGGBB> [off|on|slow|fast|ultra]` sets one LED,
-//! `led_set <device index> clear [led]` returns one or every LED to the device profile.
+//! `led_set <device index> clear [led]` drops one or every LED from the list.
 //! Device indexes as listed when run without arguments.
 use gob_lighting::{Color, LedConfig, LedMode};
 

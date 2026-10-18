@@ -2,7 +2,8 @@
 //! VKB (`vkb`), protocol after pyvkb; see docs/LIGHTING_PLAN.md.
 //!
 //! Writes are temporary: they last until the device is reconnected and change neither the
-//! firmware nor its VKBDevCfg profile. LEDs not written follow the device profile.
+//! firmware nor its VKBDevCfg profile. LEDs never written follow the device profile; a written
+//! LED keeps its last state until reconnect even after it leaves the list (EVO R, firmware 2.20).
 
 pub mod hid;
 pub mod vkb;
@@ -56,7 +57,7 @@ impl Device {
         Ok(vkb::decode(&report))
     }
 
-    /// Replaces the whole list of set LEDs (empty = all LEDs back to the device profile).
+    /// Replaces the whole list of set LEDs. LEDs dropped from it keep their last state.
     pub fn write(&self, configs: &[LedConfig]) -> io::Result<()> {
         let len = self.report_len()?;
         let report = vkb::encode(configs, vkb::random_bytes()).ok_or_else(|| {
@@ -75,7 +76,7 @@ impl Device {
         self.write(&vkb::merge(&self.read()?, config))
     }
 
-    /// Returns one LED to the device profile.
+    /// Drops one LED from the list (it keeps its last state until reconnect).
     pub fn release(&self, led: u8) -> io::Result<()> {
         let current = self.read()?;
         if current.iter().any(|c| c.led == led) {
@@ -85,7 +86,7 @@ impl Device {
         }
     }
 
-    /// Returns every LED to the device profile.
+    /// Empties the list (the LEDs keep their last state until reconnect).
     pub fn release_all(&self) -> io::Result<()> {
         self.write(&[])
     }
