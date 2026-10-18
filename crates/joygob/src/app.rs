@@ -53,6 +53,10 @@ pub struct JoyGobApp {
     hidhide_window: bool,
     apps_view: AppsView,
     /// Running profile, if activated.
+    /// New releases from GitHub (About page, check on start).
+    updater: crate::update::Updater,
+    /// A downloaded update waiting for the app to close.
+    update: Option<crate::update::Prepared>,
     /// The running profile; shared with the tray menu, which works while the window is hidden.
     activation: Activation,
     /// Active in the last frame: a change made from the tray updates the status bar.
@@ -92,6 +96,8 @@ struct Alert {
 #[derive(Clone)]
 enum Pending {
     Close,
+    /// A downloaded update: the app closes and the update takes over.
+    Update,
     /// A load-profile action asked for this file; it is activated after loading.
     Load(PathBuf),
     New,
@@ -164,6 +170,8 @@ impl JoyGobApp {
             title: crate::APP_NAME.into(),
             media: Default::default(),
             _plugins: load_plugins(),
+            updater: Default::default(),
+            update: None,
             tray: None,
             restored: Default::default(),
             hide_frames: 0,
@@ -228,6 +236,10 @@ impl JoyGobApp {
                 }
                 _ => {}
             }
+        }
+        crate::update::cleanup();
+        if app.settings.check_updates && crate::update::enabled() {
+            app.updater.check(&cc.egui_ctx, true);
         }
         if let Some(path) = reopen {
             app.open_profile(path, false);
@@ -400,6 +412,23 @@ impl JoyGobApp {
             Pending::Close => {
                 self.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            Pending::Update => {
+                let Some(prepared) = self.update.take() else {
+                    return;
+                };
+                match crate::update::apply(&prepared) {
+                    Ok(()) => {
+                        self.allow_close = true;
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                    Err(e) => {
+                        let text = self
+                            .i18n
+                            .trf("update-install-error", &[("error", e.into())]);
+                        self.error(text);
+                    }
+                }
             }
             Pending::New => self.new_profile(),
             Pending::Open => self.import_dialog(),
@@ -875,6 +904,10 @@ impl eframe::App for JoyGobApp {
                 "status-stopped"
             });
         }
+        if let Some(prepared) = self.updater.poll(ctx) {
+            self.update = Some(prepared);
+            self.request(Pending::Update, ctx);
+        }
         if let Some(e) = self.activation.take_error() {
             let text = self.i18n.trf("activate-error", &[("error", e.into())]);
             self.error(text);
@@ -1116,6 +1149,7 @@ impl eframe::App for JoyGobApp {
                         &mut self.settings,
                         &mut self.settings_tab,
                         &self.logo,
+                        &mut self.updater,
                     );
                     if let Some(change) = change {
                         self.apply_change(ctx, change);

@@ -78,6 +78,9 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
   select an input with `JOYGOB_EXPAND` = axis1 | button3 | hat1 ..., a tab with `JOYGOB_TAB` = keyboard | logical,
   the first device's info window with `JOYGOB_INFO=1`, every input viewer view with `JOYGOB_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
+- Updates (joygob/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
+  setup with /UPDATE=1 (it restarts the app), portable copies swap their files. Debug builds never update.
+  Network tests: `cargo test -p joygob update:: -- --ignored`.
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
   window stays responsive; needs "close button hides to tray" on.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the

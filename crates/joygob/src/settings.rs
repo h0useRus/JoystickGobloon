@@ -42,6 +42,8 @@ pub struct Settings {
     pub start_with_windows: bool,
     /// Activate the reopened profile on startup.
     pub activate_on_start: bool,
+    /// Look for a new release on startup and install it.
+    pub check_updates: bool,
     /// Axis calibrations: device GUID -> axis slot ("1".."8") -> values.
     pub calibration: BTreeMap<String, BTreeMap<String, AxisCalibration>>,
     /// Hidden option (not in the UI, written only when on): allow several running copies.
@@ -137,6 +139,7 @@ impl Default for Settings {
             minimize_to_tray: false,
             start_with_windows: false,
             activate_on_start: false,
+            check_updates: true,
             calibration: BTreeMap::new(),
             multi_instance: false,
         }

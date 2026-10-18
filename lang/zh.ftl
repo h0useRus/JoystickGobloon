@@ -364,6 +364,18 @@ about-releases = 版本发布
 about-credits = 使用 HidHide 和 vJoy 驱动；配置文件与 Joystick Gremlin 兼容。
 about-license = 基于 MIT 许可证的自由开源软件。
 
+# Updates
+settings-check-updates = 启动时检查新版本并安装
+update-check = 检查更新
+update-checking = 正在查找新版本…
+update-latest = 已是最新版本
+update-available = 有新版本 { $version }
+update-install = 立即更新
+update-downloading = 正在下载版本 { $version }…
+update-error = 无法检查更新
+update-debug = 调试版本不会自动更新
+update-install-error = 无法安装更新：{ $error }
+
 # Input viewer
 viewer-history = 轴随时间变化
 viewer-current = 当前轴

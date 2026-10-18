@@ -39,3 +39,8 @@ requested by the user or the person installing or operating it.
 Joystick Gobloon works on the local computer: it reads game controllers, talks to the locally installed
 HidHide and vJoy drivers and stores its settings and log in `%APPDATA%\JoystickGobloon`. Links in the
 *About* page open in the web browser only when you click them.
+
+The only network access is the update check: on startup (unless *Check for a new version on startup* is
+switched off in Settings → General) and when you press *Check for updates* in *About*, it asks
+`api.github.com` for the latest release of this project and, when there is a newer one, downloads it from
+GitHub. No personal data is sent; GitHub sees an ordinary request with the app version as user agent.

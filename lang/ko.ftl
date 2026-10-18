@@ -364,6 +364,18 @@ about-releases = 릴리스
 about-credits = HidHide 및 vJoy 드라이버를 사용하며, 프로필은 Joystick Gremlin과 호환됩니다.
 about-license = MIT 라이선스에 따른 무료 오픈 소스 소프트웨어입니다.
 
+# Updates
+settings-check-updates = 시작할 때 새 버전을 확인하고 설치
+update-check = 업데이트 확인
+update-checking = 새 버전을 찾는 중…
+update-latest = 최신 버전입니다
+update-available = { $version } 버전을 사용할 수 있습니다
+update-install = 지금 업데이트
+update-downloading = { $version } 버전을 다운로드하는 중…
+update-error = 업데이트를 확인할 수 없습니다
+update-debug = 디버그 빌드는 업데이트되지 않습니다
+update-install-error = 업데이트를 설치할 수 없습니다: { $error }
+
 # Input viewer
 viewer-history = 시간에 따른 축
 viewer-current = 현재 축

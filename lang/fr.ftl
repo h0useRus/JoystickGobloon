@@ -364,6 +364,18 @@ about-releases = Versions
 about-credits = Utilise les pilotes HidHide et vJoy ; les profils sont compatibles avec Joystick Gremlin.
 about-license = Logiciel libre et open source sous licence MIT.
 
+# Updates
+settings-check-updates = Rechercher une nouvelle version au démarrage et l’installer
+update-check = Rechercher des mises à jour
+update-checking = Recherche d’une nouvelle version…
+update-latest = Vous avez la dernière version
+update-available = La version { $version } est disponible
+update-install = Mettre à jour
+update-downloading = Téléchargement de la version { $version }…
+update-error = Impossible de rechercher des mises à jour
+update-debug = Les versions de débogage ne se mettent pas à jour
+update-install-error = Impossible d’installer la mise à jour : { $error }
+
 # Input viewer
 viewer-history = Axes dans le temps
 viewer-current = Axes maintenant
