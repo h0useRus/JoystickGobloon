@@ -158,7 +158,7 @@ status-redone = Повторено
 edit-curve-help = Перетащите точку или маркер · Щелчок по пустому месту инвертирует · Двойной щелчок добавляет точку · Правый щелчок по точке удаляет её
 
 # vJoy mapping
-vjoy-device-n = vJoy устройство { $n }
+vjoy-device-n = vJoy #{ $n }
 vjoy-axis-1 = Ось X
 vjoy-axis-2 = Ось Y
 vjoy-axis-3 = Ось Z
@@ -367,7 +367,7 @@ viewer-axis = Ось { $n }
 
 # vJoy configuration
 vjoy-add = Добавить устройство vJoy
-vjoy-new-device = Новое устройство vJoy { $n }
+vjoy-new-device = Новый vJoy #{ $n }
 vjoy-enable = Включить драйвер vJoy
 vjoy-disable = Выключить драйвер vJoy
 vjoy-hat-continuous = Плавные
@@ -392,11 +392,11 @@ vjoy-config-remove = Удалить устройство
 vjoy-config-admin = Для изменения vJoy Windows запросит права администратора
 vjoy-config-locked = Остановите профиль, чтобы менять устройства vJoy.
 vjoy-config-reading = Читаю конфигурацию vJoy...
-vjoy-config-label = настройка устройства { $n }
+vjoy-config-label = настройка vJoy #{ $n }
 vjoy-config-done = Конфигурация vJoy изменена.
 vjoy-config-error = Не удалось изменить конфигурацию vJoy: { $error }
 vjoy-config-reboot = Конфигурация vJoy изменена. Перезагрузите Windows, чтобы она вступила в силу.
-vjoy-remove-title = Удалить устройство vJoy { $n }?
+vjoy-remove-title = Удалить vJoy #{ $n }?
 vjoy-remove-text = Игры и профили, использующие это устройство, потеряют его, пока оно не будет создано снова.
 
 # Response curve

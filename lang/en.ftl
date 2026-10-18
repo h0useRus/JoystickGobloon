@@ -158,7 +158,7 @@ status-redone = Redone
 edit-curve-help = Drag a point or handle to move it · Click empty space to invert · Double-click to add a point · Right-click a point to remove it
 
 # vJoy mapping
-vjoy-device-n = vJoy Device { $n }
+vjoy-device-n = vJoy #{ $n }
 vjoy-axis-1 = X Axis
 vjoy-axis-2 = Y Axis
 vjoy-axis-3 = Z Axis
@@ -367,7 +367,7 @@ viewer-axis = Axis { $n }
 
 # vJoy configuration
 vjoy-add = Add a vJoy device
-vjoy-new-device = New vJoy device { $n }
+vjoy-new-device = New vJoy #{ $n }
 vjoy-enable = Enable the vJoy driver
 vjoy-disable = Disable the vJoy driver
 vjoy-hat-continuous = Continuous
@@ -392,11 +392,11 @@ vjoy-config-remove = Remove device
 vjoy-config-admin = Windows asks for administrator rights to change vJoy
 vjoy-config-locked = Stop the profile to change vJoy devices.
 vjoy-config-reading = Reading the vJoy configuration...
-vjoy-config-label = configure device { $n }
+vjoy-config-label = configure vJoy #{ $n }
 vjoy-config-done = vJoy configuration changed.
 vjoy-config-error = Could not change the vJoy configuration: { $error }
 vjoy-config-reboot = vJoy configuration changed. Restart Windows for it to take effect.
-vjoy-remove-title = Remove vJoy device { $n }?
+vjoy-remove-title = Remove vJoy #{ $n }?
 vjoy-remove-text = Games and profiles that use this device lose it until it is created again.
 
 # Response curve

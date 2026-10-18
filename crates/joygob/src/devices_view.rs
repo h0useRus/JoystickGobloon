@@ -930,7 +930,7 @@ fn chip_text(i18n: &I18n, a: &Action) -> String {
             InputType::Hat => "H",
             _ => "B",
         };
-        return format!("{name}: vJoy {device} {t}{input_id}");
+        return format!("{name}: vJoy #{device} {t}{input_id}");
     }
     if let gob_core::ActionKind::Description { text } = a.kind() {
         let text = text.trim();

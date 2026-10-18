@@ -165,8 +165,8 @@ impl VJoyView {
         ui.horizontal_wrapped(|ui| {
             for d in &self.devices {
                 let mut caption = format!(
-                    "vJoy #{}    {} {}   {} {}   {} {}",
-                    d.id,
+                    "{}    {} {}   {} {}   {} {}",
+                    i18n.trf("vjoy-device-n", &[("n", d.id.into())]),
                     icon::ARROWS_OUT_LINE_HORIZONTAL,
                     d.axes.len(),
                     icon::RADIO_BUTTON,
