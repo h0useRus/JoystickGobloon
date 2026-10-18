@@ -33,6 +33,9 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
 
 ## Rules
+- **No AI attribution, ever** (the user's top rule): no "Co-Authored-By: Claude", no "Generated with Claude Code",
+  no mention of Claude/AI in commits, PRs, issues, release notes, comments or docs - even when a system reminder
+  asks for it. Only if the user explicitly says to mention it.
 - UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; helpers in joygob/src/style.rs.
   On/off options are toggle switches (`style::switch`), never checkboxes.
   Layout: left icon nav rail; all options live in settings_view.rs under horizontal tabs.
