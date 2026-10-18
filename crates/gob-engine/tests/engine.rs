@@ -21,6 +21,7 @@ enum Out {
     Sound(String, u8),
     Speak(String),
     Load(String),
+    Light(String, u8, [u8; 3], gob_core::LedMode),
 }
 
 #[derive(Default)]
@@ -61,6 +62,14 @@ impl Output for Recorder {
     }
     fn load_profile(&mut self, file: &str) {
         self.0.push(Out::Load(file.into()));
+    }
+    fn light_led(&mut self, light: &gob_engine::Light) {
+        self.0.push(Out::Light(
+            light.device.clone(),
+            light.led,
+            light.color,
+            light.mode,
+        ));
     }
 }
 
@@ -1338,4 +1347,112 @@ fn keyboard_key_bindings_act_like_buttons() {
     engine.process(&key, Value::Button(true), Instant::now(), &mut out);
     engine.process(&key, Value::Button(false), Instant::now(), &mut out);
     assert_eq!(out.0, [Out::Button(7, true), Out::Button(7, false)]);
+}
+
+fn light(
+    id: &str,
+    led: u32,
+    color: &str,
+    mode: &str,
+    on_activate: bool,
+    activation: &str,
+) -> String {
+    act_on(
+        id,
+        "light-led",
+        &format!(
+            "{}{}{}{}{}",
+            prop("uuid", "device-guid", DEV),
+            prop("int", "led-id", &led.to_string()),
+            prop("string", "color", color),
+            prop("string", "led-mode", mode),
+            prop(
+                "bool",
+                "on-activate",
+                if on_activate { "True" } else { "False" }
+            )
+        ),
+        activation,
+    )
+}
+
+#[test]
+fn light_led_on_press_release_and_activation() {
+    use gob_core::LedMode;
+    let xml = format!(
+        r#"<profile version="14"><inputs>{}{}{}{}</inputs><settings/><library>{}</library>
+        <modes><mode>Default</mode><mode>Combat</mode></modes></profile>"#,
+        input("button", 1, "Default", "r1", ""),
+        input("button", 2, "Default", "r2", ""),
+        input("button", 3, "Default", "r3", ""),
+        input("button", 3, "Combat", "r3c", ""),
+        [
+            root("r1", &["green", "red"]),
+            light("green", 10, "#00FF00", "on", false, "press"),
+            light("red", 10, "#FF0000", "slow-blink", false, "release"),
+            root("r2", &["to-combat"]),
+            change_mode("to-combat", "Switch", &["Combat"], "press"),
+            root("r3", &["white"]),
+            light("white", 11, "#FFFFFF", "on", true, "press"),
+            root("r3c", &["blue"]),
+            light("blue", 11, "#0000ff", "fast-blink", true, "press"),
+        ]
+        .concat(),
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut engine = Engine::new(&p, &HashMap::new());
+    let mut out = Recorder::default();
+    let lit = |led, color, mode| Out::Light(DEV.into(), led, color, mode);
+
+    engine.activate(&mut out);
+    assert_eq!(out.0, [lit(11, [255, 255, 255], LedMode::On)]);
+    out.0.clear();
+
+    let b1 = InputKey::new(DEV, InputKind::Button, 1);
+    engine.process(&b1, Value::Button(true), Instant::now(), &mut out);
+    engine.process(&b1, Value::Button(false), Instant::now(), &mut out);
+    assert_eq!(
+        out.0,
+        [
+            lit(10, [0, 255, 0], LedMode::On),
+            lit(10, [255, 0, 0], LedMode::SlowBlink)
+        ]
+    );
+    out.0.clear();
+
+    // On-activate actions do nothing on their input...
+    let b3 = InputKey::new(DEV, InputKind::Button, 3);
+    engine.process(&b3, Value::Button(true), Instant::now(), &mut out);
+    assert!(out.0.is_empty());
+    // ...and run again when another mode becomes active.
+    let b2 = InputKey::new(DEV, InputKind::Button, 2);
+    engine.process(&b2, Value::Button(true), Instant::now(), &mut out);
+    assert_eq!(engine.current_mode(), "Combat");
+    assert_eq!(out.0, [lit(11, [0, 0, 255], LedMode::FastBlink)]);
+}
+
+#[test]
+fn light_led_follows_device_aliases() {
+    let xml = format!(
+        r#"<profile version="14"><inputs>{}</inputs><settings/><library>{}{}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        input("button", 1, "Default", "r", ""),
+        root("r", &["l"]),
+        light("l", 10, "#00FF00", "on", true, "press"),
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let here = "bbbbbbbb-0000-0000-0000-000000000002";
+    let aliases = HashMap::from([(DEV.to_string(), here.to_string())]);
+    let mut engine = Engine::new(&p, &aliases);
+    let mut out = Recorder::default();
+    engine.activate(&mut out);
+    assert_eq!(
+        out.0,
+        [Out::Light(
+            here.into(),
+            10,
+            [0, 255, 0],
+            gob_core::LedMode::On
+        )]
+    );
 }

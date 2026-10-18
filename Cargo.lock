@@ -1944,6 +1944,7 @@ dependencies = [
  "gob-core",
  "gob-gremlin",
  "gob-input",
+ "gob-lighting",
  "gob-plugin",
  "gob-vjoy",
  "log",

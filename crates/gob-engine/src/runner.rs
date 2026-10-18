@@ -35,6 +35,7 @@ struct SystemOutput {
     /// Last values written, read back by vJoy conditions.
     written: HashMap<(u32, InputKind, u32), Value>,
     media: crate::media::Media,
+    lighting: crate::lighting::Lighting,
     load_profile: Option<String>,
 }
 
@@ -65,6 +66,10 @@ impl Output for SystemOutput {
 
     fn play_sound(&mut self, file: &str, volume: u8) {
         self.media.play(file, volume);
+    }
+
+    fn light_led(&mut self, light: &crate::Light) {
+        self.lighting.send(light);
     }
 
     fn speak(&mut self, request: crate::SpeechRequest) {
@@ -123,6 +128,13 @@ impl Runner {
             devices: HashMap::new(),
             written: HashMap::new(),
             media: Default::default(),
+            lighting: crate::lighting::Lighting::new(
+                initial
+                    .iter()
+                    .filter(|d| !d.info.hid_path.is_empty())
+                    .map(|d| (d.info.guid.to_ascii_lowercase(), d.info.hid_path.clone()))
+                    .collect(),
+            ),
             load_profile: None,
         };
         for id in engine.vjoy_devices() {
@@ -150,6 +162,8 @@ impl Runner {
                 );
             }
         }
+
+        engine.activate(&mut out);
 
         let status = Arc::new(Mutex::new(RunnerStatus {
             mode: engine.current_mode().to_string(),
