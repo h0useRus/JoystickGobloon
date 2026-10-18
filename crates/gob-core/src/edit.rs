@@ -640,7 +640,7 @@ impl Profile {
         true
     }
 
-    /// Replaces the `index`-th step of a macro (`index` = step count appends). Steps JoyGob
+    /// Replaces the `index`-th step of a macro (`index` = step count appends). Steps Joystick Gobloon
     /// cannot represent ([`MacroStep::Other`]) are never written.
     pub fn set_macro_step(&mut self, id: &str, index: usize, step: &crate::MacroStep) {
         let Some((ty, items)) = macro_step_xml(step) else {

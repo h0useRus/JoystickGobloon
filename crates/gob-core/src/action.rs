@@ -1,7 +1,7 @@
 //! Actions as stored in a profile's `<library>`.
 //!
 //! An action is a generic tree of properties, groups and action references,
-//! exactly as Gremlin writes it. [`Action::kind`] decodes the types JoyGob
+//! exactly as Gremlin writes it. [`Action::kind`] decodes the types Joystick Gobloon
 //! understands into typed values; everything else stays untouched.
 
 use crate::xml::Element;
@@ -64,7 +64,7 @@ impl InputType {
     }
 }
 
-/// Typed view of the action types JoyGob can execute.
+/// Typed view of the action types Joystick Gobloon can execute.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActionKind<'a> {
     Root {
@@ -148,7 +148,7 @@ pub enum ActionKind<'a> {
         volume: u8,
     },
     /// Speaks `text` (`$current_mode` is replaced); rate/pitch -1..1, volume 0..1.
-    /// `voice` is a JoyGob addition (Gremlin ignores it): an installed voice name.
+    /// `voice` is a Joystick Gobloon addition (Gremlin ignores it): an installed voice name.
     TextToSpeech {
         text: &'a str,
         voice: Option<&'a str>,

@@ -26,15 +26,15 @@ mod vjoy_config_view;
 mod vjoy_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
-/// Version shown to users: CI sets `JOYGOB_VERSION` for alpha builds (`0.2.0-alpha.12`),
+/// Version shown to users: CI sets `JOYSTICK_GOBLOON_VERSION` for alpha builds (`0.2.0-alpha.12`),
 /// otherwise the crate version.
-pub const VERSION: &str = match option_env!("JOYGOB_VERSION") {
+pub const VERSION: &str = match option_env!("JOYSTICK_GOBLOON_VERSION") {
     Some(v) => v,
     None => env!("CARGO_PKG_VERSION"),
 };
 
 /// Command-line switch for the uninstaller: take this exe off HidHide's application list
-/// (JoyGob adds itself on start) and quit without a window.
+/// (Joystick Gobloon adds itself on start) and quit without a window.
 const HIDHIDE_UNREGISTER: &str = "--hidhide-unregister";
 
 fn main() -> eframe::Result {
@@ -77,7 +77,7 @@ fn main() -> eframe::Result {
             .with_min_inner_size([640.0, 400.0])
             .with_icon(
                 eframe::icon_data::from_png_bytes(include_bytes!(
-                    "../../../assets/icon/joygob-256.png"
+                    "../../../assets/icon/JoystickGobloon-256.png"
                 ))
                 .expect("embedded icon is a valid PNG"),
             ),
@@ -86,6 +86,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         APP_NAME,
         options,
-        Box::new(|cc| Ok(Box::new(app::JoyGobApp::new(cc, instance)))),
+        Box::new(|cc| Ok(Box::new(app::JoystickGobloonApp::new(cc, instance)))),
     )
 }

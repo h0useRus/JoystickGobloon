@@ -1,4 +1,4 @@
-//! Extension point for action types JoyGob does not implement itself.
+//! Extension point for action types Joystick Gobloon does not implement itself.
 //!
 //! An [`ActionPlugin`] handles one Gremlin action `type`: for every such action in a
 //! profile it creates a [`Functor`], which receives the input values and answers with
@@ -17,8 +17,8 @@ use gob_core::Action;
 /// Version of the DLL interface; a plugin built for another version is rejected.
 pub const ABI_VERSION: u32 = 1;
 
-/// Exported by plugin DLLs: `extern "C" fn joygob_plugin_info() -> *const PluginInfo`.
-pub const INFO_SYMBOL: &[u8] = b"joygob_plugin_info\0";
+/// Exported by plugin DLLs: `extern "C" fn joystick_gobloon_plugin_info() -> *const PluginInfo`.
+pub const INFO_SYMBOL: &[u8] = b"joystick_gobloon_plugin_info\0";
 
 /// What a plugin DLL tells about itself. Strings are NUL-terminated UTF-8 owned by the DLL.
 #[repr(C)]
@@ -149,7 +149,7 @@ impl Registry {
             let lib = libloading::Library::new(path).map_err(|e| e.to_string())?;
             let info_fn: libloading::Symbol<unsafe extern "C" fn() -> *const PluginInfo> = lib
                 .get(INFO_SYMBOL)
-                .map_err(|_| "not a JoyGob plugin".to_string())?;
+                .map_err(|_| "not a Joystick Gobloon plugin".to_string())?;
             let info = info_fn();
             if info.is_null() {
                 return Err("no plugin information".into());
@@ -157,7 +157,7 @@ impl Registry {
             let info = &*info;
             if info.abi_version != ABI_VERSION {
                 return Err(format!(
-                    "built for plugin interface {}, JoyGob has {ABI_VERSION}",
+                    "built for plugin interface {}, Joystick Gobloon has {ABI_VERSION}",
                     info.abi_version
                 ));
             }

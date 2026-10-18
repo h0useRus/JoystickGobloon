@@ -47,7 +47,7 @@ pub struct DevicesView {
     axis_ref: HashMap<(String, u8), f32>,
     /// Device whose info window is open.
     info: Option<String>,
-    /// JOYGOB_INFO was handled (debug builds).
+    /// JOYSTICK_GOBLOON_INFO was handled (debug builds).
     info_shown: bool,
     /// Selected input per device tab (the one the right panel edits).
     selected_input: HashMap<String, Key>,
@@ -208,9 +208,9 @@ impl DevicesView {
                 logical: true,
             });
         }
-        // Debug builds: JOYGOB_TAB=keyboard | logical opens that tab at start (screenshots).
+        // Debug builds: JOYSTICK_GOBLOON_TAB=keyboard | logical opens that tab at start (screenshots).
         if cfg!(debug_assertions) && self.selected.is_none() {
-            let guid = match std::env::var("JOYGOB_TAB").as_deref() {
+            let guid = match std::env::var("JOYSTICK_GOBLOON_TAB").as_deref() {
                 Ok("keyboard") => Some(gob_core::KEYBOARD_GUID),
                 Ok("logical") => Some(gob_core::LOGICAL_DEVICE_GUID),
                 _ => None,
@@ -323,8 +323,11 @@ impl DevicesView {
                     }
                 });
             });
-            // Debug builds: JOYGOB_INFO=1 opens the first device's info at start (screenshots).
-            if cfg!(debug_assertions) && !self.info_shown && std::env::var("JOYGOB_INFO").is_ok() {
+            // Debug builds: JOYSTICK_GOBLOON_INFO=1 opens the first device's info at start (screenshots).
+            if cfg!(debug_assertions)
+                && !self.info_shown
+                && std::env::var("JOYSTICK_GOBLOON_INFO").is_ok()
+            {
                 self.info_shown = true;
                 self.info = tabs
                     .iter()
@@ -1046,7 +1049,7 @@ pub(crate) fn hat_glyph(direction: Option<u16>) -> &'static str {
     }
 }
 
-/// Debug builds: `JOYGOB_EXPAND=axis1` (or button3, hat1) opens that row at start, for
+/// Debug builds: `JOYSTICK_GOBLOON_EXPAND=axis1` (or button3, hat1) opens that row at start, for
 /// screenshot checks of editors without clicking.
 fn debug_expanded((kind, id): Key) -> bool {
     if !cfg!(debug_assertions) {
@@ -1059,7 +1062,7 @@ fn debug_expanded((kind, id): Key) -> bool {
         Kind::Key => "key",
         Kind::Other => "other",
     };
-    std::env::var("JOYGOB_EXPAND").is_ok_and(|v| v == format!("{name}{id}"))
+    std::env::var("JOYSTICK_GOBLOON_EXPAND").is_ok_and(|v| v == format!("{name}{id}"))
 }
 
 fn is_keyboard(tab: &Tab) -> bool {

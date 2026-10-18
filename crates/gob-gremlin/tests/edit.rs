@@ -442,7 +442,7 @@ fn macro_steps_round_trip_and_keep_unknown_ones() {
     for (i, s) in steps.iter().enumerate() {
         p.set_macro_step(&m, i, s);
     }
-    // A step JoyGob cannot represent, as Gremlin would write it.
+    // A step Joystick Gobloon cannot represent, as Gremlin would write it.
     p.action_mut(&m).unwrap().items.push(gob_core::Item::Group {
         tag: "macro-action".into(),
         attrs: vec![("type".into(), "joystick".into())],

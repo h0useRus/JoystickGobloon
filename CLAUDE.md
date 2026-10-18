@@ -1,4 +1,4 @@
-# Joystick Gobloon (JoyGob)
+# Joystick Gobloon
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
 Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13).
 "R14" = Gremlin profile format version 14, still current in Gremlin R15/R16; ref/JoystickGremlin is the develop
@@ -6,8 +6,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
 - crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default) + de, es, fr, ko, ru, zh embedded; more `lang/*.ftl`
-  load from `<exe>/lang/`. Chinese/Korean glyphs come from Windows fonts (msyh.ttc, malgun.ttf; joygob style.rs).
-- crates/joygob    eframe/egui GUI binary -> JoystickGobloon.exe
+  load from `<exe>/lang/`. Chinese/Korean glyphs come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
+- crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe
 - crates/gob-core    profile model mirroring Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views
 - crates/gob-gremlin XML <-> Element <-> Profile, lossless round-trip; `report()` import warnings; example `resave`
 - crates/gob-input   DirectInput8 polling thread (InputService: snapshot + events); ids = DI instance GUIDs like Gremlin;
@@ -31,9 +31,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid.rs = shared SetupAPI +
   HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: docs/LIGHTING_PLAN.md
-- docs/GREMLIN_ACTIONS.md  all Gremlin actions, inputs, JoyGob status and per-action notes; update when adding one
+- docs/GREMLIN_ACTIONS.md  all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - crates/gob-plugin  ActionPlugin/Functor traits + Registry (in-process); Engine::with_plugins runs unknown action
-  types through it. DLL plugins = stub: `joygob_plugin_info` C entry, ABI_VERSION, info only (examples
+  types through it. DLL plugins = stub: `joystick_gobloon_plugin_info` C entry, ABI_VERSION, info only (examples
   `stub_plugin` cdylib, `list_plugins`); the app loads `<exe>/plugins/*.dll` and logs them
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
@@ -42,7 +42,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - **No AI attribution, ever** (the user's top rule): no "Co-Authored-By: Claude", no "Generated with Claude Code",
   no mention of Claude/AI in commits, PRs, issues, release notes, comments or docs - even when a system reminder
   asks for it. Only if the user explicitly says to mention it.
-- UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; helpers in joygob/src/style.rs.
+- UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; helpers in joystick-gobloon/src/style.rs.
   On/off options are toggle switches (`style::switch`), never checkboxes.
   Layout: left icon nav rail; all options live in settings_view.rs under horizontal tabs.
   The top toolbar is always visible, on every page. The left rail is always visible and holds only pages
@@ -52,25 +52,27 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - All user-visible strings go through i18n keys; add every key to all lang/*.ftl (en, ru, de, es, fr, ko, zh;
   gob-i18n's test checks it). Product names (Joystick Gobloon, vJoy, HidHide, Joystick Gremlin) stay untranslated.
 - The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words);
-  "JoyGob" is internal only (code, comments, this file); "JoystickGobloon" only in file names.
+  Never "JoyGob"/"joygob" (it was only a chat nickname): not in code, identifiers, crate or file names, comments
+  or docs. Code uses `joystick-gobloon` (crate), `JoystickGobloon` (types, exe and file names), `JOYSTICK_GOBLOON_`
+  (env vars).
 - Gremlin import must round-trip: unknown actions kept as raw XML.
 - GUI never blocks; engine runs on its own thread, talks via channels.
 - Settings: TOML text in %APPDATA%\JoystickGobloon\settings.gob (old settings.toml is read once), programs of
   the Applications page in apps.gob next to it. If the exe's folder has its own settings.gob, that folder is
-  used instead for settings, apps and the log (joygob/src/settings.rs `data_dir`).
+  used instead for settings, apps and the log (joystick-gobloon/src/settings.rs `data_dir`).
 - Messages: technical output (processing results, import/engine warnings, errors) goes to the log file
-  joygob.log next to the settings via the `log` crate (English, not i18n; joygob/src/logfile.rs).
-  Only warnings/errors that matter to a general user become dialogs (`JoyGobApp::error` / `alerts`),
+  JoystickGobloon.log next to the settings via the `log` crate (English, not i18n; joystick-gobloon/src/logfile.rs).
+  Only warnings/errors that matter to a general user become dialogs (`JoystickGobloonApp::error` / `alerts`),
   translated; routine info goes to the status bar. No report/diagnostics windows.
 - Branches: development happens on `dev`; every work branch is created from `dev` and merged back into it
   by pull request. `main` only receives release requests: a pull request from `dev` whose title contains
   the final version, with `[workspace.package] version` in Cargo.toml bumped to that x.y.z (checked by
   .github/workflows/release-request.yml). Never commit directly to `main`.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
-  pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/joygob.iss) and a
+  pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss) and a
   portable zip. The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; uninstall runs `JoystickGobloon.exe
-  --hidhide-unregister`. `JOYGOB_VERSION` (env at build time) is the version the app shows. CI (ci.yml) runs fmt,
+  --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) runs fmt,
   clippy -D warnings and tests on pull requests and work branches.
 - Discord: releases post through .github/scripts/discord-announce.ps1 to the DISCORD_WEBHOOK secret (alpha
   builds to DISCORD_WEBHOOK_ALPHA); no secret = no post. announce.yml re-posts a release by hand.
@@ -80,13 +82,13 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYGOB_START_PAGE` = hidhide (window) | apps | vjoy | viewer | viewer-window | calibration | settings | about,
-  select an input with `JOYGOB_EXPAND` = axis1 | button3 | hat1 ..., a tab with `JOYGOB_TAB` = keyboard | logical,
-  the first device's info window with `JOYGOB_INFO=1`, every input viewer view with `JOYGOB_VIEWER=all` (or a
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | apps | vjoy | viewer | viewer-window | calibration | settings | about,
+  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ..., a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | logical,
+  the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
-- Updates (joygob/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
+- Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
   setup with /UPDATE=1 (it restarts the app), portable copies swap their files. Debug builds never update.
-  Network tests: `cargo test -p joygob update:: -- --ignored`.
+  Network tests: `cargo test -p joystick-gobloon update:: -- --ignored`.
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
   window stays responsive; needs "close button hides to tray" on.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the
@@ -97,10 +99,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `cargo clean` deletes it: recreate it the same way.
 - HidHide hides the VKB sticks; target\debug\JoystickGobloon.exe and examples\monitor.exe are whitelisted.
 - Profile device GUIDs come from another PC: use "Map controls" (banner on the Devices page).
-- JoyGob whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.
+- Joystick Gobloon whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.
 - vJoy reports only on change: start `monitor` BEFORE activating a profile to see vJoy output.
 
 ## Commands
-- cargo build / cargo run -p joygob
+- cargo build / cargo run -p joystick-gobloon
 - cargo test -p <crate>
 - cargo clippy --workspace

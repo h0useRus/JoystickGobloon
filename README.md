@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon/joygob.svg" width="140" alt="Joystick Gobloon logo">
+  <img src="assets/icon/JoystickGobloon.svg" width="140" alt="Joystick Gobloon logo">
 </p>
 
 <h1 align="center">Joystick Gobloon</h1>
@@ -100,14 +100,14 @@ warn on the first start: choose *More info → Run anyway*.
 Rust is pinned in [`rust-toolchain.toml`](rust-toolchain.toml).
 
 ```sh
-cargo run -p joygob                 # debug build
-cargo build -p joygob --release     # target/release/JoystickGobloon.exe
+cargo run -p joystick-gobloon                 # debug build
+cargo build -p joystick-gobloon --release     # target/release/JoystickGobloon.exe
 cargo test --workspace
 ```
 
 | Crate | Purpose |
 | --- | --- |
-| `joygob` | The eframe / egui application |
+| `joystick-gobloon` | The eframe / egui application |
 | `gob-core` | Profile model mirroring Joystick Gremlin R14 |
 | `gob-gremlin` | Gremlin XML import / export, lossless round trip |
 | `gob-engine` | Runs a profile: input → actions → vJoy, keyboard, mouse |

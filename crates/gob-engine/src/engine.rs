@@ -161,7 +161,7 @@ enum Node {
     },
     /// Action type handled by a plugin: index into [`Engine::plugins`].
     Plugin(usize),
-    /// Description and action types JoyGob does not execute yet.
+    /// Description and action types Joystick Gobloon does not execute yet.
     Noop,
 }
 
@@ -457,7 +457,7 @@ impl Engine {
         Self::with_plugins(profile, aliases, &gob_plugin::Registry::default())
     }
 
-    /// Like [`Engine::new`]; action types JoyGob does not know run through `registry`.
+    /// Like [`Engine::new`]; action types Joystick Gobloon does not know run through `registry`.
     pub fn with_plugins(
         profile: &Profile,
         aliases: &HashMap<String, String>,

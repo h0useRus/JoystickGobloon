@@ -25,7 +25,7 @@ pub struct Settings {
     pub language: String,
     /// Reopen the last profile on startup.
     pub reopen_last: bool,
-    /// Add JoyGob to the HidHide whitelist on startup so it can read hidden devices.
+    /// Add Joystick Gobloon to the HidHide whitelist on startup so it can read hidden devices.
     pub hidhide_whitelist_self: bool,
     /// Device hiding window: leave out disconnected devices.
     pub hidhide_hide_disconnected: bool,
@@ -38,7 +38,7 @@ pub struct Settings {
     pub close_to_tray: bool,
     /// Minimizing hides the window to the tray (off the taskbar).
     pub minimize_to_tray: bool,
-    /// Windows starts JoyGob at logon (minimized).
+    /// Windows starts Joystick Gobloon at logon (minimized).
     pub start_with_windows: bool,
     /// Activate the reopened profile on startup.
     pub activate_on_start: bool,

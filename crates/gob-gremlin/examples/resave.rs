@@ -1,4 +1,4 @@
-//! Re-saves a Gremlin profile through JoyGob: `cargo run -p gob-gremlin --example resave -- in.xml out.xml`
+//! Re-saves a Gremlin profile through Joystick Gobloon: `cargo run -p gob-gremlin --example resave -- in.xml out.xml`
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let [_, input, output] = args.as_slice() else {

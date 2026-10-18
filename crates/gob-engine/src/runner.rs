@@ -100,7 +100,7 @@ impl Output for SystemOutput {
     }
 
     fn run_command(&mut self, executable: &str, arguments: &[String]) {
-        // Detached: the program keeps running after JoyGob stops.
+        // Detached: the program keeps running after Joystick Gobloon stops.
         let _ = std::process::Command::new(executable)
             .args(arguments)
             .spawn();

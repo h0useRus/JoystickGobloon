@@ -14,7 +14,7 @@ use crate::style::{self, icon};
 use crate::substitute_view::{missing_devices, SubstituteDialog};
 use crate::vjoy_view::VJoyView;
 
-const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/joygob-256.png");
+const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/JoystickGobloon-256.png");
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -26,7 +26,7 @@ enum Page {
     Settings,
 }
 
-pub struct JoyGobApp {
+pub struct JoystickGobloonApp {
     i18n: I18n,
     settings: Settings,
     page: Page,
@@ -104,7 +104,7 @@ enum Pending {
     Open,
 }
 
-impl JoyGobApp {
+impl JoystickGobloonApp {
     /// `instance`: the single-instance wake-up event (another start shows this window);
     /// `None` when several copies may run.
     pub fn new(cc: &eframe::CreationContext<'_>, instance: Option<crate::instance::Event>) -> Self {
@@ -193,7 +193,7 @@ impl JoyGobApp {
         }
         // Debug builds: open a page at start for screenshot checks without clicking.
         #[cfg(debug_assertions)]
-        match std::env::var("JOYGOB_START_PAGE").as_deref() {
+        match std::env::var("JOYSTICK_GOBLOON_START_PAGE").as_deref() {
             Ok("hidhide") => app.hidhide_window = true,
             Ok("apps") => app.page = Page::Apps,
             Ok("vjoy") => app.page = Page::VJoy,
@@ -891,7 +891,7 @@ impl JoyGobApp {
     }
 }
 
-impl eframe::App for JoyGobApp {
+impl eframe::App for JoystickGobloonApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
         // Started or stopped from the tray menu (maybe while the window was hidden).

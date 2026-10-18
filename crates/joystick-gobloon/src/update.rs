@@ -499,7 +499,7 @@ fn shell_open(file: &Path, params: &str) -> Result<(), String> {
 mod tests {
     use super::*;
 
-    /// Network: `cargo test -p joygob -- --ignored`. This build's version is not older than
+    /// Network: `cargo test -p joystick-gobloon -- --ignored`. This build's version is not older than
     /// the latest release, so nothing is offered; the request, TLS and JSON work.
     #[test]
     #[ignore]
