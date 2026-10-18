@@ -36,6 +36,14 @@ pub const VERSION: &str = match option_env!("JOYGOB_VERSION") {
 const HIDHIDE_UNREGISTER: &str = "--hidhide-unregister";
 
 fn main() -> eframe::Result {
+    // Elevated copy started by the vJoy configuration editor: apply one change and quit,
+    // before the single-instance check and without touching the log.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some((first, rest)) = args.split_first() {
+        if first == gob_vjoy::configure::ARG {
+            std::process::exit(gob_vjoy::configure::run_admin(rest));
+        }
+    }
     if std::env::args().any(|a| a == HIDHIDE_UNREGISTER) {
         if let (Ok(hh), Ok(exe)) = (gob_hidhide::HidHide::find(), std::env::current_exe()) {
             let _ = hh.set_app(&exe, false);

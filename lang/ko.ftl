@@ -1,0 +1,449 @@
+language-name = 한국어
+
+# Navigation and toolbar tooltips
+nav-devices = 장치 및 바인딩
+nav-hidhide = 장치 숨기기
+nav-apps = 애플리케이션
+nav-vjoy = 가상 조이스틱
+nav-viewer = 입력 뷰어
+nav-calibration = 보정
+nav-settings = 설정
+action-open = Joystick Gremlin 프로필 가져오기
+action-save = 저장
+label-mode = 모드
+
+# Settings
+settings-appearance = 모양
+settings-general = 일반
+settings-about = 정보
+settings-language = 언어
+settings-reopen-last = 시작할 때 마지막 프로필 다시 열기
+theme-light = 밝게
+theme-dark = 어둡게
+theme-system = 시스템
+theme-system-tip = Windows의 밝은/어두운 설정 따르기
+about-text = 장치 숨기기, 가상 조이스틱, 입력 매핑을 하나의 앱에서.
+
+# Empty states
+no-profile = 불러온 프로필 없음
+device-linked = 같은 이름의 프로필 장치 바인딩입니다. “컨트롤 매핑”으로 연결을 저장하세요.
+device-disconnected = 연결되지 않음
+no-devices-attached = 게임 컨트롤러를 찾을 수 없음
+
+# Status bar
+status-ready = 준비
+status-loaded = { $file } 불러옴
+status-saved = { $file } 저장됨
+import-error = 프로필을 열 수 없습니다: { $error }
+save-error = 프로필을 저장할 수 없습니다: { $error }
+file-filter-gremlin = Joystick Gremlin 프로필
+
+# Import report
+alert-error = 문제가 발생했습니다
+alert-import = { $file }의 일부 동작이 작동하지 않습니다
+alert-open-log = 로그 열기
+ok = 확인
+hidhide-whitelist-error = Joystick Gobloon을 HidHide 허용 목록에 추가할 수 없습니다: { $error }
+warn-not-executable = “{ $kind }” × { $count }: 프로필에 유지되지만 아직 실행되지 않음
+warn-scripts = 프로필에 Python 플러그인이 있습니다: 유지되지만 실행되지 않습니다
+
+# Map controls (device substitution)
+subst-title = 컨트롤 매핑
+subst-auto = 자동
+subst-auto-tip = 나머지 장치를 이름이 비슷한 연결된 장치에 매핑합니다. 불확실한 것은 직접 선택하도록 남겨 둡니다
+subst-banner = 프로필의 장치 ID가 이 PC와 일치하지 않음: { $count }
+subst-keep = 그대로 두기
+subst-apply = 적용
+status-substituted = 컨트롤이 매핑되었습니다. 변경 내용을 유지하려면 프로필을 저장하세요.
+
+# vJoy
+vjoy-missing = vJoy가 설치되지 않았거나 불러올 수 없습니다.
+vjoy-enabled = 드라이버 사용
+vjoy-disabled = 드라이버 사용 안 함
+vjoy-no-devices = 아직 구성된 vJoy 장치가 없습니다.
+vjoy-axes = 축
+vjoy-buttons = 버튼
+vjoy-hats = 햇 스위치
+vjoy-test-hint = 출력 테스트: 아래 컨트롤을 사용하려면 장치를 잠그세요.
+vjoy-test-pending = 변경 내용을 적용해야 테스트할 수 있습니다.
+vjoy-lock = 출력을 테스트하기 위해 이 장치를 독점 제어
+vjoy-unlock = 장치 해제
+vjoy-free = 사용 가능
+vjoy-own = Joystick Gobloon이 제어 중
+vjoy-busy = 다른 프로그램이 사용 중 (예: Joystick Gremlin)
+vjoy-unknown = 알 수 없는 상태
+vjoy-error = 장치를 가져올 수 없습니다: { $error }
+
+# Device hiding
+hidhide-missing = HidHide가 설치되지 않았습니다.
+hidhide-on = 장치 숨기기 켜짐
+hidhide-off = 장치 숨기기 꺼짐
+hidhide-hidden = 숨김: 허용 목록의 애플리케이션만 볼 수 있음
+hidhide-visible = 모든 애플리케이션에 표시
+hidhide-filter-disconnected = 연결되지 않은 장치 숨기기
+hidhide-gaming-only = 게임 컨트롤러만
+hidhide-enable = 장치 숨기기 사용
+hidhide-hint = 눈 아이콘을 클릭하면 다른 프로그램에서 장치를 숨깁니다(감은 눈). 변경 내용을 적용하려면 장치를 다시 연결하세요.
+hidhide-no-devices = 표시할 장치가 없습니다.
+action-refresh = 새로 고침
+settings-hidhide-self = 시작할 때 Joystick Gobloon을 HidHide 허용 목록에 추가
+status-whitelisted = Joystick Gobloon을 HidHide 허용 목록에 추가했습니다.
+
+# Applications
+apps-add = 애플리케이션 추가
+apps-empty = 아직 애플리케이션이 없습니다. 게임이나 프로그램을 추가해 설정하세요.
+apps-missing = 파일을 찾을 수 없음
+apps-missing-text = 프로그램이 더 이상 없습니다. 목록에서 제거할까요?
+apps-sees = 숨겨진 장치를 볼 수 있음
+apps-blind = 숨겨진 장치를 볼 수 없음
+apps-inverse = 애플리케이션 목록 반전
+apps-inverse-tip = 목록의 프로그램은 숨겨진 장치를 보지 못하고, 다른 모든 프로그램은 봅니다
+apps-remove = 목록에서 제거
+
+# Engine
+action-activate = 프로필 활성화
+action-deactivate = 프로필 중지
+title-active = 활성
+title-inactive = 비활성
+status-active = 프로필 활성화됨
+status-stopped = 프로필 중지됨
+activate-error = 프로필을 활성화할 수 없습니다: { $error }
+
+# Editing
+edit-add = 동작 추가
+edit-remove = 제거
+edit-up = 위로 이동
+edit-down = 아래로 이동
+edit-not-editable = 이 동작은 프로필에 유지되지만 아직 편집할 수 없습니다.
+edit-on-press = 누를 때
+edit-on-release = 뗄 때
+edit-on-both = 누를 때와 뗄 때
+edit-inverted = 반전됨
+edit-threshold = 길게 누르기 기준 시간
+edit-short = 짧게 누르기
+edit-long = 길게 누르기
+edit-deadzone = 데드존
+edit-invert = 반전
+edit-inherited = “{ $mode }” 모드에서 상속됨
+edit-unbind = 이 입력의 모든 동작 제거
+edit-override = 이 모드에서 재정의
+input-axis-kind = 축
+input-button-kind = 버튼
+input-hat-kind = 햇 스위치
+kind-map-to-vjoy = vJoy에 매핑
+kind-response-curve = 응답 곡선
+kind-change-mode = 모드 전환
+kind-tempo = 짧게 / 길게 누르기
+kind-description = 설명
+
+# Files and modes
+action-new = 새 프로필
+action-save-as = 다른 이름으로 저장…
+status-new = 새 프로필
+unsaved-title = 저장하지 않은 변경 내용
+unsaved-text = { $file }의 변경 내용을 저장할까요?
+unsaved-save = 저장
+unsaved-discard = 저장 안 함
+cancel = 취소
+modes-edit = 모드 편집
+modes-title = 모드
+modes-name = 이름
+modes-parent = 상속 대상
+modes-remove = 모드와 그 바인딩 제거
+modes-new = 새 모드
+modes-add = 모드 추가
+
+# Undo
+action-undo = 실행 취소 (Ctrl+Z)
+action-redo = 다시 실행 (Ctrl+Y)
+status-undone = 실행 취소됨
+status-redone = 다시 실행됨
+edit-curve-help = 점이나 핸들을 끌어 이동 · 빈 곳 클릭으로 반전 · 더블클릭으로 점 추가 · 점을 오른쪽 클릭해 제거
+
+# vJoy mapping
+vjoy-device-n = vJoy #{ $n }
+vjoy-axis-1 = X 축
+vjoy-axis-2 = Y 축
+vjoy-axis-3 = Z 축
+vjoy-axis-4 = X 회전
+vjoy-axis-5 = Y 회전
+vjoy-axis-6 = Z 회전
+vjoy-axis-7 = 슬라이더
+vjoy-axis-8 = 다이얼
+vjoy-button-n = 버튼 { $n }
+vjoy-hat-n = 햇 스위치 { $n }
+vjoy-absolute = 절대
+vjoy-relative = 상대
+vjoy-speed = 속도
+
+# Mouse
+kind-map-to-mouse = 마우스에 매핑
+mouse-mode-button = 마우스 버튼
+mouse-mode-motion = 커서 이동
+mouse-left = 왼쪽 버튼
+mouse-right = 오른쪽 버튼
+mouse-middle = 가운데 버튼
+mouse-forward = 앞으로 버튼
+mouse-back = 뒤로 버튼
+mouse-wheel-up = 휠 위로
+mouse-wheel-down = 휠 아래로
+mouse-direction = 방향
+mouse-min-speed = 최저 속도
+mouse-max-speed = 최고 속도
+mouse-time-to-max = 최고 속도까지 걸리는 시간
+
+# Toggle, split, pause, run
+kind-smart-toggle = 스마트 토글
+kind-split-axis = 축 분할
+kind-pause-resume = 일시 중지 / 재개
+kind-run-command = 명령 실행
+edit-delay = 모멘터리 동작의 누름 유지 시간
+edit-split = 분할 지점
+edit-lower = 아래쪽
+edit-upper = 위쪽
+pause-op-pause = 일시 중지
+pause-op-resume = 재개
+pause-op-toggle = 전환
+run-executable = 프로그램
+run-arguments = 인수
+run-browse = 프로그램 선택
+status-paused = 프로필 일시 중지됨
+
+# Double tap, chain
+kind-double-tap = 더블 탭
+kind-chain = 체인
+edit-tap-threshold = 두 번째 탭까지의 시간
+edit-tap-exclusive = 배타적: 한 번 탭은 더블 탭이 아닌지 확인할 때까지 기다림
+edit-tap-combined = 결합: 더블 탭도 한 번 탭 동작을 실행
+edit-single = 한 번 탭
+edit-double = 더블 탭
+edit-chain-timeout = 이 시간 동안 입력이 없으면 첫 단계부터 다시 시작 (0 = 안 함)
+edit-chain-step = { $n }단계
+
+# Hat as buttons
+kind-hat-buttons = 햇 스위치를 버튼으로
+edit-hat-four = 4방향
+edit-hat-eight = 8방향 (대각선 포함)
+hat-north = 북
+hat-north-east = 북동
+hat-east = 동
+hat-south-east = 남동
+hat-south = 남
+hat-south-west = 남서
+hat-west = 서
+hat-north-west = 북서
+hat-center = 중앙
+
+# Merge axis
+kind-merge-axis = 축 병합
+edit-reuse = 이 기존 동작을 여기에도 추가 (Gremlin처럼 두 축에 공유로 바인딩)
+edit-merge-name = 이름
+edit-merge-no-device = (장치 없음)
+edit-merged = 병합된 축
+merge-average = 평균
+merge-minimum = 최솟값
+merge-maximum = 최댓값
+merge-sum = 합계
+merge-bidirectional = 양방향 (축 2 빼기 축 1)
+merge-maximum-deflection = 최대 편향
+merge-closest-to-center = 중앙에 가장 가까운 값
+
+# Axis delta
+kind-axis-delta = 축 변화량
+edit-delta-threshold = 펄스를 발생시키는 축 변화량
+edit-delta-positive = 축 증가
+edit-delta-negative = 축 감소
+
+# Dual axis deadzone
+kind-dual-axis-deadzone = 이중 축 데드존
+edit-dual-inner = 안쪽 데드존 (중앙 주변의 원)
+edit-dual-outer = 바깥 한계 (여기서부터 최대 편향)
+edit-dual-close = 안쪽과 바깥 데드존이 너무 가깝습니다.
+edit-dual-first = 첫 번째 축 출력
+edit-dual-second = 두 번째 축 출력
+
+# Existing actions (Gremlin's reference action)
+edit-link-existing = 기존 동작 연결
+edit-copy-existing = 기존 동작 복사
+
+# Condition
+kind-condition = 조건
+edit-cond-all = 모든 조건을 만족해야 함
+edit-cond-any = 하나의 조건만 만족하면 됨
+edit-cond-add = 조건
+edit-cond-true = 참이면
+edit-cond-false = 아니면
+cond-current = 이 입력
+cond-joystick = 조이스틱 입력
+cond-vjoy = vJoy 출력
+cond-keyboard = 누르고 있는 키
+cond-range = 축 범위
+cond-pressed = 눌림
+cond-released = 떼어짐
+
+# Sound, speech, load profile
+kind-play-sound = 소리 재생
+kind-text-to-speech = 텍스트 음성 변환
+kind-load-profile = 프로필 불러오기
+file-filter-sound = 소리 파일
+edit-volume = 볼륨
+edit-file-missing = 파일을 찾을 수 없음
+edit-tts-hint = 읽을 텍스트; $current_mode는 현재 모드로 바뀝니다
+edit-tts-rate = 속도
+edit-tts-pitch = 음높이
+edit-tts-back = 모든 항목 뒤에 대기
+edit-tts-front = 다음 순서로 대기 (Windows 음성: 모든 항목 뒤와 같음)
+edit-tts-interrupt = 읽고 있는 내용 중단
+edit-preview = 미리 듣기
+edit-tts-voice = 음성
+edit-tts-default-voice = 기본 음성
+edit-tts-voice-missing = 설치되지 않음
+kind-map-to-keyboard = 키보드에 매핑
+
+# Key recording
+keys-record = 키 녹화: 함께 누르세요. 모두 떼면 녹화가 끝납니다
+keys-press = 키를 누르세요…
+keys-none = 키 없음
+keys-cancel = 녹화 취소
+edit-chain-add = 단계 추가
+edit-chain-remove = 이 단계와 그 동작 제거
+kind-macro = 매크로
+
+# Macro editor
+macro-repeat = 반복
+macro-repeat-single = 한 번
+macro-repeat-count = 횟수
+macro-repeat-hold = 누르고 있는 동안
+macro-repeat-toggle = 다시 누를 때까지
+macro-repeat-count-tip = 반복 횟수
+macro-repeat-delay = 반복 사이 대기
+macro-add-step = 단계
+macro-step-key = 키
+macro-step-pause = 대기
+macro-step-mouse-button = 마우스 버튼
+macro-step-mouse-motion = 마우스 이동
+macro-step-vjoy-button = vJoy 버튼
+macro-step-vjoy-axis = vJoy 축
+macro-step-vjoy-hat = vJoy 햇 스위치
+macro-press = 누르기
+macro-release = 떼기
+
+# Logical device
+logical-device = 논리 장치
+logical-device-tip = 이 프로필의 가상 입력: 입력을 여기에 매핑한 다음 스틱처럼 바인딩하세요
+logical-add-axis = 축 추가
+logical-add-button = 버튼 추가
+logical-add-hat = 햇 스위치 추가
+logical-remove = 이 입력과 그 바인딩 제거
+logical-empty = 아직 논리 입력이 없습니다: 위 버튼으로 추가하세요.
+kind-map-to-logical-device = 논리 장치에 매핑
+cond-logical = 논리 장치 입력
+
+# Tray and startup
+settings-tray = 트레이 아이콘 표시
+settings-close-to-tray = 닫을 때 트레이로
+settings-minimize-to-tray = 최소화할 때 트레이로
+settings-tray-title = 트레이 아이콘
+settings-autostart = Windows와 함께 시작 (최소화)
+settings-activate-on-start = 시작할 때 프로필 활성화
+tray-show = Joystick Gobloon 표시
+tray-hiding = 장치 숨기기
+tray-quit = 종료
+autostart-error = Windows와 함께 시작 설정을 바꿀 수 없습니다: { $error }
+
+# About
+about-alpha = 알파 빌드
+about-created = 만든 사람: { $name }
+about-support = 개발 후원
+about-support-tip = PayPal로 후원하기
+about-source = 소스 코드
+about-issues = 문제 신고
+about-releases = 릴리스
+about-credits = HidHide 및 vJoy 드라이버를 사용하며, 프로필은 Joystick Gremlin과 호환됩니다.
+about-license = MIT 라이선스에 따른 무료 오픈 소스 소프트웨어입니다.
+
+# Input viewer
+viewer-history = 시간에 따른 축
+viewer-current = 현재 축
+viewer-buttons = 버튼과 햇 스위치
+viewer-axis = 축 { $n }
+
+# vJoy configuration
+vjoy-add = vJoy 장치 추가
+vjoy-add-max = vJoy는 최대 16개의 장치를 지원합니다.
+vjoy-new-device = 새 vJoy #{ $n }: 아직 만들지 않음
+vjoy-enable = vJoy 드라이버 사용
+vjoy-disable = vJoy 드라이버 사용 안 함
+vjoy-hat-continuous = 연속
+vjoy-hat-discrete = 4방향
+vjoy-ffb = 포스 피드백
+vjoy-ffb-enable = 사용
+vjoy-ffb-const = 일정
+vjoy-ffb-ramp = 램프
+vjoy-ffb-sq = 사각파
+vjoy-ffb-sine = 사인파
+vjoy-ffb-tr = 삼각파
+vjoy-ffb-stup = 상승 톱니파
+vjoy-ffb-stdn = 하강 톱니파
+vjoy-ffb-spr = 스프링
+vjoy-ffb-dm = 댐퍼
+vjoy-ffb-inr = 관성
+vjoy-ffb-fric = 마찰
+vjoy-config-create = 만들기
+vjoy-config-apply = 적용
+vjoy-config-revert = 되돌리기
+vjoy-config-remove = 장치 제거
+vjoy-config-admin = vJoy를 변경하려면 Windows에서 관리자 권한을 요청합니다
+vjoy-config-locked = vJoy 장치를 변경하려면 프로필을 중지하세요.
+vjoy-config-reading = vJoy 구성을 읽는 중...
+vjoy-config-label = vJoy #{ $n } 구성
+vjoy-config-done = vJoy 구성이 변경되었습니다.
+vjoy-config-error = vJoy 구성을 변경할 수 없습니다: { $error }
+vjoy-config-reboot = vJoy 구성이 변경되었습니다. 적용하려면 Windows를 다시 시작하세요.
+vjoy-remove-title = vJoy #{ $n }을(를) 제거할까요?
+vjoy-remove-text = 이 장치를 사용하는 게임과 프로필은 다시 만들 때까지 이 장치를 잃습니다.
+
+# Response curve
+curve-type = 곡선 유형
+curve-linear = 구간 선형
+curve-cubic = 3차 스플라인
+curve-bezier = 3차 베지어 스플라인
+curve-symmetric = 대칭
+curve-symmetric-tip = 편집하는 동안 곡선을 중앙 기준으로 대칭
+curve-point = 점
+curve-handle = 핸들
+
+# Keyboard device
+keyboard-device = 키보드
+keyboard-tip = 키보드 키를 입력으로: 조이스틱 버튼처럼 키에 동작을 바인딩
+keyboard-add = 키 바인딩
+keyboard-empty = 아직 바인딩된 키가 없습니다: 위 버튼으로 녹화하세요.
+edit-binding-description = 이 입력의 설명
+edit-unbound = 아직 동작이 없습니다: 하나 추가하세요.
+viewer-detach = 별도 창에서 열기
+viewer-attach = 기본 창으로 돌아가기
+viewer-in-window = 입력 뷰어가 별도 창에 열려 있습니다.
+
+# Calibration
+calibration-device = 보정할 장치
+calibration-raw = 원시 값
+calibration-with-center = 중앙 포함
+calibration-reset = 초기화
+calibration-save = 이 보정 저장
+calibration-center = 중앙 보정
+calibration-center-tip = 스틱을 놓아 두고 중앙 주변에서 살짝 움직인 다음 다시 클릭하세요
+calibration-extrema = 끝점 보정
+calibration-extrema-tip = 축을 양 끝까지 움직인 다음 다시 클릭하세요
+calibration-in-window = 보정이 별도 창에 열려 있습니다.
+
+# Device info
+device-info = 장치 정보
+device-info-name = 장치 이름
+device-info-axes = 축
+device-info-buttons = 버튼
+device-info-hats = 햇 스위치
+device-info-vid = VID
+device-info-pid = PID
+device-info-joystick-id = 조이스틱 ID
+device-info-guid = 장치 GUID
+device-info-copy = 클립보드에 복사

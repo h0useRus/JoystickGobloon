@@ -14,6 +14,11 @@ pub const DEFAULT_LANG: &str = "en";
 const EMBEDDED: &[(&str, &str)] = &[
     ("en", include_str!("../../../lang/en.ftl")),
     ("ru", include_str!("../../../lang/ru.ftl")),
+    ("de", include_str!("../../../lang/de.ftl")),
+    ("es", include_str!("../../../lang/es.ftl")),
+    ("fr", include_str!("../../../lang/fr.ftl")),
+    ("ko", include_str!("../../../lang/ko.ftl")),
+    ("zh", include_str!("../../../lang/zh.ftl")),
 ];
 
 type Bundle = FluentBundle<FluentResource>;

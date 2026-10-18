@@ -39,11 +39,26 @@ struct Shown {
 /// Nothing is shown until the user switches it on.
 impl Default for Shown {
     fn default() -> Self {
+        Self::all(false)
+    }
+}
+
+impl Shown {
+    fn all(on: bool) -> Self {
         Self {
-            history: false,
-            current: false,
-            buttons: false,
+            history: on,
+            current: on,
+            buttons: on,
         }
+    }
+
+    /// Debug builds: JOYGOB_VIEWER=all (or a part of a device name, e.g. `vjoy`) shows every
+    /// view of those devices at start (screenshots).
+    fn initial(name: &str) -> Self {
+        let on = cfg!(debug_assertions)
+            && std::env::var("JOYGOB_VIEWER")
+                .is_ok_and(|v| v == "all" || name.to_lowercase().contains(&v.to_lowercase()));
+        Self::all(on)
     }
 }
 
@@ -92,7 +107,10 @@ impl ViewerView {
             .show_inside(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for d in devices {
-                        let shown = self.shown.entry(d.info.guid.clone()).or_default();
+                        let shown = self
+                            .shown
+                            .entry(d.info.guid.clone())
+                            .or_insert_with(|| Shown::initial(&d.info.name));
                         let glyph = if d.info.is_vjoy() {
                             icon::GAME_CONTROLLER
                         } else {
