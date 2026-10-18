@@ -2455,6 +2455,7 @@ dependencies = [
  "gob-hidhide",
  "gob-i18n",
  "gob-input",
+ "gob-lighting",
  "gob-plugin",
  "gob-vjoy",
  "log",

@@ -58,6 +58,8 @@ pub struct DevicesView {
     pub hidden: HashMap<String, bool>,
     /// The eye icon was clicked: (device GUID, hide). The app applies it.
     pub hide_request: Option<(String, bool)>,
+    /// GUIDs of connected devices with LED control (light-led), filled by the app.
+    pub leds: std::collections::HashSet<String>,
 }
 
 struct Tab<'a> {
@@ -285,6 +287,7 @@ impl DevicesView {
                             } else {
                                 "hidhide-visible"
                             });
+                            let led_tip = i18n.tr("device-leds");
                             let mut icons = Vec::new();
                             if let Some(hidden) = hidden {
                                 let (glyph, color) = style::eye(ui, hidden);
@@ -294,6 +297,16 @@ impl DevicesView {
                                     tip: &eye_tip,
                                 });
                             }
+                            // Shows only that light-led can drive it; clicking does nothing.
+                            let leds = t.live.is_some() && self.leds.contains(t.guid);
+                            if leds {
+                                icons.push(style::TabIcon {
+                                    glyph: icon::LIGHTBULB,
+                                    color: None,
+                                    tip: &led_tip,
+                                });
+                            }
+                            let info_index = icons.len();
                             icons.push(style::TabIcon {
                                 glyph: icon::INFO,
                                 // The info icon is always in the accent green.
@@ -306,7 +319,9 @@ impl DevicesView {
                                 (Some(0), Some(hidden)) => {
                                     self.hide_request = Some((t.guid.to_string(), !hidden));
                                 }
-                                (Some(_), _) => self.info = Some(t.guid.to_string()),
+                                (Some(i), _) if i == info_index => {
+                                    self.info = Some(t.guid.to_string());
+                                }
                                 _ => {}
                             }
                             r
@@ -852,6 +867,7 @@ impl DevicesView {
                     vjoy,
                     inputs,
                     input: Some((&b.device_id, key.1)),
+                    leds: &self.leds,
                 };
                 for cfg in &b.configs {
                     editor.container(ui, &cfg.root_action, "actions", 0);
@@ -885,6 +901,7 @@ impl DevicesView {
                     vjoy,
                     inputs,
                     input: Some((&device, key.1)),
+                    leds: &self.leds,
                 };
                 editor.add_menu(ui, None, |kind| bind(Some(kind)));
             }

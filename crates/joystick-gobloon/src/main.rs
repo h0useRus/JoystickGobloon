@@ -11,6 +11,7 @@ mod devices_view;
 mod hidhide_view;
 mod instance;
 mod key_capture;
+mod leds;
 mod logfile;
 mod macro_editor;
 mod modes_view;

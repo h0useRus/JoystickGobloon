@@ -58,7 +58,8 @@ impl Drop for Lighting {
     }
 }
 
-fn mode(m: LedMode) -> Mode {
+/// The profile's LED mode as gob-lighting takes it.
+pub fn led_mode(m: LedMode) -> Mode {
     match m {
         LedMode::Off => Mode::Off,
         LedMode::On => Mode::On,
@@ -75,7 +76,7 @@ fn batch(lights: impl IntoIterator<Item = Light>) -> Vec<(String, Vec<Led>)> {
         let led = Led {
             id: l.led,
             color: l.color,
-            mode: mode(l.mode),
+            mode: led_mode(l.mode),
         };
         let pos = match out.iter().position(|(d, _)| *d == l.device) {
             Some(p) => p,

@@ -17,6 +17,7 @@ mod runner;
 mod sendinput;
 
 pub use engine::Engine;
+pub use lighting::led_mode;
 pub use media::{voices, Media, SpeechQueue, SpeechRequest};
 pub use runner::{Runner, RunnerStatus};
 

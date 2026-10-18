@@ -73,6 +73,7 @@ pub struct JoystickGobloonApp {
     modes_window: crate::modes_view::ModesWindow,
     /// Sound and speech previews from the editor.
     media: gob_engine::Media,
+    leds: crate::leds::Leds,
     tray: Option<crate::tray::Tray>,
     /// The window was shown from outside winit (tray, second start): sync it next frame.
     restored: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -169,6 +170,7 @@ impl JoystickGobloonApp {
             modes_window: Default::default(),
             title: crate::APP_NAME.into(),
             media: Default::default(),
+            leds: Default::default(),
             _plugins: load_plugins(),
             updater: Default::default(),
             update: None,
@@ -803,6 +805,8 @@ impl JoystickGobloonApp {
                 Some((d.info.guid.clone(), hidden))
             })
             .collect();
+        self.leds.update(&devices, ui.ctx());
+        self.devices_view.leds = self.leds.guids(&devices);
         self.devices_view.show(
             ui,
             &self.i18n,
@@ -842,13 +846,37 @@ impl JoystickGobloonApp {
     /// Applies queued edits, marks the profile unsaved and restarts a running profile.
     fn apply_ops(&mut self, ops: Vec<crate::action_editor::Op>) {
         use crate::action_editor::Op;
-        let (previews, ops): (Vec<Op>, Vec<Op>) = ops
-            .into_iter()
-            .partition(|op| matches!(op, Op::PreviewSound { .. } | Op::PreviewSpeech(_)));
+        let (previews, ops): (Vec<Op>, Vec<Op>) = ops.into_iter().partition(|op| {
+            matches!(
+                op,
+                Op::PreviewSound { .. } | Op::PreviewSpeech(_) | Op::PreviewLight { .. }
+            )
+        });
         for op in previews {
             match op {
                 Op::PreviewSound { file, volume } => self.media.play(&file, volume),
                 Op::PreviewSpeech(request) => self.media.speak(request),
+                Op::PreviewLight {
+                    device,
+                    led,
+                    color,
+                    mode,
+                } => {
+                    let devices = self.input.devices();
+                    // A profile device from another PC lights the attached one standing in.
+                    let device = self
+                        .profile
+                        .as_ref()
+                        .map(|p| crate::substitute_view::auto_aliases(&p.profile, &devices))
+                        .and_then(|a| a.get(&device).cloned())
+                        .unwrap_or(device);
+                    let led = gob_lighting::Led {
+                        id: led,
+                        color,
+                        mode: gob_engine::led_mode(mode),
+                    };
+                    self.leds.preview(&devices, &device, led);
+                }
                 _ => {}
             }
         }
