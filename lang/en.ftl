@@ -370,6 +370,7 @@ viewer-axis = Axis { $n }
 
 # vJoy configuration
 vjoy-add = Add a vJoy device
+vjoy-add-max = vJoy supports at most 16 devices.
 vjoy-new-device = New vJoy #{ $n }: not created yet
 vjoy-enable = Enable the vJoy driver
 vjoy-disable = Disable the vJoy driver

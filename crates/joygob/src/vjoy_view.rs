@@ -201,7 +201,12 @@ impl VJoyView {
             }
             if self.config.available() {
                 let can = free.is_some() && self.draft.is_none() && !locked && !self.config.busy();
-                add = style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add")).clicked();
+                let r = style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add"));
+                add = if free.is_none() {
+                    r.on_disabled_hover_text(i18n.tr("vjoy-add-max")).clicked()
+                } else {
+                    r.clicked()
+                };
             }
         });
         if let Some(id) = clicked {

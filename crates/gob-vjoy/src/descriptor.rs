@@ -343,6 +343,28 @@ mod tests {
     }
 
     #[test]
+    fn sixteen_devices_fit_the_driver() {
+        // The driver joins every DeviceNN descriptor into one (USHORT size) and keeps a device
+        // only when its report id (byte 11) is new; ids 1..=16, the most it supports.
+        let mut joined = Vec::new();
+        let mut ids = Vec::new();
+        for id in 1..=crate::MAX_DEVICES {
+            let mut c = DeviceConfig::new(id);
+            c.buttons = MAX_BUTTONS;
+            c.hats = MAX_HATS;
+            c.effects = [true; 11];
+            let d = c.descriptor();
+            assert_eq!((d[10], d[11]), (0x85, id as u8));
+            assert_eq!(DeviceConfig::from_descriptor(id, &d), Some(c));
+            ids.push(d[11]);
+            joined.extend(d);
+        }
+        ids.dedup();
+        assert_eq!(ids.len(), 16);
+        assert!(joined.len() <= usize::from(u16::MAX), "{}", joined.len());
+    }
+
+    #[test]
     fn ffb_report_ids_follow_the_device_id() {
         let ids: Vec<u8> = FFB_CHUNKS[1..].iter().map(|c| c[0]).collect();
         assert_eq!(

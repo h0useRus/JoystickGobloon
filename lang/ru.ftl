@@ -370,6 +370,7 @@ viewer-axis = Ось { $n }
 
 # vJoy configuration
 vjoy-add = Добавить устройство vJoy
+vjoy-add-max = vJoy поддерживает не больше 16 устройств.
 vjoy-new-device = Новый vJoy #{ $n }: ещё не создан
 vjoy-enable = Включить драйвер vJoy
 vjoy-disable = Выключить драйвер vJoy
