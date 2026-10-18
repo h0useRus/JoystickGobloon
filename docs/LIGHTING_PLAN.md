@@ -13,7 +13,8 @@
 - `ref/vkb_led_jg_plugin` — github.com/WesCov/vkb_led_jg_plugin: плагин Joystick Gremlin для Gladiator NXT
   (PID `0x0200`), `vkb_led_jg_plugin_lib.py` — те же функции с обходом ошибки чтения, `vkb_led_jg_plugin.py` —
   что значат color1/color2 у одноцветных LED.
-- `ref/JoystickGremlin/gremlin/profile.py:394` — Gremlin **не открывает** профиль с неизвестным типом действия.
+- `ref/JoystickGremlin/gremlin/profile.py:394` (ветка develop, Gremlin 16.0; формат профиля по-прежнему 14) —
+  Gremlin **не открывает** профиль с неизвестным типом действия.
 
 ## Протокол VKB (по pyvkb; подтвердить в сессии 0)
 
@@ -43,7 +44,7 @@
 
 ### Хранение в профиле: открытый вопрос (решить до сессии 3)
 
-Gremlin R14 отказывается открывать профиль с `<action type="light-led">`. Варианты:
+Gremlin (R14–R16, формат профиля 14) отказывается открывать профиль с `<action type="light-led">`. Варианты:
 
 1. **Своё действие `light-led`** (как в предварительном плане). Просто, но такой профиль больше не откроется
    в Gremlin. При добавлении первого Light LED — предупреждение «профиль станет несовместимым с Gremlin».

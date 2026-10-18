@@ -1,6 +1,8 @@
 # Joystick Gobloon (JoyGob)
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
-Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13). Work on ONE crate per session.
+Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13).
+"R14" = Gremlin profile format version 14, still current in Gremlin R15/R16; ref/JoystickGremlin is the develop
+branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
 - crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default) + de, es, fr, ko, ru, zh embedded; more `lang/*.ftl`
