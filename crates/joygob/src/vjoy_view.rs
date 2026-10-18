@@ -50,9 +50,7 @@ struct Tester {
 impl VJoyView {
     pub fn new() -> Self {
         let vjoy = VJoy::load().map_err(|e| e.to_string());
-        let config = crate::vjoy_config_view::VJoyConfig::new(
-            vjoy.as_ref().ok().map(|v| v.dll_path.as_path()),
-        );
+        let config = crate::vjoy_config_view::VJoyConfig::new(vjoy.is_ok());
         Self {
             vjoy,
             devices: Vec::new(),

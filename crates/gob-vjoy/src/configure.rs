@@ -4,7 +4,13 @@
 //! `UpdateCollections` in ref/vJoy driver/sys/hid.c). Needs administrator rights: the app runs
 //! itself elevated with [`Change::args`] and calls [`apply`] there.
 
+use std::path::Path;
+
 use crate::config::DeviceConfig;
+
+/// Switch that makes JoyGob's exe (or the `vjoy_config` example) apply one change and quit:
+/// `--vjoy-config [--result <file>] <change args>`; see [`run_admin`] and [`run_elevated`].
+pub const ARG: &str = "--vjoy-config";
 
 /// One change, with the same arguments vJoyConfig takes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,6 +65,53 @@ impl Change {
 
 /// Exit code of the elevated process when [`apply`] returns [`Outcome::RebootNeeded`].
 pub const EXIT_REBOOT: u32 = 3;
+
+/// Exit codes of the elevated process besides 0 and [`EXIT_REBOOT`].
+const EXIT_FAILED: i32 = 1;
+const EXIT_USAGE: i32 = 2;
+
+/// The elevated side: `args` follow [`ARG`]. Applies the change, writes an error text to the
+/// `--result` file (the elevated copy has no console or log of its own) and returns the exit code.
+pub fn run_admin(args: &[String]) -> i32 {
+    let (result, args) = match args {
+        [r, file, rest @ ..] if r == "--result" => (Some(Path::new(file)), rest),
+        _ => (None, args),
+    };
+    let (code, text) = match Change::from_args(args) {
+        None => (EXIT_USAGE, format!("bad arguments: {}", args.join(" "))),
+        Some(change) => match apply(&change) {
+            Ok(Outcome::Done) => (0, String::new()),
+            Ok(Outcome::RebootNeeded) => (EXIT_REBOOT as i32, String::new()),
+            Err(e) => (EXIT_FAILED, e),
+        },
+    };
+    if let Some(file) = result {
+        let _ = std::fs::write(file, &text);
+    }
+    code
+}
+
+/// The user's side: runs `exe` elevated with [`ARG`] (UAC prompt) and waits for it.
+pub fn run_elevated(exe: &Path, change: &Change) -> Result<Outcome, String> {
+    let file =
+        std::env::temp_dir().join(format!("JoystickGobloon-vjoy-{}.txt", std::process::id()));
+    let _ = std::fs::remove_file(&file);
+    let mut args = vec![
+        ARG.to_string(),
+        "--result".into(),
+        file.display().to_string(),
+    ];
+    args.extend(change.args());
+    let code = crate::config::run_as_admin(exe, &args);
+    let text = std::fs::read_to_string(&file).unwrap_or_default();
+    let _ = std::fs::remove_file(&file);
+    match code? {
+        0 => Ok(Outcome::Done),
+        EXIT_REBOOT => Ok(Outcome::RebootNeeded),
+        code if text.is_empty() => Err(format!("exit code {code}")),
+        _ => Err(text),
+    }
+}
 
 /// What [`apply`] left to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

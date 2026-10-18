@@ -397,6 +397,7 @@ vjoy-config-reading = Reading the vJoy configuration...
 vjoy-config-label = configure device { $n }
 vjoy-config-done = vJoy configuration changed.
 vjoy-config-error = Could not change the vJoy configuration: { $error }
+vjoy-config-reboot = vJoy configuration changed. Restart Windows for it to take effect.
 vjoy-remove-title = Remove vJoy device { $n }?
 vjoy-remove-text = Games and profiles that use this device lose it until it is created again.
 

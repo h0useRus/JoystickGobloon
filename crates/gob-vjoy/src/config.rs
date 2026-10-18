@@ -144,8 +144,16 @@ pub fn read(tool: &Path) -> Result<Vec<DeviceConfig>, String> {
     Ok(text.lines().filter_map(DeviceConfig::parse).collect())
 }
 
-/// Runs vJoyConfig (or JoyGob's own exe) with administrator rights and waits for it. A refused UAC prompt is an error.
+/// Runs vJoyConfig with administrator rights and waits for it. A refused UAC prompt is an error.
 pub fn run_elevated(tool: &Path, args: &[String]) -> Result<(), String> {
+    match run_as_admin(tool, args)? {
+        0 => Ok(()),
+        code => Err(format!("exit code {code}")),
+    }
+}
+
+/// Runs a program with administrator rights (UAC prompt) and returns its exit code.
+pub fn run_as_admin(tool: &Path, args: &[String]) -> Result<u32, String> {
     #[cfg(windows)]
     {
         use windows::core::{HSTRING, PCWSTR};
@@ -191,11 +199,8 @@ pub fn run_elevated(tool: &Path, args: &[String]) -> Result<(), String> {
             let mut code = 0u32;
             let _ = GetExitCodeProcess(info.hProcess, &mut code);
             let _ = CloseHandle(info.hProcess);
-            if code != 0 {
-                return Err(format!("exit code {code}"));
-            }
+            Ok(code)
         }
-        Ok(())
     }
     #[cfg(not(windows))]
     {

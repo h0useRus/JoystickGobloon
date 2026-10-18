@@ -1,12 +1,14 @@
-//! Adding, changing and removing vJoy devices like "Configure vJoy", through vJoyConfig.exe.
-//! Reading runs in the background; changes run elevated (UAC) on a worker thread.
+//! Adding, changing and removing vJoy devices like "Configure vJoy", without vJoyConfig.exe:
+//! the configuration is read from the registry in the background; changes run this exe
+//! elevated (UAC, `--vjoy-config`) on a worker thread.
 
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
 
 use eframe::egui::{self, RichText};
 use gob_i18n::I18n;
-use gob_vjoy::config::{self, DeviceConfig, EFFECTS, MAX_BUTTONS, MAX_DEVICES, MAX_HATS};
+use gob_vjoy::config::{DeviceConfig, EFFECTS, MAX_BUTTONS, MAX_DEVICES, MAX_HATS};
+use gob_vjoy::configure::{self, Change, Outcome};
 
 use crate::style::{self, icon};
 
@@ -14,12 +16,13 @@ use crate::style::{self, icon};
 enum Done {
     Read(Result<Vec<DeviceConfig>, String>),
     /// A change: its log label and result.
-    Change(String, Result<(), String>),
+    Change(String, Result<Outcome, String>),
 }
 
 pub struct VJoyConfig {
-    tool: Option<PathBuf>,
-    /// Configuration of the existing devices (from `vJoyConfig -t -c`).
+    /// This exe, started elevated for changes; `None` without vJoy.
+    exe: Option<PathBuf>,
+    /// Configuration of the existing devices (from the registry).
     pub configs: Vec<DeviceConfig>,
     /// Edited copy of the selected device (or of a new one).
     pub edit: Option<DeviceConfig>,
@@ -29,9 +32,10 @@ pub struct VJoyConfig {
 }
 
 impl VJoyConfig {
-    pub fn new(dll_path: Option<&std::path::Path>) -> Self {
+    /// `installed`: the vJoy driver is there.
+    pub fn new(installed: bool) -> Self {
         let mut s = Self {
-            tool: dll_path.and_then(config::tool),
+            exe: std::env::current_exe().ok().filter(|_| installed),
             configs: Vec::new(),
             edit: None,
             job: None,
@@ -43,7 +47,7 @@ impl VJoyConfig {
     }
 
     pub fn available(&self) -> bool {
-        self.tool.is_some()
+        self.exe.is_some()
     }
 
     pub fn busy(&self) -> bool {
@@ -51,24 +55,24 @@ impl VJoyConfig {
     }
 
     fn reload(&mut self) {
-        let Some(tool) = self.tool.clone() else {
+        if self.exe.is_none() {
             return;
-        };
+        }
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let _ = tx.send(Done::Read(config::read(&tool)));
+            let _ = tx.send(Done::Read(gob_vjoy::descriptor::read_registry()));
         });
         self.job = Some(rx);
     }
 
-    fn run(&mut self, label: String, args: Vec<String>) {
-        let Some(tool) = self.tool.clone() else {
+    fn run(&mut self, label: String, change: Change) {
+        let Some(exe) = self.exe.clone() else {
             return;
         };
-        log::info!("vJoy: {label} (vJoyConfig {})", args.join(" "));
+        log::info!("vJoy: {label} ({})", change.args().join(" "));
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let result = config::run_elevated(&tool, &args);
+            let result = configure::run_elevated(&exe, &change);
             let _ = tx.send(Done::Change(label, result));
         });
         self.job = Some(rx);
@@ -93,9 +97,13 @@ impl VJoyConfig {
             }
             Done::Change(label, result) => {
                 match result {
-                    Ok(()) => {
+                    Ok(Outcome::Done) => {
                         log::info!("vJoy: {label} done");
                         self.message = Some(Ok(i18n.tr("vjoy-config-done")));
+                    }
+                    Ok(Outcome::RebootNeeded) => {
+                        log::warn!("vJoy: {label} done, Windows wants a restart");
+                        self.message = Some(Err(i18n.tr("vjoy-config-reboot")));
                     }
                     Err(e) => {
                         log::error!("vJoy: {label} failed: {e}");
@@ -122,10 +130,7 @@ impl VJoyConfig {
 
     pub fn enable(&mut self, on: bool, i18n: &I18n) {
         let label = i18n.tr(if on { "vjoy-enable" } else { "vjoy-disable" });
-        self.run(
-            label,
-            vec!["enable".into(), if on { "on" } else { "off" }.into()],
-        );
+        self.run(label, Change::Enable(on));
     }
 
     /// Editor for device `id` (`new`: not created yet). `locked`: a profile holds vJoy.
@@ -208,7 +213,7 @@ impl VJoyConfig {
                 .on_hover_text(i18n.tr("vjoy-config-admin"));
             if apply.clicked() {
                 let label = i18n.trf("vjoy-config-label", &[("n", id.into())]);
-                self.run(label, edit.create_args());
+                self.run(label, Change::Set(edit));
             }
             if !new
                 && changed
@@ -278,7 +283,7 @@ impl VJoyConfig {
             self.confirm_remove = None;
             if remove {
                 let label = i18n.trf("vjoy-remove-title", &[("n", id.into())]);
-                self.run(label, vec!["-d".into(), id.to_string()]);
+                self.run(label, Change::Delete(id));
             }
         }
     }
