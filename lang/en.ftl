@@ -64,8 +64,7 @@ vjoy-no-devices = No vJoy devices configured yet.
 vjoy-axes = Axes
 vjoy-buttons = Buttons
 vjoy-hats = Hats
-vjoy-test = Test output: take control of this device
-vjoy-test-hint = Press the flask to take control of this device and test its output.
+vjoy-test-hint = Test output: moving a control takes this device over until you leave the page.
 vjoy-free = Free
 vjoy-own = Controlled by Joystick Gobloon
 vjoy-busy = Used by another program (e.g. Joystick Gremlin)
@@ -369,7 +368,6 @@ viewer-axis = Axis { $n }
 # vJoy configuration
 vjoy-add = Add a vJoy device
 vjoy-new-device = New vJoy device { $n }
-vjoy-configure = Configure this device (axes, buttons, hats, force feedback)
 vjoy-enable = Enable the vJoy driver
 vjoy-disable = Disable the vJoy driver
 vjoy-hat-continuous = Continuous

@@ -64,8 +64,7 @@ vjoy-no-devices = Устройства vJoy ещё не настроены.
 vjoy-axes = Оси
 vjoy-buttons = Кнопки
 vjoy-hats = Хатки
-vjoy-test = Проверка вывода: взять управление устройством
-vjoy-test-hint = Нажмите на колбу, чтобы взять управление устройством и проверить его вывод.
+vjoy-test-hint = Проверка вывода: любое действие берёт устройство под управление, пока вы на этой странице.
 vjoy-free = Свободно
 vjoy-own = Управляется Joystick Gobloon
 vjoy-busy = Занято другой программой (например, Joystick Gremlin)
@@ -369,7 +368,6 @@ viewer-axis = Ось { $n }
 # vJoy configuration
 vjoy-add = Добавить устройство vJoy
 vjoy-new-device = Новое устройство vJoy { $n }
-vjoy-configure = Настроить устройство (оси, кнопки, хатки, обратная связь)
 vjoy-enable = Включить драйвер vJoy
 vjoy-disable = Выключить драйвер vJoy
 vjoy-hat-continuous = Плавные

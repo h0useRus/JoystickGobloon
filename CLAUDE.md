@@ -68,7 +68,7 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
   Debug builds open a page at start with env `JOYGOB_START_PAGE` = hidhide (window) | apps | vjoy | viewer | viewer-window | calibration | settings | about,
   select an input with `JOYGOB_EXPAND` = axis1 | button3 | hat1 ..., a tab with `JOYGOB_TAB` = keyboard | logical,
-  the first device's info window with `JOYGOB_INFO=1`, the vJoy device editor with `JOYGOB_VJOY=configure`
+  the first device's info window with `JOYGOB_INFO=1`
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
   window stays responsive; needs "close button hides to tray" on.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the

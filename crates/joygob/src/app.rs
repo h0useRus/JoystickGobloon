@@ -616,6 +616,8 @@ impl JoyGobApp {
             return;
         }
         let Some(loaded) = &self.profile else { return };
+        // The vJoy tester must not hold a device the profile needs.
+        self.vjoy_view.release();
         let devices = self.input.devices().clone();
         let aliases = auto_aliases(&loaded.profile, &devices);
         let repaint = {
@@ -1018,6 +1020,9 @@ impl eframe::App for JoyGobApp {
             self.hidhide_view.set_cloak(on);
         }
 
+        if self.page != Page::VJoy {
+            self.vjoy_view.release();
+        }
         let frame = egui::Frame::central_panel(&ctx.style()).inner_margin(16);
         egui::CentralPanel::default()
             .frame(frame)
