@@ -37,11 +37,11 @@ fn main() {
             Some("fastest") => Mode::FastestBlink,
             _ => Mode::On,
         };
-        device.set(Led {
+        device.set(&[Led {
             id: led,
             color,
             mode,
-        })
+        }])
     };
     if let Err(e) = result {
         return eprintln!("{e}");

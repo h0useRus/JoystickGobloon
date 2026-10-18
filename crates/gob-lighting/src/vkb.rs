@@ -284,9 +284,12 @@ impl From<Led> for LedConfig {
     }
 }
 
-/// Sets one LED, keeping the others in the list.
-pub fn set(hid: &Collection, led: Led) -> io::Result<()> {
-    write(hid, &merge(&read(hid)?, led.into()))
+/// Sets these LEDs with one write, keeping the others in the list.
+pub fn set(hid: &Collection, leds: &[Led]) -> io::Result<()> {
+    let list = leds
+        .iter()
+        .fold(read(hid)?, |list, &led| merge(&list, led.into()));
+    write(hid, &list)
 }
 
 /// Drops one LED from the list.

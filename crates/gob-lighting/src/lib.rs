@@ -62,10 +62,10 @@ impl Device {
         !hid_path.is_empty() && self.hid.path.eq_ignore_ascii_case(hid_path)
     }
 
-    /// Sets one LED, leaving the others as they are.
-    pub fn set(&self, led: Led) -> io::Result<()> {
+    /// Sets these LEDs (later ones win for the same id), leaving the others as they are.
+    pub fn set(&self, leds: &[Led]) -> io::Result<()> {
         match self.vendor {
-            Vendor::Vkb => vkb::set(&self.hid, led),
+            Vendor::Vkb => vkb::set(&self.hid, leds),
         }
     }
 
