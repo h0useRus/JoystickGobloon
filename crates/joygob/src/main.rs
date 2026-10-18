@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod action_editor;
+mod activation;
 mod app;
 mod apps_view;
 mod calibration_view;

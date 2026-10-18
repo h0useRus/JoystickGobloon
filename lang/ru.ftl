@@ -348,6 +348,8 @@ settings-autostart = Запускать вместе с Windows (свёрнут�
 settings-activate-on-start = Активировать профиль при запуске
 tray-show = Показать Joystick Gobloon
 tray-hiding = Скрытие устройств
+tray-activate = Активировать «{ $name }»
+tray-activate-none = Активировать профиль
 tray-quit = Выход
 autostart-error = Не удалось изменить автозапуск: { $error }
 

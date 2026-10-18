@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use eframe::egui::{self, Align, Layout, RichText, Vec2};
 use gob_i18n::I18n;
 
+use crate::activation::Activation;
 use crate::apps_view::AppsView;
 use crate::devices_view::DevicesView;
 use crate::hidhide_view::HidHideView;
@@ -10,7 +11,7 @@ use crate::profile_view::{important_warnings, LoadedProfile};
 use crate::settings::Settings;
 use crate::settings_view::{self, Change, SettingsTab};
 use crate::style::{self, icon};
-use crate::substitute_view::{auto_aliases, missing_devices, SubstituteDialog};
+use crate::substitute_view::{missing_devices, SubstituteDialog};
 use crate::vjoy_view::VJoyView;
 
 const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/joygob-256.png");
@@ -52,7 +53,10 @@ pub struct JoyGobApp {
     hidhide_window: bool,
     apps_view: AppsView,
     /// Running profile, if activated.
-    runner: Option<gob_engine::Runner>,
+    /// The running profile; shared with the tray menu, which works while the window is hidden.
+    activation: Activation,
+    /// Active in the last frame: a change made from the tray updates the status bar.
+    was_active: bool,
     /// Time of the last edit; a running profile restarts once edits settle.
     edited: Option<std::time::Instant>,
     /// Action waiting for the "save changes?" answer.
@@ -123,6 +127,11 @@ impl JoyGobApp {
             .last_profile
             .clone()
             .filter(|p| settings.reopen_last && p.exists());
+        let input = {
+            let ctx = cc.egui_ctx.clone();
+            gob_input::InputService::start(move || ctx.request_repaint())
+        };
+        let activation = Activation::new(input.handle(), cc.egui_ctx.clone());
         let mut app = Self {
             i18n,
             settings,
@@ -132,10 +141,7 @@ impl JoyGobApp {
             status,
             profile: None,
             logo,
-            input: {
-                let ctx = cc.egui_ctx.clone();
-                gob_input::InputService::start(move || ctx.request_repaint())
-            },
+            input,
             devices_view: DevicesView::default(),
             substitute: None,
             vjoy_view: VJoyView::new(),
@@ -147,7 +153,8 @@ impl JoyGobApp {
             hidhide_view: HidHideView::new(),
             hidhide_window: false,
             apps_view: AppsView::new(),
-            runner: None,
+            activation,
+            was_active: false,
             edited: None,
             pending: None,
             allow_close: false,
@@ -242,6 +249,7 @@ impl JoyGobApp {
                     ctx,
                     hwnd,
                     restored,
+                    self.activation.clone(),
                     crate::APP_NAME,
                     &show,
                     &hiding,
@@ -293,7 +301,7 @@ impl JoyGobApp {
                     });
                 }
                 self.profile = Some(loaded);
-                self.runner = None;
+                self.activation.stop();
                 self.devices_view.reset_mode();
                 self.settings.last_profile = Some(path);
                 self.settings.save();
@@ -373,7 +381,7 @@ impl JoyGobApp {
         let mut profile = gob_core::Profile::default();
         profile.set_startup_mode("Default");
         self.profile = Some(LoadedProfile::new(profile, None));
-        self.runner = None;
+        self.activation.stop();
         self.devices_view.reset_mode();
         self.status = self.i18n.tr("status-new");
     }
@@ -397,7 +405,7 @@ impl JoyGobApp {
             Pending::Open => self.import_dialog(),
             Pending::Load(path) => {
                 self.open_profile(path, true);
-                if self.profile.is_some() && self.runner.is_none() {
+                if self.profile.is_some() && !self.activation.is_active() {
                     self.toggle_runner(ctx);
                 }
             }
@@ -589,7 +597,7 @@ impl JoyGobApp {
         let title = match &self.profile {
             None => crate::APP_NAME.to_string(),
             Some(p) => {
-                let state = if self.runner.is_some() {
+                let state = if self.activation.is_active() {
                     "title-active"
                 } else {
                     "title-inactive"
@@ -609,42 +617,31 @@ impl JoyGobApp {
         }
     }
 
-    fn toggle_runner(&mut self, ctx: &egui::Context) {
-        if self.runner.take().is_some() {
-            log::info!("profile stopped");
+    fn toggle_runner(&mut self, _ctx: &egui::Context) {
+        if self.activation.stop() {
             self.status = self.i18n.tr("status-stopped");
             return;
         }
-        let Some(loaded) = &self.profile else { return };
+        if self.profile.is_none() {
+            return;
+        }
+        self.sync_activation();
         // The vJoy tester must not hold a device the profile needs.
         self.vjoy_view.release();
-        let devices = self.input.devices().clone();
-        let aliases = auto_aliases(&loaded.profile, &devices);
-        let repaint = {
-            let ctx = ctx.clone();
-            move || ctx.request_repaint()
-        };
-        match gob_engine::Runner::start(
-            &loaded.profile,
-            &aliases,
-            self.input.subscribe(),
-            &devices,
-            repaint,
-        ) {
-            Ok(runner) => {
-                log::info!(
-                    "profile {} active, {} device substitution(s)",
-                    loaded.file_name(),
-                    aliases.len()
-                );
-                self.runner = Some(runner);
-                self.status = self.i18n.tr("status-active");
-            }
+        match self.activation.start() {
+            Ok(()) => self.status = self.i18n.tr("status-active"),
             Err(e) => {
                 let text = self.i18n.trf("activate-error", &[("error", e.into())]);
                 self.error(text);
             }
         }
+        self.was_active = self.activation.is_active();
+    }
+
+    /// Hands the current profile to the shared activation (for the tray menu too).
+    fn sync_activation(&mut self) {
+        self.activation
+            .set_profile(self.profile.as_ref().map(|p| (&p.profile, p.file_name())));
     }
 
     /// Main toolbar: always shown, above every page.
@@ -714,7 +711,7 @@ impl JoyGobApp {
                 self.hidhide_window = !open;
             }
             ui.separator();
-            let active = self.runner.is_some();
+            let active = self.activation.is_active();
             let (glyph, tip) = if active {
                 (icon::STOP, "action-deactivate")
             } else {
@@ -867,6 +864,21 @@ impl JoyGobApp {
 
 impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.sync_activation();
+        // Started or stopped from the tray menu (maybe while the window was hidden).
+        let active = self.activation.is_active();
+        if active != self.was_active {
+            self.was_active = active;
+            self.status = self.i18n.tr(if active {
+                "status-active"
+            } else {
+                "status-stopped"
+            });
+        }
+        if let Some(e) = self.activation.take_error() {
+            let text = self.i18n.trf("activate-error", &[("error", e.into())]);
+            self.error(text);
+        }
         self.update_title(ctx);
         if self.hide_frames > 0 {
             self.vjoy_view.release();
@@ -875,13 +887,16 @@ impl eframe::App for JoyGobApp {
             ctx.request_repaint();
         }
         if let Some(tray) = &mut self.tray {
-            let active = self.runner.is_some();
-            let state = self.i18n.tr(if active {
-                "title-active"
-            } else {
-                "title-inactive"
-            });
-            tray.set_active(active, &format!("{} | {state}", crate::APP_NAME));
+            let active = self.activation.is_active();
+            let tip = |key: &str| format!("{} | {}", crate::APP_NAME, self.i18n.tr(key));
+            tray.set_active(active, [tip("title-inactive"), tip("title-active")]);
+            match self.activation.profile_name() {
+                Some(name) => {
+                    let caption = self.i18n.trf("tray-activate", &[("name", name.into())]);
+                    tray.set_profile(&caption, true);
+                }
+                None => tray.set_profile(&self.i18n.tr("tray-activate-none"), false),
+            }
             if tray.take_cloak_changed() {
                 self.hidhide_view.reload();
             }
@@ -919,7 +934,7 @@ impl eframe::App for JoyGobApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         }
         self.was_minimized = minimized;
-        if let Some(file) = self.runner.as_ref().and_then(|r| r.take_load_request()) {
+        if let Some(file) = self.activation.take_load_request() {
             self.request(Pending::Load(PathBuf::from(file)), ctx);
         }
         let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
@@ -948,11 +963,11 @@ impl eframe::App for JoyGobApp {
         }
         if let Some(t) = self.edited {
             let settle = std::time::Duration::from_millis(600);
-            if self.runner.is_none() {
+            if !self.activation.is_active() {
                 self.edited = None;
             } else if t.elapsed() >= settle {
                 self.edited = None;
-                self.runner = None;
+                self.activation.stop();
                 self.toggle_runner(ctx);
             } else {
                 ctx.request_repaint_after(settle - t.elapsed());
@@ -999,8 +1014,7 @@ impl eframe::App for JoyGobApp {
                     }
                     ui.separator();
                 }
-                if let Some(runner) = &self.runner {
-                    let status = runner.status();
+                if let Some(status) = self.activation.status() {
                     let mode = status.mode;
                     if status.paused {
                         ui.label(
@@ -1038,7 +1052,7 @@ impl eframe::App for JoyGobApp {
                     self.apps_view.show(ui, &self.i18n, &self.settings);
                 }
                 Page::VJoy => {
-                    let locked = self.runner.is_some();
+                    let locked = self.activation.is_active();
                     self.vjoy_view.show(ui, &self.i18n, locked);
                 }
                 Page::Viewer if self.viewer_window => {
@@ -1118,7 +1132,7 @@ impl eframe::App for JoyGobApp {
                     loaded.profile.substitute_device(old, new, name);
                 }
                 loaded.refresh();
-                self.runner = None;
+                self.activation.stop();
                 self.status = self.i18n.tr("status-substituted");
             }
             if !open {

@@ -348,6 +348,8 @@ settings-autostart = 随 Windows 启动（最小化）
 settings-activate-on-start = 启动时激活配置文件
 tray-show = 显示 Joystick Gobloon
 tray-hiding = 设备隐藏
+tray-activate = 激活“{ $name }”
+tray-activate-none = 激活配置文件
 tray-quit = 退出
 autostart-error = 无法更改随 Windows 启动：{ $error }
 

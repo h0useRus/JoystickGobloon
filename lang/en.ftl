@@ -348,6 +348,8 @@ settings-autostart = Start with Windows (minimized)
 settings-activate-on-start = Activate the profile on startup
 tray-show = Show Joystick Gobloon
 tray-hiding = Device hiding
+tray-activate = Activate “{ $name }”
+tray-activate-none = Activate the profile
 tray-quit = Quit
 autostart-error = Could not change starting with Windows: { $error }
 

@@ -348,6 +348,8 @@ settings-autostart = Windows와 함께 시작 (최소화)
 settings-activate-on-start = 시작할 때 프로필 활성화
 tray-show = Joystick Gobloon 표시
 tray-hiding = 장치 숨기기
+tray-activate = “{ $name }” 활성화
+tray-activate-none = 프로필 활성화
 tray-quit = 종료
 autostart-error = Windows와 함께 시작 설정을 바꿀 수 없습니다: { $error }
 
