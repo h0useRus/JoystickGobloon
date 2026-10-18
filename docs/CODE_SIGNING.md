@@ -21,6 +21,9 @@ The installer also carries the HidHide and vJoy driver installers. They are thir
 projects (MIT), downloaded from their official releases with a pinned SHA-256 and signed by their own
 authors; this project does not sign them.
 
+SignPath artifact configurations used by the workflow: [app](../.github/signpath/app.xml),
+[installer](../.github/signpath/installer.xml).
+
 ## Team roles
 
 - Committers and reviewers: [h0use](https://github.com/h0useRus)
