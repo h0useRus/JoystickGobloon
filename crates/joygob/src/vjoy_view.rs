@@ -207,6 +207,11 @@ impl VJoyView {
             }
         });
         ui.separator();
+        // "+" was pressed: the new device's editor starts next frame; the selected device's
+        // editor must not take over its draft now.
+        if self.adding.is_some() {
+            return;
+        }
 
         let Some(info) = self.devices.iter().find(|d| d.id == self.selected).cloned() else {
             return;
