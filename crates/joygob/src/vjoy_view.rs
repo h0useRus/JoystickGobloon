@@ -30,7 +30,7 @@ pub struct VJoyView {
     devices: Vec<DeviceInfo>,
     refreshed: Option<Instant>,
     selected: u32,
-    /// Output tester of the selected device; it takes the device on the first touch.
+    /// Output tester of the selected device; usable while the lock button holds the device.
     test: Option<Tester>,
     error: Option<String>,
     config: crate::vjoy_config_view::VJoyConfig,
@@ -39,9 +39,10 @@ pub struct VJoyView {
 }
 
 struct Tester {
-    id: u32,
-    /// Held while testing; released when leaving the page, selecting another device,
-    /// changing the configuration or starting a profile.
+    /// The device as the driver reported it; a new layout makes a new tester.
+    info: DeviceInfo,
+    /// Taken with the lock button; released when the page is left, another device is
+    /// selected, the window is minimized or hidden, the configuration changes or a profile starts.
     device: Option<gob_vjoy::Device>,
     axes: [f32; 8],
     buttons: Vec<bool>,
@@ -64,12 +65,10 @@ impl VJoyView {
         }
     }
 
-    /// Lets go of the device under test (the page is left or a profile starts).
+    /// Lets go of the device under test; the tester starts over from neutral values.
     pub fn release(&mut self) {
-        if let Some(t) = &mut self.test {
-            if t.device.take().is_some() {
-                self.refreshed = None;
-            }
+        if self.test.take().is_some_and(|t| t.device.is_some()) {
+            self.refreshed = None;
         }
     }
 
@@ -191,7 +190,9 @@ impl VJoyView {
                     .on_hover_text(tip);
                 if r.clicked() && d.id != self.selected {
                     self.selected = d.id;
+                    // Like release(); self.devices is borrowed here.
                     self.test = None;
+                    self.refreshed = None;
                     self.error = None;
                     self.config.edit = None;
                     self.refreshed = None;
@@ -201,7 +202,7 @@ impl VJoyView {
                 let can = free.is_some() && !locked && !self.config.busy();
                 if style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add")).clicked() {
                     if let Some(id) = free {
-                        self.test = None;
+                        self.release();
                         self.adding = Some(id);
                         self.config.start_new(id);
                     }
@@ -213,7 +214,13 @@ impl VJoyView {
         let Some(info) = self.devices.iter().find(|d| d.id == self.selected).cloned() else {
             return;
         };
-        if self.test.as_ref().is_none_or(|t| t.id != info.id) {
+        // A new configuration shows up in the tester as soon as the driver reports it.
+        if self.test.as_ref().is_none_or(|t| {
+            t.info.id != info.id
+                || (t.info.axes.as_slice(), t.info.buttons, t.info.hats())
+                    != (info.axes.as_slice(), info.buttons, info.hats())
+        }) {
+            self.release();
             self.test = Some(Tester::new(&info));
         }
         egui::ScrollArea::vertical()
@@ -223,18 +230,33 @@ impl VJoyView {
                     self.config.editor(ui, i18n, info.id, false, locked);
                     ui.separator();
                 }
-                ui.label(RichText::new(i18n.tr("vjoy-test-hint")).weak());
+                let can = !locked && !self.config.busy();
+                let held = self.test.as_ref().is_some_and(|t| t.device.is_some());
+                ui.horizontal(|ui| {
+                    let (glyph, tip) = if held {
+                        (icon::LOCK_SIMPLE, "vjoy-unlock")
+                    } else {
+                        (icon::LOCK_SIMPLE_OPEN, "vjoy-lock")
+                    };
+                    let r = ui.add_enabled_ui(can, |ui| {
+                        style::icon_toggle(ui, held, glyph, &i18n.tr(tip))
+                    });
+                    if r.inner.clicked() {
+                        if held {
+                            self.release();
+                        } else {
+                            self.take(&vjoy, &info, i18n);
+                        }
+                    }
+                    ui.label(RichText::new(i18n.tr("vjoy-test-hint")).weak());
+                });
                 if let Some(e) = &self.error {
                     ui.colored_label(ui.visuals().warn_fg_color, e);
                 }
                 ui.add_space(6.0);
-                let can = !locked && !self.config.busy();
-                let mut ops = Vec::new();
+                let held = self.test.as_ref().is_some_and(|t| t.device.is_some());
                 if let Some(test) = &mut self.test {
-                    ui.add_enabled_ui(can, |ui| test.show(ui, &info, &mut ops));
-                }
-                if !ops.is_empty() {
-                    self.output(&vjoy, &info, ops, i18n);
+                    ui.add_enabled_ui(can && held, |ui| test.show(ui, &info));
                 }
             });
     }
@@ -250,45 +272,27 @@ impl VJoyView {
         self.devices.clone()
     }
 
-    /// Sends tester changes, taking the device first if needed.
-    fn output(&mut self, vjoy: &Arc<VJoy>, info: &DeviceInfo, ops: Vec<Op>, i18n: &I18n) {
+    /// The lock button: takes the device for the tester.
+    fn take(&mut self, vjoy: &Arc<VJoy>, info: &DeviceInfo, i18n: &I18n) {
         let Some(test) = &mut self.test else { return };
-        if test.device.is_none() {
-            match vjoy.acquire(info.id) {
-                Ok(device) => {
-                    self.error = None;
-                    test.device = Some(device);
-                    self.refreshed = None;
-                }
-                Err(e) => {
-                    log::error!("acquiring vJoy device {}: {e}", info.id);
-                    self.error = Some(i18n.trf("vjoy-error", &[("error", e.to_string().into())]));
-                    return;
-                }
+        match vjoy.acquire(info.id) {
+            Ok(device) => {
+                self.error = None;
+                test.device = Some(device);
+            }
+            Err(e) => {
+                log::error!("acquiring vJoy device {}: {e}", info.id);
+                self.error = Some(i18n.trf("vjoy-error", &[("error", e.to_string().into())]));
             }
         }
-        let Some(device) = &test.device else { return };
-        for op in ops {
-            let _ = match op {
-                Op::Axis(slot, v) => device.set_axis(slot, v),
-                Op::Button(n, down) => device.set_button(n, down),
-                Op::Hat(n, dir) => device.set_hat(n, dir),
-            };
-        }
+        self.refreshed = None;
     }
-}
-
-/// One change made in the tester.
-enum Op {
-    Axis(u8, f32),
-    Button(u8, bool),
-    Hat(u8, Option<u16>),
 }
 
 impl Tester {
     fn new(info: &DeviceInfo) -> Self {
         Self {
-            id: info.id,
+            info: info.clone(),
             device: None,
             axes: [0.0; 8],
             buttons: vec![false; info.buttons as usize],
@@ -296,7 +300,7 @@ impl Tester {
         }
     }
 
-    fn show(&mut self, ui: &mut egui::Ui, info: &DeviceInfo, ops: &mut Vec<Op>) {
+    fn show(&mut self, ui: &mut egui::Ui, info: &DeviceInfo) {
         ui.spacing_mut().slider_width = 320.0;
         egui::Grid::new("vjoy-axes")
             .num_columns(2)
@@ -314,7 +318,9 @@ impl Tester {
                             self.axes[i] = 0.0;
                         }
                         if changed || center {
-                            ops.push(Op::Axis(slot, self.axes[i]));
+                            if let Some(d) = &self.device {
+                                d.set_axis(slot, self.axes[i]);
+                            }
                         }
                     });
                     ui.end_row();
@@ -335,7 +341,9 @@ impl Tester {
                 let down = r.is_pointer_button_down_on();
                 if down != *state {
                     *state = down;
-                    ops.push(Op::Button(i as u8 + 1, down));
+                    if let Some(d) = &self.device {
+                        d.set_button(i as u8 + 1, down);
+                    }
                 }
             }
         });
@@ -366,7 +374,9 @@ impl Tester {
                         });
                     if wanted != *state {
                         *state = wanted;
-                        ops.push(Op::Hat(h as u8 + 1, wanted));
+                        if let Some(d) = &self.device {
+                            d.set_hat(h as u8 + 1, wanted);
+                        }
                     }
                     ui.vertical_centered(|ui| ui.label(RichText::new(format!("{}", h + 1)).weak()));
                 });
@@ -378,9 +388,9 @@ impl Tester {
 
 fn status_glyph(status: Status) -> &'static str {
     match status {
-        Status::Own => icon::LOCK_SIMPLE_OPEN,
+        Status::Own => icon::LOCK_SIMPLE,
         Status::Free => icon::CHECK,
-        Status::Busy => icon::LOCK_SIMPLE,
+        Status::Busy => icon::PROHIBIT,
         Status::Missing | Status::Unknown => icon::QUESTION,
     }
 }

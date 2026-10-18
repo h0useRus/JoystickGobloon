@@ -869,6 +869,7 @@ impl eframe::App for JoyGobApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.update_title(ctx);
         if self.hide_frames > 0 {
+            self.vjoy_view.release();
             self.hide_frames -= 1;
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             ctx.request_repaint();
@@ -905,9 +906,14 @@ impl eframe::App for JoyGobApp {
         if to_tray && ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            self.vjoy_view.release();
         }
         // "Minimize to tray": a minimized window leaves the taskbar; the tray brings it back.
         let minimized = ctx.input(|i| i.viewport().minimized) == Some(true);
+        if minimized {
+            // The vJoy tester lets go of its device: nobody can see or use it now.
+            self.vjoy_view.release();
+        }
         if minimized && !self.was_minimized && self.settings.minimize_to_tray && self.tray.is_some()
         {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
