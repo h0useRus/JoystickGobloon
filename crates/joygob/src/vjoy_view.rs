@@ -173,10 +173,7 @@ impl VJoyView {
                     icon::ARROWS_OUT_CARDINAL,
                     d.hats()
                 );
-                // Our own hold shows at the tester's lock; only someone else's shows here.
-                if let Some(glyph) = status_glyph(d.status) {
-                    caption = format!("{caption}    {glyph}");
-                }
+                caption = format!("{caption}    {}", status_glyph(d.status));
                 let tip = format!(
                     "{}\n{}: {}, {}: {}, {}: {}",
                     i18n.tr(status_key(d.status)),
@@ -415,12 +412,13 @@ fn preview(info: &DeviceInfo, c: &gob_vjoy::config::DeviceConfig) -> DeviceInfo 
     }
 }
 
-/// Tab mark for a device someone else holds or that is not there; none for free or our own.
-fn status_glyph(status: Status) -> Option<&'static str> {
+/// Tab mark: free, held by us (the tester's lock or a profile), held by another program.
+fn status_glyph(status: Status) -> &'static str {
     match status {
-        Status::Own | Status::Free => None,
-        Status::Busy => Some(icon::PROHIBIT),
-        Status::Missing | Status::Unknown => Some(icon::QUESTION),
+        Status::Own => icon::LOCK_SIMPLE,
+        Status::Free => icon::CHECK,
+        Status::Busy => icon::PROHIBIT,
+        Status::Missing | Status::Unknown => icon::QUESTION,
     }
 }
 
