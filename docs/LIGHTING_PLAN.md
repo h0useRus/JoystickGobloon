@@ -56,9 +56,9 @@
 | --- | --- | --- |
 | **gob-lighting** (новый крейт) | lib.rs: общие `Device` / `Led` / `Mode`, `match` по `Vendor`; hid.rs: общий HID (поиск, `GetFeature`/`SetFeature`); **каждый производитель — свой файл**, `vkb.rs`: report `0x59`, кодирование записи и пакета, CRC, слияние с текущим списком, фиктивный LED 99 | gob-hidhide (HID, SetupAPI/CfgMgr), pyvkb |
 | **gob-input** | Для устройства DirectInput отдать путь HID (`DIPROP_GUIDANDPATH`): у VKB report `0x59` лежит в той же коллекции джойстика, путь совпадает с `gob_lighting::Device::path` (сравнивать без учёта регистра) | dinput.rs |
-| **gob-core** | `ActionKind::LightLed { device, led, color, mode, trigger }`, `trigger` = `press` / `release` / `activate`, `NewAction::LightLed`; своё действие `light-led` | `PlaySound` в action.rs / edit.rs |
+| **gob-core** | `ActionKind::LightLed { device, led, color, mode, on_activate }`; нажатие / отпускание — обычный Gremlin `activation-mode`, «при активации» — свойство `on-activate`; `NewAction::LightLed`; своё действие `light-led` | `PlaySound` в action.rs / edit.rs |
 | **gob-gremlin** | `<action type="light-led">` ⇄ `LightLed`; round-trip-тест | — |
-| **gob-engine** | `Node::LightLed`; `Output::light_led(device, led, color, mode)` по `trigger`: на нажатие, на отпускание или один раз при активации профиля (все `activate` сразу после старта); при остановке профиля LED не трогаем | `Node::PlaySound`, `Output::play_sound` |
+| **gob-engine** | `Node::LightLed`; `Output::light_led(&Light)` на нажатие / отпускание (`activation-mode`); `on-activate` — `Engine::activate` при старте профиля и при каждой смене режима (действия, привязанные в новом режиме); при остановке профиля LED не трогаем | `Node::PlaySound`, `Output::play_sound` |
 | **Runner** | Отдельный поток `lighting`: HID-запросы не тормозят цикл движка; последняя команда на LED побеждает (схлопывать очередь) | media.rs |
 | **joystick-gobloon** | Пункт «Light LED» в меню действий (иконка `LIGHTBULB`); редактор: устройство (подключённые с поддержкой LED), LED (имена для известных моделей + номер), цвет (палитра 8×8×8 с предпросмотром), режим (горит / мигает медленно / быстро / очень быстро / выкл), когда срабатывает (нажатие / отпускание / при активации профиля), кнопка «проверить» (зажечь сейчас, когда профиль не активен); лампочка на вкладке устройства с LED; i18n на 7 языков | редактор play-sound |
 | **docs** | `light-led` в `docs/GREMLIN_ACTIONS.md` как своё действие (нет в Gremlin) | — |
@@ -112,18 +112,23 @@
 
 ### 3. gob-core + gob-gremlin
 
-- [ ] `ActionKind::LightLed`, `NewAction::LightLed`, чтение/запись, round-trip-тест.
+- [x] `ActionKind::LightLed`, `LedMode`, `parse_color` / `format_color`, `NewAction::LightLed`; свойства
+      `device-guid` uuid, `led-id` int, `color` `#RRGGBB`, `led-mode` (`on`, `slow-blink`, `fast-blink`,
+      `fastest-blink`, `off`), `on-activate` bool + обычные `activation-mode` / `action-label`; round-trip-тест.
 
 ### 4. gob-engine
 
-- [ ] `Node::LightLed`, `Output::light_led`, поток `lighting` в Runner, `trigger` (нажатие / отпускание /
-      активация профиля); тесты движка на порядок вызовов (как play-sound).
+- [x] `Node::LightLed`, `Output::light_led`, `Engine::activate` (старт и смена режима, порядок профиля),
+      алиасы устройств; поток `gob-lighting` в Runner: GUID -> HID-путь из `DeviceInfo`, очередь схлопывается
+      (последняя команда на LED), одна запись на устройство; ошибки — в лог один раз на устройство. Тесты.
 
 ### 5. joystick-gobloon
 
-- [ ] Редактор действия, кнопка «проверить», лампочка на вкладке устройства, i18n ×7, скриншот.
-- [ ] Ручная проверка с пользователем: профиль VKB + Light LED на кнопке, горит / мигает / цвет при активации
-      профиля / смена на нажатие и на отпускание.
+- [x] Редактор действия (стик, LED с именами VKB + номер, цвет, режим, «при активации» / нажатие / отпускание),
+      кнопка «зажечь сейчас», лампочка на вкладке устройства, i18n ×7, скриншот. Поиск LED-устройств — в фоне
+      (leds.rs), при смене подключённых устройств.
+- [x] Ручная проверка с пользователем (2026-10-19, EVO R + EVO OT L): «зажечь сейчас», цвет при активации
+      профиля (мигающая хатка), нажатие на обоих стиках, остановка профиля оставляет LED — всё работает.
 
 ### 6. Выпуск 0.5.0
 

@@ -32,6 +32,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `text-to-speech` | B | done |
 | `run-command` | B K | done |
 | `map-to-logical-device` | A B H K | done |
+| `light-led` | B K | own action, not in Gremlin (Gremlin cannot open profiles that use it) |
 
 ## map-to-mouse
 
@@ -156,6 +157,17 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - Joystick states are Joystick Gobloon's latest physical values (the runner seeds buttons/hats/axes at start),
   device GUIDs follow the substitution; vJoy states are the last values Joystick Gobloon wrote; keys via
   GetAsyncKeyState.
+
+## light-led (Joystick Gobloon's own)
+
+- Sets a joystick LED; VKB only so far (crates/gob-lighting, docs/LIGHTING_PLAN.md). Properties: `device-guid`
+  uuid (DirectInput instance GUID, device aliases apply), `led-id` int (VKB NXT/EVO: 10 RGB on top of the grip,
+  11 hat, 0 base), `color` string `#RRGGBB` (VKB: 8 levels per channel), `led-mode` (`on`, `slow-blink`,
+  `fast-blink`, `fastest-blink`, `off`), `on-activate` bool, plus the usual `action-label` / `activation-mode`.
+- `on-activate` false: runs on press / release like any action. True: nothing on the input; the LED is set when
+  the profile starts and whenever a mode becomes active in which the binding is active (profile order).
+- Writes go to a background thread; a LED keeps its state after the profile stops, until the stick is
+  reconnected. Missing device or no LED control: nothing happens, one log line.
 
 ## load-profile, play-sound, text-to-speech
 
