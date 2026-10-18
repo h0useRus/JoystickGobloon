@@ -88,6 +88,11 @@ impl VJoyConfig {
         self.job = None;
         match done {
             Done::Read(Ok(configs)) => {
+                // An untouched copy of the old configuration (taken while this read ran,
+                // e.g. right after Apply) follows the new one.
+                if self.edit.as_ref().is_some_and(|e| self.configs.contains(e)) {
+                    self.edit = None;
+                }
                 self.configs = configs;
                 false
             }
@@ -157,12 +162,12 @@ impl VJoyConfig {
                 ui.end_row();
 
                 ui.label(i18n.tr("vjoy-buttons"));
-                ui.add(egui::DragValue::new(&mut edit.buttons).range(0..=MAX_BUTTONS));
+                style::stepper(ui, &mut edit.buttons, 0..=MAX_BUTTONS);
                 ui.end_row();
 
                 ui.label(i18n.tr("vjoy-hats"));
                 ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut edit.hats).range(0..=MAX_HATS));
+                    style::stepper(ui, &mut edit.hats, 0..=MAX_HATS);
                     ui.add_enabled_ui(edit.hats > 0, |ui| {
                         ui.radio_value(
                             &mut edit.discrete_hats,

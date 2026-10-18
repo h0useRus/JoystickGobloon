@@ -60,7 +60,9 @@ impl VJoyView {
             error: None,
             config,
             adding: None,
-            configure: false,
+            // Debug builds: JOYGOB_VJOY=configure opens the editor at start (screenshots).
+            configure: cfg!(debug_assertions)
+                && std::env::var("JOYGOB_VJOY").as_deref() == Ok("configure"),
         }
     }
 

@@ -417,3 +417,136 @@ pub fn switch<'a>(on: &'a mut bool, text: impl Into<egui::WidgetText>) -> impl e
         response
     }
 }
+
+/// Numeric up-down: a text field for digits with up/down arrows inside its right edge, as tall
+/// as other fields. The mouse wheel over it steps the value too; out-of-range input is clamped
+/// when the field loses focus.
+pub fn stepper(
+    ui: &mut egui::Ui,
+    value: &mut u32,
+    range: std::ops::RangeInclusive<u32>,
+) -> egui::Response {
+    let (min, max) = (*range.start(), *range.end());
+    let h = ui.spacing().interact_size.y;
+    let arrows_w = 18.0;
+    let id = ui.next_auto_id();
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(64.0, h), egui::Sense::hover());
+    // One frame around the digits and the arrows; the text field inside has none.
+    let radius = ui.visuals().widgets.inactive.corner_radius;
+    ui.painter()
+        .rect_filled(rect, radius, ui.visuals().extreme_bg_color);
+
+    // While the field has focus it edits its own text; otherwise it shows the value.
+    let mut text = ui
+        .memory(|m| m.has_focus(id))
+        .then(|| ui.data(|d| d.get_temp::<String>(id)))
+        .flatten()
+        .unwrap_or_else(|| value.to_string());
+    let field = egui::Rect::from_min_max(rect.min, egui::pos2(rect.max.x - arrows_w, rect.max.y));
+    // A child that takes no space in the layout: `ui.put` would move the cursor back to the
+    // field's right edge, under the arrows.
+    let mut response = ui.new_child(egui::UiBuilder::new().max_rect(field)).add(
+        egui::TextEdit::singleline(&mut text)
+            .id(id)
+            .frame(false)
+            .margin(Vec2::new(4.0, 0.0))
+            .min_size(field.size())
+            .vertical_align(egui::Align::Center)
+            .horizontal_align(egui::Align::Center)
+            .char_limit(3),
+    );
+    text.retain(|c| c.is_ascii_digit());
+    let typed = text.parse::<u32>().ok();
+    if response.changed() {
+        if let Some(v) = typed.filter(|v| range.contains(v)) {
+            *value = v;
+        }
+    }
+    if response.lost_focus() {
+        if let Some(v) = typed {
+            *value = v.clamp(min, max);
+        }
+        ui.data_mut(|d| d.remove::<String>(id));
+        response.mark_changed();
+    } else if response.has_focus() {
+        ui.data_mut(|d| d.insert_temp(id, text));
+    }
+
+    // +1 / -1 from the wheel or an arrow, applied at the end.
+    let mut step = None;
+    if ui.is_enabled() && ui.rect_contains_pointer(rect) {
+        let scroll = ui.input(|i| i.raw_scroll_delta.y);
+        if scroll != 0.0 {
+            // Taken here, so the page does not scroll as well.
+            ui.input_mut(|i| {
+                i.raw_scroll_delta = Vec2::ZERO;
+                i.smooth_scroll_delta = Vec2::ZERO;
+            });
+            step = Some(scroll > 0.0);
+        }
+    }
+
+    let arrows = egui::Rect::from_min_max(egui::pos2(field.max.x, rect.min.y), rect.max);
+    let painter = ui.painter_at(rect);
+    let stroke = if response.has_focus() {
+        ui.visuals().selection.stroke
+    } else if ui.rect_contains_pointer(rect) {
+        ui.visuals().widgets.hovered.bg_stroke
+    } else {
+        ui.visuals().widgets.noninteractive.bg_stroke
+    };
+    painter.rect_stroke(rect.shrink(0.5), radius, stroke, egui::StrokeKind::Inside);
+    painter.vline(
+        arrows.min.x,
+        rect.y_range().shrink(4.0),
+        ui.visuals().widgets.noninteractive.bg_stroke,
+    );
+    for (i, glyph) in [icon::CARET_UP, icon::CARET_DOWN].into_iter().enumerate() {
+        let up = i == 0;
+        let half = if up {
+            egui::Rect::from_min_max(arrows.min, egui::pos2(arrows.max.x, arrows.center().y))
+        } else {
+            egui::Rect::from_min_max(egui::pos2(arrows.min.x, arrows.center().y), arrows.max)
+        };
+        let enabled = ui.is_enabled() && if up { *value < max } else { *value > min };
+        let sense = if enabled {
+            egui::Sense::click()
+        } else {
+            egui::Sense::hover()
+        };
+        let arrow = ui.interact(half, id.with(i), sense);
+        let visuals = &ui.visuals().widgets;
+        let color = if !enabled {
+            visuals.noninteractive.fg_stroke.color.gamma_multiply(0.4)
+        } else if arrow.hovered() {
+            painter.rect_filled(half.shrink(1.0), 2.0, visuals.hovered.weak_bg_fill);
+            visuals.hovered.fg_stroke.color
+        } else {
+            visuals.inactive.fg_stroke.color
+        };
+        painter.text(
+            half.center(),
+            egui::Align2::CENTER_CENTER,
+            glyph,
+            egui::FontId::proportional(12.0),
+            color,
+        );
+        if arrow.clicked() {
+            step = Some(up);
+        }
+    }
+    if let Some(up) = step {
+        let next = if up {
+            value.saturating_add(1)
+        } else {
+            value.saturating_sub(1)
+        }
+        .clamp(min, max);
+        if next != *value {
+            *value = next;
+            ui.data_mut(|d| d.insert_temp(id, next.to_string()));
+            response.mark_changed();
+        }
+    }
+    response
+}
