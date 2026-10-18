@@ -65,6 +65,7 @@ vjoy-axes = Axes
 vjoy-buttons = Buttons
 vjoy-hats = Hats
 vjoy-test-hint = Test output: lock the device to use the controls below.
+vjoy-test-pending = Apply the changes to test them.
 vjoy-lock = Take exclusive control of this device to test its output
 vjoy-unlock = Release the device
 vjoy-free = Free

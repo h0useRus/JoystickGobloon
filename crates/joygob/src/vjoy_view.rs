@@ -214,15 +214,6 @@ impl VJoyView {
         let Some(info) = self.devices.iter().find(|d| d.id == self.selected).cloned() else {
             return;
         };
-        // A new configuration shows up in the tester as soon as the driver reports it.
-        if self.test.as_ref().is_none_or(|t| {
-            t.info.id != info.id
-                || (t.info.axes.as_slice(), t.info.buttons, t.info.hats())
-                    != (info.axes.as_slice(), info.buttons, info.hats())
-        }) {
-            self.release();
-            self.test = Some(Tester::new(&info));
-        }
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
@@ -230,7 +221,27 @@ impl VJoyView {
                     self.config.editor(ui, i18n, info.id, false, locked);
                     ui.separator();
                 }
-                let can = !locked && !self.config.busy();
+                // The tester shows the editor's layout at once; unapplied changes cannot be
+                // tested, so the lock waits for Apply.
+                let pending = self.config.edit.as_ref().filter(|e| {
+                    e.id == info.id
+                        && self.config.configs.iter().find(|c| c.id == info.id) != Some(e)
+                });
+                let layout = pending.map_or_else(|| info.clone(), |e| preview(&info, e));
+                let pending = pending.is_some();
+                if self.test.as_ref().is_none_or(|t| {
+                    t.info.id != layout.id
+                        || (t.info.axes.as_slice(), t.info.buttons, t.info.hats())
+                            != (layout.axes.as_slice(), layout.buttons, layout.hats())
+                }) {
+                    self.release();
+                    self.test = Some(Tester::new(&layout));
+                }
+                if pending {
+                    self.release();
+                    self.test.get_or_insert_with(|| Tester::new(&layout));
+                }
+                let can = !locked && !self.config.busy() && !pending;
                 let held = self.test.as_ref().is_some_and(|t| t.device.is_some());
                 ui.horizontal(|ui| {
                     let (glyph, tip) = if held {
@@ -248,7 +259,12 @@ impl VJoyView {
                             self.take(&vjoy, &info, i18n);
                         }
                     }
-                    ui.label(RichText::new(i18n.tr("vjoy-test-hint")).weak());
+                    let hint = if pending {
+                        "vjoy-test-pending"
+                    } else {
+                        "vjoy-test-hint"
+                    };
+                    ui.label(RichText::new(i18n.tr(hint)).weak());
                 });
                 if let Some(e) = &self.error {
                     ui.colored_label(ui.visuals().warn_fg_color, e);
@@ -256,7 +272,7 @@ impl VJoyView {
                 ui.add_space(6.0);
                 let held = self.test.as_ref().is_some_and(|t| t.device.is_some());
                 if let Some(test) = &mut self.test {
-                    ui.add_enabled_ui(can && held, |ui| test.show(ui, &info));
+                    ui.add_enabled_ui(can && held, |ui| test.show(ui, &layout));
                 }
             });
     }
@@ -383,6 +399,18 @@ impl Tester {
                 ui.add_space(12.0);
             }
         });
+    }
+}
+
+/// The device as it will look once the edited configuration is applied.
+fn preview(info: &DeviceInfo, c: &gob_vjoy::config::DeviceConfig) -> DeviceInfo {
+    let hats = c.hats.min(gob_vjoy::config::MAX_HATS);
+    DeviceInfo {
+        axes: (1..=8u8).filter(|s| c.axes[usize::from(*s) - 1]).collect(),
+        buttons: c.buttons.min(gob_vjoy::config::MAX_BUTTONS),
+        cont_hats: if c.discrete_hats { 0 } else { hats },
+        disc_hats: if c.discrete_hats { hats } else { 0 },
+        ..info.clone()
     }
 }
 
