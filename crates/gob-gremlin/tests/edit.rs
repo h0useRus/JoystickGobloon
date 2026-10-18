@@ -501,3 +501,54 @@ fn logical_device_inputs_round_trip() {
         "bindings of a removed input go too"
     );
 }
+
+#[test]
+fn light_led_round_trips() {
+    let mut p = sample();
+    let root = p.bind(DEV, "button", "3", "Default");
+    let led = p
+        .add_child(
+            &root,
+            "actions",
+            gob_core::Action::new(&NewAction::LightLed {
+                device: DEV.into(),
+                led: 10,
+            }),
+        )
+        .unwrap();
+    let a = p.action_mut(&led).unwrap();
+    a.set("color", "string", "#FF8000");
+    a.set("led-mode", "string", "slow-blink");
+    a.set("on-activate", "bool", "True");
+
+    let xml = gob_gremlin::to_string(&p);
+    assert!(xml.contains(r#"type="light-led""#));
+    let p = reload(&p);
+    let a = p.action(&led).unwrap();
+    assert_eq!(
+        a.kind(),
+        ActionKind::LightLed {
+            device: DEV,
+            led: 10,
+            color: [0xFF, 0x80, 0x00],
+            mode: gob_core::LedMode::SlowBlink,
+            on_activate: true,
+        }
+    );
+    assert_eq!(a.activation_mode(), gob_core::ActivationMode::Press);
+    assert_eq!(gob_gremlin::to_string(&p), xml, "saved again unchanged");
+    assert!(gob_gremlin::report(&p)
+        .warnings
+        .iter()
+        .all(|w| !w.to_string().contains("light-led")));
+}
+
+#[test]
+fn led_colors_and_modes_parse() {
+    assert_eq!(gob_core::parse_color("#00ff7F"), Some([0, 0xFF, 0x7F]));
+    assert_eq!(gob_core::parse_color("12"), None);
+    assert_eq!(gob_core::format_color([0, 0xFF, 0x7F]), "#00FF7F");
+    for m in gob_core::LedMode::ALL {
+        assert_eq!(gob_core::LedMode::parse(m.name()), Some(m));
+    }
+}

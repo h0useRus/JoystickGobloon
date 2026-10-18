@@ -147,6 +147,17 @@ pub enum ActionKind<'a> {
         file: &'a str,
         volume: u8,
     },
+    /// Joystick Gobloon's own action (not in Gremlin): sets LED `led` of the joystick
+    /// `device` (DirectInput instance GUID) to `color` (8-bit RGB). Runs on the input like
+    /// any action (`activation-mode`), or once when the profile is activated with
+    /// `on_activate`.
+    LightLed {
+        device: &'a str,
+        led: u8,
+        color: [u8; 3],
+        mode: LedMode,
+        on_activate: bool,
+    },
     /// Speaks `text` (`$current_mode` is replaced); rate/pitch -1..1, volume 0..1.
     /// `voice` is a Joystick Gobloon addition (Gremlin ignores it): an installed voice name.
     TextToSpeech {
@@ -204,6 +215,60 @@ pub enum ActionKind<'a> {
     },
     /// Preserved in the profile but not executed (yet).
     Other,
+}
+
+/// How a light-led LED shines (`led-mode` property).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LedMode {
+    Off,
+    #[default]
+    On,
+    SlowBlink,
+    FastBlink,
+    FastestBlink,
+}
+
+impl LedMode {
+    pub const ALL: [LedMode; 5] = [
+        Self::On,
+        Self::SlowBlink,
+        Self::FastBlink,
+        Self::FastestBlink,
+        Self::Off,
+    ];
+
+    /// Value of the `led-mode` property.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::On => "on",
+            Self::SlowBlink => "slow-blink",
+            Self::FastBlink => "fast-blink",
+            Self::FastestBlink => "fastest-blink",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim();
+        Self::ALL
+            .into_iter()
+            .find(|m| m.name().eq_ignore_ascii_case(s))
+    }
+}
+
+/// `#RRGGBB` (or `RRGGBB`) to RGB.
+pub fn parse_color(s: &str) -> Option<[u8; 3]> {
+    let s = s.trim().trim_start_matches('#');
+    if s.len() != 6 {
+        return None;
+    }
+    let v = u32::from_str_radix(s, 16).ok()?;
+    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
+}
+
+/// RGB as `#RRGGBB`, the form light-led stores.
+pub fn format_color([r, g, b]: [u8; 3]) -> String {
+    format!("#{r:02X}{g:02X}{b:02X}")
 }
 
 /// How merge-axis combines its two axes.
@@ -427,6 +492,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "load-profile",
     "map-to-logical-device",
     "play-sound",
+    "light-led",
     "text-to-speech",
     "smart-toggle",
     "split-axis",
@@ -574,6 +640,16 @@ impl Action {
                     .parse::<f64>("volume")
                     .unwrap_or(50.0)
                     .clamp(0.0, 100.0) as u8,
+            },
+            "light-led" => ActionKind::LightLed {
+                device: self.str("device-guid").unwrap_or_default().trim(),
+                led: self.parse("led-id").unwrap_or(0),
+                color: self.str("color").and_then(parse_color).unwrap_or([0, 0, 0]),
+                mode: self
+                    .str("led-mode")
+                    .and_then(LedMode::parse)
+                    .unwrap_or_default(),
+                on_activate: self.bool("on-activate"),
             },
             "text-to-speech" => ActionKind::TextToSpeech {
                 text: self.str("text").unwrap_or_default(),
