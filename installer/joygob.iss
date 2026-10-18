@@ -42,6 +42,18 @@ PrivilegesRequired=admin
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+; Official only in newer Inno Setup releases: used when the installed compiler has them.
+#if FileExists(CompilerPath + "Languages\ChineseSimplified.isl")
+  #define HaveZh
+Name: "zh"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+#endif
+#if FileExists(CompilerPath + "Languages\Korean.isl")
+  #define HaveKo
+Name: "ko"; MessagesFile: "compiler:Languages\Korean.isl"
+#endif
 
 [CustomMessages]
 en.DesktopIcon=Create a desktop shortcut
@@ -61,6 +73,50 @@ ru.InstallingVJoy=Установка драйвера vJoy...
 en.VJoyFailed=The vJoy driver was not installed (code %1). Profiles cannot output to virtual joysticks until vJoy is installed.
 ru.VJoyFailed=Драйвер vJoy не установлен (код %1). Профили не смогут выводить на виртуальные джойстики, пока vJoy не установлен.
 
+de.DesktopIcon=Verknüpfung auf dem Desktop erstellen
+de.Drivers=Treiber:
+de.InstallHidHide=HidHide-Treiber installieren (verbirgt Gamecontroller vor anderen Programmen; evtl. ist ein Neustart nötig)
+de.InstallingHidHide=HidHide-Treiber wird installiert...
+de.HidHideFailed=Der HidHide-Treiber wurde nicht installiert (Code %1). Geräte verbergen funktioniert erst, wenn HidHide installiert ist.
+de.InstallVJoy=vJoy-Treiber installieren (virtuelle Joysticks für die Ausgabe von Profilen; evtl. ist ein Neustart nötig)
+de.InstallingVJoy=vJoy-Treiber wird installiert...
+de.VJoyFailed=Der vJoy-Treiber wurde nicht installiert (Code %1). Profile können erst auf virtuelle Joysticks ausgeben, wenn vJoy installiert ist.
+es.DesktopIcon=Crear un acceso directo en el escritorio
+es.Drivers=Controladores:
+es.InstallHidHide=Instalar el controlador HidHide (oculta los mandos de juego a otros programas; puede requerir reiniciar)
+es.InstallingHidHide=Instalando el controlador HidHide...
+es.HidHideFailed=El controlador HidHide no se instaló (código %1). La ocultación de dispositivos no funcionará hasta que se instale HidHide.
+es.InstallVJoy=Instalar el controlador vJoy (joysticks virtuales a los que envían los perfiles; puede requerir reiniciar)
+es.InstallingVJoy=Instalando el controlador vJoy...
+es.VJoyFailed=El controlador vJoy no se instaló (código %1). Los perfiles no podrán enviar a joysticks virtuales hasta que se instale vJoy.
+fr.DesktopIcon=Créer un raccourci sur le Bureau
+fr.Drivers=Pilotes :
+fr.InstallHidHide=Installer le pilote HidHide (masque les manettes de jeu aux autres programmes ; un redémarrage peut être nécessaire)
+fr.InstallingHidHide=Installation du pilote HidHide...
+fr.HidHideFailed=Le pilote HidHide n’a pas été installé (code %1). Le masquage des périphériques ne fonctionnera pas tant que HidHide n’est pas installé.
+fr.InstallVJoy=Installer le pilote vJoy (joysticks virtuels vers lesquels les profils envoient ; un redémarrage peut être nécessaire)
+fr.InstallingVJoy=Installation du pilote vJoy...
+fr.VJoyFailed=Le pilote vJoy n’a pas été installé (code %1). Les profils ne pourront pas envoyer vers des joysticks virtuels tant que vJoy n’est pas installé.
+#ifdef HaveZh
+zh.DesktopIcon=创建桌面快捷方式
+zh.Drivers=驱动程序：
+zh.InstallHidHide=安装 HidHide 驱动（对其他程序隐藏游戏控制器；可能需要重启）
+zh.InstallingHidHide=正在安装 HidHide 驱动...
+zh.HidHideFailed=HidHide 驱动未安装（代码 %1）。安装 HidHide 之前，设备隐藏将无法使用。
+zh.InstallVJoy=安装 vJoy 驱动（配置文件输出所用的虚拟摇杆；可能需要重启）
+zh.InstallingVJoy=正在安装 vJoy 驱动...
+zh.VJoyFailed=vJoy 驱动未安装（代码 %1）。安装 vJoy 之前，配置文件无法输出到虚拟摇杆。
+#endif
+#ifdef HaveKo
+ko.DesktopIcon=바탕 화면 바로 가기 만들기
+ko.Drivers=드라이버:
+ko.InstallHidHide=HidHide 드라이버 설치 (다른 프로그램에서 게임 컨트롤러를 숨김; 다시 시작이 필요할 수 있음)
+ko.InstallingHidHide=HidHide 드라이버를 설치하는 중...
+ko.HidHideFailed=HidHide 드라이버가 설치되지 않았습니다(코드 %1). HidHide를 설치할 때까지 장치 숨기기가 작동하지 않습니다.
+ko.InstallVJoy=vJoy 드라이버 설치 (프로필이 출력하는 가상 조이스틱; 다시 시작이 필요할 수 있음)
+ko.InstallingVJoy=vJoy 드라이버를 설치하는 중...
+ko.VJoyFailed=vJoy 드라이버가 설치되지 않았습니다(코드 %1). vJoy를 설치할 때까지 프로필이 가상 조이스틱으로 출력할 수 없습니다.
+#endif
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; Flags: unchecked
 ; Offered (and ticked) only when the driver is missing.
