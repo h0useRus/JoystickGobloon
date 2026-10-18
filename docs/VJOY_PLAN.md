@@ -86,6 +86,13 @@
       что всё в реестре пересобирается байт в байт. FFB-ветка сверена только по структуре (у пользователя FFB нет). — 2026-10-18
 - [ ] Запись в реестр и перезапуск устройства vJoy из нашего же exe с правами администратора:
       `JoystickGobloon.exe --vjoy-config ...` через `ShellExecute "runas"` (один UAC, как сейчас с vJoyConfig).
+      В крейте готово (`src/configure.rs`): `Change` с аргументами как у vJoyConfig (`<id> -f ...`, `-d <id>`,
+      `enable on|off`), `apply` пишет `DeviceNN` и делает `DIF_PROPERTYCHANGE` на `root\VID_1234&PID_BEAD`
+      (`DICS_PROPCHANGE` = `devcon restart`; enable/disable — `DICS_ENABLE`/`DICS_DISABLE`). `Repair` из vJoyConfig
+      (переустановка драйвера) не нужен: драйвер перечитывает реестр на каждый запрос дескриптора
+      (`UpdateCollections`, driver/sys/hid.c). Пример `vjoy_config` перезапускает себя с `--admin` через UAC;
+      код 3 = нужна перезагрузка (устройство занято). Ждёт ручной проверки с пользователем; `--vjoy-config` в joygob —
+      в сессии joygob.
 - [ ] Чтение текущей конфигурации — из реестра вместо разбора `vJoyConfig -t`: в крейте готово
       (`descriptor::read_registry`, прав не нужно; `vjoy_info` показывает «same as vJoyConfig -t: yes»),
       `joygob` пока зовёт `config::read` — переключить в сессии joygob.

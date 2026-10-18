@@ -144,7 +144,7 @@ pub fn read(tool: &Path) -> Result<Vec<DeviceConfig>, String> {
     Ok(text.lines().filter_map(DeviceConfig::parse).collect())
 }
 
-/// Runs vJoyConfig with administrator rights and waits for it. A refused UAC prompt is an error.
+/// Runs vJoyConfig (or JoyGob's own exe) with administrator rights and waits for it. A refused UAC prompt is an error.
 pub fn run_elevated(tool: &Path, args: &[String]) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -185,14 +185,14 @@ pub fn run_elevated(tool: &Path, args: &[String]) -> Result<(), String> {
         unsafe {
             ShellExecuteExW(&mut info).map_err(|e| e.message())?;
             if info.hProcess.is_invalid() {
-                return Err("vJoyConfig did not start".into());
+                return Err(format!("{} did not start", tool.display()));
             }
             WaitForSingleObject(info.hProcess, INFINITE);
             let mut code = 0u32;
             let _ = GetExitCodeProcess(info.hProcess, &mut code);
             let _ = CloseHandle(info.hProcess);
             if code != 0 {
-                return Err(format!("vJoyConfig exit code {code}"));
+                return Err(format!("exit code {code}"));
             }
         }
         Ok(())

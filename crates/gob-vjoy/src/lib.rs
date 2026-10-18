@@ -5,6 +5,7 @@
 //! installation folder (docs/VJOY_PLAN.md, session 3 replaces it).
 
 pub mod config;
+pub mod configure;
 pub mod descriptor;
 pub mod direct;
 mod ffb_desc;
