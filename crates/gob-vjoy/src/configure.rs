@@ -40,6 +40,14 @@ impl Change {
                 _ => None,
             },
             _ => {
+                // -b/-p/-s need a number: a cut-off `-p` must not silently mean 0 hats.
+                let counted = args.iter().enumerate().all(|(i, a)| {
+                    !matches!(a.as_str(), "-b" | "-p" | "-s")
+                        || args.get(i + 1).is_some_and(|n| n.parse::<u32>().is_ok())
+                });
+                if !counted {
+                    return None;
+                }
                 let c = DeviceConfig::parse(&format!("vJoyConfig {}", args.join(" ")))?;
                 (1..=crate::MAX_DEVICES)
                     .contains(&c.id)
@@ -269,5 +277,7 @@ mod tests {
         assert_eq!(Change::from_args(&args("-d 17")), None);
         assert_eq!(Change::from_args(&args("0 -f -b 8")), None);
         assert_eq!(Change::from_args(&args("enable maybe")), None);
+        assert_eq!(Change::from_args(&args("2 -f -a X -b 126 -p")), None);
+        assert_eq!(Change::from_args(&args("2 -f -a X -b -p 4")), None);
     }
 }
