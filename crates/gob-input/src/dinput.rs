@@ -6,8 +6,8 @@ use std::mem::size_of;
 use windows::core::{Interface, BOOL, GUID};
 use windows::Win32::Devices::HumanInterfaceDevice::{
     DirectInput8Create, IDirectInput8W, IDirectInputDevice8W, DI8DEVCLASS_GAMECTRL, DIDATAFORMAT,
-    DIDEVCAPS, DIDEVICEINSTANCEW, DIEDFL_ATTACHEDONLY, DIJOYSTATE2, DIPH_BYOFFSET, DIPROPHEADER,
-    DIPROPRANGE,
+    DIDEVCAPS, DIDEVICEINSTANCEW, DIEDFL_ATTACHEDONLY, DIJOYSTATE2, DIPH_BYOFFSET, DIPH_DEVICE,
+    DIPROPGUIDANDPATH, DIPROPHEADER, DIPROPRANGE,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 
@@ -16,6 +16,8 @@ use crate::{format_guid, normalize_axis, pov_direction, DeviceInfo, DeviceState,
 const DIRECTINPUT_VERSION: u32 = 0x0800;
 /// `DIPROP_RANGE` is `MAKEDIPROP(4)`: a small integer passed as a GUID pointer.
 const DIPROP_RANGE: *const GUID = std::ptr::without_provenance(4);
+/// `DIPROP_GUIDANDPATH` is `MAKEDIPROP(12)`.
+const DIPROP_GUIDANDPATH: *const GUID = std::ptr::without_provenance(12);
 /// Byte offsets of lX, lY, lZ, lRx, lRy, lRz, rglSlider[0], rglSlider[1] in DIJOYSTATE2.
 const AXIS_OFFSETS: [u32; AXIS_SLOTS] = [0, 4, 8, 12, 16, 20, 24, 28];
 
@@ -112,12 +114,31 @@ impl DirectInput {
                 axes,
                 buttons: (caps.dwButtons as usize).min(128),
                 hats: (caps.dwPOVs as usize).min(4),
+                hid_path: hid_path(&dev),
             };
             Ok(Device {
                 dev,
                 state: DeviceState::new(info),
             })
         }
+    }
+}
+
+/// The device's HID interface path, empty when DirectInput does not know it.
+fn hid_path(dev: &IDirectInputDevice8W) -> String {
+    let mut prop = DIPROPGUIDANDPATH {
+        diph: DIPROPHEADER {
+            dwSize: size_of::<DIPROPGUIDANDPATH>() as u32,
+            dwHeaderSize: size_of::<DIPROPHEADER>() as u32,
+            dwObj: 0,
+            dwHow: DIPH_DEVICE,
+        },
+        ..Default::default()
+    };
+    // SAFETY: `prop` is a DIPROPGUIDANDPATH with its sizes set, as the property expects.
+    match unsafe { dev.GetProperty(DIPROP_GUIDANDPATH, &mut prop.diph) } {
+        Ok(()) => wide_to_string(&prop.wszPath),
+        Err(_) => String::new(),
     }
 }
 

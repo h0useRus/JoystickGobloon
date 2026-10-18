@@ -106,7 +106,9 @@
 
 ### 2. gob-input
 
-- [ ] HID-путь / instance для DirectInput-устройства; `DeviceInfo` получает признак «есть LED» (через gob-lighting).
+- [x] `DeviceInfo::hid_path` из `DIPROP_GUIDANDPATH` (пример `monitor` печатает). gob-input от gob-lighting не
+      зависит: связь — `gob_lighting::Device::is_at(&info.hid_path)` там, где нужны оба (движок, интерфейс).
+      На железе: пути EVO R / EVO OT L из DirectInput и из gob-lighting совпадают.
 
 ### 3. gob-core + gob-gremlin
 

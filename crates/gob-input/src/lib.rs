@@ -15,7 +15,7 @@ pub use service::{Calibrations, InputHandle, InputService};
 /// Number of DirectInput axis slots: X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1.
 pub const AXIS_SLOTS: usize = 8;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct DeviceInfo {
     /// Instance GUID formatted like Gremlin: lowercase, no braces.
     pub guid: String,
@@ -26,6 +26,9 @@ pub struct DeviceInfo {
     pub axes: Vec<u8>,
     pub buttons: usize,
     pub hats: usize,
+    /// HID interface path (`DIPROP_GUIDANDPATH`), empty when unknown. Links the device to
+    /// gob-lighting's LED control (same path there, compare ignoring case).
+    pub hid_path: String,
 }
 
 impl DeviceInfo {

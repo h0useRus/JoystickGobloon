@@ -18,6 +18,7 @@ fn main() {
         axes: (1..=8).collect(),
         buttons: 0,
         hats: 0,
+        ..Default::default()
     });
     state.axes[2] = 1.0;
     let (_tx, rx) = std::sync::mpsc::sync_channel(16);
