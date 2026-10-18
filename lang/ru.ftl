@@ -370,7 +370,7 @@ viewer-axis = Ось { $n }
 
 # vJoy configuration
 vjoy-add = Добавить устройство vJoy
-vjoy-new-device = Новый vJoy #{ $n }
+vjoy-new-device = Новый vJoy #{ $n }: ещё не создан
 vjoy-enable = Включить драйвер vJoy
 vjoy-disable = Выключить драйвер vJoy
 vjoy-hat-continuous = Плавные

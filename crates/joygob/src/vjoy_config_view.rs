@@ -29,6 +29,8 @@ pub struct VJoyConfig {
     job: Option<Receiver<Done>>,
     pub message: Option<Result<String, String>>,
     confirm_remove: Option<u32>,
+    /// Cancel was pressed on a new device's editor (the page drops its draft).
+    pub cancelled: bool,
 }
 
 impl VJoyConfig {
@@ -41,6 +43,7 @@ impl VJoyConfig {
             job: None,
             message: None,
             confirm_remove: None,
+            cancelled: false,
         };
         s.reload();
         s
@@ -79,11 +82,11 @@ impl VJoyConfig {
         self.message = None;
     }
 
-    /// Collects finished background work; returns true when the device list changed.
-    pub fn poll(&mut self, i18n: &I18n) -> bool {
-        let Some(rx) = &self.job else { return false };
+    /// Collects finished background work; `Some(succeeded)` when a change finished.
+    pub fn poll(&mut self, i18n: &I18n) -> Option<bool> {
+        let Some(rx) = &self.job else { return None };
         let Ok(done) = rx.try_recv() else {
-            return false;
+            return None;
         };
         self.job = None;
         match done {
@@ -94,13 +97,14 @@ impl VJoyConfig {
                     self.edit = None;
                 }
                 self.configs = configs;
-                false
+                None
             }
             Done::Read(Err(e)) => {
                 log::error!("reading vJoy configuration: {e}");
-                false
+                None
             }
             Done::Change(label, result) => {
+                let ok = result.is_ok();
                 match result {
                     Ok(Outcome::Done) => {
                         log::info!("vJoy: {label} done");
@@ -118,7 +122,7 @@ impl VJoyConfig {
                 }
                 self.edit = None;
                 self.reload();
-                true
+                Some(ok)
             }
         }
     }
@@ -128,9 +132,20 @@ impl VJoyConfig {
         (1..=MAX_DEVICES).find(|n| !used.contains(n) && !self.configs.iter().any(|c| c.id == *n))
     }
 
-    pub fn start_new(&mut self, id: u32) {
-        self.edit = Some(DeviceConfig::new(id));
-        self.message = None;
+    /// A new device `id` set up like the first existing one, or with everything at maximum.
+    pub fn template(&self, id: u32) -> DeviceConfig {
+        let mut c = self
+            .configs
+            .iter()
+            .min_by_key(|c| c.id)
+            .cloned()
+            .unwrap_or(DeviceConfig {
+                buttons: MAX_BUTTONS,
+                hats: MAX_HATS,
+                ..DeviceConfig::new(id)
+            });
+        c.id = id;
+        c
     }
 
     pub fn enable(&mut self, on: bool, i18n: &I18n) {
@@ -228,8 +243,13 @@ impl VJoyConfig {
             {
                 self.edit = None;
             }
-            if new && ui.button(i18n.tr("cancel")).clicked() {
+            if new
+                && ui
+                    .add_enabled(can, egui::Button::new(i18n.tr("cancel")))
+                    .clicked()
+            {
                 self.edit = None;
+                self.cancelled = true;
             }
             if !new {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

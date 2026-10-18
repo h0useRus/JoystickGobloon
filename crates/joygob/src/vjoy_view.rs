@@ -34,8 +34,9 @@ pub struct VJoyView {
     test: Option<Tester>,
     error: Option<String>,
     config: crate::vjoy_config_view::VJoyConfig,
-    /// Device number being created.
-    adding: Option<u32>,
+    /// A device added with "+" but not created yet: its own tab, editor (Create) and a
+    /// disabled tester. Kept until the driver lists the device, or dropped by Cancel.
+    draft: Option<gob_vjoy::config::DeviceConfig>,
 }
 
 struct Tester {
@@ -61,7 +62,7 @@ impl VJoyView {
             test: None,
             error: None,
             config,
-            adding: None,
+            draft: None,
         }
     }
 
@@ -74,10 +75,12 @@ impl VJoyView {
 
     /// `locked`: a profile is active and holds vJoy devices, so they cannot be reconfigured.
     pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, locked: bool) {
-        if self.config.poll(i18n) {
+        if self.config.poll(i18n).is_some() {
             self.refreshed = None;
             self.test = None;
-            self.adding = None;
+        }
+        if std::mem::take(&mut self.config.cancelled) {
+            self.draft = None;
         }
         // A change restarts vJoy; a held device would make Windows ask for a reboot.
         if locked || self.config.busy() {
@@ -126,44 +129,53 @@ impl VJoyView {
         self.config.message(ui);
         ui.separator();
 
+        // A created draft becomes a normal tab once the driver lists it.
+        if let Some(d) = &self.draft {
+            if self.devices.iter().any(|x| x.id == d.id) {
+                self.draft = None;
+            }
+        }
         let used: Vec<u32> = self.devices.iter().map(|d| d.id).collect();
         let free = self.config.free_id(&used);
-        if let Some(id) = self.adding {
-            ui.label(
-                RichText::new(format!(
-                    "{}  {}",
-                    icon::PLUS_CIRCLE,
-                    i18n.trf("vjoy-new-device", &[("n", id.into())])
-                ))
-                .strong(),
-            );
-            ui.add_space(6.0);
-            self.config.editor(ui, i18n, id, true, locked);
-            if self.config.edit.is_none() && !self.config.busy() {
-                self.adding = None;
-            }
-            return;
-        }
-        if self.devices.is_empty() {
+        let draft_id = self.draft.as_ref().map(|d| d.id);
+        if self.devices.is_empty() && draft_id.is_none() {
             crate::app::empty_state(ui, icon::GAME_CONTROLLER, &i18n.tr("vjoy-no-devices"));
             if let (true, Some(id)) = (self.config.available(), free) {
                 ui.vertical_centered(|ui| {
                     let text = format!("{}  {}", icon::PLUS, i18n.tr("vjoy-add"));
                     if ui.add_enabled(!locked, egui::Button::new(text)).clicked() {
-                        self.adding = Some(id);
-                        self.config.start_new(id);
+                        self.add(id);
                     }
                 });
             }
             return;
         }
-        if !self.devices.iter().any(|d| d.id == self.selected) {
-            self.selected = self.devices[0].id;
+        if !self.devices.iter().any(|d| d.id == self.selected) && draft_id != Some(self.selected) {
+            self.selected = self.devices.first().map_or(self.selected, |d| d.id);
         }
+        // Tabs: the devices, then the draft (laid out as its editor says).
+        let mut tabs: Vec<(DeviceInfo, &str, String)> = self
+            .devices
+            .iter()
+            .map(|d| {
+                (
+                    d.clone(),
+                    status_glyph(d.status),
+                    i18n.tr(status_key(d.status)),
+                )
+            })
+            .collect();
+        if let Some(d) = &self.draft {
+            let info = draft_info(d);
+            let tip = i18n.trf("vjoy-new-device", &[("n", d.id.into())]);
+            tabs.push((info, icon::PENCIL_SIMPLE, tip));
+        }
+        let mut clicked = None;
+        let mut add = false;
         ui.horizontal_wrapped(|ui| {
-            for d in &self.devices {
-                let mut caption = format!(
-                    "{}    {} {}   {} {}   {} {}",
+            for (d, glyph, status) in &tabs {
+                let caption = format!(
+                    "{}    {} {}   {} {}   {} {}    {glyph}",
                     i18n.trf("vjoy-device-n", &[("n", d.id.into())]),
                     icon::ARROWS_OUT_LINE_HORIZONTAL,
                     d.axes.len(),
@@ -172,10 +184,8 @@ impl VJoyView {
                     icon::ARROWS_OUT_CARDINAL,
                     d.hats()
                 );
-                caption = format!("{caption}    {}", status_glyph(d.status));
                 let tip = format!(
-                    "{}\n{}: {}, {}: {}, {}: {}",
-                    i18n.tr(status_key(d.status)),
+                    "{status}\n{}: {}, {}: {}, {}: {}",
                     i18n.tr("vjoy-axes"),
                     d.axes.len(),
                     i18n.tr("vjoy-buttons"),
@@ -186,41 +196,46 @@ impl VJoyView {
                 let r = style::tab(ui, d.id == self.selected, icon::GAME_CONTROLLER, &caption)
                     .on_hover_text(tip);
                 if r.clicked() && d.id != self.selected {
-                    self.selected = d.id;
-                    // Like release(); self.devices is borrowed here.
-                    self.test = None;
-                    self.refreshed = None;
-                    self.error = None;
-                    self.config.edit = None;
-                    self.refreshed = None;
+                    clicked = Some(d.id);
                 }
             }
             if self.config.available() {
-                let can = free.is_some() && !locked && !self.config.busy();
-                if style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add")).clicked() {
-                    if let Some(id) = free {
-                        self.release();
-                        self.adding = Some(id);
-                        self.config.start_new(id);
-                    }
-                }
+                let can = free.is_some() && self.draft.is_none() && !locked && !self.config.busy();
+                add = style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add")).clicked();
             }
         });
-        ui.separator();
-        // "+" was pressed: the new device's editor starts next frame; the selected device's
-        // editor must not take over its draft now.
-        if self.adding.is_some() {
-            return;
+        if let Some(id) = clicked {
+            self.select(id);
         }
+        if let (true, Some(id)) = (add, free) {
+            self.add(id);
+        }
+        ui.separator();
 
-        let Some(info) = self.devices.iter().find(|d| d.id == self.selected).cloned() else {
-            return;
+        // The selected device, or the draft as it would look.
+        let info = match self.devices.iter().find(|d| d.id == self.selected) {
+            Some(d) => d.clone(),
+            None => match &self.draft {
+                Some(d) if d.id == self.selected => draft_info(d),
+                _ => return,
+            },
         };
+        let new = !self.config.configs.iter().any(|c| c.id == info.id);
+        if let Some(d) = &mut self.draft {
+            if d.id == info.id {
+                // The editor works on the draft; it survives switching tabs and a refused UAC.
+                match &self.config.edit {
+                    Some(e) if e.id == d.id => *d = e.clone(),
+                    _ if new && !self.config.busy() => self.config.edit = Some(d.clone()),
+                    _ => {}
+                }
+            }
+        }
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
                 if self.config.available() {
-                    self.config.editor(ui, i18n, info.id, false, locked);
+                    self.config.editor(ui, i18n, info.id, new, locked);
                     ui.separator();
                 }
                 // The tester shows the editor's layout at once; unapplied changes cannot be
@@ -288,6 +303,20 @@ impl VJoyView {
             }
         }
         self.devices.clone()
+    }
+
+    /// Switches to another device's tab.
+    fn select(&mut self, id: u32) {
+        self.selected = id;
+        self.release();
+        self.error = None;
+        self.config.edit = None;
+    }
+
+    /// "+": a draft of device `id`, set up like the first device, gets its own tab.
+    fn add(&mut self, id: u32) {
+        self.draft = Some(self.config.template(id));
+        self.select(id);
     }
 
     /// The lock button: takes the device for the tester.
@@ -402,6 +431,19 @@ impl Tester {
             }
         });
     }
+}
+
+/// A draft device as the tabs and the tester show it.
+fn draft_info(c: &gob_vjoy::config::DeviceConfig) -> DeviceInfo {
+    let base = DeviceInfo {
+        id: c.id,
+        status: Status::Missing,
+        axes: Vec::new(),
+        buttons: 0,
+        cont_hats: 0,
+        disc_hats: 0,
+    };
+    preview(&base, c)
 }
 
 /// The device as it will look once the edited configuration is applied.
