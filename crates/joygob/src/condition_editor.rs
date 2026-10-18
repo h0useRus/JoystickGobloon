@@ -223,7 +223,7 @@ impl Editor<'_> {
             } => {
                 ui.label(RichText::new(icon::GAME_CONTROLLER).size(style::ICON_SIZE))
                     .on_hover_text(self.i18n.tr("cond-vjoy"));
-                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy "));
+                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy #"));
                 if let Some(t) = type_combo(ui, self, ("cond-type", &salt), *input_type) {
                     *input_type = t;
                     cond.comparator = Condition::default_comparator(t);

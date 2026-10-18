@@ -175,7 +175,7 @@ impl Editor<'_> {
                 id: button,
                 pressed,
             } => {
-                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy "));
+                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy #"));
                 ui.add(egui::DragValue::new(button).range(1..=128).prefix("#"));
                 press_toggle(ui, self, pressed);
             }
@@ -185,7 +185,7 @@ impl Editor<'_> {
                 value,
                 relative,
             } => {
-                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy "));
+                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy #"));
                 egui::ComboBox::from_id_salt(("macro-axis", id, index))
                     .selected_text(self.i18n.tr(&format!("vjoy-axis-{axis}")))
                     .show_ui(ui, |ui| {
@@ -212,7 +212,7 @@ impl Editor<'_> {
                 id: hat,
                 direction,
             } => {
-                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy "));
+                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy #"));
                 ui.add(egui::DragValue::new(hat).range(1..=4).prefix("#"));
                 for d in DIRECTIONS {
                     let tip = self.i18n.tr(hat_key(d));

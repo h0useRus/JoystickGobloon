@@ -1,23 +1,25 @@
-//! vJoy virtual joystick output through `vJoyInterface.dll`.
-//!
-//! The DLL is loaded at runtime from the vJoy installation, so JoyGob still
-//! starts when vJoy is missing.
+//! vJoy virtual joystick output straight through the vJoy driver (`direct`), and its device
+//! configuration in the registry (`descriptor`, `configure`): neither vJoyInterface.dll nor
+//! vJoyConfig.exe is used, only the installed driver. JoyGob still starts when vJoy is missing.
 
 pub mod config;
+pub mod configure;
+pub mod descriptor;
+pub mod direct;
+mod ffb_desc;
 use std::fmt;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use libloading::Library;
+use direct::{Acquired, Direct};
 
 /// vJoy supports device ids 1..=16.
 pub const MAX_DEVICES: u32 = 16;
 /// HID usages of X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1 (axis slots 1..=8).
-const AXIS_USAGES: [u32; 8] = [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
+pub(crate) const AXIS_USAGES: [u32; 8] = [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
 
 #[derive(Debug)]
 pub enum Error {
-    /// vJoy is not installed or the DLL could not be loaded.
+    /// vJoy is not installed.
     NotInstalled(String),
     /// The driver is installed but disabled.
     Disabled,
@@ -66,172 +68,94 @@ impl DeviceInfo {
     }
 }
 
-type Bool = i32;
-
-/// Function table resolved from vJoyInterface.dll.
-struct Api {
-    _lib: Library,
-    enabled: unsafe extern "C" fn() -> Bool,
-    version: unsafe extern "C" fn() -> i16,
-    status: unsafe extern "C" fn(u32) -> i32,
-    acquire: unsafe extern "C" fn(u32) -> Bool,
-    relinquish: unsafe extern "C" fn(u32),
-    reset: unsafe extern "C" fn(u32) -> Bool,
-    buttons: unsafe extern "C" fn(u32) -> i32,
-    disc_povs: unsafe extern "C" fn(u32) -> i32,
-    cont_povs: unsafe extern "C" fn(u32) -> i32,
-    axis_exists: unsafe extern "C" fn(u32, u32) -> Bool,
-    axis_min: unsafe extern "C" fn(u32, u32, *mut i32) -> Bool,
-    axis_max: unsafe extern "C" fn(u32, u32, *mut i32) -> Bool,
-    set_axis: unsafe extern "C" fn(i32, u32, u32) -> Bool,
-    set_button: unsafe extern "C" fn(Bool, u32, u8) -> Bool,
-    set_disc_pov: unsafe extern "C" fn(i32, u32, u8) -> Bool,
-    set_cont_pov: unsafe extern "C" fn(u32, u32, u8) -> Bool,
-}
-
-impl Api {
-    fn load(path: &Path) -> Result<Self, libloading::Error> {
-        unsafe {
-            let lib = Library::new(path)?;
-            macro_rules! sym {
-                ($name:literal) => {
-                    *lib.get($name)?
-                };
-            }
-            Ok(Self {
-                enabled: sym!(b"vJoyEnabled\0"),
-                version: sym!(b"GetvJoyVersion\0"),
-                status: sym!(b"GetVJDStatus\0"),
-                acquire: sym!(b"AcquireVJD\0"),
-                relinquish: sym!(b"RelinquishVJD\0"),
-                reset: sym!(b"ResetVJD\0"),
-                buttons: sym!(b"GetVJDButtonNumber\0"),
-                disc_povs: sym!(b"GetVJDDiscPovNumber\0"),
-                cont_povs: sym!(b"GetVJDContPovNumber\0"),
-                axis_exists: sym!(b"GetVJDAxisExist\0"),
-                axis_min: sym!(b"GetVJDAxisMin\0"),
-                axis_max: sym!(b"GetVJDAxisMax\0"),
-                set_axis: sym!(b"SetAxis\0"),
-                set_button: sym!(b"SetBtn\0"),
-                set_disc_pov: sym!(b"SetDiscPov\0"),
-                set_cont_pov: sym!(b"SetContPov\0"),
-                _lib: lib,
-            })
-        }
-    }
-}
-
-/// Loaded vJoy driver interface; shared via [`Arc`].
+/// The installed vJoy driver; shared via [`Arc`]. The driver is looked up on each call, so a
+/// driver that is switched on or off later is noticed.
 pub struct VJoy {
-    api: Api,
-    pub dll_path: PathBuf,
+    _private: (),
 }
 
 impl VJoy {
-    /// Loads vJoyInterface.dll from the vJoy installation.
+    /// Succeeds when the vJoy driver is installed (it may be disabled).
     pub fn load() -> Result<Arc<Self>, Error> {
-        let path =
-            find_dll().ok_or_else(|| Error::NotInstalled("vJoyInterface.dll not found".into()))?;
-        Self::load_from(&path)
+        if Direct::find().is_none() && !service_installed() {
+            return Err(Error::NotInstalled("vJoy driver not found".into()));
+        }
+        Ok(Arc::new(Self { _private: () }))
     }
 
-    pub fn load_from(path: &Path) -> Result<Arc<Self>, Error> {
-        let api = Api::load(path).map_err(|e| Error::NotInstalled(e.to_string()))?;
-        Ok(Arc::new(Self {
-            api,
-            dll_path: path.to_path_buf(),
-        }))
-    }
-
+    /// The driver runs and has at least one device.
     pub fn enabled(&self) -> bool {
-        unsafe { (self.api.enabled)() != 0 }
+        Direct::find().is_some_and(|d| !d.collections().is_empty())
     }
 
-    /// Driver version as reported by vJoy, e.g. `2.1.9`.
+    /// Driver version, e.g. `2.1.9`; empty when the driver is not running.
     pub fn version(&self) -> String {
-        let v = unsafe { (self.api.version)() } as u16;
-        format!("{}.{}.{}", v >> 8, (v >> 4) & 0xF, v & 0xF)
+        Direct::find().and_then(|d| d.version()).unwrap_or_default()
     }
 
     pub fn status(&self, id: u32) -> Status {
-        match unsafe { (self.api.status)(id) } {
-            0 => Status::Own,
-            1 => Status::Free,
-            2 => Status::Busy,
-            3 => Status::Missing,
-            _ => Status::Unknown,
-        }
+        Direct::find().map_or(Status::Unknown, |d| d.status(id))
     }
 
     /// Every configured device.
     pub fn devices(&self) -> Vec<DeviceInfo> {
-        (1..=MAX_DEVICES).filter_map(|id| self.device(id)).collect()
+        Direct::find().map(|d| d.devices()).unwrap_or_default()
     }
 
     pub fn device(&self, id: u32) -> Option<DeviceInfo> {
-        let status = self.status(id);
-        if matches!(status, Status::Missing | Status::Unknown) {
-            return None;
-        }
-        let api = &self.api;
-        unsafe {
-            Some(DeviceInfo {
-                id,
-                status,
-                axes: (1..=8u8)
-                    .filter(|&s| (api.axis_exists)(id, AXIS_USAGES[usize::from(s) - 1]) != 0)
-                    .collect(),
-                buttons: (api.buttons)(id).max(0) as u32,
-                cont_hats: (api.cont_povs)(id).max(0) as u32,
-                disc_hats: (api.disc_povs)(id).max(0) as u32,
-            })
-        }
+        self.devices().into_iter().find(|d| d.id == id)
     }
 
     /// Takes ownership of device `id` until the returned handle is dropped.
     pub fn acquire(self: &Arc<Self>, id: u32) -> Result<Device, Error> {
-        if !self.enabled() {
+        let direct = Direct::find().ok_or(Error::Disabled)?;
+        let collections = direct.collections();
+        if collections.is_empty() {
             return Err(Error::Disabled);
         }
-        let status = self.status(id);
-        if !matches!(status, Status::Free | Status::Own) || unsafe { (self.api.acquire)(id) } == 0 {
+        let status = direct.status(id);
+        let collection = collections.iter().find(|c| u32::from(c.report_id) == id);
+        let acquired = match (collection, u8::try_from(id)) {
+            (Some(_), Ok(n)) if matches!(status, Status::Free | Status::Own) => direct.acquire(n),
+            _ => None,
+        };
+        let (Some(acquired), Some(collection)) = (acquired, collection) else {
             return Err(Error::Unavailable { id, status });
-        }
+        };
         let mut ranges = [(0, 0x8000); 8];
-        for (i, range) in ranges.iter_mut().enumerate() {
-            let (mut min, mut max) = (0, 0);
-            unsafe {
-                if (self.api.axis_min)(id, AXIS_USAGES[i], &mut min) != 0
-                    && (self.api.axis_max)(id, AXIS_USAGES[i], &mut max) != 0
-                    && max > min
-                {
-                    *range = (min, max);
-                }
+        for &(slot, min, max) in &collection.axes {
+            if max > min {
+                ranges[usize::from(slot) - 1] = (min, max);
             }
         }
-        let continuous = unsafe { (self.api.cont_povs)(id) } > 0;
-        let device = Device {
-            vjoy: self.clone(),
+        Ok(Device {
             id,
             ranges,
-            continuous,
-        };
-        device.reset();
-        Ok(device)
+            continuous: collection.cont_hats > 0,
+            acquired: Mutex::new(acquired),
+        })
     }
 }
 
 /// An acquired vJoy device. Reset and released on drop.
 pub struct Device {
-    vjoy: Arc<VJoy>,
     id: u32,
     ranges: [(i32, i32); 8],
     continuous: bool,
+    acquired: Mutex<Acquired>,
 }
 
 impl Device {
     pub fn id(&self) -> u32 {
         self.id
+    }
+
+    /// Changes the state and sends all of it to the driver.
+    fn update(&self, change: impl FnOnce(&mut direct::Position) -> bool) -> bool {
+        let Ok(mut device) = self.acquired.lock() else {
+            return false;
+        };
+        change(&mut device.position) && device.send()
     }
 
     /// Sets axis `slot` (1..=8) from a value in -1.0..=1.0.
@@ -240,36 +164,37 @@ impl Device {
             return false;
         };
         let raw = scale_axis(value, min, max);
-        unsafe { (self.vjoy.api.set_axis)(raw, self.id, AXIS_USAGES[usize::from(slot) - 1]) != 0 }
+        self.update(|p| {
+            p.axes[usize::from(slot) - 1] = raw;
+            true
+        })
     }
 
     /// Presses or releases button `n` (1-based).
     pub fn set_button(&self, n: u8, pressed: bool) -> bool {
-        unsafe { (self.vjoy.api.set_button)(Bool::from(pressed), self.id, n) != 0 }
+        self.update(|p| p.set_button(n, pressed))
     }
 
     /// Sets hat `n` (1-based) to a direction in hundredths of a degree, or centered.
     pub fn set_hat(&self, n: u8, direction: Option<u16>) -> bool {
-        unsafe {
-            if self.continuous {
-                let raw = direction.map_or(u32::MAX, |d| u32::from(d % 36000));
-                (self.vjoy.api.set_cont_pov)(raw, self.id, n) != 0
-            } else {
-                (self.vjoy.api.set_disc_pov)(discrete_pov(direction), self.id, n) != 0
-            }
+        if self.continuous {
+            let raw = direction.map_or(u32::MAX, |d| u32::from(d % 36000));
+            self.update(|p| p.set_cont_hat(n, raw))
+        } else {
+            self.update(|p| p.set_disc_hat(n, discrete_pov(direction)))
         }
     }
 
     /// Centers axes and hats, releases buttons.
     pub fn reset(&self) -> bool {
-        unsafe { (self.vjoy.api.reset)(self.id) != 0 }
+        self.acquired.lock().is_ok_and(|mut d| d.reset())
     }
 }
 
 impl Drop for Device {
     fn drop(&mut self) {
+        // Closing the handle (dropping `Acquired` after this) releases the device.
         self.reset();
-        unsafe { (self.vjoy.api.relinquish)(self.id) }
     }
 }
 
@@ -284,53 +209,31 @@ pub fn discrete_pov(direction: Option<u16>) -> i32 {
     direction.map_or(-1, |d| ((i32::from(d % 36000) + 4500) / 9000) % 4)
 }
 
-/// vJoy's install location from its uninstall entry, then the default path.
-fn find_dll() -> Option<PathBuf> {
-    let arch = if cfg!(target_pointer_width = "64") {
-        "x64"
-    } else {
-        "x86"
-    };
-    let mut candidates = Vec::new();
-    if let Some(dir) = install_location() {
-        candidates.push(dir.join(arch).join("vJoyInterface.dll"));
-    }
-    candidates.push(PathBuf::from(format!(
-        r"C:\Program Files\vJoy\{arch}\vJoyInterface.dll"
-    )));
-    candidates.into_iter().find(|p| p.exists())
-}
-
+/// The `vjoy` driver service exists (the driver is installed, even when switched off).
 #[cfg(windows)]
-fn install_location() -> Option<PathBuf> {
+fn service_installed() -> bool {
     use windows::core::w;
-    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_ANY};
 
-    let mut buf = [0u16; 512];
-    let mut len = (buf.len() * 2) as u32;
-    let result = unsafe {
+    let mut len = 0u32;
+    // SAFETY: a sizing call without a buffer.
+    unsafe {
         RegGetValueW(
             HKEY_LOCAL_MACHINE,
-            w!(
-                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8E31F76F-74C3-47F1-9550-E041EEDC5FBB}_is1"
-            ),
-            w!("InstallLocation"),
-            RRF_RT_REG_SZ,
+            w!(r"SYSTEM\CurrentControlSet\Services\vjoy"),
+            w!("ImagePath"),
+            RRF_RT_ANY,
             None,
-            Some(buf.as_mut_ptr().cast()),
+            None,
             Some(&mut len),
         )
-    };
-    if result.is_err() {
-        return None;
     }
-    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
-    Some(PathBuf::from(String::from_utf16_lossy(&buf[..end])))
+    .is_ok()
 }
 
 #[cfg(not(windows))]
-fn install_location() -> Option<PathBuf> {
-    None
+fn service_installed() -> bool {
+    false
 }
 
 #[cfg(test)]
