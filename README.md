@@ -36,7 +36,7 @@ Joystick Gremlin workflow, so you can switch without relearning anything.
 ## Requirements
 
 - Windows 10 or 11
-- The [HidHide](https://github.com/nefarius/HidHide/releases) and [vJoy](https://github.com/BrunnerInnovation/vJoy/releases) drivers installed
+- The [HidHide](https://github.com/nefarius/HidHide/releases) and [vJoy 2.1.9.1](https://github.com/jshafer817/vJoy/releases) drivers (the installer installs them when they are missing)
 
 ## Building
 

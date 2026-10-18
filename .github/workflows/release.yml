@@ -55,8 +55,8 @@ jobs:
           JOYGOB_VERSION: ${{ steps.version.outputs.version }}
         run: cargo build --release -p joygob
 
-      # The installer installs the latest signed HidHide driver when it is missing. Pinned by
-      # hash: a changed file fails the release instead of shipping something unchecked.
+      # The installer installs the signed HidHide and vJoy drivers when they are missing. Pinned
+      # by hash: a changed file fails the release instead of shipping something unchecked.
       - name: HidHide installer
         shell: pwsh
         run: |
@@ -65,6 +65,18 @@ jobs:
           $dir = "target\installer\deps"
           New-Item -ItemType Directory -Force $dir | Out-Null
           Invoke-WebRequest "https://github.com/nefarius/HidHide/releases/download/v1.5.230.0/$name" -OutFile "$dir\$name"
+          $got = (Get-FileHash "$dir\$name" -Algorithm SHA256).Hash
+          if ($got -ne $hash) { Write-Error "$name hash $got, expected $hash"; exit 1 }
+
+      # Official vJoy 2.1.9.1 (signed by its author, Justin Shafer): the version gob-vjoy targets.
+      - name: vJoy installer
+        shell: pwsh
+        run: |
+          $name = "vJoySetup.exe"
+          $hash = "F103CED4E7FF7CCB49C8415A542C56768ED4DA4FEA252B8F4FFDAC343074654A"
+          $dir = "target\installer\deps"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Invoke-WebRequest "https://github.com/jshafer817/vJoy/releases/download/v2.1.9.1/$name" -OutFile "$dir\$name"
           $got = (Get-FileHash "$dir\$name" -Algorithm SHA256).Hash
           if ($got -ne $hash) { Write-Error "$name hash $got, expected $hash"; exit 1 }
 

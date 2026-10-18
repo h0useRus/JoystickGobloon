@@ -1,7 +1,7 @@
 ﻿; Joystick Gobloon installer (Inno Setup 6).
 ; Build: iscc /DAppVersion=0.1.0 installer\joygob.iss  (after `cargo build --release`)
-; Needs the HidHide installer in target\installer\deps (release.yml downloads it and checks
-; its hash). Output: target\installer\JoystickGobloon-<version>-setup.exe
+; Needs the HidHide and vJoy installers in target\installer\deps (release.yml downloads them
+; and checks their hashes). Output: target\installer\JoystickGobloon-<version>-setup.exe
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -11,7 +11,9 @@
 #define AppExe "JoystickGobloon.exe"
 ; Latest signed HidHide release (https://github.com/nefarius/HidHide/releases, MIT).
 #define HidHideSetup "HidHide_1.5.230_x64.exe"
-#define VJoyUrl "https://github.com/BrunnerInnovation/vJoy/releases"
+; Official signed vJoy 2.1.9.1 (https://github.com/jshafer817/vJoy/releases, MIT): the driver
+; version Joystick Gobloon's vJoy code is written and tested for.
+#define VJoySetup "vJoySetup.exe"
 
 [Setup]
 AppId={{31D3CD9B-BF83-41A1-8D79-FDD6912A6458}
@@ -33,7 +35,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-; Installs into Program Files and, when needed, the HidHide driver: asks for administrator rights.
+; Installs into Program Files and, when needed, the HidHide and vJoy drivers: asks for
+; administrator rights.
 PrivilegesRequired=admin
 
 [Languages]
@@ -51,20 +54,27 @@ en.InstallingHidHide=Installing the HidHide driver...
 ru.InstallingHidHide=Установка драйвера HidHide...
 en.HidHideFailed=The HidHide driver was not installed (code %1). Device hiding will not work until HidHide is installed.
 ru.HidHideFailed=Драйвер HidHide не установлен (код %1). Скрытие устройств не будет работать, пока HidHide не установлен.
-en.MissingVJoy=Joystick Gobloon outputs to the vJoy virtual joystick driver, which is not installed.%n%nOpen the vJoy download page now? You can install it later too.
-ru.MissingVJoy=Joystick Gobloon выводит на виртуальные джойстики через драйвер vJoy, но он не установлен.%n%nОткрыть страницу загрузки vJoy сейчас? Его можно установить и позже.
+en.InstallVJoy=Install the vJoy driver (virtual joysticks that profiles output to; a restart may be needed)
+ru.InstallVJoy=Установить драйвер vJoy (виртуальные джойстики для вывода профилей; может понадобиться перезагрузка)
+en.InstallingVJoy=Installing the vJoy driver...
+ru.InstallingVJoy=Установка драйвера vJoy...
+en.VJoyFailed=The vJoy driver was not installed (code %1). Profiles cannot output to virtual joysticks until vJoy is installed.
+ru.VJoyFailed=Драйвер vJoy не установлен (код %1). Профили не смогут выводить на виртуальные джойстики, пока vJoy не установлен.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; Flags: unchecked
 ; Offered (and ticked) only when the driver is missing.
 Name: "hidhide"; Description: "{cm:InstallHidHide}"; GroupDescription: "{cm:Drivers}"; Check: NeedHidHide
+Name: "vjoy"; Description: "{cm:InstallVJoy}"; GroupDescription: "{cm:Drivers}"; Check: NeedVJoy
 
 [Files]
 Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\lang\*.ftl"; DestDir: "{app}\lang"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
-; Extracted to {tmp} only when needed (InstallHidHide); not installed or uninstalled itself.
+; Extracted to {tmp} only when needed (InstallHidHide / InstallVJoy); not installed or
+; uninstalled themselves.
 Source: "..\target\installer\deps\{#HidHideSetup}"; Flags: dontcopy
+Source: "..\target\installer\deps\{#VJoySetup}"; Flags: dontcopy
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
@@ -93,10 +103,16 @@ begin
   Result := not HidHideInstalled();
 end;
 
+{ The vJoy driver is installed (Joystick Gobloon talks to it directly, like gob-vjoy checks). }
 function VJoyInstalled(): Boolean;
 begin
-  Result := RegKeyExists(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8E31F76F-74C3-47F1-9550-E041EEDC5FBB}_is1')
-    or FileExists(ExpandConstant('{commonpf64}\vJoy\x64\vJoyInterface.dll'));
+  Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\vjoy')
+    or FileExists(ExpandConstant('{sys}\drivers\vjoy.sys'));
+end;
+
+function NeedVJoy(): Boolean;
+begin
+  Result := not VJoyInstalled();
 end;
 
 { Runs the signed HidHide installer and waits; 3010/1641 mean it wants a restart. }
@@ -119,18 +135,33 @@ begin
     MsgBox(FmtMessage(CustomMessage('HidHideFailed'), [IntToStr(Code)]), mbError, MB_OK);
 end;
 
-procedure CurStepChanged(CurStep: TSetupStep);
+{ Runs the signed vJoy installer (Inno Setup) and waits; it shows its own wizard unless this
+  setup runs silently. Afterwards the driver service tells whether it worked. }
+procedure InstallVJoy();
 var
+  Params: String;
   Code: Integer;
+begin
+  WizardForm.StatusLabel.Caption := CustomMessage('InstallingVJoy');
+  ExtractTemporaryFile('{#VJoySetup}');
+  Params := '/NORESTART';
+  if WizardSilent() then
+    Params := '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART';
+  if not Exec(ExpandConstant('{tmp}\{#VJoySetup}'), Params, '', SW_SHOWNORMAL, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Log(Format('vJoy installer exit code: %d', [Code]));
+  if (Code <> 0) and not VJoyInstalled() and not WizardSilent() then
+    MsgBox(FmtMessage(CustomMessage('VJoyFailed'), [IntToStr(Code)]), mbError, MB_OK);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep <> ssPostInstall then
     Exit;
   if WizardIsTaskSelected('hidhide') then
     InstallHidHide();
-  if WizardSilent() or VJoyInstalled() then
-    Exit;
-  if MsgBox(CustomMessage('MissingVJoy'), mbConfirmation, MB_YESNO) = IDYES then
-    ShellExec('open', '{#VJoyUrl}', '', '', SW_SHOWNORMAL, ewNoWait, Code);
+  if WizardIsTaskSelected('vjoy') then
+    InstallVJoy();
 end;
 
 function NeedRestart(): Boolean;
