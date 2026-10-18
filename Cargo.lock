@@ -1983,6 +1983,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gob-lighting"
+version = "0.4.1"
+dependencies = [
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "gob-plugin"
 version = "0.4.1"
 dependencies = [

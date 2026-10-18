@@ -19,6 +19,7 @@ gob-vjoy = { path = "crates/gob-vjoy" }
 gob-hidhide = { path = "crates/gob-hidhide" }
 gob-engine = { path = "crates/gob-engine" }
 gob-plugin = { path = "crates/gob-plugin" }
+gob-lighting = { path = "crates/gob-lighting" }
 eframe = "0.31"
 fluent-bundle = "0.15"
 unic-langid = "0.9"

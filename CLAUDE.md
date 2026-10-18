@@ -27,6 +27,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
   semantics (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy;
   examples `dry_run` (profile -> printed vJoy output) and `runner_check`
+- crates/gob-lighting joystick LEDs via HID feature reports (hid.rs: SetupAPI + HidD_Get/SetFeature); VKB only
+  (vkb.rs: report 0x59 after pyvkb, CRC, dummy LED 99), writes last until reconnect. Device path = DirectInput
+  DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: docs/LIGHTING_PLAN.md
 - docs/GREMLIN_ACTIONS.md  all Gremlin actions, inputs, JoyGob status and per-action notes; update when adding one
 - crates/gob-plugin  ActionPlugin/Functor traits + Registry (in-process); Engine::with_plugins runs unknown action
   types through it. DLL plugins = stub: `joygob_plugin_info` C entry, ABI_VERSION, info only (examples
