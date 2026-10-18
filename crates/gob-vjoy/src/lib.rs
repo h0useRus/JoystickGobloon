@@ -5,7 +5,9 @@
 //! installation folder (docs/VJOY_PLAN.md, session 3 replaces it).
 
 pub mod config;
+pub mod descriptor;
 pub mod direct;
+mod ffb_desc;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

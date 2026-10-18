@@ -1,5 +1,6 @@
 //! Prints vJoy devices: `cargo run -p gob-vjoy --example vjoy_info [--sweep <id>]`.
-//! Lists them through vJoyInterface.dll and straight from the driver (read-only) to compare.
+//! Lists them through vJoyInterface.dll and straight from the driver (read-only) to compare,
+//! and the configuration from the registry next to `vJoyConfig -t`.
 //! With `--sweep`, moves X, blinks button 1 and spins hat 1 for 3 seconds.
 use std::time::{Duration, Instant};
 
@@ -34,6 +35,18 @@ fn main() {
                 "same as the DLL: {}",
                 if devices == dll { "yes" } else { "NO" }
             );
+        }
+    }
+    match gob_vjoy::descriptor::read_registry() {
+        Err(e) => println!("registry: {e}"),
+        Ok(reg) => {
+            for c in &reg {
+                println!("reg    {}", c.create_args().join(" "));
+            }
+            if let Some(tool) = gob_vjoy::config::tool(&vjoy.dll_path) {
+                let same = gob_vjoy::config::read(&tool).is_ok_and(|t| t == reg);
+                println!("same as vJoyConfig -t: {}", if same { "yes" } else { "NO" });
+            }
         }
     }
     let args: Vec<String> = std::env::args().collect();
