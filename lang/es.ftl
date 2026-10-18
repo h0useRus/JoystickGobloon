@@ -348,6 +348,8 @@ settings-autostart = Iniciar con Windows (minimizado)
 settings-activate-on-start = Activar el perfil al iniciar
 tray-show = Mostrar Joystick Gobloon
 tray-hiding = Ocultar dispositivos
+tray-activate = Activar «{ $name }»
+tray-activate-none = Activar el perfil
 tray-quit = Salir
 autostart-error = No se pudo cambiar el inicio con Windows: { $error }
 
@@ -361,6 +363,18 @@ about-issues = Informar de un problema
 about-releases = Versiones
 about-credits = Usa los controladores HidHide y vJoy; los perfiles son compatibles con Joystick Gremlin.
 about-license = Libre y de código abierto bajo la licencia MIT.
+
+# Updates
+settings-check-updates = Buscar una versión nueva al iniciar e instalarla
+update-check = Buscar actualizaciones
+update-checking = Buscando una versión nueva…
+update-latest = Tiene la versión más reciente
+update-available = La versión { $version } está disponible
+update-install = Actualizar ahora
+update-downloading = Descargando la versión { $version }…
+update-error = No se pudo buscar actualizaciones
+update-debug = Las versiones de depuración no se actualizan
+update-install-error = No se pudo instalar la actualización: { $error }
 
 # Input viewer
 viewer-history = Ejes a lo largo del tiempo

@@ -17,6 +17,10 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    env:
+      # Code signing through SignPath (docs/CODE_SIGNING.md): final releases only, and only
+      # when the secret is set; alpha builds and forks stay unsigned.
+      SIGN: ${{ github.ref_name == 'main' && secrets.SIGNPATH_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,6 +59,34 @@ jobs:
           JOYGOB_VERSION: ${{ steps.version.outputs.version }}
         run: cargo build --release -p joygob
 
+      - name: Upload the app for signing
+        if: env.SIGN == 'true'
+        id: unsigned-exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe
+          path: target/release/JoystickGobloon.exe
+          if-no-files-found: error
+
+      - name: Sign the app
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'JoystickGobloon' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}
+          artifact-configuration-slug: app
+          github-artifact-id: ${{ steps.unsigned-exe.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: target/signed-exe
+
+      # The installer and the portable zip take the signed exe.
+      - name: Use the signed app
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: Copy-Item target\signed-exe\JoystickGobloon.exe target\release\JoystickGobloon.exe -Force
+
       # The installer installs the signed HidHide and vJoy drivers when they are missing. Pinned
       # by hash: a changed file fails the release instead of shipping something unchecked.
       - name: HidHide installer
@@ -89,6 +121,33 @@ jobs:
           }
           & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" installer\joygob.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload the installer for signing
+        if: env.SIGN == 'true'
+        id: unsigned-setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-setup
+          path: target/installer/JoystickGobloon-${{ steps.version.outputs.version }}-setup.exe
+          if-no-files-found: error
+
+      - name: Sign the installer
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'JoystickGobloon' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.unsigned-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: target/signed-setup
+
+      - name: Use the signed installer
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: Copy-Item target\signed-setup\*.exe target\installer\ -Force
 
       - name: Portable zip
         shell: pwsh

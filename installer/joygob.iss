@@ -142,6 +142,8 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; An update started by the app (/UPDATE=1, silent): start it again, as the user, not elevated.
+Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: IsUpdate
 
 [Code]
 var
@@ -152,6 +154,12 @@ function HidHideInstalled(): Boolean;
 begin
   Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\HidHide')
     or FileExists(ExpandConstant('{sys}\drivers\HidHide.sys'));
+end;
+
+{ Started by Joystick Gobloon's updater (JoystickGobloon.exe runs the new setup with /UPDATE=1). }
+function IsUpdate(): Boolean;
+begin
+  Result := ExpandConstant('{param:UPDATE|0}') = '1';
 end;
 
 function NeedHidHide(): Boolean;
