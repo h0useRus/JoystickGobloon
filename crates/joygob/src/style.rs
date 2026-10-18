@@ -429,8 +429,9 @@ pub fn stepper(
     let (min, max) = (*range.start(), *range.end());
     let h = ui.spacing().interact_size.y;
     let arrows_w = 18.0;
-    let id = ui.next_auto_id();
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(64.0, h), egui::Sense::hover());
+    let (rect, area) = ui.allocate_exact_size(Vec2::new(64.0, h), egui::Sense::hover());
+    // Not the area's own id: two widgets with one id lose keyboard focus.
+    let id = area.id.with("text");
     // One frame around the digits and the arrows; the text field inside has none.
     let radius = ui.visuals().widgets.inactive.corner_radius;
     ui.painter()
@@ -472,8 +473,15 @@ pub fn stepper(
         ui.data_mut(|d| d.insert_temp(id, text));
     }
 
-    // +1 / -1 from the wheel or an arrow, applied at the end.
+    // +1 / -1 from the wheel, an arrow or the Up/Down keys, applied at the end.
     let mut step = None;
+    if response.has_focus() {
+        if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)) {
+            step = Some(true);
+        } else if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
+            step = Some(false);
+        }
+    }
     if ui.is_enabled() && ui.rect_contains_pointer(rect) {
         let scroll = ui.input(|i| i.raw_scroll_delta.y);
         if scroll != 0.0 {
