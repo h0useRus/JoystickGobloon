@@ -10,7 +10,7 @@ mod dinput;
 mod keyboard;
 mod service;
 
-pub use service::{Calibrations, InputService};
+pub use service::{Calibrations, InputHandle, InputService};
 
 /// Number of DirectInput axis slots: X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1.
 pub const AXIS_SLOTS: usize = 8;

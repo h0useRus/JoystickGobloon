@@ -88,6 +88,10 @@ Gremlin workflow you already know.
 
 Requirements: Windows 10 or 11 (x64).
 
+Code signing of releases through SignPath is being set up (see the [code signing policy](docs/CODE_SIGNING.md)).
+Until then — and for a while after, until a new release has been downloaded often enough — Windows SmartScreen may
+warn on the first start: choose *More info → Run anyway*.
+
 > **Status:** alpha. Daily-driver features are in place and used with a Star Citizen dual-VKB profile; expect rough
 > edges. See the [roadmap](docs/ROADMAP.md) and [releases](https://github.com/h0useRus/JoystickGobloon/releases).
 
@@ -126,6 +130,9 @@ Joystick Gobloon stands on the shoulders of
 [vJoy](https://github.com/shauleiz/vJoy) by Shaul Eizikovich (signed 2.1.9.1 build by
 [Justin Shafer](https://github.com/jshafer817/vJoy)) and
 [Joystick Gremlin](https://github.com/WhiteMagic/JoystickGremlin) by Lionel Ott.
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/).
 
 ## License
 

@@ -1,14 +1,51 @@
 //! Notification area (tray) icon and the Windows autostart entry.
 //!
 //! While the window is hidden eframe does not run `update`, so the tray callbacks show
-//! the window directly through Win32 and only then ask egui to repaint.
+//! the window directly through Win32 and only then ask egui to repaint. "Activate" works
+//! without the window: it starts the engine through [`Activation`] and updates the icon itself.
 
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use eframe::egui;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
+
+use crate::activation::Activation;
+
+/// What shows the profile state: the icon, its tooltip and the "Activate" check mark. Kept on
+/// the UI thread, where the menu callbacks run (muda handles the menu in the tray's window).
+struct Live {
+    icon: TrayIcon,
+    activate: CheckMenuItem,
+    /// Tooltips for inactive and active.
+    tooltips: [String; 2],
+    shown: Option<bool>,
+}
+
+impl Live {
+    fn show(&mut self, active: bool) {
+        if self.shown == Some(active) {
+            return;
+        }
+        self.shown = Some(active);
+        match tray_image(active) {
+            Ok(icon) => {
+                let _ = self.icon.set_icon(Some(icon));
+            }
+            Err(e) => log::error!("tray icon: {e}"),
+        }
+        let _ = self
+            .icon
+            .set_tooltip(Some(&self.tooltips[usize::from(active)]));
+        self.activate.set_checked(active);
+    }
+}
+
+thread_local! {
+    static LIVE: RefCell<Option<Live>> = const { RefCell::new(None) };
+}
 
 /// Tray images (assets/icon/tray-*.svg): the logo's joystick on a green circle while a
 /// profile is active, on a light grey one otherwise; one per Windows tray size.
@@ -58,9 +95,6 @@ fn tray_image(active: bool) -> Result<tray_icon::Icon, String> {
 }
 
 pub struct Tray {
-    icon: TrayIcon,
-    /// Profile state the icon and tooltip show; `None` until the first update.
-    active: Option<bool>,
     /// "Quit" was chosen in the tray menu; the app closes (asking to save first).
     pub quit: Arc<AtomicBool>,
     /// "Device hiding" item, when HidHide is installed.
@@ -72,11 +106,13 @@ pub struct Tray {
 impl Tray {
     /// `hwnd` is the main window, `tooltip` the app name; `show`/`hiding`/`quit` are menu
     /// captions. `restored` is set whenever the window is shown from the tray (see
-    /// [`show_window`]).
+    /// [`show_window`]). "Activate" starts and stops the profile through `activation`.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: &egui::Context,
         hwnd: isize,
         restored: Arc<AtomicBool>,
+        activation: Activation,
         tooltip: &str,
         show: &str,
         hiding: &str,
@@ -84,9 +120,12 @@ impl Tray {
     ) -> Result<Self, String> {
         let icon = tray_image(false)?;
         let show_item = MenuItem::new(show, true, None);
+        // Caption and enabled state follow the loaded profile (`set_profile`).
+        let activate_item = CheckMenuItem::new("", false, false, None);
         let quit_item = MenuItem::new(quit, true, None);
         let menu = Menu::new();
         menu.append(&show_item).map_err(|e| e.to_string())?;
+        menu.append(&activate_item).map_err(|e| e.to_string())?;
         // Device hiding on/off without opening the window (HidHide installed only).
         let hidhide = gob_hidhide::HidHide::find().ok().map(Arc::new);
         let cloak_item = hidhide.as_ref().map(|hh| {
@@ -126,10 +165,21 @@ impl Tray {
         {
             let ctx = ctx.clone();
             let (show_id, quit_id) = (show_item.id().clone(), quit_item.id().clone());
+            let activate_id = activate_item.id().clone();
             let cloak_id = cloak_item.as_ref().map(|i| i.id().clone());
             let quit_flag = quit_flag.clone();
             let cloak_changed = cloak_changed.clone();
             MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
+                if event.id == activate_id {
+                    activation.toggle_from_tray();
+                    let active = activation.is_active();
+                    LIVE.with(|l| {
+                        if let Some(l) = l.borrow_mut().as_mut() {
+                            l.show(active);
+                        }
+                    });
+                    ctx.request_repaint();
+                }
                 if event.id == quit_id {
                     quit_flag.store(true, Ordering::Relaxed);
                 }
@@ -154,28 +204,47 @@ impl Tray {
                 }
             }));
         }
+        LIVE.with(|l| {
+            *l.borrow_mut() = Some(Live {
+                icon: tray,
+                activate: activate_item,
+                tooltips: [tooltip.to_string(), tooltip.to_string()],
+                shown: None,
+            });
+        });
         Ok(Self {
-            icon: tray,
-            active: None,
             quit: quit_flag,
             cloak_item,
             cloak_changed,
         })
     }
 
-    /// Green circle and `tooltip` while a profile runs, grey otherwise; no-op if unchanged.
-    pub fn set_active(&mut self, active: bool, tooltip: &str) {
-        if self.active == Some(active) {
-            return;
-        }
-        self.active = Some(active);
-        match tray_image(active) {
-            Ok(icon) => {
-                let _ = self.icon.set_icon(Some(icon));
+    /// Green circle while a profile runs, grey otherwise, with the tooltip for each state
+    /// (`[inactive, active]`); no-op if unchanged.
+    pub fn set_active(&mut self, active: bool, tooltips: [String; 2]) {
+        LIVE.with(|l| {
+            if let Some(l) = l.borrow_mut().as_mut() {
+                if l.tooltips != tooltips {
+                    l.tooltips = tooltips;
+                    l.shown = None;
+                }
+                l.show(active);
             }
-            Err(e) => log::error!("tray icon: {e}"),
-        }
-        let _ = self.icon.set_tooltip(Some(tooltip));
+        });
+    }
+
+    /// Caption of "Activate" (it names the profile) and whether a profile is loaded.
+    pub fn set_profile(&self, caption: &str, loaded: bool) {
+        LIVE.with(|l| {
+            if let Some(l) = l.borrow().as_ref() {
+                if l.activate.text() != caption {
+                    l.activate.set_text(caption);
+                }
+                if l.activate.is_enabled() != loaded {
+                    l.activate.set_enabled(loaded);
+                }
+            }
+        });
     }
 
     /// Check mark of the "Device hiding" item.
@@ -194,6 +263,13 @@ impl Tray {
 
     pub fn take_quit(&self) -> bool {
         self.quit.swap(false, Ordering::Relaxed)
+    }
+}
+
+impl Drop for Tray {
+    /// The icon lives in [`LIVE`]; dropping it there removes it from the notification area.
+    fn drop(&mut self) {
+        LIVE.with(|l| l.borrow_mut().take());
     }
 }
 

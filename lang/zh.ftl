@@ -348,6 +348,8 @@ settings-autostart = 随 Windows 启动（最小化）
 settings-activate-on-start = 启动时激活配置文件
 tray-show = 显示 Joystick Gobloon
 tray-hiding = 设备隐藏
+tray-activate = 激活“{ $name }”
+tray-activate-none = 激活配置文件
 tray-quit = 退出
 autostart-error = 无法更改随 Windows 启动：{ $error }
 
@@ -361,6 +363,18 @@ about-issues = 报告问题
 about-releases = 版本发布
 about-credits = 使用 HidHide 和 vJoy 驱动；配置文件与 Joystick Gremlin 兼容。
 about-license = 基于 MIT 许可证的自由开源软件。
+
+# Updates
+settings-check-updates = 启动时检查新版本并安装
+update-check = 检查更新
+update-checking = 正在查找新版本…
+update-latest = 已是最新版本
+update-available = 有新版本 { $version }
+update-install = 立即更新
+update-downloading = 正在下载版本 { $version }…
+update-error = 无法检查更新
+update-debug = 调试版本不会自动更新
+update-install-error = 无法安装更新：{ $error }
 
 # Input viewer
 viewer-history = 轴随时间变化

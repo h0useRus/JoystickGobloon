@@ -35,6 +35,7 @@ pub fn show(
     settings: &mut Settings,
     tab: &mut SettingsTab,
     logo: &egui::TextureHandle,
+    updater: &mut crate::update::Updater,
 ) -> Option<Change> {
     ui.horizontal(|ui| {
         for (t, glyph, key) in [
@@ -82,7 +83,11 @@ pub fn show(
                 &mut settings.activate_on_start,
                 i18n.tr("settings-activate-on-start"),
             ));
-            let changed = [&reopen, &whitelist, &autostart, &activate]
+            let updates = ui.add(style::switch(
+                &mut settings.check_updates,
+                i18n.tr("settings-check-updates"),
+            ));
+            let changed = [&reopen, &whitelist, &autostart, &activate, &updates]
                 .iter()
                 .any(|r| r.changed());
             if changed {
@@ -95,7 +100,7 @@ pub fn show(
             }
         }
         SettingsTab::About => {
-            about(ui, i18n, logo);
+            about(ui, i18n, logo, updater);
             None
         }
     }
@@ -182,7 +187,12 @@ fn appearance(ui: &mut egui::Ui, i18n: &I18n, settings: &Settings) -> Option<Cha
     change
 }
 
-fn about(ui: &mut egui::Ui, i18n: &I18n, logo: &egui::TextureHandle) {
+fn about(
+    ui: &mut egui::Ui,
+    i18n: &I18n,
+    logo: &egui::TextureHandle,
+    updater: &mut crate::update::Updater,
+) {
     let accent = style::accent(ui);
     ui.add_space(12.0);
     ui.vertical_centered(|ui| {
@@ -209,6 +219,12 @@ fn about(ui: &mut egui::Ui, i18n: &I18n, logo: &egui::TextureHandle) {
                 .stroke(egui::Stroke::NONE)
                 .corner_radius(10)
                 .sense(egui::Sense::hover()),
+        );
+        // Update check, centered under the version.
+        ui.add_space(6.0);
+        ui.scope_builder(
+            egui::UiBuilder::new().layout(egui::Layout::top_down(egui::Align::Center)),
+            |ui| updater.ui(ui, i18n),
         );
         ui.add_space(10.0);
         ui.label(RichText::new(i18n.tr("about-text")).size(15.0));

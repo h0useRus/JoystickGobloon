@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod action_editor;
+mod activation;
 mod app;
 mod apps_view;
 mod calibration_view;
@@ -19,6 +20,7 @@ mod settings_view;
 mod style;
 mod substitute_view;
 mod tray;
+mod update;
 mod viewer_view;
 mod vjoy_config_view;
 mod vjoy_view;
@@ -44,6 +46,8 @@ fn main() -> eframe::Result {
             std::process::exit(gob_vjoy::configure::run_admin(rest));
         }
     }
+    // Restarted by a portable update: let the old copy exit before the single-instance check.
+    update::wait_for_previous();
     if std::env::args().any(|a| a == HIDHIDE_UNREGISTER) {
         if let (Ok(hh), Ok(exe)) = (gob_hidhide::HidHide::find(), std::env::current_exe()) {
             let _ = hh.set_app(&exe, false);

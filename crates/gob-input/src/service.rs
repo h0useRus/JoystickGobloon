@@ -16,6 +16,28 @@ const POLL_INTERVAL: Duration = Duration::from_millis(4);
 const RESCAN_EVERY: u32 = 500;
 const EVENT_BUFFER: usize = 4096;
 
+/// Shared, read-only side of an [`InputService`]: see [`InputService::handle`].
+#[derive(Clone)]
+pub struct InputHandle {
+    snapshot: Arc<RwLock<Vec<DeviceState>>>,
+    broadcast: Broadcast,
+}
+
+impl InputHandle {
+    /// Current state of every attached device.
+    pub fn devices(&self) -> Vec<DeviceState> {
+        self.snapshot
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Like [`InputService::subscribe`].
+    pub fn subscribe(&self) -> Receiver<InputEvent> {
+        self.broadcast.subscribe()
+    }
+}
+
 /// Fan-out of input events to every subscriber; dead subscribers are dropped.
 #[derive(Clone, Default)]
 struct Broadcast(Arc<Mutex<Vec<SyncSender<InputEvent>>>>);
@@ -107,6 +129,15 @@ impl InputService {
     /// A separate event stream, e.g. for the mapping engine. Drop the receiver to unsubscribe.
     pub fn subscribe(&self) -> Receiver<InputEvent> {
         self.broadcast.subscribe()
+    }
+
+    /// The device states and the event stream for other owners (e.g. a tray menu that starts
+    /// the engine while the window is hidden). Polling stops with the service, not the handle.
+    pub fn handle(&self) -> InputHandle {
+        InputHandle {
+            snapshot: self.snapshot.clone(),
+            broadcast: self.broadcast.clone(),
+        }
     }
 
     /// Changes since the last call. Events are dropped when nobody drains them.
