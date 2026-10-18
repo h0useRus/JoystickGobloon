@@ -3,7 +3,8 @@ Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidH
 Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13). Work on ONE crate per session.
 
 ## Layout
-- crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default), other `lang/*.ftl` embedded or loaded from `<exe>/lang/`.
+- crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default) + de, es, fr, ko, ru, zh embedded; more `lang/*.ftl`
+  load from `<exe>/lang/`. Chinese/Korean glyphs come from Windows fonts (msyh.ttc, malgun.ttf; joygob style.rs).
 - crates/joygob    eframe/egui GUI binary -> JoystickGobloon.exe
 - crates/gob-core    profile model mirroring Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views
 - crates/gob-gremlin XML <-> Element <-> Profile, lossless round-trip; `report()` import warnings; example `resave`
@@ -39,7 +40,8 @@ Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13
   shown inside the main window (some may detach into their own window as an option). Features that live
   in their own window (e.g. HidHide device hiding) get a button in the top toolbar only, never in the rail;
   their window is a normal app window, or modal when it affects how the program works.
-- All user-visible strings go through i18n keys; add key to lang/en.ftl AND lang/ru.ftl.
+- All user-visible strings go through i18n keys; add every key to all lang/*.ftl (en, ru, de, es, fr, ko, zh;
+  gob-i18n's test checks it). Product names (Joystick Gobloon, vJoy, HidHide, Joystick Gremlin) stay untranslated.
 - The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words);
   "JoyGob" is internal only (code, comments, this file); "JoystickGobloon" only in file names.
 - Gremlin import must round-trip: unknown actions kept as raw XML.

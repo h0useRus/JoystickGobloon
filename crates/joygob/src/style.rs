@@ -15,7 +15,29 @@ pub const RADIUS: u8 = 8;
 pub fn install_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+    add_cjk_fallbacks(&mut fonts);
     ctx.set_fonts(fonts);
+}
+
+/// Chinese and Korean glyphs from fonts every Windows 10/11 has (Microsoft YaHei, Malgun
+/// Gothic), after egui's own fonts. Always loaded: the language list shows 简体中文 and 한국어
+/// whatever the UI language is.
+fn add_cjk_fallbacks(fonts: &mut egui::FontDefinitions) {
+    let windows = std::env::var_os("WINDIR").unwrap_or_else(|| r"C:\Windows".into());
+    let dir = std::path::Path::new(&windows).join("Fonts");
+    for (name, file) in [("cjk-zh", "msyh.ttc"), ("cjk-ko", "malgun.ttf")] {
+        let Ok(bytes) = std::fs::read(dir.join(file)) else {
+            log::warn!("font {file} not found: {name} text will show as boxes");
+            continue;
+        };
+        fonts.font_data.insert(
+            name.into(),
+            std::sync::Arc::new(egui::FontData::from_owned(bytes)),
+        );
+        for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+            fonts.families.entry(family).or_default().push(name.into());
+        }
+    }
 }
 
 /// Installs both palettes and picks one; [`Theme::System`] lets egui follow the

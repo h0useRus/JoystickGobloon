@@ -30,7 +30,7 @@ Joystick Gremlin workflow, so you can switch without relearning anything.
 - Configure vJoy devices and send inputs to them (uses the vJoy driver)
 - Modes, response curves, tempo, macros and the other Gremlin actions
 - An API for plugins
-- English interface by default; more languages can be added as Fluent files (`lang/*.ftl`)
+- English, Russian, German, Spanish, French, Chinese (Simplified) and Korean; more languages can be added as Fluent files (`lang/*.ftl`)
 - Light and dark themes
 
 ## Requirements
