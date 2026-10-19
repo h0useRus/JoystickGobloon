@@ -4,20 +4,30 @@
 //! Write: `59 A5 0A` · CRC16 (LE) · 2 random bytes · N · N 4-byte LED configs · zeros.
 //! The list replaces the previous one; an LED dropped from it keeps its last state (EVO R,
 //! firmware 2.20). Everything lasts until the device is reconnected (firmware and VKBDevCfg
-//! settings stay). LEDs on Gladiator NXT / EVO: 0 base, 10 RGB on top of the grip, 11 hat.
+//! settings stay). LEDs on Gladiator NXT / EVO: see [`KNOWN_LEDS`].
 
 use std::io;
 
 use crate::hid::Collection;
-use crate::{Device, Led, Mode, Vendor};
+use crate::{Blend, Device, Led, LedKind, Mode, Vendor};
 
 /// VKB vendor id.
 pub const VENDOR_ID: u16 = 0x231D;
 pub const REPORT_ID: u8 = 0x59;
 pub const REPORT_LEN: usize = 129;
 const OP_SET: [u8; 3] = [0x59, 0xA5, 0x0A];
-/// Most configs one report carries (pyvkb), the dummy included.
-pub const MAX_CONFIGS: usize = 12;
+/// Most configs one report carries, the dummy included. pyvkb allows 12, but a Gladiator EVO
+/// (firmware 2.20) reads back garbage after the fourth; the Gremlin plugin also stops at 4.
+pub const MAX_CONFIGS: usize = 5;
+/// LEDs kept in the list. A LED dropped from it keeps its color, so only the latest count.
+const MAX_LEDS: usize = MAX_CONFIGS - 1;
+/// Gladiator NXT / EVO (checked on an EVO R): 0 the base (blue right = red channel of color1,
+/// red left = red channel of color2), 10 RGB on top of the grip, 11 small red at the hat.
+pub const KNOWN_LEDS: &[(u8, LedKind)] = &[
+    (10, LedKind::Rgb),
+    (11, LedKind::Single),
+    (0, LedKind::Dual),
+];
 /// Appended to every list: the device spoils `led_mode` of the last config when it is
 /// read back (vkb_led_jg_plugin), so the last one is never a real LED.
 pub const DUMMY_LED: u8 = 99;
@@ -183,7 +193,7 @@ pub fn decode(report: &[u8]) -> Vec<LedConfig> {
     if report.len() < 8 || report[..3] != OP_SET {
         return Vec::new();
     }
-    let n = report[7] as usize;
+    let n = (report[7] as usize).min(MAX_CONFIGS);
     report[8..]
         .as_chunks::<4>()
         .0
@@ -269,10 +279,16 @@ pub fn write(hid: &Collection, configs: &[LedConfig]) -> io::Result<()> {
 
 impl From<Led> for LedConfig {
     fn from(led: Led) -> Self {
-        let [r, g, b] = led.color;
+        let ([r, g, b], [r2, g2, b2]) = (led.color, led.color2);
         Self {
             led: led.id,
-            color_mode: ColorMode::Color1,
+            color_mode: match led.blend {
+                Blend::First => ColorMode::Color1,
+                Blend::Second => ColorMode::Color2,
+                Blend::Alternate => ColorMode::Color1Then2,
+                Blend::AlternateReverse => ColorMode::Color2Then1,
+                Blend::Mix => ColorMode::Color1Plus2,
+            },
             led_mode: match led.mode {
                 Mode::Off => LedMode::Off,
                 Mode::On => LedMode::Constant,
@@ -281,16 +297,17 @@ impl From<Led> for LedConfig {
                 Mode::FastestBlink => LedMode::UltraBlink,
             },
             color1: Color::from_rgb(r, g, b),
-            color2: Color::default(),
+            color2: Color::from_rgb(r2, g2, b2),
         }
     }
 }
 
 /// Sets these LEDs with one write, keeping the others in the list.
 pub fn set(hid: &Collection, leds: &[Led]) -> io::Result<()> {
-    let list = leds
+    let mut list = leds
         .iter()
         .fold(read(hid)?, |list, &led| merge(&list, led.into()));
+    list.drain(..list.len().saturating_sub(MAX_LEDS));
     write(hid, &list)
 }
 
@@ -389,11 +406,21 @@ mod tests {
             id: 10,
             color: [0, 255, 0],
             mode: Mode::FastestBlink,
+            ..Default::default()
         });
         assert_eq!(c.led, 10);
         assert_eq!(c.led_mode, LedMode::UltraBlink);
+        assert_eq!(c.color_mode, ColorMode::Color1);
         assert_eq!(c.color1, Color::new(0, 7, 0));
         assert_eq!(c.color2, Color::default());
+        let c = LedConfig::from(Led {
+            color: [255, 0, 0],
+            color2: [255, 0, 0],
+            blend: Blend::Alternate,
+            ..Default::default()
+        });
+        assert_eq!(c.color_mode, ColorMode::Color1Then2);
+        assert_eq!(c.color2, Color::new(7, 0, 0));
     }
 
     #[test]

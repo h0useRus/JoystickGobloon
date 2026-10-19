@@ -25,13 +25,42 @@ pub enum Mode {
     FastestBlink,
 }
 
-/// What one LED should show. `color` is 8-bit RGB; the vendor scales it to what the LED
-/// can show (VKB: 8 levels per channel, single-color LEDs use red).
+/// How an LED's two colors combine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Blend {
+    /// `color` only.
+    #[default]
+    First,
+    /// `color2` only.
+    Second,
+    /// `color`, then `color2` (with blinking).
+    Alternate,
+    /// `color2`, then `color`.
+    AlternateReverse,
+    /// Both at once.
+    Mix,
+}
+
+/// What one LED should show. Colors are 8-bit RGB; the vendor scales them to what the LED
+/// can show (VKB: 8 levels per channel; see [`LedKind`] for LEDs that are not RGB).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Led {
     pub id: u8,
     pub color: [u8; 3],
+    pub color2: [u8; 3],
+    pub blend: Blend,
     pub mode: Mode,
+}
+
+/// What a known LED is, for editors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LedKind {
+    Rgb,
+    /// One color; its brightness is the red channel of `color`.
+    Single,
+    /// Two elements of fixed colors: the red channel of `color` drives the first, the red
+    /// channel of `color2` the second (VKB base: blue, red).
+    Dual,
 }
 
 /// LED state saved by [`Device::save`]: what this program can read back and write again
@@ -61,6 +90,13 @@ impl Device {
     /// HID interface path, as DirectInput reports it in `DIPROP_GUIDANDPATH`.
     pub fn path(&self) -> &str {
         &self.hid.path
+    }
+
+    /// LEDs this device is known to have; empty when unknown (any number may work).
+    pub fn known_leds(&self) -> &'static [(u8, LedKind)] {
+        match self.vendor {
+            Vendor::Vkb => vkb::KNOWN_LEDS,
+        }
     }
 
     /// Whether this is the device DirectInput reports with `hid_path` (gob-input's

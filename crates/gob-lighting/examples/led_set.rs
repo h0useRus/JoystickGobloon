@@ -1,6 +1,8 @@
 //! WRITES to the device (temporary, until it is reconnected) - run only on purpose.
 //! `led_set <device index> <led> <#RRGGBB> [off|on|slow|fast|fastest]` sets one LED,
 //! `led_set <device index> clear [led]` drops one or every LED from the list.
+//! VKB, both colors: `led_set <device> <led> <#color1> <mode> <#color2> <c1|c2|c1/2|c2/1|c1+2>`
+//! writes just that LED (two-color LEDs: brightness in the red channel of each color).
 //! Device indexes as listed when run without arguments.
 use gob_lighting::{Led, Mode, Vendor};
 
@@ -37,11 +39,31 @@ fn main() {
             Some("fastest") => Mode::FastestBlink,
             _ => Mode::On,
         };
-        device.set(&[Led {
+        let led = Led {
             id: led,
             color,
             mode,
-        }])
+            ..Default::default()
+        };
+        match (device.vendor, args.get(4).and_then(|c| parse_color(c))) {
+            (Vendor::Vkb, Some([r, g, b])) => {
+                use gob_lighting::vkb::{Color, ColorMode, LedConfig};
+                let color_mode = match args.get(5).map(String::as_str) {
+                    Some("c2") => ColorMode::Color2,
+                    Some("c1/2") => ColorMode::Color1Then2,
+                    Some("c2/1") => ColorMode::Color2Then1,
+                    Some("c1+2") => ColorMode::Color1Plus2,
+                    _ => ColorMode::Color1,
+                };
+                let config = LedConfig {
+                    color_mode,
+                    color2: Color::from_rgb(r, g, b),
+                    ..LedConfig::from(led)
+                };
+                gob_lighting::vkb::write(&device.hid, &[config])
+            }
+            _ => device.set(&[led]),
+        }
     };
     if let Err(e) = result {
         return eprintln!("{e}");
