@@ -222,6 +222,10 @@ impl JoystickGobloonApp {
                 app.viewer_window = true;
             }
             Ok("settings") => app.page = Page::Settings,
+            Ok("general") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::General;
+            }
             Ok("about") => {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::About;

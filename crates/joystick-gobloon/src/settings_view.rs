@@ -106,10 +106,14 @@ pub fn show(
                 &mut settings.start_with_windows,
                 i18n.tr("settings-autostart"),
             ));
-            let activate = ui.add(style::switch(
-                &mut settings.activate_on_start,
-                i18n.tr("settings-activate-on-start"),
-            ));
+            // Only a reopened profile can be activated on startup.
+            let activate = ui.add_enabled(
+                settings.reopen_last,
+                style::switch(
+                    &mut settings.activate_on_start,
+                    i18n.tr("settings-activate-on-start"),
+                ),
+            );
             let updates = ui.add(style::switch(
                 &mut settings.check_updates,
                 i18n.tr("settings-check-updates"),
