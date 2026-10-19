@@ -292,6 +292,7 @@ mod tests {
             axes: vec![1],
             buttons: 1,
             hats: 0,
+            ..Default::default()
         })
     }
 

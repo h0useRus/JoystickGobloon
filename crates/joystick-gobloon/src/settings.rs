@@ -25,7 +25,7 @@ pub struct Settings {
     pub language: String,
     /// Reopen the last profile on startup.
     pub reopen_last: bool,
-    /// Add JoyGob to the HidHide whitelist on startup so it can read hidden devices.
+    /// Add Joystick Gobloon to the HidHide whitelist on startup so it can read hidden devices.
     pub hidhide_whitelist_self: bool,
     /// Device hiding window: leave out disconnected devices.
     pub hidhide_hide_disconnected: bool,
@@ -38,14 +38,19 @@ pub struct Settings {
     pub close_to_tray: bool,
     /// Minimizing hides the window to the tray (off the taskbar).
     pub minimize_to_tray: bool,
-    /// Windows starts JoyGob at logon (minimized).
+    /// Windows starts Joystick Gobloon at logon (minimized).
     pub start_with_windows: bool,
     /// Activate the reopened profile on startup.
     pub activate_on_start: bool,
     /// Look for a new release on startup and install it.
     pub check_updates: bool,
+    /// Experimental features (joystick LEDs): hidden and not run while off.
+    pub experimental: bool,
     /// Axis calibrations: device GUID -> axis slot ("1".."8") -> values.
     pub calibration: BTreeMap<String, BTreeMap<String, AxisCalibration>>,
+    /// Default LED colors: device GUID -> LEDs, set when a profile that changed that
+    /// device's LEDs stops (VKB keeps written colors until the stick restarts).
+    pub leds: BTreeMap<String, DeviceLeds>,
     /// Hidden option (not in the UI, written only when on): allow several running copies.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub multi_instance: bool,
@@ -72,6 +77,55 @@ impl AppList {
 
     pub fn save(&self) {
         save_toml("apps.gob", self);
+    }
+}
+
+/// Default LED colors of one device.
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DeviceLeds {
+    /// Device name when saved, for reading the file.
+    pub name: String,
+    pub led: Vec<LedDefault>,
+}
+
+/// One default LED; values as light-led stores them.
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LedDefault {
+    pub id: u8,
+    /// 0: the whole LED; 1, 2: one element (VKB base: blue, red).
+    pub element: u8,
+    /// `#RRGGBB`.
+    pub color: String,
+    pub color2: String,
+    /// light-led's `color-mode` names (`color1`, `alternate`, ...).
+    pub blend: String,
+    /// light-led's `led-mode` names (`on`, `slow-blink`, ...).
+    pub mode: String,
+}
+
+impl LedDefault {
+    pub fn value(&self) -> crate::leds::LedValue {
+        crate::leds::LedValue {
+            id: self.id,
+            element: self.element,
+            color: gob_core::parse_color(&self.color).unwrap_or_default(),
+            color2: gob_core::parse_color(&self.color2).unwrap_or_default(),
+            blend: gob_core::LedBlend::parse(&self.blend).unwrap_or_default(),
+            mode: gob_core::LedMode::parse(&self.mode).unwrap_or_default(),
+        }
+    }
+
+    pub fn from_value(v: crate::leds::LedValue) -> Self {
+        Self {
+            id: v.id,
+            element: v.element,
+            color: gob_core::format_color(v.color),
+            color2: gob_core::format_color(v.color2),
+            blend: v.blend.name().into(),
+            mode: v.mode.name().into(),
+        }
     }
 }
 
@@ -110,6 +164,17 @@ impl From<AxisCalibration> for gob_input::Calibration {
 }
 
 impl Settings {
+    /// Default LED colors for the engine (set when a profile stops); `None` while
+    /// experimental features are off: no LED control at all.
+    pub fn led_defaults(&self) -> Option<Vec<gob_engine::Light>> {
+        self.experimental.then(|| {
+            self.leds
+                .iter()
+                .flat_map(|(guid, d)| d.led.iter().map(move |l| l.value().light(guid)))
+                .collect()
+        })
+    }
+
     /// Saved calibrations by (device, slot).
     pub fn calibrations(&self) -> gob_input::Calibrations {
         let mut map = gob_input::Calibrations::new();
@@ -141,6 +206,8 @@ impl Default for Settings {
             activate_on_start: false,
             check_updates: true,
             calibration: BTreeMap::new(),
+            leds: BTreeMap::new(),
+            experimental: false,
             multi_instance: false,
         }
     }

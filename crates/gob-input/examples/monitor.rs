@@ -15,8 +15,16 @@ fn main() {
                 for d in input.devices().iter() {
                     let i = &d.info;
                     println!(
-                        "{} {:?} vid={:04x} pid={:04x} axes={:?} buttons={} hats={}",
-                        i.guid, i.name, i.vendor_id, i.product_id, i.axes, i.buttons, i.hats
+                        "{} {:?} vid={:04x} pid={:04x} axes={:?} buttons={} hats={}
+    {}",
+                        i.guid,
+                        i.name,
+                        i.vendor_id,
+                        i.product_id,
+                        i.axes,
+                        i.buttons,
+                        i.hats,
+                        i.hid_path
                     );
                 }
             } else {

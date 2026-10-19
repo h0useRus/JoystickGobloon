@@ -10,9 +10,9 @@ pub enum Warning {
     DanglingRef { from: String, to: String },
     /// An input is bound in a mode that is not declared in `<modes>`.
     UnknownMode(String),
-    /// Action type is preserved on save but JoyGob cannot execute it yet.
+    /// Action type is preserved on save but Joystick Gobloon cannot execute it yet.
     NotExecutable { kind: String, count: usize },
-    /// The profile contains user Python scripts, which JoyGob does not run.
+    /// The profile contains user Python scripts, which Joystick Gobloon does not run.
     HasScripts,
 }
 

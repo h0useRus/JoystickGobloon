@@ -1,6 +1,6 @@
 //! vJoy virtual joystick output straight through the vJoy driver (`direct`), and its device
 //! configuration in the registry (`descriptor`, `configure`): neither vJoyInterface.dll nor
-//! vJoyConfig.exe is used, only the installed driver. JoyGob still starts when vJoy is missing.
+//! vJoyConfig.exe is used, only the installed driver. Joystick Gobloon still starts when vJoy is missing.
 
 pub mod config;
 pub mod configure;

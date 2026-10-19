@@ -1,4 +1,4 @@
-//! Applications page: programs known to JoyGob (`apps.gob`) and their options. For now the only
+//! Applications page: programs known to Joystick Gobloon (`apps.gob`) and their options. For now the only
 //! option is access to devices hidden by HidHide (its application list); profiles per program
 //! come later. Switching access off keeps the program on the page.
 
@@ -38,7 +38,7 @@ impl AppsView {
         }
     }
 
-    /// Lets JoyGob itself see hidden devices: adds it to the whitelist (not in inverse mode,
+    /// Lets Joystick Gobloon itself see hidden devices: adds it to the whitelist (not in inverse mode,
     /// where the list blocks programs instead).
     pub fn whitelist_self(&self) -> Option<Result<bool, String>> {
         let hh = self.hh.as_ref().ok()?;
@@ -107,7 +107,7 @@ impl AppsView {
         self.list.save();
     }
 
-    /// Switches inverse mode, keeping JoyGob itself able to see hidden devices.
+    /// Switches inverse mode, keeping Joystick Gobloon itself able to see hidden devices.
     fn set_inverse(&mut self, on: bool, settings: &Settings) {
         let own = std::env::current_exe().ok();
         self.apply(|hh| {

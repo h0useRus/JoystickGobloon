@@ -1,6 +1,8 @@
 //! Action tree editor. Widgets read the profile and queue [`Op`]s, which are
 //! applied after the frame so drawing never holds a mutable borrow.
 
+use std::collections::HashSet;
+
 use eframe::egui::{self, RichText};
 use gob_core::{
     child_groups, Action, ActionKind, InputType, Item, MergeOp, MouseAction, MouseButton,
@@ -165,6 +167,12 @@ pub enum Op {
     },
     /// Preview in the editor; not an edit.
     PreviewSpeech(gob_engine::SpeechRequest),
+    /// Lights a LED now ("light it now" in the light-led editor); not an edit. `device`
+    /// is the profile's device GUID.
+    PreviewLight {
+        device: String,
+        led: crate::leds::LedValue,
+    },
     /// hat-buttons: 4 or 8 directions.
     HatButtonCount {
         action: String,
@@ -256,7 +264,7 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::SwapMacroSteps { action, index } => p.swap_macro_steps(&action, index),
         Op::RemoveChainStep { action, index } => p.remove_chain_step(&action, index),
         // Handled by the app before edits are applied.
-        Op::PreviewSound { .. } | Op::PreviewSpeech(_) => {}
+        Op::PreviewSound { .. } | Op::PreviewSpeech(_) | Op::PreviewLight { .. } => {}
         Op::SetCondition {
             action,
             index,
@@ -371,6 +379,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "map-to-logical-device" => icon::CPU,
         "play-sound" => icon::SPEAKER_HIGH,
         "text-to-speech" => icon::CHAT_TEXT,
+        "light-led" => icon::LIGHTBULB,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -439,6 +448,15 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             NewAction::RunCommand,
         ));
         list.push((icon::SPEAKER_HIGH, "kind-play-sound", NewAction::PlaySound));
+        // The device is filled in by the add menu.
+        list.push((
+            icon::LIGHTBULB,
+            "kind-light-led",
+            NewAction::LightLed {
+                device: String::new(),
+                led: 10,
+            },
+        ));
         list.push((
             icon::CHAT_TEXT,
             "kind-text-to-speech",
@@ -488,6 +506,10 @@ pub struct Editor<'a> {
     pub inputs: &'a [gob_input::DeviceState],
     /// Input being edited (profile device id, input id), for templates that refer to it.
     pub input: Option<(&'a str, u32)>,
+    /// GUIDs of the attached devices with LED control.
+    pub leds: &'a HashSet<String>,
+    /// Experimental features (light-led) are on; off, light-led cannot be added or edited.
+    pub experimental: bool,
 }
 
 impl Editor<'_> {
@@ -503,11 +525,19 @@ impl Editor<'_> {
         ui.menu_button(
             RichText::new(icon::PLUS_CIRCLE).size(style::ICON_SIZE),
             |ui| {
-                for (glyph, key, kind) in addable(self.behavior, mode) {
+                let experimental = self.experimental;
+                let all = addable(self.behavior, mode);
+                let offered = all
+                    .into_iter()
+                    .filter(|(_, _, k)| experimental || !matches!(k, NewAction::LightLed { .. }));
+                for (glyph, key, mut kind) in offered {
                     if ui
                         .button(format!("{glyph}  {}", self.i18n.tr(key)))
                         .clicked()
                     {
+                        if let NewAction::LightLed { device, .. } = &mut kind {
+                            *device = self.led_device_for_new();
+                        }
                         self.ops.push(make(AddKind::New(kind)));
                         ui.close_menu();
                     }
@@ -746,6 +776,29 @@ impl Editor<'_> {
                         ui.separator();
                         self.activation(ui, action);
                     });
+                }
+                ActionKind::LightLed { .. } if !self.experimental => {
+                    ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
+                }
+                ActionKind::LightLed {
+                    device,
+                    led,
+                    element,
+                    color,
+                    color2,
+                    blend,
+                    mode,
+                    on_activate,
+                } => {
+                    let value = crate::leds::LedValue {
+                        id: led,
+                        element,
+                        color,
+                        color2,
+                        blend,
+                        mode,
+                    };
+                    self.light_led(ui, action, device, value, on_activate)
                 }
                 ActionKind::TextToSpeech {
                     text,
@@ -1660,6 +1713,138 @@ impl Editor<'_> {
             }
         }
         devices
+    }
+
+    /// Attached device for a profile device: same GUID, or the same name (profile from
+    /// another PC).
+    fn live_device(&self, guid: &str, name: &str) -> Option<&gob_input::DeviceState> {
+        self.inputs.iter().filter(|d| !d.info.is_vjoy()).find(|d| {
+            d.info.guid.eq_ignore_ascii_case(guid)
+                || (!name.is_empty() && gob_core::same_device_name(&d.info.name, name))
+        })
+    }
+
+    fn has_leds(&self, guid: &str, name: &str) -> bool {
+        self.live_device(guid, name)
+            .is_some_and(|d| self.leds.contains(&d.info.guid))
+    }
+
+    /// Device of a new light-led: the edited input's when it has LEDs, else the first
+    /// device with LEDs, else none yet.
+    fn led_device_for_new(&self) -> String {
+        let devices = self.device_choices();
+        let input = self.input.map(|(d, _)| d.to_ascii_lowercase());
+        input
+            .iter()
+            .filter_map(|g| devices.iter().find(|(d, _)| d == g))
+            .chain(&devices)
+            .find(|(g, n)| self.has_leds(g, n))
+            .map(|(g, _)| g.clone())
+            .unwrap_or_default()
+    }
+
+    fn light_led(
+        &mut self,
+        ui: &mut egui::Ui,
+        action: &Action,
+        device: &str,
+        led: crate::leds::LedValue,
+        on_activate: bool,
+    ) {
+        let id = action.id.clone();
+        let device = device.to_ascii_lowercase();
+        let devices = self.device_choices();
+        let name = devices
+            .iter()
+            .find(|(g, _)| *g == device)
+            .map(|(_, n)| n.clone())
+            .unwrap_or_default();
+        let lit = |has: bool, label: &str| {
+            if has {
+                format!("{}  {label}", icon::LIGHTBULB)
+            } else {
+                label.to_string()
+            }
+        };
+        let has_leds = self.has_leds(&device, &name);
+        let vkb = self
+            .live_device(&device, &name)
+            .is_some_and(|d| d.info.vendor_id == gob_lighting::vkb::VENDOR_ID);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::JOYSTICK).size(style::ICON_SIZE))
+                .on_hover_text(self.i18n.tr("edit-led-device"));
+            let shown = if device.is_empty() {
+                self.i18n.tr("edit-merge-no-device")
+            } else {
+                lit(has_leds, &name)
+            };
+            egui::ComboBox::from_id_salt(("led-device", &id))
+                .selected_text(shown)
+                .width(240.0)
+                .show_ui(ui, |ui| {
+                    for (g, label) in &devices {
+                        let text = lit(self.has_leds(g, label), label);
+                        if ui.selectable_label(*g == device, text).clicked() {
+                            self.set(&id, "device-guid", "uuid", g.clone());
+                        }
+                    }
+                });
+        });
+        if !device.is_empty() && !has_leds {
+            ui.colored_label(
+                ui.visuals().warn_fg_color,
+                self.i18n.tr("edit-led-no-device"),
+            );
+        }
+        ui.horizontal(|ui| {
+            let mut v = led;
+            if crate::leds::led_widgets(ui, self.i18n, ("action", id.as_str()), vkb, &mut v) {
+                if v.id != led.id {
+                    self.set(&id, "led-id", "int", v.id.to_string());
+                }
+                if v.element != led.element {
+                    self.set(&id, "led-element", "int", v.element.to_string());
+                }
+                if v.color != led.color {
+                    self.set(&id, "color", "string", gob_core::format_color(v.color));
+                }
+                if v.color2 != led.color2 {
+                    self.set(&id, "color2", "string", gob_core::format_color(v.color2));
+                }
+                if v.blend != led.blend {
+                    self.set(&id, "color-mode", "string", v.blend.name());
+                }
+                if v.mode != led.mode {
+                    self.set(&id, "led-mode", "string", v.mode.name());
+                }
+            }
+            if style::icon_button(ui, has_leds, icon::PLAY, &self.i18n.tr("edit-led-test"))
+                .clicked()
+            {
+                self.ops.push(Op::PreviewLight {
+                    device: device.clone(),
+                    led,
+                });
+            }
+        });
+        ui.horizontal(|ui| {
+            let mut on = on_activate;
+            if ui
+                .add(style::switch(&mut on, self.i18n.tr("edit-led-on-activate")))
+                .changed()
+            {
+                self.set(
+                    &id,
+                    "on-activate",
+                    "bool",
+                    if on { "True" } else { "False" },
+                );
+            }
+            if !on_activate {
+                ui.separator();
+                self.activation(ui, action);
+            }
+        });
     }
 
     fn axis_pickers(&mut self, ui: &mut egui::Ui, id: &str, axes: [(&str, u32); 2]) {

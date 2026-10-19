@@ -56,8 +56,8 @@ jobs:
 
       - name: Build
         env:
-          JOYGOB_VERSION: ${{ steps.version.outputs.version }}
-        run: cargo build --release -p joygob
+          JOYSTICK_GOBLOON_VERSION: ${{ steps.version.outputs.version }}
+        run: cargo build --release -p joystick-gobloon
 
       - name: Upload the app for signing
         if: env.SIGN == 'true'
@@ -119,7 +119,7 @@ jobs:
           if (-not (Test-Path $iscc)) {
             choco install innosetup -y --no-progress
           }
-          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" installer\joygob.iss
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" installer\JoystickGobloon.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload the installer for signing

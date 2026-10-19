@@ -35,6 +35,7 @@ struct SystemOutput {
     /// Last values written, read back by vJoy conditions.
     written: HashMap<(u32, InputKind, u32), Value>,
     media: crate::media::Media,
+    lighting: crate::lighting::Lighting,
     load_profile: Option<String>,
 }
 
@@ -65,6 +66,10 @@ impl Output for SystemOutput {
 
     fn play_sound(&mut self, file: &str, volume: u8) {
         self.media.play(file, volume);
+    }
+
+    fn light_led(&mut self, light: &crate::Light) {
+        self.lighting.send(light);
     }
 
     fn speak(&mut self, request: crate::SpeechRequest) {
@@ -100,7 +105,7 @@ impl Output for SystemOutput {
     }
 
     fn run_command(&mut self, executable: &str, arguments: &[String]) {
-        // Detached: the program keeps running after JoyGob stops.
+        // Detached: the program keeps running after Joystick Gobloon stops.
         let _ = std::process::Command::new(executable)
             .args(arguments)
             .spawn();
@@ -110,11 +115,14 @@ impl Output for SystemOutput {
 impl Runner {
     /// Takes the vJoy devices the profile needs and starts processing `events`.
     /// `initial` is the current device state, used to send axis positions right away.
+    /// `led_defaults` are set on the devices whose LEDs the profile changed when it stops;
+    /// `None`: LED control is off and light-led actions do nothing.
     pub fn start(
         profile: &Profile,
         aliases: &HashMap<String, String>,
         events: Receiver<InputEvent>,
         initial: &[DeviceState],
+        led_defaults: Option<&[crate::Light]>,
         on_change: impl Fn() + Send + 'static,
     ) -> Result<Self, String> {
         let mut engine = Engine::new(profile, aliases);
@@ -123,6 +131,14 @@ impl Runner {
             devices: HashMap::new(),
             written: HashMap::new(),
             media: Default::default(),
+            lighting: crate::lighting::Lighting::new(
+                initial
+                    .iter()
+                    .filter(|d| !d.info.hid_path.is_empty())
+                    .map(|d| (d.info.guid.to_ascii_lowercase(), d.info.hid_path.clone()))
+                    .collect(),
+                led_defaults.map(<[crate::Light]>::to_vec),
+            ),
             load_profile: None,
         };
         for id in engine.vjoy_devices() {
@@ -150,6 +166,11 @@ impl Runner {
                 );
             }
         }
+
+        if led_defaults.is_none() && engine.uses_lights() {
+            log::info!("light-led actions ignored: experimental features are off");
+        }
+        engine.activate(&mut out);
 
         let status = Arc::new(Mutex::new(RunnerStatus {
             mode: engine.current_mode().to_string(),

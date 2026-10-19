@@ -14,7 +14,7 @@ use crate::style::{self, icon};
 use crate::substitute_view::{missing_devices, SubstituteDialog};
 use crate::vjoy_view::VJoyView;
 
-const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/joygob-256.png");
+const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/JoystickGobloon-256.png");
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -26,7 +26,7 @@ enum Page {
     Settings,
 }
 
-pub struct JoyGobApp {
+pub struct JoystickGobloonApp {
     i18n: I18n,
     settings: Settings,
     page: Page,
@@ -73,6 +73,7 @@ pub struct JoyGobApp {
     modes_window: crate::modes_view::ModesWindow,
     /// Sound and speech previews from the editor.
     media: gob_engine::Media,
+    leds: crate::leds::Leds,
     tray: Option<crate::tray::Tray>,
     /// The window was shown from outside winit (tray, second start): sync it next frame.
     restored: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -104,7 +105,7 @@ enum Pending {
     Open,
 }
 
-impl JoyGobApp {
+impl JoystickGobloonApp {
     /// `instance`: the single-instance wake-up event (another start shows this window);
     /// `None` when several copies may run.
     pub fn new(cc: &eframe::CreationContext<'_>, instance: Option<crate::instance::Event>) -> Self {
@@ -169,6 +170,7 @@ impl JoyGobApp {
             modes_window: Default::default(),
             title: crate::APP_NAME.into(),
             media: Default::default(),
+            leds: Default::default(),
             _plugins: load_plugins(),
             updater: Default::default(),
             update: None,
@@ -178,6 +180,7 @@ impl JoyGobApp {
             hwnd: crate::tray::window_handle(cc),
         };
         app.update_tray(&cc.egui_ctx);
+        app.activation.set_led_defaults(app.settings.led_defaults());
         app.calibrations = app.settings.calibrations();
         for ((device, slot), c) in &app.calibrations {
             app.input.set_calibration(device, *slot, Some(*c));
@@ -193,7 +196,7 @@ impl JoyGobApp {
         }
         // Debug builds: open a page at start for screenshot checks without clicking.
         #[cfg(debug_assertions)]
-        match std::env::var("JOYGOB_START_PAGE").as_deref() {
+        match std::env::var("JOYSTICK_GOBLOON_START_PAGE").as_deref() {
             Ok("hidhide") => app.hidhide_window = true,
             Ok("apps") => app.page = Page::Apps,
             Ok("vjoy") => app.page = Page::VJoy,
@@ -207,6 +210,10 @@ impl JoyGobApp {
             Ok("about") => {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::About;
+            }
+            Ok("lighting") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::Lighting;
             }
             _ => {}
         }
@@ -803,6 +810,13 @@ impl JoyGobApp {
                 Some((d.info.guid.clone(), hidden))
             })
             .collect();
+        self.devices_view.experimental = self.settings.experimental;
+        self.devices_view.leds = if self.settings.experimental {
+            self.leds.update(&devices, ui.ctx());
+            self.leds.guids(&devices)
+        } else {
+            Default::default()
+        };
         self.devices_view.show(
             ui,
             &self.i18n,
@@ -842,13 +856,27 @@ impl JoyGobApp {
     /// Applies queued edits, marks the profile unsaved and restarts a running profile.
     fn apply_ops(&mut self, ops: Vec<crate::action_editor::Op>) {
         use crate::action_editor::Op;
-        let (previews, ops): (Vec<Op>, Vec<Op>) = ops
-            .into_iter()
-            .partition(|op| matches!(op, Op::PreviewSound { .. } | Op::PreviewSpeech(_)));
+        let (previews, ops): (Vec<Op>, Vec<Op>) = ops.into_iter().partition(|op| {
+            matches!(
+                op,
+                Op::PreviewSound { .. } | Op::PreviewSpeech(_) | Op::PreviewLight { .. }
+            )
+        });
         for op in previews {
             match op {
                 Op::PreviewSound { file, volume } => self.media.play(&file, volume),
                 Op::PreviewSpeech(request) => self.media.speak(request),
+                Op::PreviewLight { device, led } => {
+                    let devices = self.input.devices();
+                    // A profile device from another PC lights the attached one standing in.
+                    let device = self
+                        .profile
+                        .as_ref()
+                        .map(|p| crate::substitute_view::auto_aliases(&p.profile, &devices))
+                        .and_then(|a| a.get(&device).cloned())
+                        .unwrap_or(device);
+                    self.leds.preview(&devices, &device, vec![led.to_led()]);
+                }
                 _ => {}
             }
         }
@@ -886,12 +914,23 @@ impl JoyGobApp {
                 self.settings.language = self.i18n.language().to_string();
                 self.status = self.i18n.tr("status-ready");
             }
+            Change::PreviewLeds { device, leds } => {
+                let leds = leds
+                    .into_iter()
+                    .map(crate::leds::LedValue::to_led)
+                    .collect();
+                self.leds.preview(&self.input.devices(), &device, leds);
+            }
+            Change::LedDefaults => {
+                self.activation
+                    .set_led_defaults(self.settings.led_defaults());
+            }
         }
         self.settings.save();
     }
 }
 
-impl eframe::App for JoyGobApp {
+impl eframe::App for JoystickGobloonApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
         // Started or stopped from the tray menu (maybe while the window was hidden).
@@ -1143,6 +1182,14 @@ impl eframe::App for JoyGobApp {
                     self.apply_calibration(out);
                 }
                 Page::Settings => {
+                    let devices = self.input.devices();
+                    let led_devices = if self.settings.experimental {
+                        self.leds.update(&devices, ctx);
+                        self.leds.attached(&devices)
+                    } else {
+                        Vec::new()
+                    };
+                    drop(devices);
                     let change = settings_view::show(
                         ui,
                         &self.i18n,
@@ -1150,6 +1197,7 @@ impl eframe::App for JoyGobApp {
                         &mut self.settings_tab,
                         &self.logo,
                         &mut self.updater,
+                        &led_devices,
                     );
                     if let Some(change) = change {
                         self.apply_change(ctx, change);

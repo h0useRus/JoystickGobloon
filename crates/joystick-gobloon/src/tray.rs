@@ -306,7 +306,7 @@ pub fn window_handle(cc: &eframe::CreationContext<'_>) -> Option<isize> {
     }
 }
 
-/// `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry starting JoyGob minimized.
+/// `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry starting Joystick Gobloon minimized.
 pub mod autostart {
     /// Started by Windows at logon: start hidden in the tray (or minimized).
     pub const ARG: &str = "--minimized";

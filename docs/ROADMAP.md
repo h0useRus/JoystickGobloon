@@ -23,7 +23,7 @@ JoystickGobloon/
     gob-engine/    runtime: event loop (отдельный поток), режимы, исполнение дерева действий, кривые, tempo, макросы
     gob-plugin/    trait `ActionPlugin` + регистрация (API для будущих плагинов; реализаций нет)
     gob-i18n/      Fluent (`fluent-bundle`), файлы `lang/en.ftl` (встроен) + внешние `lang/*.ftl`
-    joygob/        bin: eframe/egui GUI → JoystickGobloon.exe
+    joystick-gobloon/ bin: eframe/egui GUI → JoystickGobloon.exe
   lang/en.ftl, lang/ru.ftl
   tests/fixtures/  реальные профили Gremlin (включая VKB NXT R15)
 ```
@@ -38,7 +38,7 @@ JoystickGobloon/
 - Слева — список входов устройства (Axis/Button/Hat) с подсветкой при нажатии в реальном времени; справа — дерево действий выбранного входа (root → дочерние), редакторы для каждого типа.
 - Селектор режима (mode) в тулбаре, кнопка Activate (как в Gremlin), иконка в трее.
 - Редактор кривой отклика (точки, перетаскивание) — `egui_plot`.
-- Итоги импорта и технические предупреждения — в лог-файл `%APPDATA%\JoystickGobloon\joygob.log`; пользователю — только важные предупреждения/ошибки в диалоге.
+- Итоги импорта и технические предупреждения — в лог-файл `%APPDATA%\JoystickGobloon\JoystickGobloon.log`; пользователю — только важные предупреждения/ошибки в диалоге.
 
 ## Фазы (каждая = 1–3 короткие сессии Claude)
 | # | Фаза | Результат / проверка |

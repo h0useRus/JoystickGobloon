@@ -52,11 +52,11 @@ impl Shown {
         }
     }
 
-    /// Debug builds: JOYGOB_VIEWER=all (or a part of a device name, e.g. `vjoy`) shows every
+    /// Debug builds: JOYSTICK_GOBLOON_VIEWER=all (or a part of a device name, e.g. `vjoy`) shows every
     /// view of those devices at start (screenshots).
     fn initial(name: &str) -> Self {
         let on = cfg!(debug_assertions)
-            && std::env::var("JOYGOB_VIEWER")
+            && std::env::var("JOYSTICK_GOBLOON_VIEWER")
                 .is_ok_and(|v| v == "all" || name.to_lowercase().contains(&v.to_lowercase()));
         Self::all(on)
     }
