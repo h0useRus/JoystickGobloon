@@ -8,7 +8,7 @@
 //! colors until the stick restarts, so the defaults are what stands in for its own profile.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread::JoinHandle;
 
 use gob_core::{LedBlend, LedMode};
@@ -139,10 +139,10 @@ fn run(paths: &HashMap<String, String>, defaults: &[Light], rx: &Receiver<Light>
                 }
                 None => Err("device not attached or without LED control".into()),
             };
-            if let Err(e) = result {
-                if warned.insert(guid.clone()) {
-                    log::warn!("light-led {guid}: {e}");
-                }
+            if let Err(e) = result
+                && warned.insert(guid.clone())
+            {
+                log::warn!("light-led {guid}: {e}");
             }
         }
     }

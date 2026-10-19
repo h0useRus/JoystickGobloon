@@ -42,7 +42,6 @@ pub fn from_multi_sz(buffer: &[u16]) -> Vec<String> {
 #[cfg(windows)]
 mod imp {
     use super::*;
-    use windows::core::w;
     use windows::Win32::Foundation::{
         CloseHandle, ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND, ERROR_SHARING_VIOLATION,
         GENERIC_READ, HANDLE,
@@ -52,6 +51,7 @@ mod imp {
         OPEN_EXISTING,
     };
     use windows::Win32::System::IO::DeviceIoControl;
+    use windows::core::w;
 
     /// An open control device; closed on drop.
     pub struct Driver(HANDLE);
@@ -86,7 +86,7 @@ mod imp {
                 match handle {
                     Ok(h) => return Ok(Self(h)),
                     Err(e) if e.code() == ERROR_FILE_NOT_FOUND.to_hresult() => {
-                        return Err(Error::NotInstalled)
+                        return Err(Error::NotInstalled);
                     }
                     Err(e)
                         if tries < 10
@@ -99,7 +99,7 @@ mod imp {
                     Err(e) if e.code() == ERROR_ACCESS_DENIED.to_hresult() => {
                         return Err(Error::Driver(
                             "the HidHide device is in use by another program".into(),
-                        ))
+                        ));
                     }
                     Err(e) => return Err(Error::Driver(format!("opening HidHide: {e}"))),
                 }

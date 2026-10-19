@@ -8,7 +8,7 @@ use gob_core::{
 
 use crate::media::{SpeechQueue, SpeechRequest};
 use crate::modes::ModeStack;
-use crate::motion::{compass, Motion};
+use crate::motion::{Motion, compass};
 use crate::{InputKey, InputKind, Light, Output, Value};
 
 /// Delay between press and release of a pulse (Gremlin: 50 ms).
@@ -1116,10 +1116,10 @@ impl Engine {
         }
         self.step_relative(now, out);
         self.step_logical(now, out);
-        if let Some((dx, dy)) = self.motion.step(now) {
-            if dx != 0 || dy != 0 {
-                out.mouse_move(dx, dy);
-            }
+        if let Some((dx, dy)) = self.motion.step(now)
+            && (dx != 0 || dy != 0)
+        {
+            out.mouse_move(dx, dy);
         }
         self.after_mode_change(&before, now, out);
     }
@@ -1531,11 +1531,11 @@ impl Engine {
                         .unwrap_or_else(|| truth(self, *value)),
                     Value::Hat(Some(_)) => {
                         let b = truth(self, *value);
-                        if let Some(prev) = self.cond_cache.insert(node, b) {
-                            if prev != b {
-                                for &c in &branches[prev] {
-                                    self.run(c, src, &mut Value::Hat(None), now, out, depth + 1);
-                                }
+                        if let Some(prev) = self.cond_cache.insert(node, b)
+                            && prev != b
+                        {
+                            for &c in &branches[prev] {
+                                self.run(c, src, &mut Value::Hat(None), now, out, depth + 1);
                             }
                         }
                         b

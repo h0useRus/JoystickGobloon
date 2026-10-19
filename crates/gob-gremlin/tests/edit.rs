@@ -85,10 +85,12 @@ fn bind_and_add_actions_survive_save() {
     assert!(
         matches!(p.action(&tempo).unwrap().kind(), ActionKind::Tempo { long, .. } if long.len() == 1)
     );
-    assert!(gob_gremlin::report(&p)
-        .warnings
-        .iter()
-        .all(|w| !matches!(w, gob_gremlin::Warning::DanglingRef { .. })));
+    assert!(
+        gob_gremlin::report(&p)
+            .warnings
+            .iter()
+            .all(|w| !matches!(w, gob_gremlin::Warning::DanglingRef { .. }))
+    );
 }
 
 #[test]
@@ -463,7 +465,7 @@ fn macro_steps_round_trip_and_keep_unknown_ones() {
 
 #[test]
 fn logical_device_inputs_round_trip() {
-    use gob_core::{LogicalInput, LOGICAL_DEVICE_GUID};
+    use gob_core::{LOGICAL_DEVICE_GUID, LogicalInput};
     let mut p = sample();
     assert_eq!(p.add_logical_input(InputType::Axis), 1);
     assert_eq!(p.add_logical_input(InputType::Button), 1);
@@ -543,10 +545,12 @@ fn light_led_round_trips() {
     );
     assert_eq!(a.activation_mode(), gob_core::ActivationMode::Press);
     assert_eq!(gob_gremlin::to_string(&p), xml, "saved again unchanged");
-    assert!(gob_gremlin::report(&p)
-        .warnings
-        .iter()
-        .all(|w| !w.to_string().contains("light-led")));
+    assert!(
+        gob_gremlin::report(&p)
+            .warnings
+            .iter()
+            .all(|w| !w.to_string().contains("light-led"))
+    );
 }
 
 #[test]

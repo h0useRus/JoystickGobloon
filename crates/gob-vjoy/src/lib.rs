@@ -212,8 +212,8 @@ pub fn discrete_pov(direction: Option<u16>) -> i32 {
 /// The `vjoy` driver service exists (the driver is installed, even when switched off).
 #[cfg(windows)]
 fn service_installed() -> bool {
+    use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_ANY, RegGetValueW};
     use windows::core::w;
-    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_ANY};
 
     let mut len = 0u32;
     // SAFETY: a sizing call without a buffer.

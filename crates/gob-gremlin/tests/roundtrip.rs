@@ -1,7 +1,7 @@
 use gob_core::{
     ActionKind, ActivationMode, InputType, Item, MacroRepeat, MacroStep, Profile, Section,
 };
-use gob_gremlin::{profile_to_element, report, xmltext, Warning};
+use gob_gremlin::{Warning, profile_to_element, report, xmltext};
 
 const SAMPLE: &str = include_str!("../../../tests/fixtures/sample_r14.xml");
 const LOCAL_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/local");
@@ -132,18 +132,20 @@ fn sample_report() {
     assert_eq!((r.inputs, r.actions, r.devices, r.modes), (2, 9, 1, 2));
     assert_eq!(r.by_kind["root"], 2);
     assert!(r.warnings.contains(&Warning::HasScripts));
-    assert!(!r
-        .warnings
-        .iter()
-        .any(|w| matches!(w, Warning::NotExecutable { kind, .. } if kind == "macro")));
+    assert!(
+        !r.warnings
+            .iter()
+            .any(|w| matches!(w, Warning::NotExecutable { kind, .. } if kind == "macro"))
+    );
     assert!(r.warnings.contains(&Warning::NotExecutable {
         kind: "future-action".into(),
         count: 1
     }));
-    assert!(!r
-        .warnings
-        .iter()
-        .any(|w| matches!(w, Warning::DanglingRef { .. } | Warning::UnknownMode(_))));
+    assert!(
+        !r.warnings
+            .iter()
+            .any(|w| matches!(w, Warning::DanglingRef { .. } | Warning::UnknownMode(_)))
+    );
 }
 
 #[test]
@@ -153,10 +155,11 @@ fn report_finds_broken_references() {
         .replace("00000000c001</action-id>", "deadbeefc001</action-id>");
     let r = report(&gob_gremlin::from_str(&broken).unwrap());
     assert!(r.warnings.contains(&Warning::UnknownMode("Missing".into())));
-    assert!(r
-        .warnings
-        .iter()
-        .any(|w| matches!(w, Warning::DanglingRef { to, .. } if to.ends_with("deadbeefc001"))));
+    assert!(
+        r.warnings
+            .iter()
+            .any(|w| matches!(w, Warning::DanglingRef { to, .. } if to.ends_with("deadbeefc001")))
+    );
 }
 
 #[test]

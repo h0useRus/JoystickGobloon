@@ -185,10 +185,10 @@ fn run(
             let before = devices.len();
             devices.retain(|d| attached.iter().any(|a| guid_of(a) == d.state.info.guid));
             for inst in &attached {
-                if !devices.iter().any(|d| d.state.info.guid == guid_of(inst)) {
-                    if let Ok(dev) = di.open(inst) {
-                        devices.push(dev);
-                    }
+                if !devices.iter().any(|d| d.state.info.guid == guid_of(inst))
+                    && let Ok(dev) = di.open(inst)
+                {
+                    devices.push(dev);
                 }
             }
             if devices.len() != before || tick == 0 {

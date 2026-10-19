@@ -18,7 +18,7 @@ mod sendinput;
 
 pub use engine::Engine;
 pub use lighting::to_led;
-pub use media::{voices, Media, SpeechQueue, SpeechRequest};
+pub use media::{Media, SpeechQueue, SpeechRequest, voices};
 pub use runner::{Runner, RunnerStatus};
 
 /// Value flowing through an action tree.

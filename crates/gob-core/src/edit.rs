@@ -5,7 +5,7 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
 
-use crate::action::{Action, InputType, Item, Property, HAT_BUTTONS};
+use crate::action::{Action, HAT_BUTTONS, InputType, Item, Property};
 use crate::profile::{ActionConfig, InputBinding, Mode, Profile};
 
 /// Action types the editor can create.
@@ -692,10 +692,10 @@ impl Profile {
     }
 
     pub fn remove_macro_step(&mut self, id: &str, index: usize) {
-        if let Some(a) = self.action_mut(id) {
-            if let Some(&pos) = macro_positions(&a.items).get(index) {
-                a.items.remove(pos);
-            }
+        if let Some(a) = self.action_mut(id)
+            && let Some(&pos) = macro_positions(&a.items).get(index)
+        {
+            a.items.remove(pos);
         }
     }
 
@@ -786,10 +786,10 @@ impl Profile {
     }
 
     pub fn remove_condition(&mut self, id: &str, index: usize) {
-        if let Some(a) = self.action_mut(id) {
-            if let Some(&pos) = condition_positions(&a.items).get(index) {
-                a.items.remove(pos);
-            }
+        if let Some(a) = self.action_mut(id)
+            && let Some(&pos) = condition_positions(&a.items).get(index)
+        {
+            a.items.remove(pos);
         }
     }
 
@@ -802,10 +802,10 @@ impl Profile {
             if cur == target {
                 return true;
             }
-            if seen.insert(cur) {
-                if let Some(a) = index.get(cur) {
-                    stack.extend(a.child_ids());
-                }
+            if seen.insert(cur)
+                && let Some(a) = index.get(cur)
+            {
+                stack.extend(a.child_ids());
             }
         }
         false
@@ -919,10 +919,10 @@ impl Profile {
             .flat_map(|b| b.configs.iter().map(|c| c.root_action.clone()))
             .collect();
         while let Some(id) = stack.pop() {
-            if reachable.insert(id.clone()) {
-                if let Some(a) = index.get(id.as_str()) {
-                    stack.extend(a.child_ids().into_iter().map(String::from));
-                }
+            if reachable.insert(id.clone())
+                && let Some(a) = index.get(id.as_str())
+            {
+                stack.extend(a.child_ids().into_iter().map(String::from));
             }
         }
         self.library.retain(|a| reachable.contains(&a.id));
@@ -932,11 +932,11 @@ impl Profile {
     pub fn set_startup_mode(&mut self, name: &str) {
         let mut found = false;
         for c in self.settings.children.iter_mut() {
-            if let crate::xml::Node::Element(e) = c {
-                if e.name == "startup-mode" {
-                    e.children = vec![crate::xml::Node::Text(name.into())];
-                    found = true;
-                }
+            if let crate::xml::Node::Element(e) = c
+                && e.name == "startup-mode"
+            {
+                e.children = vec![crate::xml::Node::Text(name.into())];
+                found = true;
             }
         }
         if !found {
@@ -979,14 +979,15 @@ impl Profile {
         }
         for a in self.library.iter_mut().filter(|a| a.kind == "change-mode") {
             for item in &mut a.items {
-                if let Item::Group { tag, items, .. } = item {
-                    if tag == "target-mode" {
-                        for i in items {
-                            if let Item::Property(p) = i {
-                                if p.name == "name" && p.value == old {
-                                    p.value = new.into();
-                                }
-                            }
+                if let Item::Group { tag, items, .. } = item
+                    && tag == "target-mode"
+                {
+                    for i in items {
+                        if let Item::Property(p) = i
+                            && p.name == "name"
+                            && p.value == old
+                        {
+                            p.value = new.into();
                         }
                     }
                 }

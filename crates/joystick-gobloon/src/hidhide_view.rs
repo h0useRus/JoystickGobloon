@@ -49,12 +49,12 @@ impl HidHideView {
 
     /// Runs a change, then reloads the state from HidHide.
     fn apply(&mut self, change: impl FnOnce(&HidHide) -> Result<(), gob_hidhide::Error>) {
-        if let Ok(hh) = &self.hh {
-            if let Err(e) = change(hh) {
-                log::error!("changing HidHide state: {e}");
-                self.error = Some(e.to_string());
-                return;
-            }
+        if let Ok(hh) = &self.hh
+            && let Err(e) = change(hh)
+        {
+            log::error!("changing HidHide state: {e}");
+            self.error = Some(e.to_string());
+            return;
         }
         self.refresh(self.gaming_only);
     }

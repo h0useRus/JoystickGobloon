@@ -3,15 +3,15 @@
 use std::ffi::c_void;
 use std::mem::size_of;
 
-use windows::core::{Interface, BOOL, GUID};
 use windows::Win32::Devices::HumanInterfaceDevice::{
-    DirectInput8Create, IDirectInput8W, IDirectInputDevice8W, DI8DEVCLASS_GAMECTRL, DIDATAFORMAT,
-    DIDEVCAPS, DIDEVICEINSTANCEW, DIEDFL_ATTACHEDONLY, DIJOYSTATE2, DIPH_BYOFFSET, DIPH_DEVICE,
-    DIPROPGUIDANDPATH, DIPROPHEADER, DIPROPRANGE,
+    DI8DEVCLASS_GAMECTRL, DIDATAFORMAT, DIDEVCAPS, DIDEVICEINSTANCEW, DIEDFL_ATTACHEDONLY,
+    DIJOYSTATE2, DIPH_BYOFFSET, DIPH_DEVICE, DIPROPGUIDANDPATH, DIPROPHEADER, DIPROPRANGE,
+    DirectInput8Create, IDirectInput8W, IDirectInputDevice8W,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::core::{BOOL, GUID, Interface};
 
-use crate::{format_guid, normalize_axis, pov_direction, DeviceInfo, DeviceState, AXIS_SLOTS};
+use crate::{AXIS_SLOTS, DeviceInfo, DeviceState, format_guid, normalize_axis, pov_direction};
 
 const DIRECTINPUT_VERSION: u32 = 0x0800;
 /// `DIPROP_RANGE` is `MAKEDIPROP(4)`: a small integer passed as a GUID pointer.
@@ -22,14 +22,14 @@ const DIPROP_GUIDANDPATH: *const GUID = std::ptr::without_provenance(12);
 const AXIS_OFFSETS: [u32; AXIS_SLOTS] = [0, 4, 8, 12, 16, 20, 24, 28];
 
 #[link(name = "dinput8", kind = "static", modifiers = "-bundle")]
-extern "C" {
+unsafe extern "C" {
     /// Predefined data format from dinput8.lib describing DIJOYSTATE2.
     static c_dfDIJoystick2: DIDATAFORMAT;
 }
 
 // Axis/POV GUIDs referenced by `c_dfDIJoystick2`.
 #[link(name = "dxguid", kind = "static", modifiers = "-bundle")]
-extern "C" {}
+unsafe extern "C" {}
 
 pub struct DirectInput {
     di: IDirectInput8W,
@@ -199,9 +199,11 @@ impl Drop for Device {
 }
 
 unsafe extern "system" fn collect_device(inst: *mut DIDEVICEINSTANCEW, ctx: *mut c_void) -> BOOL {
-    let found = &mut *(ctx as *mut Vec<DIDEVICEINSTANCEW>);
-    found.push(*inst);
-    BOOL(1) // DIENUM_CONTINUE
+    unsafe {
+        let found = &mut *(ctx as *mut Vec<DIDEVICEINSTANCEW>);
+        found.push(*inst);
+        BOOL(1) // DIENUM_CONTINUE
+    }
 }
 
 fn wide_to_string(buf: &[u16]) -> String {

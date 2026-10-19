@@ -4,7 +4,7 @@
 //! Downloads are checked against the SHA-256 digest GitHub keeps for every release asset.
 
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
 
 use eframe::egui::{self, RichText};
@@ -448,7 +448,7 @@ pub fn wait_for_previous() {
     unsafe {
         use windows::Win32::Foundation::CloseHandle;
         use windows::Win32::System::Threading::{
-            OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+            OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
         };
         if let Ok(h) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
             WaitForSingleObject(h, 15_000);
@@ -463,9 +463,9 @@ pub fn wait_for_previous() {
 fn shell_open(file: &Path, params: &str) -> Result<(), String> {
     #[cfg(windows)]
     {
-        use windows::core::{HSTRING, PCWSTR};
         use windows::Win32::UI::Shell::ShellExecuteW;
         use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        use windows::core::{HSTRING, PCWSTR};
         let (file, params) = (HSTRING::from(file.as_os_str()), HSTRING::from(params));
         // SAFETY: the strings outlive the call.
         let h = unsafe {

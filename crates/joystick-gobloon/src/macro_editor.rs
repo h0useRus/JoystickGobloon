@@ -3,7 +3,7 @@
 use eframe::egui::{self, RichText};
 use gob_core::{Action, Key, MacroRepeat, MacroStep, MouseButton};
 
-use crate::action_editor::{py_float, Editor, Op};
+use crate::action_editor::{Editor, Op, py_float};
 use crate::devices_view::hat_glyph;
 use crate::style::{self, icon};
 
@@ -146,11 +146,11 @@ impl Editor<'_> {
                     extended: *extended,
                 };
                 let field = egui::Id::new(("macro-key", id, index));
-                if let Some(keys) = crate::key_capture::keys_field(ui, field, &[key], self.i18n) {
-                    if let Some(k) = keys.first() {
-                        *scan_code = k.scan_code;
-                        *extended = k.extended;
-                    }
+                if let Some(keys) = crate::key_capture::keys_field(ui, field, &[key], self.i18n)
+                    && let Some(k) = keys.first()
+                {
+                    *scan_code = k.scan_code;
+                    *extended = k.extended;
                 }
                 press_toggle(ui, self, pressed);
             }

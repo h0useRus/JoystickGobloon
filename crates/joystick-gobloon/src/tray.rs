@@ -5,8 +5,8 @@
 //! without the window: it starts the engine through [`Activation`] and updates the icon itself.
 
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use eframe::egui;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem};
@@ -249,10 +249,10 @@ impl Tray {
 
     /// Check mark of the "Device hiding" item.
     pub fn set_cloaked(&self, on: bool) {
-        if let Some(item) = &self.cloak_item {
-            if item.is_checked() != on {
-                item.set_checked(on);
-            }
+        if let Some(item) = &self.cloak_item
+            && item.is_checked() != on
+        {
+            item.set_checked(on);
         }
     }
 
@@ -282,7 +282,7 @@ pub fn show_window(hwnd: isize) {
     {
         use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::WindowsAndMessaging::{
-            IsIconic, ShowWindowAsync, SW_RESTORE, SW_SHOW,
+            IsIconic, SW_RESTORE, SW_SHOW, ShowWindowAsync,
         };
         let hwnd = HWND(hwnd as *mut _);
         // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
@@ -319,10 +319,10 @@ pub mod autostart {
     pub fn set(enabled: bool) -> Result<(), String> {
         #[cfg(windows)]
         {
-            use windows::core::HSTRING;
             use windows::Win32::System::Registry::{
-                RegDeleteKeyValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_SZ,
+                HKEY_CURRENT_USER, REG_SZ, RegDeleteKeyValueW, RegSetKeyValueW,
             };
+            use windows::core::HSTRING;
             let (key, value) = (HSTRING::from(RUN_KEY), HSTRING::from(VALUE));
             // SAFETY: plain registry calls with valid, NUL-terminated strings.
             let status = unsafe {

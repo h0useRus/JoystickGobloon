@@ -130,10 +130,10 @@ impl VJoyView {
         ui.separator();
 
         // A created draft becomes a normal tab once the driver lists it.
-        if let Some(d) = &self.draft {
-            if self.devices.iter().any(|x| x.id == d.id) {
-                self.draft = None;
-            }
+        if let Some(d) = &self.draft
+            && self.devices.iter().any(|x| x.id == d.id)
+        {
+            self.draft = None;
         }
         let used: Vec<u32> = self.devices.iter().map(|d| d.id).collect();
         let free = self.config.free_id(&used);
@@ -226,14 +226,14 @@ impl VJoyView {
             },
         };
         let new = !self.config.configs.iter().any(|c| c.id == info.id);
-        if let Some(d) = &mut self.draft {
-            if d.id == info.id {
-                // The editor works on the draft; it survives switching tabs and a refused UAC.
-                match &self.config.edit {
-                    Some(e) if e.id == d.id => *d = e.clone(),
-                    _ if new && !self.config.busy() => self.config.edit = Some(d.clone()),
-                    _ => {}
-                }
+        if let Some(d) = &mut self.draft
+            && d.id == info.id
+        {
+            // The editor works on the draft; it survives switching tabs and a refused UAC.
+            match &self.config.edit {
+                Some(e) if e.id == d.id => *d = e.clone(),
+                _ if new && !self.config.busy() => self.config.edit = Some(d.clone()),
+                _ => {}
             }
         }
         egui::ScrollArea::vertical()
@@ -301,11 +301,11 @@ impl VJoyView {
 
     /// Configured devices, refreshed at most every [`REFRESH`].
     pub fn device_list(&mut self) -> Vec<DeviceInfo> {
-        if let Ok(vjoy) = &self.vjoy {
-            if self.refreshed.is_none_or(|t| t.elapsed() > REFRESH * 4) {
-                self.devices = vjoy.devices();
-                self.refreshed = Some(Instant::now());
-            }
+        if let Ok(vjoy) = &self.vjoy
+            && self.refreshed.is_none_or(|t| t.elapsed() > REFRESH * 4)
+        {
+            self.devices = vjoy.devices();
+            self.refreshed = Some(Instant::now());
         }
         self.devices.clone()
     }
@@ -369,10 +369,10 @@ impl Tester {
                         if center {
                             self.axes[i] = 0.0;
                         }
-                        if changed || center {
-                            if let Some(d) = &self.device {
-                                d.set_axis(slot, self.axes[i]);
-                            }
+                        if (changed || center)
+                            && let Some(d) = &self.device
+                        {
+                            d.set_axis(slot, self.axes[i]);
                         }
                     });
                     ui.end_row();

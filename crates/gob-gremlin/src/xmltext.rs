@@ -2,8 +2,8 @@
 //! is dropped; all other text (including leading/trailing spaces) is kept.
 
 use gob_core::{Element, Node};
-use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 
 use crate::Error;
 

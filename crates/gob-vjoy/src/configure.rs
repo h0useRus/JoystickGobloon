@@ -155,20 +155,20 @@ pub fn apply(change: &Change) -> Result<Outcome, String> {
 #[cfg(windows)]
 mod sys {
     use super::Outcome;
-    use windows::core::HSTRING;
     use windows::Win32::Devices::DeviceAndDriverInstallation::{
+        DI_NEEDREBOOT, DI_NEEDRESTART, DICS_FLAG_CONFIGSPECIFIC, DIF_PROPERTYCHANGE,
+        DIGCF_ALLCLASSES, DIGCF_PRESENT, SETUP_DI_STATE_CHANGE, SP_CLASSINSTALL_HEADER,
+        SP_DEVINFO_DATA, SP_DEVINSTALL_PARAMS_W, SP_PROPCHANGE_PARAMS, SPDRP_HARDWAREID,
         SetupDiCallClassInstaller, SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo,
         SetupDiGetClassDevsW, SetupDiGetDeviceInstallParamsW, SetupDiGetDeviceRegistryPropertyW,
-        SetupDiSetClassInstallParamsW, DICS_FLAG_CONFIGSPECIFIC, DIF_PROPERTYCHANGE,
-        DIGCF_ALLCLASSES, DIGCF_PRESENT, DI_NEEDREBOOT, DI_NEEDRESTART, SETUP_DI_STATE_CHANGE,
-        SPDRP_HARDWAREID, SP_CLASSINSTALL_HEADER, SP_DEVINFO_DATA, SP_DEVINSTALL_PARAMS_W,
-        SP_PROPCHANGE_PARAMS,
+        SetupDiSetClassInstallParamsW,
     };
     use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, WIN32_ERROR};
     use windows::Win32::System::Registry::{
-        RegCloseKey, RegCreateKeyExW, RegDeleteKeyW, RegSetValueExW, HKEY, HKEY_LOCAL_MACHINE,
-        KEY_SET_VALUE, REG_BINARY, REG_DWORD, REG_OPTION_NON_VOLATILE, REG_VALUE_TYPE,
+        HKEY, HKEY_LOCAL_MACHINE, KEY_SET_VALUE, REG_BINARY, REG_DWORD, REG_OPTION_NON_VOLATILE,
+        REG_VALUE_TYPE, RegCloseKey, RegCreateKeyExW, RegDeleteKeyW, RegSetValueExW,
     };
+    use windows::core::HSTRING;
 
     /// Hardware id of the vJoy device node (`root\VID_1234&PID_BEAD&REV_xxxx`).
     const HWID: &str = r"root\VID_1234&PID_BEAD";

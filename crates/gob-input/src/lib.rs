@@ -74,11 +74,7 @@ impl Calibration {
         );
         let out = if self.with_center {
             if v < cl {
-                if cl > low {
-                    (v - cl) / (cl - low)
-                } else {
-                    0.0
-                }
+                if cl > low { (v - cl) / (cl - low) } else { 0.0 }
             } else if v <= ch {
                 0.0
             } else if high > ch {
@@ -162,7 +158,7 @@ pub fn joystick_ids(vendor_id: u16, product_id: u16) -> Vec<u32> {
     #[cfg(windows)]
     {
         use windows::Win32::Media::Multimedia::{
-            joyGetDevCapsW, joyGetNumDevs, joyGetPosEx, JOYCAPSW, JOYINFOEX, JOY_RETURNBUTTONS,
+            JOY_RETURNBUTTONS, JOYCAPSW, JOYINFOEX, joyGetDevCapsW, joyGetNumDevs, joyGetPosEx,
         };
         let mut ids = Vec::new();
         // SAFETY: plain WinMM queries into locally owned structs of the right size.

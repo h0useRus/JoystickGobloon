@@ -12,8 +12,8 @@ use std::path::Path;
 
 use gob_core::Profile;
 
-pub use convert::{profile_from_element, profile_to_element, MIN_VERSION};
-pub use report::{report, ImportReport, Warning};
+pub use convert::{MIN_VERSION, profile_from_element, profile_to_element};
+pub use report::{ImportReport, Warning, report};
 
 #[derive(Debug)]
 pub enum Error {

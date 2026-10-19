@@ -19,9 +19,9 @@ mod imp {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::System::Threading::GetCurrentThreadId;
     use windows::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, DispatchMessageW, GetMessageW, PostThreadMessageW, SetWindowsHookExW,
-        TranslateMessage, UnhookWindowsHookEx, HC_ACTION, KBDLLHOOKSTRUCT, LLKHF_EXTENDED,
-        LLKHF_INJECTED, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_QUIT, WM_SYSKEYDOWN,
+        CallNextHookEx, DispatchMessageW, GetMessageW, HC_ACTION, KBDLLHOOKSTRUCT, LLKHF_EXTENDED,
+        LLKHF_INJECTED, MSG, PostThreadMessageW, SetWindowsHookExW, TranslateMessage,
+        UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_KEYDOWN, WM_QUIT, WM_SYSKEYDOWN,
     };
 
     use super::KeySink;
@@ -45,17 +45,17 @@ mod imp {
                     info.flags.0 & LLKHF_EXTENDED.0 != 0,
                 );
                 let pressed = matches!(wparam.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN);
-                if let Some(Ok(mut guard)) = STATE.get().map(|m| m.lock()) {
-                    if let Some(state) = guard.as_mut() {
-                        // Auto-repeat: a press for a key that is already down.
-                        let changed = if pressed {
-                            state.down.insert(key)
-                        } else {
-                            state.down.remove(&key)
-                        };
-                        if changed {
-                            (state.sink)(key.0, key.1, pressed);
-                        }
+                if let Some(Ok(mut guard)) = STATE.get().map(|m| m.lock())
+                    && let Some(state) = guard.as_mut()
+                {
+                    // Auto-repeat: a press for a key that is already down.
+                    let changed = if pressed {
+                        state.down.insert(key)
+                    } else {
+                        state.down.remove(&key)
+                    };
+                    if changed {
+                        (state.sink)(key.0, key.1, pressed);
                     }
                 }
             }
@@ -130,4 +130,4 @@ mod imp {
     }
 }
 
-pub use imp::{start, Hook};
+pub use imp::{Hook, start};

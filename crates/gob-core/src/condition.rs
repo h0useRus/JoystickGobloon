@@ -198,11 +198,7 @@ fn input_type_name(t: InputType) -> &'static str {
 }
 
 fn py_bool(b: bool) -> &'static str {
-    if b {
-        "True"
-    } else {
-        "False"
-    }
+    if b { "True" } else { "False" }
 }
 
 fn p(ty: &str, name: &str, value: &str) -> Item {

@@ -8,7 +8,7 @@
 //! - Output: opening `<namespace>device_NNN` acquires device N; `LOAD_POSITIONS` sends the whole
 //!   state (`Position`, `JOYSTICK_POSITION_V2`), `RESET_DEV` resets it, closing releases it.
 
-use crate::{DeviceInfo, Status, AXIS_USAGES, MAX_DEVICES};
+use crate::{AXIS_USAGES, DeviceInfo, MAX_DEVICES, Status};
 
 /// `CTL_CODE(FILE_DEVICE_UNKNOWN, f, METHOD_BUFFERED, access)`.
 const fn ioctl(f: u32, access: u32) -> u32 {
@@ -284,22 +284,22 @@ fn axis_slot(usage: u16) -> Option<u8> {
 #[cfg(windows)]
 mod imp {
     use super::*;
-    use windows::core::{GUID, PCWSTR};
     use windows::Win32::Devices::DeviceAndDriverInstallation::{
-        SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInterfaces, SetupDiGetClassDevsW,
-        SetupDiGetDeviceInterfaceDetailW, DIGCF_DEVICEINTERFACE, DIGCF_PRESENT, HDEVINFO,
-        SP_DEVICE_INTERFACE_DATA, SP_DEVICE_INTERFACE_DETAIL_DATA_W,
+        DIGCF_DEVICEINTERFACE, DIGCF_PRESENT, HDEVINFO, SP_DEVICE_INTERFACE_DATA,
+        SP_DEVICE_INTERFACE_DETAIL_DATA_W, SetupDiDestroyDeviceInfoList,
+        SetupDiEnumDeviceInterfaces, SetupDiGetClassDevsW, SetupDiGetDeviceInterfaceDetailW,
     };
     use windows::Win32::Devices::HumanInterfaceDevice::{
+        HIDD_ATTRIBUTES, HIDP_BUTTON_CAPS, HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS,
         HidD_FreePreparsedData, HidD_GetAttributes, HidD_GetHidGuid, HidD_GetPreparsedData,
-        HidP_GetButtonCaps, HidP_GetCaps, HidP_GetValueCaps, HidP_Input, HIDD_ATTRIBUTES,
-        HIDP_BUTTON_CAPS, HIDP_CAPS, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS, PHIDP_PREPARSED_DATA,
+        HidP_GetButtonCaps, HidP_GetCaps, HidP_GetValueCaps, HidP_Input, PHIDP_PREPARSED_DATA,
     };
     use windows::Win32::Foundation::{CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE};
     use windows::Win32::Storage::FileSystem::{
         CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
     };
     use windows::Win32::System::IO::DeviceIoControl;
+    use windows::core::{GUID, PCWSTR};
 
     /// `{781EF630-72B2-11D2-B852-00C04FAD5101}`
     const GUID_DEVINTERFACE_VJOY: GUID = GUID::from_u128(0x781ef630_72b2_11d2_b852_00c04fad5101);
@@ -339,19 +339,21 @@ mod imp {
     }
 
     unsafe fn detail(set: HDEVINFO, data: &SP_DEVICE_INTERFACE_DATA) -> Option<String> {
-        let mut needed = 0u32;
-        let _ = SetupDiGetDeviceInterfaceDetailW(set, data, None, 0, Some(&mut needed), None);
-        let mut buffer = vec![0u8; needed as usize + 8];
-        let detail = buffer
-            .as_mut_ptr()
-            .cast::<SP_DEVICE_INTERFACE_DETAIL_DATA_W>();
-        (*detail).cbSize = size_of::<SP_DEVICE_INTERFACE_DETAIL_DATA_W>() as u32;
-        SetupDiGetDeviceInterfaceDetailW(set, data, Some(detail), needed, None, None).ok()?;
-        let path = std::ptr::addr_of!((*detail).DevicePath).cast::<u16>();
-        let len = (0..).take_while(|&i| *path.add(i) != 0).count();
-        Some(String::from_utf16_lossy(std::slice::from_raw_parts(
-            path, len,
-        )))
+        unsafe {
+            let mut needed = 0u32;
+            let _ = SetupDiGetDeviceInterfaceDetailW(set, data, None, 0, Some(&mut needed), None);
+            let mut buffer = vec![0u8; needed as usize + 8];
+            let detail = buffer
+                .as_mut_ptr()
+                .cast::<SP_DEVICE_INTERFACE_DETAIL_DATA_W>();
+            (*detail).cbSize = size_of::<SP_DEVICE_INTERFACE_DETAIL_DATA_W>() as u32;
+            SetupDiGetDeviceInterfaceDetailW(set, data, Some(detail), needed, None, None).ok()?;
+            let path = std::ptr::addr_of!((*detail).DevicePath).cast::<u16>();
+            let len = (0..).take_while(|&i| *path.add(i) != 0).count();
+            Some(String::from_utf16_lossy(std::slice::from_raw_parts(
+                path, len,
+            )))
+        }
     }
 
     /// The driver's interface path up to its last `\`: device N is `<namespace>device_NNN`.

@@ -480,10 +480,10 @@ pub fn stepper(
     );
     text.retain(|c| c.is_ascii_digit());
     let typed = text.parse::<u32>().ok();
-    if response.changed() {
-        if let Some(v) = typed.filter(|v| range.contains(v)) {
-            *value = v;
-        }
+    if response.changed()
+        && let Some(v) = typed.filter(|v| range.contains(v))
+    {
+        *value = v;
     }
     if response.lost_focus() {
         if let Some(v) = typed {
