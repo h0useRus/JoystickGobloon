@@ -34,6 +34,13 @@ pub struct Led {
     pub mode: Mode,
 }
 
+/// LED state saved by [`Device::save`]: what this program can read back and write again
+/// (VKB: the list set with report `0x59`, not the colors of the device's own profile).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Saved {
+    Vkb(Vec<vkb::LedConfig>),
+}
+
 /// A device whose LEDs can be set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Device {
@@ -80,6 +87,20 @@ impl Device {
     pub fn release_all(&self) -> io::Result<()> {
         match self.vendor {
             Vendor::Vkb => vkb::write(&self.hid, &[]),
+        }
+    }
+
+    /// Reads the LED state to put back later with [`Device::restore`].
+    pub fn save(&self) -> io::Result<Saved> {
+        match self.vendor {
+            Vendor::Vkb => vkb::read(&self.hid).map(Saved::Vkb),
+        }
+    }
+
+    /// Puts back a state from [`Device::save`].
+    pub fn restore(&self, saved: &Saved) -> io::Result<()> {
+        match (self.vendor, saved) {
+            (Vendor::Vkb, Saved::Vkb(list)) => vkb::write(&self.hid, list),
         }
     }
 }

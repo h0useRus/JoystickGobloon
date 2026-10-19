@@ -153,18 +153,20 @@ fn checksum(n: usize, body: &[u8]) -> u16 {
 }
 
 /// The feature report that sets `configs` (the dummy LED appended), `random` = the two
-/// "random" bytes. `None` when there are too many configs.
+/// "random" bytes. An empty list is sent without the dummy (N = 0, like pyvkb's
+/// `set_leds([])`). `None` when there are too many configs.
 pub fn encode(configs: &[LedConfig], random: [u8; 2]) -> Option<[u8; REPORT_LEN]> {
-    let n = configs.len() + 1;
-    if n > MAX_CONFIGS {
-        return None;
-    }
-    let mut body = vec![random[0], random[1], n as u8];
     let dummy = LedConfig {
         led: DUMMY_LED,
         ..Default::default()
     };
-    for c in configs.iter().chain([&dummy]) {
+    let dummy = (!configs.is_empty()).then_some(&dummy);
+    let n = configs.len() + usize::from(dummy.is_some());
+    if n > MAX_CONFIGS {
+        return None;
+    }
+    let mut body = vec![random[0], random[1], n as u8];
+    for c in configs.iter().chain(dummy) {
         body.extend_from_slice(&c.to_bytes());
     }
     let crc = checksum(n, &body).to_le_bytes();
@@ -361,6 +363,15 @@ mod tests {
         let crc = checksum(2, &r[5..]).to_le_bytes();
         assert_eq!(r[3..5], crc);
         assert!(encode(&[red_green(1); MAX_CONFIGS], [0, 0]).is_none());
+    }
+
+    #[test]
+    fn empty_list_has_no_dummy() {
+        let r = encode(&[], [0x12, 0x34]).unwrap();
+        assert_eq!(r[5..8], [0x12, 0x34, 0]);
+        assert_eq!(r[3..5], checksum(0, &r[5..]).to_le_bytes());
+        assert!(r[8..].iter().all(|&b| b == 0));
+        assert!(decode(&r).is_empty());
     }
 
     #[test]
