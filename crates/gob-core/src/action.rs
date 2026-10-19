@@ -148,13 +148,15 @@ pub enum ActionKind<'a> {
         volume: u8,
     },
     /// Joystick Gobloon's own action (not in Gremlin): sets LED `led` of the joystick
-    /// `device` (DirectInput instance GUID) to `color` (8-bit RGB). Runs on the input like
-    /// any action (`activation-mode`), or once when the profile is activated with
-    /// `on_activate`.
+    /// `device` (DirectInput instance GUID) to `color` / `color2` (8-bit RGB) combined by
+    /// `blend`. Runs on the input like any action (`activation-mode`), or once when the
+    /// profile is activated with `on_activate`.
     LightLed {
         device: &'a str,
         led: u8,
         color: [u8; 3],
+        color2: [u8; 3],
+        blend: LedBlend,
         mode: LedMode,
         on_activate: bool,
     },
@@ -245,6 +247,50 @@ impl LedMode {
             Self::SlowBlink => "slow-blink",
             Self::FastBlink => "fast-blink",
             Self::FastestBlink => "fastest-blink",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim();
+        Self::ALL
+            .into_iter()
+            .find(|m| m.name().eq_ignore_ascii_case(s))
+    }
+}
+
+/// How a light-led LED's two colors combine (`color-mode` property).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LedBlend {
+    /// `color` only.
+    #[default]
+    First,
+    /// `color2` only.
+    Second,
+    /// `color`, then `color2` (with blinking).
+    Alternate,
+    /// `color2`, then `color`.
+    AlternateReverse,
+    /// Both at once.
+    Mix,
+}
+
+impl LedBlend {
+    pub const ALL: [LedBlend; 5] = [
+        Self::First,
+        Self::Second,
+        Self::Alternate,
+        Self::AlternateReverse,
+        Self::Mix,
+    ];
+
+    /// Value of the `color-mode` property.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::First => "color1",
+            Self::Second => "color2",
+            Self::Alternate => "alternate",
+            Self::AlternateReverse => "alternate-reverse",
+            Self::Mix => "mix",
         }
     }
 
@@ -645,6 +691,14 @@ impl Action {
                 device: self.str("device-guid").unwrap_or_default().trim(),
                 led: self.parse("led-id").unwrap_or(0),
                 color: self.str("color").and_then(parse_color).unwrap_or([0, 0, 0]),
+                color2: self
+                    .str("color2")
+                    .and_then(parse_color)
+                    .unwrap_or([0, 0, 0]),
+                blend: self
+                    .str("color-mode")
+                    .and_then(LedBlend::parse)
+                    .unwrap_or_default(),
                 mode: self
                     .str("led-mode")
                     .and_then(LedMode::parse)

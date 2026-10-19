@@ -412,6 +412,8 @@ impl Action {
                     prop("uuid", "device-guid", device.clone()),
                     prop("int", "led-id", led.to_string()),
                     prop("string", "color", "#00FF00"),
+                    prop("string", "color2", "#000000"),
+                    prop("string", "color-mode", "color1"),
                     prop("string", "led-mode", "on"),
                     prop("bool", "on-activate", "False"),
                 ],

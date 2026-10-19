@@ -519,6 +519,8 @@ fn light_led_round_trips() {
     let a = p.action_mut(&led).unwrap();
     a.set("color", "string", "#FF8000");
     a.set("led-mode", "string", "slow-blink");
+    a.set("color2", "string", "#0000FF");
+    a.set("color-mode", "string", "alternate");
     a.set("on-activate", "bool", "True");
 
     let xml = gob_gremlin::to_string(&p);
@@ -531,6 +533,8 @@ fn light_led_round_trips() {
             device: DEV,
             led: 10,
             color: [0xFF, 0x80, 0x00],
+            color2: [0, 0, 0xFF],
+            blend: gob_core::LedBlend::Alternate,
             mode: gob_core::LedMode::SlowBlink,
             on_activate: true,
         }
@@ -550,5 +554,8 @@ fn led_colors_and_modes_parse() {
     assert_eq!(gob_core::format_color([0, 0xFF, 0x7F]), "#00FF7F");
     for m in gob_core::LedMode::ALL {
         assert_eq!(gob_core::LedMode::parse(m.name()), Some(m));
+    }
+    for b in gob_core::LedBlend::ALL {
+        assert_eq!(gob_core::LedBlend::parse(b.name()), Some(b));
     }
 }
