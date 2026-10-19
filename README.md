@@ -71,6 +71,14 @@ Gremlin workflow you already know.
   <img src="docs/screenshots/hidhide.png" width="32%" alt="Device hiding window: the VKB sticks are hidden, the vJoy devices are visible">
 </p>
 
+### Joystick lighting (experimental)
+
+- **Light LED** action for VKB Gladiator NXT / EVO sticks: the RGB light on top of the grip, the hat light and the two
+  base lights, each with its own color and blink mode — on press, on release or when a profile or mode becomes active.
+- Default colors per stick (Settings → Lighting), set again when the profile stops.
+- Turn it on in Settings → General → *Enable experimental features*. Profiles that use Light LED no longer open in
+  Joystick Gremlin.
+
 ### Everyday comfort
 
 - Tray icon, start with Windows, activate the profile on start.
@@ -114,6 +122,7 @@ cargo test --workspace
 | `gob-input` | DirectInput polling and the keyboard hook |
 | `gob-vjoy` | vJoy driver: output and device configuration |
 | `gob-hidhide` | HidHide driver: hiding, application list |
+| `gob-lighting` | Joystick LEDs through HID (VKB) |
 | `gob-plugin` | Plugin API (early) |
 | `gob-i18n` | Fluent translations |
 
@@ -130,6 +139,8 @@ Joystick Gobloon stands on the shoulders of
 [vJoy](https://github.com/shauleiz/vJoy) by Shaul Eizikovich (signed 2.1.9.1 build by
 [Justin Shafer](https://github.com/jshafer817/vJoy)) and
 [Joystick Gremlin](https://github.com/WhiteMagic/JoystickGremlin) by Lionel Ott.
+The VKB LED protocol follows [pyvkb](https://github.com/ventorvar/pyvkb) by Ventorvar and
+[vkb_led_jg_plugin](https://github.com/WesCov/vkb_led_jg_plugin) by WesCov.
 
 Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
 [SignPath Foundation](https://signpath.org/).
