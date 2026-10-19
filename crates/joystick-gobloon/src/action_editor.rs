@@ -773,6 +773,7 @@ impl Editor<'_> {
                 ActionKind::LightLed {
                     device,
                     led,
+                    element,
                     color,
                     color2,
                     blend,
@@ -781,6 +782,7 @@ impl Editor<'_> {
                 } => {
                     let value = crate::leds::LedValue {
                         id: led,
+                        element,
                         color,
                         color2,
                         blend,
@@ -1789,6 +1791,9 @@ impl Editor<'_> {
             if crate::leds::led_widgets(ui, self.i18n, ("action", id.as_str()), vkb, &mut v) {
                 if v.id != led.id {
                     self.set(&id, "led-id", "int", v.id.to_string());
+                }
+                if v.element != led.element {
+                    self.set(&id, "led-element", "int", v.element.to_string());
                 }
                 if v.color != led.color {
                     self.set(&id, "color", "string", gob_core::format_color(v.color));

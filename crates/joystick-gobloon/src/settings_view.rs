@@ -154,15 +154,20 @@ fn lighting(
             if style::icon_button(ui, true, icon::PLUS_CIRCLE, &i18n.tr("settings-leds-add"))
                 .clicked()
             {
-                let used = |n: u8| leds.iter().any(|l| l.id == n);
-                let id = [10, 11, 0]
-                    .into_iter()
-                    .find(|&n| vkb && !used(n))
-                    .unwrap_or_else(|| leds.iter().map(|l| l.id).max().map_or(0, |m| m + 1));
+                // The next known LED not listed yet, else the next number.
+                let used =
+                    |id: u8, element: u8| leds.iter().any(|l| (l.id, l.element) == (id, element));
+                let (id, element) = gob_lighting::vkb::KNOWN_LEDS
+                    .iter()
+                    .filter(|_| vkb)
+                    .map(|k| (k.id, k.element))
+                    .find(|&(id, element)| !used(id, element))
+                    .unwrap_or_else(|| (leds.iter().map(|l| l.id).max().map_or(0, |m| m + 1), 0));
                 let entry = settings.leds.entry(guid.clone()).or_default();
                 entry.name = d.name.clone();
                 let mut value = LedValue {
                     id,
+                    element,
                     color: [0, 0xFF, 0xFF],
                     ..Default::default()
                 };

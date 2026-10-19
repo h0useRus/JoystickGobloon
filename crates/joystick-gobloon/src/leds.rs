@@ -108,6 +108,8 @@ pub struct LedDevice {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LedValue {
     pub id: u8,
+    /// 0: the whole LED; 1, 2: one element (see `gob_lighting::Led::element`).
+    pub element: u8,
     pub color: [u8; 3],
     pub color2: [u8; 3],
     pub blend: LedBlend,
@@ -120,6 +122,7 @@ impl LedValue {
         gob_engine::Light {
             device: device.to_ascii_lowercase(),
             led: self.id,
+            element: self.element,
             color: self.color,
             color2: self.color2,
             blend: self.blend,
@@ -132,54 +135,37 @@ impl LedValue {
     }
 }
 
-const RED: [u8; 3] = [255, 0, 0];
-
 /// i18n key of a known VKB LED (Gladiator NXT / EVO).
-fn vkb_name(id: u8) -> Option<&'static str> {
-    match id {
-        10 => Some("led-vkb-grip"),
-        11 => Some("led-vkb-hat"),
-        0 => Some("led-vkb-base"),
+fn vkb_name(id: u8, element: u8) -> Option<&'static str> {
+    match (id, element) {
+        (10, 0) => Some("led-vkb-grip"),
+        (11, 0) => Some("led-vkb-hat"),
+        (0, 1) => Some("led-vkb-base-blue"),
+        (0, 2) => Some("led-vkb-base-red"),
         _ => None,
     }
 }
 
-fn kind(vkb: bool, id: u8) -> Option<LedKind> {
+fn kind(vkb: bool, led: &LedValue) -> Option<LedKind> {
     if !vkb {
         return None;
     }
     gob_lighting::vkb::KNOWN_LEDS
         .iter()
-        .find(|(n, _)| *n == id)
-        .map(|&(_, k)| k)
+        .find(|k| (k.id, k.element) == (led.id, led.element))
+        .map(|k| k.kind)
 }
 
-/// Picking another LED: colors that light its kind (single and two-color LEDs only use
-/// the red channel).
+/// Picking another LED: a single-color one lights with the red channel only.
 pub fn adapt(led: &mut LedValue, vkb: bool) {
-    match kind(vkb, led.id) {
-        Some(LedKind::Single) => {
-            led.color = RED;
-            led.blend = LedBlend::First;
-        }
-        Some(LedKind::Dual) => {
-            led.color = RED;
-            led.color2 = RED;
-        }
-        _ => {}
+    if kind(vkb, led) == Some(LedKind::Single) {
+        led.color = [255, 0, 0];
+        led.blend = LedBlend::First;
     }
 }
 
-/// The two elements of a two-color LED (VKB base: blue, red) as one choice.
-const DUAL: [(LedBlend, &str); 4] = [
-    (LedBlend::First, "led-vkb-base-blue"),
-    (LedBlend::Second, "led-vkb-base-red"),
-    (LedBlend::Mix, "led-vkb-base-both"),
-    (LedBlend::Alternate, "led-vkb-base-alternate"),
-];
-
-/// LED number (with VKB names when `vkb`), its colors and mode in the current row; true
-/// when `led` was changed. What the colors look like depends on the kind of LED.
+/// LED (with VKB names when `vkb`), its colors and mode in the current row; true when `led`
+/// was changed. Single-color LEDs have no colors to pick.
 pub fn led_widgets(
     ui: &mut egui::Ui,
     i18n: &I18n,
@@ -191,65 +177,51 @@ pub fn led_widgets(
     ui.label(egui::RichText::new(crate::style::icon::LIGHTBULB).size(crate::style::ICON_SIZE))
         .on_hover_text(i18n.tr("edit-led-id"));
     if vkb {
-        let text = vkb_name(led.id).map_or_else(|| led.id.to_string(), |k| i18n.tr(k));
+        let text = vkb_name(led.id, led.element).map_or_else(|| led.id.to_string(), |k| i18n.tr(k));
         egui::ComboBox::from_id_salt(("led-id", salt))
             .selected_text(text)
             .show_ui(ui, |ui| {
-                for &(n, _) in gob_lighting::vkb::KNOWN_LEDS {
-                    let name = vkb_name(n).map(|k| i18n.tr(k)).unwrap_or_default();
+                for k in gob_lighting::vkb::KNOWN_LEDS {
+                    let name = vkb_name(k.id, k.element)
+                        .map(|key| i18n.tr(key))
+                        .unwrap_or_default();
+                    let selected = (k.id, k.element) == (led.id, led.element);
                     if ui
-                        .selectable_label(n == led.id, format!("{n}  {name}"))
+                        .selectable_label(selected, format!("{}  {name}", k.id))
                         .clicked()
                     {
-                        led.id = n;
+                        (led.id, led.element) = (k.id, k.element);
                     }
                 }
             });
     }
-    ui.add(egui::DragValue::new(&mut led.id));
-    if led.id != before.id {
+    let mut id = led.id;
+    if ui.add(egui::DragValue::new(&mut id)).changed() {
+        // A typed number is a whole LED.
+        (led.id, led.element) = (id, 0);
+    }
+    if (led.id, led.element) != (before.id, before.element) {
         adapt(led, vkb);
     }
     ui.separator();
-    match kind(vkb, led.id) {
-        // Brightness only: on, blinking or off.
-        Some(LedKind::Single) => {}
-        Some(LedKind::Dual) => {
-            let current = DUAL
-                .iter()
-                .find(|(b, _)| *b == led.blend)
-                .map_or(DUAL[0].1, |(_, k)| k);
-            egui::ComboBox::from_id_salt(("led-dual", salt))
-                .selected_text(i18n.tr(current))
-                .show_ui(ui, |ui| {
-                    for (b, key) in DUAL {
-                        if ui.selectable_label(b == led.blend, i18n.tr(key)).clicked() {
-                            led.blend = b;
-                        }
+    if kind(vkb, led) != Some(LedKind::Single) {
+        egui::color_picker::color_edit_button_srgb(ui, &mut led.color)
+            .on_hover_text(i18n.tr("edit-led-color"));
+        egui::ComboBox::from_id_salt(("led-blend", salt))
+            .selected_text(i18n.tr(&format!("led-blend-{}", led.blend.name())))
+            .show_ui(ui, |ui| {
+                for b in LedBlend::ALL {
+                    let text = i18n.tr(&format!("led-blend-{}", b.name()));
+                    if ui.selectable_label(b == led.blend, text).clicked() {
+                        led.blend = b;
                     }
-                })
-                .response
-                .on_hover_text(i18n.tr("edit-led-blend"));
-        }
-        Some(LedKind::Rgb) | None => {
-            egui::color_picker::color_edit_button_srgb(ui, &mut led.color)
-                .on_hover_text(i18n.tr("edit-led-color"));
-            egui::ComboBox::from_id_salt(("led-blend", salt))
-                .selected_text(i18n.tr(&format!("led-blend-{}", led.blend.name())))
-                .show_ui(ui, |ui| {
-                    for b in LedBlend::ALL {
-                        let text = i18n.tr(&format!("led-blend-{}", b.name()));
-                        if ui.selectable_label(b == led.blend, text).clicked() {
-                            led.blend = b;
-                        }
-                    }
-                })
-                .response
-                .on_hover_text(i18n.tr("edit-led-blend"));
-            if led.blend != LedBlend::First {
-                egui::color_picker::color_edit_button_srgb(ui, &mut led.color2)
-                    .on_hover_text(i18n.tr("edit-led-color2"));
-            }
+                }
+            })
+            .response
+            .on_hover_text(i18n.tr("edit-led-blend"));
+        if led.blend != LedBlend::First {
+            egui::color_picker::color_edit_button_srgb(ui, &mut led.color2)
+                .on_hover_text(i18n.tr("edit-led-color2"));
         }
     }
     egui::ComboBox::from_id_salt(("led-mode", salt))

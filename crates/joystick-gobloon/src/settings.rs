@@ -92,6 +92,8 @@ pub struct DeviceLeds {
 #[serde(default)]
 pub struct LedDefault {
     pub id: u8,
+    /// 0: the whole LED; 1, 2: one element (VKB base: blue, red).
+    pub element: u8,
     /// `#RRGGBB`.
     pub color: String,
     pub color2: String,
@@ -105,6 +107,7 @@ impl LedDefault {
     pub fn value(&self) -> crate::leds::LedValue {
         crate::leds::LedValue {
             id: self.id,
+            element: self.element,
             color: gob_core::parse_color(&self.color).unwrap_or_default(),
             color2: gob_core::parse_color(&self.color2).unwrap_or_default(),
             blend: gob_core::LedBlend::parse(&self.blend).unwrap_or_default(),
@@ -115,6 +118,7 @@ impl LedDefault {
     pub fn from_value(v: crate::leds::LedValue) -> Self {
         Self {
             id: v.id,
+            element: v.element,
             color: gob_core::format_color(v.color),
             color2: gob_core::format_color(v.color2),
             blend: v.blend.name().into(),
