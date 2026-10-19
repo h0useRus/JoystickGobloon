@@ -1,12 +1,16 @@
 //! Notification area (tray) icon and the Windows autostart entry.
 //!
-//! While the window is hidden eframe does not run `update`, so the tray callbacks show
-//! the window directly through Win32 and only then ask egui to repaint. "Activate" works
-//! without the window: it starts the engine through [`Activation`] and updates the icon itself.
+//! The tray callbacks show the window directly through Win32 and only then ask egui to
+//! repaint. "Activate" works without the window: it starts the engine through
+//! [`Activation`] and updates the icon itself.
+//!
+//! Left click: show the window, or minimize it when it is on screen (to the tray with
+//! "minimize to tray"). Double click: activate / deactivate the profile.
 
 use std::cell::RefCell;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use eframe::egui;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem};
@@ -149,17 +153,45 @@ impl Tray {
         {
             let ctx = ctx.clone();
             let restored = restored.clone();
-            TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
-                if let TrayIconEvent::Click {
+            let activation = activation.clone();
+            // Every left click and double click bumps it: a pending single click only acts if
+            // nothing followed it within the double-click time.
+            let clicks = Arc::new(AtomicU64::new(0));
+            let double_at: Arc<Mutex<Option<Instant>>> = Arc::default();
+            let wait = double_click_time();
+            TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| match event {
+                TrayIconEvent::Click {
                     button: MouseButton::Left,
                     button_state: MouseButtonState::Up,
                     ..
-                } = event
-                {
-                    restored.store(true, Ordering::Relaxed);
-                    show_window(hwnd);
+                } => {
+                    // The release that ends a double click.
+                    let last = *double_at.lock().unwrap_or_else(|e| e.into_inner());
+                    if last.is_some_and(|t| t.elapsed() < wait) {
+                        return;
+                    }
+                    let n = clicks.fetch_add(1, Ordering::Relaxed) + 1;
+                    let (clicks, ctx, restored) = (clicks.clone(), ctx.clone(), restored.clone());
+                    let _ =
+                        std::thread::Builder::new()
+                            .name("tray-click".into())
+                            .spawn(move || {
+                                std::thread::sleep(wait);
+                                if clicks.load(Ordering::Relaxed) == n {
+                                    single_click(hwnd, &restored, &ctx);
+                                }
+                            });
+                }
+                TrayIconEvent::DoubleClick {
+                    button: MouseButton::Left,
+                    ..
+                } => {
+                    clicks.fetch_add(1, Ordering::Relaxed);
+                    *double_at.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+                    toggle_activation(&activation);
                     ctx.request_repaint();
                 }
+                _ => {}
             }));
         }
         {
@@ -171,13 +203,7 @@ impl Tray {
             let cloak_changed = cloak_changed.clone();
             MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
                 if event.id == activate_id {
-                    activation.toggle_from_tray();
-                    let active = activation.is_active();
-                    LIVE.with(|l| {
-                        if let Some(l) = l.borrow_mut().as_mut() {
-                            l.show(active);
-                        }
-                    });
+                    toggle_activation(&activation);
                     ctx.request_repaint();
                 }
                 if event.id == quit_id {
@@ -271,6 +297,49 @@ impl Drop for Tray {
     fn drop(&mut self) {
         LIVE.with(|l| l.borrow_mut().take());
     }
+}
+
+/// Starts or stops the profile and updates the icon (UI thread: tray callbacks).
+fn toggle_activation(activation: &Activation) {
+    activation.toggle_from_tray();
+    let active = activation.is_active();
+    LIVE.with(|l| {
+        if let Some(l) = l.borrow_mut().as_mut() {
+            l.show(active);
+        }
+    });
+}
+
+/// A left click on the icon that was not part of a double click: minimizes the window when
+/// it is on screen (the app moves it on to the tray with "minimize to tray"), otherwise
+/// shows it. Runs on a helper thread: only async window calls.
+fn single_click(hwnd: isize, restored: &AtomicBool, ctx: &egui::Context) {
+    if window_shown(hwnd) && !in_tray(hwnd) {
+        #[cfg(windows)]
+        {
+            use windows::Win32::UI::WindowsAndMessaging::{SW_MINIMIZE, ShowWindowAsync};
+            // SAFETY: the app's own window; the request is only posted to its thread.
+            unsafe {
+                let _ = ShowWindowAsync(handle(hwnd), SW_MINIMIZE);
+            }
+        }
+    } else {
+        restored.store(true, Ordering::Relaxed);
+        show_window(hwnd);
+    }
+    ctx.request_repaint();
+}
+
+/// Windows' double-click time: a click waits this long before it counts as a single click.
+fn double_click_time() -> Duration {
+    #[cfg(windows)]
+    {
+        // SAFETY: plain query without arguments.
+        let ms = unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime() };
+        Duration::from_millis(u64::from(ms))
+    }
+    #[cfg(not(windows))]
+    Duration::from_millis(500)
 }
 
 /// Puts the main window into the tray: a transparent, click-through tool window (off the
