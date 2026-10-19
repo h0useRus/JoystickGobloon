@@ -92,6 +92,8 @@ hidhide-no-devices = Keine Geräte anzuzeigen.
 action-refresh = Aktualisieren
 settings-hidhide-self = Joystick Gobloon beim Start zur HidHide-Positivliste hinzufügen
 settings-focus-input = Auf der Seite „Geräte und Belegungen“ zur benutzten Eingabe springen
+settings-input-events = Controller bei Änderung lesen
+settings-input-events-tip = Weniger Latenz und CPU-Last: Controller werden gelesen, wenn sie eine Änderung melden, und kurze Tastendrücke gehen nie verloren. Aus: jeder Controller wird alle 4 ms abgefragt.
 status-whitelisted = Joystick Gobloon wurde zur HidHide-Positivliste hinzugefügt.
 
 # Applications

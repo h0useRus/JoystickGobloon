@@ -42,6 +42,8 @@ pub struct Settings {
     pub start_with_windows: bool,
     /// Devices page: using an input selects its device tab and scrolls the list to it.
     pub focus_used_input: bool,
+    /// Read controllers when DirectInput signals a change instead of polling every 4 ms.
+    pub input_events: bool,
     /// Activate the reopened profile on startup.
     pub activate_on_start: bool,
     /// Look for a new release on startup and install it.
@@ -206,6 +208,7 @@ impl Default for Settings {
             minimize_to_tray: false,
             start_with_windows: false,
             focus_used_input: true,
+            input_events: false,
             activate_on_start: false,
             check_updates: true,
             calibration: BTreeMap::new(),
