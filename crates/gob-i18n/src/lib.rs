@@ -37,17 +37,17 @@ impl I18n {
             .iter()
             .map(|(c, s)| (c.to_string(), s.to_string()))
             .collect();
-        if let Some(dir) = lang_dir {
-            if let Ok(entries) = std::fs::read_dir(dir) {
-                for path in entries.flatten().map(|e| e.path()) {
-                    if path.extension().is_some_and(|e| e == "ftl") {
-                        if let (Some(code), Ok(text)) = (
-                            path.file_stem().and_then(|s| s.to_str()),
-                            std::fs::read_to_string(&path),
-                        ) {
-                            sources.insert(code.to_string(), text);
-                        }
-                    }
+        if let Some(dir) = lang_dir
+            && let Ok(entries) = std::fs::read_dir(dir)
+        {
+            for path in entries.flatten().map(|e| e.path()) {
+                if path.extension().is_some_and(|e| e == "ftl")
+                    && let (Some(code), Ok(text)) = (
+                        path.file_stem().and_then(|s| s.to_str()),
+                        std::fs::read_to_string(&path),
+                    )
+                {
+                    sources.insert(code.to_string(), text);
                 }
             }
         }

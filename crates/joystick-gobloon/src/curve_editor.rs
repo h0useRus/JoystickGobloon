@@ -2,10 +2,10 @@
 //! knots (and Bezier handles), X/Y of the selected point, and the deadzone fields.
 
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, RichText, Sense, Stroke, Vec2};
-use gob_core::curve::{Curve, CurveType, Editable};
 use gob_core::Action;
+use gob_core::curve::{Curve, CurveType, Editable};
 
-use crate::action_editor::{py_float, Editor, Op};
+use crate::action_editor::{Editor, Op, py_float};
 use crate::style::{self, icon};
 
 /// Space for the X/Y fields next to the chart.
@@ -297,11 +297,11 @@ fn chart(
     };
     let drag_id = ui.make_persistent_id(("curve-drag", id));
     let mut selected = selected;
-    if response.drag_started() {
-        if let Some(i) = response.interact_pointer_pos().and_then(nearest) {
-            ui.data_mut(|d| d.insert_temp(drag_id, i));
-            selected = i;
-        }
+    if response.drag_started()
+        && let Some(i) = response.interact_pointer_pos().and_then(nearest)
+    {
+        ui.data_mut(|d| d.insert_temp(drag_id, i));
+        selected = i;
     }
     if response.dragged() {
         let dragging: Option<usize> = ui.data(|d| d.get_temp(drag_id));
@@ -317,10 +317,10 @@ fn chart(
         ui.data_mut(|d| d.remove::<usize>(drag_id));
     }
     let on_point = response.interact_pointer_pos().and_then(nearest);
-    if response.clicked() {
-        if let Some(i) = on_point {
-            selected = i;
-        }
+    if response.clicked()
+        && let Some(i) = on_point
+    {
+        selected = i;
     }
     // A single click on empty space inverts, but only once it is clear it was not the
     // first half of a double-click (which adds a point instead).
@@ -353,12 +353,12 @@ fn chart(
         ui.ctx()
             .request_repaint_after(std::time::Duration::from_secs_f64(DOUBLE_CLICK));
     }
-    if response.secondary_clicked() {
-        if let Some(i) = on_point {
-            let p = Editable::remove(kind, points, i, symmetric);
-            if p.len() != points.len() {
-                return (Some(p), 0);
-            }
+    if response.secondary_clicked()
+        && let Some(i) = on_point
+    {
+        let p = Editable::remove(kind, points, i, symmetric);
+        if p.len() != points.len() {
+            return (Some(p), 0);
         }
     }
     (None, selected)
@@ -381,11 +381,11 @@ fn range_slider(
     };
     let handle_id = response.id.with("handle");
     let mut changed = false;
-    if response.drag_started() {
-        if let Some(p) = response.interact_pointer_pos() {
-            let upper = (p.x - to_x(*hi)).abs() < (p.x - to_x(*lo)).abs();
-            ui.data_mut(|d| d.insert_temp(handle_id, upper));
-        }
+    if response.drag_started()
+        && let Some(p) = response.interact_pointer_pos()
+    {
+        let upper = (p.x - to_x(*hi)).abs() < (p.x - to_x(*lo)).abs();
+        ui.data_mut(|d| d.insert_temp(handle_id, upper));
     }
     if response.dragged() {
         let upper: Option<bool> = ui.data(|d| d.get_temp(handle_id));

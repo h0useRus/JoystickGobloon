@@ -1,7 +1,7 @@
 //! Sound playback (play-sound) and speech (text-to-speech) on background threads,
 //! started on first use. Failures are logged; they never stop the engine.
 
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{Sender, channel};
 
 /// Gremlin's TTS queue modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -170,13 +170,13 @@ pub fn voices() -> &'static [String] {
 
 #[cfg(windows)]
 mod sapi {
-    use windows::core::PCWSTR;
     use windows::Win32::Media::Speech::{
-        ISpObjectToken, ISpObjectTokenCategory, SpObjectTokenCategory, SPCAT_VOICES,
+        ISpObjectToken, ISpObjectTokenCategory, SPCAT_VOICES, SpObjectTokenCategory,
     };
     use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED,
+        CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
     };
+    use windows::core::PCWSTR;
 
     const ONECORE_VOICES: PCWSTR =
         windows::core::w!("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices");
@@ -230,13 +230,13 @@ mod sapi {
 
 #[cfg(windows)]
 fn speech_thread(rx: std::sync::mpsc::Receiver<SpeechRequest>) {
-    use windows::core::HSTRING;
     use windows::Win32::Media::Speech::{
-        ISpVoice, SpVoice, SPF_ASYNC, SPF_IS_XML, SPF_PURGEBEFORESPEAK,
+        ISpVoice, SPF_ASYNC, SPF_IS_XML, SPF_PURGEBEFORESPEAK, SpVoice,
     };
     use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
+        CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
     };
+    use windows::core::HSTRING;
 
     // SAFETY: COM is initialised for this thread before the voice is created and used only here.
     let voice: ISpVoice = unsafe {

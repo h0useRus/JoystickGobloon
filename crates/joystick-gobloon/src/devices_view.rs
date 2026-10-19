@@ -6,12 +6,12 @@ use std::time::{Duration, Instant};
 use eframe::egui::{
     self, Align, Align2, Color32, FontId, Layout, Margin, Rect, RichText, Sense, Stroke, Vec2,
 };
-use gob_core::{same_device_name, Action, InputBinding, InputType};
+use gob_core::{Action, InputBinding, InputType, same_device_name};
 use gob_i18n::I18n;
 use gob_input::{DeviceState, InputEvent};
 
 use crate::action_editor::{Editor, Op};
-use crate::profile_view::{action_tree, LoadedProfile};
+use crate::profile_view::{LoadedProfile, action_tree};
 use crate::style::{self, icon};
 
 /// How long a row stays highlighted after its input was used.
@@ -829,24 +829,24 @@ impl DevicesView {
                 let root = b.configs.first().map(|c| c.root_action.clone());
                 ui.horizontal(|ui| {
                     // The binding's description: the root action's label, like Gremlin.
-                    if let Some(root_id) = &root {
-                        if let Some(a) = p.profile.action(root_id) {
-                            let mut text = a
-                                .label()
-                                .filter(|l| *l != "None")
-                                .unwrap_or_default()
-                                .to_string();
-                            let edit = egui::TextEdit::singleline(&mut text)
-                                .hint_text(i18n.tr("edit-binding-description"))
-                                .desired_width((ui.available_width() - 40.0).max(120.0));
-                            if ui.add(edit).changed() {
-                                ops.push(Op::Set {
-                                    action: root_id.clone(),
-                                    name: "action-label".into(),
-                                    ty: "string".into(),
-                                    value: text,
-                                });
-                            }
+                    if let Some(root_id) = &root
+                        && let Some(a) = p.profile.action(root_id)
+                    {
+                        let mut text = a
+                            .label()
+                            .filter(|l| *l != "None")
+                            .unwrap_or_default()
+                            .to_string();
+                        let edit = egui::TextEdit::singleline(&mut text)
+                            .hint_text(i18n.tr("edit-binding-description"))
+                            .desired_width((ui.available_width() - 40.0).max(120.0));
+                        if ui.add(edit).changed() {
+                            ops.push(Op::Set {
+                                action: root_id.clone(),
+                                name: "action-label".into(),
+                                ty: "string".into(),
+                                value: text,
+                            });
                         }
                     }
                     if style::icon_button(ui, true, icon::TRASH, &i18n.tr("edit-unbind")).clicked()

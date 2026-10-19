@@ -13,7 +13,7 @@ use crate::style::{self, icon};
 mod os {
     use gob_core::Key;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        GetAsyncKeyState, GetKeyNameTextW, MapVirtualKeyW, MAPVK_VK_TO_VSC_EX,
+        GetAsyncKeyState, GetKeyNameTextW, MAPVK_VK_TO_VSC_EX, MapVirtualKeyW,
     };
 
     /// Keys held right now. Mouse buttons and the side-neutral Shift/Ctrl/Alt codes are

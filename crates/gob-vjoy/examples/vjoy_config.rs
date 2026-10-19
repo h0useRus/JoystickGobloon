@@ -5,13 +5,15 @@ use gob_vjoy::configure::{self, Change};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if let Some((first, rest)) = args.split_first() {
-        if first == configure::ARG {
-            std::process::exit(configure::run_admin(rest));
-        }
+    if let Some((first, rest)) = args.split_first()
+        && first == configure::ARG
+    {
+        std::process::exit(configure::run_admin(rest));
     }
     let Some(change) = Change::from_args(&args) else {
-        eprintln!("usage: vjoy_config <id> -f [-a X Y ...] -b N (-p|-s) N [-e ...] | -d <id> | enable on|off");
+        eprintln!(
+            "usage: vjoy_config <id> -f [-a X Y ...] -b N (-p|-s) N [-e ...] | -d <id> | enable on|off"
+        );
         std::process::exit(2);
     };
     println!("{}", change.args().join(" "));

@@ -202,10 +202,10 @@ impl Editor<'_> {
                                 ui.selectable_value(device, g.clone(), label);
                             }
                         });
-                    if n == 0 {
-                        if let Some(t) = type_combo(ui, self, ("cond-type", &salt), *ty) {
-                            new_type = Some(t);
-                        }
+                    if n == 0
+                        && let Some(t) = type_combo(ui, self, ("cond-type", &salt), *ty)
+                    {
+                        new_type = Some(t);
                     }
                     ui.add(egui::DragValue::new(input).range(1..=128).prefix("#"));
                 }

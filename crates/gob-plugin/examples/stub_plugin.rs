@@ -2,7 +2,7 @@
 //! Build: `cargo build -p gob-plugin --example stub_plugin`
 //! (target\debug\examples\stub_plugin.dll), then copy it to `<Joystick Gobloon folder>\plugins`.
 
-use gob_plugin::{PluginInfo, ABI_VERSION};
+use gob_plugin::{ABI_VERSION, PluginInfo};
 
 struct Info(PluginInfo);
 
@@ -15,7 +15,7 @@ static INFO: Info = Info(PluginInfo {
     version: c"0.1.0".as_ptr(),
 });
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn joystick_gobloon_plugin_info() -> *const PluginInfo {
     &INFO.0
 }

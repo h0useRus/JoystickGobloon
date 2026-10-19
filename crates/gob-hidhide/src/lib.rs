@@ -260,11 +260,11 @@ fn vid_pid(instance_path: &str) -> Option<(u16, u16)> {
 /// File version of `%SystemRoot%\System32\drivers\HidHide.sys` as "major.minor.build".
 #[cfg(windows)]
 fn driver_version() -> Option<String> {
-    use windows::core::{w, PCWSTR};
     use windows::Win32::Storage::FileSystem::{
-        GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW, VS_FIXEDFILEINFO,
+        GetFileVersionInfoSizeW, GetFileVersionInfoW, VS_FIXEDFILEINFO, VerQueryValueW,
     };
     use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
+    use windows::core::{PCWSTR, w};
 
     let mut dir = [0u16; 260];
     // SAFETY: the buffer outlives the call.

@@ -7,11 +7,11 @@ use crate::activation::Activation;
 use crate::apps_view::AppsView;
 use crate::devices_view::DevicesView;
 use crate::hidhide_view::HidHideView;
-use crate::profile_view::{important_warnings, LoadedProfile};
+use crate::profile_view::{LoadedProfile, important_warnings};
 use crate::settings::Settings;
 use crate::settings_view::{self, Change, SettingsTab};
 use crate::style::{self, icon};
-use crate::substitute_view::{missing_devices, SubstituteDialog};
+use crate::substitute_view::{SubstituteDialog, missing_devices};
 use crate::vjoy_view::VJoyView;
 
 const LOGO_PNG: &[u8] = include_bytes!("../../../assets/icon/JoystickGobloon-256.png");
@@ -788,11 +788,11 @@ impl JoystickGobloonApp {
                     ui.label(RichText::new(icon::PLUGS).size(style::ICON_SIZE));
                     ui.label(self.i18n.trf("subst-banner", &[("count", missing.into())]));
                     let text = format!("{}  {}", icon::SWAP, self.i18n.tr("subst-title"));
-                    if ui.button(text).clicked() {
-                        if let Some(p) = &self.profile {
-                            self.substitute =
-                                Some(SubstituteDialog::new(&p.profile, &self.input.devices()));
-                        }
+                    if ui.button(text).clicked()
+                        && let Some(p) = &self.profile
+                    {
+                        self.substitute =
+                            Some(SubstituteDialog::new(&p.profile, &self.input.devices()));
                     }
                 });
             });
@@ -825,10 +825,10 @@ impl JoystickGobloonApp {
             &mut ops,
             &vjoy,
         );
-        if let Some((guid, hide)) = self.devices_view.hide_request.take() {
-            if let Some(d) = devices.iter().find(|d| d.info.guid == guid) {
-                self.hidhide_view.set_device_hidden(&d.info, hide);
-            }
+        if let Some((guid, hide)) = self.devices_view.hide_request.take()
+            && let Some(d) = devices.iter().find(|d| d.info.guid == guid)
+        {
+            self.hidhide_view.set_device_hidden(&d.info, hide);
         }
         drop(devices);
         if std::mem::take(&mut self.devices_view.open_modes) {
@@ -1228,15 +1228,15 @@ impl eframe::App for JoystickGobloonApp {
                 .modes_window
                 .show(ctx, &self.i18n, &loaded.profile, &mut open);
             self.show_modes = open;
-            if !ops.is_empty() {
-                if let Some(loaded) = &mut self.profile {
-                    for op in ops {
-                        loaded.checkpoint();
-                        crate::modes_view::apply(&mut loaded.profile, op);
-                    }
-                    loaded.refresh();
-                    self.edited = Some(std::time::Instant::now());
+            if !ops.is_empty()
+                && let Some(loaded) = &mut self.profile
+            {
+                for op in ops {
+                    loaded.checkpoint();
+                    crate::modes_view::apply(&mut loaded.profile, op);
                 }
+                loaded.refresh();
+                self.edited = Some(std::time::Instant::now());
             }
         }
         self.unsaved_dialog(ctx);

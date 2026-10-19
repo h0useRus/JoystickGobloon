@@ -202,11 +202,11 @@ fn lighting(
         for (i, mut v) in leds.iter().copied().enumerate() {
             ui.horizontal(|ui| {
                 ui.add_space(24.0);
-                if crate::leds::led_widgets(ui, i18n, ("default", guid.as_str(), i), vkb, &mut v) {
-                    if let Some(e) = settings.leds.get_mut(&guid) {
-                        e.led[i] = LedDefault::from_value(v);
-                        edited = true;
-                    }
+                if crate::leds::led_widgets(ui, i18n, ("default", guid.as_str(), i), vkb, &mut v)
+                    && let Some(e) = settings.leds.get_mut(&guid)
+                {
+                    e.led[i] = LedDefault::from_value(v);
+                    edited = true;
                 }
                 if style::icon_button(ui, true, icon::PLAY, &i18n.tr("edit-led-test")).clicked() {
                     change = Some(Change::PreviewLeds {
@@ -219,14 +219,14 @@ fn lighting(
                 }
             });
         }
-        if let Some(i) = remove {
-            if let Some(e) = settings.leds.get_mut(&guid) {
-                e.led.remove(i);
-                if e.led.is_empty() {
-                    settings.leds.remove(&guid);
-                }
-                edited = true;
+        if let Some(i) = remove
+            && let Some(e) = settings.leds.get_mut(&guid)
+        {
+            e.led.remove(i);
+            if e.led.is_empty() {
+                settings.leds.remove(&guid);
             }
+            edited = true;
         }
     }
     if edited {

@@ -9,7 +9,7 @@
 //! [`INFO_SYMBOL`] (a C function returning [`PluginInfo`]), checks [`ABI_VERSION`] and
 //! keeps them loaded, but they cannot provide actions yet.
 
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 use std::path::{Path, PathBuf};
 
 use gob_core::Action;
