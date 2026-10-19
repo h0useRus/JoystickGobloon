@@ -162,12 +162,16 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 
 - Sets a joystick LED; VKB only so far (crates/gob-lighting, docs/LIGHTING_PLAN.md). Properties: `device-guid`
   uuid (DirectInput instance GUID, device aliases apply), `led-id` int (VKB NXT/EVO: 10 RGB on top of the grip,
-  11 hat, 0 base), `color` string `#RRGGBB` (VKB: 8 levels per channel), `led-mode` (`on`, `slow-blink`,
-  `fast-blink`, `fastest-blink`, `off`), `on-activate` bool, plus the usual `action-label` / `activation-mode`.
+  11 small red at the hat, 0 base), `led-element` int (0 whole LED; VKB base: 1 blue, 2 red - set one by one,
+  sharing one blink mode), `color` / `color2` string `#RRGGBB` (VKB: 8 levels per channel; single-color LEDs use
+  the red channel), `color-mode` (`color1`, `color2`, `alternate`, `alternate-reverse`, `mix`), `led-mode`
+  (`on`, `slow-blink`, `fast-blink`, `fastest-blink`, `off`), `on-activate` bool, plus the usual
+  `action-label` / `activation-mode`.
 - `on-activate` false: runs on press / release like any action. True: nothing on the input; the LED is set when
   the profile starts and whenever a mode becomes active in which the binding is active (profile order).
-- Writes go to a background thread; a LED keeps its state after the profile stops, until the stick is
-  reconnected. Missing device or no LED control: nothing happens, one log line.
+- Writes go to a background thread. A VKB LED keeps a written color until the stick is reconnected, so when
+  the profile stops, the sticks it wrote to get back their saved `0x59` list and then the default colors from
+  Settings > Lighting. Missing device or no LED control: nothing happens, one log line.
 
 ## load-profile, play-sound, text-to-speech
 
