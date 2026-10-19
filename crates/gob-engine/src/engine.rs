@@ -772,6 +772,7 @@ impl Engine {
                 ActionKind::LightLed {
                     device,
                     led,
+                    element,
                     color,
                     color2,
                     blend,
@@ -781,6 +782,7 @@ impl Engine {
                     let light = Light {
                         device: self.device(device),
                         led,
+                        element,
                         color,
                         color2,
                         blend,

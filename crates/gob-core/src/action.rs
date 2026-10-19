@@ -154,6 +154,8 @@ pub enum ActionKind<'a> {
     LightLed {
         device: &'a str,
         led: u8,
+        /// 0: the whole LED; 1, 2: one of two single-color LEDs on that number (VKB base).
+        element: u8,
         color: [u8; 3],
         color2: [u8; 3],
         blend: LedBlend,
@@ -690,6 +692,7 @@ impl Action {
             "light-led" => ActionKind::LightLed {
                 device: self.str("device-guid").unwrap_or_default().trim(),
                 led: self.parse("led-id").unwrap_or(0),
+                element: self.parse("led-element").unwrap_or(0),
                 color: self.str("color").and_then(parse_color).unwrap_or([0, 0, 0]),
                 color2: self
                     .str("color2")

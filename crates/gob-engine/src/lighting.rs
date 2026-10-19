@@ -70,6 +70,7 @@ impl Drop for Lighting {
 pub fn to_led(l: &Light) -> Led {
     Led {
         id: l.led,
+        element: l.element,
         color: l.color,
         color2: l.color2,
         blend: match l.blend {
@@ -102,7 +103,7 @@ fn batch(lights: impl IntoIterator<Item = Light>) -> Vec<(String, Vec<Led>)> {
             }
         };
         let leds = &mut out[pos].1;
-        leds.retain(|x| x.id != led.id);
+        leds.retain(|x| (x.id, x.element) != (led.id, led.element));
         leds.push(led);
     }
     out

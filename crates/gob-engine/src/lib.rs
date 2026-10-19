@@ -73,6 +73,8 @@ pub struct Light {
     /// Attached device GUID, lowercase (profile aliases applied).
     pub device: String,
     pub led: u8,
+    /// 0: the whole LED; 1, 2: one element of it (see `gob_lighting::Led::element`).
+    pub element: u8,
     /// 8-bit RGB.
     pub color: [u8; 3],
     pub color2: [u8; 3],

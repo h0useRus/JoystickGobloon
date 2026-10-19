@@ -520,6 +520,7 @@ fn light_led_round_trips() {
     a.set("color", "string", "#FF8000");
     a.set("led-mode", "string", "slow-blink");
     a.set("color2", "string", "#0000FF");
+    a.set("led-element", "int", "2");
     a.set("color-mode", "string", "alternate");
     a.set("on-activate", "bool", "True");
 
@@ -532,6 +533,7 @@ fn light_led_round_trips() {
         ActionKind::LightLed {
             device: DEV,
             led: 10,
+            element: 2,
             color: [0xFF, 0x80, 0x00],
             color2: [0, 0, 0xFF],
             blend: gob_core::LedBlend::Alternate,

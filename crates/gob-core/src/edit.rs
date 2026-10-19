@@ -411,6 +411,7 @@ impl Action {
                 vec![
                     prop("uuid", "device-guid", device.clone()),
                     prop("int", "led-id", led.to_string()),
+                    prop("int", "led-element", "0"),
                     prop("string", "color", "#00FF00"),
                     prop("string", "color2", "#000000"),
                     prop("string", "color-mode", "color1"),
