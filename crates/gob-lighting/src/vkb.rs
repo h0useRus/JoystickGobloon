@@ -9,7 +9,7 @@
 use std::io;
 
 use crate::hid::Collection;
-use crate::{Blend, Device, Led, LedKind, Mode, Vendor};
+use crate::{Blend, Device, KnownLed, Led, LedKind, Mode, Vendor};
 
 /// VKB vendor id.
 pub const VENDOR_ID: u16 = 0x231D;
@@ -21,12 +21,30 @@ const OP_SET: [u8; 3] = [0x59, 0xA5, 0x0A];
 pub const MAX_CONFIGS: usize = 5;
 /// LEDs kept in the list. A LED dropped from it keeps its color, so only the latest count.
 const MAX_LEDS: usize = MAX_CONFIGS - 1;
-/// Gladiator NXT / EVO (checked on an EVO R): 0 the base (blue right = red channel of color1,
-/// red left = red channel of color2), 10 RGB on top of the grip, 11 small red at the hat.
-pub const KNOWN_LEDS: &[(u8, LedKind)] = &[
-    (10, LedKind::Rgb),
-    (11, LedKind::Single),
-    (0, LedKind::Dual),
+/// Gladiator NXT / EVO (checked on an EVO R): 10 RGB on top of the grip, 11 small red at
+/// the hat, 0 the base: two LEDs on one number, blue (right) = red channel of color1, red
+/// (left) = red channel of color2, one blink mode for both.
+pub const KNOWN_LEDS: &[KnownLed] = &[
+    KnownLed {
+        id: 10,
+        element: 0,
+        kind: LedKind::Rgb,
+    },
+    KnownLed {
+        id: 11,
+        element: 0,
+        kind: LedKind::Single,
+    },
+    KnownLed {
+        id: 0,
+        element: 1,
+        kind: LedKind::Single,
+    },
+    KnownLed {
+        id: 0,
+        element: 2,
+        kind: LedKind::Single,
+    },
 ];
 /// Appended to every list: the device spoils `led_mode` of the last config when it is
 /// read back (vkb_led_jg_plugin), so the last one is never a real LED.
@@ -215,6 +233,68 @@ pub fn merge(current: &[LedConfig], config: LedConfig) -> Vec<LedConfig> {
     list
 }
 
+/// Brightness (0..=7) of the two elements a config lights.
+fn elements(c: &LedConfig) -> (u8, u8) {
+    if c.led_mode == LedMode::Off {
+        return (0, 0);
+    }
+    let (first, second) = match c.color_mode {
+        ColorMode::Color1 => (true, false),
+        ColorMode::Color2 => (false, true),
+        _ => (true, true),
+    };
+    (
+        if first { c.color1.r } else { 0 },
+        if second { c.color2.r } else { 0 },
+    )
+}
+
+/// `current` with `led` applied: a whole LED replaces its entry, an element changes only its
+/// half of the entry (the other element as it was; not in the list = off).
+pub fn apply(current: &[LedConfig], led: &Led) -> Vec<LedConfig> {
+    if led.element == 0 {
+        return merge(current, (*led).into());
+    }
+    let old = current
+        .iter()
+        .find(|c| c.led == led.id)
+        .copied()
+        .unwrap_or(LedConfig {
+            led: led.id,
+            ..Default::default()
+        });
+    let (mut first, mut second) = elements(&old);
+    let [r, ..] = led.color;
+    let level = if led.mode == Mode::Off {
+        0
+    } else {
+        Color::from_rgb(r, 0, 0).r
+    };
+    if led.element == 1 {
+        first = level;
+    } else {
+        second = level;
+    }
+    // One blink mode for both: the one just set, else the other element's.
+    let led_mode = match (first, second) {
+        (0, 0) => LedMode::Off,
+        _ if led.mode != Mode::Off => LedConfig::from(*led).led_mode,
+        _ => old.led_mode,
+    };
+    let config = LedConfig {
+        led: led.id,
+        color_mode: match (first > 0, second > 0) {
+            (true, true) => ColorMode::Color1Plus2,
+            (false, true) => ColorMode::Color2,
+            _ => ColorMode::Color1,
+        },
+        led_mode,
+        color1: Color::new(first, 0, 0),
+        color2: Color::new(second, 0, 0),
+    };
+    merge(current, config)
+}
+
 /// `current` without `led`: it follows the device profile again.
 pub fn remove(current: &[LedConfig], led: u8) -> Vec<LedConfig> {
     current.iter().filter(|c| c.led != led).copied().collect()
@@ -304,9 +384,7 @@ impl From<Led> for LedConfig {
 
 /// Sets these LEDs with one write, keeping the others in the list.
 pub fn set(hid: &Collection, leds: &[Led]) -> io::Result<()> {
-    let mut list = leds
-        .iter()
-        .fold(read(hid)?, |list, &led| merge(&list, led.into()));
+    let mut list = leds.iter().fold(read(hid)?, |list, led| apply(&list, led));
     list.drain(..list.len().saturating_sub(MAX_LEDS));
     write(hid, &list)
 }
@@ -421,6 +499,49 @@ mod tests {
         });
         assert_eq!(c.color_mode, ColorMode::Color1Then2);
         assert_eq!(c.color2, Color::new(7, 0, 0));
+    }
+
+    #[test]
+    fn base_elements_are_set_one_by_one() {
+        let blue = Led {
+            id: 0,
+            element: 1,
+            color: [255, 0, 0],
+            mode: Mode::On,
+            ..Default::default()
+        };
+        let list = apply(&[], &blue);
+        assert_eq!(list[0].color_mode, ColorMode::Color1);
+        assert_eq!(list[0].color1, Color::new(7, 0, 0));
+        assert_eq!(list[0].led_mode, LedMode::Constant);
+        let red = Led {
+            element: 2,
+            mode: Mode::SlowBlink,
+            ..blue
+        };
+        let list = apply(&list, &red);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].color_mode, ColorMode::Color1Plus2);
+        assert_eq!((list[0].color1.r, list[0].color2.r), (7, 7));
+        assert_eq!(list[0].led_mode, LedMode::SlowBlink);
+        // Blue off: red keeps blinking.
+        let list = apply(
+            &list,
+            &Led {
+                mode: Mode::Off,
+                ..blue
+            },
+        );
+        assert_eq!(list[0].color_mode, ColorMode::Color2);
+        assert_eq!(list[0].led_mode, LedMode::SlowBlink);
+        let list = apply(
+            &list,
+            &Led {
+                mode: Mode::Off,
+                ..red
+            },
+        );
+        assert_eq!(list[0].led_mode, LedMode::Off);
     }
 
     #[test]

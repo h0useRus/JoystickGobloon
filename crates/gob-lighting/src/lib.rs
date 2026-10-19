@@ -46,6 +46,10 @@ pub enum Blend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Led {
     pub id: u8,
+    /// 0: the whole LED. 1, 2: one element of a LED number that drives two single-color
+    /// LEDs (VKB base: 1 blue, 2 red); its brightness is the red channel of `color`, and
+    /// the other element keeps its state.
+    pub element: u8,
     pub color: [u8; 3],
     pub color2: [u8; 3],
     pub blend: Blend,
@@ -58,9 +62,15 @@ pub enum LedKind {
     Rgb,
     /// One color; its brightness is the red channel of `color`.
     Single,
-    /// Two elements of fixed colors: the red channel of `color` drives the first, the red
-    /// channel of `color2` the second (VKB base: blue, red).
-    Dual,
+}
+
+/// A LED a device is known to have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KnownLed {
+    pub id: u8,
+    /// See [`Led::element`].
+    pub element: u8,
+    pub kind: LedKind,
 }
 
 /// LED state saved by [`Device::save`]: what this program can read back and write again
@@ -93,7 +103,7 @@ impl Device {
     }
 
     /// LEDs this device is known to have; empty when unknown (any number may work).
-    pub fn known_leds(&self) -> &'static [(u8, LedKind)] {
+    pub fn known_leds(&self) -> &'static [KnownLed] {
         match self.vendor {
             Vendor::Vkb => vkb::KNOWN_LEDS,
         }
