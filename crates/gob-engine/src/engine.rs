@@ -1040,6 +1040,14 @@ impl Engine {
             .min()
     }
 
+    /// Whether the profile has light-led actions.
+    pub fn uses_lights(&self) -> bool {
+        self.nodes
+            .iter()
+            .any(|n| matches!(n, Node::LightLed { .. }))
+            || self.sets.iter().flatten().any(|c| !c.lights.is_empty())
+    }
+
     /// Sets the LEDs of the light-led actions marked "on activate" that are bound in the
     /// current mode (in profile order). Call once when the profile starts; mode changes
     /// call it themselves.

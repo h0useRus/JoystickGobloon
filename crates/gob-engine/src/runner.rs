@@ -115,13 +115,14 @@ impl Output for SystemOutput {
 impl Runner {
     /// Takes the vJoy devices the profile needs and starts processing `events`.
     /// `initial` is the current device state, used to send axis positions right away.
-    /// `led_defaults` are set on the devices whose LEDs the profile changed when it stops.
+    /// `led_defaults` are set on the devices whose LEDs the profile changed when it stops;
+    /// `None`: LED control is off and light-led actions do nothing.
     pub fn start(
         profile: &Profile,
         aliases: &HashMap<String, String>,
         events: Receiver<InputEvent>,
         initial: &[DeviceState],
-        led_defaults: &[crate::Light],
+        led_defaults: Option<&[crate::Light]>,
         on_change: impl Fn() + Send + 'static,
     ) -> Result<Self, String> {
         let mut engine = Engine::new(profile, aliases);
@@ -136,7 +137,7 @@ impl Runner {
                     .filter(|d| !d.info.hid_path.is_empty())
                     .map(|d| (d.info.guid.to_ascii_lowercase(), d.info.hid_path.clone()))
                     .collect(),
-                led_defaults.to_vec(),
+                led_defaults.map(<[crate::Light]>::to_vec),
             ),
             load_profile: None,
         };
@@ -166,6 +167,9 @@ impl Runner {
             }
         }
 
+        if led_defaults.is_none() && engine.uses_lights() {
+            log::info!("light-led actions ignored: experimental features are off");
+        }
         engine.activate(&mut out);
 
         let status = Arc::new(Mutex::new(RunnerStatus {

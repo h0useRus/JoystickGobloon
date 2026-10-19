@@ -21,22 +21,29 @@ pub struct Lighting {
     paths: HashMap<String, String>,
     /// Colors set when the runner stops, on the devices the profile wrote to.
     defaults: Vec<Light>,
+    /// Off: light-led actions do nothing (experimental features are off).
+    enabled: bool,
     tx: Option<Sender<Light>>,
     thread: Option<JoinHandle<()>>,
 }
 
 impl Lighting {
     /// `paths`: GUID -> HID path of the attached devices (`DeviceInfo::hid_path`).
-    pub fn new(paths: HashMap<String, String>, defaults: Vec<Light>) -> Self {
+    /// `defaults`: `None` turns LED control off.
+    pub fn new(paths: HashMap<String, String>, defaults: Option<Vec<Light>>) -> Self {
         Self {
             paths,
-            defaults,
+            enabled: defaults.is_some(),
+            defaults: defaults.unwrap_or_default(),
             tx: None,
             thread: None,
         }
     }
 
     pub fn send(&mut self, light: &Light) {
+        if !self.enabled {
+            return;
+        }
         if self.tx.is_none() {
             let (tx, rx) = channel();
             let paths = std::mem::take(&mut self.paths);
