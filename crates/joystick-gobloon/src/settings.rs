@@ -46,6 +46,9 @@ pub struct Settings {
     pub check_updates: bool,
     /// Axis calibrations: device GUID -> axis slot ("1".."8") -> values.
     pub calibration: BTreeMap<String, BTreeMap<String, AxisCalibration>>,
+    /// Default LED colors: device GUID -> LEDs, set when a profile that changed that
+    /// device's LEDs stops (VKB keeps written colors until the stick restarts).
+    pub leds: BTreeMap<String, DeviceLeds>,
     /// Hidden option (not in the UI, written only when on): allow several running copies.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub multi_instance: bool,
@@ -72,6 +75,42 @@ impl AppList {
 
     pub fn save(&self) {
         save_toml("apps.gob", self);
+    }
+}
+
+/// Default LED colors of one device.
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DeviceLeds {
+    /// Device name when saved, for reading the file.
+    pub name: String,
+    pub led: Vec<LedDefault>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LedDefault {
+    pub id: u8,
+    /// `#RRGGBB`.
+    pub color: String,
+    /// light-led's `led-mode` names (`on`, `slow-blink`, ...).
+    pub mode: String,
+}
+
+impl LedDefault {
+    pub fn value(&self) -> crate::leds::LedValue {
+        crate::leds::LedValue {
+            id: self.id,
+            color: gob_core::parse_color(&self.color).unwrap_or_default(),
+            mode: gob_core::LedMode::parse(&self.mode).unwrap_or_default(),
+        }
+    }
+
+    pub fn from_value(v: crate::leds::LedValue) -> Self {
+        Self {
+            id: v.id,
+            color: gob_core::format_color(v.color),
+            mode: v.mode.name().into(),
+        }
     }
 }
 
@@ -110,6 +149,24 @@ impl From<AxisCalibration> for gob_input::Calibration {
 }
 
 impl Settings {
+    /// Default LED colors for the engine (set when a profile stops).
+    pub fn led_defaults(&self) -> Vec<gob_engine::Light> {
+        self.leds
+            .iter()
+            .flat_map(|(guid, d)| {
+                d.led.iter().map(move |l| {
+                    let v = l.value();
+                    gob_engine::Light {
+                        device: guid.to_ascii_lowercase(),
+                        led: v.id,
+                        color: v.color,
+                        mode: v.mode,
+                    }
+                })
+            })
+            .collect()
+    }
+
     /// Saved calibrations by (device, slot).
     pub fn calibrations(&self) -> gob_input::Calibrations {
         let mut map = gob_input::Calibrations::new();
@@ -141,6 +198,7 @@ impl Default for Settings {
             activate_on_start: false,
             check_updates: true,
             calibration: BTreeMap::new(),
+            leds: BTreeMap::new(),
             multi_instance: false,
         }
     }

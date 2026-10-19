@@ -15,7 +15,11 @@ label-mode = Режим
 # Settings
 settings-appearance = Внешний вид
 settings-general = Общие
-settings-about = О программе
+settings-about = О программе
+settings-lighting = Подсветка
+settings-leds-hint = Когда профиль, менявший подсветку джойстика, деактивируется, ставятся эти цвета. Джойстик держит изменённые цвета до переподключения, поэтому вернуть его собственные настройки подсветки нельзя.
+settings-leds-none = Нет подключённых джойстиков с управляемой подсветкой.
+settings-leds-add = Добавить светодиод
 settings-language = Язык
 settings-reopen-last = Открывать последний профиль при запуске
 theme-light = Светлая

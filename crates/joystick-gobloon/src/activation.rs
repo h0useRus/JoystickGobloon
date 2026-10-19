@@ -20,6 +20,8 @@ struct Inner {
     ctx: egui::Context,
     /// A start from the tray failed; the app shows it once the window is visible.
     error: Option<String>,
+    /// Default LED colors, set when a profile that changed them stops.
+    led_defaults: Vec<gob_engine::Light>,
 }
 
 impl Activation {
@@ -30,7 +32,13 @@ impl Activation {
             input,
             ctx,
             error: None,
+            led_defaults: Vec::new(),
         })))
+    }
+
+    /// Default LED colors for the next start (a running profile keeps its own).
+    pub fn set_led_defaults(&self, defaults: Vec<gob_engine::Light>) {
+        self.lock().led_defaults = defaults;
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -86,6 +94,7 @@ impl Activation {
             &aliases,
             inner.input.subscribe(),
             &devices,
+            &inner.led_defaults,
             repaint,
         )?;
         log::info!(

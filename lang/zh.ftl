@@ -15,7 +15,11 @@ label-mode = 模式
 # Settings
 settings-appearance = 外观
 settings-general = 常规
-settings-about = 关于
+settings-about = 关于
+settings-lighting = 灯光
+settings-leds-hint = 当更改过摇杆 LED 的配置文件被停用时，将设置这些颜色。摇杆会保持更改后的颜色直到重新连接，因此无法恢复其自身的 LED 设置。
+settings-leds-none = 未连接可控制 LED 的摇杆。
+settings-leds-add = 添加 LED
 settings-language = 语言
 settings-reopen-last = 启动时打开上次的配置文件
 theme-light = 浅色

@@ -180,6 +180,7 @@ impl JoystickGobloonApp {
             hwnd: crate::tray::window_handle(cc),
         };
         app.update_tray(&cc.egui_ctx);
+        app.activation.set_led_defaults(app.settings.led_defaults());
         app.calibrations = app.settings.calibrations();
         for ((device, slot), c) in &app.calibrations {
             app.input.set_calibration(device, *slot, Some(*c));
@@ -209,6 +210,10 @@ impl JoystickGobloonApp {
             Ok("about") => {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::About;
+            }
+            Ok("lighting") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::Lighting;
             }
             _ => {}
         }
@@ -870,12 +875,12 @@ impl JoystickGobloonApp {
                         .map(|p| crate::substitute_view::auto_aliases(&p.profile, &devices))
                         .and_then(|a| a.get(&device).cloned())
                         .unwrap_or(device);
-                    let led = gob_lighting::Led {
+                    let led = crate::leds::LedValue {
                         id: led,
                         color,
-                        mode: gob_engine::led_mode(mode),
+                        mode,
                     };
-                    self.leds.preview(&devices, &device, led);
+                    self.leds.preview(&devices, &device, vec![led.to_led()]);
                 }
                 _ => {}
             }
@@ -913,6 +918,17 @@ impl JoystickGobloonApp {
                 self.i18n.set_language(&code);
                 self.settings.language = self.i18n.language().to_string();
                 self.status = self.i18n.tr("status-ready");
+            }
+            Change::PreviewLeds { device, leds } => {
+                let leds = leds
+                    .into_iter()
+                    .map(crate::leds::LedValue::to_led)
+                    .collect();
+                self.leds.preview(&self.input.devices(), &device, leds);
+            }
+            Change::LedDefaults => {
+                self.activation
+                    .set_led_defaults(self.settings.led_defaults());
             }
         }
         self.settings.save();
@@ -1171,6 +1187,10 @@ impl eframe::App for JoystickGobloonApp {
                     self.apply_calibration(out);
                 }
                 Page::Settings => {
+                    let devices = self.input.devices();
+                    self.leds.update(&devices, ctx);
+                    let led_devices = self.leds.attached(&devices);
+                    drop(devices);
                     let change = settings_view::show(
                         ui,
                         &self.i18n,
@@ -1178,6 +1198,7 @@ impl eframe::App for JoystickGobloonApp {
                         &mut self.settings_tab,
                         &self.logo,
                         &mut self.updater,
+                        &led_devices,
                     );
                     if let Some(change) = change {
                         self.apply_change(ctx, change);

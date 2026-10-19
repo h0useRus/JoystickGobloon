@@ -15,7 +15,11 @@ label-mode = 모드
 # Settings
 settings-appearance = 모양
 settings-general = 일반
-settings-about = 정보
+settings-about = 정보
+settings-lighting = 조명
+settings-leds-hint = 조이스틱의 LED를 바꾼 프로필이 비활성화되면 이 색상이 설정됩니다. 조이스틱은 다시 연결할 때까지 바뀐 색상을 유지하므로 자체 LED 설정으로 되돌릴 수 없습니다.
+settings-leds-none = LED를 제어할 수 있는 조이스틱이 연결되어 있지 않습니다.
+settings-leds-add = LED 추가
 settings-language = 언어
 settings-reopen-last = 시작할 때 마지막 프로필 다시 열기
 theme-light = 밝게

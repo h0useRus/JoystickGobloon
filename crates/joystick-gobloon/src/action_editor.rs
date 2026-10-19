@@ -1779,57 +1779,22 @@ impl Editor<'_> {
             );
         }
         ui.horizontal(|ui| {
-            ui.label(RichText::new(icon::LIGHTBULB).size(style::ICON_SIZE))
-                .on_hover_text(self.i18n.tr("edit-led-id"));
-            // Known LEDs (VKB Gladiator NXT / EVO); any other number can be typed.
-            let known: &[(u8, &str)] = if vkb {
-                &[
-                    (10, "led-vkb-grip"),
-                    (11, "led-vkb-hat"),
-                    (0, "led-vkb-base"),
-                ]
-            } else {
-                &[]
+            let mut v = crate::leds::LedValue {
+                id: led,
+                color,
+                mode,
             };
-            if !known.is_empty() {
-                let text = known
-                    .iter()
-                    .find(|(n, _)| *n == led)
-                    .map_or_else(|| led.to_string(), |(_, k)| self.i18n.tr(k));
-                egui::ComboBox::from_id_salt(("led-id", &id))
-                    .selected_text(text)
-                    .show_ui(ui, |ui| {
-                        for &(n, key) in known {
-                            let text = format!("{n}  {}", self.i18n.tr(key));
-                            if ui.selectable_label(n == led, text).clicked() {
-                                self.set(&id, "led-id", "int", n.to_string());
-                            }
-                        }
-                    });
+            if crate::leds::led_widgets(ui, self.i18n, ("action", id.as_str()), vkb, &mut v) {
+                if v.id != led {
+                    self.set(&id, "led-id", "int", v.id.to_string());
+                }
+                if v.color != color {
+                    self.set(&id, "color", "string", gob_core::format_color(v.color));
+                }
+                if v.mode != mode {
+                    self.set(&id, "led-mode", "string", v.mode.name());
+                }
             }
-            let mut n = led;
-            if ui.add(egui::DragValue::new(&mut n)).changed() {
-                self.set(&id, "led-id", "int", n.to_string());
-            }
-            ui.separator();
-            let mut c = color;
-            let picker = egui::color_picker::color_edit_button_srgb(ui, &mut c)
-                .on_hover_text(self.i18n.tr("edit-led-color"));
-            if picker.changed() {
-                self.set(&id, "color", "string", gob_core::format_color(c));
-            }
-            egui::ComboBox::from_id_salt(("led-mode", &id))
-                .selected_text(self.i18n.tr(&format!("led-mode-{}", mode.name())))
-                .show_ui(ui, |ui| {
-                    for m in LedMode::ALL {
-                        let text = self.i18n.tr(&format!("led-mode-{}", m.name()));
-                        if ui.selectable_label(m == mode, text).clicked() {
-                            self.set(&id, "led-mode", "string", m.name());
-                        }
-                    }
-                })
-                .response
-                .on_hover_text(self.i18n.tr("edit-led-mode"));
             if style::icon_button(ui, has_leds, icon::PLAY, &self.i18n.tr("edit-led-test"))
                 .clicked()
             {

@@ -15,7 +15,11 @@ label-mode = Modo
 # Settings
 settings-appearance = Apariencia
 settings-general = General
-settings-about = Acerca de
+settings-about = Acerca de
+settings-lighting = Iluminación
+settings-leds-hint = Al desactivar un perfil que cambió los LED de un joystick, se aplican estos colores. El joystick conserva los colores cambiados hasta que se vuelve a conectar, así que no se puede recuperar su propia configuración de LED.
+settings-leds-none = No hay ningún joystick con LED controlables conectado.
+settings-leds-add = Añadir LED
 settings-language = Idioma
 settings-reopen-last = Abrir el último perfil al iniciar
 theme-light = Claro
