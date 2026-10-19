@@ -87,6 +87,14 @@ pub fn show(
                 &mut settings.reopen_last,
                 i18n.tr("settings-reopen-last"),
             ));
+            // Only a reopened profile can be activated on startup.
+            let activate = ui.add_enabled(
+                settings.reopen_last,
+                style::switch(
+                    &mut settings.activate_on_start,
+                    i18n.tr("settings-activate-on-start"),
+                ),
+            );
             let whitelist = ui.add(style::switch(
                 &mut settings.hidhide_whitelist_self,
                 i18n.tr("settings-hidhide-self"),
@@ -106,14 +114,6 @@ pub fn show(
                 &mut settings.start_with_windows,
                 i18n.tr("settings-autostart"),
             ));
-            // Only a reopened profile can be activated on startup.
-            let activate = ui.add_enabled(
-                settings.reopen_last,
-                style::switch(
-                    &mut settings.activate_on_start,
-                    i18n.tr("settings-activate-on-start"),
-                ),
-            );
             let updates = ui.add(style::switch(
                 &mut settings.check_updates,
                 i18n.tr("settings-check-updates"),
