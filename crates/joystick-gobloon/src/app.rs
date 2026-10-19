@@ -861,12 +861,7 @@ impl JoystickGobloonApp {
             match op {
                 Op::PreviewSound { file, volume } => self.media.play(&file, volume),
                 Op::PreviewSpeech(request) => self.media.speak(request),
-                Op::PreviewLight {
-                    device,
-                    led,
-                    color,
-                    mode,
-                } => {
+                Op::PreviewLight { device, led } => {
                     let devices = self.input.devices();
                     // A profile device from another PC lights the attached one standing in.
                     let device = self
@@ -875,11 +870,6 @@ impl JoystickGobloonApp {
                         .map(|p| crate::substitute_view::auto_aliases(&p.profile, &devices))
                         .and_then(|a| a.get(&device).cloned())
                         .unwrap_or(device);
-                    let led = crate::leds::LedValue {
-                        id: led,
-                        color,
-                        mode,
-                    };
                     self.leds.preview(&devices, &device, vec![led.to_led()]);
                 }
                 _ => {}

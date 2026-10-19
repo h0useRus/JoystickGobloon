@@ -87,11 +87,16 @@ pub struct DeviceLeds {
     pub led: Vec<LedDefault>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+/// One default LED; values as light-led stores them.
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct LedDefault {
     pub id: u8,
     /// `#RRGGBB`.
     pub color: String,
+    pub color2: String,
+    /// light-led's `color-mode` names (`color1`, `alternate`, ...).
+    pub blend: String,
     /// light-led's `led-mode` names (`on`, `slow-blink`, ...).
     pub mode: String,
 }
@@ -101,6 +106,8 @@ impl LedDefault {
         crate::leds::LedValue {
             id: self.id,
             color: gob_core::parse_color(&self.color).unwrap_or_default(),
+            color2: gob_core::parse_color(&self.color2).unwrap_or_default(),
+            blend: gob_core::LedBlend::parse(&self.blend).unwrap_or_default(),
             mode: gob_core::LedMode::parse(&self.mode).unwrap_or_default(),
         }
     }
@@ -109,6 +116,8 @@ impl LedDefault {
         Self {
             id: v.id,
             color: gob_core::format_color(v.color),
+            color2: gob_core::format_color(v.color2),
+            blend: v.blend.name().into(),
             mode: v.mode.name().into(),
         }
     }
@@ -153,17 +162,7 @@ impl Settings {
     pub fn led_defaults(&self) -> Vec<gob_engine::Light> {
         self.leds
             .iter()
-            .flat_map(|(guid, d)| {
-                d.led.iter().map(move |l| {
-                    let v = l.value();
-                    gob_engine::Light {
-                        device: guid.to_ascii_lowercase(),
-                        led: v.id,
-                        color: v.color,
-                        mode: v.mode,
-                    }
-                })
-            })
+            .flat_map(|(guid, d)| d.led.iter().map(move |l| l.value().light(guid)))
             .collect()
     }
 

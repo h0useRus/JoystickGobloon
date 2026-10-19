@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use eframe::egui::{self, RichText};
 use gob_core::{
-    child_groups, Action, ActionKind, InputType, Item, LedMode, MergeOp, MouseAction, MouseButton,
+    child_groups, Action, ActionKind, InputType, Item, MergeOp, MouseAction, MouseButton,
     NewAction, Profile, Property,
 };
 use gob_i18n::I18n;
@@ -171,9 +171,7 @@ pub enum Op {
     /// is the profile's device GUID.
     PreviewLight {
         device: String,
-        led: u8,
-        color: [u8; 3],
-        mode: LedMode,
+        led: crate::leds::LedValue,
     },
     /// hat-buttons: 4 or 8 directions.
     HatButtonCount {
@@ -776,9 +774,20 @@ impl Editor<'_> {
                     device,
                     led,
                     color,
+                    color2,
+                    blend,
                     mode,
                     on_activate,
-                } => self.light_led(ui, action, device, led, color, mode, on_activate),
+                } => {
+                    let value = crate::leds::LedValue {
+                        id: led,
+                        color,
+                        color2,
+                        blend,
+                        mode,
+                    };
+                    self.light_led(ui, action, device, value, on_activate)
+                }
                 ActionKind::TextToSpeech {
                     text,
                     voice,
@@ -1722,15 +1731,12 @@ impl Editor<'_> {
             .unwrap_or_default()
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn light_led(
         &mut self,
         ui: &mut egui::Ui,
         action: &Action,
         device: &str,
-        led: u8,
-        color: [u8; 3],
-        mode: LedMode,
+        led: crate::leds::LedValue,
         on_activate: bool,
     ) {
         let id = action.id.clone();
@@ -1779,19 +1785,21 @@ impl Editor<'_> {
             );
         }
         ui.horizontal(|ui| {
-            let mut v = crate::leds::LedValue {
-                id: led,
-                color,
-                mode,
-            };
+            let mut v = led;
             if crate::leds::led_widgets(ui, self.i18n, ("action", id.as_str()), vkb, &mut v) {
-                if v.id != led {
+                if v.id != led.id {
                     self.set(&id, "led-id", "int", v.id.to_string());
                 }
-                if v.color != color {
+                if v.color != led.color {
                     self.set(&id, "color", "string", gob_core::format_color(v.color));
                 }
-                if v.mode != mode {
+                if v.color2 != led.color2 {
+                    self.set(&id, "color2", "string", gob_core::format_color(v.color2));
+                }
+                if v.blend != led.blend {
+                    self.set(&id, "color-mode", "string", v.blend.name());
+                }
+                if v.mode != led.mode {
                     self.set(&id, "led-mode", "string", v.mode.name());
                 }
             }
@@ -1801,8 +1809,6 @@ impl Editor<'_> {
                 self.ops.push(Op::PreviewLight {
                     device: device.clone(),
                     led,
-                    color,
-                    mode,
                 });
             }
         });

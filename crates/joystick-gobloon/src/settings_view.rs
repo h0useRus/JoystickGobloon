@@ -161,11 +161,13 @@ fn lighting(
                     .unwrap_or_else(|| leds.iter().map(|l| l.id).max().map_or(0, |m| m + 1));
                 let entry = settings.leds.entry(guid.clone()).or_default();
                 entry.name = d.name.clone();
-                entry.led.push(LedDefault::from_value(LedValue {
+                let mut value = LedValue {
                     id,
                     color: [0, 0xFF, 0xFF],
-                    mode: gob_core::LedMode::On,
-                }));
+                    ..Default::default()
+                };
+                crate::leds::adapt(&mut value, vkb);
+                entry.led.push(LedDefault::from_value(value));
                 edited = true;
             }
         });
