@@ -91,6 +91,7 @@ hidhide-hint = Cliquez sur l’œil pour masquer un périphérique aux autres pr
 hidhide-no-devices = Aucun périphérique à afficher.
 action-refresh = Actualiser
 settings-hidhide-self = Ajouter Joystick Gobloon à la liste blanche de HidHide au démarrage
+settings-focus-input = Aller à l’entrée utilisée sur la page « Périphériques et affectations »
 status-whitelisted = Joystick Gobloon a été ajouté à la liste blanche de HidHide.
 
 # Applications

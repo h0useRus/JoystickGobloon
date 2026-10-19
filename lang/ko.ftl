@@ -91,6 +91,7 @@ hidhide-hint = 눈 아이콘을 클릭하면 다른 프로그램에서 장치를
 hidhide-no-devices = 표시할 장치가 없습니다.
 action-refresh = 새로 고침
 settings-hidhide-self = 시작할 때 Joystick Gobloon을 HidHide 허용 목록에 추가
+settings-focus-input = 장치 및 바인딩 페이지에서 사용 중인 입력으로 이동
 status-whitelisted = Joystick Gobloon을 HidHide 허용 목록에 추가했습니다.
 
 # Applications

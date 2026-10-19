@@ -91,6 +91,7 @@ hidhide-hint = Click the eye to hide a device from other programs (closed eye). 
 hidhide-no-devices = No devices to show.
 action-refresh = Refresh
 settings-hidhide-self = Add Joystick Gobloon to the HidHide whitelist on startup
+settings-focus-input = Jump to the input in use on the Devices and bindings page
 status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
 
 # Applications

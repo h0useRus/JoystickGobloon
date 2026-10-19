@@ -1045,8 +1045,11 @@ impl eframe::App for JoystickGobloonApp {
                 ctx.request_repaint_after(settle - t.elapsed());
             }
         }
-        self.devices_view
-            .handle_events(self.input.events(), &self.input.devices());
+        self.devices_view.handle_events(
+            self.input.events(),
+            &self.input.devices(),
+            self.settings.focus_used_input,
+        );
         egui::SidePanel::left("nav")
             .resizable(false)
             .exact_width(60.0)

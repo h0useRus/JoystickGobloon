@@ -91,6 +91,7 @@ hidhide-hint = 点击眼睛图标可对其他程序隐藏设备（闭眼）。�
 hidhide-no-devices = 没有可显示的设备。
 action-refresh = 刷新
 settings-hidhide-self = 启动时将 Joystick Gobloon 添加到 HidHide 白名单
+settings-focus-input = 在“设备与绑定”页面跳转到正在使用的输入
 status-whitelisted = 已将 Joystick Gobloon 添加到 HidHide 白名单。
 
 # Applications
