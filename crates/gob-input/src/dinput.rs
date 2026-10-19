@@ -11,7 +11,9 @@ use windows::Win32::Devices::HumanInterfaceDevice::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::core::{BOOL, GUID, Interface};
 
-use crate::{AXIS_SLOTS, DeviceInfo, DeviceState, format_guid, normalize_axis, pov_direction};
+use crate::{
+    AXIS_SLOTS, Calibration, DeviceInfo, DeviceState, format_guid, normalize_axis, pov_direction,
+};
 
 const DIRECTINPUT_VERSION: u32 = 0x0800;
 /// `DIPROP_RANGE` is `MAKEDIPROP(4)`: a small integer passed as a GUID pointer.
@@ -38,6 +40,10 @@ pub struct DirectInput {
 pub struct Device {
     dev: IDirectInputDevice8W,
     pub state: DeviceState,
+    /// The state before the last poll, to find what changed.
+    pub previous: DeviceState,
+    /// Calibration per axis slot, taken from [`crate::Calibrations`] by `set_calibrations`.
+    calibration: [Option<Calibration>; AXIS_SLOTS],
 }
 
 impl DirectInput {
@@ -116,9 +122,12 @@ impl DirectInput {
                 hats: (caps.dwPOVs as usize).min(4),
                 hid_path: hid_path(&dev),
             };
+            let state = DeviceState::new(info);
             Ok(Device {
                 dev,
-                state: DeviceState::new(info),
+                previous: state.clone(),
+                state,
+                calibration: [None; AXIS_SLOTS],
             })
         }
     }
@@ -143,9 +152,19 @@ fn hid_path(dev: &IDirectInputDevice8W) -> String {
 }
 
 impl Device {
-    /// Reads the current state; returns false when the device is gone.
-    /// `calibrations` replace the default scaling for the axes they cover.
-    pub fn poll(&mut self, calibrations: &crate::Calibrations) -> bool {
+    /// Takes this device's axis calibrations; they replace the default scaling of their axes.
+    pub fn set_calibrations(&mut self, calibrations: &crate::Calibrations) {
+        for (i, c) in self.calibration.iter_mut().enumerate() {
+            *c = calibrations
+                .get(&(self.state.info.guid.clone(), i as u8 + 1))
+                .copied();
+        }
+    }
+
+    /// Reads the current state into `state` (the old one moves to `previous`); returns false
+    /// when the device is gone.
+    pub fn poll(&mut self) -> bool {
+        self.previous.copy_readings(&self.state);
         let mut raw = DIJOYSTATE2::default();
         let read = |dev: &IDirectInputDevice8W, raw: &mut DIJOYSTATE2| unsafe {
             let _ = dev.Poll();
@@ -175,7 +194,7 @@ impl Device {
         for &id in &s.info.axes {
             let i = usize::from(id) - 1;
             s.raw[i] = values[i];
-            s.axes[i] = match calibrations.get(&(s.info.guid.clone(), id)) {
+            s.axes[i] = match &self.calibration[i] {
                 Some(c) => c.apply(values[i]),
                 None => normalize_axis(values[i]),
             };

@@ -1,6 +1,6 @@
 //! Background polling thread with a shared snapshot and an event channel.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::thread::JoinHandle;
@@ -67,6 +67,8 @@ pub struct InputService {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     calibrations: Arc<RwLock<Calibrations>>,
+    /// Bumped on every calibration change, so the polling thread copies the map only then.
+    calibration_version: Arc<AtomicU64>,
     /// Keyboard keys as events (low-level hook); `None` if it could not be installed.
     _keyboard: Option<crate::keyboard::Hook>,
 }
@@ -77,6 +79,7 @@ impl InputService {
     pub fn start(on_change: impl Fn() + Send + Sync + 'static) -> Self {
         let on_change = Arc::new(on_change);
         let calibrations: Arc<RwLock<Calibrations>> = Arc::default();
+        let calibration_version = Arc::new(AtomicU64::new(0));
         let snapshot = Arc::new(RwLock::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let broadcast = Broadcast::default();
@@ -84,9 +87,10 @@ impl InputService {
         let thread = {
             let (snapshot, stop, tx) = (snapshot.clone(), stop.clone(), broadcast.clone());
             let (on_change, cal) = (on_change.clone(), calibrations.clone());
+            let version = calibration_version.clone();
             std::thread::Builder::new()
                 .name("gob-input".into())
-                .spawn(move || run(&snapshot, &stop, &tx, &cal, &*on_change))
+                .spawn(move || run(&snapshot, &stop, &tx, &cal, &version, &*on_change))
                 .ok()
         };
         let keyboard = {
@@ -107,6 +111,7 @@ impl InputService {
             stop,
             thread,
             calibrations,
+            calibration_version,
             _keyboard: keyboard,
         }
     }
@@ -119,6 +124,7 @@ impl InputService {
             Some(c) => map.insert(key, c),
             None => map.remove(&key),
         };
+        self.calibration_version.fetch_add(1, Ordering::Release);
     }
 
     /// Current state of every attached device.
@@ -161,6 +167,7 @@ fn run(
     _: &AtomicBool,
     _: &Broadcast,
     _: &RwLock<Calibrations>,
+    _: &AtomicU64,
     _: &dyn Fn(),
 ) {
 }
@@ -171,6 +178,7 @@ fn run(
     stop: &AtomicBool,
     tx: &Broadcast,
     calibrations: &RwLock<Calibrations>,
+    calibration_version: &AtomicU64,
     on_change: &dyn Fn(),
 ) {
     use crate::dinput::{Device, DirectInput};
@@ -178,6 +186,8 @@ fn run(
     let Ok(di) = DirectInput::new() else { return };
     let mut devices: Vec<Device> = Vec::new();
     let mut tick = 0u32;
+    let mut cal = Calibrations::new();
+    let mut cal_version = None;
     while !stop.load(Ordering::Relaxed) {
         let mut changed = false;
         if tick.is_multiple_of(RESCAN_EVERY) {
@@ -186,8 +196,9 @@ fn run(
             devices.retain(|d| attached.iter().any(|a| guid_of(a) == d.state.info.guid));
             for inst in &attached {
                 if !devices.iter().any(|d| d.state.info.guid == guid_of(inst))
-                    && let Ok(dev) = di.open(inst)
+                    && let Ok(mut dev) = di.open(inst)
                 {
+                    dev.set_calibrations(&cal);
                     devices.push(dev);
                 }
             }
@@ -198,27 +209,44 @@ fn run(
         }
         tick = tick.wrapping_add(1);
 
+        let version = calibration_version.load(Ordering::Acquire);
+        if cal_version != Some(version) {
+            cal_version = Some(version);
+            cal.clone_from(&calibrations.read().unwrap_or_else(|e| e.into_inner()));
+            for dev in &mut devices {
+                dev.set_calibrations(&cal);
+            }
+        }
+
         let mut lost = false;
-        let cal = calibrations
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
         for dev in &mut devices {
-            let previous = dev.state.clone();
-            if !dev.poll(&cal) {
+            if !dev.poll() {
                 lost = true;
                 continue;
             }
-            changed |= emit_changes(&previous, &dev.state, tx);
+            changed |= emit_changes(&dev.previous, &dev.state, tx);
             // Raw values matter to the calibration page even when the scaled value stays.
-            changed |= previous.raw != dev.state.raw;
+            changed |= dev.previous.raw != dev.state.raw;
         }
         if lost {
             tick = 0; // rescan right away
         }
         if changed {
-            *snapshot.write().unwrap_or_else(|e| e.into_inner()) =
-                devices.iter().map(|d| d.state.clone()).collect();
+            let mut shared = snapshot.write().unwrap_or_else(|e| e.into_inner());
+            let same_devices = shared.len() == devices.len()
+                && shared
+                    .iter()
+                    .zip(&devices)
+                    .all(|(s, d)| s.info.guid == d.state.info.guid);
+            if same_devices {
+                // Usual case: only values changed, update them in place without allocating.
+                for (s, d) in shared.iter_mut().zip(&devices) {
+                    s.copy_readings(&d.state);
+                }
+            } else {
+                *shared = devices.iter().map(|d| d.state.clone()).collect();
+            }
+            drop(shared);
             on_change();
         }
         std::thread::sleep(POLL_INTERVAL);

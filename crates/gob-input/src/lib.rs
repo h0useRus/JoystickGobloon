@@ -114,6 +114,14 @@ impl DeviceState {
         }
     }
 
+    /// Copies the live values (not the info) from `other`, reusing this state's buffers.
+    pub(crate) fn copy_readings(&mut self, other: &DeviceState) {
+        self.axes = other.axes;
+        self.raw = other.raw;
+        self.buttons.clone_from(&other.buttons);
+        self.hats.clone_from(&other.hats);
+    }
+
     pub fn axis(&self, id: u8) -> Option<f32> {
         self.info
             .axes
