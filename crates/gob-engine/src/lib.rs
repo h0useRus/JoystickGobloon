@@ -17,7 +17,7 @@ mod runner;
 mod sendinput;
 
 pub use engine::Engine;
-pub use lighting::led_mode;
+pub use lighting::to_led;
 pub use media::{voices, Media, SpeechQueue, SpeechRequest};
 pub use runner::{Runner, RunnerStatus};
 
@@ -68,13 +68,15 @@ impl InputKey {
 }
 
 /// One LED of a joystick (light-led action).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Light {
     /// Attached device GUID, lowercase (profile aliases applied).
     pub device: String,
     pub led: u8,
     /// 8-bit RGB.
     pub color: [u8; 3],
+    pub color2: [u8; 3],
+    pub blend: gob_core::LedBlend,
     pub mode: gob_core::LedMode,
 }
 

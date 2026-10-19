@@ -11,8 +11,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::JoinHandle;
 
-use gob_core::LedMode;
-use gob_lighting::{Led, Mode};
+use gob_core::{LedBlend, LedMode};
+use gob_lighting::{Blend, Led, Mode};
 
 use crate::Light;
 
@@ -66,14 +66,26 @@ impl Drop for Lighting {
     }
 }
 
-/// The profile's LED mode as gob-lighting takes it.
-pub fn led_mode(m: LedMode) -> Mode {
-    match m {
-        LedMode::Off => Mode::Off,
-        LedMode::On => Mode::On,
-        LedMode::SlowBlink => Mode::SlowBlink,
-        LedMode::FastBlink => Mode::FastBlink,
-        LedMode::FastestBlink => Mode::FastestBlink,
+/// A profile's LED as gob-lighting takes it.
+pub fn to_led(l: &Light) -> Led {
+    Led {
+        id: l.led,
+        color: l.color,
+        color2: l.color2,
+        blend: match l.blend {
+            LedBlend::First => Blend::First,
+            LedBlend::Second => Blend::Second,
+            LedBlend::Alternate => Blend::Alternate,
+            LedBlend::AlternateReverse => Blend::AlternateReverse,
+            LedBlend::Mix => Blend::Mix,
+        },
+        mode: match l.mode {
+            LedMode::Off => Mode::Off,
+            LedMode::On => Mode::On,
+            LedMode::SlowBlink => Mode::SlowBlink,
+            LedMode::FastBlink => Mode::FastBlink,
+            LedMode::FastestBlink => Mode::FastestBlink,
+        },
     }
 }
 
@@ -81,11 +93,7 @@ pub fn led_mode(m: LedMode) -> Mode {
 fn batch(lights: impl IntoIterator<Item = Light>) -> Vec<(String, Vec<Led>)> {
     let mut out: Vec<(String, Vec<Led>)> = Vec::new();
     for l in lights {
-        let led = Led {
-            id: l.led,
-            color: l.color,
-            mode: led_mode(l.mode),
-        };
+        let led = to_led(&l);
         let pos = match out.iter().position(|(d, _)| *d == l.device) {
             Some(p) => p,
             None => {
@@ -158,7 +166,7 @@ mod tests {
             device: device.into(),
             led,
             color: [r, 0, 0],
-            mode: LedMode::On,
+            ..Default::default()
         }
     }
 

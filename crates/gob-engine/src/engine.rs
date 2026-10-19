@@ -773,6 +773,8 @@ impl Engine {
                     device,
                     led,
                     color,
+                    color2,
+                    blend,
                     mode,
                     on_activate,
                 } => {
@@ -780,6 +782,8 @@ impl Engine {
                         device: self.device(device),
                         led,
                         color,
+                        color2,
+                        blend,
                         mode,
                     };
                     if light.device.is_empty() {
