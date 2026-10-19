@@ -1,4 +1,6 @@
 # Hide to tray (WM_CLOSE with close-to-tray on) and restore (tray left click message), N times.
+# In the tray the window stays visible to Windows (so the app keeps running frames) but is a
+# transparent tool window: `hidden` checks that style.
 param([int]$Cycles = 5, [string]$Exe = "target\debug\JoystickGobloon.exe")
 Add-Type @'
 using System; using System.Runtime.InteropServices; using System.Text;
@@ -7,6 +9,8 @@ public class TC {
  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc p, IntPtr l);
  [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+ [DllImport("user32.dll")] public static extern long GetWindowLongPtrW(IntPtr h, int i);
+ public static bool InTray(IntPtr h) { return (GetWindowLongPtrW(h, -20) & 0x80) != 0; }
  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
@@ -23,10 +27,10 @@ Start-Sleep -Seconds 5
 for ($i = 1; $i -le $Cycles; $i++) {
   [TC]::PostMessage([TC]::main, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null   # WM_CLOSE
   Start-Sleep -Milliseconds 800
-  $hidden = -not [TC]::IsWindowVisible([TC]::main)
+  $hidden = [TC]::InTray([TC]::main)
   [TC]::PostMessage([TC]::tray, 6002, [IntPtr]::Zero, [IntPtr]0x0202) | Out-Null     # tray left button up
   Start-Sleep -Milliseconds 800
-  $shown = [TC]::IsWindowVisible([TC]::main)
+  $shown = [TC]::IsWindowVisible([TC]::main) -and -not [TC]::InTray([TC]::main)
   "cycle $i : hidden=$hidden shown=$shown responds=$([TC]::Responds([TC]::main))"
 }
 $p.Refresh()

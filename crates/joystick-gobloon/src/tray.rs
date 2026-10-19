@@ -273,28 +273,126 @@ impl Drop for Tray {
     }
 }
 
-/// Shows the hidden main window. Called from tray callbacks, which run inside the window
-/// message handling: the async variant only posts the request, so winit is not re-entered.
-/// The app then syncs winit's state on its next frame (its `restored` flag); without
-/// that winit still thinks the window is hidden and ignores the next hide request.
+/// Puts the main window into the tray: a transparent, click-through tool window (off the
+/// taskbar and Alt+Tab), not minimized. It is not hidden (SW_HIDE): Windows does not paint
+/// hidden windows, so eframe would never run a frame and its event loop would spin a CPU
+/// core on every repaint request. Not minimized either: Windows draws a minimized tool
+/// window as a small title bar above the taskbar, whatever its transparency.
+pub fn hide_window(hwnd: isize) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            SW_HIDE, SW_SHOWNOACTIVATE, ShowWindowAsync,
+        };
+        let window = handle(hwnd);
+        set_tray_style(window, true);
+        // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
+        // Async: callers may run inside winit's message handling. Hiding first makes the
+        // taskbar notice the style change; SW_SHOWNOACTIVATE also un-minimizes.
+        unsafe {
+            let _ = ShowWindowAsync(window, SW_HIDE);
+            let _ = ShowWindowAsync(window, SW_SHOWNOACTIVATE);
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = hwnd;
+}
+
+/// Shows the main window again (from the tray, or minimized). Called from tray callbacks,
+/// which run inside the window message handling: the async variant only posts the request,
+/// so winit is not re-entered. The app then syncs winit's state on its next frame (its
+/// `restored` flag).
 pub fn show_window(hwnd: isize) {
     #[cfg(windows)]
     {
-        use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::WindowsAndMessaging::{
-            IsIconic, SW_RESTORE, SW_SHOW, ShowWindowAsync,
+            IsIconic, SW_HIDE, SW_RESTORE, SW_SHOW, ShowWindowAsync,
         };
-        let hwnd = HWND(hwnd as *mut _);
+        let hwnd = handle(hwnd);
+        let from_tray = in_tray_handle(hwnd);
+        set_tray_style(hwnd, false);
         // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
         unsafe {
+            if from_tray {
+                // Hide first so the taskbar adds the button back.
+                let _ = ShowWindowAsync(hwnd, SW_HIDE);
+            }
             let _ = ShowWindowAsync(hwnd, SW_SHOW);
-            if IsIconic(hwnd).as_bool() {
+            if from_tray || IsIconic(hwnd).as_bool() {
                 let _ = ShowWindowAsync(hwnd, SW_RESTORE);
             }
         }
     }
     #[cfg(not(windows))]
     let _ = hwnd;
+}
+
+/// The main window is in the tray (see [`hide_window`]).
+pub fn in_tray(hwnd: isize) -> bool {
+    #[cfg(windows)]
+    return in_tray_handle(handle(hwnd));
+    #[cfg(not(windows))]
+    {
+        let _ = hwnd;
+        false
+    }
+}
+
+/// The main window is on screen: visible, not minimized, not in the tray.
+pub fn window_shown(hwnd: isize) -> bool {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible};
+        let hwnd = handle(hwnd);
+        // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
+        unsafe { IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = hwnd;
+        true
+    }
+}
+
+#[cfg(windows)]
+fn handle(hwnd: isize) -> windows::Win32::Foundation::HWND {
+    windows::Win32::Foundation::HWND(hwnd as *mut _)
+}
+
+#[cfg(windows)]
+fn in_tray_handle(hwnd: windows::Win32::Foundation::HWND) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GetWindowLongPtrW, WS_EX_TOOLWINDOW,
+    };
+    // SAFETY: reading the style of the app's own window.
+    let style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
+    style & WS_EX_TOOLWINDOW.0 as isize != 0
+}
+
+/// Tray style: a tool window (off the taskbar and Alt+Tab), fully transparent and
+/// click-through.
+#[cfg(windows)]
+fn set_tray_style(hwnd: windows::Win32::Foundation::HWND, on: bool) {
+    use windows::Win32::Foundation::COLORREF;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GetWindowLongPtrW, LWA_ALPHA, SetLayeredWindowAttributes, SetWindowLongPtrW,
+        WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
+    };
+    let tray = (WS_EX_TOOLWINDOW.0 | WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0) as isize;
+    // SAFETY: changing the extended style of the app's own window.
+    unsafe {
+        let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        if on {
+            SetWindowLongPtrW(
+                hwnd,
+                GWL_EXSTYLE,
+                (style | tray) & !(WS_EX_APPWINDOW.0 as isize),
+            );
+            let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_ALPHA);
+        } else {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style & !tray);
+        }
+    }
 }
 
 /// Native handle of the main window, for the tray callbacks.
