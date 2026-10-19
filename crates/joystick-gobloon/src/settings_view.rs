@@ -95,6 +95,12 @@ pub fn show(
                 &mut settings.focus_used_input,
                 i18n.tr("settings-focus-input"),
             ));
+            let input_events = ui
+                .add(style::switch(
+                    &mut settings.input_events,
+                    i18n.tr("settings-input-events"),
+                ))
+                .on_hover_text(i18n.tr("settings-input-events-tip"));
             ui.add_space(8.0);
             let autostart = ui.add(style::switch(
                 &mut settings.start_with_windows,
@@ -119,6 +125,7 @@ pub fn show(
                 &reopen,
                 &whitelist,
                 &focus,
+                &input_events,
                 &autostart,
                 &activate,
                 &updates,

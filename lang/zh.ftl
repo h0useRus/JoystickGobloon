@@ -92,6 +92,8 @@ hidhide-no-devices = 没有可显示的设备。
 action-refresh = 刷新
 settings-hidhide-self = 启动时将 Joystick Gobloon 添加到 HidHide 白名单
 settings-focus-input = 在“设备与绑定”页面跳转到正在使用的输入
+settings-input-events = 在变化时读取控制器
+settings-input-events-tip = 更低延迟和 CPU 占用：控制器报告变化时才读取，短按按钮也不会丢失。关闭时每 4 毫秒读取一次所有控制器。
 status-whitelisted = 已将 Joystick Gobloon 添加到 HidHide 白名单。
 
 # Applications

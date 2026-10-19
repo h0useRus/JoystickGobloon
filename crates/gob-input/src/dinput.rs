@@ -4,24 +4,36 @@ use std::ffi::c_void;
 use std::mem::size_of;
 
 use windows::Win32::Devices::HumanInterfaceDevice::{
-    DI8DEVCLASS_GAMECTRL, DIDATAFORMAT, DIDEVCAPS, DIDEVICEINSTANCEW, DIEDFL_ATTACHEDONLY,
-    DIJOYSTATE2, DIPH_BYOFFSET, DIPH_DEVICE, DIPROPGUIDANDPATH, DIPROPHEADER, DIPROPRANGE,
-    DirectInput8Create, IDirectInput8W, IDirectInputDevice8W,
+    DI8DEVCLASS_GAMECTRL, DIDATAFORMAT, DIDEVCAPS, DIDEVICEINSTANCEW, DIDEVICEOBJECTDATA,
+    DIEDFL_ATTACHEDONLY, DIJOYSTATE2, DIPH_BYOFFSET, DIPH_DEVICE, DIPROPDWORD, DIPROPGUIDANDPATH,
+    DIPROPHEADER, DIPROPRANGE, DirectInput8Create, IDirectInput8W, IDirectInputDevice8W,
 };
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Threading::CreateEventW;
 use windows::core::{BOOL, GUID, Interface};
 
 use crate::{
-    AXIS_SLOTS, Calibration, DeviceInfo, DeviceState, format_guid, normalize_axis, pov_direction,
+    AXIS_SLOTS, Calibration, DeviceInfo, DeviceState, InputEvent, format_guid, normalize_axis,
+    pov_direction,
 };
 
 const DIRECTINPUT_VERSION: u32 = 0x0800;
 /// `DIPROP_RANGE` is `MAKEDIPROP(4)`: a small integer passed as a GUID pointer.
 const DIPROP_RANGE: *const GUID = std::ptr::without_provenance(4);
+/// `DIPROP_BUFFERSIZE` is `MAKEDIPROP(1)`.
+const DIPROP_BUFFERSIZE: *const GUID = std::ptr::without_provenance(1);
 /// `DIPROP_GUIDANDPATH` is `MAKEDIPROP(12)`.
 const DIPROP_GUIDANDPATH: *const GUID = std::ptr::without_provenance(12);
 /// Byte offsets of lX, lY, lZ, lRx, lRy, lRz, rglSlider[0], rglSlider[1] in DIJOYSTATE2.
 const AXIS_OFFSETS: [u32; AXIS_SLOTS] = [0, 4, 8, 12, 16, 20, 24, 28];
+/// Byte offsets of rgdwPOV[0] and rgbButtons[0] in DIJOYSTATE2.
+const POV_OFFSET: u32 = 32;
+const BUTTON_OFFSET: u32 = 48;
+/// Byte offset just past rgbButtons (velocity and force fields follow; not used).
+const BUTTON_END: u32 = BUTTON_OFFSET + 128;
+/// Changes DirectInput keeps per device between two reads in event mode.
+const BUFFER_SIZE: u32 = 1024;
 
 #[link(name = "dinput8", kind = "static", modifiers = "-bundle")]
 unsafe extern "C" {
@@ -44,6 +56,8 @@ pub struct Device {
     pub previous: DeviceState,
     /// Calibration per axis slot, taken from [`crate::Calibrations`] by `set_calibrations`.
     calibration: [Option<Calibration>; AXIS_SLOTS],
+    /// Event mode: signaled by DirectInput when the device changes; its changes are buffered.
+    event: Option<HANDLE>,
 }
 
 impl DirectInput {
@@ -78,7 +92,9 @@ impl DirectInput {
         found
     }
 
-    pub fn open(&self, inst: &DIDEVICEINSTANCEW) -> windows::core::Result<Device> {
+    /// Opens a controller. With `events`, DirectInput buffers its changes and signals
+    /// [`Device::event`] when there are new ones; otherwise it is only polled.
+    pub fn open(&self, inst: &DIDEVICEINSTANCEW, events: bool) -> windows::core::Result<Device> {
         unsafe {
             let mut dev = None;
             self.di.CreateDevice(&inst.guidInstance, &mut dev, None)?;
@@ -108,6 +124,14 @@ impl DirectInput {
                 ..Default::default()
             };
             dev.GetCapabilities(&mut caps)?;
+            // Buffer and event must be set before Acquire. Without them the device is polled.
+            let event = if events { buffered_event(&dev) } else { None };
+            if events && event.is_none() {
+                log::warn!(
+                    "{}: no DirectInput change events, the device is polled",
+                    wide_to_string(&inst.tszProductName)
+                );
+            }
             let _ = dev.Acquire();
 
             let g = inst.guidInstance;
@@ -128,9 +152,33 @@ impl DirectInput {
                 previous: state.clone(),
                 state,
                 calibration: [None; AXIS_SLOTS],
+                event,
             })
         }
     }
+}
+
+/// Gives the (not yet acquired) device a change buffer and an auto-reset event it signals.
+/// `None` when either fails: the device is then polled.
+fn buffered_event(dev: &IDirectInputDevice8W) -> Option<HANDLE> {
+    let size = DIPROPDWORD {
+        diph: DIPROPHEADER {
+            dwSize: size_of::<DIPROPDWORD>() as u32,
+            dwHeaderSize: size_of::<DIPROPHEADER>() as u32,
+            dwObj: 0,
+            dwHow: DIPH_DEVICE,
+        },
+        dwData: BUFFER_SIZE,
+    };
+    // SAFETY: `size` is a DIPROPDWORD with its sizes set; the device is not acquired yet.
+    unsafe { dev.SetProperty(DIPROP_BUFFERSIZE, (&raw const size.diph).cast_mut()) }.ok()?;
+    // SAFETY: a plain auto-reset event, closed in `Device`'s Drop (or here if refused).
+    let event = unsafe { CreateEventW(None, false, false, None) }.ok()?;
+    if unsafe { dev.SetEventNotification(event) }.is_err() {
+        let _ = unsafe { CloseHandle(event) };
+        return None;
+    }
+    Some(event)
 }
 
 /// The device's HID interface path, empty when DirectInput does not know it.
@@ -165,6 +213,86 @@ impl Device {
     /// when the device is gone.
     pub fn poll(&mut self) -> bool {
         self.previous.copy_readings(&self.state);
+        self.read_state()
+    }
+
+    /// The event DirectInput signals on changes (event mode only).
+    pub fn event(&self) -> Option<HANDLE> {
+        self.event
+    }
+
+    /// Event mode: sends every buffered button and hat change in order (a press shorter than
+    /// the time between two reads is not lost), then reads the state like [`Device::poll`].
+    /// Axes, and anything the buffer missed, are left to the `previous` -> `state` diff.
+    /// Returns false when the device is gone.
+    pub fn read_buffered(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool {
+        self.previous.copy_readings(&self.state);
+        let mut data = [DIDEVICEOBJECTDATA::default(); 64];
+        loop {
+            let mut count = data.len() as u32;
+            // SAFETY: `data` has room for `count` DIDEVICEOBJECTDATA entries.
+            let read = unsafe {
+                let _ = self.dev.Poll();
+                self.dev.GetDeviceData(
+                    size_of::<DIDEVICEOBJECTDATA>() as u32,
+                    data.as_mut_ptr(),
+                    &mut count,
+                    0,
+                )
+            };
+            if read.is_err() {
+                // Input lost: re-acquire, the state read below tells whether it worked.
+                let _ = unsafe { self.dev.Acquire() };
+                break;
+            }
+            for item in &data[..count as usize] {
+                self.apply_buffered(item, emit);
+            }
+            if (count as usize) < data.len() {
+                break;
+            }
+        }
+        // Already sent: the diff must not send these again.
+        self.previous.buttons.clone_from(&self.state.buttons);
+        self.previous.hats.clone_from(&self.state.hats);
+        self.read_state()
+    }
+
+    /// One buffered button or hat change: updates `state` and sends it if it differs.
+    fn apply_buffered(&mut self, item: &DIDEVICEOBJECTDATA, emit: &mut dyn FnMut(InputEvent)) {
+        let s = &mut self.state;
+        let ofs = item.dwOfs;
+        if (BUTTON_OFFSET..BUTTON_END).contains(&ofs) {
+            let i = (ofs - BUTTON_OFFSET) as usize;
+            let pressed = item.dwData & 0x80 != 0;
+            if let Some(b) = s.buttons.get_mut(i)
+                && *b != pressed
+            {
+                *b = pressed;
+                emit(InputEvent::Button {
+                    device: s.info.guid.clone(),
+                    id: i as u16 + 1,
+                    pressed,
+                });
+            }
+        } else if (POV_OFFSET..BUTTON_OFFSET).contains(&ofs) {
+            let i = ((ofs - POV_OFFSET) / 4) as usize;
+            let direction = pov_direction(item.dwData);
+            if let Some(h) = s.hats.get_mut(i)
+                && *h != direction
+            {
+                *h = direction;
+                emit(InputEvent::Hat {
+                    device: s.info.guid.clone(),
+                    id: i as u8 + 1,
+                    direction,
+                });
+            }
+        }
+    }
+
+    /// Reads the whole state into `state`; returns false when the device is gone.
+    fn read_state(&mut self) -> bool {
         let mut raw = DIJOYSTATE2::default();
         let read = |dev: &IDirectInputDevice8W, raw: &mut DIJOYSTATE2| unsafe {
             let _ = dev.Poll();
@@ -213,6 +341,10 @@ impl Drop for Device {
     fn drop(&mut self) {
         unsafe {
             let _ = self.dev.Unacquire();
+            if let Some(event) = self.event {
+                let _ = self.dev.SetEventNotification(HANDLE::default());
+                let _ = CloseHandle(event);
+            }
         }
     }
 }

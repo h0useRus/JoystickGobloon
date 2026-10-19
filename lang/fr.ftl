@@ -92,6 +92,8 @@ hidhide-no-devices = Aucun périphérique à afficher.
 action-refresh = Actualiser
 settings-hidhide-self = Ajouter Joystick Gobloon à la liste blanche de HidHide au démarrage
 settings-focus-input = Aller à l’entrée utilisée sur la page « Périphériques et affectations »
+settings-input-events = Lire les manettes lors d’un changement
+settings-input-events-tip = Moins de latence et de charge CPU : les manettes sont lues quand elles signalent un changement, et les appuis courts ne sont jamais perdus. Désactivé : chaque manette est lue toutes les 4 ms.
 status-whitelisted = Joystick Gobloon a été ajouté à la liste blanche de HidHide.
 
 # Applications

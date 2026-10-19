@@ -1045,6 +1045,7 @@ impl eframe::App for JoystickGobloonApp {
                 ctx.request_repaint_after(settle - t.elapsed());
             }
         }
+        self.input.set_event_mode(self.settings.input_events);
         self.devices_view.handle_events(
             self.input.events(),
             &self.input.devices(),

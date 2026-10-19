@@ -92,6 +92,8 @@ hidhide-no-devices = No devices to show.
 action-refresh = Refresh
 settings-hidhide-self = Add Joystick Gobloon to the HidHide whitelist on startup
 settings-focus-input = Jump to the input in use on the Devices and bindings page
+settings-input-events = Read controllers on change
+settings-input-events-tip = Lower latency and less CPU: controllers are read when they report a change, and short button presses are never missed. Off: every controller is read every 4 ms.
 status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
 
 # Applications
