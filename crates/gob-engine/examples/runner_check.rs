@@ -22,7 +22,7 @@ fn main() {
     });
     state.axes[2] = 1.0;
     let (_tx, rx) = std::sync::mpsc::sync_channel(16);
-    match gob_engine::Runner::start(&profile, &HashMap::new(), rx, &[state], || {}) {
+    match gob_engine::Runner::start(&profile, &HashMap::new(), rx, &[state], &[], || {}) {
         Ok(runner) => {
             println!("running in mode {}", runner.status().mode);
             std::thread::sleep(Duration::from_secs(4));

@@ -115,11 +115,13 @@ impl Output for SystemOutput {
 impl Runner {
     /// Takes the vJoy devices the profile needs and starts processing `events`.
     /// `initial` is the current device state, used to send axis positions right away.
+    /// `led_defaults` are set on the devices whose LEDs the profile changed when it stops.
     pub fn start(
         profile: &Profile,
         aliases: &HashMap<String, String>,
         events: Receiver<InputEvent>,
         initial: &[DeviceState],
+        led_defaults: &[crate::Light],
         on_change: impl Fn() + Send + 'static,
     ) -> Result<Self, String> {
         let mut engine = Engine::new(profile, aliases);
@@ -134,6 +136,7 @@ impl Runner {
                     .filter(|d| !d.info.hid_path.is_empty())
                     .map(|d| (d.info.guid.to_ascii_lowercase(), d.info.hid_path.clone()))
                     .collect(),
+                led_defaults.to_vec(),
             ),
             load_profile: None,
         };

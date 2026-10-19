@@ -2,6 +2,10 @@
 //! take milliseconds and must not hold up the engine. Commands queued meanwhile are merged
 //! (the last one per LED wins) and each device gets one write. Failures are logged once
 //! per device; they never stop the engine.
+//!
+//! When the runner stops (profile deactivated), every device the profile wrote to gets back
+//! the state saved before its first write, then the user's default colors. VKB keeps written
+//! colors until the stick restarts, so the defaults are what stands in for its own profile.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -15,15 +19,18 @@ use crate::Light;
 pub struct Lighting {
     /// Attached device GUID (lowercase) -> HID interface path.
     paths: HashMap<String, String>,
+    /// Colors set when the runner stops, on the devices the profile wrote to.
+    defaults: Vec<Light>,
     tx: Option<Sender<Light>>,
     thread: Option<JoinHandle<()>>,
 }
 
 impl Lighting {
     /// `paths`: GUID -> HID path of the attached devices (`DeviceInfo::hid_path`).
-    pub fn new(paths: HashMap<String, String>) -> Self {
+    pub fn new(paths: HashMap<String, String>, defaults: Vec<Light>) -> Self {
         Self {
             paths,
+            defaults,
             tx: None,
             thread: None,
         }
@@ -33,9 +40,10 @@ impl Lighting {
         if self.tx.is_none() {
             let (tx, rx) = channel();
             let paths = std::mem::take(&mut self.paths);
+            let defaults = std::mem::take(&mut self.defaults);
             match std::thread::Builder::new()
                 .name("gob-lighting".into())
-                .spawn(move || run(&paths, &rx))
+                .spawn(move || run(&paths, &defaults, &rx))
             {
                 Ok(t) => self.thread = Some(t),
                 Err(e) => log::warn!("light-led: no lighting thread: {e}"),
@@ -92,16 +100,27 @@ fn batch(lights: impl IntoIterator<Item = Light>) -> Vec<(String, Vec<Led>)> {
     out
 }
 
-fn run(paths: &HashMap<String, String>, rx: &Receiver<Light>) {
+fn run(paths: &HashMap<String, String>, defaults: &[Light], rx: &Receiver<Light>) {
     let devices = gob_lighting::devices();
     let mut warned = HashSet::new();
+    // Devices written to, in the order first touched, with their state before that.
+    let mut touched: Vec<(String, &gob_lighting::Device, Option<gob_lighting::Saved>)> = Vec::new();
     while let Ok(first) = rx.recv() {
         for (guid, leds) in batch(std::iter::once(first).chain(rx.try_iter())) {
             let device = paths
                 .get(&guid)
                 .and_then(|p| devices.iter().find(|d| d.is_at(p)));
             let result = match device {
-                Some(d) => d.set(&leds).map_err(|e| e.to_string()),
+                Some(d) => {
+                    if !touched.iter().any(|(g, ..)| *g == guid) {
+                        let saved = d
+                            .save()
+                            .map_err(|e| log::warn!("light-led {guid}: state not saved: {e}"))
+                            .ok();
+                        touched.push((guid.clone(), d, saved));
+                    }
+                    d.set(&leds).map_err(|e| e.to_string())
+                }
                 None => Err("device not attached or without LED control".into()),
             };
             if let Err(e) = result {
@@ -109,6 +128,23 @@ fn run(paths: &HashMap<String, String>, rx: &Receiver<Light>) {
                     log::warn!("light-led {guid}: {e}");
                 }
             }
+        }
+    }
+    // The runner stopped: the state before the profile, then the default colors.
+    for (guid, device, saved) in &touched {
+        let restored = saved.as_ref().map_or(Ok(()), |s| device.restore(s));
+        let own: Vec<Light> = defaults
+            .iter()
+            .filter(|l| l.device == *guid)
+            .cloned()
+            .collect();
+        let result = restored.and_then(|()| match batch(own).pop() {
+            Some((_, leds)) => device.set(&leds),
+            None => Ok(()),
+        });
+        match result {
+            Ok(()) => log::info!("light-led {guid}: LEDs restored"),
+            Err(e) => log::warn!("light-led {guid}: LEDs not restored: {e}"),
         }
     }
 }
