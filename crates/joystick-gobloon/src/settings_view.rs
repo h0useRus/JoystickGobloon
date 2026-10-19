@@ -3,7 +3,8 @@
 use eframe::egui::{self, RichText, Vec2};
 use gob_i18n::I18n;
 
-use crate::settings::{Settings, Theme};
+use crate::leds::{LedDevice, LedValue};
+use crate::settings::{LedDefault, Settings, Theme};
 use crate::style::{self, icon};
 
 const REPO_URL: &str = "https://github.com/h0useRus/JoystickGobloon";
@@ -16,6 +17,7 @@ pub enum SettingsTab {
     #[default]
     Appearance,
     General,
+    Lighting,
     About,
 }
 
@@ -27,6 +29,13 @@ pub enum Change {
     Tray,
     /// Start with Windows was switched: update the registry.
     Autostart(bool),
+    /// Light these LEDs of an attached device now (a test).
+    PreviewLeds {
+        device: String,
+        leds: Vec<LedValue>,
+    },
+    /// Default LED colors were edited or experimental features switched.
+    LedDefaults,
 }
 
 pub fn show(
@@ -36,7 +45,11 @@ pub fn show(
     tab: &mut SettingsTab,
     logo: &egui::TextureHandle,
     updater: &mut crate::update::Updater,
+    led_devices: &[LedDevice],
 ) -> Option<Change> {
+    if !settings.experimental && *tab == SettingsTab::Lighting {
+        *tab = SettingsTab::General;
+    }
     ui.horizontal(|ui| {
         for (t, glyph, key) in [
             (
@@ -49,8 +62,12 @@ pub fn show(
                 icon::SLIDERS_HORIZONTAL,
                 "settings-general",
             ),
+            (SettingsTab::Lighting, icon::LIGHTBULB, "settings-lighting"),
             (SettingsTab::About, icon::INFO, "settings-about"),
         ] {
+            if t == SettingsTab::Lighting && !settings.experimental {
+                continue;
+            }
             if style::tab(ui, *tab == t, glyph, &i18n.tr(key)).clicked() {
                 *tab = t;
             }
@@ -87,23 +104,136 @@ pub fn show(
                 &mut settings.check_updates,
                 i18n.tr("settings-check-updates"),
             ));
-            let changed = [&reopen, &whitelist, &autostart, &activate, &updates]
-                .iter()
-                .any(|r| r.changed());
+            ui.add_space(8.0);
+            let experimental = ui
+                .add(style::switch(
+                    &mut settings.experimental,
+                    i18n.tr("settings-experimental"),
+                ))
+                .on_hover_text(i18n.tr("settings-experimental-tip"));
+            let changed = [
+                &reopen,
+                &whitelist,
+                &autostart,
+                &activate,
+                &updates,
+                &experimental,
+            ]
+            .iter()
+            .any(|r| r.changed());
             if changed {
                 settings.save();
             }
             if autostart.changed() {
                 Some(Change::Autostart(settings.start_with_windows))
+            } else if experimental.changed() {
+                Some(Change::LedDefaults)
             } else {
                 None
             }
         }
+        SettingsTab::Lighting => lighting(ui, i18n, settings, led_devices),
         SettingsTab::About => {
             about(ui, i18n, logo, updater);
             None
         }
     }
+}
+
+/// Default LED colors per attached joystick with LED control.
+fn lighting(
+    ui: &mut egui::Ui,
+    i18n: &I18n,
+    settings: &mut Settings,
+    led_devices: &[LedDevice],
+) -> Option<Change> {
+    ui.label(RichText::new(i18n.tr("settings-leds-hint")).weak());
+    if led_devices.is_empty() {
+        ui.add_space(8.0);
+        ui.label(i18n.tr("settings-leds-none"));
+        return None;
+    }
+    let mut change = None;
+    let mut edited = false;
+    for d in led_devices {
+        let (guid, vkb) = (d.guid.clone(), d.vkb);
+        let leds: Vec<LedValue> = settings
+            .leds
+            .get(&guid)
+            .map(|e| e.led.iter().map(LedDefault::value).collect())
+            .unwrap_or_default();
+        ui.add_space(12.0);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(format!("{}  {}", icon::JOYSTICK, d.name)).strong());
+            if style::icon_button(ui, !leds.is_empty(), icon::PLAY, &i18n.tr("edit-led-test"))
+                .clicked()
+            {
+                change = Some(Change::PreviewLeds {
+                    device: guid.clone(),
+                    leds: leds.clone(),
+                });
+            }
+            if style::icon_button(ui, true, icon::PLUS_CIRCLE, &i18n.tr("settings-leds-add"))
+                .clicked()
+            {
+                // The next known LED not listed yet, else the next number.
+                let used =
+                    |id: u8, element: u8| leds.iter().any(|l| (l.id, l.element) == (id, element));
+                let (id, element) = gob_lighting::vkb::KNOWN_LEDS
+                    .iter()
+                    .filter(|_| vkb)
+                    .map(|k| (k.id, k.element))
+                    .find(|&(id, element)| !used(id, element))
+                    .unwrap_or_else(|| (leds.iter().map(|l| l.id).max().map_or(0, |m| m + 1), 0));
+                let entry = settings.leds.entry(guid.clone()).or_default();
+                entry.name = d.name.clone();
+                let mut value = LedValue {
+                    id,
+                    element,
+                    color: [0, 0xFF, 0xFF],
+                    ..Default::default()
+                };
+                crate::leds::adapt(&mut value, vkb);
+                entry.led.push(LedDefault::from_value(value));
+                edited = true;
+            }
+        });
+        let mut remove = None;
+        for (i, mut v) in leds.iter().copied().enumerate() {
+            ui.horizontal(|ui| {
+                ui.add_space(24.0);
+                if crate::leds::led_widgets(ui, i18n, ("default", guid.as_str(), i), vkb, &mut v) {
+                    if let Some(e) = settings.leds.get_mut(&guid) {
+                        e.led[i] = LedDefault::from_value(v);
+                        edited = true;
+                    }
+                }
+                if style::icon_button(ui, true, icon::PLAY, &i18n.tr("edit-led-test")).clicked() {
+                    change = Some(Change::PreviewLeds {
+                        device: guid.clone(),
+                        leds: vec![v],
+                    });
+                }
+                if style::icon_button(ui, true, icon::TRASH, &i18n.tr("edit-remove")).clicked() {
+                    remove = Some(i);
+                }
+            });
+        }
+        if let Some(i) = remove {
+            if let Some(e) = settings.leds.get_mut(&guid) {
+                e.led.remove(i);
+                if e.led.is_empty() {
+                    settings.leds.remove(&guid);
+                }
+                edited = true;
+            }
+        }
+    }
+    if edited {
+        settings.save();
+        change = change.or(Some(Change::LedDefaults));
+    }
+    change
 }
 
 /// Tray icon options (Appearance tab).

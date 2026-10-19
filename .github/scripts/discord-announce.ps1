@@ -28,14 +28,14 @@ $lines = @(
 )
 $body = @{
     username   = "Joystick Gobloon"
-    avatar_url = "https://raw.githubusercontent.com/$Repo/$Sha/assets/icon/joygob-256.png"
+    avatar_url = "https://raw.githubusercontent.com/$Repo/$Sha/assets/icon/JoystickGobloon-256.png"
     embeds     = @(@{
         title       = $title
         url         = $page
         description = ($lines -join "`n")
         # Goblin green from the app's dark theme; alpha builds in amber.
         color       = $(if ($Prerelease) { 0xE6A23C } else { 0x8CC82C })
-        thumbnail   = @{ url = "https://raw.githubusercontent.com/$Repo/$Sha/assets/icon/joygob-256.png" }
+        thumbnail   = @{ url = "https://raw.githubusercontent.com/$Repo/$Sha/assets/icon/JoystickGobloon-256.png" }
     })
 }
 $json = $body | ConvertTo-Json -Depth 6

@@ -1,6 +1,6 @@
 //! Joystick Gremlin profile import/export (R14+ XML format).
 //!
-//! Profiles round-trip without loss: everything JoyGob does not understand is
+//! Profiles round-trip without loss: everything Joystick Gobloon does not understand is
 //! kept verbatim and written back unchanged.
 
 mod convert;

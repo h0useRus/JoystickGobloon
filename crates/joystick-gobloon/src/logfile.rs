@@ -1,5 +1,5 @@
-//! Technical log `joygob.log` next to the settings (`settings::data_dir`; processing results, warnings,
-//! errors). The previous run is kept as `joygob.old.log`. Messages are English, not translated.
+//! Technical log `JoystickGobloon.log` next to the settings (`settings::data_dir`; processing results, warnings,
+//! errors). The previous run is kept as `JoystickGobloon.old.log`. Messages are English, not translated.
 
 use std::fs::File;
 use std::io::Write;
@@ -42,7 +42,7 @@ impl Log for FileLog {
 }
 
 pub fn path() -> Option<PathBuf> {
-    crate::settings::data_dir().map(|dir| dir.join("joygob.log"))
+    crate::settings::data_dir().map(|dir| dir.join("JoystickGobloon.log"))
 }
 
 /// Starts logging to the file; without a writable file nothing is logged.

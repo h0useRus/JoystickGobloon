@@ -1,6 +1,6 @@
-//! Smallest plugin DLL: only tells JoyGob its name and version.
+//! Smallest plugin DLL: only tells Joystick Gobloon its name and version.
 //! Build: `cargo build -p gob-plugin --example stub_plugin`
-//! (target\debug\examples\stub_plugin.dll), then copy it to `<JoyGob folder>\plugins`.
+//! (target\debug\examples\stub_plugin.dll), then copy it to `<Joystick Gobloon folder>\plugins`.
 
 use gob_plugin::{PluginInfo, ABI_VERSION};
 
@@ -16,6 +16,6 @@ static INFO: Info = Info(PluginInfo {
 });
 
 #[no_mangle]
-pub extern "C" fn joygob_plugin_info() -> *const PluginInfo {
+pub extern "C" fn joystick_gobloon_plugin_info() -> *const PluginInfo {
     &INFO.0
 }

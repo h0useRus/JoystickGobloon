@@ -14,7 +14,7 @@ pub enum Source {
     Joystick(Vec<(String, InputType, u32)>),
     /// Keys held at the same time.
     Keyboard(Vec<Key>),
-    /// The last value JoyGob sent to a vJoy input.
+    /// The last value Joystick Gobloon sent to a vJoy input.
     Vjoy {
         device: u32,
         input_type: InputType,

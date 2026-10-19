@@ -1,5 +1,6 @@
 //! Profile editing. New actions are written exactly like Gremlin R14 writes
-//! them (property names, types and order), so edited profiles load in Gremlin.
+//! them (property names, types and order), so edited profiles load in Gremlin -
+//! except Joystick Gobloon's own actions (light-led), which Gremlin does not know.
 
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
@@ -26,6 +27,12 @@ pub enum NewAction {
     Condition,
     LoadProfile,
     PlaySound,
+    /// LED `led` of `device` (DirectInput instance GUID, empty = not chosen yet) lit green
+    /// on press.
+    LightLed {
+        device: String,
+        led: u8,
+    },
     TextToSpeech,
     /// No keys yet; they are recorded in the editor.
     MapToKeyboard,
@@ -399,6 +406,20 @@ impl Action {
                 vec![prop("string", "filename", ""), prop("int", "volume", "50")],
                 "press",
             ),
+            NewAction::LightLed { device, led } => Self::build(
+                "light-led",
+                vec![
+                    prop("uuid", "device-guid", device.clone()),
+                    prop("int", "led-id", led.to_string()),
+                    prop("int", "led-element", "0"),
+                    prop("string", "color", "#00FF00"),
+                    prop("string", "color2", "#000000"),
+                    prop("string", "color-mode", "color1"),
+                    prop("string", "led-mode", "on"),
+                    prop("bool", "on-activate", "False"),
+                ],
+                "press",
+            ),
             NewAction::TextToSpeech => Self::build(
                 "text-to-speech",
                 vec![
@@ -640,7 +661,7 @@ impl Profile {
         true
     }
 
-    /// Replaces the `index`-th step of a macro (`index` = step count appends). Steps JoyGob
+    /// Replaces the `index`-th step of a macro (`index` = step count appends). Steps Joystick Gobloon
     /// cannot represent ([`MacroStep::Other`]) are never written.
     pub fn set_macro_step(&mut self, id: &str, index: usize, step: &crate::MacroStep) {
         let Some((ty, items)) = macro_step_xml(step) else {

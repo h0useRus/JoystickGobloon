@@ -1,5 +1,5 @@
 ﻿; Joystick Gobloon installer (Inno Setup 6).
-; Build: iscc /DAppVersion=0.1.0 installer\joygob.iss  (after `cargo build --release`)
+; Build: iscc /DAppVersion=0.1.0 installer\JoystickGobloon.iss  (after `cargo build --release`)
 ; Needs the HidHide and vJoy installers in target\installer\deps (release.yml downloads them
 ; and checks their hashes). Output: target\installer\JoystickGobloon-<version>-setup.exe
 
@@ -28,7 +28,7 @@ DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
 OutputDir=..\target\installer
 OutputBaseFilename=JoystickGobloon-{#AppVersion}-setup
-SetupIconFile=..\assets\icon\joygob.ico
+SetupIconFile=..\assets\icon\JoystickGobloon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

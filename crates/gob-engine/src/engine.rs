@@ -9,7 +9,7 @@ use gob_core::{
 use crate::media::{SpeechQueue, SpeechRequest};
 use crate::modes::ModeStack;
 use crate::motion::{compass, Motion};
-use crate::{InputKey, InputKind, Output, Value};
+use crate::{InputKey, InputKind, Light, Output, Value};
 
 /// Delay between press and release of a pulse (Gremlin: 50 ms).
 const PULSE: Duration = Duration::from_millis(50);
@@ -122,6 +122,12 @@ enum Node {
         volume: u8,
         act: ActivationMode,
     },
+    /// light-led run by its input; the ones set on profile activation are in
+    /// [`Config::lights`] instead.
+    LightLed {
+        light: Light,
+        act: ActivationMode,
+    },
     /// `request.text` still holds `$current_mode` placeholders.
     Speak {
         request: SpeechRequest,
@@ -161,7 +167,7 @@ enum Node {
     },
     /// Action type handled by a plugin: index into [`Engine::plugins`].
     Plugin(usize),
-    /// Description and action types JoyGob does not execute yet.
+    /// Description and action types Joystick Gobloon does not execute yet.
     Noop,
 }
 
@@ -385,6 +391,8 @@ struct Config {
     always: bool,
     vbutton: Option<VButton>,
     virtual_id: u32,
+    /// light-led actions of this binding set when its mode becomes active.
+    lights: Vec<Light>,
 }
 
 pub struct Engine {
@@ -431,6 +439,8 @@ pub struct Engine {
     /// Functors of plugin actions, one per library action (shared references share it).
     plugins: Vec<Box<dyn gob_plugin::Functor>>,
     plugin_ids: HashMap<String, usize>,
+    /// On-activate light-led actions met while compiling the current binding.
+    compiled_lights: Vec<Light>,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -457,7 +467,7 @@ impl Engine {
         Self::with_plugins(profile, aliases, &gob_plugin::Registry::default())
     }
 
-    /// Like [`Engine::new`]; action types JoyGob does not know run through `registry`.
+    /// Like [`Engine::new`]; action types Joystick Gobloon does not know run through `registry`.
     pub fn with_plugins(
         profile: &Profile,
         aliases: &HashMap<String, String>,
@@ -508,6 +518,7 @@ impl Engine {
                 .collect(),
             plugins: Vec::new(),
             plugin_ids: HashMap::new(),
+            compiled_lights: Vec::new(),
         };
         for a in &profile.library {
             if gob_core::SUPPORTED_KINDS.contains(&a.kind.as_str()) {
@@ -570,6 +581,7 @@ impl Engine {
                     root,
                     vbutton,
                     virtual_id,
+                    lights: std::mem::take(&mut engine.compiled_lights),
                 });
             }
         }
@@ -757,6 +769,37 @@ impl Engine {
                     volume,
                     act: action.activation_mode(),
                 },
+                ActionKind::LightLed {
+                    device,
+                    led,
+                    element,
+                    color,
+                    color2,
+                    blend,
+                    mode,
+                    on_activate,
+                } => {
+                    let light = Light {
+                        device: self.device(device),
+                        led,
+                        element,
+                        color,
+                        color2,
+                        blend,
+                        mode,
+                    };
+                    if light.device.is_empty() {
+                        Node::Noop
+                    } else if on_activate {
+                        self.compiled_lights.push(light);
+                        Node::Noop
+                    } else {
+                        Node::LightLed {
+                            light,
+                            act: action.activation_mode(),
+                        }
+                    }
+                }
                 ActionKind::TextToSpeech {
                     text,
                     voice,
@@ -997,6 +1040,34 @@ impl Engine {
             .min()
     }
 
+    /// Whether the profile has light-led actions.
+    pub fn uses_lights(&self) -> bool {
+        self.nodes
+            .iter()
+            .any(|n| matches!(n, Node::LightLed { .. }))
+            || self.sets.iter().flatten().any(|c| !c.lights.is_empty())
+    }
+
+    /// Sets the LEDs of the light-led actions marked "on activate" that are bound in the
+    /// current mode (in profile order). Call once when the profile starts; mode changes
+    /// call it themselves.
+    pub fn activate(&mut self, out: &mut dyn Output) {
+        let mode = self.modes.current();
+        let mut configs: Vec<&Config> = self
+            .lookup
+            .values()
+            .filter_map(|m| m.get(mode))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .flat_map(|&set| &self.sets[set])
+            .filter(|c| !c.lights.is_empty())
+            .collect();
+        configs.sort_by_key(|c| c.virtual_id);
+        for light in configs.iter().flat_map(|c| &c.lights) {
+            out.light_led(light);
+        }
+    }
+
     /// Records an input's state without running anything (initial positions for conditions).
     pub fn seed(&mut self, key: &InputKey, value: Value) {
         match value {
@@ -1075,6 +1146,7 @@ impl Engine {
         if self.modes.current() == before {
             return;
         }
+        self.activate(out);
         // Stop cursor motion whose input is bound differently in the new mode.
         let (lookup, current) = (&self.lookup, self.modes.current().to_string());
         self.motion.retain(|(_, key), mode| {
@@ -1411,6 +1483,11 @@ impl Engine {
             Node::PlaySound { file, volume, act } => {
                 if should_execute(act, *value) && !file.is_empty() {
                     out.play_sound(&file, volume);
+                }
+            }
+            Node::LightLed { light, act } => {
+                if should_execute(act, *value) {
+                    out.light_led(&light);
                 }
             }
             Node::Speak { mut request, act } => {

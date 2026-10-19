@@ -1,6 +1,6 @@
 //! Changes the vJoy configuration without vJoyConfig (UAC prompt), e.g.
 //! `cargo run -p gob-vjoy --example vjoy_config -- 2 -f -a X Y Z Rx Ry Rz Sl0 Sl1 -b 127 -p 4`,
-//! `... -- -d 3`, `... -- enable on`. Runs itself elevated with `--vjoy-config` like JoyGob's exe.
+//! `... -- -d 3`, `... -- enable on`. Runs itself elevated with `--vjoy-config` like Joystick Gobloon's exe.
 use gob_vjoy::configure::{self, Change};
 
 fn main() {

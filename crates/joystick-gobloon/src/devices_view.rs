@@ -47,7 +47,7 @@ pub struct DevicesView {
     axis_ref: HashMap<(String, u8), f32>,
     /// Device whose info window is open.
     info: Option<String>,
-    /// JOYGOB_INFO was handled (debug builds).
+    /// JOYSTICK_GOBLOON_INFO was handled (debug builds).
     info_shown: bool,
     /// Selected input per device tab (the one the right panel edits).
     selected_input: HashMap<String, Key>,
@@ -58,6 +58,10 @@ pub struct DevicesView {
     pub hidden: HashMap<String, bool>,
     /// The eye icon was clicked: (device GUID, hide). The app applies it.
     pub hide_request: Option<(String, bool)>,
+    /// GUIDs of connected devices with LED control (light-led), filled by the app.
+    pub leds: std::collections::HashSet<String>,
+    /// Experimental features (light-led) are on, filled by the app.
+    pub experimental: bool,
 }
 
 struct Tab<'a> {
@@ -208,9 +212,9 @@ impl DevicesView {
                 logical: true,
             });
         }
-        // Debug builds: JOYGOB_TAB=keyboard | logical opens that tab at start (screenshots).
+        // Debug builds: JOYSTICK_GOBLOON_TAB=keyboard | logical opens that tab at start (screenshots).
         if cfg!(debug_assertions) && self.selected.is_none() {
-            let guid = match std::env::var("JOYGOB_TAB").as_deref() {
+            let guid = match std::env::var("JOYSTICK_GOBLOON_TAB").as_deref() {
                 Ok("keyboard") => Some(gob_core::KEYBOARD_GUID),
                 Ok("logical") => Some(gob_core::LOGICAL_DEVICE_GUID),
                 _ => None,
@@ -285,6 +289,7 @@ impl DevicesView {
                             } else {
                                 "hidhide-visible"
                             });
+                            let led_tip = i18n.tr("device-leds");
                             let mut icons = Vec::new();
                             if let Some(hidden) = hidden {
                                 let (glyph, color) = style::eye(ui, hidden);
@@ -294,6 +299,16 @@ impl DevicesView {
                                     tip: &eye_tip,
                                 });
                             }
+                            // Shows only that light-led can drive it; clicking does nothing.
+                            let leds = t.live.is_some() && self.leds.contains(t.guid);
+                            if leds {
+                                icons.push(style::TabIcon {
+                                    glyph: icon::LIGHTBULB,
+                                    color: None,
+                                    tip: &led_tip,
+                                });
+                            }
+                            let info_index = icons.len();
                             icons.push(style::TabIcon {
                                 glyph: icon::INFO,
                                 // The info icon is always in the accent green.
@@ -306,7 +321,9 @@ impl DevicesView {
                                 (Some(0), Some(hidden)) => {
                                     self.hide_request = Some((t.guid.to_string(), !hidden));
                                 }
-                                (Some(_), _) => self.info = Some(t.guid.to_string()),
+                                (Some(i), _) if i == info_index => {
+                                    self.info = Some(t.guid.to_string());
+                                }
                                 _ => {}
                             }
                             r
@@ -323,8 +340,11 @@ impl DevicesView {
                     }
                 });
             });
-            // Debug builds: JOYGOB_INFO=1 opens the first device's info at start (screenshots).
-            if cfg!(debug_assertions) && !self.info_shown && std::env::var("JOYGOB_INFO").is_ok() {
+            // Debug builds: JOYSTICK_GOBLOON_INFO=1 opens the first device's info at start (screenshots).
+            if cfg!(debug_assertions)
+                && !self.info_shown
+                && std::env::var("JOYSTICK_GOBLOON_INFO").is_ok()
+            {
                 self.info_shown = true;
                 self.info = tabs
                     .iter()
@@ -849,6 +869,8 @@ impl DevicesView {
                     vjoy,
                     inputs,
                     input: Some((&b.device_id, key.1)),
+                    leds: &self.leds,
+                    experimental: self.experimental,
                 };
                 for cfg in &b.configs {
                     editor.container(ui, &cfg.root_action, "actions", 0);
@@ -882,6 +904,8 @@ impl DevicesView {
                     vjoy,
                     inputs,
                     input: Some((&device, key.1)),
+                    leds: &self.leds,
+                    experimental: self.experimental,
                 };
                 editor.add_menu(ui, None, |kind| bind(Some(kind)));
             }
@@ -1046,7 +1070,7 @@ pub(crate) fn hat_glyph(direction: Option<u16>) -> &'static str {
     }
 }
 
-/// Debug builds: `JOYGOB_EXPAND=axis1` (or button3, hat1) opens that row at start, for
+/// Debug builds: `JOYSTICK_GOBLOON_EXPAND=axis1` (or button3, hat1) opens that row at start, for
 /// screenshot checks of editors without clicking.
 fn debug_expanded((kind, id): Key) -> bool {
     if !cfg!(debug_assertions) {
@@ -1059,7 +1083,7 @@ fn debug_expanded((kind, id): Key) -> bool {
         Kind::Key => "key",
         Kind::Other => "other",
     };
-    std::env::var("JOYGOB_EXPAND").is_ok_and(|v| v == format!("{name}{id}"))
+    std::env::var("JOYSTICK_GOBLOON_EXPAND").is_ok_and(|v| v == format!("{name}{id}"))
 }
 
 fn is_keyboard(tab: &Tab) -> bool {

@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::config::DeviceConfig;
 
-/// Switch that makes JoyGob's exe (or the `vjoy_config` example) apply one change and quit:
+/// Switch that makes Joystick Gobloon's exe (or the `vjoy_config` example) apply one change and quit:
 /// `--vjoy-config [--result <file>] <change args>`; see [`run_admin`] and [`run_elevated`].
 pub const ARG: &str = "--vjoy-config";
 

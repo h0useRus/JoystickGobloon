@@ -9,6 +9,7 @@
 //! are auto-released when their input is released in another mode.
 
 mod engine;
+mod lighting;
 mod media;
 mod modes;
 mod motion;
@@ -16,6 +17,7 @@ mod runner;
 mod sendinput;
 
 pub use engine::Engine;
+pub use lighting::to_led;
 pub use media::{voices, Media, SpeechQueue, SpeechRequest};
 pub use runner::{Runner, RunnerStatus};
 
@@ -65,6 +67,21 @@ impl InputKey {
     }
 }
 
+/// One LED of a joystick (light-led action).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Light {
+    /// Attached device GUID, lowercase (profile aliases applied).
+    pub device: String,
+    pub led: u8,
+    /// 0: the whole LED; 1, 2: one element of it (see `gob_lighting::Led::element`).
+    pub element: u8,
+    /// 8-bit RGB.
+    pub color: [u8; 3],
+    pub color2: [u8; 3],
+    pub blend: gob_core::LedBlend,
+    pub mode: gob_core::LedMode,
+}
+
 /// Destination for engine output; implemented by vJoy and by test recorders.
 pub trait Output {
     fn axis(&mut self, device: u32, axis: u8, value: f32);
@@ -81,6 +98,8 @@ pub trait Output {
     fn run_command(&mut self, _executable: &str, _arguments: &[String]) {}
     /// Plays a sound file, `volume` 0..=100 (play-sound action).
     fn play_sound(&mut self, _file: &str, _volume: u8) {}
+    /// Sets a joystick LED (light-led action). Must not block: the runner queues it.
+    fn light_led(&mut self, _light: &Light) {}
     /// Text-to-speech action.
     fn speak(&mut self, _request: SpeechRequest) {}
     /// Load-profile action: the GUI switches to `file` and activates it.
