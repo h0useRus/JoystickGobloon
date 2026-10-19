@@ -91,6 +91,7 @@ hidhide-hint = Klicken Sie auf das Auge, um ein Gerät vor anderen Programmen zu
 hidhide-no-devices = Keine Geräte anzuzeigen.
 action-refresh = Aktualisieren
 settings-hidhide-self = Joystick Gobloon beim Start zur HidHide-Positivliste hinzufügen
+settings-focus-input = Auf der Seite „Geräte und Belegungen“ zur benutzten Eingabe springen
 status-whitelisted = Joystick Gobloon wurde zur HidHide-Positivliste hinzugefügt.
 
 # Applications

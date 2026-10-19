@@ -91,6 +91,10 @@ pub fn show(
                 &mut settings.hidhide_whitelist_self,
                 i18n.tr("settings-hidhide-self"),
             ));
+            let focus = ui.add(style::switch(
+                &mut settings.focus_used_input,
+                i18n.tr("settings-focus-input"),
+            ));
             ui.add_space(8.0);
             let autostart = ui.add(style::switch(
                 &mut settings.start_with_windows,
@@ -114,6 +118,7 @@ pub fn show(
             let changed = [
                 &reopen,
                 &whitelist,
+                &focus,
                 &autostart,
                 &activate,
                 &updates,

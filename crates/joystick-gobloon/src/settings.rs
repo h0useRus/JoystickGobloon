@@ -40,6 +40,8 @@ pub struct Settings {
     pub minimize_to_tray: bool,
     /// Windows starts Joystick Gobloon at logon (minimized).
     pub start_with_windows: bool,
+    /// Devices page: using an input selects its device tab and scrolls the list to it.
+    pub focus_used_input: bool,
     /// Activate the reopened profile on startup.
     pub activate_on_start: bool,
     /// Look for a new release on startup and install it.
@@ -203,6 +205,7 @@ impl Default for Settings {
             close_to_tray: false,
             minimize_to_tray: false,
             start_with_windows: false,
+            focus_used_input: true,
             activate_on_start: false,
             check_updates: true,
             calibration: BTreeMap::new(),
