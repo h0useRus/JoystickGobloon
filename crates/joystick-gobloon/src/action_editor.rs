@@ -508,6 +508,8 @@ pub struct Editor<'a> {
     pub input: Option<(&'a str, u32)>,
     /// GUIDs of the attached devices with LED control.
     pub leds: &'a HashSet<String>,
+    /// Experimental features (light-led) are on; off, light-led cannot be added or edited.
+    pub experimental: bool,
 }
 
 impl Editor<'_> {
@@ -523,7 +525,12 @@ impl Editor<'_> {
         ui.menu_button(
             RichText::new(icon::PLUS_CIRCLE).size(style::ICON_SIZE),
             |ui| {
-                for (glyph, key, mut kind) in addable(self.behavior, mode) {
+                let experimental = self.experimental;
+                let all = addable(self.behavior, mode);
+                let offered = all
+                    .into_iter()
+                    .filter(|(_, _, k)| experimental || !matches!(k, NewAction::LightLed { .. }));
+                for (glyph, key, mut kind) in offered {
                     if ui
                         .button(format!("{glyph}  {}", self.i18n.tr(key)))
                         .clicked()
@@ -769,6 +776,9 @@ impl Editor<'_> {
                         ui.separator();
                         self.activation(ui, action);
                     });
+                }
+                ActionKind::LightLed { .. } if !self.experimental => {
+                    ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
                 }
                 ActionKind::LightLed {
                     device,

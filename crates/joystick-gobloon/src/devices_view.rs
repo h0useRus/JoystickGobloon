@@ -60,6 +60,8 @@ pub struct DevicesView {
     pub hide_request: Option<(String, bool)>,
     /// GUIDs of connected devices with LED control (light-led), filled by the app.
     pub leds: std::collections::HashSet<String>,
+    /// Experimental features (light-led) are on, filled by the app.
+    pub experimental: bool,
 }
 
 struct Tab<'a> {
@@ -868,6 +870,7 @@ impl DevicesView {
                     inputs,
                     input: Some((&b.device_id, key.1)),
                     leds: &self.leds,
+                    experimental: self.experimental,
                 };
                 for cfg in &b.configs {
                     editor.container(ui, &cfg.root_action, "actions", 0);
@@ -902,6 +905,7 @@ impl DevicesView {
                     inputs,
                     input: Some((&device, key.1)),
                     leds: &self.leds,
+                    experimental: self.experimental,
                 };
                 editor.add_menu(ui, None, |kind| bind(Some(kind)));
             }

@@ -394,6 +394,8 @@ about-license = 基于 MIT 许可证的自由开源软件。
 
 # Updates
 settings-check-updates = 启动时检查新版本并安装
+settings-experimental = 启用实验性功能
+settings-experimental-tip = 摇杆灯光：LED 灯光动作和灯光选项卡。关闭时它们会被隐藏，配置文件中的 LED 灯光动作不会执行。
 update-check = 检查更新
 update-checking = 正在查找新版本…
 update-latest = 已是最新版本

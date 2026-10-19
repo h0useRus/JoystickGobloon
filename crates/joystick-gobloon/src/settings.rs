@@ -44,6 +44,8 @@ pub struct Settings {
     pub activate_on_start: bool,
     /// Look for a new release on startup and install it.
     pub check_updates: bool,
+    /// Experimental features (joystick LEDs): hidden and not run while off.
+    pub experimental: bool,
     /// Axis calibrations: device GUID -> axis slot ("1".."8") -> values.
     pub calibration: BTreeMap<String, BTreeMap<String, AxisCalibration>>,
     /// Default LED colors: device GUID -> LEDs, set when a profile that changed that
@@ -162,12 +164,15 @@ impl From<AxisCalibration> for gob_input::Calibration {
 }
 
 impl Settings {
-    /// Default LED colors for the engine (set when a profile stops).
-    pub fn led_defaults(&self) -> Vec<gob_engine::Light> {
-        self.leds
-            .iter()
-            .flat_map(|(guid, d)| d.led.iter().map(move |l| l.value().light(guid)))
-            .collect()
+    /// Default LED colors for the engine (set when a profile stops); `None` while
+    /// experimental features are off: no LED control at all.
+    pub fn led_defaults(&self) -> Option<Vec<gob_engine::Light>> {
+        self.experimental.then(|| {
+            self.leds
+                .iter()
+                .flat_map(|(guid, d)| d.led.iter().map(move |l| l.value().light(guid)))
+                .collect()
+        })
     }
 
     /// Saved calibrations by (device, slot).
@@ -202,6 +207,7 @@ impl Default for Settings {
             check_updates: true,
             calibration: BTreeMap::new(),
             leds: BTreeMap::new(),
+            experimental: false,
             multi_instance: false,
         }
     }

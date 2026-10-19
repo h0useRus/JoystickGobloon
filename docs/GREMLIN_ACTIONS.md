@@ -32,7 +32,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 | `text-to-speech` | B | done |
 | `run-command` | B K | done |
 | `map-to-logical-device` | A B H K | done |
-| `light-led` | B K | own action, not in Gremlin (Gremlin cannot open profiles that use it) |
+| `light-led` | B K | own action, not in Gremlin (Gremlin cannot open profiles that use it); experimental: off by default, then hidden and not run |
 
 ## map-to-mouse
 

@@ -34,7 +34,7 @@ pub enum Change {
         device: String,
         leds: Vec<LedValue>,
     },
-    /// Default LED colors were edited.
+    /// Default LED colors were edited or experimental features switched.
     LedDefaults,
 }
 
@@ -47,6 +47,9 @@ pub fn show(
     updater: &mut crate::update::Updater,
     led_devices: &[LedDevice],
 ) -> Option<Change> {
+    if !settings.experimental && *tab == SettingsTab::Lighting {
+        *tab = SettingsTab::General;
+    }
     ui.horizontal(|ui| {
         for (t, glyph, key) in [
             (
@@ -62,6 +65,9 @@ pub fn show(
             (SettingsTab::Lighting, icon::LIGHTBULB, "settings-lighting"),
             (SettingsTab::About, icon::INFO, "settings-about"),
         ] {
+            if t == SettingsTab::Lighting && !settings.experimental {
+                continue;
+            }
             if style::tab(ui, *tab == t, glyph, &i18n.tr(key)).clicked() {
                 *tab = t;
             }
@@ -98,14 +104,30 @@ pub fn show(
                 &mut settings.check_updates,
                 i18n.tr("settings-check-updates"),
             ));
-            let changed = [&reopen, &whitelist, &autostart, &activate, &updates]
-                .iter()
-                .any(|r| r.changed());
+            ui.add_space(8.0);
+            let experimental = ui
+                .add(style::switch(
+                    &mut settings.experimental,
+                    i18n.tr("settings-experimental"),
+                ))
+                .on_hover_text(i18n.tr("settings-experimental-tip"));
+            let changed = [
+                &reopen,
+                &whitelist,
+                &autostart,
+                &activate,
+                &updates,
+                &experimental,
+            ]
+            .iter()
+            .any(|r| r.changed());
             if changed {
                 settings.save();
             }
             if autostart.changed() {
                 Some(Change::Autostart(settings.start_with_windows))
+            } else if experimental.changed() {
+                Some(Change::LedDefaults)
             } else {
                 None
             }

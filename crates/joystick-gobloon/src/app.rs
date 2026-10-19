@@ -810,8 +810,13 @@ impl JoystickGobloonApp {
                 Some((d.info.guid.clone(), hidden))
             })
             .collect();
-        self.leds.update(&devices, ui.ctx());
-        self.devices_view.leds = self.leds.guids(&devices);
+        self.devices_view.experimental = self.settings.experimental;
+        self.devices_view.leds = if self.settings.experimental {
+            self.leds.update(&devices, ui.ctx());
+            self.leds.guids(&devices)
+        } else {
+            Default::default()
+        };
         self.devices_view.show(
             ui,
             &self.i18n,
@@ -1178,8 +1183,12 @@ impl eframe::App for JoystickGobloonApp {
                 }
                 Page::Settings => {
                     let devices = self.input.devices();
-                    self.leds.update(&devices, ctx);
-                    let led_devices = self.leds.attached(&devices);
+                    let led_devices = if self.settings.experimental {
+                        self.leds.update(&devices, ctx);
+                        self.leds.attached(&devices)
+                    } else {
+                        Vec::new()
+                    };
                     drop(devices);
                     let change = settings_view::show(
                         ui,

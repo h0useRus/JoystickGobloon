@@ -20,8 +20,9 @@ struct Inner {
     ctx: egui::Context,
     /// A start from the tray failed; the app shows it once the window is visible.
     error: Option<String>,
-    /// Default LED colors, set when a profile that changed them stops.
-    led_defaults: Vec<gob_engine::Light>,
+    /// Default LED colors, set when a profile that changed them stops; `None`: LED control
+    /// is off (experimental features off).
+    led_defaults: Option<Vec<gob_engine::Light>>,
 }
 
 impl Activation {
@@ -32,12 +33,13 @@ impl Activation {
             input,
             ctx,
             error: None,
-            led_defaults: Vec::new(),
+            led_defaults: None,
         })))
     }
 
-    /// Default LED colors for the next start (a running profile keeps its own).
-    pub fn set_led_defaults(&self, defaults: Vec<gob_engine::Light>) {
+    /// Default LED colors for the next start (a running profile keeps its own); `None`
+    /// turns LED control off.
+    pub fn set_led_defaults(&self, defaults: Option<Vec<gob_engine::Light>>) {
         self.lock().led_defaults = defaults;
     }
 
@@ -94,7 +96,7 @@ impl Activation {
             &aliases,
             inner.input.subscribe(),
             &devices,
-            &inner.led_defaults,
+            inner.led_defaults.as_deref(),
             repaint,
         )?;
         log::info!(

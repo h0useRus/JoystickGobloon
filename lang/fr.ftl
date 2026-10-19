@@ -394,6 +394,8 @@ about-license = Logiciel libre et open source sous licence MIT.
 
 # Updates
 settings-check-updates = Rechercher une nouvelle version au démarrage et l’installer
+settings-experimental = Activer les fonctions expérimentales
+settings-experimental-tip = Éclairage des joysticks : l'action Éclairage LED et l'onglet Éclairage. Tant que c'est désactivé, ils sont masqués et les actions d'éclairage des profils ne font rien.
 update-check = Rechercher des mises à jour
 update-checking = Recherche d’une nouvelle version…
 update-latest = Vous avez la dernière version
