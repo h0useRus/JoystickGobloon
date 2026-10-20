@@ -52,6 +52,8 @@ pub struct JoystickGobloonApp {
     /// The device hiding window is open.
     hidhide_window: bool,
     apps_view: AppsView,
+    /// Banner for device access the user still has to grant (Linux).
+    device_access: crate::device_access::DeviceAccess,
     /// Running profile, if activated.
     /// New releases from GitHub (About page, check on start).
     updater: crate::update::Updater,
@@ -87,7 +89,6 @@ pub struct JoystickGobloonApp {
     /// The window was on screen last frame (not in the tray, not minimized).
     was_shown: bool,
     /// Plugin DLLs from `<exe folder>\plugins`, kept loaded while the app runs.
-    _plugins: gob_plugin::Registry,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -176,6 +177,7 @@ impl JoystickGobloonApp {
             hidhide_view: HidHideView::new(),
             hidhide_window: false,
             apps_view: AppsView::new(),
+            device_access: crate::device_access::DeviceAccess::new(),
             activation,
             was_active: false,
             edited: None,
@@ -187,7 +189,6 @@ impl JoystickGobloonApp {
             title: crate::APP_NAME.into(),
             media: Default::default(),
             leds: Default::default(),
-            _plugins: load_plugins(),
             updater: Default::default(),
             update: None,
             tray: None,
@@ -646,6 +647,10 @@ impl JoystickGobloonApp {
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
                 (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
             ] {
+                // The Applications page edits the hiding program list; not every platform has one.
+                if page == Page::Apps && !gob_hide::capabilities().app_list {
+                    continue;
+                }
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
                 }
@@ -797,6 +802,20 @@ impl JoystickGobloonApp {
     }
 
     fn devices_page(&mut self, ui: &mut egui::Ui) {
+        match self.device_access.show(ui, &self.i18n) {
+            Some(Ok(())) => {
+                log::info!("device access granted");
+                self.status = self.i18n.tr("access-granted");
+                // They found no access when they were made: make them again.
+                self.vjoy_view = VJoyView::new();
+                self.hidhide_view = HidHideView::new();
+            }
+            Some(Err(e)) => {
+                let text = self.i18n.trf("access-error", &[("error", e.into())]);
+                self.error(text);
+            }
+            None => {}
+        }
         let no_devices = self.input.devices().iter().all(|d| d.info.is_vjoy());
         if self.profile.is_none() && no_devices {
             empty_state(ui, icon::JOYSTICK, &self.i18n.tr("no-profile"));
@@ -1306,29 +1325,6 @@ impl eframe::App for JoystickGobloonApp {
         self.alert_dialog(ctx);
         self.detached_windows(ctx);
     }
-}
-
-/// Loads the plugin DLLs next to the exe and logs what was found (plugins are a stub so far).
-fn load_plugins() -> gob_plugin::Registry {
-    let mut registry = gob_plugin::Registry::default();
-    let Some(dir) = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(|d| d.join("plugins")))
-    else {
-        return registry;
-    };
-    for e in registry.load_dir(&dir) {
-        log::warn!("plugin skipped: {e}");
-    }
-    for p in registry.loaded() {
-        log::info!(
-            "plugin loaded: {} {} ({})",
-            p.name,
-            p.version,
-            p.path.display()
-        );
-    }
-    registry
 }
 
 /// Default size of a detached page window.

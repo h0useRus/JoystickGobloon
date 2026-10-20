@@ -1,4 +1,4 @@
-//! Platforms without a backend yet (Linux gets an exclusive grab, docs/LINUX_PLAN.md phase 4).
+//! Platforms without device hiding (neither Windows nor Linux).
 
 use std::sync::Arc;
 

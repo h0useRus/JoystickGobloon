@@ -8,13 +8,14 @@ use gob_vjoy::configure as vconfigure;
 
 use crate::{Backend, Capabilities, Change, DeviceConfig, DeviceInfo, Error, Outcome, Status};
 
-const CAPABILITIES: Capabilities = Capabilities {
+pub const CAPABILITIES: Capabilities = Capabilities {
     name: "vJoy",
     max_devices: vconfig::MAX_DEVICES,
     max_buttons: vconfig::MAX_BUTTONS,
     max_hats: vconfig::MAX_HATS,
     effects: &vconfig::EFFECTS,
     switchable: true,
+    needs_admin: true,
 };
 
 pub fn load() -> Result<Arc<dyn Backend>, Error> {

@@ -1,5 +1,5 @@
-//! Platforms without controller access yet (Linux gets evdev, docs/LINUX_PLAN.md phase 2): no
-//! controllers, no keyboard keys.
+//! Platforms without controller access (neither Windows nor Linux): no controllers, no keyboard
+//! keys.
 
 use crate::{Calibrations, DeviceState, InputEvent};
 

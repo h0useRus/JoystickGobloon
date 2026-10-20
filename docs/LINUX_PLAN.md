@@ -9,13 +9,13 @@
 поставить; обновляется сам, как переносная версия на Windows). Flatpak — позже, если понадобится: его песочница
 не ставит правила udev.
 
-Ветка: `feat/linux` от `dev` (фаза 0), дальше по ветке на фазу. Одна сессия — один крейт (CLAUDE.md).
+Ветки: по ветке на фазы 0–4; фазы 5–6 — одной веткой `feat/linux-desktop`.
 
 ## Что уже переносимо
 
 | Часть | Строк | Зависит от Windows |
 |---|---|---|
-| gob-core, gob-gremlin, gob-i18n, gob-plugin | ~4 200 | нет |
+| gob-core, gob-gremlin, gob-i18n | ~4 000 | нет |
 | gob-engine | 3 900 | `media.rs` (речь SAPI), `sendinput.rs` (клавиатура/мышь); сам движок нейтрален (трейт `Output`) |
 | gob-input | 1 130 | всё: DirectInput, клавиатурный хук |
 | gob-vjoy | 1 980 | всё (драйвер vJoy) |
@@ -31,18 +31,17 @@
 | Клавиатурный хук | клавиатуры evdev (без захвата; работает и в X11, и в Wayland); коды evdev → scan code set 1 таблицей |
 | vJoy + его конфигурация | **uinput**: виртуальные джойстики создаются при активации профиля, драйвер и его настройка не нужны. Страница vJoy → список виртуальных устройств в настройках (оси, кнопки, хатки) |
 | SendInput | клавиатура и мышь на uinput |
-| HidHide | **EVIOCGRAB** — монопольный захват физического устройства на время активного профиля: игры перестают видеть его через evdev/joydev. hidraw (SDL hidapi, Steam) захват не закрывает — права на hidraw через правило udev |
+| HidHide | **EVIOCGRAB** — монопольный захват физического устройства, пока программа работает: игры перестают видеть его через evdev/joydev. hidraw (SDL hidapi, Steam) захват не закрывает; по умолчанию hidraw только у root |
 | Подсветка (`HidD_SetFeature`) | hidraw, `HIDIOCSFEATURE`; новый `hid.rs` для Linux, остальное как есть |
 | SAPI | speech-dispatcher; звук (rodio) уже работает |
 | `%APPDATA%`, автозапуск в реестре, именованный мьютекс | `$XDG_CONFIG_HOME/JoystickGobloon`, `~/.config/autostart/*.desktop`, сокет/файл блокировки в `$XDG_RUNTIME_DIR` |
 | Трей, «прозрачное» окно в трее | tray-icon (GTK/AppIndicator) или ksni (StatusNotifierItem). GNOME на Wayland без расширения трея не показывает — тогда без трея, обычное сворачивание. Поведение скрытого окна eframe проверить заново |
 | Шрифты CJK из `C:\Windows\Fonts` | Noto CJK через fontconfig |
 | Установщик, обновление | AppImage; обновление — сначала только уведомление со ссылкой, потом замена файла как у переносной версии |
-| Плагины `.dll` | `.so` (libloading уже кроссплатформенный) |
 | Страница «Приложения» (белый список HidHide) | на Linux не нужна (захват вместо списка), скрыть |
 
 Права: `/dev/uinput` на большинстве дистрибутивов только для root, `/dev/input/event*` — для группы `input`.
-Программа при первом запуске ставит правило udev (`TAG+="uaccess"` для uinput, джойстиков и их hidraw) через
+Программа по кнопке «Выдать доступ» ставит правило udev (`TAG+="uaccess"` для uinput и джойстиков) через
 `pkexec` — как настройка vJoy через UAC на Windows.
 
 ## Архитектура: платформенный слой
@@ -117,15 +116,110 @@ UI и логику: например, заменить vJoy **своим дра�
      (gob-vjoy, gob-hidhide) и в одном месте выбора бэкенда (`gob-virtual`, `gob-hide`).
 2. **Ввод на Linux.** evdev + udev — Linux-реализация в gob-input. Результат: страница «Устройства», просмотр
    ввода и калибровка работают. **Первым делом**: сколько кнопок Linux показывает у VKB (128 кнопок; ядро
-   отдаёт джойстикам 16 кодов `BTN_JOYSTICK` + 40 `BTN_TRIGGER_HAPPY`, остальное — как получится). Если
-   кнопки теряются — читать hidraw и разбирать HID-отчёты самим (дескрипторы уже умеем, gob-vjoy).
+   отдаёт джойстикам 32 кода `BTN_JOYSTICK`/`BTN_GAMEPAD` + 64 `BTN_TRIGGER_HAPPY` до `KEY_MAX`, остальное —
+   как получится). Если кнопки теряются — читать hidraw и разбирать HID-отчёты самим (дескрипторы уже
+   умеем, gob-vjoy).
+   - [x] gob-input `platform/linux/`: джойстики из `/dev/input/event*` (как udev `input_id`: кнопки или оси
+     джойстика, не мышь/тачпад/перо/акселерометр); подключение — тем же пересканированием раз в 2 с, что и на
+     Windows (udev не нужен). Id: `PPPPVVVV-<шина>-0000-<FNV-1a от серийного номера или phys + имени>`.
+     Оси — в слоты DirectInput (X…Rz, следующие две — ползунки), кнопки в порядке SDL, хатки
+     `ABS_HATnX/Y` (диагональ — одним событием в конце отчёта), режим событий — `poll(2)`, `SYN_DROPPED` —
+     перечитать состояние ioctl. `hid_path` = `/dev/hidrawN` того же HID-устройства, `joystick_ids` = номера
+     `/dev/input/jsN`. Клавиатуры evdev → scan code set 1 как у хука Windows (NumLock = E0 45, F13… = 0x64…),
+     без автоповтора, устройства с именем «Joystick Gobloon…» (наш вывод, фаза 3) пропускаются.
+   - [x] Тест без железа: `tests/uinput.rs` (виртуальный стик на 96 кнопок и клавиатура),
+     `tools\linux\check.ps1 --devices cargo test -p gob-input -- --include-ignored`.
+   - [x] Настоящий VKB (VirtualBox, Ubuntu 26.04, ядро 7.0): оси все 8 и хатка; **кнопок 80 из 128** — драйвер
+     HID ядра даёт джойстику 16 кодов `BTN_JOYSTICK` + 64 `BTN_TRIGGER_HAPPY`, остальное отбрасывает (evdev
+     и joydev одинаково). Кнопки 1–80 совпадают с Windows. Имя — строка `product` USB (как на Windows).
+   - [ ] Кнопки 81–128: читать HID-отчёты через hidraw (дескрипторы уже разбирает gob-vjoy). Пока —
+     совет пользователям: разбить кнопки ручки на виртуальные HID-устройства в VKBDevCfg (по ≤ 80).
 3. **Вывод на Linux.** uinput-бэкенд `gob-virtual` (джойстик) и `Injector` (клавиатура/мышь). Результат:
    профили работают. Проверка: чтение вывода через evdev, `jstest`, игра через Proton. Те же вопросы о числе
    кнопок — у игр (SDL).
+   - [x] Крейт-бэкенд `gob-uinput`: `VirtualDevice` (кнопки/клавиши, оси, REL), `emit` одним отчётом,
+     узел event через `UI_GET_SYSNAME`, `device_names`; пример `uinput_check`.
+   - [x] `gob-virtual/src/linux.rs`: устройство создаётся при `acquire` и исчезает при отпускании; раскладка
+     в `virtual.gob` (TOML, папка из `gob_virtual::set_data_dir`, без неё `$XDG_CONFIG_HOME/JoystickGobloon`;
+     без файла — одно устройство по умолчанию). Имя «Joystick Gobloon Joystick N», vendor/product как у
+     vJoy (0x1234/0xBEAD — gob-input считает их нашим выводом). Оси — коды, которые gob-input читает в те же
+     слоты (ползунки = `ABS_THROTTLE`/`ABS_RUDDER`), кнопки 1-32 = `BTN_JOYSTICK…`, 33-96 =
+     `BTN_TRIGGER_HAPPY…` (до `KEY_MAX`; **максимум 96 — решено оставить**: больше — только кодами клавиш
+     клавиатуры, их SDL и игры считают иначе). Новое устройство — всё по максимуму (96 кнопок, 4 хатки). Хатки `ABS_HATnX/Y`, непрерывные — 8 направлений.
+     «Занято» = устройство с таким именем есть в системе, но не наше (вторая копия программы). Нет прав
+     на `/dev/uinput` → `Error::NoAccess`. Тест `tests/uinput.rs` (`check.ps1 --devices`).
+   - [x] `Injector` на uinput (gob-engine `platform/linux/`): два устройства, «Joystick Gobloon Keyboard»
+     (все клавиши из `gob_uinput::keys`) и «Joystick Gobloon Mouse» (REL_X/Y, колёса, 5 кнопок),
+     создаются при старте профиля (`Injector::prepare`: события сразу после создания рабочий стол
+     теряет) и живут до выхода. Scan code set 1 ↔ evdev — таблица `gob_uinput::keys` (обе стороны;
+     ей же пользуется клавиатура gob-input). `key_pressed` — `EVIOCGKEY`
+     по всем клавиатурам, включая нашу (как `GetAsyncKeyState`); нужно чтение `/dev/input`.
+     Тест в `injector.rs` (ignored, `check.ps1 --devices`). Речь на Linux — пока нет (фаза 5).
+   - [x] Страница vJoy на Linux: «vJoy» остаётся общим именем функции на обеих ОС; тексты про драйвер — по
+     возможностям (`switchable`: «Драйвер включён», `needs_admin`: щит и «права администратора»), нет прав на
+     `/dev/uinput` — свой текст (`vjoy-no-access`). Осталось: `about-credits` («Использует драйверы HidHide и
+     vJoy») — когда будет скрытие на Linux (фаза 4).
+   - [ ] Проверка: `jstest`, игра через Proton (SDL), профиль целиком.
 4. **Скрытие на Linux.** Бэкенд `gob-hide` на захвате; установка правила udev через `pkexec`.
+   - [x] gob-input `exclusive`: список устройств, которые сервис ввода читает один (`set`, `devices`,
+     `supported`). На Linux поток ввода держит на них `EVIOCGRAB` (игры не получают событий ни через evdev,
+     ни через joydev), пока программа работает; на Windows не поддерживается (там HidHide). Захват —
+     у единственного `InputService` процесса. Тест `exclusive_hides_from_other_readers`.
+   - [x] gob-hide `linux.rs`: выключатель и скрытые устройства в `hidden.gob` (папка из
+     `gob_hide::set_data_dir`), отключённые скрытые остаются в списке; состояние применяется уже при
+     `load`. `Capabilities::app_list` (Windows да, Linux нет): страница «Приложения» и «добавить себя в
+     белый список» показываются только с ним; `gob_hide::capabilities()` — без загрузки бэкенда.
+   - [x] Правило udev (gob-uinput `access`): `/etc/udev/rules.d/70-joystick-gobloon.rules` (до 73 — там
+     `uaccess`), `uaccess` для `/dev/uinput` (`static_node`) и узлов event джойстиков. Ставится через
+     `pkexec /bin/sh -c …` (не через запуск себя: root не видит FUSE-монтирование AppImage), затем
+     `udevadm control --reload-rules` + `trigger`. GUI: `Desktop::device_access_missing` /
+     `grant_device_access`, баннер «Выдать доступ» на странице «Устройства»; после успеха страницы vJoy и
+     скрытия загружаются заново, клавиатура/мышь пробуют снова при старте профиля. Начат
+     `joystick-gobloon/src/platform/linux/` (остальное пока из `none.rs`).
+     **Клавиатуры не в правиле**: чтение всех клавиатур дало бы любой программе пользователя то, что он
+     печатает. Поэтому вкладка Keyboard (клавиши как ввод) на Linux скрыта (`Desktop::keyboard_bindings`);
+     Map to Keyboard и макросы работают (uinput). Вернуться, если пользователи попросят.
+     **hidraw не трогаем**: по умолчанию он только у root, HOTAS через него не видны; исключение —
+     устройства из правил Steam (`steam-devices`, в основном геймпады).
+   - [x] «О программе»: строки «Скрытие устройств: …» и «Виртуальные джойстики: …» с именем и версией
+     бэкенда (`gob_hide::capabilities`, `gob_virtual::capabilities`); на Linux «Linux evdev» / «Linux uinput»
+     с версией ядра.
 5. **Рабочий стол на Linux.** Linux-модули `platform/`: пути настроек, один экземпляр, автозапуск, трей, шрифты,
-   речь; подсветка через hidraw.
+   речь. Подсветка — экспериментальная функция (скрытый ключ `experimental`), в перенос пока не входит.
+   - [x] `joystick-gobloon/src/platform/linux/`: папка данных `$XDG_CONFIG_HOME/JoystickGobloon` (иначе
+     `~/.config/…`; там же ищут gob-virtual и gob-hide), один экземпляр — абстрактный Unix-сокет
+     `JoystickGobloon[.debug].<uid>` (без файла, после падения ничего не остаётся; подключение = «покажись»),
+     автозапуск — `~/.config/autostart/joystick-gobloon.desktop` (для AppImage — путь из `$APPIMAGE`, `Exec`
+     экранирован по спецификации), лог — `xdg-open`, время — `localtime_r`. Тексты автозапуска и темы без
+     «Windows».
+   - [x] Окно и трей: `Desktop::on_tray_thread` — поток, где живёт значок (Windows: поток интерфейса, как
+     было; Linux: свой поток GTK с `gtk::main`, код туда — `glib::idle_add_once`). `tray.rs` гоняет через
+     него всё, что трогает значок и меню. Окно Linux — команды egui: в трей на X11 = `Visible(false)`, на
+     Wayland — свернуть (скрыться окно там не может). AppIndicator не сообщает щелчков: на Linux всё через
+     меню. Проверено в Xvfb (`tools/linux/gui_smoke.sh`): окно, поток трея, второй запуск будит первый.
+     Нужны библиотеки X11 (`libxkbcommon-x11`, `libxcursor`, `libxi`, `libxrandr`) — в AppImage.
+     **Не проверено**: значок на настоящем рабочем столе (KDE, GNOME с AppIndicator, Steam Deck), кадры
+     скрытого окна на X11, GNOME без расширения трея (скрытое окно вернёт только повторный запуск).
+   - [x] Шрифты CJK: `fc-list :lang=zh-cn` / `:lang=ko`, предпочтение Noto Sans CJK / Source Han Sans
+     (один файл на оба языка грузится один раз).
+   - [x] Клавиши: `held_keys` → `Option` (`None` — состояния клавиатуры не видно); на Linux `EVIOCGKEY` по
+     клавиатурам при группе `input`, иначе запись клавиш берёт события окна (физические клавиши egui → scan
+     code; Ctrl/Shift/Alt — левые, правые egui не различает). Имена клавиш на Linux — английская таблица по
+     scan code.
+   - [x] Речь (gob-engine `platform/linux/speech.rs`): `spd-say` speech-dispatcher, без библиотек при сборке;
+     скорость/высота/громкость → −100…100, голоса из `spd-say -L`, «прервать» = `spd-say -C` (отменяет и
+     чужую речь, например экранного диктора), «следующим» = как «в конец».
 6. **Выпуск.** AppImage в `release.yml`, заметки и Discord как сейчас.
+   - [x] `tools/linux/appimage.sh <версия> <папка> [бинарник]`: AppDir (программа, `lang/`, LICENSE, значок,
+     `.desktop`, AppRun) → `JoystickGobloon-<версия>-x86_64.AppImage`; appimagetool 1.9.1 и runtime 20251108
+     закреплены по SHA-256. GTK, AppIndicator, X11/Wayland — из системы. Проверено в контейнере:
+     собирается, запускается в Xvfb (`APP=… tools/linux/gui_smoke.sh`), один экземпляр работает.
+   - [x] `release.yml`: задание `appimage` (Ubuntu 22.04: проверки, release-сборка, AppImage) → задание
+     Windows его ждёт и публикует вместе с установщиком и zip; в Discord — ссылка «Linux».
+   - [x] Обновления: копия из AppImage (`$APPIMAGE`) считается «установленной», ищет `*-x86_64.AppImage`,
+     кладёт новый файл рядом и переименовывает поверх запущенного, запускает его с `--wait-pid`
+     (ожидание — по `/proc/<pid>`). Сборка не из AppImage не обновляется.
+   - [ ] Первый настоящий выпуск: AppImage на чистой системе (Ubuntu, Fedora, Steam Deck), обновление.
 
 ## Тестирование
 
@@ -142,5 +236,5 @@ UI и логику: например, заменить vJoy **своим дра�
 
 - Число кнопок (128 у VKB и у виртуальных устройств): что видят ядро и SDL в играх.
 - Трей на Wayland (GNOME), поведение скрытого окна eframe.
-- Права на `/dev/uinput` и hidraw без правила udev.
+- Права на `/dev/uinput` без правила udev (джойстики Ubuntu 26.04 отдаёт пользователю сама).
 - Proton: как игры под Wine видят виртуальные устройства uinput (через SDL/hidraw/evdev).

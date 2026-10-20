@@ -11,6 +11,7 @@ use windows::Win32::Devices::HumanInterfaceDevice::DIDEVICEINSTANCEW;
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::Threading::WaitForMultipleObjects;
 
+use super::{format_guid, normalize_axis};
 use crate::{Calibrations, DeviceState, InputEvent};
 
 /// Polling mode: time between two reads of every device.
@@ -132,23 +133,9 @@ pub(crate) fn joystick_ids(vendor_id: u16, product_id: u16) -> Vec<u32> {
     ids
 }
 
-/// Formats GUID parts the way Gremlin writes device ids.
-fn format_guid(data1: u32, data2: u16, data3: u16, data4: [u8; 8]) -> String {
-    let d = data4;
-    format!(
-        "{data1:08x}-{data2:04x}-{data3:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]
-    )
-}
-
 /// DirectInput POV value -> direction; centered is reported as 0xFFFF in the low word.
 fn pov_direction(raw: u32) -> Option<u16> {
     (raw & 0xFFFF != 0xFFFF).then_some((raw % 36000) as u16)
-}
-
-/// DirectInput axis value in -32768..=32767 -> -1.0..=1.0.
-fn normalize_axis(raw: i32) -> f32 {
-    ((raw as f32 + 0.5) / 32767.5).clamp(-1.0, 1.0)
 }
 
 #[cfg(test)]
@@ -156,22 +143,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn guid_matches_gremlin_format() {
-        let g = format_guid(
-            0x7d12d5c0,
-            0x43ea,
-            0x11f0,
-            [0x80, 0x0a, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00],
-        );
-        assert_eq!(g, "7d12d5c0-43ea-11f0-800a-444553540000");
-    }
-
-    #[test]
-    fn pov_and_axis_conversion() {
+    fn pov_conversion() {
         assert_eq!(pov_direction(0xFFFF_FFFF), None);
         assert_eq!(pov_direction(9000), Some(9000));
-        assert_eq!(normalize_axis(-32768), -1.0);
-        assert_eq!(normalize_axis(32767), 1.0);
-        assert!(normalize_axis(0).abs() < 1e-4);
     }
 }

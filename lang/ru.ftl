@@ -15,7 +15,8 @@ label-mode = Режим
 # Settings
 settings-appearance = Внешний вид
 settings-general = Общие
-settings-about = О программе
+settings-about = О программе
+
 settings-lighting = Подсветка
 settings-leds-hint = Когда профиль, менявший подсветку джойстика, деактивируется, ставятся эти цвета. Джойстик держит изменённые цвета до переподключения, поэтому вернуть его собственные настройки подсветки нельзя.
 settings-leds-none = Нет подключённых джойстиков с управляемой подсветкой.
@@ -25,7 +26,7 @@ settings-reopen-last = Открывать последний профиль пр
 theme-light = Светлая
 theme-dark = Тёмная
 theme-system = Как в системе
-theme-system-tip = Светлая или тёмная, как выбрано в Windows
+theme-system-tip = Светлая или тёмная, как выбрано в системе
 about-text = Скрытие устройств, виртуальные джойстики и назначения в одной программе.
 
 # Empty states
@@ -56,12 +57,17 @@ subst-title = Сопоставить контроллеры
 subst-auto = Авто
 subst-auto-tip = Сопоставить оставшиеся устройства с подключёнными по похожему имени; неоднозначные останутся на ваш выбор
 subst-banner = ID устройств в профиле не совпадают с этим ПК: { $count }
+access-banner = Joystick Gobloon нужны права на чтение игровых контроллеров и создание виртуальных устройств.
+access-grant = Выдать доступ
+access-granted = Доступ к устройствам выдан.
+access-error = Не удалось выдать доступ к устройствам: { $error }
 subst-keep = Оставить как есть
 subst-apply = Применить
 status-substituted = Контроллеры сопоставлены. Сохраните профиль, чтобы закрепить изменения.
 
 # vJoy
 vjoy-missing = vJoy не установлен или не загружается.
+vjoy-no-access = Нет прав на создание устройств vJoy.
 vjoy-enabled = Драйвер включён
 vjoy-disabled = Драйвер выключен
 vjoy-no-devices = Устройства vJoy ещё не настроены.
@@ -74,7 +80,7 @@ vjoy-lock = Взять устройство в монопольное управ
 vjoy-unlock = Отпустить устройство
 vjoy-free = Свободно
 vjoy-own = Управляется Joystick Gobloon
-vjoy-busy = Занято другой программой (например, Joystick Gremlin)
+vjoy-busy = Занято другой программой или другой копией Joystick Gobloon
 vjoy-unknown = Неизвестное состояние
 vjoy-error = Не удалось взять устройство: { $error }
 
@@ -299,16 +305,18 @@ edit-tts-hint = Текст для озвучивания; $current_mode заме
 edit-tts-rate = Скорость
 edit-tts-pitch = Высота голоса
 edit-tts-back = В конец очереди
-edit-tts-front = Следующим (в речи Windows — как в конец очереди)
+edit-tts-front = Следующим (в речи системы — как в конец очереди)
 edit-tts-interrupt = Прервать текущую речь
-edit-preview = Прослушать
+edit-preview = Прослушать
+
 kind-light-led = Подсветка
 edit-led-device = Джойстик с подсветкой
 edit-led-no-device = Джойстик не подключён или его подсветкой нельзя управлять
 edit-led-id = Светодиод
 led-vkb-grip = RGB на верху рукояти
 led-vkb-hat = Маленький красный у хатки
-edit-led-color = Цвет
+edit-led-color = Цвет
+
 edit-led-color2 = Второй цвет
 edit-led-blend = Цвета
 led-blend-color1 = Один цвет
@@ -376,7 +384,7 @@ settings-close-to-tray = Закрывать в трей
 settings-minimize-to-tray = Сворачивать в трей
 settings-tray-double-click = Двойной клик активирует профиль
 settings-tray-title = Значок в трее
-settings-autostart = Запускать вместе с Windows (свёрнутым)
+settings-autostart = Запускать при входе в систему (свёрнутым)
 settings-activate-on-start = Активировать профиль при запуске
 tray-show = Показать Joystick Gobloon
 tray-hiding = Скрытие устройств
@@ -393,13 +401,14 @@ about-support-tip = Внести вклад через PayPal
 about-source = Исходный код
 about-issues = Сообщить о проблеме
 about-releases = Выпуски
-about-credits = Использует драйверы HidHide и vJoy; профили совместимы с Joystick Gremlin.
+about-hiding = Скрытие устройств: { $backend }
+about-virtual = Виртуальные джойстики: { $backend }
+about-not-installed = не установлено
+about-gremlin = Профили совместимы с Joystick Gremlin.
 about-license = Свободная программа с открытым кодом под лицензией MIT.
 
 # Updates
 settings-check-updates = Проверять новую версию при запуске и устанавливать её
-settings-experimental = Включить экспериментальные функции
-settings-experimental-tip = Подсветка джойстиков: действие «Подсветка» и вкладка «Подсветка». Пока выключено, они скрыты, а действия «Подсветка» в профилях не выполняются.
 update-check = Проверить обновления
 update-checking = Поиск новой версии…
 update-latest = У вас последняя версия
@@ -485,7 +494,8 @@ calibration-extrema-tip = Доведите ось до обоих краёв, з
 calibration-in-window = Калибровка открыта в отдельном окне.
 
 # Device info
-device-info = Сведения об устройстве
+device-info = Сведения об устройстве
+
 device-leds = Подсветкой можно управлять (действие «Подсветка»)
 device-info-name = Название
 device-info-axes = Оси

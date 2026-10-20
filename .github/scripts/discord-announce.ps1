@@ -23,6 +23,7 @@ $lines = @(
     "",
     "**Installer:** [JoystickGobloon-$Version-setup.exe]($download/JoystickGobloon-$Version-setup.exe)",
     "**Portable:** [JoystickGobloon-$Version-portable.zip]($download/JoystickGobloon-$Version-portable.zip)",
+    "**Linux:** [JoystickGobloon-$Version-x86_64.AppImage]($download/JoystickGobloon-$Version-x86_64.AppImage)",
     "",
     "[What's new]($page)"
 )

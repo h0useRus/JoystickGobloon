@@ -1,5 +1,4 @@
-//! Platforms without keyboard/mouse output and speech yet (Linux: uinput and speech-dispatcher,
-//! docs/LINUX_PLAN.md phases 3 and 5).
+//! Platforms without keyboard/mouse output and speech (neither Windows nor Linux).
 
 use gob_core::MouseButton;
 

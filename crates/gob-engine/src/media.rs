@@ -10,7 +10,8 @@ use crate::platform::SpeechEngine;
 pub enum SpeechQueue {
     /// After everything queued.
     Back,
-    /// Next, after the current sentence (SAPI cannot reorder: treated like `Back`).
+    /// Next, after the current sentence (SAPI and speech-dispatcher cannot reorder: treated
+    /// like `Back`).
     Front,
     /// Stops what is spoken and drops the queue.
     Interrupt,

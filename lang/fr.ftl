@@ -15,7 +15,8 @@ label-mode = Mode
 # Settings
 settings-appearance = Apparence
 settings-general = Général
-settings-about = À propos
+settings-about = À propos
+
 settings-lighting = Éclairage
 settings-leds-hint = Quand un profil qui a modifié les LED d'un joystick est désactivé, ces couleurs sont appliquées. Le joystick garde les couleurs modifiées jusqu'à sa reconnexion : ses propres réglages de LED ne peuvent donc pas être rétablis.
 settings-leds-none = Aucun joystick avec LED pilotables n'est connecté.
@@ -25,7 +26,7 @@ settings-reopen-last = Rouvrir le dernier profil au démarrage
 theme-light = Clair
 theme-dark = Sombre
 theme-system = Système
-theme-system-tip = Suivre le mode clair ou sombre de Windows
+theme-system-tip = Suivre le mode clair ou sombre du système
 about-text = Masquage des périphériques, joysticks virtuels et affectation des entrées dans une seule application.
 
 # Empty states
@@ -56,12 +57,17 @@ subst-title = Associer les commandes
 subst-auto = Auto
 subst-auto-tip = Associer les périphériques restants aux périphériques branchés de nom similaire ; les cas douteux vous sont laissés
 subst-banner = Les identifiants de périphériques du profil ne correspondent pas à ce PC : { $count }
+access-banner = Joystick Gobloon a besoin de l’autorisation de lire les manettes et de créer des périphériques virtuels.
+access-grant = Accorder l’accès
+access-granted = Accès aux périphériques accordé.
+access-error = Impossible d’accorder l’accès aux périphériques : { $error }
 subst-keep = Laisser tel quel
 subst-apply = Appliquer
 status-substituted = Commandes associées. Enregistrez le profil pour conserver la modification.
 
 # vJoy
 vjoy-missing = vJoy n’est pas installé ou n’a pas pu être chargé.
+vjoy-no-access = Pas l’autorisation de créer des périphériques vJoy.
 vjoy-enabled = Pilote activé
 vjoy-disabled = Pilote désactivé
 vjoy-no-devices = Aucun périphérique vJoy configuré pour l’instant.
@@ -74,7 +80,7 @@ vjoy-lock = Prendre le contrôle exclusif de ce périphérique pour tester sa so
 vjoy-unlock = Libérer le périphérique
 vjoy-free = Libre
 vjoy-own = Contrôlé par Joystick Gobloon
-vjoy-busy = Utilisé par un autre programme (p. ex. Joystick Gremlin)
+vjoy-busy = Utilisé par un autre programme ou une autre copie de Joystick Gobloon
 vjoy-unknown = État inconnu
 vjoy-error = Impossible de prendre le périphérique : { $error }
 
@@ -299,16 +305,18 @@ edit-tts-hint = Texte à prononcer ; $current_mode est remplacé par le mode act
 edit-tts-rate = Vitesse
 edit-tts-pitch = Hauteur
 edit-tts-back = Mettre en file après tout le reste
-edit-tts-front = Mettre ensuite (voix Windows : comme après tout le reste)
+edit-tts-front = Mettre ensuite (voix du système : comme après tout le reste)
 edit-tts-interrupt = Interrompre ce qui est en cours
-edit-preview = Aperçu
+edit-preview = Aperçu
+
 kind-light-led = Éclairage LED
 edit-led-device = Joystick avec LED
 edit-led-no-device = Ce joystick n'est pas connecté ou ses LED ne peuvent pas être pilotées
 edit-led-id = LED
 led-vkb-grip = RVB en haut de la poignée
 led-vkb-hat = Petite rouge près du chapeau
-edit-led-color = Couleur
+edit-led-color = Couleur
+
 edit-led-color2 = Seconde couleur
 edit-led-blend = Couleurs
 led-blend-color1 = Une couleur
@@ -376,14 +384,14 @@ settings-close-to-tray = Fermer dans la zone de notification
 settings-minimize-to-tray = Réduire dans la zone de notification
 settings-tray-double-click = Un double-clic active le profil
 settings-tray-title = Icône de notification
-settings-autostart = Démarrer avec Windows (réduit)
+settings-autostart = Démarrer à l’ouverture de session (réduit)
 settings-activate-on-start = Activer le profil au démarrage
 tray-show = Afficher Joystick Gobloon
 tray-hiding = Masquage des périphériques
 tray-activate = Activer « { $name } »
 tray-activate-none = Activer le profil
 tray-quit = Quitter
-autostart-error = Impossible de modifier le démarrage avec Windows : { $error }
+autostart-error = Impossible de modifier le démarrage à l’ouverture de session : { $error }
 
 # About
 about-alpha = version alpha
@@ -393,13 +401,14 @@ about-support-tip = Contribuer via PayPal
 about-source = Code source
 about-issues = Signaler un problème
 about-releases = Versions
-about-credits = Utilise les pilotes HidHide et vJoy ; les profils sont compatibles avec Joystick Gremlin.
+about-hiding = Masquage des périphériques : { $backend }
+about-virtual = Joysticks virtuels : { $backend }
+about-not-installed = non installé
+about-gremlin = Les profils sont compatibles avec Joystick Gremlin.
 about-license = Logiciel libre et open source sous licence MIT.
 
 # Updates
 settings-check-updates = Rechercher une nouvelle version au démarrage et l’installer
-settings-experimental = Activer les fonctions expérimentales
-settings-experimental-tip = Éclairage des joysticks : l'action Éclairage LED et l'onglet Éclairage. Tant que c'est désactivé, ils sont masqués et les actions d'éclairage des profils ne font rien.
 update-check = Rechercher des mises à jour
 update-checking = Recherche d’une nouvelle version…
 update-latest = Vous avez la dernière version
@@ -485,7 +494,8 @@ calibration-extrema-tip = Amenez l’axe aux deux extrémités, puis cliquez à 
 calibration-in-window = Le calibrage est ouvert dans sa propre fenêtre.
 
 # Device info
-device-info = Informations sur le périphérique
+device-info = Informations sur le périphérique
+
 device-leds = LED pilotables (action Éclairage LED)
 device-info-name = Nom du périphérique
 device-info-axes = Axes

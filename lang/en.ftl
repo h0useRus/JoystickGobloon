@@ -15,7 +15,8 @@ label-mode = Mode
 # Settings
 settings-appearance = Appearance
 settings-general = General
-settings-about = About
+settings-about = About
+
 settings-lighting = Lighting
 settings-leds-hint = When a profile that changed a joystick's LEDs is deactivated, these colors are set. The joystick keeps changed colors until it is reconnected, so its own LED settings cannot be brought back.
 settings-leds-none = No joystick with LED control is connected.
@@ -25,7 +26,7 @@ settings-reopen-last = Reopen the last profile on startup
 theme-light = Light
 theme-dark = Dark
 theme-system = System
-theme-system-tip = Follow the Windows light or dark setting
+theme-system-tip = Follow the system light or dark setting
 about-text = Device hiding, virtual joysticks and input mapping in one app.
 
 # Empty states
@@ -56,12 +57,17 @@ subst-title = Map controls
 subst-auto = Auto
 subst-auto-tip = Map the remaining devices to attached ones with similar names; unclear ones stay for you to choose
 subst-banner = Device IDs in the profile do not match this PC: { $count }
+access-banner = Joystick Gobloon needs permission to read game controllers and create virtual devices.
+access-grant = Grant access
+access-granted = Device access granted.
+access-error = Could not grant device access: { $error }
 subst-keep = Keep as is
 subst-apply = Apply
 status-substituted = Controls mapped. Save the profile to keep the change.
 
 # vJoy
 vjoy-missing = vJoy is not installed or could not be loaded.
+vjoy-no-access = No permission to create vJoy devices.
 vjoy-enabled = Driver enabled
 vjoy-disabled = Driver disabled
 vjoy-no-devices = No vJoy devices configured yet.
@@ -74,7 +80,7 @@ vjoy-lock = Take exclusive control of this device to test its output
 vjoy-unlock = Release the device
 vjoy-free = Free
 vjoy-own = Controlled by Joystick Gobloon
-vjoy-busy = Used by another program (e.g. Joystick Gremlin)
+vjoy-busy = Used by another program or another copy of Joystick Gobloon
 vjoy-unknown = Unknown state
 vjoy-error = Could not take the device: { $error }
 
@@ -299,16 +305,18 @@ edit-tts-hint = Text to speak; $current_mode is replaced with the active mode
 edit-tts-rate = Speed
 edit-tts-pitch = Pitch
 edit-tts-back = Queue after everything else
-edit-tts-front = Queue next (Windows speech: same as after everything else)
+edit-tts-front = Queue next (the system's speech: same as after everything else)
 edit-tts-interrupt = Interrupt what is being said
-edit-preview = Preview
+edit-preview = Preview
+
 kind-light-led = Light LED
 edit-led-device = Joystick with LEDs
 edit-led-no-device = This joystick is not connected or its LEDs cannot be controlled
 edit-led-id = LED
 led-vkb-grip = RGB on top of the grip
 led-vkb-hat = Small red at the hat
-edit-led-color = Color
+edit-led-color = Color
+
 edit-led-color2 = Second color
 edit-led-blend = Colors
 led-blend-color1 = One color
@@ -376,14 +384,14 @@ settings-close-to-tray = Close to the tray
 settings-minimize-to-tray = Minimize to the tray
 settings-tray-double-click = Double click activates the profile
 settings-tray-title = Tray icon
-settings-autostart = Start with Windows (minimized)
+settings-autostart = Start at logon (minimized)
 settings-activate-on-start = Activate the profile on startup
 tray-show = Show Joystick Gobloon
 tray-hiding = Device hiding
 tray-activate = Activate “{ $name }”
 tray-activate-none = Activate the profile
 tray-quit = Quit
-autostart-error = Could not change starting with Windows: { $error }
+autostart-error = Could not change starting at logon: { $error }
 
 # About
 about-alpha = alpha build
@@ -393,13 +401,14 @@ about-support-tip = Contribute via PayPal
 about-source = Source code
 about-issues = Report a problem
 about-releases = Releases
-about-credits = Uses the HidHide and vJoy drivers; profiles are compatible with Joystick Gremlin.
+about-hiding = Device hiding: { $backend }
+about-virtual = Virtual joysticks: { $backend }
+about-not-installed = not installed
+about-gremlin = Profiles are compatible with Joystick Gremlin.
 about-license = Free and open source under the MIT license.
 
 # Updates
 settings-check-updates = Check for a new version on startup and install it
-settings-experimental = Enable experimental features
-settings-experimental-tip = Joystick lighting: the Light LED action and the Lighting tab. While off, they are hidden and Light LED actions in profiles do nothing.
 update-check = Check for updates
 update-checking = Looking for a new version…
 update-latest = You have the latest version
@@ -485,7 +494,8 @@ calibration-extrema-tip = Move the axis to both ends, then click again
 calibration-in-window = The calibration is open in its own window.
 
 # Device info
-device-info = Device information
+device-info = Device information
+
 device-leds = LEDs can be controlled (Light LED action)
 device-info-name = Device name
 device-info-axes = Axes

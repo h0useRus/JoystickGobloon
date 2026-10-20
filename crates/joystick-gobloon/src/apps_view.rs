@@ -43,7 +43,11 @@ impl AppsView {
     /// Lets Joystick Gobloon itself see hidden devices: adds it to the whitelist (not in inverse mode,
     /// where the list blocks programs instead).
     pub fn whitelist_self(&self) -> Option<Result<bool, String>> {
-        let hh = self.hh.as_ref().ok()?;
+        let hh = self
+            .hh
+            .as_ref()
+            .ok()
+            .filter(|hh| hh.capabilities().app_list)?;
         let exe = std::env::current_exe().ok()?;
         let result = hh.apps_inverted().and_then(|inverse| {
             if inverse {

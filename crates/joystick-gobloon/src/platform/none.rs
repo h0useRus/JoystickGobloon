@@ -1,5 +1,5 @@
-//! Platforms without their own module yet (Linux: XDG paths, a socket for the single instance,
-//! fontconfig, docs/LINUX_PLAN.md phase 5).
+//! Platforms without their own module; Linux's module takes the double-click time, the tray
+//! icon size and zip unpacking from here.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -39,8 +39,12 @@ impl super::Desktop for Desktop {
 
     fn listen_instance(_event: (), _show: Box<dyn Fn() + Send>) {}
 
-    fn held_keys() -> Vec<Key> {
-        Vec::new()
+    fn keyboard_bindings() -> bool {
+        false
+    }
+
+    fn held_keys() -> Option<Vec<Key>> {
+        None
     }
 
     fn key_name(key: Key) -> String {
@@ -54,6 +58,10 @@ impl super::Desktop for Desktop {
     fn hide_to_tray(_window: ()) {}
 
     fn show_window(_window: ()) {}
+
+    fn on_tray_thread(f: Box<dyn FnOnce() + Send>) {
+        f();
+    }
 
     fn minimize_window(_window: ()) {}
 
@@ -75,6 +83,14 @@ impl super::Desktop for Desktop {
 
     fn set_autostart(_enabled: bool, _arg: &str) -> Result<(), String> {
         Ok(())
+    }
+
+    fn device_access_missing() -> bool {
+        false
+    }
+
+    fn grant_device_access() -> Result<(), String> {
+        Err("not supported on this system".into())
     }
 
     fn installed_copy(_exe_dir: &Path) -> bool {

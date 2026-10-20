@@ -15,7 +15,8 @@ label-mode = 모드
 # Settings
 settings-appearance = 모양
 settings-general = 일반
-settings-about = 정보
+settings-about = 정보
+
 settings-lighting = 조명
 settings-leds-hint = 조이스틱의 LED를 바꾼 프로필이 비활성화되면 이 색상이 설정됩니다. 조이스틱은 다시 연결할 때까지 바뀐 색상을 유지하므로 자체 LED 설정으로 되돌릴 수 없습니다.
 settings-leds-none = LED를 제어할 수 있는 조이스틱이 연결되어 있지 않습니다.
@@ -25,7 +26,7 @@ settings-reopen-last = 시작할 때 마지막 프로필 다시 열기
 theme-light = 밝게
 theme-dark = 어둡게
 theme-system = 시스템
-theme-system-tip = Windows의 밝은/어두운 설정 따르기
+theme-system-tip = 시스템의 밝은/어두운 설정 따르기
 about-text = 장치 숨기기, 가상 조이스틱, 입력 매핑을 하나의 앱에서.
 
 # Empty states
@@ -56,12 +57,17 @@ subst-title = 컨트롤 매핑
 subst-auto = 자동
 subst-auto-tip = 나머지 장치를 이름이 비슷한 연결된 장치에 매핑합니다. 불확실한 것은 직접 선택하도록 남겨 둡니다
 subst-banner = 프로필의 장치 ID가 이 PC와 일치하지 않음: { $count }
+access-banner = Joystick Gobloon이 게임 컨트롤러를 읽고 가상 장치를 만들려면 권한이 필요합니다.
+access-grant = 접근 허용
+access-granted = 장치 접근이 허용되었습니다.
+access-error = 장치 접근을 허용할 수 없습니다: { $error }
 subst-keep = 그대로 두기
 subst-apply = 적용
 status-substituted = 컨트롤이 매핑되었습니다. 변경 내용을 유지하려면 프로필을 저장하세요.
 
 # vJoy
 vjoy-missing = vJoy가 설치되지 않았거나 불러올 수 없습니다.
+vjoy-no-access = vJoy 장치를 만들 권한이 없습니다.
 vjoy-enabled = 드라이버 사용
 vjoy-disabled = 드라이버 사용 안 함
 vjoy-no-devices = 아직 구성된 vJoy 장치가 없습니다.
@@ -74,7 +80,7 @@ vjoy-lock = 출력을 테스트하기 위해 이 장치를 독점 제어
 vjoy-unlock = 장치 해제
 vjoy-free = 사용 가능
 vjoy-own = Joystick Gobloon이 제어 중
-vjoy-busy = 다른 프로그램이 사용 중 (예: Joystick Gremlin)
+vjoy-busy = 다른 프로그램 또는 다른 Joystick Gobloon 인스턴스가 사용 중
 vjoy-unknown = 알 수 없는 상태
 vjoy-error = 장치를 가져올 수 없습니다: { $error }
 
@@ -299,16 +305,18 @@ edit-tts-hint = 읽을 텍스트; $current_mode는 현재 모드로 바뀝니다
 edit-tts-rate = 속도
 edit-tts-pitch = 음높이
 edit-tts-back = 모든 항목 뒤에 대기
-edit-tts-front = 다음 순서로 대기 (Windows 음성: 모든 항목 뒤와 같음)
+edit-tts-front = 다음 순서로 대기 (시스템 음성: 모든 항목 뒤와 같음)
 edit-tts-interrupt = 읽고 있는 내용 중단
-edit-preview = 미리 듣기
+edit-preview = 미리 듣기
+
 kind-light-led = LED 조명
 edit-led-device = LED가 있는 조이스틱
 edit-led-no-device = 이 조이스틱이 연결되어 있지 않거나 LED를 제어할 수 없습니다
 edit-led-id = LED
 led-vkb-grip = 그립 상단 RGB
 led-vkb-hat = 햇 스위치 옆 작은 빨간색
-edit-led-color = 색상
+edit-led-color = 색상
+
 edit-led-color2 = 두 번째 색상
 edit-led-blend = 색상
 led-blend-color1 = 한 가지 색상
@@ -376,14 +384,14 @@ settings-close-to-tray = 닫을 때 트레이로
 settings-minimize-to-tray = 최소화할 때 트레이로
 settings-tray-double-click = 두 번 클릭하면 프로필 활성화
 settings-tray-title = 트레이 아이콘
-settings-autostart = Windows와 함께 시작 (최소화)
+settings-autostart = 로그인 시 시작 (최소화)
 settings-activate-on-start = 시작할 때 프로필 활성화
 tray-show = Joystick Gobloon 표시
 tray-hiding = 장치 숨기기
 tray-activate = “{ $name }” 활성화
 tray-activate-none = 프로필 활성화
 tray-quit = 종료
-autostart-error = Windows와 함께 시작 설정을 바꿀 수 없습니다: { $error }
+autostart-error = 로그인 시 시작 설정을 바꿀 수 없습니다: { $error }
 
 # About
 about-alpha = 알파 빌드
@@ -393,13 +401,14 @@ about-support-tip = PayPal로 후원하기
 about-source = 소스 코드
 about-issues = 문제 신고
 about-releases = 릴리스
-about-credits = HidHide 및 vJoy 드라이버를 사용하며, 프로필은 Joystick Gremlin과 호환됩니다.
+about-hiding = 장치 숨기기: { $backend }
+about-virtual = 가상 조이스틱: { $backend }
+about-not-installed = 설치되지 않음
+about-gremlin = 프로필은 Joystick Gremlin과 호환됩니다.
 about-license = MIT 라이선스에 따른 무료 오픈 소스 소프트웨어입니다.
 
 # Updates
 settings-check-updates = 시작할 때 새 버전을 확인하고 설치
-settings-experimental = 실험적 기능 사용
-settings-experimental-tip = 조이스틱 조명: LED 조명 동작과 조명 탭. 꺼져 있으면 숨겨지고 프로필의 LED 조명 동작은 실행되지 않습니다.
 update-check = 업데이트 확인
 update-checking = 새 버전을 찾는 중…
 update-latest = 최신 버전입니다
@@ -485,7 +494,8 @@ calibration-extrema-tip = 축을 양 끝까지 움직인 다음 다시 클릭하
 calibration-in-window = 보정이 별도 창에 열려 있습니다.
 
 # Device info
-device-info = 장치 정보
+device-info = 장치 정보
+
 device-leds = LED 제어 가능 (LED 조명 동작)
 device-info-name = 장치 이름
 device-info-axes = 축

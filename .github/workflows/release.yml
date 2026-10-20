@@ -1,6 +1,7 @@
 # main: release v<version>, dev: pre-release v<version>-alpha.<run number>. The version comes
 # from the Conventional Commits since the last release (.github/scripts/next-version.sh).
-# Both build the app and the installer, after the same checks as CI.
+# Both build the app, the Windows installer and portable zip and the Linux AppImage, after the
+# same checks as CI.
 name: Release
 
 on:
@@ -15,7 +16,56 @@ permissions:
   contents: write
 
 jobs:
+  # Linux: the AppImage (tools/linux/appimage.sh). Ubuntu 22.04: its older glibc keeps the
+  # AppImage running on newer systems too (Steam Deck included).
+  appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev libgtk-3-dev             libxdo-dev libayatana-appindicator3-dev libudev-dev libssl-dev libxkbcommon-dev libwayland-dev
+      # Installs the Rust version pinned in rust-toolchain.toml.
+      - name: Rust toolchain
+        run: rustup toolchain install && rustup show
+      - uses: Swatinem/rust-cache@v2
+
+      # Same version as the Windows job: same script, commit and run number.
+      - name: Version
+        id: version
+        run: |
+          base=$(bash .github/scripts/next-version.sh)
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            version="$base"
+          else
+            version="$base-alpha.${{ github.run_number }}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check
+        run: |
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+
+      - name: Build
+        env:
+          JOYSTICK_GOBLOON_VERSION: ${{ steps.version.outputs.version }}
+        run: cargo build --release -p joystick-gobloon
+
+      - name: AppImage
+        run: sh tools/linux/appimage.sh "${{ steps.version.outputs.version }}" target/appimage target/release/JoystickGobloon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: target/appimage/JoystickGobloon-${{ steps.version.outputs.version }}-x86_64.AppImage
+          if-no-files-found: error
+
   release:
+    needs: appimage
     runs-on: windows-latest
     env:
       # Code signing through SignPath (docs/CODE_SIGNING.md): final releases only, and only
@@ -159,6 +209,12 @@ jobs:
           Copy-Item LICENSE $dir
           Compress-Archive -Path $dir -DestinationPath "target\JoystickGobloon-${{ steps.version.outputs.version }}-portable.zip" -Force
 
+      - name: Linux AppImage
+        uses: actions/download-artifact@v4
+        with:
+          name: appimage
+          path: target/appimage
+
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
@@ -170,6 +226,7 @@ jobs:
           files: |
             target/installer/JoystickGobloon-${{ steps.version.outputs.version }}-setup.exe
             target/JoystickGobloon-${{ steps.version.outputs.version }}-portable.zip
+            target/appimage/JoystickGobloon-${{ steps.version.outputs.version }}-x86_64.AppImage
 
       # Discord: final releases to DISCORD_WEBHOOK, alpha builds to DISCORD_WEBHOOK_ALPHA
       # (each only when that secret is set). A failed post never fails the release.

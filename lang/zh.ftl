@@ -15,7 +15,8 @@ label-mode = 模式
 # Settings
 settings-appearance = 外观
 settings-general = 常规
-settings-about = 关于
+settings-about = 关于
+
 settings-lighting = 灯光
 settings-leds-hint = 当更改过摇杆 LED 的配置文件被停用时，将设置这些颜色。摇杆会保持更改后的颜色直到重新连接，因此无法恢复其自身的 LED 设置。
 settings-leds-none = 未连接可控制 LED 的摇杆。
@@ -25,7 +26,7 @@ settings-reopen-last = 启动时打开上次的配置文件
 theme-light = 浅色
 theme-dark = 深色
 theme-system = 跟随系统
-theme-system-tip = 跟随 Windows 的浅色或深色设置
+theme-system-tip = 跟随系统的浅色或深色设置
 about-text = 设备隐藏、虚拟摇杆和输入映射，集于一个应用。
 
 # Empty states
@@ -56,12 +57,17 @@ subst-title = 映射控件
 subst-auto = 自动
 subst-auto-tip = 将其余设备映射到名称相似的已连接设备；不确定的留给您选择
 subst-banner = 配置文件中的设备 ID 与此电脑不匹配：{ $count }
+access-banner = Joystick Gobloon 需要读取游戏控制器和创建虚拟设备的权限。
+access-grant = 授予权限
+access-granted = 已授予设备访问权限。
+access-error = 无法授予设备访问权限：{ $error }
 subst-keep = 保持不变
 subst-apply = 应用
 status-substituted = 控件已映射。保存配置文件以保留更改。
 
 # vJoy
 vjoy-missing = 未安装 vJoy 或无法加载。
+vjoy-no-access = 没有创建 vJoy 设备的权限。
 vjoy-enabled = 驱动已启用
 vjoy-disabled = 驱动已禁用
 vjoy-no-devices = 尚未配置 vJoy 设备。
@@ -74,7 +80,7 @@ vjoy-lock = 独占控制此设备以测试其输出
 vjoy-unlock = 释放设备
 vjoy-free = 空闲
 vjoy-own = 由 Joystick Gobloon 控制
-vjoy-busy = 被其他程序使用（例如 Joystick Gremlin）
+vjoy-busy = 被其他程序或另一个 Joystick Gobloon 实例使用
 vjoy-unknown = 未知状态
 vjoy-error = 无法占用设备：{ $error }
 
@@ -299,16 +305,18 @@ edit-tts-hint = 要朗读的文本；$current_mode 会替换为当前模式
 edit-tts-rate = 语速
 edit-tts-pitch = 音调
 edit-tts-back = 排在所有内容之后
-edit-tts-front = 排在下一个（Windows 语音：与排在所有内容之后相同）
+edit-tts-front = 排在下一个（系统语音：与排在所有内容之后相同）
 edit-tts-interrupt = 打断正在朗读的内容
-edit-preview = 试听
+edit-preview = 试听
+
 kind-light-led = LED 灯光
 edit-led-device = 带 LED 的摇杆
 edit-led-no-device = 此摇杆未连接，或无法控制其 LED
 edit-led-id = LED
 led-vkb-grip = 握把顶部 RGB
 led-vkb-hat = 苦力帽旁小红灯
-edit-led-color = 颜色
+edit-led-color = 颜色
+
 edit-led-color2 = 第二颜色
 edit-led-blend = 颜色
 led-blend-color1 = 单色
@@ -376,14 +384,14 @@ settings-close-to-tray = 关闭时最小化到托盘
 settings-minimize-to-tray = 最小化到托盘
 settings-tray-double-click = 双击激活配置文件
 settings-tray-title = 托盘图标
-settings-autostart = 随 Windows 启动（最小化）
+settings-autostart = 登录时启动（最小化）
 settings-activate-on-start = 启动时激活配置文件
 tray-show = 显示 Joystick Gobloon
 tray-hiding = 设备隐藏
 tray-activate = 激活“{ $name }”
 tray-activate-none = 激活配置文件
 tray-quit = 退出
-autostart-error = 无法更改随 Windows 启动：{ $error }
+autostart-error = 无法更改登录时启动：{ $error }
 
 # About
 about-alpha = 测试版
@@ -393,13 +401,14 @@ about-support-tip = 通过 PayPal 捐助
 about-source = 源代码
 about-issues = 报告问题
 about-releases = 版本发布
-about-credits = 使用 HidHide 和 vJoy 驱动；配置文件与 Joystick Gremlin 兼容。
+about-hiding = 设备隐藏：{ $backend }
+about-virtual = 虚拟摇杆：{ $backend }
+about-not-installed = 未安装
+about-gremlin = 配置文件与 Joystick Gremlin 兼容。
 about-license = 基于 MIT 许可证的自由开源软件。
 
 # Updates
 settings-check-updates = 启动时检查新版本并安装
-settings-experimental = 启用实验性功能
-settings-experimental-tip = 摇杆灯光：LED 灯光动作和灯光选项卡。关闭时它们会被隐藏，配置文件中的 LED 灯光动作不会执行。
 update-check = 检查更新
 update-checking = 正在查找新版本…
 update-latest = 已是最新版本
@@ -485,7 +494,8 @@ calibration-extrema-tip = 将轴移到两端，然后再次点击
 calibration-in-window = 校准已在单独窗口中打开。
 
 # Device info
-device-info = 设备信息
+device-info = 设备信息
+
 device-leds = 可控制 LED（LED 灯光动作）
 device-info-name = 设备名称
 device-info-axes = 轴

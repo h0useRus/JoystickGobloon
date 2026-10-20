@@ -15,7 +15,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
   platform/windows/ = DirectInput8 (polls every 4 ms, or with `set_event_mode` waits for DI change events and reads
   buffered buttons/hats; ids = DI instance GUIDs like Gremlin; links dinput8.lib/dxguid.lib statically (-bundle)
-  for c_dfDIJoystick2), platform/none.rs elsewhere; example `monitor`
+  for c_dfDIJoystick2), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
+  order, keyboards -> set 1 scan codes; tests/uinput.rs = virtual devices, `check.ps1 --devices`),
+  platform/none.rs elsewhere; example `monitor`
   + low-level keyboard hook (platform/windows/keyboard.rs) -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
   use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine
 - crates/gob-vjoy    talks to the vJoy driver directly (direct.rs: device_NNN handles + IOCTLs, HID caps; no
@@ -24,9 +26,16 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   layout), changed by `JoystickGobloon.exe --vjoy-config <vJoyConfig-style args>` run elevated (configure.rs).
   Examples `vjoy_info [--sweep <id>]` (read-only), `vjoy_config <args>` (UAC, changes the user's vJoy)
 - crates/gob-virtual virtual joysticks, the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
-  + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, unsupported.rs elsewhere (Linux: uinput later)
+  + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
+  made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`), unsupported.rs elsewhere
+- crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`, `keys` = set 1 scan
+  codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers, installed via pkexec from the
+  Devices page banner); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
+  made in `prepare` when a profile starts; key_pressed via EVIOCGKEY). Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
+  `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
-  capabilities), `find_device` (input device -> hideable device); windows.rs = HidHide via gob-hidhide
+  capabilities incl. `app_list`), `find_device` (input device -> hideable device); windows.rs = HidHide via
+  gob-hidhide, linux.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.
@@ -40,9 +49,6 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: docs/LIGHTING_PLAN.md
 - docs/GREMLIN_ACTIONS.md  all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
-- crates/gob-plugin  ActionPlugin/Functor traits + Registry (in-process); Engine::with_plugins runs unknown action
-  types through it. DLL plugins = stub: `joystick_gobloon_plugin_info` C entry, ABI_VERSION, info only (examples
-  `stub_plugin` cdylib, `list_plugins`); the app loads `<exe>/plugins/*.dll` and logs them
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
 
@@ -85,8 +91,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   while 0.x). Never bump versions by hand; `[workspace.package] version` in Cargo.toml only names local builds.
   `bash .github/scripts/next-version.sh` prints the next version.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
-  pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss) and a
-  portable zip. The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
+  pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss), a
+  portable zip and a Linux AppImage (job `appimage`, tools/linux/appimage.sh; it updates itself in place). The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; uninstall runs `JoystickGobloon.exe
   --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) checks commit
   messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches,
@@ -109,11 +115,15 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Network tests: `cargo test -p joystick-gobloon update:: -- --ignored`.
 - Linux (docs/LINUX_PLAN.md): `tools\linux\check.ps1` runs clippy + tests (or any command) in Podman (machine
   pod-h0use, start it first); Windows-only code stays behind `cfg(windows)`, so the Linux build must stay clean.
+  `check.ps1 --devices` adds /dev (uinput tests); tools/linux/gui_smoke.sh starts the GUI (or `APP=` an
+  AppImage) under Xvfb for a screenshot; no real tray or desktop there.
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
   window stays responsive; needs "close button hides to tray" on.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the
   running window and exits. tools/single_instance.ps1 checks it. Hidden setting `multi_instance = true`
   (top of settings.gob, not in the UI) turns this off.
+- Joystick lighting is an experimental feature for the user only: hidden setting `experimental = true`
+  (settings.gob, no switch in the UI) turns it on. Leave lighting alone unless asked (also on Linux).
 - target\debug\settings.gob = local debug settings (copy of the user's + `multi_instance = true`): debug runs
   never touch the installed copy's settings and may run next to the user's own debug window.
   `cargo clean` deletes it: recreate it the same way.

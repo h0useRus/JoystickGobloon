@@ -1945,8 +1945,9 @@ dependencies = [
  "gob-gremlin",
  "gob-input",
  "gob-lighting",
- "gob-plugin",
+ "gob-uinput",
  "gob-virtual",
+ "libc",
  "log",
  "rodio",
  "windows 0.61.3",
@@ -1965,6 +1966,9 @@ name = "gob-hide"
 version = "0.6.0"
 dependencies = [
  "gob-hidhide",
+ "gob-input",
+ "serde",
+ "toml 0.8.2",
 ]
 
 [[package]]
@@ -1986,6 +1990,8 @@ dependencies = [
 name = "gob-input"
 version = "0.6.0"
 dependencies = [
+ "gob-uinput",
+ "libc",
  "log",
  "windows 0.61.3",
 ]
@@ -1998,18 +2004,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "gob-plugin"
+name = "gob-uinput"
 version = "0.6.0"
 dependencies = [
- "gob-core",
- "libloading 0.8.9",
+ "libc",
 ]
 
 [[package]]
 name = "gob-virtual"
 version = "0.6.0"
 dependencies = [
+ "gob-uinput",
  "gob-vjoy",
+ "libc",
+ "log",
+ "serde",
+ "toml 0.8.2",
 ]
 
 [[package]]
@@ -2470,8 +2480,10 @@ dependencies = [
  "gob-i18n",
  "gob-input",
  "gob-lighting",
- "gob-plugin",
+ "gob-uinput",
  "gob-virtual",
+ "gtk",
+ "libc",
  "log",
  "raw-window-handle",
  "rfd",
