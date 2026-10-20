@@ -13,10 +13,8 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::CreateEventW;
 use windows::core::{BOOL, GUID, Interface};
 
-use crate::{
-    AXIS_SLOTS, Calibration, DeviceInfo, DeviceState, InputEvent, format_guid, normalize_axis,
-    pov_direction,
-};
+use super::{format_guid, normalize_axis, pov_direction};
+use crate::{AXIS_SLOTS, Calibration, DeviceInfo, DeviceState, InputEvent};
 
 const DIRECTINPUT_VERSION: u32 = 0x0800;
 /// `DIPROP_RANGE` is `MAKEDIPROP(4)`: a small integer passed as a GUID pointer.
@@ -201,7 +199,7 @@ fn hid_path(dev: &IDirectInputDevice8W) -> String {
 
 impl Device {
     /// Takes this device's axis calibrations; they replace the default scaling of their axes.
-    pub fn set_calibrations(&mut self, calibrations: &crate::Calibrations) {
+    pub fn use_calibrations(&mut self, calibrations: &crate::Calibrations) {
         for (i, c) in self.calibration.iter_mut().enumerate() {
             *c = calibrations
                 .get(&(self.state.info.guid.clone(), i as u8 + 1))

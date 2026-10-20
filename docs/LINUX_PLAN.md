@@ -100,8 +100,11 @@ UI и логику: например, заменить vJoy **своим дра�
      бэкенд vJoy поверх gob-vjoy; движок и GUI больше не знают gob-vjoy.
    - [x] Скрытие: крейт `gob-hide` (`Backend`: вкл/выкл, устройства с флагом `hidden`, список программ,
      `Capabilities`; `find_device`), бэкенд HidHide поверх gob-hidhide; GUI больше не знает gob-hidhide.
-   - [ ] Ввод (бэкенд в gob-input), клавиатура/мышь и речь (`platform` в gob-engine), HID-транспорт
-     подсветки, рабочий стол (`platform` в GUI).
+   - [x] Ввод: в gob-input общий `service.rs` (цикл: пересканирование, калибровки, поиск изменений, снимок
+     для GUI) поверх внутренних трейтов `platform::Backend` / `Device`; `platform/windows/` — DirectInput,
+     клавиатурный хук, номера WinMM; `platform/none.rs` — без устройств. API `InputService` не изменился.
+   - [ ] Клавиатура/мышь и речь (`platform` в gob-engine), HID-транспорт подсветки, рабочий стол
+     (`platform` в GUI).
 2. **Ввод на Linux.** evdev + udev — Linux-реализация в gob-input. Результат: страница «Устройства», просмотр
    ввода и калибровка работают. **Первым делом**: сколько кнопок Linux показывает у VKB (128 кнопок; ядро
    отдаёт джойстикам 16 кодов `BTN_JOYSTICK` + 40 `BTN_TRIGGER_HAPPY`, остальное — как получится). Если

@@ -11,10 +11,11 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe
 - crates/gob-core    profile model mirroring Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views
 - crates/gob-gremlin XML <-> Element <-> Profile, lossless round-trip; `report()` import warnings; example `resave`
-- crates/gob-input   DirectInput8 input thread (InputService: snapshot + events; polls every 4 ms, or with
-  `set_event_mode` waits for DI change events and reads buffered buttons/hats); ids = DI instance GUIDs like Gremlin;
-  links dinput8.lib/dxguid.lib statically (-bundle) for c_dfDIJoystick2; example `monitor`
-  + low-level keyboard hook -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
+- crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
+  platform/windows/ = DirectInput8 (polls every 4 ms, or with `set_event_mode` waits for DI change events and reads
+  buffered buttons/hats; ids = DI instance GUIDs like Gremlin; links dinput8.lib/dxguid.lib statically (-bundle)
+  for c_dfDIJoystick2), platform/none.rs elsewhere; example `monitor`
+  + low-level keyboard hook (platform/windows/keyboard.rs) -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
   use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine
 - crates/gob-vjoy    talks to the vJoy driver directly (direct.rs: device_NNN handles + IOCTLs, HID caps; no
   vJoyInterface.dll / vJoyConfig.exe); VJoy::acquire -> Device (reset+release on drop); axis slots 1..8 like

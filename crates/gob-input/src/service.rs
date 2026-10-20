@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::thread::JoinHandle;
-#[cfg(windows)]
 use std::time::{Duration, Instant};
 
 use crate::{Calibration, DeviceState, InputEvent};
@@ -12,14 +11,7 @@ use crate::{Calibration, DeviceState, InputEvent};
 /// Calibration per (device GUID, axis slot); axes without one use DirectInput's range.
 pub type Calibrations = std::collections::HashMap<(String, u8), Calibration>;
 
-/// Polling mode: time between two reads of every device.
-#[cfg(windows)]
-const POLL_INTERVAL: Duration = Duration::from_millis(4);
-/// Event mode: devices are also read this often without a change signal, as a fallback.
-#[cfg(windows)]
-const EVENT_TIMEOUT: Duration = Duration::from_millis(20);
 /// Re-enumerate devices this often to catch hot-plugging.
-#[cfg(windows)]
 const RESCAN: Duration = Duration::from_secs(2);
 const EVENT_BUFFER: usize = 4096;
 
@@ -79,7 +71,7 @@ pub struct InputService {
     /// See [`InputService::set_event_mode`].
     event_mode: Arc<AtomicBool>,
     /// Keyboard keys as events (low-level hook); `None` if it could not be installed.
-    _keyboard: Option<crate::keyboard::Hook>,
+    _keyboard: Option<crate::platform::keyboard::Hook>,
 }
 
 impl InputService {
@@ -115,7 +107,7 @@ impl InputService {
         };
         let keyboard = {
             let tx = broadcast.clone();
-            crate::keyboard::start(Arc::new(move |scan_code, extended, pressed| {
+            crate::platform::keyboard::start(Arc::new(move |scan_code, extended, pressed| {
                 tx.send(InputEvent::Key {
                     scan_code,
                     extended,
@@ -191,8 +183,6 @@ impl Drop for InputService {
 }
 
 /// What the polling thread shares with [`InputService`].
-// Linux has no polling thread yet (docs/LINUX_PLAN.md, phase 1).
-#[cfg_attr(not(windows), allow(dead_code))]
 struct Shared<'a> {
     snapshot: &'a RwLock<Vec<DeviceState>>,
     stop: &'a AtomicBool,
@@ -202,46 +192,38 @@ struct Shared<'a> {
     event_mode: &'a AtomicBool,
 }
 
-#[cfg(not(windows))]
-fn run(_: &Shared, _: &dyn Fn()) {}
-
-#[cfg(windows)]
+/// The input thread: finds, opens and reads controllers through this platform's backend.
 fn run(shared: &Shared, on_change: &dyn Fn()) {
-    use windows::Win32::Foundation::HANDLE;
-    use windows::Win32::System::Threading::WaitForMultipleObjects;
-
-    use crate::dinput::{Device, DirectInput};
-
-    /// WaitForMultipleObjects takes at most this many handles.
-    const MAX_WAIT: usize = 64;
+    use crate::platform::{Backend, Device, Platform};
 
     let tx = shared.tx;
-    let Ok(di) = DirectInput::new() else { return };
-    let mut devices: Vec<Device> = Vec::new();
+    let Some(platform) = Platform::new() else {
+        return;
+    };
+    let mut devices: Vec<<Platform as Backend>::Device> = Vec::new();
     let mut next_scan = Instant::now();
     // The first scan, and the one after a device was lost, always reports the device list.
     let mut announce = true;
     let mut events = shared.event_mode.load(Ordering::Relaxed);
     let mut cal = Calibrations::new();
     let mut cal_version = None;
-    let mut handles: Vec<HANDLE> = Vec::new();
     while !shared.stop.load(Ordering::Relaxed) {
         let mut changed = false;
         let wanted = shared.event_mode.load(Ordering::Relaxed);
         if wanted != events {
-            // Buffer and event can only be set up while opening: reopen in the new mode.
+            // The read mode is set up when a device is opened: reopen them in the new mode.
             events = wanted;
             devices.clear();
             next_scan = Instant::now();
         }
         if Instant::now() >= next_scan {
             next_scan = Instant::now() + RESCAN;
-            let attached = di.enumerate();
+            let attached = platform.attached();
             let before = devices.len();
-            devices.retain(|d| attached.iter().any(|a| guid_of(a) == d.state.info.guid));
-            for inst in &attached {
-                if !devices.iter().any(|d| d.state.info.guid == guid_of(inst))
-                    && let Ok(mut dev) = di.open(inst, events)
+            devices.retain(|d| attached.iter().any(|(id, _)| *id == d.state().info.guid));
+            for (id, found) in &attached {
+                if !devices.iter().any(|d| d.state().info.guid == *id)
+                    && let Some(mut dev) = platform.open(found, events)
                 {
                     dev.set_calibrations(&cal);
                     devices.push(dev);
@@ -270,21 +252,17 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
 
         let mut lost = false;
         for dev in &mut devices {
-            let read = if dev.event().is_some() {
-                dev.read_buffered(&mut |event| {
-                    tx.send(event);
-                    changed = true;
-                })
-            } else {
-                dev.poll()
-            };
+            let read = dev.read(&mut |event| {
+                tx.send(event);
+                changed = true;
+            });
             if !read {
                 lost = true;
                 continue;
             }
-            changed |= emit_changes(&dev.previous, &dev.state, tx);
+            changed |= emit_changes(dev.previous(), dev.state(), tx);
             // Raw values matter to the calibration page even when the scaled value stays.
-            changed |= dev.previous.raw != dev.state.raw;
+            changed |= dev.previous().raw != dev.state().raw;
         }
         if lost {
             next_scan = Instant::now(); // rescan right away
@@ -296,44 +274,23 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
                 && snapshot
                     .iter()
                     .zip(&devices)
-                    .all(|(s, d)| s.info.guid == d.state.info.guid);
+                    .all(|(s, d)| s.info.guid == d.state().info.guid);
             if same_devices {
                 // Usual case: only values changed, update them in place without allocating.
                 for (s, d) in snapshot.iter_mut().zip(&devices) {
-                    s.copy_readings(&d.state);
+                    s.copy_readings(d.state());
                 }
             } else {
-                *snapshot = devices.iter().map(|d| d.state.clone()).collect();
+                *snapshot = devices.iter().map(|d| d.state().clone()).collect();
             }
             drop(snapshot);
             on_change();
         }
-
-        handles.clear();
-        handles.extend(devices.iter().filter_map(Device::event).take(MAX_WAIT));
-        // A device without an event (polling mode, or it refused one) needs the short interval.
-        let all_signal = !devices.is_empty() && handles.len() == devices.len();
-        if events && all_signal {
-            // SAFETY: the handles belong to `devices`, which stay open during the wait.
-            unsafe {
-                WaitForMultipleObjects(&handles, false, EVENT_TIMEOUT.as_millis() as u32);
-            }
-        } else if events && devices.is_empty() {
-            std::thread::sleep(EVENT_TIMEOUT);
-        } else {
-            std::thread::sleep(POLL_INTERVAL);
-        }
+        platform.wait(&devices, events);
     }
 }
 
-#[cfg(windows)]
-fn guid_of(inst: &windows::Win32::Devices::HumanInterfaceDevice::DIDEVICEINSTANCEW) -> String {
-    let g = inst.guidInstance;
-    crate::format_guid(g.data1, g.data2, g.data3, g.data4)
-}
-
 /// Sends one event per changed input; returns whether anything changed.
-#[cfg(windows)]
 fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &Broadcast) -> bool {
     let device = || new.info.guid.clone();
     let mut changed = false;
