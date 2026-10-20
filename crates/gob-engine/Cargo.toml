@@ -20,5 +20,9 @@ windows = { workspace = true, features = [
     "Win32_System_Com",
 ] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+gob-uinput.workspace = true
+libc.workspace = true
+
 [dev-dependencies]
 gob-gremlin.workspace = true

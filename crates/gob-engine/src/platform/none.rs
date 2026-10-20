@@ -1,10 +1,11 @@
-//! Platforms without keyboard/mouse output and speech yet (Linux: uinput and speech-dispatcher,
-//! docs/LINUX_PLAN.md phases 3 and 5).
+//! Platforms without keyboard/mouse output and speech (Linux takes its speech until
+//! speech-dispatcher, docs/LINUX_PLAN.md phase 5).
 
 use gob_core::MouseButton;
 
 use crate::media::SpeechRequest;
 
+#[cfg_attr(target_os = "linux", allow(dead_code))]
 pub(crate) struct Injector;
 
 impl super::Injector for Injector {

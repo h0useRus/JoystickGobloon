@@ -133,7 +133,13 @@ UI и логику: например, заменить vJoy **своим дра�
      порядок у SDL другой — решать после проверки игр). Хатки `ABS_HATnX/Y`, непрерывные — 8 направлений.
      «Занято» = устройство с таким именем есть в системе, но не наше (вторая копия программы). Нет прав
      на `/dev/uinput` → `Error::NoAccess`. Тест `tests/uinput.rs` (`check.ps1 --devices`).
-   - [ ] `Injector` на uinput (gob-engine): клавиатура и мышь, имя «Joystick Gobloon …».
+   - [x] `Injector` на uinput (gob-engine `platform/linux/`): два устройства, «Joystick Gobloon Keyboard»
+     (все клавиши из `gob_uinput::keys`) и «Joystick Gobloon Mouse» (REL_X/Y, колёса, 5 кнопок),
+     создаются при старте профиля (`Injector::prepare`: события сразу после создания рабочий стол
+     теряет) и живут до выхода. Scan code set 1 ↔ evdev — таблица `gob_uinput::keys` (обе стороны;
+     gob-input из фазы 2 после слияния перейти на неё вместо своей копии). `key_pressed` — `EVIOCGKEY`
+     по всем клавиатурам, включая нашу (как `GetAsyncKeyState`); нужно чтение `/dev/input`.
+     Тест в `injector.rs` (ignored, `check.ps1 --devices`). Речь на Linux — пока нет (фаза 5).
    - [ ] Страница vJoy на Linux: тексты про vJoy (i18n) заменить общими, где показывается `caps.name`.
    - [ ] Проверка: `jstest`, игра через Proton (SDL), профиль целиком.
 4. **Скрытие на Linux.** Бэкенд `gob-hide` на захвате; установка правила udev через `pkexec`.

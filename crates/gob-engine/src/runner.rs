@@ -170,6 +170,7 @@ impl Runner {
         if led_defaults.is_none() && engine.uses_lights() {
             log::info!("light-led actions ignored: experimental features are off");
         }
+        crate::platform::Injector::prepare(crate::platform::injector());
         engine.activate(&mut out);
 
         let status = Arc::new(Mutex::new(RunnerStatus {

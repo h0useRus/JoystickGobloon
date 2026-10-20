@@ -1,7 +1,8 @@
 //! Virtual input devices on Linux through uinput (`/dev/uinput`): the kernel creates an evdev
 //! device that games and the desktop see like a real one. Backend for gob-virtual (joysticks)
-//! and gob-engine (keyboard and mouse output). No driver to install; writing `/dev/uinput`
-//! needs root or a udev rule (`TAG+="uaccess"`, docs/LINUX_PLAN.md).
+//! and gob-engine (keyboard and mouse output); `keys` maps key codes to Gremlin's scan codes.
+//! No driver to install; writing `/dev/uinput` needs root or a udev rule (`TAG+="uaccess"`,
+//! docs/LINUX_PLAN.md).
 //!
 //! Example `uinput_check`: creates a joystick for a few seconds (shows whether uinput works).
 #![cfg(target_os = "linux")]
@@ -12,6 +13,7 @@ use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 
 pub mod codes;
+pub mod keys;
 
 const UINPUT: &str = "/dev/uinput";
 /// `UINPUT_MAX_NAME_SIZE`.

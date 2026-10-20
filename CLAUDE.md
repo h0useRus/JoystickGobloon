@@ -26,8 +26,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-virtual virtual joysticks, the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
   + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
   made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`), unsupported.rs elsewhere
-- crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`); used by gob-virtual,
-  later gob-engine's Injector. Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
+- crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`, `keys` = set 1 scan
+  codes <-> evdev); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
+  made in `prepare` when a profile starts; key_pressed via EVIOCGKEY). Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
   `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
   capabilities), `find_device` (input device -> hideable device); windows.rs = HidHide via gob-hidhide
