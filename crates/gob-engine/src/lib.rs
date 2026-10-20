@@ -13,8 +13,8 @@ mod lighting;
 mod media;
 mod modes;
 mod motion;
+mod platform;
 mod runner;
-mod sendinput;
 
 pub use engine::Engine;
 pub use lighting::to_led;

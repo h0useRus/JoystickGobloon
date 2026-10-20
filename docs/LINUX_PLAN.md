@@ -103,8 +103,10 @@ UI и логику: например, заменить vJoy **своим дра�
    - [x] Ввод: в gob-input общий `service.rs` (цикл: пересканирование, калибровки, поиск изменений, снимок
      для GUI) поверх внутренних трейтов `platform::Backend` / `Device`; `platform/windows/` — DirectInput,
      клавиатурный хук, номера WinMM; `platform/none.rs` — без устройств. API `InputService` не изменился.
-   - [ ] Клавиатура/мышь и речь (`platform` в gob-engine), HID-транспорт подсветки, рабочий стол
-     (`platform` в GUI).
+   - [x] Клавиатура/мышь и речь: в gob-engine `platform/` с трейтами `Injector` и `SpeechEngine`;
+     `platform/windows/` — SendInput и SAPI, `platform/none.rs` — ничего; `media.rs` (звук, очередь речи,
+     список голосов) и `runner.rs` общие.
+   - [ ] HID-транспорт подсветки, рабочий стол (`platform` в GUI).
 2. **Ввод на Linux.** evdev + udev — Linux-реализация в gob-input. Результат: страница «Устройства», просмотр
    ввода и калибровка работают. **Первым делом**: сколько кнопок Linux показывает у VKB (128 кнопок; ядро
    отдаёт джойстикам 16 кодов `BTN_JOYSTICK` + 40 `BTN_TRIGGER_HAPPY`, остальное — как получится). Если

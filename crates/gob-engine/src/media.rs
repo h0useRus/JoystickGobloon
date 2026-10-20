@@ -3,6 +3,8 @@
 
 use std::sync::mpsc::{Sender, channel};
 
+use crate::platform::SpeechEngine;
+
 /// Gremlin's TTS queue modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpeechQueue {
@@ -116,7 +118,7 @@ fn audio_thread(rx: std::sync::mpsc::Receiver<(String, u8)>) {
     }
 }
 
-/// Windows speech (SAPI) voice on its own COM thread.
+/// The platform's speech engine on its own thread (it may need one, e.g. SAPI and COM).
 #[derive(Default)]
 pub struct Speech(Option<Sender<SpeechRequest>>);
 
@@ -136,30 +138,12 @@ impl Speech {
     }
 }
 
-/// SAPI XML so every request carries its own rate, volume and pitch.
-#[cfg(any(windows, test))]
-fn speech_xml(r: &SpeechRequest) -> String {
-    let escaped = r
-        .text
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;");
-    let scale = |v: f32| (v.clamp(-1.0, 1.0) * 10.0).round() as i32;
-    format!(
-        r#"<rate absspeed="{}"/><volume level="{}"/><pitch absmiddle="{}"/>{escaped}"#,
-        scale(r.rate),
-        (r.volume.clamp(0.0, 1.0) * 100.0).round() as i32,
-        scale(r.pitch)
-    )
-}
-
-/// Installed voice names (classic SAPI voices and the Windows OneCore ones), sorted.
-/// Enumerated once, on a separate COM thread.
+/// Installed voice names, sorted. Enumerated once, on a separate thread.
 pub fn voices() -> &'static [String] {
     static VOICES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
     VOICES.get_or_init(|| {
         std::thread::spawn(|| {
-            let mut names: Vec<String> = sapi::tokens().into_iter().map(|(n, _)| n).collect();
+            let mut names = <crate::platform::Speech as SpeechEngine>::voices();
             names.sort();
             names.dedup();
             names
@@ -169,138 +153,15 @@ pub fn voices() -> &'static [String] {
     })
 }
 
-#[cfg(windows)]
-mod sapi {
-    use windows::Win32::Media::Speech::{
-        ISpObjectToken, ISpObjectTokenCategory, SPCAT_VOICES, SpObjectTokenCategory,
-    };
-    use windows::Win32::System::Com::{
-        CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
-    };
-    use windows::core::PCWSTR;
-
-    const ONECORE_VOICES: PCWSTR =
-        windows::core::w!("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices");
-
-    /// (name, token) of every voice; COM is initialised for the calling thread.
-    pub fn tokens() -> Vec<(String, ISpObjectToken)> {
-        let mut out = Vec::new();
-        // SAFETY: plain COM calls on this thread; returned strings are freed with CoTaskMemFree.
-        unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            for category in [SPCAT_VOICES, ONECORE_VOICES] {
-                let Ok(cat) = CoCreateInstance::<_, ISpObjectTokenCategory>(
-                    &SpObjectTokenCategory,
-                    None,
-                    CLSCTX_ALL,
-                ) else {
-                    continue;
-                };
-                if cat.SetId(category, false).is_err() {
-                    continue;
-                }
-                let Ok(list) = cat.EnumTokens(PCWSTR::null(), PCWSTR::null()) else {
-                    continue;
-                };
-                let mut count = 0;
-                if list.GetCount(&mut count).is_err() {
-                    continue;
-                }
-                for i in 0..count {
-                    let Ok(token) = list.Item(i) else { continue };
-                    if let Ok(name) = token.GetStringValue(PCWSTR::null()) {
-                        let text = name.to_string().unwrap_or_default();
-                        CoTaskMemFree(Some(name.0 as *const _));
-                        if !text.is_empty() {
-                            out.push((text, token));
-                        }
-                    }
-                }
-            }
-        }
-        out
-    }
-}
-
-#[cfg(not(windows))]
-mod sapi {
-    pub fn tokens() -> Vec<(String, ())> {
-        Vec::new()
-    }
-}
-
-#[cfg(windows)]
 fn speech_thread(rx: std::sync::mpsc::Receiver<SpeechRequest>) {
-    use windows::Win32::Media::Speech::{
-        ISpVoice, SPF_ASYNC, SPF_IS_XML, SPF_PURGEBEFORESPEAK, SpVoice,
-    };
-    use windows::Win32::System::Com::{
-        CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
-    };
-    use windows::core::HSTRING;
-
-    // SAFETY: COM is initialised for this thread before the voice is created and used only here.
-    let voice: ISpVoice = unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        match CoCreateInstance(&SpVoice, None, CLSCTX_ALL) {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!("text-to-speech voice: {e}");
-                return;
-            }
+    let Some(mut engine) = <crate::platform::Speech as SpeechEngine>::new() else {
+        log::warn!("text-to-speech is not available on this system");
+        for r in rx {
+            log::warn!("text-to-speech skipped: {}", r.text);
         }
+        return;
     };
-    let tokens = sapi::tokens();
-    let mut current_voice: Option<String> = None;
     for request in rx {
-        if request.voice != current_voice {
-            let token = request
-                .voice
-                .as_ref()
-                .and_then(|v| tokens.iter().find(|(n, _)| n == v))
-                .map(|(_, t)| t);
-            // SAFETY: the token comes from this thread's enumeration; `None` restores the default.
-            if let Err(e) = unsafe { voice.SetVoice(token) } {
-                log::error!("text-to-speech voice {:?}: {e}", request.voice);
-            }
-            current_voice = request.voice.clone();
-        }
-        let mut flags = SPF_ASYNC.0 | SPF_IS_XML.0;
-        if request.queue == SpeechQueue::Interrupt {
-            flags |= SPF_PURGEBEFORESPEAK.0;
-        }
-        let text = HSTRING::from(speech_xml(&request));
-        // SAFETY: `text` outlives the call; SAPI copies it for asynchronous speech.
-        if let Err(e) = unsafe { voice.Speak(&text, flags as u32, None) } {
-            log::error!("text-to-speech: {e}");
-        }
-    }
-}
-
-#[cfg(not(windows))]
-fn speech_thread(rx: std::sync::mpsc::Receiver<SpeechRequest>) {
-    for r in rx {
-        log::warn!("text-to-speech is only available on Windows: {}", r.text);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn speech_xml_scales_and_escapes() {
-        let r = SpeechRequest {
-            text: "Mode <Combat> & go".into(),
-            voice: None,
-            rate: 0.5,
-            volume: 0.8,
-            pitch: -1.0,
-            queue: SpeechQueue::Back,
-        };
-        assert_eq!(
-            speech_xml(&r),
-            r#"<rate absspeed="5"/><volume level="80"/><pitch absmiddle="-10"/>Mode &lt;Combat&gt; &amp; go"#
-        );
+        engine.speak(&request);
     }
 }
