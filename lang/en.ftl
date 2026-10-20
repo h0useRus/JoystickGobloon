@@ -374,6 +374,7 @@ cond-logical = Logical device input
 settings-tray = Show the tray icon
 settings-close-to-tray = Close to the tray
 settings-minimize-to-tray = Minimize to the tray
+settings-tray-double-click = Double click activates the profile
 settings-tray-title = Tray icon
 settings-autostart = Start with Windows (minimized)
 settings-activate-on-start = Activate the profile on startup

@@ -374,6 +374,7 @@ cond-logical = 논리 장치 입력
 settings-tray = 트레이 아이콘 표시
 settings-close-to-tray = 닫을 때 트레이로
 settings-minimize-to-tray = 최소화할 때 트레이로
+settings-tray-double-click = 두 번 클릭하면 프로필 활성화
 settings-tray-title = 트레이 아이콘
 settings-autostart = Windows와 함께 시작 (최소화)
 settings-activate-on-start = 시작할 때 프로필 활성화

@@ -374,6 +374,7 @@ cond-logical = Eingabe des logischen Geräts
 settings-tray = Symbol im Infobereich anzeigen
 settings-close-to-tray = Beim Schließen in den Infobereich
 settings-minimize-to-tray = Beim Minimieren in den Infobereich
+settings-tray-double-click = Doppelklick aktiviert das Profil
 settings-tray-title = Symbol im Infobereich
 settings-autostart = Mit Windows starten (minimiert)
 settings-activate-on-start = Profil beim Start aktivieren

@@ -281,7 +281,14 @@ fn tray_section(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Opti
             i18n.tr("settings-minimize-to-tray"),
         ),
     );
-    if tray.changed() || close.changed() || minimize.changed() {
+    let double_click = ui.add_enabled(
+        settings.show_tray,
+        style::switch(
+            &mut settings.tray_double_click_activates,
+            i18n.tr("settings-tray-double-click"),
+        ),
+    );
+    if tray.changed() || close.changed() || minimize.changed() || double_click.changed() {
         settings.save();
     }
     tray.changed().then_some(Change::Tray)

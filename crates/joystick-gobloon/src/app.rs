@@ -989,6 +989,7 @@ impl eframe::App for JoystickGobloonApp {
             let active = self.activation.is_active();
             let tip = |key: &str| format!("{} | {}", crate::APP_NAME, self.i18n.tr(key));
             tray.set_active(active, [tip("title-inactive"), tip("title-active")]);
+            tray.set_double_click_activates(self.settings.tray_double_click_activates);
             match self.activation.profile_name() {
                 Some(name) => {
                     let caption = self.i18n.trf("tray-activate", &[("name", name.into())]);

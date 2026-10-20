@@ -5,7 +5,8 @@
 //! [`Activation`] and updates the icon itself.
 //!
 //! Left click: show the window, or minimize it when it is on screen (to the tray with
-//! "minimize to tray"). Double click: activate / deactivate the profile.
+//! "minimize to tray"). Double click (if on in the settings): activate / deactivate the
+//! profile; a single click then waits for the double-click time.
 
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -105,6 +106,8 @@ pub struct Tray {
     cloak_item: Option<CheckMenuItem>,
     /// The tray menu switched device hiding; the app reloads HidHide's state.
     cloak_changed: Arc<AtomicBool>,
+    /// A double click on the icon activates / deactivates the profile (setting).
+    double_click_activates: Arc<AtomicBool>,
 }
 
 impl Tray {
@@ -149,6 +152,7 @@ impl Tray {
             .map_err(|e| e.to_string())?;
 
         let quit_flag = Arc::new(AtomicBool::new(false));
+        let double_click_activates = Arc::new(AtomicBool::new(true));
         let cloak_changed = Arc::new(AtomicBool::new(false));
         {
             let ctx = ctx.clone();
@@ -159,6 +163,7 @@ impl Tray {
             let clicks = Arc::new(AtomicU64::new(0));
             let double_at: Arc<Mutex<Option<Instant>>> = Arc::default();
             let wait = double_click_time();
+            let activates = double_click_activates.clone();
             TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| match event {
                 TrayIconEvent::Click {
                     button: MouseButton::Left,
@@ -168,6 +173,11 @@ impl Tray {
                     // The release that ends a double click.
                     let last = *double_at.lock().unwrap_or_else(|e| e.into_inner());
                     if last.is_some_and(|t| t.elapsed() < wait) {
+                        return;
+                    }
+                    if !activates.load(Ordering::Relaxed) {
+                        // No double-click action: nothing to wait for.
+                        single_click(hwnd, &restored, &ctx);
                         return;
                     }
                     let n = clicks.fetch_add(1, Ordering::Relaxed) + 1;
@@ -188,8 +198,10 @@ impl Tray {
                 } => {
                     clicks.fetch_add(1, Ordering::Relaxed);
                     *double_at.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
-                    toggle_activation(&activation);
-                    ctx.request_repaint();
+                    if activates.load(Ordering::Relaxed) {
+                        toggle_activation(&activation);
+                        ctx.request_repaint();
+                    }
                 }
                 _ => {}
             }));
@@ -242,6 +254,7 @@ impl Tray {
             quit: quit_flag,
             cloak_item,
             cloak_changed,
+            double_click_activates,
         })
     }
 
@@ -285,6 +298,11 @@ impl Tray {
     /// Device hiding was switched from the tray menu since the last call.
     pub fn take_cloak_changed(&self) -> bool {
         self.cloak_changed.swap(false, Ordering::Relaxed)
+    }
+
+    /// Whether a double click on the icon activates / deactivates the profile.
+    pub fn set_double_click_activates(&self, on: bool) {
+        self.double_click_activates.store(on, Ordering::Relaxed);
     }
 
     pub fn take_quit(&self) -> bool {
