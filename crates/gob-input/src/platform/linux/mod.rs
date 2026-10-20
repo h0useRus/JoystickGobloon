@@ -229,6 +229,23 @@ fn scale_axis(value: i32, min: i32, max: i32) -> i32 {
     (v * 65535 / (i64::from(max) - i64::from(min)) - 32768) as i32
 }
 
+/// The USB device's product string (e.g. "VKBsim Gladiator EVO R"), the name Windows shows. The
+/// evdev name has the manufacturer in front ("VKB-Sim (C) Alex Oz 2023  VKBsim ..."), which
+/// would keep "Map controls" from matching profiles made on Windows. `None` for devices that
+/// are not on USB (e.g. Bluetooth): their evdev name is used.
+fn usb_product(event_node: &Path) -> Option<String> {
+    let name = event_node.file_name()?;
+    // eventN/device = the input device, its device = the HID device, two levels up = USB.
+    let hid = Path::new("/sys/class/input")
+        .join(name)
+        .join("device/device")
+        .canonicalize()
+        .ok()?;
+    let product = std::fs::read_to_string(hid.parent()?.parent()?.join("product")).ok()?;
+    let product = product.trim();
+    (!product.is_empty()).then(|| product.to_string())
+}
+
 /// The `hidraw` node of the HID device behind an event node (for gob-lighting), if any.
 fn hidraw_path(event_node: &Path) -> String {
     let Some(name) = event_node.file_name() else {
@@ -321,7 +338,7 @@ impl Device {
         slots.sort_unstable();
         let info = DeviceInfo {
             guid: found.guid.clone(),
-            name: node.name(),
+            name: usb_product(&found.path).unwrap_or_else(|| node.name()),
             vendor_id,
             product_id,
             axes: slots,
