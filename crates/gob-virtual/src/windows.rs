@@ -78,10 +78,6 @@ impl Backend for VJoy {
 struct Device(gob_vjoy::Device);
 
 impl crate::Device for Device {
-    fn id(&self) -> u32 {
-        self.0.id()
-    }
-
     fn set_axis(&self, slot: u8, value: f32) -> bool {
         self.0.set_axis(slot, value)
     }

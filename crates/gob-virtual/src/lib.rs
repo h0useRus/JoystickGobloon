@@ -154,9 +154,6 @@ pub trait Backend: Send + Sync {
     fn status(&self, id: u32) -> Status;
     /// Every configured device.
     fn devices(&self) -> Vec<DeviceInfo>;
-    fn device(&self, id: u32) -> Option<DeviceInfo> {
-        self.devices().into_iter().find(|d| d.id == id)
-    }
     /// Takes device `id` until the returned handle is dropped (reset and released then).
     fn acquire(&self, id: u32) -> Result<Box<dyn Device>, Error>;
     /// The stored configuration of every device. Blocking: call it off the GUI thread.
@@ -168,7 +165,6 @@ pub trait Backend: Send + Sync {
 
 /// An acquired virtual device. Reset and released when dropped.
 pub trait Device: Send {
-    fn id(&self) -> u32;
     /// Sets axis `slot` (1..=8) from a value in -1.0..=1.0.
     fn set_axis(&self, slot: u8, value: f32) -> bool;
     /// Presses or releases button `n` (1-based).

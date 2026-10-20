@@ -39,8 +39,6 @@ impl std::error::Error for Error {}
 pub struct Capabilities {
     /// Product name for the user, e.g. "HidHide".
     pub name: &'static str,
-    /// Programs can be listed: they still see hidden devices (or, inverted, only they don't).
-    pub app_list: bool,
 }
 
 /// One part of a [`Device`] (HidHide: a HID collection), to match input devices.
@@ -56,8 +54,6 @@ pub struct Part {
 pub struct Device {
     pub name: String,
     pub present: bool,
-    /// A game controller (the "gaming devices only" filter).
-    pub gaming: bool,
     pub hidden: bool,
     pub parts: Vec<Part>,
     /// Technical details for a tooltip (HidHide: instance paths).
@@ -159,7 +155,6 @@ mod tests {
         Device {
             name: name.into(),
             present,
-            gaming: true,
             hidden: false,
             parts: parts
                 .iter()

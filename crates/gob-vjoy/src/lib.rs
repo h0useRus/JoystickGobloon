@@ -103,10 +103,6 @@ impl VJoy {
         Direct::find().map(|d| d.devices()).unwrap_or_default()
     }
 
-    pub fn device(&self, id: u32) -> Option<DeviceInfo> {
-        self.devices().into_iter().find(|d| d.id == id)
-    }
-
     /// Takes ownership of device `id` until the returned handle is dropped.
     pub fn acquire(self: &Arc<Self>, id: u32) -> Result<Device, Error> {
         let direct = Direct::find().ok_or(Error::Disabled)?;
@@ -130,7 +126,6 @@ impl VJoy {
             }
         }
         Ok(Device {
-            id,
             ranges,
             continuous: collection.cont_hats > 0,
             acquired: Mutex::new(acquired),
@@ -140,17 +135,12 @@ impl VJoy {
 
 /// An acquired vJoy device. Reset and released on drop.
 pub struct Device {
-    id: u32,
     ranges: [(i32, i32); 8],
     continuous: bool,
     acquired: Mutex<Acquired>,
 }
 
 impl Device {
-    pub fn id(&self) -> u32 {
-        self.id
-    }
-
     /// Changes the state and sends all of it to the driver.
     fn update(&self, change: impl FnOnce(&mut direct::Position) -> bool) -> bool {
         let Ok(mut device) = self.acquired.lock() else {
