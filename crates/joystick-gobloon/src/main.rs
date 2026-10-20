@@ -7,6 +7,7 @@ mod apps_view;
 mod calibration_view;
 mod condition_editor;
 mod curve_editor;
+mod device_access;
 mod devices_view;
 mod hidhide_view;
 mod key_capture;

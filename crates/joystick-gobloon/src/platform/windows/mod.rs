@@ -122,4 +122,13 @@ impl super::Desktop for Desktop {
     fn wait_for_process(pid: u32, timeout: Duration) {
         update::wait_for_process(pid, timeout);
     }
+
+    /// The drivers' installers give access; nothing for the user to grant.
+    fn device_access_missing() -> bool {
+        false
+    }
+
+    fn grant_device_access() -> Result<(), String> {
+        Ok(())
+    }
 }

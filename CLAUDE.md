@@ -29,7 +29,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
   made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`), unsupported.rs elsewhere
 - crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`, `keys` = set 1 scan
-  codes <-> evdev); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
+  codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers, installed via pkexec from the
+  Devices page banner); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
   made in `prepare` when a profile starts; key_pressed via EVIOCGKEY). Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
   `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,

@@ -1,18 +1,22 @@
 //! Desktop integration per platform behind one interface, so the pages and the app logic stay the
-//! same everywhere (docs/LINUX_PLAN.md, "Архитектура"). `windows/`: Win32; `none.rs`: what other
-//! platforms get until their own module (Linux: phase 5).
+//! same everywhere (docs/LINUX_PLAN.md, "Архитектура"). `windows/`: Win32; `linux/`: device
+//! access, the rest from `none.rs` until phase 5; `none.rs`: what other platforms get.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use gob_core::Key;
 
+#[cfg(target_os = "linux")]
+mod linux;
 #[cfg(not(windows))]
 mod none;
 #[cfg(windows)]
 mod windows;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+use linux::Desktop as Current;
+#[cfg(not(any(windows, target_os = "linux")))]
 use none::Desktop as Current;
 #[cfg(windows)]
 use windows::Desktop as Current;
@@ -62,6 +66,12 @@ pub(crate) trait Desktop {
     fn tray_icon_size() -> u32;
     /// Starts the running program with `arg` when the user logs on, or stops doing so.
     fn set_autostart(enabled: bool, arg: &str) -> Result<(), String>;
+    /// The user lacks access to devices the program needs (controllers, virtual devices) that
+    /// [`Desktop::grant_device_access`] can give.
+    fn device_access_missing() -> bool;
+    /// Gives the user that access once and for good, with administrator rights (the system
+    /// asks). Blocking: call it off the GUI thread.
+    fn grant_device_access() -> Result<(), String>;
 
     /// The copy in `exe_dir` is managed by the system's installer (it updates through a new one).
     fn installed_copy(exe_dir: &Path) -> bool;
@@ -152,6 +162,14 @@ pub(crate) fn tray_icon_size() -> u32 {
 
 pub(crate) fn set_autostart(enabled: bool, arg: &str) -> Result<(), String> {
     Current::set_autostart(enabled, arg)
+}
+
+pub(crate) fn device_access_missing() -> bool {
+    Current::device_access_missing()
+}
+
+pub(crate) fn grant_device_access() -> Result<(), String> {
+    Current::grant_device_access()
 }
 
 pub(crate) fn installed_copy(exe_dir: &Path) -> bool {

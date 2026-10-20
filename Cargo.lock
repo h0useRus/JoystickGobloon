@@ -2490,6 +2490,7 @@ dependencies = [
  "gob-input",
  "gob-lighting",
  "gob-plugin",
+ "gob-uinput",
  "gob-virtual",
  "log",
  "raw-window-handle",
