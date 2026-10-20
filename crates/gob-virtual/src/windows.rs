@@ -16,8 +16,8 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     effects: &vconfig::EFFECTS,
     switchable: true,
     needs_admin: true,
-    // vJoy's driver keeps every device's layout: start small, as before.
-    default_buttons: 32,
+    // vJoy's full button range, as vJoy devices are usually set up.
+    default_buttons: vconfig::MAX_BUTTONS,
     default_hats: 1,
 };
 
