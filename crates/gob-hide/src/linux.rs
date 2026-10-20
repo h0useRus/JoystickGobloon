@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::{Backend, Capabilities, Device, Error, Part};
 
 pub const CAPABILITIES: Capabilities = Capabilities {
-    name: "",
+    name: "Linux evdev",
     app_list: false,
 };
 const STATE_FILE: &str = "hidden.gob";
@@ -179,8 +179,11 @@ impl Backend for Grab {
         CAPABILITIES
     }
 
+    /// The kernel's version: evdev comes with it.
     fn version(&self) -> String {
-        String::new()
+        std::fs::read_to_string("/proc/sys/kernel/osrelease")
+            .map(|v| v.trim().to_string())
+            .unwrap_or_default()
     }
 
     fn enabled(&self) -> Result<bool, Error> {

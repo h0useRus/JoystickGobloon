@@ -19,8 +19,8 @@ use crate::{
     AXIS_SLOTS, Backend, Capabilities, Change, DeviceConfig, DeviceInfo, Error, Outcome, Status,
 };
 
-const CAPABILITIES: Capabilities = Capabilities {
-    name: "uinput",
+pub const CAPABILITIES: Capabilities = Capabilities {
+    name: "Linux uinput",
     max_devices: crate::PROFILE_DEVICES,
     // Joystick buttons the kernel has codes for below KEY_MAX; more would need other key codes,
     // which games may count differently.

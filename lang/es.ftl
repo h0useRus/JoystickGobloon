@@ -401,7 +401,10 @@ about-support-tip = Contribuir mediante PayPal
 about-source = Código fuente
 about-issues = Informar de un problema
 about-releases = Versiones
-about-credits = Usa los controladores HidHide y vJoy; los perfiles son compatibles con Joystick Gremlin.
+about-hiding = Ocultación de dispositivos: { $backend }
+about-virtual = Joysticks virtuales: { $backend }
+about-not-installed = no instalado
+about-gremlin = Los perfiles son compatibles con Joystick Gremlin.
 about-license = Libre y de código abierto bajo la licencia MIT.
 
 # Updates

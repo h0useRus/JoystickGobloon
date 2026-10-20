@@ -401,7 +401,10 @@ about-support-tip = 通过 PayPal 捐助
 about-source = 源代码
 about-issues = 报告问题
 about-releases = 版本发布
-about-credits = 使用 HidHide 和 vJoy 驱动；配置文件与 Joystick Gremlin 兼容。
+about-hiding = 设备隐藏：{ $backend }
+about-virtual = 虚拟摇杆：{ $backend }
+about-not-installed = 未安装
+about-gremlin = 配置文件与 Joystick Gremlin 兼容。
 about-license = 基于 MIT 许可证的自由开源软件。
 
 # Updates

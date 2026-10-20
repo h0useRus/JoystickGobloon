@@ -8,7 +8,7 @@ use gob_vjoy::configure as vconfigure;
 
 use crate::{Backend, Capabilities, Change, DeviceConfig, DeviceInfo, Error, Outcome, Status};
 
-const CAPABILITIES: Capabilities = Capabilities {
+pub const CAPABILITIES: Capabilities = Capabilities {
     name: "vJoy",
     max_devices: vconfig::MAX_DEVICES,
     max_buttons: vconfig::MAX_BUTTONS,

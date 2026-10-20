@@ -331,6 +331,34 @@ fn appearance(ui: &mut egui::Ui, i18n: &I18n, settings: &Settings) -> Option<Cha
     change
 }
 
+/// A backend as the About page names it.
+struct BackendInfo {
+    name: &'static str,
+    /// `None`: not installed or not usable.
+    version: Option<String>,
+}
+
+/// Device hiding and virtual joysticks with their i18n keys, found once per run; platforms
+/// without one are left out.
+fn backends() -> &'static [(&'static str, BackendInfo)] {
+    static BACKENDS: std::sync::OnceLock<Vec<(&'static str, BackendInfo)>> =
+        std::sync::OnceLock::new();
+    BACKENDS.get_or_init(|| {
+        let hiding = BackendInfo {
+            name: gob_hide::capabilities().name,
+            version: gob_hide::load().ok().map(|b| b.version()),
+        };
+        let virtual_devices = BackendInfo {
+            name: gob_virtual::capabilities().name,
+            version: gob_virtual::load().ok().map(|b| b.version()),
+        };
+        [("about-hiding", hiding), ("about-virtual", virtual_devices)]
+            .into_iter()
+            .filter(|(_, b)| !b.name.is_empty())
+            .collect()
+    })
+}
+
 fn about(
     ui: &mut egui::Ui,
     i18n: &I18n,
@@ -426,7 +454,14 @@ fn about(
         ui.add_space(20.0);
         ui.separator();
         ui.add_space(6.0);
-        ui.label(RichText::new(i18n.tr("about-credits")).weak());
+        for (key, backend) in backends() {
+            let text = match &backend.version {
+                Some(v) => format!("{} {v}", backend.name).trim().to_string(),
+                None => format!("{} ({})", backend.name, i18n.tr("about-not-installed")),
+            };
+            ui.label(RichText::new(i18n.trf(key, &[("backend", text.into())])).weak());
+        }
+        ui.label(RichText::new(i18n.tr("about-gremlin")).weak());
         ui.label(RichText::new(i18n.tr("about-license")).weak());
     });
 }
