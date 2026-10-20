@@ -1935,11 +1935,11 @@ dependencies = [
 
 [[package]]
 name = "gob-core"
-version = "0.5.0"
+version = "0.6.0"
 
 [[package]]
 name = "gob-engine"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "gob-core",
  "gob-gremlin",
@@ -1954,7 +1954,7 @@ dependencies = [
 
 [[package]]
 name = "gob-gremlin"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "gob-core",
  "quick-xml 0.37.5",
@@ -1962,14 +1962,14 @@ dependencies = [
 
 [[package]]
 name = "gob-hidhide"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "windows 0.61.3",
 ]
 
 [[package]]
 name = "gob-i18n"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "fluent-bundle",
  "unic-langid",
@@ -1977,7 +1977,7 @@ dependencies = [
 
 [[package]]
 name = "gob-input"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "log",
  "windows 0.61.3",
@@ -1985,14 +1985,14 @@ dependencies = [
 
 [[package]]
 name = "gob-lighting"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "windows 0.61.3",
 ]
 
 [[package]]
 name = "gob-plugin"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "gob-core",
  "libloading 0.8.9",
@@ -2000,7 +2000,7 @@ dependencies = [
 
 [[package]]
 name = "gob-vjoy"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "windows 0.61.3",
 ]
@@ -2445,7 +2445,7 @@ dependencies = [
 
 [[package]]
 name = "joystick-gobloon"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "eframe",
  "egui-phosphor",
