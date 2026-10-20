@@ -153,10 +153,6 @@ impl HidHide {
         Driver::open()?.get_list(driver::GET_BLACKLIST)
     }
 
-    pub fn set_hidden(&self, instance_path: &str, hidden: bool) -> Result<(), Error> {
-        self.change_hidden(&[instance_path], hidden)
-    }
-
     /// Hides or shows all collections of a device together with its USB container.
     pub fn set_group_hidden(&self, group: &DeviceGroup, hidden: bool) -> Result<(), Error> {
         self.change_hidden(&group.instance_paths(), hidden)

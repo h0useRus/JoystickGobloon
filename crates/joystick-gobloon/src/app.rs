@@ -82,6 +82,10 @@ pub struct JoystickGobloonApp {
     hide_frames: u8,
     /// Main window handle, for showing it from the tray.
     hwnd: Option<isize>,
+    /// Input changes repaint the window only while it shows live input values.
+    live_input: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// The window was on screen last frame (not in the tray, not minimized).
+    was_shown: bool,
     /// Plugin DLLs from `<exe folder>\plugins`, kept loaded while the app runs.
     _plugins: gob_plugin::Registry,
     /// Window title last sent to the viewport.
@@ -134,9 +138,18 @@ impl JoystickGobloonApp {
             .last_profile
             .clone()
             .filter(|p| settings.reopen_last && p.exists());
+        let live_input = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let hwnd = crate::tray::window_handle(cc);
         let input = {
-            let ctx = cc.egui_ctx.clone();
-            gob_input::InputService::start(move || ctx.request_repaint())
+            let (ctx, live) = (cc.egui_ctx.clone(), live_input.clone());
+            gob_input::InputService::start(move || {
+                // `live` is set per frame; the tray check covers the time after hiding.
+                if live.load(std::sync::atomic::Ordering::Relaxed)
+                    && !hwnd.is_some_and(crate::tray::in_tray)
+                {
+                    ctx.request_repaint();
+                }
+            })
         };
         let activation = Activation::new(input.handle(), cc.egui_ctx.clone());
         let mut app = Self {
@@ -177,7 +190,9 @@ impl JoystickGobloonApp {
             tray: None,
             restored: Default::default(),
             hide_frames: 0,
-            hwnd: crate::tray::window_handle(cc),
+            hwnd,
+            live_input,
+            was_shown: true,
         };
         app.update_tray(&cc.egui_ctx);
         app.activation.set_led_defaults(app.settings.led_defaults());
@@ -207,6 +222,10 @@ impl JoystickGobloonApp {
                 app.viewer_window = true;
             }
             Ok("settings") => app.page = Page::Settings,
+            Ok("general") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::General;
+            }
             Ok("about") => {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::About;
@@ -406,6 +425,14 @@ impl JoystickGobloonApp {
     }
 
     /// Runs `action`, first asking to save unsaved changes.
+    /// Close or minimize to tray. Without a window handle (not Windows) the window is hidden.
+    fn hide_to_tray(&self, ctx: &egui::Context) {
+        match self.hwnd {
+            Some(hwnd) => crate::tray::hide_window(hwnd),
+            None => ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false)),
+        }
+    }
+
     fn request(&mut self, action: Pending, ctx: &egui::Context) {
         if self.profile.as_ref().is_some_and(|p| p.dirty) {
             self.pending = Some(action);
@@ -955,13 +982,14 @@ impl eframe::App for JoystickGobloonApp {
         if self.hide_frames > 0 {
             self.vjoy_view.release();
             self.hide_frames -= 1;
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            self.hide_to_tray(ctx);
             ctx.request_repaint();
         }
         if let Some(tray) = &mut self.tray {
             let active = self.activation.is_active();
             let tip = |key: &str| format!("{} | {}", crate::APP_NAME, self.i18n.tr(key));
             tray.set_active(active, [tip("title-inactive"), tip("title-active")]);
+            tray.set_double_click_activates(self.settings.tray_double_click_activates);
             match self.activation.profile_name() {
                 Some(name) => {
                     let caption = self.i18n.trf("tray-activate", &[("name", name.into())]);
@@ -992,7 +1020,7 @@ impl eframe::App for JoystickGobloonApp {
         let to_tray = self.settings.close_to_tray && self.tray.is_some() && !self.allow_close;
         if to_tray && ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            self.hide_to_tray(ctx);
             self.vjoy_view.release();
         }
         // "Minimize to tray": a minimized window leaves the taskbar; the tray brings it back.
@@ -1003,7 +1031,7 @@ impl eframe::App for JoystickGobloonApp {
         }
         if minimized && !self.was_minimized && self.settings.minimize_to_tray && self.tray.is_some()
         {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            self.hide_to_tray(ctx);
         }
         self.was_minimized = minimized;
         if let Some(file) = self.activation.take_load_request() {
@@ -1046,11 +1074,35 @@ impl eframe::App for JoystickGobloonApp {
             }
         }
         self.input.set_event_mode(self.settings.input_events);
-        self.devices_view.handle_events(
-            self.input.events(),
-            &self.input.devices(),
-            self.settings.focus_used_input,
-        );
+        let in_tray = self.hwnd.is_some_and(crate::tray::in_tray);
+        let shown = !in_tray && self.hwnd.is_none_or(crate::tray::window_shown);
+        if in_tray && self.pending.is_some() {
+            // A question needs the window, e.g. Quit from the tray with unsaved changes.
+            if let Some(hwnd) = self.hwnd {
+                crate::tray::show_window(hwnd);
+            }
+            self.restored
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            ctx.request_repaint();
+        }
+        // Detached windows stay on screen while the main window is only minimized.
+        let live = !in_tray
+            && ((shown && matches!(self.page, Page::Devices | Page::Viewer | Page::Calibration))
+                || self.viewer_window
+                || self.calibration_window);
+        self.live_input
+            .store(live, std::sync::atomic::Ordering::Relaxed);
+        // Always drained; events from before the window came back are stale and only dropped.
+        let focus =
+            self.settings.focus_used_input && shown && self.was_shown && self.page == Page::Devices;
+        self.devices_view
+            .handle_events(self.input.events(), &self.input.devices(), focus);
+        self.was_shown = shown;
+        // In the tray only the logic above runs: nothing is drawn, so no page or window
+        // schedules repaints. Detached windows close and come back with the main window.
+        if in_tray {
+            return;
+        }
         egui::SidePanel::left("nav")
             .resizable(false)
             .exact_width(60.0)

@@ -374,6 +374,7 @@ cond-logical = 逻辑设备输入
 settings-tray = 显示托盘图标
 settings-close-to-tray = 关闭时最小化到托盘
 settings-minimize-to-tray = 最小化到托盘
+settings-tray-double-click = 双击激活配置文件
 settings-tray-title = 托盘图标
 settings-autostart = 随 Windows 启动（最小化）
 settings-activate-on-start = 启动时激活配置文件

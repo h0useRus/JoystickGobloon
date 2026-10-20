@@ -87,6 +87,14 @@ pub fn show(
                 &mut settings.reopen_last,
                 i18n.tr("settings-reopen-last"),
             ));
+            // Only a reopened profile can be activated on startup.
+            let activate = ui.add_enabled(
+                settings.reopen_last,
+                style::switch(
+                    &mut settings.activate_on_start,
+                    i18n.tr("settings-activate-on-start"),
+                ),
+            );
             let whitelist = ui.add(style::switch(
                 &mut settings.hidhide_whitelist_self,
                 i18n.tr("settings-hidhide-self"),
@@ -105,10 +113,6 @@ pub fn show(
             let autostart = ui.add(style::switch(
                 &mut settings.start_with_windows,
                 i18n.tr("settings-autostart"),
-            ));
-            let activate = ui.add(style::switch(
-                &mut settings.activate_on_start,
-                i18n.tr("settings-activate-on-start"),
             ));
             let updates = ui.add(style::switch(
                 &mut settings.check_updates,
@@ -277,7 +281,14 @@ fn tray_section(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Opti
             i18n.tr("settings-minimize-to-tray"),
         ),
     );
-    if tray.changed() || close.changed() || minimize.changed() {
+    let double_click = ui.add_enabled(
+        settings.show_tray,
+        style::switch(
+            &mut settings.tray_double_click_activates,
+            i18n.tr("settings-tray-double-click"),
+        ),
+    );
+    if tray.changed() || close.changed() || minimize.changed() || double_click.changed() {
         settings.save();
     }
     tray.changed().then_some(Change::Tray)

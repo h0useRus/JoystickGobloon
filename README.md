@@ -81,7 +81,10 @@ Gremlin workflow you already know.
 
 ### Everyday comfort
 
-- Tray icon, start with Windows, activate the profile on start.
+- Tray icon: click to show or hide the window, double click to activate the profile; in the tray the app uses
+  almost no CPU.
+- Start with Windows, activate the profile on start.
+- Controllers are read when they change: low latency, short button presses are never missed.
 - Light, dark or system theme.
 - English, Русский, Deutsch, Español, Français, 简体中文 and 한국어 — more languages are a text file away.
 
@@ -119,7 +122,7 @@ cargo test --workspace
 | `gob-core` | Profile model mirroring Joystick Gremlin R14 |
 | `gob-gremlin` | Gremlin XML import / export, lossless round trip |
 | `gob-engine` | Runs a profile: input → actions → vJoy, keyboard, mouse |
-| `gob-input` | DirectInput polling and the keyboard hook |
+| `gob-input` | DirectInput input (on change or polling) and the keyboard hook |
 | `gob-vjoy` | vJoy driver: output and device configuration |
 | `gob-hidhide` | HidHide driver: hiding, application list |
 | `gob-lighting` | Joystick LEDs through HID (VKB) |

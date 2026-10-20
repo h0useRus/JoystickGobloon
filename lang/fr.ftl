@@ -374,6 +374,7 @@ cond-logical = Entrée du périphérique logique
 settings-tray = Afficher l’icône dans la zone de notification
 settings-close-to-tray = Fermer dans la zone de notification
 settings-minimize-to-tray = Réduire dans la zone de notification
+settings-tray-double-click = Un double-clic active le profil
 settings-tray-title = Icône de notification
 settings-autostart = Démarrer avec Windows (réduit)
 settings-activate-on-start = Activer le profil au démarrage

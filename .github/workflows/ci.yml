@@ -21,6 +21,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --all --check
+      # Dependencies no crate uses any more (searches the sources, no build needed).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete
+      - name: Unused dependencies
+        run: cargo machete
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test

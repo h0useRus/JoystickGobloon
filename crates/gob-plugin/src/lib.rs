@@ -113,10 +113,6 @@ impl Registry {
             .map(|p| p.as_ref())
     }
 
-    pub fn kinds(&self) -> impl Iterator<Item = &str> {
-        self.actions.iter().map(|p| p.kind())
-    }
-
     pub fn loaded(&self) -> &[LoadedPlugin] {
         &self.loaded
     }

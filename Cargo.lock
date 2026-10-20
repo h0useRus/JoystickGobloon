@@ -2463,7 +2463,6 @@ dependencies = [
  "rfd",
  "semver",
  "serde",
- "serde_json",
  "sha2",
  "toml 0.8.2",
  "tray-icon",

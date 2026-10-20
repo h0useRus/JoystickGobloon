@@ -374,6 +374,7 @@ cond-logical = Вход логического устройства
 settings-tray = Показывать значок в трее
 settings-close-to-tray = Закрывать в трей
 settings-minimize-to-tray = Сворачивать в трей
+settings-tray-double-click = Двойной клик активирует профиль
 settings-tray-title = Значок в трее
 settings-autostart = Запускать вместе с Windows (свёрнутым)
 settings-activate-on-start = Активировать профиль при запуске

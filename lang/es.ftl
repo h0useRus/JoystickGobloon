@@ -374,6 +374,7 @@ cond-logical = Entrada del dispositivo lógico
 settings-tray = Mostrar el icono en la bandeja
 settings-close-to-tray = Cerrar a la bandeja
 settings-minimize-to-tray = Minimizar a la bandeja
+settings-tray-double-click = Doble clic activa el perfil
 settings-tray-title = Icono de la bandeja
 settings-autostart = Iniciar con Windows (minimizado)
 settings-activate-on-start = Activar el perfil al iniciar
