@@ -15,7 +15,8 @@ label-mode = 模式
 # Settings
 settings-appearance = 外观
 settings-general = 常规
-settings-about = 关于
+settings-about = 关于
+
 settings-lighting = 灯光
 settings-leds-hint = 当更改过摇杆 LED 的配置文件被停用时，将设置这些颜色。摇杆会保持更改后的颜色直到重新连接，因此无法恢复其自身的 LED 设置。
 settings-leds-none = 未连接可控制 LED 的摇杆。
@@ -62,6 +63,7 @@ status-substituted = 控件已映射。保存配置文件以保留更改。
 
 # vJoy
 vjoy-missing = 未安装 vJoy 或无法加载。
+vjoy-no-access = 没有创建 vJoy 设备的权限。
 vjoy-enabled = 驱动已启用
 vjoy-disabled = 驱动已禁用
 vjoy-no-devices = 尚未配置 vJoy 设备。
@@ -74,7 +76,7 @@ vjoy-lock = 独占控制此设备以测试其输出
 vjoy-unlock = 释放设备
 vjoy-free = 空闲
 vjoy-own = 由 Joystick Gobloon 控制
-vjoy-busy = 被其他程序使用（例如 Joystick Gremlin）
+vjoy-busy = 被其他程序或另一个 Joystick Gobloon 实例使用
 vjoy-unknown = 未知状态
 vjoy-error = 无法占用设备：{ $error }
 
@@ -301,14 +303,16 @@ edit-tts-pitch = 音调
 edit-tts-back = 排在所有内容之后
 edit-tts-front = 排在下一个（Windows 语音：与排在所有内容之后相同）
 edit-tts-interrupt = 打断正在朗读的内容
-edit-preview = 试听
+edit-preview = 试听
+
 kind-light-led = LED 灯光
 edit-led-device = 带 LED 的摇杆
 edit-led-no-device = 此摇杆未连接，或无法控制其 LED
 edit-led-id = LED
 led-vkb-grip = 握把顶部 RGB
 led-vkb-hat = 苦力帽旁小红灯
-edit-led-color = 颜色
+edit-led-color = 颜色
+
 edit-led-color2 = 第二颜色
 edit-led-blend = 颜色
 led-blend-color1 = 单色
@@ -485,7 +489,8 @@ calibration-extrema-tip = 将轴移到两端，然后再次点击
 calibration-in-window = 校准已在单独窗口中打开。
 
 # Device info
-device-info = 设备信息
+device-info = 设备信息
+
 device-leds = 可控制 LED（LED 灯光动作）
 device-info-name = 设备名称
 device-info-axes = 轴

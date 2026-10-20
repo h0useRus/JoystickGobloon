@@ -15,6 +15,7 @@ const CAPABILITIES: Capabilities = Capabilities {
     max_hats: vconfig::MAX_HATS,
     effects: &vconfig::EFFECTS,
     switchable: true,
+    needs_admin: true,
 };
 
 pub fn load() -> Result<Arc<dyn Backend>, Error> {

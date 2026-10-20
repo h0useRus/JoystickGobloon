@@ -15,7 +15,8 @@ label-mode = 모드
 # Settings
 settings-appearance = 모양
 settings-general = 일반
-settings-about = 정보
+settings-about = 정보
+
 settings-lighting = 조명
 settings-leds-hint = 조이스틱의 LED를 바꾼 프로필이 비활성화되면 이 색상이 설정됩니다. 조이스틱은 다시 연결할 때까지 바뀐 색상을 유지하므로 자체 LED 설정으로 되돌릴 수 없습니다.
 settings-leds-none = LED를 제어할 수 있는 조이스틱이 연결되어 있지 않습니다.
@@ -62,6 +63,7 @@ status-substituted = 컨트롤이 매핑되었습니다. 변경 내용을 유지
 
 # vJoy
 vjoy-missing = vJoy가 설치되지 않았거나 불러올 수 없습니다.
+vjoy-no-access = vJoy 장치를 만들 권한이 없습니다.
 vjoy-enabled = 드라이버 사용
 vjoy-disabled = 드라이버 사용 안 함
 vjoy-no-devices = 아직 구성된 vJoy 장치가 없습니다.
@@ -74,7 +76,7 @@ vjoy-lock = 출력을 테스트하기 위해 이 장치를 독점 제어
 vjoy-unlock = 장치 해제
 vjoy-free = 사용 가능
 vjoy-own = Joystick Gobloon이 제어 중
-vjoy-busy = 다른 프로그램이 사용 중 (예: Joystick Gremlin)
+vjoy-busy = 다른 프로그램 또는 다른 Joystick Gobloon 인스턴스가 사용 중
 vjoy-unknown = 알 수 없는 상태
 vjoy-error = 장치를 가져올 수 없습니다: { $error }
 
@@ -301,14 +303,16 @@ edit-tts-pitch = 음높이
 edit-tts-back = 모든 항목 뒤에 대기
 edit-tts-front = 다음 순서로 대기 (Windows 음성: 모든 항목 뒤와 같음)
 edit-tts-interrupt = 읽고 있는 내용 중단
-edit-preview = 미리 듣기
+edit-preview = 미리 듣기
+
 kind-light-led = LED 조명
 edit-led-device = LED가 있는 조이스틱
 edit-led-no-device = 이 조이스틱이 연결되어 있지 않거나 LED를 제어할 수 없습니다
 edit-led-id = LED
 led-vkb-grip = 그립 상단 RGB
 led-vkb-hat = 햇 스위치 옆 작은 빨간색
-edit-led-color = 색상
+edit-led-color = 색상
+
 edit-led-color2 = 두 번째 색상
 edit-led-blend = 색상
 led-blend-color1 = 한 가지 색상
@@ -485,7 +489,8 @@ calibration-extrema-tip = 축을 양 끝까지 움직인 다음 다시 클릭하
 calibration-in-window = 보정이 별도 창에 열려 있습니다.
 
 # Device info
-device-info = 장치 정보
+device-info = 장치 정보
+
 device-leds = LED 제어 가능 (LED 조명 동작)
 device-info-name = 장치 이름
 device-info-axes = 축

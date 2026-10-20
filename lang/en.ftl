@@ -15,7 +15,8 @@ label-mode = Mode
 # Settings
 settings-appearance = Appearance
 settings-general = General
-settings-about = About
+settings-about = About
+
 settings-lighting = Lighting
 settings-leds-hint = When a profile that changed a joystick's LEDs is deactivated, these colors are set. The joystick keeps changed colors until it is reconnected, so its own LED settings cannot be brought back.
 settings-leds-none = No joystick with LED control is connected.
@@ -62,6 +63,7 @@ status-substituted = Controls mapped. Save the profile to keep the change.
 
 # vJoy
 vjoy-missing = vJoy is not installed or could not be loaded.
+vjoy-no-access = No permission to create vJoy devices.
 vjoy-enabled = Driver enabled
 vjoy-disabled = Driver disabled
 vjoy-no-devices = No vJoy devices configured yet.
@@ -74,7 +76,7 @@ vjoy-lock = Take exclusive control of this device to test its output
 vjoy-unlock = Release the device
 vjoy-free = Free
 vjoy-own = Controlled by Joystick Gobloon
-vjoy-busy = Used by another program (e.g. Joystick Gremlin)
+vjoy-busy = Used by another program or another copy of Joystick Gobloon
 vjoy-unknown = Unknown state
 vjoy-error = Could not take the device: { $error }
 
@@ -301,14 +303,16 @@ edit-tts-pitch = Pitch
 edit-tts-back = Queue after everything else
 edit-tts-front = Queue next (Windows speech: same as after everything else)
 edit-tts-interrupt = Interrupt what is being said
-edit-preview = Preview
+edit-preview = Preview
+
 kind-light-led = Light LED
 edit-led-device = Joystick with LEDs
 edit-led-no-device = This joystick is not connected or its LEDs cannot be controlled
 edit-led-id = LED
 led-vkb-grip = RGB on top of the grip
 led-vkb-hat = Small red at the hat
-edit-led-color = Color
+edit-led-color = Color
+
 edit-led-color2 = Second color
 edit-led-blend = Colors
 led-blend-color1 = One color
@@ -485,7 +489,8 @@ calibration-extrema-tip = Move the axis to both ends, then click again
 calibration-in-window = The calibration is open in its own window.
 
 # Device info
-device-info = Device information
+device-info = Device information
+
 device-leds = LEDs can be controlled (Light LED action)
 device-info-name = Device name
 device-info-axes = Axes

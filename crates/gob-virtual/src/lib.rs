@@ -93,6 +93,8 @@ pub struct Capabilities {
     pub effects: &'static [&'static str],
     /// The whole backend can be switched on and off ([`Change::Enable`]).
     pub switchable: bool,
+    /// Applying a configuration change asks the user for administrator rights.
+    pub needs_admin: bool,
 }
 
 /// No backend: nothing can be configured.
@@ -103,6 +105,7 @@ pub const NO_CAPABILITIES: Capabilities = Capabilities {
     max_hats: 0,
     effects: &[],
     switchable: false,
+    needs_admin: false,
 };
 
 /// One device's configuration, as the configuration page edits it.

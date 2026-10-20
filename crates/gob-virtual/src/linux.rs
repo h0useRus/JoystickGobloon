@@ -28,6 +28,7 @@ const CAPABILITIES: Capabilities = Capabilities {
     max_hats: 4,
     effects: &[],
     switchable: false,
+    needs_admin: false,
 };
 const NAME_PREFIX: &str = "Joystick Gobloon Joystick ";
 const VENDOR: u16 = 0x1234;

@@ -15,7 +15,8 @@ label-mode = Mode
 # Settings
 settings-appearance = Apparence
 settings-general = Général
-settings-about = À propos
+settings-about = À propos
+
 settings-lighting = Éclairage
 settings-leds-hint = Quand un profil qui a modifié les LED d'un joystick est désactivé, ces couleurs sont appliquées. Le joystick garde les couleurs modifiées jusqu'à sa reconnexion : ses propres réglages de LED ne peuvent donc pas être rétablis.
 settings-leds-none = Aucun joystick avec LED pilotables n'est connecté.
@@ -62,6 +63,7 @@ status-substituted = Commandes associées. Enregistrez le profil pour conserver 
 
 # vJoy
 vjoy-missing = vJoy n’est pas installé ou n’a pas pu être chargé.
+vjoy-no-access = Pas l’autorisation de créer des périphériques vJoy.
 vjoy-enabled = Pilote activé
 vjoy-disabled = Pilote désactivé
 vjoy-no-devices = Aucun périphérique vJoy configuré pour l’instant.
@@ -74,7 +76,7 @@ vjoy-lock = Prendre le contrôle exclusif de ce périphérique pour tester sa so
 vjoy-unlock = Libérer le périphérique
 vjoy-free = Libre
 vjoy-own = Contrôlé par Joystick Gobloon
-vjoy-busy = Utilisé par un autre programme (p. ex. Joystick Gremlin)
+vjoy-busy = Utilisé par un autre programme ou une autre copie de Joystick Gobloon
 vjoy-unknown = État inconnu
 vjoy-error = Impossible de prendre le périphérique : { $error }
 
@@ -301,14 +303,16 @@ edit-tts-pitch = Hauteur
 edit-tts-back = Mettre en file après tout le reste
 edit-tts-front = Mettre ensuite (voix Windows : comme après tout le reste)
 edit-tts-interrupt = Interrompre ce qui est en cours
-edit-preview = Aperçu
+edit-preview = Aperçu
+
 kind-light-led = Éclairage LED
 edit-led-device = Joystick avec LED
 edit-led-no-device = Ce joystick n'est pas connecté ou ses LED ne peuvent pas être pilotées
 edit-led-id = LED
 led-vkb-grip = RVB en haut de la poignée
 led-vkb-hat = Petite rouge près du chapeau
-edit-led-color = Couleur
+edit-led-color = Couleur
+
 edit-led-color2 = Seconde couleur
 edit-led-blend = Couleurs
 led-blend-color1 = Une couleur
@@ -485,7 +489,8 @@ calibration-extrema-tip = Amenez l’axe aux deux extrémités, puis cliquez à 
 calibration-in-window = Le calibrage est ouvert dans sa propre fenêtre.
 
 # Device info
-device-info = Informations sur le périphérique
+device-info = Informations sur le périphérique
+
 device-leds = LED pilotables (action Éclairage LED)
 device-info-name = Nom du périphérique
 device-info-axes = Axes

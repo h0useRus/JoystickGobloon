@@ -15,7 +15,8 @@ label-mode = Режим
 # Settings
 settings-appearance = Внешний вид
 settings-general = Общие
-settings-about = О программе
+settings-about = О программе
+
 settings-lighting = Подсветка
 settings-leds-hint = Когда профиль, менявший подсветку джойстика, деактивируется, ставятся эти цвета. Джойстик держит изменённые цвета до переподключения, поэтому вернуть его собственные настройки подсветки нельзя.
 settings-leds-none = Нет подключённых джойстиков с управляемой подсветкой.
@@ -62,6 +63,7 @@ status-substituted = Контроллеры сопоставлены. Сохра
 
 # vJoy
 vjoy-missing = vJoy не установлен или не загружается.
+vjoy-no-access = Нет прав на создание устройств vJoy.
 vjoy-enabled = Драйвер включён
 vjoy-disabled = Драйвер выключен
 vjoy-no-devices = Устройства vJoy ещё не настроены.
@@ -74,7 +76,7 @@ vjoy-lock = Взять устройство в монопольное управ
 vjoy-unlock = Отпустить устройство
 vjoy-free = Свободно
 vjoy-own = Управляется Joystick Gobloon
-vjoy-busy = Занято другой программой (например, Joystick Gremlin)
+vjoy-busy = Занято другой программой или другой копией Joystick Gobloon
 vjoy-unknown = Неизвестное состояние
 vjoy-error = Не удалось взять устройство: { $error }
 
@@ -301,14 +303,16 @@ edit-tts-pitch = Высота голоса
 edit-tts-back = В конец очереди
 edit-tts-front = Следующим (в речи Windows — как в конец очереди)
 edit-tts-interrupt = Прервать текущую речь
-edit-preview = Прослушать
+edit-preview = Прослушать
+
 kind-light-led = Подсветка
 edit-led-device = Джойстик с подсветкой
 edit-led-no-device = Джойстик не подключён или его подсветкой нельзя управлять
 edit-led-id = Светодиод
 led-vkb-grip = RGB на верху рукояти
 led-vkb-hat = Маленький красный у хатки
-edit-led-color = Цвет
+edit-led-color = Цвет
+
 edit-led-color2 = Второй цвет
 edit-led-blend = Цвета
 led-blend-color1 = Один цвет
@@ -485,7 +489,8 @@ calibration-extrema-tip = Доведите ось до обоих краёв, з
 calibration-in-window = Калибровка открыта в отдельном окне.
 
 # Device info
-device-info = Сведения об устройстве
+device-info = Сведения об устройстве
+
 device-leds = Подсветкой можно управлять (действие «Подсветка»)
 device-info-name = Название
 device-info-axes = Оси
