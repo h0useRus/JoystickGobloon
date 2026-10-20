@@ -2,8 +2,10 @@
 
 mod instance;
 mod keys;
+mod window;
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use gob_core::Key;
 
@@ -11,6 +13,7 @@ pub(crate) struct Desktop;
 
 impl super::Desktop for Desktop {
     type InstanceEvent = instance::Event;
+    type Window = window::Window;
 
     fn default_data_dir() -> Option<PathBuf> {
         std::env::var_os("APPDATA").map(|p| PathBuf::from(p).join("JoystickGobloon"))
@@ -57,5 +60,41 @@ impl super::Desktop for Desktop {
 
     fn key_name(key: Key) -> String {
         keys::name(key)
+    }
+
+    fn main_window(cc: &eframe::CreationContext<'_>) -> Option<window::Window> {
+        window::main_window(cc)
+    }
+
+    fn hide_to_tray(w: window::Window) {
+        window::hide_to_tray(w);
+    }
+
+    fn show_window(w: window::Window) {
+        window::show(w);
+    }
+
+    fn minimize_window(w: window::Window) {
+        window::minimize(w);
+    }
+
+    fn in_tray(w: window::Window) -> bool {
+        window::in_tray(w)
+    }
+
+    fn window_shown(w: window::Window) -> bool {
+        window::visible(w) && !window::in_tray(w)
+    }
+
+    fn double_click_time() -> Duration {
+        window::double_click_time()
+    }
+
+    fn tray_icon_size() -> u32 {
+        window::small_icon_size()
+    }
+
+    fn set_autostart(enabled: bool, arg: &str) -> Result<(), String> {
+        window::set_autostart(enabled, arg)
     }
 }

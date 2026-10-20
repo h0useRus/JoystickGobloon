@@ -2,6 +2,7 @@
 //! fontconfig, docs/LINUX_PLAN.md phase 5).
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use gob_core::Key;
 
@@ -9,6 +10,7 @@ pub(crate) struct Desktop;
 
 impl super::Desktop for Desktop {
     type InstanceEvent = ();
+    type Window = ();
 
     fn default_data_dir() -> Option<PathBuf> {
         None
@@ -43,5 +45,35 @@ impl super::Desktop for Desktop {
 
     fn key_name(key: Key) -> String {
         super::key_code(key)
+    }
+
+    fn main_window(_cc: &eframe::CreationContext<'_>) -> Option<()> {
+        None
+    }
+
+    fn hide_to_tray(_window: ()) {}
+
+    fn show_window(_window: ()) {}
+
+    fn minimize_window(_window: ()) {}
+
+    fn in_tray(_window: ()) -> bool {
+        false
+    }
+
+    fn window_shown(_window: ()) -> bool {
+        true
+    }
+
+    fn double_click_time() -> Duration {
+        Duration::from_millis(500)
+    }
+
+    fn tray_icon_size() -> u32 {
+        16
+    }
+
+    fn set_autostart(_enabled: bool, _arg: &str) -> Result<(), String> {
+        Ok(())
     }
 }

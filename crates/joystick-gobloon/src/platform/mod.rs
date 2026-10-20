@@ -3,6 +3,7 @@
 //! platforms get until their own module (Linux: phase 5).
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use gob_core::Key;
 
@@ -20,6 +21,8 @@ use windows::Desktop as Current;
 pub(crate) trait Desktop {
     /// Wakes a running copy (see [`claim_instance`]).
     type InstanceEvent: Send + 'static;
+    /// The main window, as the tray and the app's hiding logic address it.
+    type Window: Copy + Send + Sync + 'static;
 
     /// Folder for settings, the app list and the log when the program has no portable one.
     fn default_data_dir() -> Option<PathBuf>;
@@ -39,10 +42,32 @@ pub(crate) trait Desktop {
     fn held_keys() -> Vec<Key>;
     /// A key's name in the current keyboard layout, e.g. "Right Ctrl".
     fn key_name(key: Key) -> String;
+
+    /// The main window; `None` where the platform cannot address it (the app then hides and
+    /// shows it through eframe only).
+    fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Self::Window>;
+    /// Puts the window into the tray. It must keep getting frames there (the app's logic runs
+    /// in them) without being drawn on screen or in the task switcher. May be called from inside
+    /// the window's event handling.
+    fn hide_to_tray(window: Self::Window);
+    /// Shows the window again, from the tray or minimized.
+    fn show_window(window: Self::Window);
+    fn minimize_window(window: Self::Window);
+    fn in_tray(window: Self::Window) -> bool;
+    /// On screen: visible, not minimized, not in the tray.
+    fn window_shown(window: Self::Window) -> bool;
+    /// The user's double-click time (a tray click waits for it).
+    fn double_click_time() -> Duration;
+    /// Size of a tray icon in pixels at the current display scaling.
+    fn tray_icon_size() -> u32;
+    /// Starts the running program with `arg` when the user logs on, or stops doing so.
+    fn set_autostart(enabled: bool, arg: &str) -> Result<(), String>;
 }
 
 /// What a later start signals to wake this copy.
 pub(crate) type InstanceEvent = <Current as Desktop>::InstanceEvent;
+/// The main window (an opaque handle).
+pub(crate) type Window = <Current as Desktop>::Window;
 
 pub(crate) fn default_data_dir() -> Option<PathBuf> {
     Current::default_data_dir()
@@ -78,6 +103,42 @@ pub(crate) fn held_keys() -> Vec<Key> {
 
 pub(crate) fn key_name(key: Key) -> String {
     Current::key_name(key)
+}
+
+pub(crate) fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Window> {
+    Current::main_window(cc)
+}
+
+pub(crate) fn hide_to_tray(window: Window) {
+    Current::hide_to_tray(window);
+}
+
+pub(crate) fn show_window(window: Window) {
+    Current::show_window(window);
+}
+
+pub(crate) fn minimize_window(window: Window) {
+    Current::minimize_window(window);
+}
+
+pub(crate) fn in_tray(window: Window) -> bool {
+    Current::in_tray(window)
+}
+
+pub(crate) fn window_shown(window: Window) -> bool {
+    Current::window_shown(window)
+}
+
+pub(crate) fn double_click_time() -> Duration {
+    Current::double_click_time()
+}
+
+pub(crate) fn tray_icon_size() -> u32 {
+    Current::tray_icon_size()
+}
+
+pub(crate) fn set_autostart(enabled: bool, arg: &str) -> Result<(), String> {
+    Current::set_autostart(enabled, arg)
 }
 
 /// A key as its code, when the system has no name for it: `0x1d`, `E0 0x1d`.
