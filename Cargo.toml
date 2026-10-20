@@ -3,6 +3,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
+# Local builds only: releases take their version from the commits (.github/scripts/next-version.sh).
 version = "0.6.0"
 edition = "2024"
 license = "MIT"

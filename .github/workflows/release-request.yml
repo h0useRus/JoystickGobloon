@@ -1,6 +1,5 @@
-# Pull requests into main are release requests: they come from dev and carry the final
-# version of the release (workspace version in Cargo.toml, no pre-release suffix, newer
-# than the latest release).
+# Pull requests into main are release requests: they come from dev, and their title names the
+# version the merge releases (computed from the Conventional Commits since the last release).
 name: Release request
 
 on:
@@ -22,26 +21,21 @@ jobs:
             echo "::error::Pull requests into main must come from dev (this one is from ${{ github.head_ref }})."
             exit 1
           fi
-      - name: Final, new version
+      # The version comes from the commits (.github/scripts/next-version.sh): they must all be
+      # Conventional Commits, and the title names the version the merge will release.
+      - name: Conventional commits
         shell: bash
         run: |
-          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
-          echo "Release version: $version"
-          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Cargo.toml version '$version' is not a final x.y.z version."
-            exit 1
-          fi
-          # No final release yet is fine (grep finds nothing; the step runs with pipefail).
-          last=$(git tag -l 'v*' | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sed 's/^v//' | sort -V | tail -n1)
-          echo "Latest release: ${last:-none}"
-          if [ -n "$last" ]; then
-            newest=$(printf '%s\n%s\n' "$last" "$version" | sort -V | tail -n1)
-            if [ "$version" = "$last" ] || [ "$newest" != "$version" ]; then
-              echo "::error::Version $version must be newer than the latest release $last."
-              exit 1
-            fi
-          fi
-          if ! grep -q "$version" <<< "${{ github.event.pull_request.title }}"; then
-            echo "::error::The pull request title must contain the release version $version."
+          last=$(git tag -l 'v*' | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -n1)
+          bash .github/scripts/next-version.sh --check "${last:+$last..}HEAD"
+      - name: Release version in the title
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          version=$(bash .github/scripts/next-version.sh)
+          echo "Release version: $version" >> "$GITHUB_STEP_SUMMARY"
+          if ! grep -qF "$version" <<< "$TITLE"; then
+            echo "::error::This merge releases $version: the pull request title must contain it (e.g. \"Release $version\")."
             exit 1
           fi
