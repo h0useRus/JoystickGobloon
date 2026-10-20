@@ -67,18 +67,23 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   translated; routine info goes to the status bar. No report/diagnostics windows.
 - Branches: development happens on `dev`; every work branch is created from `dev` and merged back into it
   by pull request. `main` only receives release requests: a pull request from `dev` whose title contains
-  the final version, with `[workspace.package] version` in Cargo.toml bumped to that x.y.z (checked by
-  .github/workflows/release-request.yml). Never commit directly to `main`.
+  the version the merge releases (checked by .github/workflows/release-request.yml). Never commit directly
+  to `main`.
+- Versions come from the commits (.github/scripts/next-version.sh): Conventional Commits since the latest
+  final tag vX.Y.Z; feat -> minor, any other type -> patch, `type!:` / `BREAKING CHANGE:` -> major (minor
+  while 0.x). Never bump versions by hand; `[workspace.package] version` in Cargo.toml only names local builds.
+  `bash .github/scripts/next-version.sh` prints the next version.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
   pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss) and a
   portable zip. The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; uninstall runs `JoystickGobloon.exe
-  --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) runs fmt,
-  cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches.
+  --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) checks commit
+  messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches.
 - Discord: releases post through .github/scripts/discord-announce.ps1 to the DISCORD_WEBHOOK secret (alpha
   builds to DISCORD_WEBHOOK_ALPHA); no secret = no post. announce.yml re-posts a release by hand.
 - Rust version is pinned in rust-toolchain.toml (local and CI); bump it deliberately and fix new lints.
-- Commits: Conventional Commits (feat/fix/docs/refactor/test/chore/build/ci; scope = crate, e.g. `feat(gob-gremlin): parse R14 library`).
+- Commits: Conventional Commits (feat/fix/perf/docs/refactor/test/chore/build/ci/style/revert; scope = crate,
+  e.g. `feat(gob-gremlin): parse R14 library`). CI rejects other messages; the type sets the release version.
 
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.

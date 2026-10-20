@@ -15,6 +15,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Release versions come from the commit messages (.github/scripts/next-version.sh).
+      - name: Conventional commits
+        shell: bash
+        run: bash .github/scripts/next-version.sh --check "origin/${{ github.base_ref || 'dev' }}..HEAD"
       # Installs the Rust version pinned in rust-toolchain.toml.
       - name: Rust toolchain
         run: rustup toolchain install && rustup show

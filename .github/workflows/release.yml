@@ -1,5 +1,5 @@
-# main: release v<version> (version from Cargo.toml).
-# dev:  pre-release v<version>-alpha.<run number>.
+# main: release v<version>, dev: pre-release v<version>-alpha.<run number>. The version comes
+# from the Conventional Commits since the last release (.github/scripts/next-version.sh).
 # Both build the app and the installer, after the same checks as CI.
 name: Release
 
@@ -34,14 +34,14 @@ jobs:
         id: version
         shell: bash
         run: |
-          base=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          base=$(bash .github/scripts/next-version.sh)
           if [ "${{ github.ref_name }}" = "main" ]; then
             version="$base"; prerelease=false
           else
             version="$base-alpha.${{ github.run_number }}"; prerelease=true
           fi
           if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-            echo "::error::Tag v$version already exists: bump the version in Cargo.toml."
+            echo "::error::Tag v$version already exists."
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
