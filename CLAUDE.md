@@ -94,8 +94,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   while 0.x). Never bump versions by hand; `[workspace.package] version` in Cargo.toml only names local builds.
   `bash .github/scripts/next-version.sh` prints the next version.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
-  pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss) and a
-  portable zip. The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
+  pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss), a
+  portable zip and a Linux AppImage (job `appimage`, tools/linux/appimage.sh; it updates itself in place). The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; uninstall runs `JoystickGobloon.exe
   --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) checks commit
   messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches,
@@ -118,6 +118,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Network tests: `cargo test -p joystick-gobloon update:: -- --ignored`.
 - Linux (docs/LINUX_PLAN.md): `tools\linux\check.ps1` runs clippy + tests (or any command) in Podman (machine
   pod-h0use, start it first); Windows-only code stays behind `cfg(windows)`, so the Linux build must stay clean.
+  `check.ps1 --devices` adds /dev (uinput tests); tools/linux/gui_smoke.sh starts the GUI (or `APP=` an
+  AppImage) under Xvfb for a screenshot; no real tray or desktop there.
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
   window stays responsive; needs "close button hides to tray" on.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the
