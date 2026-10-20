@@ -59,6 +59,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   (env vars).
 - Gremlin import must round-trip: unknown actions kept as raw XML.
 - GUI never blocks; engine runs on its own thread, talks via channels.
+- Platform code (OS APIs, drivers) lives only in per-platform modules (`platform/windows.rs`, `platform/linux.rs`) or
+  backend crates behind a common interface; UI, engine and model use only the interface and its capabilities, never
+  `windows::`/`cfg(windows)`/`cfg(target_os)`. A platform part (e.g. our own Windows driver instead of vJoy) must be
+  replaceable without touching UI or logic. Layout and migration: docs/LINUX_PLAN.md, "Архитектура".
 - Settings: TOML text in %APPDATA%\JoystickGobloon\settings.gob (old settings.toml is read once), programs of
   the Applications page in apps.gob next to it. If the exe's folder has its own settings.gob, that folder is
   used instead for settings, apps and the log (joystick-gobloon/src/settings.rs `data_dir`).
