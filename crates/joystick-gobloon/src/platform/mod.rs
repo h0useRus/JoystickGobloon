@@ -1,6 +1,6 @@
 //! Desktop integration per platform behind one interface, so the pages and the app logic stay the
-//! same everywhere (docs/LINUX_PLAN.md, "Архитектура"). `windows/`: Win32; `linux/`: device
-//! access, the rest from `none.rs` until phase 5; `none.rs`: what other platforms get.
+//! same everywhere (docs/LINUX_PLAN.md, "Архитектура"). `windows/`: Win32; `linux/`: XDG, GTK
+//! tray, udev rule, AppImage updates; `none.rs`: what other platforms get (and Linux in part).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

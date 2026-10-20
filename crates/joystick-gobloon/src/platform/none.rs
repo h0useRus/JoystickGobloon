@@ -1,5 +1,5 @@
-//! Platforms without their own module, and what Linux's module still takes from here
-//! (docs/LINUX_PLAN.md, phase 5: window and tray, fonts, updates).
+//! Platforms without their own module; Linux's module takes the double-click time, the tray
+//! icon size and zip unpacking from here.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
