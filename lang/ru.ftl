@@ -305,7 +305,7 @@ edit-tts-hint = Текст для озвучивания; $current_mode заме
 edit-tts-rate = Скорость
 edit-tts-pitch = Высота голоса
 edit-tts-back = В конец очереди
-edit-tts-front = Следующим (в речи Windows — как в конец очереди)
+edit-tts-front = Следующим (в речи системы — как в конец очереди)
 edit-tts-interrupt = Прервать текущую речь
 edit-preview = Прослушать
 

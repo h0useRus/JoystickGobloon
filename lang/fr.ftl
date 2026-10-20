@@ -305,7 +305,7 @@ edit-tts-hint = Texte à prononcer ; $current_mode est remplacé par le mode act
 edit-tts-rate = Vitesse
 edit-tts-pitch = Hauteur
 edit-tts-back = Mettre en file après tout le reste
-edit-tts-front = Mettre ensuite (voix Windows : comme après tout le reste)
+edit-tts-front = Mettre ensuite (voix du système : comme après tout le reste)
 edit-tts-interrupt = Interrompre ce qui est en cours
 edit-preview = Aperçu
 

@@ -8,7 +8,7 @@ use crate::media::SpeechRequest;
 
 #[cfg(target_os = "linux")]
 mod linux;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 mod none;
 #[cfg(windows)]
 mod windows;

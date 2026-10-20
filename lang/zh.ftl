@@ -305,7 +305,7 @@ edit-tts-hint = 要朗读的文本；$current_mode 会替换为当前模式
 edit-tts-rate = 语速
 edit-tts-pitch = 音调
 edit-tts-back = 排在所有内容之后
-edit-tts-front = 排在下一个（Windows 语音：与排在所有内容之后相同）
+edit-tts-front = 排在下一个（系统语音：与排在所有内容之后相同）
 edit-tts-interrupt = 打断正在朗读的内容
 edit-preview = 试听
 

@@ -305,7 +305,7 @@ edit-tts-hint = Text to speak; $current_mode is replaced with the active mode
 edit-tts-rate = Speed
 edit-tts-pitch = Pitch
 edit-tts-back = Queue after everything else
-edit-tts-front = Queue next (Windows speech: same as after everything else)
+edit-tts-front = Queue next (the system's speech: same as after everything else)
 edit-tts-interrupt = Interrupt what is being said
 edit-preview = Preview
 

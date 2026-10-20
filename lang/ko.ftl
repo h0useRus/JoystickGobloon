@@ -305,7 +305,7 @@ edit-tts-hint = 읽을 텍스트; $current_mode는 현재 모드로 바뀝니다
 edit-tts-rate = 속도
 edit-tts-pitch = 음높이
 edit-tts-back = 모든 항목 뒤에 대기
-edit-tts-front = 다음 순서로 대기 (Windows 음성: 모든 항목 뒤와 같음)
+edit-tts-front = 다음 순서로 대기 (시스템 음성: 모든 항목 뒤와 같음)
 edit-tts-interrupt = 읽고 있는 내용 중단
 edit-preview = 미리 듣기
 

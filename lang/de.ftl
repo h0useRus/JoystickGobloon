@@ -305,7 +305,7 @@ edit-tts-hint = Zu sprechender Text; $current_mode wird durch den aktiven Modus 
 edit-tts-rate = Geschwindigkeit
 edit-tts-pitch = Tonhöhe
 edit-tts-back = Hinter allem anderen einreihen
-edit-tts-front = Als Nächstes einreihen (Windows-Sprachausgabe: wie hinter allem anderen)
+edit-tts-front = Als Nächstes einreihen (Sprachausgabe des Systems: wie hinter allem anderen)
 edit-tts-interrupt = Laufende Ansage unterbrechen
 edit-preview = Vorschau
 
