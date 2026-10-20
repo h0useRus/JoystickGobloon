@@ -49,9 +49,6 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: docs/LIGHTING_PLAN.md
 - docs/GREMLIN_ACTIONS.md  all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
-- crates/gob-plugin  ActionPlugin/Functor traits + Registry (in-process); Engine::with_plugins runs unknown action
-  types through it. DLL plugins = stub: `joystick_gobloon_plugin_info` C entry, ABI_VERSION, info only (examples
-  `stub_plugin` cdylib, `list_plugins`); the app loads `<exe>/plugins/*.dll` and logs them
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
 

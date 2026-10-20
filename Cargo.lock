@@ -1945,7 +1945,6 @@ dependencies = [
  "gob-gremlin",
  "gob-input",
  "gob-lighting",
- "gob-plugin",
  "gob-uinput",
  "gob-virtual",
  "libc",
@@ -2002,14 +2001,6 @@ name = "gob-lighting"
 version = "0.6.0"
 dependencies = [
  "windows 0.61.3",
-]
-
-[[package]]
-name = "gob-plugin"
-version = "0.6.0"
-dependencies = [
- "gob-core",
- "libloading 0.8.9",
 ]
 
 [[package]]
@@ -2489,7 +2480,6 @@ dependencies = [
  "gob-i18n",
  "gob-input",
  "gob-lighting",
- "gob-plugin",
  "gob-uinput",
  "gob-virtual",
  "gtk",

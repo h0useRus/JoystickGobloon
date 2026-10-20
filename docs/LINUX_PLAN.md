@@ -15,7 +15,7 @@
 
 | Часть | Строк | Зависит от Windows |
 |---|---|---|
-| gob-core, gob-gremlin, gob-i18n, gob-plugin | ~4 200 | нет |
+| gob-core, gob-gremlin, gob-i18n | ~4 000 | нет |
 | gob-engine | 3 900 | `media.rs` (речь SAPI), `sendinput.rs` (клавиатура/мышь); сам движок нейтрален (трейт `Output`) |
 | gob-input | 1 130 | всё: DirectInput, клавиатурный хук |
 | gob-vjoy | 1 980 | всё (драйвер vJoy) |
@@ -38,7 +38,6 @@
 | Трей, «прозрачное» окно в трее | tray-icon (GTK/AppIndicator) или ksni (StatusNotifierItem). GNOME на Wayland без расширения трея не показывает — тогда без трея, обычное сворачивание. Поведение скрытого окна eframe проверить заново |
 | Шрифты CJK из `C:\Windows\Fonts` | Noto CJK через fontconfig |
 | Установщик, обновление | AppImage; обновление — сначала только уведомление со ссылкой, потом замена файла как у переносной версии |
-| Плагины `.dll` | `.so` (libloading уже кроссплатформенный) |
 | Страница «Приложения» (белый список HidHide) | на Linux не нужна (захват вместо списка), скрыть |
 
 Права: `/dev/uinput` на большинстве дистрибутивов только для root, `/dev/input/event*` — для группы `input`.

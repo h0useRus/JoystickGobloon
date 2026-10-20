@@ -89,7 +89,6 @@ pub struct JoystickGobloonApp {
     /// The window was on screen last frame (not in the tray, not minimized).
     was_shown: bool,
     /// Plugin DLLs from `<exe folder>\plugins`, kept loaded while the app runs.
-    _plugins: gob_plugin::Registry,
     /// Window title last sent to the viewport.
     title: String,
 }
@@ -190,7 +189,6 @@ impl JoystickGobloonApp {
             title: crate::APP_NAME.into(),
             media: Default::default(),
             leds: Default::default(),
-            _plugins: load_plugins(),
             updater: Default::default(),
             update: None,
             tray: None,
@@ -1327,29 +1325,6 @@ impl eframe::App for JoystickGobloonApp {
         self.alert_dialog(ctx);
         self.detached_windows(ctx);
     }
-}
-
-/// Loads the plugin DLLs next to the exe and logs what was found (plugins are a stub so far).
-fn load_plugins() -> gob_plugin::Registry {
-    let mut registry = gob_plugin::Registry::default();
-    let Some(dir) = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(|d| d.join("plugins")))
-    else {
-        return registry;
-    };
-    for e in registry.load_dir(&dir) {
-        log::warn!("plugin skipped: {e}");
-    }
-    for p in registry.loaded() {
-        log::info!(
-            "plugin loaded: {} {} ({})",
-            p.name,
-            p.version,
-            p.path.display()
-        );
-    }
-    registry
 }
 
 /// Default size of a detached page window.
