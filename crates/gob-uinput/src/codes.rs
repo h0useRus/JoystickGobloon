@@ -1,0 +1,34 @@
+//! evdev event types and codes (linux/input-event-codes.h) the backends use.
+
+pub const EV_SYN: u16 = 0x00;
+pub const EV_KEY: u16 = 0x01;
+pub const EV_REL: u16 = 0x02;
+pub const EV_ABS: u16 = 0x03;
+pub const SYN_REPORT: u16 = 0;
+
+pub const BUS_VIRTUAL: u16 = 0x06;
+
+pub const ABS_X: u16 = 0x00;
+pub const ABS_Y: u16 = 0x01;
+pub const ABS_Z: u16 = 0x02;
+pub const ABS_RX: u16 = 0x03;
+pub const ABS_RY: u16 = 0x04;
+pub const ABS_RZ: u16 = 0x05;
+pub const ABS_THROTTLE: u16 = 0x06;
+pub const ABS_RUDDER: u16 = 0x07;
+pub const ABS_HAT0X: u16 = 0x10;
+
+pub const REL_X: u16 = 0x00;
+pub const REL_Y: u16 = 0x01;
+pub const REL_HWHEEL: u16 = 0x06;
+pub const REL_WHEEL: u16 = 0x08;
+
+/// First joystick button (`BTN_TRIGGER`); joystick and gamepad buttons run to 0x13f.
+pub const BTN_JOYSTICK: u16 = 0x120;
+/// First of the 64 extra buttons up to `KEY_MAX` (`BTN_TRIGGER_HAPPY1`).
+pub const BTN_TRIGGER_HAPPY: u16 = 0x2c0;
+pub const BTN_LEFT: u16 = 0x110;
+pub const BTN_RIGHT: u16 = 0x111;
+pub const BTN_MIDDLE: u16 = 0x112;
+pub const BTN_SIDE: u16 = 0x113;
+pub const BTN_EXTRA: u16 = 0x114;

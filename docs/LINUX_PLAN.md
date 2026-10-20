@@ -122,6 +122,20 @@ UI и логику: например, заменить vJoy **своим дра�
 3. **Вывод на Linux.** uinput-бэкенд `gob-virtual` (джойстик) и `Injector` (клавиатура/мышь). Результат:
    профили работают. Проверка: чтение вывода через evdev, `jstest`, игра через Proton. Те же вопросы о числе
    кнопок — у игр (SDL).
+   - [x] Крейт-бэкенд `gob-uinput`: `VirtualDevice` (кнопки/клавиши, оси, REL), `emit` одним отчётом,
+     узел event через `UI_GET_SYSNAME`, `device_names`; пример `uinput_check`.
+   - [x] `gob-virtual/src/linux.rs`: устройство создаётся при `acquire` и исчезает при отпускании; раскладка
+     в `virtual.gob` (TOML, папка из `gob_virtual::set_data_dir`, без неё `$XDG_CONFIG_HOME/JoystickGobloon`;
+     без файла — одно устройство по умолчанию). Имя «Joystick Gobloon Joystick N», vendor/product как у
+     vJoy (0x1234/0xBEAD — gob-input считает их нашим выводом). Оси — коды, которые gob-input читает в те же
+     слоты (ползунки = `ABS_THROTTLE`/`ABS_RUDDER`), кнопки 1-32 = `BTN_JOYSTICK…`, 33-96 =
+     `BTN_TRIGGER_HAPPY…` (до `KEY_MAX`; **пока максимум 96**: больше — только другими кодами клавиш, их
+     порядок у SDL другой — решать после проверки игр). Хатки `ABS_HATnX/Y`, непрерывные — 8 направлений.
+     «Занято» = устройство с таким именем есть в системе, но не наше (вторая копия программы). Нет прав
+     на `/dev/uinput` → `Error::NoAccess`. Тест `tests/uinput.rs` (`check.ps1 --devices`).
+   - [ ] `Injector` на uinput (gob-engine): клавиатура и мышь, имя «Joystick Gobloon …».
+   - [ ] Страница vJoy на Linux: тексты про vJoy (i18n) заменить общими, где показывается `caps.name`.
+   - [ ] Проверка: `jstest`, игра через Proton (SDL), профиль целиком.
 4. **Скрытие на Linux.** Бэкенд `gob-hide` на захвате; установка правила udev через `pkexec`.
 5. **Рабочий стол на Linux.** Linux-модули `platform/`: пути настроек, один экземпляр, автозапуск, трей, шрифты,
    речь; подсветка через hidraw.

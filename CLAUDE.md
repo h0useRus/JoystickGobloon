@@ -24,7 +24,11 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   layout), changed by `JoystickGobloon.exe --vjoy-config <vJoyConfig-style args>` run elevated (configure.rs).
   Examples `vjoy_info [--sweep <id>]` (read-only), `vjoy_config <args>` (UAC, changes the user's vJoy)
 - crates/gob-virtual virtual joysticks, the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
-  + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, unsupported.rs elsewhere (Linux: uinput later)
+  + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
+  made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`), unsupported.rs elsewhere
+- crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`); used by gob-virtual,
+  later gob-engine's Injector. Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
+  `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
   capabilities), `find_device` (input device -> hideable device); windows.rs = HidHide via gob-hidhide
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;

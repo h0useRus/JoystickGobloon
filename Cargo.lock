@@ -2006,10 +2006,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "gob-uinput"
+version = "0.6.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "gob-virtual"
 version = "0.6.0"
 dependencies = [
+ "gob-uinput",
  "gob-vjoy",
+ "libc",
+ "log",
+ "serde",
+ "toml 0.8.2",
 ]
 
 [[package]]
