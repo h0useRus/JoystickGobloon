@@ -33,6 +33,7 @@ semver = "1.0.28"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gob-uinput.workspace = true
+libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 # The main window's HWND (platform/windows/window.rs).

@@ -2492,6 +2492,7 @@ dependencies = [
  "gob-plugin",
  "gob-uinput",
  "gob-virtual",
+ "libc",
  "log",
  "raw-window-handle",
  "rfd",

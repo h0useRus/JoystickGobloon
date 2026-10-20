@@ -184,6 +184,14 @@ UI и логику: например, заменить vJoy **своим дра�
      с версией ядра.
 5. **Рабочий стол на Linux.** Linux-модули `platform/`: пути настроек, один экземпляр, автозапуск, трей, шрифты,
    речь. Подсветка — экспериментальная функция (скрытый ключ `experimental`), в перенос пока не входит.
+   - [x] `joystick-gobloon/src/platform/linux/`: папка данных `$XDG_CONFIG_HOME/JoystickGobloon` (иначе
+     `~/.config/…`; там же ищут gob-virtual и gob-hide), один экземпляр — абстрактный Unix-сокет
+     `JoystickGobloon[.debug].<uid>` (без файла, после падения ничего не остаётся; подключение = «покажись»),
+     автозапуск — `~/.config/autostart/joystick-gobloon.desktop` (для AppImage — путь из `$APPIMAGE`, `Exec`
+     экранирован по спецификации), лог — `xdg-open`, время — `localtime_r`. Тексты автозапуска и темы без
+     «Windows».
+   - [ ] Окно и трей: tray-icon (AppIndicator/StatusNotifierItem), скрытие окна eframe; GNOME/Wayland без трея.
+   - [ ] Шрифты CJK через fontconfig (`fc-match`), речь через speech-dispatcher, имена клавиш.
 6. **Выпуск.** AppImage в `release.yml`, заметки и Discord как сейчас.
 
 ## Тестирование

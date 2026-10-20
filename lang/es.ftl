@@ -26,7 +26,7 @@ settings-reopen-last = Abrir el último perfil al iniciar
 theme-light = Claro
 theme-dark = Oscuro
 theme-system = Sistema
-theme-system-tip = Seguir el modo claro u oscuro de Windows
+theme-system-tip = Seguir el modo claro u oscuro del sistema
 about-text = Ocultación de dispositivos, joysticks virtuales y asignación de entradas en una sola aplicación.
 
 # Empty states
@@ -384,14 +384,14 @@ settings-close-to-tray = Cerrar a la bandeja
 settings-minimize-to-tray = Minimizar a la bandeja
 settings-tray-double-click = Doble clic activa el perfil
 settings-tray-title = Icono de la bandeja
-settings-autostart = Iniciar con Windows (minimizado)
+settings-autostart = Iniciar al iniciar sesión (minimizado)
 settings-activate-on-start = Activar el perfil al iniciar
 tray-show = Mostrar Joystick Gobloon
 tray-hiding = Ocultar dispositivos
 tray-activate = Activar «{ $name }»
 tray-activate-none = Activar el perfil
 tray-quit = Salir
-autostart-error = No se pudo cambiar el inicio con Windows: { $error }
+autostart-error = No se pudo cambiar el inicio al iniciar sesión: { $error }
 
 # About
 about-alpha = versión alfa

@@ -1,6 +1,9 @@
-//! Linux desktop integration. Device access (the udev rule, gob-uinput's `access`) is Linux's
-//! own; the rest still comes from `none.rs` until phase 5 (docs/LINUX_PLAN.md): XDG paths, a
-//! socket for the single instance, fontconfig, the tray.
+//! Linux desktop integration: XDG folders, a socket for the single instance, XDG autostart,
+//! device access (the udev rule, gob-uinput's `access`). The window, tray, fonts and updates
+//! still come from `none.rs` (docs/LINUX_PLAN.md, phase 5).
+
+mod autostart;
+mod instance;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -11,36 +14,65 @@ use super::none::Desktop as Fallback;
 
 pub(crate) struct Desktop;
 
+/// `$XDG_CONFIG_HOME`, by default `~/.config`.
+fn config_home() -> Option<PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+}
+
 impl super::Desktop for Desktop {
-    type InstanceEvent = <Fallback as super::Desktop>::InstanceEvent;
+    type InstanceEvent = instance::Event;
     type Window = <Fallback as super::Desktop>::Window;
 
+    /// `$XDG_CONFIG_HOME/JoystickGobloon`, where gob-virtual and gob-hide look without one too.
     fn default_data_dir() -> Option<PathBuf> {
-        Fallback::default_data_dir()
+        Some(config_home()?.join("JoystickGobloon"))
     }
 
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
         Fallback::cjk_fonts()
     }
 
+    /// In the user's editor for text files.
     fn open_text_file(path: &Path) {
-        Fallback::open_text_file(path);
+        if let Err(e) = std::process::Command::new("xdg-open").arg(path).spawn() {
+            log::warn!("xdg-open {}: {e}", path.display());
+        }
     }
 
+    /// Programs have no extension here: any file.
     fn program_extensions() -> &'static [&'static str] {
-        Fallback::program_extensions()
+        &[]
     }
 
     fn local_time() -> String {
-        Fallback::local_time()
+        // SAFETY: plain libc calls into locally owned structs.
+        unsafe {
+            let mut now: libc::timespec = std::mem::zeroed();
+            libc::clock_gettime(libc::CLOCK_REALTIME, &mut now);
+            let mut t: libc::tm = std::mem::zeroed();
+            libc::localtime_r(&now.tv_sec, &mut t);
+            format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
+                t.tm_year + 1900,
+                t.tm_mon + 1,
+                t.tm_mday,
+                t.tm_hour,
+                t.tm_min,
+                t.tm_sec,
+                now.tv_nsec / 1_000_000
+            )
+        }
     }
 
     fn claim_instance() -> Option<Self::InstanceEvent> {
-        Fallback::claim_instance()
+        instance::claim()
     }
 
     fn listen_instance(event: Self::InstanceEvent, show: Box<dyn Fn() + Send>) {
-        Fallback::listen_instance(event, show);
+        instance::listen(event, show);
     }
 
     /// Off for now: reading every keyboard needs the `input` group (the udev rule leaves
@@ -90,7 +122,7 @@ impl super::Desktop for Desktop {
     }
 
     fn set_autostart(enabled: bool, arg: &str) -> Result<(), String> {
-        Fallback::set_autostart(enabled, arg)
+        autostart::set(enabled, arg)
     }
 
     fn device_access_missing() -> bool {

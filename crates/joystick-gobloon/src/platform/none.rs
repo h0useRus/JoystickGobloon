@@ -1,5 +1,5 @@
-//! Platforms without their own module, and what Linux's module takes from here until phase 5
-//! (docs/LINUX_PLAN.md: XDG paths, a socket for the single instance, fontconfig).
+//! Platforms without their own module, and what Linux's module still takes from here
+//! (docs/LINUX_PLAN.md, phase 5: window and tray, fonts, updates).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

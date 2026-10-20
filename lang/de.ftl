@@ -26,7 +26,7 @@ settings-reopen-last = Beim Start das letzte Profil öffnen
 theme-light = Hell
 theme-dark = Dunkel
 theme-system = System
-theme-system-tip = Der hellen oder dunklen Windows-Einstellung folgen
+theme-system-tip = Der hellen oder dunklen Systemeinstellung folgen
 about-text = Geräte verbergen, virtuelle Joysticks und Eingabebelegung in einer App.
 
 # Empty states
@@ -384,14 +384,14 @@ settings-close-to-tray = Beim Schließen in den Infobereich
 settings-minimize-to-tray = Beim Minimieren in den Infobereich
 settings-tray-double-click = Doppelklick aktiviert das Profil
 settings-tray-title = Symbol im Infobereich
-settings-autostart = Mit Windows starten (minimiert)
+settings-autostart = Bei der Anmeldung starten (minimiert)
 settings-activate-on-start = Profil beim Start aktivieren
 tray-show = Joystick Gobloon anzeigen
 tray-hiding = Geräte verbergen
 tray-activate = „{ $name }“ aktivieren
 tray-activate-none = Profil aktivieren
 tray-quit = Beenden
-autostart-error = Der Start mit Windows konnte nicht geändert werden: { $error }
+autostart-error = Der Start bei der Anmeldung konnte nicht geändert werden: { $error }
 
 # About
 about-alpha = Alpha-Version

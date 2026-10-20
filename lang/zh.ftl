@@ -26,7 +26,7 @@ settings-reopen-last = 启动时打开上次的配置文件
 theme-light = 浅色
 theme-dark = 深色
 theme-system = 跟随系统
-theme-system-tip = 跟随 Windows 的浅色或深色设置
+theme-system-tip = 跟随系统的浅色或深色设置
 about-text = 设备隐藏、虚拟摇杆和输入映射，集于一个应用。
 
 # Empty states
@@ -384,14 +384,14 @@ settings-close-to-tray = 关闭时最小化到托盘
 settings-minimize-to-tray = 最小化到托盘
 settings-tray-double-click = 双击激活配置文件
 settings-tray-title = 托盘图标
-settings-autostart = 随 Windows 启动（最小化）
+settings-autostart = 登录时启动（最小化）
 settings-activate-on-start = 启动时激活配置文件
 tray-show = 显示 Joystick Gobloon
 tray-hiding = 设备隐藏
 tray-activate = 激活“{ $name }”
 tray-activate-none = 激活配置文件
 tray-quit = 退出
-autostart-error = 无法更改随 Windows 启动：{ $error }
+autostart-error = 无法更改登录时启动：{ $error }
 
 # About
 about-alpha = 测试版

@@ -26,7 +26,7 @@ settings-reopen-last = 시작할 때 마지막 프로필 다시 열기
 theme-light = 밝게
 theme-dark = 어둡게
 theme-system = 시스템
-theme-system-tip = Windows의 밝은/어두운 설정 따르기
+theme-system-tip = 시스템의 밝은/어두운 설정 따르기
 about-text = 장치 숨기기, 가상 조이스틱, 입력 매핑을 하나의 앱에서.
 
 # Empty states
@@ -384,14 +384,14 @@ settings-close-to-tray = 닫을 때 트레이로
 settings-minimize-to-tray = 최소화할 때 트레이로
 settings-tray-double-click = 두 번 클릭하면 프로필 활성화
 settings-tray-title = 트레이 아이콘
-settings-autostart = Windows와 함께 시작 (최소화)
+settings-autostart = 로그인 시 시작 (최소화)
 settings-activate-on-start = 시작할 때 프로필 활성화
 tray-show = Joystick Gobloon 표시
 tray-hiding = 장치 숨기기
 tray-activate = “{ $name }” 활성화
 tray-activate-none = 프로필 활성화
 tray-quit = 종료
-autostart-error = Windows와 함께 시작 설정을 바꿀 수 없습니다: { $error }
+autostart-error = 로그인 시 시작 설정을 바꿀 수 없습니다: { $error }
 
 # About
 about-alpha = 알파 빌드
