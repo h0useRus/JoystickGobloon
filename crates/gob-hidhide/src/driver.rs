@@ -20,6 +20,7 @@ pub const GET_WLINVERSE: u32 = ioctl(2054);
 pub const SET_WLINVERSE: u32 = ioctl(2055);
 
 /// UTF-16 `REG_MULTI_SZ`: each string with its terminator, then one more 0.
+#[cfg(any(windows, test))]
 pub fn to_multi_sz(items: &[String]) -> Vec<u16> {
     let mut out: Vec<u16> = Vec::new();
     for item in items.iter().filter(|s| !s.is_empty()) {
@@ -31,6 +32,7 @@ pub fn to_multi_sz(items: &[String]) -> Vec<u16> {
 }
 
 /// Strings of a `REG_MULTI_SZ` buffer; empty strings (the terminators) are skipped.
+#[cfg(any(windows, test))]
 pub fn from_multi_sz(buffer: &[u16]) -> Vec<String> {
     buffer
         .split(|&c| c == 0)

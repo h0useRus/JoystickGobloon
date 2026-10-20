@@ -1,11 +1,12 @@
 //! Applications page: programs known to Joystick Gobloon (`apps.gob`) and their options. For now the only
-//! option is access to devices hidden by HidHide (its application list); profiles per program
-//! come later. Switching access off keeps the program on the page.
+//! option is access to hidden devices (the device hiding's application list, e.g. HidHide's);
+//! profiles per program come later. Switching access off keeps the program on the page.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use eframe::egui::{self, Align, Layout, RichText, Vec2};
-use gob_hidhide::{HidHide, same_path};
+use gob_hide::{Backend, same_path};
 use gob_i18n::I18n;
 
 use crate::settings::{AppEntry, AppList, Settings};
@@ -14,10 +15,11 @@ use crate::style::{self, icon};
 const NAME_WIDTH: f32 = 220.0;
 
 pub struct AppsView {
-    hh: Result<HidHide, String>,
+    hh: Result<Arc<dyn Backend>, String>,
     list: AppList,
     loaded: bool,
-    /// HidHide's application list: whitelist, or blacklist in inverse mode.
+    /// The application list: programs that see hidden devices, or in inverse mode the ones
+    /// that do not.
     listed: Vec<PathBuf>,
     inverse: bool,
     error: Option<String>,
@@ -28,7 +30,7 @@ pub struct AppsView {
 impl AppsView {
     pub fn new() -> Self {
         Self {
-            hh: HidHide::find().map_err(|e| e.to_string()),
+            hh: gob_hide::load().map_err(|e| e.to_string()),
             list: AppList::load(),
             loaded: false,
             listed: Vec::new(),
@@ -43,7 +45,7 @@ impl AppsView {
     pub fn whitelist_self(&self) -> Option<Result<bool, String>> {
         let hh = self.hh.as_ref().ok()?;
         let exe = std::env::current_exe().ok()?;
-        let result = hh.inverse().and_then(|inverse| {
+        let result = hh.apps_inverted().and_then(|inverse| {
             if inverse {
                 Ok(false)
             } else {
@@ -53,17 +55,17 @@ impl AppsView {
         Some(result.map_err(|e| e.to_string()))
     }
 
-    /// Reads HidHide's state; programs in its list that are not on the page are added.
+    /// Reads the application list; programs in it that are not on the page are added.
     fn refresh(&mut self) {
         self.loaded = true;
         let Ok(hh) = &self.hh else { return };
         let result = (|| {
-            self.inverse = hh.inverse()?;
+            self.inverse = hh.apps_inverted()?;
             self.listed = hh.apps()?;
-            Ok::<_, gob_hidhide::Error>(())
+            Ok::<_, gob_hide::Error>(())
         })();
         if let Err(e) = &result {
-            log::error!("reading the HidHide application list: {e}");
+            log::error!("reading the device hiding application list: {e}");
         }
         self.error = result.err().map(|e| e.to_string());
         let mut added = false;
@@ -78,12 +80,12 @@ impl AppsView {
         }
     }
 
-    /// Runs a change, then reloads the state from HidHide.
-    fn apply(&mut self, change: impl FnOnce(&HidHide) -> Result<(), gob_hidhide::Error>) {
+    /// Runs a change, then reloads the application list.
+    fn apply(&mut self, change: impl FnOnce(&dyn Backend) -> Result<(), gob_hide::Error>) {
         if let Ok(hh) = &self.hh
-            && let Err(e) = change(hh)
+            && let Err(e) = change(hh.as_ref())
         {
-            log::error!("changing the HidHide application list: {e}");
+            log::error!("changing the device hiding application list: {e}");
             self.error = Some(e.to_string());
             return;
         }
@@ -94,7 +96,7 @@ impl AppsView {
         self.listed.iter().any(|a| same_path(a, exe))
     }
 
-    /// Takes a program out of HidHide's list (its file may be gone already).
+    /// Takes a program out of the application list (its file may be gone already).
     fn unlist(&mut self, path: &Path) {
         if self.is_listed(path) {
             self.apply(|hh| hh.set_app(path, false));
@@ -116,7 +118,7 @@ impl AppsView {
             {
                 hh.set_app(own, false)?;
             }
-            hh.set_inverse(on)?;
+            hh.set_apps_inverted(on)?;
             match &own {
                 Some(own) if !on && settings.hidhide_whitelist_self => hh.ensure_app(own).map(drop),
                 _ => Ok(()),
@@ -131,9 +133,7 @@ impl AppsView {
         ui.horizontal(|ui| {
             let add = format!("{}  {}", icon::PLUS, i18n.tr("apps-add"));
             if ui.button(add).clicked()
-                && let Some(path) = rfd::FileDialog::new()
-                    .add_filter("exe", &["exe"])
-                    .pick_file()
+                && let Some(path) = program_dialog().pick_file()
             {
                 if !self.list.apps.iter().any(|a| same_path(&a.path, &path)) {
                     self.list.apps.push(AppEntry { path: path.clone() });
@@ -306,5 +306,16 @@ fn row(
     );
     if style::icon_button(ui, true, icon::TRASH, &i18n.tr("apps-remove")).clicked() {
         *remove = Some(path.to_path_buf());
+    }
+}
+
+/// File picker for programs, filtered to the platform's program files (Windows: `.exe`).
+fn program_dialog() -> rfd::FileDialog {
+    let extensions = crate::platform::program_extensions();
+    let dialog = rfd::FileDialog::new();
+    if extensions.is_empty() {
+        dialog
+    } else {
+        dialog.add_filter(extensions.join(", "), extensions)
     }
 }

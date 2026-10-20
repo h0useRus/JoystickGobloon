@@ -9,12 +9,12 @@ mod condition_editor;
 mod curve_editor;
 mod devices_view;
 mod hidhide_view;
-mod instance;
 mod key_capture;
 mod leds;
 mod logfile;
 mod macro_editor;
 mod modes_view;
+mod platform;
 mod profile_view;
 mod settings;
 mod settings_view;
@@ -34,23 +34,21 @@ pub const VERSION: &str = match option_env!("JOYSTICK_GOBLOON_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
-/// Command-line switch for the uninstaller: take this exe off HidHide's application list
+/// Command-line switch for the uninstaller: take this exe off the device hiding's application list
 /// (Joystick Gobloon adds itself on start) and quit without a window.
 const HIDHIDE_UNREGISTER: &str = "--hidhide-unregister";
 
 fn main() -> eframe::Result {
-    // Elevated copy started by the vJoy configuration editor: apply one change and quit,
+    // Elevated copy started by the virtual device configuration: apply one change and quit,
     // before the single-instance check and without touching the log.
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if let Some((first, rest)) = args.split_first()
-        && first == gob_vjoy::configure::ARG
-    {
-        std::process::exit(gob_vjoy::configure::run_admin(rest));
+    if let Some(code) = gob_virtual::admin_entry(&args) {
+        std::process::exit(code);
     }
     // Restarted by a portable update: let the old copy exit before the single-instance check.
     update::wait_for_previous();
     if std::env::args().any(|a| a == HIDHIDE_UNREGISTER) {
-        if let (Ok(hh), Ok(exe)) = (gob_hidhide::HidHide::find(), std::env::current_exe()) {
+        if let (Ok(hh), Ok(exe)) = (gob_hide::load(), std::env::current_exe()) {
             let _ = hh.set_app(&exe, false);
         }
         return Ok(());
@@ -61,7 +59,7 @@ fn main() -> eframe::Result {
     let instance = if settings.multi_instance {
         None
     } else {
-        match instance::claim() {
+        match platform::claim_instance() {
             Some(event) => Some(event),
             None => return Ok(()),
         }

@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::{self, RichText, Vec2};
 use gob_i18n::I18n;
-use gob_vjoy::{DeviceInfo, Status, VJoy};
+use gob_virtual::{Backend, Capabilities, DeviceConfig, DeviceInfo, Status};
 
 use crate::style::{self, icon};
 
@@ -26,7 +26,7 @@ const HAT_GRID: [Option<u16>; 9] = [
 ];
 
 pub struct VJoyView {
-    vjoy: Result<Arc<VJoy>, String>,
+    vjoy: Result<Arc<dyn Backend>, String>,
     devices: Vec<DeviceInfo>,
     refreshed: Option<Instant>,
     selected: u32,
@@ -36,7 +36,7 @@ pub struct VJoyView {
     config: crate::vjoy_config_view::VJoyConfig,
     /// A device added with "+" but not created yet: its own tab, editor (Create) and a
     /// disabled tester. Kept until the driver lists the device, or dropped by Cancel.
-    draft: Option<gob_vjoy::config::DeviceConfig>,
+    draft: Option<DeviceConfig>,
 }
 
 struct Tester {
@@ -44,7 +44,7 @@ struct Tester {
     info: DeviceInfo,
     /// Taken with the lock button; released when the page is left, another device is
     /// selected, the window is minimized or hidden, the configuration changes or a profile starts.
-    device: Option<gob_vjoy::Device>,
+    device: Option<Box<dyn gob_virtual::Device>>,
     axes: [f32; 8],
     buttons: Vec<bool>,
     hats: Vec<Option<u16>>,
@@ -52,8 +52,8 @@ struct Tester {
 
 impl VJoyView {
     pub fn new() -> Self {
-        let vjoy = VJoy::load().map_err(|e| e.to_string());
-        let config = crate::vjoy_config_view::VJoyConfig::new(vjoy.is_ok());
+        let vjoy = gob_virtual::load().map_err(|e| e.to_string());
+        let config = crate::vjoy_config_view::VJoyConfig::new(vjoy.as_ref().ok().cloned());
         Self {
             vjoy,
             devices: Vec::new(),
@@ -94,6 +94,7 @@ impl VJoyView {
                 return;
             }
         };
+        let caps = vjoy.capabilities();
         if self.refreshed.is_none_or(|t| t.elapsed() > REFRESH) {
             self.devices = vjoy.devices();
             self.refreshed = Some(Instant::now());
@@ -111,9 +112,9 @@ impl VJoyView {
                     .size(style::ICON_SIZE)
                     .color(style::accent(ui)),
             );
-            ui.label(format!("vJoy {}", vjoy.version()));
+            ui.label(format!("{} {}", caps.name, vjoy.version()));
             ui.label(RichText::new(i18n.tr(key)).weak());
-            if self.config.available() {
+            if self.config.available() && caps.switchable {
                 let on = vjoy.enabled();
                 let tip = i18n.tr(if on { "vjoy-disable" } else { "vjoy-enable" });
                 let can = !locked && !self.config.busy();
@@ -166,7 +167,7 @@ impl VJoyView {
             })
             .collect();
         if let Some(d) = &self.draft {
-            let info = draft_info(d);
+            let info = draft_info(d, &caps);
             let tip = i18n.trf("vjoy-new-device", &[("n", d.id.into())]);
             tabs.push((info, icon::PENCIL_SIMPLE, tip));
         }
@@ -221,7 +222,7 @@ impl VJoyView {
         let info = match self.devices.iter().find(|d| d.id == self.selected) {
             Some(d) => d.clone(),
             None => match &self.draft {
-                Some(d) if d.id == self.selected => draft_info(d),
+                Some(d) if d.id == self.selected => draft_info(d, &caps),
                 _ => return,
             },
         };
@@ -249,7 +250,7 @@ impl VJoyView {
                     e.id == info.id
                         && self.config.configs.iter().find(|c| c.id == info.id) != Some(e)
                 });
-                let layout = pending.map_or_else(|| info.clone(), |e| preview(&info, e));
+                let layout = pending.map_or_else(|| info.clone(), |e| preview(&info, e, &caps));
                 let pending = pending.is_some();
                 if self.test.as_ref().is_none_or(|t| {
                     t.info.id != layout.id
@@ -325,7 +326,7 @@ impl VJoyView {
     }
 
     /// The lock button: takes the device for the tester.
-    fn take(&mut self, vjoy: &Arc<VJoy>, info: &DeviceInfo, i18n: &I18n) {
+    fn take(&mut self, vjoy: &Arc<dyn Backend>, info: &DeviceInfo, i18n: &I18n) {
         let Some(test) = &mut self.test else { return };
         match vjoy.acquire(info.id) {
             Ok(device) => {
@@ -439,7 +440,7 @@ impl Tester {
 }
 
 /// A draft device as the tabs and the tester show it.
-fn draft_info(c: &gob_vjoy::config::DeviceConfig) -> DeviceInfo {
+fn draft_info(c: &DeviceConfig, caps: &Capabilities) -> DeviceInfo {
     let base = DeviceInfo {
         id: c.id,
         status: Status::Missing,
@@ -448,15 +449,15 @@ fn draft_info(c: &gob_vjoy::config::DeviceConfig) -> DeviceInfo {
         cont_hats: 0,
         disc_hats: 0,
     };
-    preview(&base, c)
+    preview(&base, c, caps)
 }
 
 /// The device as it will look once the edited configuration is applied.
-fn preview(info: &DeviceInfo, c: &gob_vjoy::config::DeviceConfig) -> DeviceInfo {
-    let hats = c.hats.min(gob_vjoy::config::MAX_HATS);
+fn preview(info: &DeviceInfo, c: &DeviceConfig, caps: &Capabilities) -> DeviceInfo {
+    let hats = c.hats.min(caps.max_hats);
     DeviceInfo {
         axes: (1..=8u8).filter(|s| c.axes[usize::from(*s) - 1]).collect(),
-        buttons: c.buttons.min(gob_vjoy::config::MAX_BUTTONS),
+        buttons: c.buttons.min(caps.max_buttons),
         cont_hats: if c.discrete_hats { 0 } else { hats },
         disc_hats: if c.discrete_hats { hats } else { 0 },
         ..info.clone()

@@ -5,9 +5,7 @@
 //! attached controller, keeps a shared snapshot for the GUI and emits change
 //! events for the engine.
 
-#[cfg(windows)]
-mod dinput;
-mod keyboard;
+mod platform;
 mod service;
 
 pub use service::{Calibrations, InputHandle, InputService};
@@ -160,64 +158,10 @@ pub enum InputEvent {
     DevicesChanged,
 }
 
-/// Windows game controller numbers (WinMM ids, as joy.cpl and many games use them) of the
-/// connected controllers with this vendor and product id.
+/// The system's own controller numbers of the connected controllers with this vendor and product
+/// id (Windows: WinMM ids, as joy.cpl and many games use them); empty where there are none.
 pub fn joystick_ids(vendor_id: u16, product_id: u16) -> Vec<u32> {
-    #[cfg(windows)]
-    {
-        use windows::Win32::Media::Multimedia::{
-            JOY_RETURNBUTTONS, JOYCAPSW, JOYINFOEX, joyGetDevCapsW, joyGetNumDevs, joyGetPosEx,
-        };
-        let mut ids = Vec::new();
-        // SAFETY: plain WinMM queries into locally owned structs of the right size.
-        unsafe {
-            for id in 0..joyGetNumDevs() {
-                let mut caps = JOYCAPSW::default();
-                if joyGetDevCapsW(
-                    id as usize,
-                    &mut caps,
-                    std::mem::size_of::<JOYCAPSW>() as u32,
-                ) != 0
-                {
-                    continue;
-                }
-                let mut info = JOYINFOEX {
-                    dwSize: std::mem::size_of::<JOYINFOEX>() as u32,
-                    dwFlags: JOY_RETURNBUTTONS as u32,
-                    ..Default::default()
-                };
-                let connected = joyGetPosEx(id, &mut info) == 0;
-                if connected && caps.wMid == vendor_id && caps.wPid == product_id {
-                    ids.push(id);
-                }
-            }
-        }
-        ids
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = (vendor_id, product_id);
-        Vec::new()
-    }
-}
-
-/// Formats GUID parts the way Gremlin writes device ids.
-pub fn format_guid(data1: u32, data2: u16, data3: u16, data4: [u8; 8]) -> String {
-    let d = data4;
-    format!(
-        "{data1:08x}-{data2:04x}-{data3:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]
-    )
-}
-
-/// DirectInput POV value -> direction; centered is reported as 0xFFFF in the low word.
-pub fn pov_direction(raw: u32) -> Option<u16> {
-    (raw & 0xFFFF != 0xFFFF).then_some((raw % 36000) as u16)
-}
-
-/// DirectInput axis value in -32768..=32767 -> -1.0..=1.0.
-pub fn normalize_axis(raw: i32) -> f32 {
-    ((raw as f32 + 0.5) / 32767.5).clamp(-1.0, 1.0)
+    platform::joystick_ids(vendor_id, product_id)
 }
 
 #[cfg(test)]
@@ -247,25 +191,5 @@ mod tests {
         assert_eq!(slider.apply(0), -1.0);
         assert_eq!(slider.apply(10000), 0.0);
         assert_eq!(slider.apply(25000), 1.0);
-    }
-
-    #[test]
-    fn guid_matches_gremlin_format() {
-        let g = format_guid(
-            0x7d12d5c0,
-            0x43ea,
-            0x11f0,
-            [0x80, 0x0a, 0x44, 0x45, 0x53, 0x54, 0x00, 0x00],
-        );
-        assert_eq!(g, "7d12d5c0-43ea-11f0-800a-444553540000");
-    }
-
-    #[test]
-    fn pov_and_axis_conversion() {
-        assert_eq!(pov_direction(0xFFFF_FFFF), None);
-        assert_eq!(pov_direction(9000), Some(9000));
-        assert_eq!(normalize_axis(-32768), -1.0);
-        assert_eq!(normalize_axis(32767), 1.0);
-        assert!(normalize_axis(0).abs() < 1e-4);
     }
 }

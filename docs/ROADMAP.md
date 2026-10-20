@@ -53,6 +53,7 @@ JoystickGobloon/
 | 7 | Остальные действия Gremlin R14 (chain, macro, map-to-keyboard/mouse, condition, smart-toggle, split/merge-axis, hat-buttons, load-profile и т.д.) | fixture-тест на каждый тип |
 | 8 | `gob-plugin` API (trait + реестр, загрузка dll через `libloading` — заготовка) | пример-заглушка компилируется |
 | 9 | Трей, автозапуск, инсталлятор (cargo-wix/Inno Setup с ссылками на HidHide/vJoy) | установка на чистую систему |
+| 10 | Версия для Linux (evdev, uinput вместо vJoy, захват вместо HidHide, AppImage), план — docs/LINUX_PLAN.md | профиль работает на Linux и Steam Deck |
 
 MVP для замены всех трёх программ на вашем профиле = фазы 0–5 (~8–12 сессий).
 

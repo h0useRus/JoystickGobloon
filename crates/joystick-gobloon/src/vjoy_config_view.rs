@@ -1,14 +1,13 @@
-//! Adding, changing and removing vJoy devices like "Configure vJoy", without vJoyConfig.exe:
-//! the configuration is read from the registry in the background; changes run this exe
-//! elevated (UAC, `--vjoy-config`) on a worker thread.
+//! Adding, changing and removing virtual devices (vJoy: like "Configure vJoy", without
+//! vJoyConfig.exe). Reading and applying the configuration may block (vJoy: the registry, an
+//! elevated copy of this exe behind a UAC prompt), so both run on worker threads.
 
-use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, channel};
 
 use eframe::egui::{self, RichText};
 use gob_i18n::I18n;
-use gob_vjoy::config::{DeviceConfig, EFFECTS, MAX_BUTTONS, MAX_DEVICES, MAX_HATS};
-use gob_vjoy::configure::{self, Change, Outcome};
+use gob_virtual::{Backend, Capabilities, Change, DeviceConfig, Outcome};
 
 use crate::style::{self, icon};
 
@@ -20,8 +19,8 @@ enum Done {
 }
 
 pub struct VJoyConfig {
-    /// This exe, started elevated for changes; `None` without vJoy.
-    exe: Option<PathBuf>,
+    /// Where the configuration lives; `None` without virtual devices.
+    backend: Option<Arc<dyn Backend>>,
     /// Configuration of the existing devices (from the registry).
     pub configs: Vec<DeviceConfig>,
     /// Edited copy of the selected device (or of a new one).
@@ -34,10 +33,9 @@ pub struct VJoyConfig {
 }
 
 impl VJoyConfig {
-    /// `installed`: the vJoy driver is there.
-    pub fn new(installed: bool) -> Self {
+    pub fn new(backend: Option<Arc<dyn Backend>>) -> Self {
         let mut s = Self {
-            exe: std::env::current_exe().ok().filter(|_| installed),
+            backend,
             configs: Vec::new(),
             edit: None,
             job: None,
@@ -50,7 +48,11 @@ impl VJoyConfig {
     }
 
     pub fn available(&self) -> bool {
-        self.exe.is_some()
+        self.backend.is_some()
+    }
+
+    fn capabilities(&self) -> Option<Capabilities> {
+        self.backend.as_ref().map(|b| b.capabilities())
     }
 
     pub fn busy(&self) -> bool {
@@ -58,24 +60,24 @@ impl VJoyConfig {
     }
 
     fn reload(&mut self) {
-        if self.exe.is_none() {
+        let Some(backend) = self.backend.clone() else {
             return;
-        }
+        };
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let _ = tx.send(Done::Read(gob_vjoy::descriptor::read_registry()));
+            let _ = tx.send(Done::Read(backend.read_config()));
         });
         self.job = Some(rx);
     }
 
     fn run(&mut self, label: String, change: Change) {
-        let Some(exe) = self.exe.clone() else {
+        let Some(backend) = self.backend.clone() else {
             return;
         };
-        log::info!("vJoy: {label} ({})", change.args().join(" "));
+        log::info!("virtual devices: {label} ({change:?})");
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let result = configure::run_elevated(&exe, &change);
+            let result = backend.apply(&change);
             let _ = tx.send(Done::Change(label, result));
         });
         self.job = Some(rx);
@@ -100,22 +102,22 @@ impl VJoyConfig {
                 None
             }
             Done::Read(Err(e)) => {
-                log::error!("reading vJoy configuration: {e}");
+                log::error!("reading the virtual device configuration: {e}");
                 None
             }
             Done::Change(label, result) => {
                 let ok = result.is_ok();
                 match result {
                     Ok(Outcome::Done) => {
-                        log::info!("vJoy: {label} done");
+                        log::info!("virtual devices: {label} done");
                         self.message = Some(Ok(i18n.tr("vjoy-config-done")));
                     }
                     Ok(Outcome::RebootNeeded) => {
-                        log::warn!("vJoy: {label} done, Windows wants a restart");
+                        log::warn!("virtual devices: {label} done, the system wants a restart");
                         self.message = Some(Err(i18n.tr("vjoy-config-reboot")));
                     }
                     Err(e) => {
-                        log::error!("vJoy: {label} failed: {e}");
+                        log::error!("virtual devices: {label} failed: {e}");
                         self.message =
                             Some(Err(i18n.trf("vjoy-config-error", &[("error", e.into())])));
                     }
@@ -129,20 +131,22 @@ impl VJoyConfig {
 
     /// Lowest device number not in use.
     pub fn free_id(&self, used: &[u32]) -> Option<u32> {
-        (1..=MAX_DEVICES).find(|n| !used.contains(n) && !self.configs.iter().any(|c| c.id == *n))
+        let max = self.capabilities().map_or(0, |c| c.max_devices);
+        (1..=max).find(|n| !used.contains(n) && !self.configs.iter().any(|c| c.id == *n))
     }
 
     /// A new device `id` set up like the first existing one, or with everything at maximum.
     pub fn template(&self, id: u32) -> DeviceConfig {
+        let caps = self.capabilities().unwrap_or(gob_virtual::NO_CAPABILITIES);
         let mut c = self
             .configs
             .iter()
             .min_by_key(|c| c.id)
             .cloned()
             .unwrap_or(DeviceConfig {
-                buttons: MAX_BUTTONS,
-                hats: MAX_HATS,
-                ..DeviceConfig::new(id)
+                buttons: caps.max_buttons,
+                hats: caps.max_hats,
+                ..DeviceConfig::new(id, &caps)
             });
         c.id = id;
         c
@@ -158,6 +162,7 @@ impl VJoyConfig {
         if self.edit.as_ref().is_none_or(|e| e.id != id) {
             self.edit = self.configs.iter().find(|c| c.id == id).cloned();
         }
+        let caps = self.capabilities().unwrap_or(gob_virtual::NO_CAPABILITIES);
         let Some(edit) = &mut self.edit else {
             ui.label(RichText::new(i18n.tr("vjoy-config-reading")).weak());
             return;
@@ -177,12 +182,12 @@ impl VJoyConfig {
                 ui.end_row();
 
                 ui.label(i18n.tr("vjoy-buttons"));
-                style::stepper(ui, &mut edit.buttons, 0..=MAX_BUTTONS);
+                style::stepper(ui, &mut edit.buttons, 0..=caps.max_buttons);
                 ui.end_row();
 
                 ui.label(i18n.tr("vjoy-hats"));
                 ui.horizontal(|ui| {
-                    style::stepper(ui, &mut edit.hats, 0..=MAX_HATS);
+                    style::stepper(ui, &mut edit.hats, 0..=caps.max_hats);
                     ui.add_enabled_ui(edit.hats > 0, |ui| {
                         ui.radio_value(
                             &mut edit.discrete_hats,
@@ -201,12 +206,12 @@ impl VJoyConfig {
                         .add(style::switch(&mut any, i18n.tr("vjoy-ffb-enable")))
                         .changed()
                     {
-                        edit.effects = [any; 11];
+                        edit.effects = vec![any; caps.effects.len()];
                     }
                     if any {
                         ui.horizontal_wrapped(|ui| {
                             for (i, on) in edit.effects.iter_mut().enumerate() {
-                                let key = format!("vjoy-ffb-{}", EFFECTS[i].to_lowercase());
+                                let key = format!("vjoy-ffb-{}", caps.effects[i].to_lowercase());
                                 ui.add(style::switch(on, i18n.tr(&key)));
                             }
                         });

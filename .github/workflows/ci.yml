@@ -37,3 +37,22 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
         run: cargo test --workspace
+
+  # The Linux version (docs/LINUX_PLAN.md): the same code must build and pass there too.
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev libgtk-3-dev \
+            libxdo-dev libayatana-appindicator3-dev libudev-dev libssl-dev libxkbcommon-dev libwayland-dev
+      # Installs the Rust version pinned in rust-toolchain.toml.
+      - name: Rust toolchain
+        run: rustup toolchain install && rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --workspace

@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 
 use gob_core::Profile;
 use gob_input::{DeviceState, InputEvent};
-use gob_vjoy::VJoy;
 
+use crate::platform::Injector;
 use crate::{Engine, InputKey, InputKind, Output, Value};
 
 /// Upper bound on how long the loop sleeps without events.
@@ -31,7 +31,7 @@ pub struct Runner {
 }
 
 struct SystemOutput {
-    devices: HashMap<u32, gob_vjoy::Device>,
+    devices: HashMap<u32, Box<dyn gob_virtual::Device>>,
     /// Last values written, read back by vJoy conditions.
     written: HashMap<(u32, InputKind, u32), Value>,
     media: crate::media::Media,
@@ -85,23 +85,23 @@ impl Output for SystemOutput {
     }
 
     fn key_pressed(&self, scan_code: u16, extended: bool) -> bool {
-        crate::sendinput::key_pressed(scan_code, extended)
+        crate::platform::injector().key_pressed(scan_code, extended)
     }
 
     fn mouse_move(&mut self, dx: i32, dy: i32) {
-        crate::sendinput::mouse_move(dx, dy);
+        crate::platform::injector().mouse_move(dx, dy);
     }
 
     fn mouse_button(&mut self, button: gob_core::MouseButton, pressed: bool) {
-        crate::sendinput::mouse_button(button, pressed);
+        crate::platform::injector().mouse_button(button, pressed);
     }
 
     fn mouse_wheel(&mut self, notches: i32) {
-        crate::sendinput::mouse_wheel(notches);
+        crate::platform::injector().mouse_wheel(notches);
     }
 
     fn key(&mut self, scan_code: u16, extended: bool, pressed: bool) {
-        crate::sendinput::key(scan_code, extended, pressed);
+        crate::platform::injector().key(scan_code, extended, pressed);
     }
 
     fn run_command(&mut self, executable: &str, arguments: &[String]) {
@@ -126,7 +126,7 @@ impl Runner {
         on_change: impl Fn() + Send + 'static,
     ) -> Result<Self, String> {
         let mut engine = Engine::new(profile, aliases);
-        let vjoy = VJoy::load().map_err(|e| e.to_string())?;
+        let virtual_devices = gob_virtual::load().map_err(|e| e.to_string())?;
         let mut out = SystemOutput {
             devices: HashMap::new(),
             written: HashMap::new(),
@@ -143,7 +143,7 @@ impl Runner {
         };
         for id in engine.vjoy_devices() {
             out.devices
-                .insert(id, vjoy.acquire(id).map_err(|e| e.to_string())?);
+                .insert(id, virtual_devices.acquire(id).map_err(|e| e.to_string())?);
         }
 
         let now = Instant::now();

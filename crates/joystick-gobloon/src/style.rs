@@ -19,15 +19,15 @@ pub fn install_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-/// Chinese and Korean glyphs from fonts every Windows 10/11 has (Microsoft YaHei, Malgun
-/// Gothic), after egui's own fonts. Always loaded: the language list shows 简体中文 and 한국어
-/// whatever the UI language is.
+/// Chinese and Korean glyphs from the system's fonts (`platform::cjk_fonts`), after egui's own
+/// fonts. Always loaded: the language list shows 简体中文 and 한국어 whatever the UI language is.
 fn add_cjk_fallbacks(fonts: &mut egui::FontDefinitions) {
-    let windows = std::env::var_os("WINDIR").unwrap_or_else(|| r"C:\Windows".into());
-    let dir = std::path::Path::new(&windows).join("Fonts");
-    for (name, file) in [("cjk-zh", "msyh.ttc"), ("cjk-ko", "malgun.ttf")] {
-        let Ok(bytes) = std::fs::read(dir.join(file)) else {
-            log::warn!("font {file} not found: {name} text will show as boxes");
+    for (name, file) in crate::platform::cjk_fonts() {
+        let Ok(bytes) = std::fs::read(&file) else {
+            log::warn!(
+                "font {} not found: {name} text will show as boxes",
+                file.display()
+            );
             continue;
         };
         fonts.font_data.insert(

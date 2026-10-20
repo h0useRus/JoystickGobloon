@@ -8,7 +8,9 @@
 //! - Output: opening `<namespace>device_NNN` acquires device N; `LOAD_POSITIONS` sends the whole
 //!   state (`Position`, `JOYSTICK_POSITION_V2`), `RESET_DEV` resets it, closing releases it.
 
-use crate::{AXIS_USAGES, DeviceInfo, MAX_DEVICES, Status};
+#[cfg(any(windows, test))]
+use crate::AXIS_USAGES;
+use crate::{DeviceInfo, MAX_DEVICES, Status};
 
 /// `CTL_CODE(FILE_DEVICE_UNKNOWN, f, METHOD_BUFFERED, access)`.
 const fn ioctl(f: u32, access: u32) -> u32 {
@@ -28,6 +30,7 @@ pub const GET_DRV_INFO: u32 = ioctl(0x91E, FILE_ANY_ACCESS);
 pub const VENDOR_ID: u16 = 0x1234;
 pub const PRODUCT_ID: u16 = 0xBEAD;
 /// HID usage of a hat switch.
+#[cfg(windows)]
 const USAGE_HAT: u16 = 0x39;
 
 /// What `GET_DRV_INFO` reports.
@@ -274,6 +277,7 @@ impl Direct {
 }
 
 /// Axis slot (1..=8) of a HID usage, as in `AXIS_USAGES`.
+#[cfg(any(windows, test))]
 fn axis_slot(usage: u16) -> Option<u8> {
     AXIS_USAGES
         .iter()

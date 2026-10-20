@@ -501,7 +501,7 @@ pub struct Editor<'a> {
     /// How the input is interpreted; decides which actions make sense.
     pub behavior: InputType,
     /// Configured vJoy devices (empty when vJoy is unavailable).
-    pub vjoy: &'a [gob_vjoy::DeviceInfo],
+    pub vjoy: &'a [gob_virtual::DeviceInfo],
     /// Attached controllers, for actions that name physical inputs.
     pub inputs: &'a [gob_input::DeviceState],
     /// Input being edited (profile device id, input id), for templates that refer to it.
@@ -1089,12 +1089,12 @@ impl Editor<'_> {
         inverted: bool,
     ) {
         let id = action.id.clone();
-        // Configured vJoy devices; without vJoy, offer the ids a profile may use.
-        let devices: Vec<gob_vjoy::DeviceInfo> = if self.vjoy.is_empty() {
-            (1..=gob_vjoy::MAX_DEVICES)
-                .map(|n| gob_vjoy::DeviceInfo {
+        // Configured virtual devices; without them, offer the ids a profile may use.
+        let devices: Vec<gob_virtual::DeviceInfo> = if self.vjoy.is_empty() {
+            (1..=gob_virtual::PROFILE_DEVICES)
+                .map(|n| gob_virtual::DeviceInfo {
                     id: n,
-                    status: gob_vjoy::Status::Unknown,
+                    status: gob_virtual::Status::Unknown,
                     axes: (1..=8).collect(),
                     buttons: 128,
                     cont_hats: 4,

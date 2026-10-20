@@ -7,7 +7,7 @@ license.workspace = true
 [dependencies]
 gob-core.workspace = true
 gob-input.workspace = true
-gob-vjoy.workspace = true
+gob-virtual.workspace = true
 gob-plugin.workspace = true
 gob-lighting.workspace = true
 log.workspace = true

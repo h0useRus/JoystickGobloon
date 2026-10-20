@@ -9,7 +9,6 @@ use std::sync::Arc;
 /// Reports (scan code, extended, pressed).
 pub type KeySink = Arc<dyn Fn(u16, bool, bool) + Send + Sync>;
 
-#[cfg(windows)]
 mod imp {
     use std::collections::HashSet;
     use std::sync::{Mutex, OnceLock};
@@ -118,15 +117,6 @@ mod imp {
                 *s = None;
             }
         }
-    }
-}
-
-#[cfg(not(windows))]
-mod imp {
-    use super::KeySink;
-    pub struct Hook;
-    pub fn start(_sink: KeySink) -> Option<Hook> {
-        None
     }
 }
 
