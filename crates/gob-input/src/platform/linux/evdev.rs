@@ -140,6 +140,23 @@ impl Node {
         }
     }
 
+    /// `EVIOCGRAB`: takes the device for this file alone (other readers, joydev included, get
+    /// no events), or lets go of it. Closing the file lets go as well.
+    pub fn grab(&self, on: bool) -> io::Result<()> {
+        // _IOW('E', 0x90, int)
+        let request = (1u32 << 30)
+            | ((size_of::<libc::c_int>() as u32) << 16)
+            | (u32::from(b'E') << 8)
+            | 0x90;
+        // SAFETY: EVIOCGRAB takes an int by value.
+        let n = unsafe { libc::ioctl(self.fd(), request as _, libc::c_int::from(on)) };
+        if n < 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
+    }
+
     /// `EVIOCGKEY`: the keys and buttons held down right now.
     pub fn pressed(&self) -> Bits {
         self.bits(0x18, KEY_CNT)

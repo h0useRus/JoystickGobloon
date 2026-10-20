@@ -7,6 +7,7 @@ mod apps_view;
 mod calibration_view;
 mod condition_editor;
 mod curve_editor;
+mod device_access;
 mod devices_view;
 mod hidhide_view;
 mod key_capture;
@@ -56,6 +57,7 @@ fn main() -> eframe::Result {
     let settings = settings::Settings::load();
     if let Some(dir) = settings::data_dir() {
         gob_virtual::set_data_dir(dir);
+        gob_hide::set_data_dir(dir);
     }
     // Already running: that copy was woken and comes to the front; this one quits.
     // The hidden `multi_instance` setting lets copies run side by side.

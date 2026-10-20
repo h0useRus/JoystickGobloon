@@ -34,7 +34,7 @@ pub enum Change {
         device: String,
         leds: Vec<LedValue>,
     },
-    /// Default LED colors were edited or experimental features switched.
+    /// Default LED colors were edited.
     LedDefaults,
 }
 
@@ -95,10 +95,13 @@ pub fn show(
                     i18n.tr("settings-activate-on-start"),
                 ),
             );
-            let whitelist = ui.add(style::switch(
-                &mut settings.hidhide_whitelist_self,
-                i18n.tr("settings-hidhide-self"),
-            ));
+            // Only where hiding has a program list to put Joystick Gobloon on.
+            let whitelist = gob_hide::capabilities().app_list.then(|| {
+                ui.add(style::switch(
+                    &mut settings.hidhide_whitelist_self,
+                    i18n.tr("settings-hidhide-self"),
+                ))
+            });
             let focus = ui.add(style::switch(
                 &mut settings.focus_used_input,
                 i18n.tr("settings-focus-input"),
@@ -118,35 +121,23 @@ pub fn show(
                 &mut settings.check_updates,
                 i18n.tr("settings-check-updates"),
             ));
-            ui.add_space(8.0);
-            let experimental = ui
-                .add(style::switch(
-                    &mut settings.experimental,
-                    i18n.tr("settings-experimental"),
-                ))
-                .on_hover_text(i18n.tr("settings-experimental-tip"));
             let changed = [
                 &reopen,
-                &whitelist,
                 &focus,
                 &input_events,
                 &autostart,
                 &activate,
                 &updates,
-                &experimental,
             ]
             .iter()
-            .any(|r| r.changed());
+            .any(|r| r.changed())
+                || whitelist.is_some_and(|r| r.changed());
             if changed {
                 settings.save();
             }
-            if autostart.changed() {
-                Some(Change::Autostart(settings.start_with_windows))
-            } else if experimental.changed() {
-                Some(Change::LedDefaults)
-            } else {
-                None
-            }
+            autostart
+                .changed()
+                .then_some(Change::Autostart(settings.start_with_windows))
         }
         SettingsTab::Lighting => lighting(ui, i18n, settings, led_devices),
         SettingsTab::About => {
@@ -340,6 +331,34 @@ fn appearance(ui: &mut egui::Ui, i18n: &I18n, settings: &Settings) -> Option<Cha
     change
 }
 
+/// A backend as the About page names it.
+struct BackendInfo {
+    name: &'static str,
+    /// `None`: not installed or not usable.
+    version: Option<String>,
+}
+
+/// Device hiding and virtual joysticks with their i18n keys, found once per run; platforms
+/// without one are left out.
+fn backends() -> &'static [(&'static str, BackendInfo)] {
+    static BACKENDS: std::sync::OnceLock<Vec<(&'static str, BackendInfo)>> =
+        std::sync::OnceLock::new();
+    BACKENDS.get_or_init(|| {
+        let hiding = BackendInfo {
+            name: gob_hide::capabilities().name,
+            version: gob_hide::load().ok().map(|b| b.version()),
+        };
+        let virtual_devices = BackendInfo {
+            name: gob_virtual::capabilities().name,
+            version: gob_virtual::load().ok().map(|b| b.version()),
+        };
+        [("about-hiding", hiding), ("about-virtual", virtual_devices)]
+            .into_iter()
+            .filter(|(_, b)| !b.name.is_empty())
+            .collect()
+    })
+}
+
 fn about(
     ui: &mut egui::Ui,
     i18n: &I18n,
@@ -381,6 +400,14 @@ fn about(
         );
         ui.add_space(10.0);
         ui.label(RichText::new(i18n.tr("about-text")).size(15.0));
+        ui.add_space(6.0);
+        for (key, backend) in backends() {
+            let text = match &backend.version {
+                Some(v) => format!("{} {v}", backend.name).trim().to_string(),
+                None => format!("{} ({})", backend.name, i18n.tr("about-not-installed")),
+            };
+            ui.label(RichText::new(i18n.trf(key, &[("backend", text.into())])).weak());
+        }
         ui.add_space(6.0);
         ui.label(RichText::new(i18n.trf("about-created", &[("name", AUTHOR.into())])).weak());
 
@@ -435,7 +462,7 @@ fn about(
         ui.add_space(20.0);
         ui.separator();
         ui.add_space(6.0);
-        ui.label(RichText::new(i18n.tr("about-credits")).weak());
+        ui.label(RichText::new(i18n.tr("about-gremlin")).weak());
         ui.label(RichText::new(i18n.tr("about-license")).weak());
     });
 }

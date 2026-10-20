@@ -159,8 +159,31 @@ UI и логику: например, заменить vJoy **своим дра�
      vJoy») — когда будет скрытие на Linux (фаза 4).
    - [ ] Проверка: `jstest`, игра через Proton (SDL), профиль целиком.
 4. **Скрытие на Linux.** Бэкенд `gob-hide` на захвате; установка правила udev через `pkexec`.
+   - [x] gob-input `exclusive`: список устройств, которые сервис ввода читает один (`set`, `devices`,
+     `supported`). На Linux поток ввода держит на них `EVIOCGRAB` (игры не получают событий ни через evdev,
+     ни через joydev), пока программа работает; на Windows не поддерживается (там HidHide). Захват —
+     у единственного `InputService` процесса. Тест `exclusive_hides_from_other_readers`.
+   - [x] gob-hide `linux.rs`: выключатель и скрытые устройства в `hidden.gob` (папка из
+     `gob_hide::set_data_dir`), отключённые скрытые остаются в списке; состояние применяется уже при
+     `load`. `Capabilities::app_list` (Windows да, Linux нет): страница «Приложения» и «добавить себя в
+     белый список» показываются только с ним; `gob_hide::capabilities()` — без загрузки бэкенда.
+   - [x] Правило udev (gob-uinput `access`): `/etc/udev/rules.d/70-joystick-gobloon.rules` (до 73 — там
+     `uaccess`), `uaccess` для `/dev/uinput` (`static_node`) и узлов event джойстиков. Ставится через
+     `pkexec /bin/sh -c …` (не через запуск себя: root не видит FUSE-монтирование AppImage), затем
+     `udevadm control --reload-rules` + `trigger`. GUI: `Desktop::device_access_missing` /
+     `grant_device_access`, баннер «Выдать доступ» на странице «Устройства»; после успеха страницы vJoy и
+     скрытия загружаются заново, клавиатура/мышь пробуют снова при старте профиля. Начат
+     `joystick-gobloon/src/platform/linux/` (остальное пока из `none.rs`).
+     **Клавиатуры не в правиле**: чтение всех клавиатур дало бы любой программе пользователя то, что он
+     печатает. Поэтому вкладка Keyboard (клавиши как ввод) на Linux скрыта (`Desktop::keyboard_bindings`);
+     Map to Keyboard и макросы работают (uinput). Вернуться, если пользователи попросят.
+     **hidraw не трогаем**: по умолчанию он только у root, HOTAS через него не видны; исключение —
+     устройства из правил Steam (`steam-devices`, в основном геймпады).
+   - [x] «О программе»: строки «Скрытие устройств: …» и «Виртуальные джойстики: …» с именем и версией
+     бэкенда (`gob_hide::capabilities`, `gob_virtual::capabilities`); на Linux «Linux evdev» / «Linux uinput»
+     с версией ядра.
 5. **Рабочий стол на Linux.** Linux-модули `platform/`: пути настроек, один экземпляр, автозапуск, трей, шрифты,
-   речь; подсветка через hidraw.
+   речь. Подсветка — экспериментальная функция (скрытый ключ `experimental`), в перенос пока не входит.
 6. **Выпуск.** AppImage в `release.yml`, заметки и Discord как сейчас.
 
 ## Тестирование

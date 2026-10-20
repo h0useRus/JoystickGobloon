@@ -1967,6 +1967,9 @@ name = "gob-hide"
 version = "0.6.0"
 dependencies = [
  "gob-hidhide",
+ "gob-input",
+ "serde",
+ "toml 0.8.2",
 ]
 
 [[package]]
@@ -2487,6 +2490,7 @@ dependencies = [
  "gob-input",
  "gob-lighting",
  "gob-plugin",
+ "gob-uinput",
  "gob-virtual",
  "log",
  "raw-window-handle",

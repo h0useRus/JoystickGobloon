@@ -29,11 +29,13 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
   made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`), unsupported.rs elsewhere
 - crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`, `keys` = set 1 scan
-  codes <-> evdev); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
+  codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers, installed via pkexec from the
+  Devices page banner); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
   made in `prepare` when a profile starts; key_pressed via EVIOCGKEY). Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
   `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
-  capabilities), `find_device` (input device -> hideable device); windows.rs = HidHide via gob-hidhide
+  capabilities incl. `app_list`), `find_device` (input device -> hideable device); windows.rs = HidHide via
+  gob-hidhide, linux.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.
@@ -121,6 +123,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the
   running window and exits. tools/single_instance.ps1 checks it. Hidden setting `multi_instance = true`
   (top of settings.gob, not in the UI) turns this off.
+- Joystick lighting is an experimental feature for the user only: hidden setting `experimental = true`
+  (settings.gob, no switch in the UI) turns it on. Leave lighting alone unless asked (also on Linux).
 - target\debug\settings.gob = local debug settings (copy of the user's + `multi_instance = true`): debug runs
   never touch the installed copy's settings and may run next to the user's own debug window.
   `cargo clean` deletes it: recreate it the same way.

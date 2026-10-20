@@ -30,6 +30,14 @@ const ABS_HAT0Y: u16 = 0x11;
 const BUTTONS: usize = 96;
 const NAME: &str = "Test VKB Gladiator";
 
+/// One test at a time: each starts its own input service, and the exclusive list is shared by
+/// every service of the process (the program has only one).
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// `_IOW('U', nr, size)` / `_IO('U', nr)`.
 fn uinput_request(nr: u32, size: usize) -> u32 {
     let dir = if size > 0 { 1u32 << 30 } else { 0 };
@@ -199,6 +207,7 @@ fn wait_for(events: &Receiver<InputEvent>, want: impl Fn(&InputEvent) -> bool) -
 #[test]
 #[ignore = "needs /dev/uinput"]
 fn virtual_stick_reads_back() {
+    let _serial = serial();
     let mut stick = Virtual::stick();
     let input = InputService::start(|| {});
     input.set_event_mode(true);
@@ -268,6 +277,7 @@ fn virtual_stick_reads_back() {
 #[test]
 #[ignore = "needs /dev/uinput"]
 fn keyboard_keys_as_scan_codes() {
+    let _serial = serial();
     let mut keyboard = Virtual::keyboard("Test Keyboard");
     // Our own output device (phase 3 creates it on uinput): its keys are not input.
     let mut own = Virtual::keyboard("Joystick Gobloon Keyboard");
@@ -295,4 +305,104 @@ fn keyboard_keys_as_scan_codes() {
     };
     assert_eq!(wait_for(&events, is_key), key(true));
     assert_eq!(wait_for(&events, is_key), key(false));
+}
+
+/// The event node of the input device with this name.
+fn event_node(name: &str) -> std::path::PathBuf {
+    let dir = std::fs::read_dir("/sys/class/input").unwrap();
+    dir.flatten()
+        .find_map(|e| {
+            let file = e.file_name().into_string().ok()?;
+            let found = file.starts_with("event")
+                && std::fs::read_to_string(e.path().join("device/name"))
+                    .ok()?
+                    .trim_end()
+                    == name;
+            found.then(|| std::path::Path::new("/dev/input").join(file))
+        })
+        .unwrap_or_else(|| panic!("{name} not found"))
+}
+
+/// Whether another reader (a game) gets an event from the node within 300 ms.
+fn other_reader_sees(node: &mut File) -> bool {
+    use std::io::Read;
+    let mut buf = [0u8; 24 * 16];
+    let end = Instant::now() + Duration::from_millis(300);
+    while Instant::now() < end {
+        if node.read(&mut buf).is_ok_and(|n| n > 0) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    false
+}
+
+#[test]
+#[ignore = "needs /dev/uinput"]
+fn exclusive_hides_from_other_readers() {
+    let _serial = serial();
+    use std::os::unix::fs::OpenOptionsExt;
+
+    const GRAB_NAME: &str = "Test Grab Stick";
+    let mut stick = Virtual::create(
+        GRAB_NAME,
+        [0x03, 0x1111, 0x2222, 1],
+        &[],
+        BTN_TRIGGER..BTN_TRIGGER + 4,
+        &[(ABS_X, 0, 255), (ABS_Y, 0, 255)],
+    );
+    let input = InputService::start(|| {});
+    let events = input.subscribe();
+    let end = Instant::now() + Duration::from_secs(5);
+    let guid = loop {
+        if let Some(d) = input.devices().iter().find(|d| d.info.name == GRAB_NAME) {
+            break d.info.guid.clone();
+        }
+        assert!(Instant::now() < end, "stick not found");
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert!(gob_input::exclusive::supported());
+    let listed = gob_input::exclusive::devices();
+    assert!(listed.iter().any(|d| d.guid == guid), "{listed:?}");
+
+    let mut game = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(event_node(GRAB_NAME))
+        .unwrap();
+    let pressed = |e: &InputEvent| {
+        matches!(
+            e,
+            InputEvent::Button {
+                id: 1,
+                pressed: true,
+                ..
+            }
+        )
+    };
+    let released = |e: &InputEvent| {
+        matches!(
+            e,
+            InputEvent::Button {
+                id: 1,
+                pressed: false,
+                ..
+            }
+        )
+    };
+
+    gob_input::exclusive::set([guid.clone()]);
+    std::thread::sleep(Duration::from_millis(100)); // one round of the input thread
+    stick.send(&[(EV_KEY, BTN_TRIGGER, 1)]);
+    wait_for(&events, pressed);
+    assert!(
+        !other_reader_sees(&mut game),
+        "hidden: the game gets nothing"
+    );
+
+    gob_input::exclusive::set([]);
+    std::thread::sleep(Duration::from_millis(100));
+    stick.send(&[(EV_KEY, BTN_TRIGGER, 0)]);
+    wait_for(&events, released);
+    assert!(other_reader_sees(&mut game), "shown again");
 }

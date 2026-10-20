@@ -195,6 +195,16 @@ pub fn load() -> Result<Arc<dyn Backend>, Error> {
     return unsupported::load();
 }
 
+/// What this platform's backend can do, without loading it (e.g. its name for the About page).
+pub fn capabilities() -> Capabilities {
+    #[cfg(windows)]
+    return windows::CAPABILITIES;
+    #[cfg(target_os = "linux")]
+    return linux::CAPABILITIES;
+    #[cfg(not(any(windows, target_os = "linux")))]
+    return NO_CAPABILITIES;
+}
+
 static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// The program's data folder (next to its settings), where a backend that keeps its own files

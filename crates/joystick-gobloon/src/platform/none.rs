@@ -1,5 +1,5 @@
-//! Platforms without their own module yet (Linux: XDG paths, a socket for the single instance,
-//! fontconfig, docs/LINUX_PLAN.md phase 5).
+//! Platforms without their own module, and what Linux's module takes from here until phase 5
+//! (docs/LINUX_PLAN.md: XDG paths, a socket for the single instance, fontconfig).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -39,6 +39,10 @@ impl super::Desktop for Desktop {
 
     fn listen_instance(_event: (), _show: Box<dyn Fn() + Send>) {}
 
+    fn keyboard_bindings() -> bool {
+        false
+    }
+
     fn held_keys() -> Vec<Key> {
         Vec::new()
     }
@@ -75,6 +79,14 @@ impl super::Desktop for Desktop {
 
     fn set_autostart(_enabled: bool, _arg: &str) -> Result<(), String> {
         Ok(())
+    }
+
+    fn device_access_missing() -> bool {
+        false
+    }
+
+    fn grant_device_access() -> Result<(), String> {
+        Err("not supported on this system".into())
     }
 
     fn installed_copy(_exe_dir: &Path) -> bool {

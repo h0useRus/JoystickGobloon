@@ -24,7 +24,8 @@ pub(crate) struct Injector;
 struct Devices {
     keyboard: Option<VirtualDevice>,
     mouse: Option<VirtualDevice>,
-    /// Creating them failed once (e.g. no access to /dev/uinput): logged, not retried.
+    /// Creating them failed (e.g. no access to /dev/uinput): logged, and not tried again until
+    /// the next profile start.
     failed: bool,
 }
 
@@ -89,7 +90,10 @@ impl crate::platform::Injector for Injector {
     /// Makes the devices before the first key: the desktop needs a moment to open a new
     /// device, and events sent before that are lost.
     fn prepare(&self) {
-        devices(|_| ());
+        let mut guard = DEVICES.lock().unwrap_or_else(|e| e.into_inner());
+        let devices = guard.get_or_insert_default();
+        devices.failed = false;
+        devices.create();
     }
 
     fn mouse_move(&self, dx: i32, dy: i32) {

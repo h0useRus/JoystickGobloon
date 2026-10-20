@@ -1,13 +1,15 @@
 //! Hiding physical devices from other programs (games then see only the virtual devices): the
 //! common interface the GUI uses, whatever does the hiding. Each platform has its own backend
-//! (docs/LINUX_PLAN.md, "Архитектура"): HidHide on Windows (`windows.rs`, over gob-hidhide);
-//! Linux (exclusive grab) comes later, until then `unsupported.rs`.
+//! (docs/LINUX_PLAN.md, "Архитектура"): HidHide on Windows (`windows.rs`, over gob-hidhide),
+//! exclusive reading on Linux (`linux.rs`, over gob-input), `unsupported.rs` elsewhere.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(not(any(windows, target_os = "linux")))]
 mod unsupported;
 #[cfg(windows)]
 mod windows;
@@ -37,8 +39,11 @@ impl std::error::Error for Error {}
 /// What a backend can do; the GUI adapts to it instead of checking the platform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Capabilities {
-    /// Product name for the user, e.g. "HidHide".
+    /// Product name for the user, e.g. "HidHide"; empty when there is none to show.
     pub name: &'static str,
+    /// Programs can be listed to see hidden devices (or, inverted, not to): the Applications
+    /// page and "whitelist Joystick Gobloon itself".
+    pub app_list: bool,
 }
 
 /// One part of a [`Device`] (HidHide: a HID collection), to match input devices.
@@ -74,7 +79,7 @@ pub trait Backend: Send + Sync {
     /// `gaming_only`.
     fn devices(&self, gaming_only: bool) -> Result<Vec<Device>, Error>;
     fn set_hidden(&self, device: &Device, hidden: bool) -> Result<(), Error>;
-    /// Listed programs (only with [`Capabilities::app_list`]).
+    /// Listed programs (empty without [`Capabilities::app_list`]).
     fn apps(&self) -> Result<Vec<PathBuf>, Error>;
     /// Adds or removes a program; removing works for files that no longer exist too.
     fn set_app(&self, exe: &Path, listed: bool) -> Result<(), Error>;
@@ -96,8 +101,37 @@ pub trait Backend: Send + Sync {
 pub fn load() -> Result<Arc<dyn Backend>, Error> {
     #[cfg(windows)]
     return windows::load();
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    return linux::load();
+    #[cfg(not(any(windows, target_os = "linux")))]
     return unsupported::load();
+}
+
+/// What this platform's backend can do, without loading it (e.g. for the settings page).
+pub fn capabilities() -> Capabilities {
+    #[cfg(windows)]
+    return windows::CAPABILITIES;
+    #[cfg(target_os = "linux")]
+    return linux::CAPABILITIES;
+    #[cfg(not(any(windows, target_os = "linux")))]
+    return Capabilities {
+        name: "",
+        app_list: false,
+    };
+}
+
+static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// The program's data folder (next to its settings), where a backend that keeps its own files
+/// (e.g. the hidden devices on Linux) stores them. Set once at start, before [`load`]; later
+/// calls are ignored. Without it a backend uses the platform's usual place.
+pub fn set_data_dir(dir: &Path) {
+    let _ = DATA_DIR.set(dir.to_path_buf());
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn data_dir() -> Option<PathBuf> {
+    DATA_DIR.get().cloned()
 }
 
 /// Where to get this platform's device hiding when it is missing; `None` when there is nothing to

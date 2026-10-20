@@ -4,6 +4,7 @@
 //! same id Joystick Gremlin stores in profiles. A background thread reads every attached
 //! controller, keeps a shared snapshot for the GUI and emits change events for the engine.
 
+pub mod exclusive;
 mod platform;
 mod service;
 
