@@ -5,8 +5,8 @@ use std::collections::HashSet;
 
 use eframe::egui::{self, RichText};
 use gob_core::{
-    child_groups, Action, ActionKind, InputType, Item, MergeOp, MouseAction, MouseButton,
-    NewAction, Profile, Property,
+    Action, ActionKind, InputType, Item, MergeOp, MouseAction, MouseButton, NewAction, Profile,
+    Property, child_groups,
 };
 use gob_i18n::I18n;
 
@@ -994,15 +994,14 @@ impl Editor<'_> {
                                     &self.i18n.tr("run-browse"),
                                 )
                                 .clicked()
+                                    && let Some(path) = rfd::FileDialog::new().pick_file()
                                 {
-                                    if let Some(path) = rfd::FileDialog::new().pick_file() {
-                                        self.set(
-                                            &action.id,
-                                            "executable",
-                                            "string",
-                                            path.display().to_string(),
-                                        );
-                                    }
+                                    self.set(
+                                        &action.id,
+                                        "executable",
+                                        "string",
+                                        path.display().to_string(),
+                                    );
                                 }
                             });
                             ui.end_row();

@@ -91,6 +91,9 @@ hidhide-hint = Haga clic en el ojo para ocultar un dispositivo a otros programas
 hidhide-no-devices = No hay dispositivos que mostrar.
 action-refresh = Actualizar
 settings-hidhide-self = Añadir Joystick Gobloon a la lista blanca de HidHide al iniciar
+settings-focus-input = Saltar a la entrada en uso en la página «Dispositivos y asignaciones»
+settings-input-events = Leer los mandos al cambiar
+settings-input-events-tip = Menos latencia y uso de CPU: los mandos se leen cuando informan de un cambio y las pulsaciones cortas nunca se pierden. Desactivado: cada mando se lee cada 4 ms.
 status-whitelisted = Joystick Gobloon se añadió a la lista blanca de HidHide.
 
 # Applications
@@ -371,6 +374,7 @@ cond-logical = Entrada del dispositivo lógico
 settings-tray = Mostrar el icono en la bandeja
 settings-close-to-tray = Cerrar a la bandeja
 settings-minimize-to-tray = Minimizar a la bandeja
+settings-tray-double-click = Doble clic activa el perfil
 settings-tray-title = Icono de la bandeja
 settings-autostart = Iniciar con Windows (minimizado)
 settings-activate-on-start = Activar el perfil al iniciar

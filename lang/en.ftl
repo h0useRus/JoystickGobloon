@@ -91,6 +91,9 @@ hidhide-hint = Click the eye to hide a device from other programs (closed eye). 
 hidhide-no-devices = No devices to show.
 action-refresh = Refresh
 settings-hidhide-self = Add Joystick Gobloon to the HidHide whitelist on startup
+settings-focus-input = Jump to the input in use on the Devices and bindings page
+settings-input-events = Read controllers on change
+settings-input-events-tip = Lower latency and less CPU: controllers are read when they report a change, and short button presses are never missed. Off: every controller is read every 4 ms.
 status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
 
 # Applications
@@ -371,6 +374,7 @@ cond-logical = Logical device input
 settings-tray = Show the tray icon
 settings-close-to-tray = Close to the tray
 settings-minimize-to-tray = Minimize to the tray
+settings-tray-double-click = Double click activates the profile
 settings-tray-title = Tray icon
 settings-autostart = Start with Windows (minimized)
 settings-activate-on-start = Activate the profile on startup

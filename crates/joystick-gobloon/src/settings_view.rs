@@ -87,18 +87,32 @@ pub fn show(
                 &mut settings.reopen_last,
                 i18n.tr("settings-reopen-last"),
             ));
+            // Only a reopened profile can be activated on startup.
+            let activate = ui.add_enabled(
+                settings.reopen_last,
+                style::switch(
+                    &mut settings.activate_on_start,
+                    i18n.tr("settings-activate-on-start"),
+                ),
+            );
             let whitelist = ui.add(style::switch(
                 &mut settings.hidhide_whitelist_self,
                 i18n.tr("settings-hidhide-self"),
             ));
+            let focus = ui.add(style::switch(
+                &mut settings.focus_used_input,
+                i18n.tr("settings-focus-input"),
+            ));
+            let input_events = ui
+                .add(style::switch(
+                    &mut settings.input_events,
+                    i18n.tr("settings-input-events"),
+                ))
+                .on_hover_text(i18n.tr("settings-input-events-tip"));
             ui.add_space(8.0);
             let autostart = ui.add(style::switch(
                 &mut settings.start_with_windows,
                 i18n.tr("settings-autostart"),
-            ));
-            let activate = ui.add(style::switch(
-                &mut settings.activate_on_start,
-                i18n.tr("settings-activate-on-start"),
             ));
             let updates = ui.add(style::switch(
                 &mut settings.check_updates,
@@ -114,6 +128,8 @@ pub fn show(
             let changed = [
                 &reopen,
                 &whitelist,
+                &focus,
+                &input_events,
                 &autostart,
                 &activate,
                 &updates,
@@ -202,11 +218,11 @@ fn lighting(
         for (i, mut v) in leds.iter().copied().enumerate() {
             ui.horizontal(|ui| {
                 ui.add_space(24.0);
-                if crate::leds::led_widgets(ui, i18n, ("default", guid.as_str(), i), vkb, &mut v) {
-                    if let Some(e) = settings.leds.get_mut(&guid) {
-                        e.led[i] = LedDefault::from_value(v);
-                        edited = true;
-                    }
+                if crate::leds::led_widgets(ui, i18n, ("default", guid.as_str(), i), vkb, &mut v)
+                    && let Some(e) = settings.leds.get_mut(&guid)
+                {
+                    e.led[i] = LedDefault::from_value(v);
+                    edited = true;
                 }
                 if style::icon_button(ui, true, icon::PLAY, &i18n.tr("edit-led-test")).clicked() {
                     change = Some(Change::PreviewLeds {
@@ -219,14 +235,14 @@ fn lighting(
                 }
             });
         }
-        if let Some(i) = remove {
-            if let Some(e) = settings.leds.get_mut(&guid) {
-                e.led.remove(i);
-                if e.led.is_empty() {
-                    settings.leds.remove(&guid);
-                }
-                edited = true;
+        if let Some(i) = remove
+            && let Some(e) = settings.leds.get_mut(&guid)
+        {
+            e.led.remove(i);
+            if e.led.is_empty() {
+                settings.leds.remove(&guid);
             }
+            edited = true;
         }
     }
     if edited {
@@ -265,7 +281,14 @@ fn tray_section(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Opti
             i18n.tr("settings-minimize-to-tray"),
         ),
     );
-    if tray.changed() || close.changed() || minimize.changed() {
+    let double_click = ui.add_enabled(
+        settings.show_tray,
+        style::switch(
+            &mut settings.tray_double_click_activates,
+            i18n.tr("settings-tray-double-click"),
+        ),
+    );
+    if tray.changed() || close.changed() || minimize.changed() || double_click.changed() {
         settings.save();
     }
     tray.changed().then_some(Change::Tray)

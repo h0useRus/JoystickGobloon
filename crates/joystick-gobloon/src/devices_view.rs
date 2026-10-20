@@ -1,21 +1,18 @@
 //! Devices page: live state of attached controllers merged with the profile's bindings.
 
 use std::collections::{BTreeMap, HashMap};
-use std::time::{Duration, Instant};
 
 use eframe::egui::{
     self, Align, Align2, Color32, FontId, Layout, Margin, Rect, RichText, Sense, Stroke, Vec2,
 };
-use gob_core::{same_device_name, Action, InputBinding, InputType};
+use gob_core::{Action, InputBinding, InputType, same_device_name};
 use gob_i18n::I18n;
 use gob_input::{DeviceState, InputEvent};
 
 use crate::action_editor::{Editor, Op};
-use crate::profile_view::{action_tree, LoadedProfile};
+use crate::profile_view::{LoadedProfile, action_tree};
 use crate::style::{self, icon};
 
-/// How long a row stays highlighted after its input was used.
-const HIGHLIGHT: Duration = Duration::from_millis(700);
 const LIVE_WIDTH: f32 = 110.0;
 /// Axis change (of -1..1) that counts as using the axis, like pressing a button.
 const AXIS_MOVE: f32 = 0.25;
@@ -41,7 +38,6 @@ pub struct DevicesView {
     /// The user picked the tab; otherwise a connected device is preferred.
     user_selected: bool,
     mode: Option<String>,
-    activity: HashMap<(String, Key), Instant>,
     scroll_to: Option<(String, Key)>,
     /// Axis value when it last counted as moved (per device and axis).
     axis_ref: HashMap<(String, u8), f32>,
@@ -75,14 +71,19 @@ struct Tab<'a> {
 }
 
 impl DevicesView {
-    /// Pressing a button, moving a hat or clearly moving an axis selects its device,
-    /// highlights the input and scrolls the list to it.
+    /// Pressing a button, moving a hat or clearly moving an axis selects its device and
+    /// scrolls the list to the input (`focus` off: events are only drained). The row is not
+    /// highlighted: its live widget already shows the input; a click selects it.
     pub fn handle_events(
         &mut self,
         events: impl Iterator<Item = InputEvent>,
         devices: &[DeviceState],
+        focus: bool,
     ) {
         for event in events {
+            if !focus {
+                continue;
+            }
             let (device, key) = match event {
                 InputEvent::Button {
                     device,
@@ -103,7 +104,7 @@ impl DevicesView {
                     *reference = value;
                     (device, (Kind::Axis, u32::from(id)))
                 }
-                // Typing must not switch tabs: keys only light up their row.
+                // Typing must not switch tabs: keys only scroll an open keyboard tab.
                 InputEvent::Key {
                     scan_code,
                     extended,
@@ -113,11 +114,9 @@ impl DevicesView {
                         scan_code,
                         extended,
                     });
-                    let key = (gob_core::KEYBOARD_GUID.to_string(), (Kind::Key, id));
                     if self.selected.as_deref() == Some(gob_core::KEYBOARD_GUID) {
-                        self.scroll_to = Some(key.clone());
+                        self.scroll_to = Some((gob_core::KEYBOARD_GUID.into(), (Kind::Key, id)));
                     }
-                    self.activity.insert(key, Instant::now());
                     continue;
                 }
                 _ => continue,
@@ -129,7 +128,6 @@ impl DevicesView {
                 continue;
             }
             self.selected = Some(device.clone());
-            self.activity.insert((device.clone(), key), Instant::now());
             self.scroll_to = Some((device, key));
         }
     }
@@ -647,14 +645,8 @@ impl DevicesView {
         label: Option<&str>,
         selected: bool,
     ) -> bool {
-        let active = self
-            .activity
-            .get(&(tab.guid.to_string(), key))
-            .is_some_and(|t| t.elapsed() < HIGHLIGHT);
         let visuals = ui.visuals();
-        let fill = if active {
-            visuals.selection.bg_fill
-        } else if selected {
+        let fill = if selected {
             // A light accent tint: the live bar's track uses faint_bg_color and must show.
             style::accent(ui).gamma_multiply(0.08)
         } else {
@@ -732,9 +724,6 @@ impl DevicesView {
         {
             response.scroll_to_me(Some(Align::Center));
             self.scroll_to = None;
-        }
-        if active {
-            ui.ctx().request_repaint_after(HIGHLIGHT);
         }
         ui.add_space(2.0);
         response.clicked()
@@ -829,24 +818,24 @@ impl DevicesView {
                 let root = b.configs.first().map(|c| c.root_action.clone());
                 ui.horizontal(|ui| {
                     // The binding's description: the root action's label, like Gremlin.
-                    if let Some(root_id) = &root {
-                        if let Some(a) = p.profile.action(root_id) {
-                            let mut text = a
-                                .label()
-                                .filter(|l| *l != "None")
-                                .unwrap_or_default()
-                                .to_string();
-                            let edit = egui::TextEdit::singleline(&mut text)
-                                .hint_text(i18n.tr("edit-binding-description"))
-                                .desired_width((ui.available_width() - 40.0).max(120.0));
-                            if ui.add(edit).changed() {
-                                ops.push(Op::Set {
-                                    action: root_id.clone(),
-                                    name: "action-label".into(),
-                                    ty: "string".into(),
-                                    value: text,
-                                });
-                            }
+                    if let Some(root_id) = &root
+                        && let Some(a) = p.profile.action(root_id)
+                    {
+                        let mut text = a
+                            .label()
+                            .filter(|l| *l != "None")
+                            .unwrap_or_default()
+                            .to_string();
+                        let edit = egui::TextEdit::singleline(&mut text)
+                            .hint_text(i18n.tr("edit-binding-description"))
+                            .desired_width((ui.available_width() - 40.0).max(120.0));
+                        if ui.add(edit).changed() {
+                            ops.push(Op::Set {
+                                action: root_id.clone(),
+                                name: "action-label".into(),
+                                ty: "string".into(),
+                                value: text,
+                            });
                         }
                     }
                     if style::icon_button(ui, true, icon::TRASH, &i18n.tr("edit-unbind")).clicked()

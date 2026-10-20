@@ -1,12 +1,17 @@
 //! Notification area (tray) icon and the Windows autostart entry.
 //!
-//! While the window is hidden eframe does not run `update`, so the tray callbacks show
-//! the window directly through Win32 and only then ask egui to repaint. "Activate" works
-//! without the window: it starts the engine through [`Activation`] and updates the icon itself.
+//! The tray callbacks show the window directly through Win32 and only then ask egui to
+//! repaint. "Activate" works without the window: it starts the engine through
+//! [`Activation`] and updates the icon itself.
+//!
+//! Left click: show the window, or minimize it when it is on screen (to the tray with
+//! "minimize to tray"). Double click (if on in the settings): activate / deactivate the
+//! profile; a single click then waits for the double-click time.
 
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use eframe::egui;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem};
@@ -101,6 +106,8 @@ pub struct Tray {
     cloak_item: Option<CheckMenuItem>,
     /// The tray menu switched device hiding; the app reloads HidHide's state.
     cloak_changed: Arc<AtomicBool>,
+    /// A double click on the icon activates / deactivates the profile (setting).
+    double_click_activates: Arc<AtomicBool>,
 }
 
 impl Tray {
@@ -145,21 +152,58 @@ impl Tray {
             .map_err(|e| e.to_string())?;
 
         let quit_flag = Arc::new(AtomicBool::new(false));
+        let double_click_activates = Arc::new(AtomicBool::new(true));
         let cloak_changed = Arc::new(AtomicBool::new(false));
         {
             let ctx = ctx.clone();
             let restored = restored.clone();
-            TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
-                if let TrayIconEvent::Click {
+            let activation = activation.clone();
+            // Every left click and double click bumps it: a pending single click only acts if
+            // nothing followed it within the double-click time.
+            let clicks = Arc::new(AtomicU64::new(0));
+            let double_at: Arc<Mutex<Option<Instant>>> = Arc::default();
+            let wait = double_click_time();
+            let activates = double_click_activates.clone();
+            TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| match event {
+                TrayIconEvent::Click {
                     button: MouseButton::Left,
                     button_state: MouseButtonState::Up,
                     ..
-                } = event
-                {
-                    restored.store(true, Ordering::Relaxed);
-                    show_window(hwnd);
-                    ctx.request_repaint();
+                } => {
+                    // The release that ends a double click.
+                    let last = *double_at.lock().unwrap_or_else(|e| e.into_inner());
+                    if last.is_some_and(|t| t.elapsed() < wait) {
+                        return;
+                    }
+                    if !activates.load(Ordering::Relaxed) {
+                        // No double-click action: nothing to wait for.
+                        single_click(hwnd, &restored, &ctx);
+                        return;
+                    }
+                    let n = clicks.fetch_add(1, Ordering::Relaxed) + 1;
+                    let (clicks, ctx, restored) = (clicks.clone(), ctx.clone(), restored.clone());
+                    let _ =
+                        std::thread::Builder::new()
+                            .name("tray-click".into())
+                            .spawn(move || {
+                                std::thread::sleep(wait);
+                                if clicks.load(Ordering::Relaxed) == n {
+                                    single_click(hwnd, &restored, &ctx);
+                                }
+                            });
                 }
+                TrayIconEvent::DoubleClick {
+                    button: MouseButton::Left,
+                    ..
+                } => {
+                    clicks.fetch_add(1, Ordering::Relaxed);
+                    *double_at.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+                    if activates.load(Ordering::Relaxed) {
+                        toggle_activation(&activation);
+                        ctx.request_repaint();
+                    }
+                }
+                _ => {}
             }));
         }
         {
@@ -171,13 +215,7 @@ impl Tray {
             let cloak_changed = cloak_changed.clone();
             MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
                 if event.id == activate_id {
-                    activation.toggle_from_tray();
-                    let active = activation.is_active();
-                    LIVE.with(|l| {
-                        if let Some(l) = l.borrow_mut().as_mut() {
-                            l.show(active);
-                        }
-                    });
+                    toggle_activation(&activation);
                     ctx.request_repaint();
                 }
                 if event.id == quit_id {
@@ -216,6 +254,7 @@ impl Tray {
             quit: quit_flag,
             cloak_item,
             cloak_changed,
+            double_click_activates,
         })
     }
 
@@ -249,16 +288,21 @@ impl Tray {
 
     /// Check mark of the "Device hiding" item.
     pub fn set_cloaked(&self, on: bool) {
-        if let Some(item) = &self.cloak_item {
-            if item.is_checked() != on {
-                item.set_checked(on);
-            }
+        if let Some(item) = &self.cloak_item
+            && item.is_checked() != on
+        {
+            item.set_checked(on);
         }
     }
 
     /// Device hiding was switched from the tray menu since the last call.
     pub fn take_cloak_changed(&self) -> bool {
         self.cloak_changed.swap(false, Ordering::Relaxed)
+    }
+
+    /// Whether a double click on the icon activates / deactivates the profile.
+    pub fn set_double_click_activates(&self, on: bool) {
+        self.double_click_activates.store(on, Ordering::Relaxed);
     }
 
     pub fn take_quit(&self) -> bool {
@@ -273,28 +317,169 @@ impl Drop for Tray {
     }
 }
 
-/// Shows the hidden main window. Called from tray callbacks, which run inside the window
-/// message handling: the async variant only posts the request, so winit is not re-entered.
-/// The app then syncs winit's state on its next frame (its `restored` flag); without
-/// that winit still thinks the window is hidden and ignores the next hide request.
+/// Starts or stops the profile and updates the icon (UI thread: tray callbacks).
+fn toggle_activation(activation: &Activation) {
+    activation.toggle_from_tray();
+    let active = activation.is_active();
+    LIVE.with(|l| {
+        if let Some(l) = l.borrow_mut().as_mut() {
+            l.show(active);
+        }
+    });
+}
+
+/// A left click on the icon that was not part of a double click: minimizes the window when
+/// it is on screen (the app moves it on to the tray with "minimize to tray"), otherwise
+/// shows it. Runs on a helper thread: only async window calls.
+fn single_click(hwnd: isize, restored: &AtomicBool, ctx: &egui::Context) {
+    if window_shown(hwnd) && !in_tray(hwnd) {
+        #[cfg(windows)]
+        {
+            use windows::Win32::UI::WindowsAndMessaging::{SW_MINIMIZE, ShowWindowAsync};
+            // SAFETY: the app's own window; the request is only posted to its thread.
+            unsafe {
+                let _ = ShowWindowAsync(handle(hwnd), SW_MINIMIZE);
+            }
+        }
+    } else {
+        restored.store(true, Ordering::Relaxed);
+        show_window(hwnd);
+    }
+    ctx.request_repaint();
+}
+
+/// Windows' double-click time: a click waits this long before it counts as a single click.
+fn double_click_time() -> Duration {
+    #[cfg(windows)]
+    {
+        // SAFETY: plain query without arguments.
+        let ms = unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime() };
+        Duration::from_millis(u64::from(ms))
+    }
+    #[cfg(not(windows))]
+    Duration::from_millis(500)
+}
+
+/// Puts the main window into the tray: a transparent, click-through tool window (off the
+/// taskbar and Alt+Tab), not minimized. It is not hidden (SW_HIDE): Windows does not paint
+/// hidden windows, so eframe would never run a frame and its event loop would spin a CPU
+/// core on every repaint request. Not minimized either: Windows draws a minimized tool
+/// window as a small title bar above the taskbar, whatever its transparency.
+pub fn hide_window(hwnd: isize) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            SW_HIDE, SW_SHOWNOACTIVATE, ShowWindowAsync,
+        };
+        let window = handle(hwnd);
+        set_tray_style(window, true);
+        // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
+        // Async: callers may run inside winit's message handling. Hiding first makes the
+        // taskbar notice the style change; SW_SHOWNOACTIVATE also un-minimizes.
+        unsafe {
+            let _ = ShowWindowAsync(window, SW_HIDE);
+            let _ = ShowWindowAsync(window, SW_SHOWNOACTIVATE);
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = hwnd;
+}
+
+/// Shows the main window again (from the tray, or minimized). Called from tray callbacks,
+/// which run inside the window message handling: the async variant only posts the request,
+/// so winit is not re-entered. The app then syncs winit's state on its next frame (its
+/// `restored` flag).
 pub fn show_window(hwnd: isize) {
     #[cfg(windows)]
     {
-        use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::WindowsAndMessaging::{
-            IsIconic, ShowWindowAsync, SW_RESTORE, SW_SHOW,
+            IsIconic, SW_HIDE, SW_RESTORE, SW_SHOW, ShowWindowAsync,
         };
-        let hwnd = HWND(hwnd as *mut _);
+        let hwnd = handle(hwnd);
+        let from_tray = in_tray_handle(hwnd);
+        set_tray_style(hwnd, false);
         // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
         unsafe {
+            if from_tray {
+                // Hide first so the taskbar adds the button back.
+                let _ = ShowWindowAsync(hwnd, SW_HIDE);
+            }
             let _ = ShowWindowAsync(hwnd, SW_SHOW);
-            if IsIconic(hwnd).as_bool() {
+            if from_tray || IsIconic(hwnd).as_bool() {
                 let _ = ShowWindowAsync(hwnd, SW_RESTORE);
             }
         }
     }
     #[cfg(not(windows))]
     let _ = hwnd;
+}
+
+/// The main window is in the tray (see [`hide_window`]).
+pub fn in_tray(hwnd: isize) -> bool {
+    #[cfg(windows)]
+    return in_tray_handle(handle(hwnd));
+    #[cfg(not(windows))]
+    {
+        let _ = hwnd;
+        false
+    }
+}
+
+/// The main window is on screen: visible, not minimized, not in the tray.
+pub fn window_shown(hwnd: isize) -> bool {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible};
+        let hwnd = handle(hwnd);
+        // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
+        unsafe { IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = hwnd;
+        true
+    }
+}
+
+#[cfg(windows)]
+fn handle(hwnd: isize) -> windows::Win32::Foundation::HWND {
+    windows::Win32::Foundation::HWND(hwnd as *mut _)
+}
+
+#[cfg(windows)]
+fn in_tray_handle(hwnd: windows::Win32::Foundation::HWND) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GetWindowLongPtrW, WS_EX_TOOLWINDOW,
+    };
+    // SAFETY: reading the style of the app's own window.
+    let style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
+    style & WS_EX_TOOLWINDOW.0 as isize != 0
+}
+
+/// Tray style: a tool window (off the taskbar and Alt+Tab), fully transparent and
+/// click-through.
+#[cfg(windows)]
+fn set_tray_style(hwnd: windows::Win32::Foundation::HWND, on: bool) {
+    use windows::Win32::Foundation::COLORREF;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GetWindowLongPtrW, LWA_ALPHA, SetLayeredWindowAttributes, SetWindowLongPtrW,
+        WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
+    };
+    let tray = (WS_EX_TOOLWINDOW.0 | WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0) as isize;
+    // SAFETY: changing the extended style of the app's own window.
+    unsafe {
+        let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        if on {
+            SetWindowLongPtrW(
+                hwnd,
+                GWL_EXSTYLE,
+                (style | tray) & !(WS_EX_APPWINDOW.0 as isize),
+            );
+            let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_ALPHA);
+        } else {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style & !tray);
+        }
+    }
 }
 
 /// Native handle of the main window, for the tray callbacks.
@@ -319,10 +504,10 @@ pub mod autostart {
     pub fn set(enabled: bool) -> Result<(), String> {
         #[cfg(windows)]
         {
-            use windows::core::HSTRING;
             use windows::Win32::System::Registry::{
-                RegDeleteKeyValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_SZ,
+                HKEY_CURRENT_USER, REG_SZ, RegDeleteKeyValueW, RegSetKeyValueW,
             };
+            use windows::core::HSTRING;
             let (key, value) = (HSTRING::from(RUN_KEY), HSTRING::from(VALUE));
             // SAFETY: plain registry calls with valid, NUL-terminated strings.
             let status = unsafe {

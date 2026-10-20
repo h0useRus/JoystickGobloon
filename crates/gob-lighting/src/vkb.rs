@@ -115,12 +115,6 @@ impl Color {
         let c = |v: u8| ((v as u32 * 7 + 127) / 255) as u8;
         Self::new(c(r), c(g), c(b))
     }
-
-    /// Back to 8-bit RGB (for previews).
-    pub fn to_rgb(self) -> [u8; 3] {
-        let c = |v: u8| ((v.min(7) as u32 * 255 + 3) / 7) as u8;
-        [c(self.r), c(self.g), c(self.b)]
-    }
 }
 
 /// One LED entry of the report.
@@ -438,7 +432,6 @@ mod tests {
     fn colors_scale_to_eight_levels() {
         assert_eq!(Color::from_rgb(255, 51, 0), Color::new(7, 1, 0));
         assert_eq!(Color::from_rgb(0x80, 0x80, 0x80), Color::new(4, 4, 4));
-        assert_eq!(Color::new(7, 0, 4).to_rgb(), [255, 0, 146]);
     }
 
     #[test]

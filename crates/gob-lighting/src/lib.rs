@@ -102,13 +102,6 @@ impl Device {
         &self.hid.path
     }
 
-    /// LEDs this device is known to have; empty when unknown (any number may work).
-    pub fn known_leds(&self) -> &'static [KnownLed] {
-        match self.vendor {
-            Vendor::Vkb => vkb::KNOWN_LEDS,
-        }
-    }
-
     /// Whether this is the device DirectInput reports with `hid_path` (gob-input's
     /// `DeviceInfo::hid_path`); paths differ only in case, if at all.
     pub fn is_at(&self, hid_path: &str) -> bool {

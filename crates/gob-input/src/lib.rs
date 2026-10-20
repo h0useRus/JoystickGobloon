@@ -74,11 +74,7 @@ impl Calibration {
         );
         let out = if self.with_center {
             if v < cl {
-                if cl > low {
-                    (v - cl) / (cl - low)
-                } else {
-                    0.0
-                }
+                if cl > low { (v - cl) / (cl - low) } else { 0.0 }
             } else if v <= ch {
                 0.0
             } else if high > ch {
@@ -116,6 +112,14 @@ impl DeviceState {
             hats: vec![None; info.hats],
             info,
         }
+    }
+
+    /// Copies the live values (not the info) from `other`, reusing this state's buffers.
+    pub(crate) fn copy_readings(&mut self, other: &DeviceState) {
+        self.axes = other.axes;
+        self.raw = other.raw;
+        self.buttons.clone_from(&other.buttons);
+        self.hats.clone_from(&other.hats);
     }
 
     pub fn axis(&self, id: u8) -> Option<f32> {
@@ -162,7 +166,7 @@ pub fn joystick_ids(vendor_id: u16, product_id: u16) -> Vec<u32> {
     #[cfg(windows)]
     {
         use windows::Win32::Media::Multimedia::{
-            joyGetDevCapsW, joyGetNumDevs, joyGetPosEx, JOYCAPSW, JOYINFOEX, JOY_RETURNBUTTONS,
+            JOY_RETURNBUTTONS, JOYCAPSW, JOYINFOEX, joyGetDevCapsW, joyGetNumDevs, joyGetPosEx,
         };
         let mut ids = Vec::new();
         // SAFETY: plain WinMM queries into locally owned structs of the right size.

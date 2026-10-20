@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Align, Layout, RichText, Vec2};
-use gob_hidhide::{same_path, HidHide};
+use gob_hidhide::{HidHide, same_path};
 use gob_i18n::I18n;
 
 use crate::settings::{AppEntry, AppList, Settings};
@@ -80,12 +80,12 @@ impl AppsView {
 
     /// Runs a change, then reloads the state from HidHide.
     fn apply(&mut self, change: impl FnOnce(&HidHide) -> Result<(), gob_hidhide::Error>) {
-        if let Ok(hh) = &self.hh {
-            if let Err(e) = change(hh) {
-                log::error!("changing the HidHide application list: {e}");
-                self.error = Some(e.to_string());
-                return;
-            }
+        if let Ok(hh) = &self.hh
+            && let Err(e) = change(hh)
+        {
+            log::error!("changing the HidHide application list: {e}");
+            self.error = Some(e.to_string());
+            return;
         }
         self.refresh();
     }
@@ -111,10 +111,10 @@ impl AppsView {
     fn set_inverse(&mut self, on: bool, settings: &Settings) {
         let own = std::env::current_exe().ok();
         self.apply(|hh| {
-            if let Some(own) = &own {
-                if on {
-                    hh.set_app(own, false)?;
-                }
+            if let Some(own) = &own
+                && on
+            {
+                hh.set_app(own, false)?;
             }
             hh.set_inverse(on)?;
             match &own {
@@ -130,19 +130,18 @@ impl AppsView {
         }
         ui.horizontal(|ui| {
             let add = format!("{}  {}", icon::PLUS, i18n.tr("apps-add"));
-            if ui.button(add).clicked() {
-                if let Some(path) = rfd::FileDialog::new()
+            if ui.button(add).clicked()
+                && let Some(path) = rfd::FileDialog::new()
                     .add_filter("exe", &["exe"])
                     .pick_file()
-                {
-                    if !self.list.apps.iter().any(|a| same_path(&a.path, &path)) {
-                        self.list.apps.push(AppEntry { path: path.clone() });
-                        self.list.save();
-                    }
-                    // A new program sees hidden devices: whitelisted, or not blocked when inverse.
-                    if self.hh.is_ok() && !self.inverse && !self.is_listed(&path) {
-                        self.apply(|hh| hh.set_app(&path, true));
-                    }
+            {
+                if !self.list.apps.iter().any(|a| same_path(&a.path, &path)) {
+                    self.list.apps.push(AppEntry { path: path.clone() });
+                    self.list.save();
+                }
+                // A new program sees hidden devices: whitelisted, or not blocked when inverse.
+                if self.hh.is_ok() && !self.inverse && !self.is_listed(&path) {
+                    self.apply(|hh| hh.set_app(&path, true));
                 }
             }
             if style::icon_button(ui, true, icon::ARROWS_CLOCKWISE, &i18n.tr("action-refresh"))

@@ -91,6 +91,9 @@ hidhide-hint = 눈 아이콘을 클릭하면 다른 프로그램에서 장치를
 hidhide-no-devices = 표시할 장치가 없습니다.
 action-refresh = 새로 고침
 settings-hidhide-self = 시작할 때 Joystick Gobloon을 HidHide 허용 목록에 추가
+settings-focus-input = 장치 및 바인딩 페이지에서 사용 중인 입력으로 이동
+settings-input-events = 변경 시 컨트롤러 읽기
+settings-input-events-tip = 지연과 CPU 사용량 감소: 컨트롤러가 변경을 알릴 때 읽으며, 짧은 버튼 입력도 놓치지 않습니다. 끄면 모든 컨트롤러를 4ms마다 읽습니다.
 status-whitelisted = Joystick Gobloon을 HidHide 허용 목록에 추가했습니다.
 
 # Applications
@@ -371,6 +374,7 @@ cond-logical = 논리 장치 입력
 settings-tray = 트레이 아이콘 표시
 settings-close-to-tray = 닫을 때 트레이로
 settings-minimize-to-tray = 최소화할 때 트레이로
+settings-tray-double-click = 두 번 클릭하면 프로필 활성화
 settings-tray-title = 트레이 아이콘
 settings-autostart = Windows와 함께 시작 (최소화)
 settings-activate-on-start = 시작할 때 프로필 활성화

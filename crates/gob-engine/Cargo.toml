@@ -17,7 +17,6 @@ rodio = { version = "0.19", default-features = false, features = ["symphonia-wav
 windows = { workspace = true, features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_Media_Speech",
-    "Win32_Media_Audio",
     "Win32_System_Com",
 ] }
 

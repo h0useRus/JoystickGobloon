@@ -5,13 +5,13 @@
 
 #[cfg(windows)]
 mod imp {
-    use windows::core::HSTRING;
-    use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS, HANDLE};
+    use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError, HANDLE};
     use windows::Win32::System::Threading::{
-        CreateEventW, CreateMutexW, OpenEventW, SetEvent, WaitForSingleObject, EVENT_MODIFY_STATE,
-        INFINITE,
+        CreateEventW, CreateMutexW, EVENT_MODIFY_STATE, INFINITE, OpenEventW, SetEvent,
+        WaitForSingleObject,
     };
-    use windows::Win32::UI::WindowsAndMessaging::{AllowSetForegroundWindow, ASFW_ANY};
+    use windows::Win32::UI::WindowsAndMessaging::{ASFW_ANY, AllowSetForegroundWindow};
+    use windows::core::HSTRING;
 
     /// Debug builds get their own names, so a development build runs next to an installed one.
     const BASE: &str = if cfg!(debug_assertions) {
@@ -58,13 +58,15 @@ mod imp {
     pub fn listen(event: Event, show: impl Fn() + Send + 'static) {
         let spawned = std::thread::Builder::new()
             .name("gob-instance".into())
-            .spawn(move || loop {
-                // SAFETY: the handle stays open for the life of the process.
-                let r = unsafe { WaitForSingleObject(event.handle(), INFINITE) };
-                if r.0 != 0 {
-                    return;
+            .spawn(move || {
+                loop {
+                    // SAFETY: the handle stays open for the life of the process.
+                    let r = unsafe { WaitForSingleObject(event.handle(), INFINITE) };
+                    if r.0 != 0 {
+                        return;
+                    }
+                    show();
                 }
-                show();
             });
         if let Err(e) = spawned {
             log::error!("single instance listener: {e}");
@@ -81,4 +83,4 @@ mod imp {
     pub fn listen(_event: Event, _show: impl Fn() + Send + 'static) {}
 }
 
-pub use imp::{claim, listen, Event};
+pub use imp::{Event, claim, listen};

@@ -225,9 +225,9 @@ pub fn read_registry() -> Result<Vec<DeviceConfig>, String> {
 
 #[cfg(windows)]
 mod reg {
-    use windows::core::HSTRING;
     use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
-    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_BINARY};
+    use windows::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RRF_RT_REG_BINARY, RegGetValueW};
+    use windows::core::HSTRING;
 
     /// A REG_BINARY value; `None` when the key or the value is missing.
     pub fn read_binary(key: &str, name: &str) -> Result<Option<Vec<u8>>, String> {

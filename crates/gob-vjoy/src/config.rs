@@ -125,15 +125,15 @@ impl DeviceConfig {
 pub fn run_as_admin(tool: &Path, args: &[String]) -> Result<u32, String> {
     #[cfg(windows)]
     {
-        use windows::core::{HSTRING, PCWSTR};
         use windows::Win32::Foundation::CloseHandle;
         use windows::Win32::System::Threading::{
-            GetExitCodeProcess, WaitForSingleObject, INFINITE,
+            GetExitCodeProcess, INFINITE, WaitForSingleObject,
         };
         use windows::Win32::UI::Shell::{
-            ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+            SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW,
         };
         use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+        use windows::core::{HSTRING, PCWSTR};
 
         let file = HSTRING::from(tool.as_os_str());
         let params = HSTRING::from(

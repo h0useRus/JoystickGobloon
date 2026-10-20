@@ -10,7 +10,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe
 - crates/gob-core    profile model mirroring Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views
 - crates/gob-gremlin XML <-> Element <-> Profile, lossless round-trip; `report()` import warnings; example `resave`
-- crates/gob-input   DirectInput8 polling thread (InputService: snapshot + events); ids = DI instance GUIDs like Gremlin;
+- crates/gob-input   DirectInput8 input thread (InputService: snapshot + events; polls every 4 ms, or with
+  `set_event_mode` waits for DI change events and reads buffered buttons/hats); ids = DI instance GUIDs like Gremlin;
   links dinput8.lib/dxguid.lib statically (-bundle) for c_dfDIJoystick2; example `monitor`
   + low-level keyboard hook -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
   use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine
@@ -73,7 +74,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   portable zip. The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; uninstall runs `JoystickGobloon.exe
   --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) runs fmt,
-  clippy -D warnings and tests on pull requests and work branches.
+  cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches.
 - Discord: releases post through .github/scripts/discord-announce.ps1 to the DISCORD_WEBHOOK secret (alpha
   builds to DISCORD_WEBHOOK_ALPHA); no secret = no post. announce.yml re-posts a release by hand.
 - Rust version is pinned in rust-toolchain.toml (local and CI); bump it deliberately and fix new lints.
@@ -82,7 +83,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | apps | vjoy | viewer | viewer-window | calibration | settings | about | lighting,
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | apps | vjoy | viewer | viewer-window | calibration | settings | general | about | lighting,
   select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ..., a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | logical,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)

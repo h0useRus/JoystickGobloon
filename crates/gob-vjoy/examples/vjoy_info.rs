@@ -40,20 +40,20 @@ fn main() {
         }
     }
     let args: Vec<String> = std::env::args().collect();
-    if let [_, flag, id] = args.as_slice() {
-        if flag == "--sweep" {
-            let dev = vjoy
-                .acquire(id.parse().expect("device id"))
-                .unwrap_or_else(|e| panic!("{e}"));
-            let start = Instant::now();
-            while start.elapsed() < Duration::from_secs(3) {
-                let t = start.elapsed().as_secs_f32();
-                dev.set_axis(1, (t * 3.0).sin());
-                dev.set_button(1, ((t * 4.0) as u32).is_multiple_of(2));
-                dev.set_hat(1, Some(((t * 9000.0) as u32 % 36000) as u16));
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            println!("sweep done");
+    if let [_, flag, id] = args.as_slice()
+        && flag == "--sweep"
+    {
+        let dev = vjoy
+            .acquire(id.parse().expect("device id"))
+            .unwrap_or_else(|e| panic!("{e}"));
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(3) {
+            let t = start.elapsed().as_secs_f32();
+            dev.set_axis(1, (t * 3.0).sin());
+            dev.set_button(1, ((t * 4.0) as u32).is_multiple_of(2));
+            dev.set_hat(1, Some(((t * 9000.0) as u32 % 36000) as u16));
+            std::thread::sleep(Duration::from_millis(10));
         }
+        println!("sweep done");
     }
 }

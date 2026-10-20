@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use eframe::egui::{self, RichText};
-use gob_core::{same_device_name, Profile};
+use gob_core::{Profile, same_device_name};
 use gob_i18n::I18n;
 use gob_input::DeviceState;
 
@@ -237,10 +237,10 @@ fn name_score(a: &str, b: &str) -> Option<u32> {
             _ => None,
         }
     };
-    if let (Some(x), Some(y)) = (side(&a), side(&b)) {
-        if x != y {
-            return None;
-        }
+    if let (Some(x), Some(y)) = (side(&a), side(&b))
+        && x != y
+    {
+        return None;
     }
     let shared = a.iter().filter(|w| b.contains(w)).count();
     let named = a
@@ -269,10 +269,10 @@ pub fn auto_aliases(profile: &Profile, devices: &[DeviceState]) -> HashMap<Strin
             .iter()
             .filter(|s| same_device_name(&s.info.name, &d.name))
             .collect();
-        if let [one] = same.as_slice() {
-            if !aliases.values().any(|g: &String| g == &one.info.guid) {
-                aliases.insert(d.id.to_ascii_lowercase(), one.info.guid.clone());
-            }
+        if let [one] = same.as_slice()
+            && !aliases.values().any(|g: &String| g == &one.info.guid)
+        {
+            aliases.insert(d.id.to_ascii_lowercase(), one.info.guid.clone());
         }
     }
     aliases

@@ -38,8 +38,14 @@ pub struct Settings {
     pub close_to_tray: bool,
     /// Minimizing hides the window to the tray (off the taskbar).
     pub minimize_to_tray: bool,
+    /// A double click on the tray icon activates / deactivates the profile.
+    pub tray_double_click_activates: bool,
     /// Windows starts Joystick Gobloon at logon (minimized).
     pub start_with_windows: bool,
+    /// Devices page: using an input selects its device tab and scrolls the list to it.
+    pub focus_used_input: bool,
+    /// Read controllers when DirectInput signals a change instead of polling every 4 ms.
+    pub input_events: bool,
     /// Activate the reopened profile on startup.
     pub activate_on_start: bool,
     /// Look for a new release on startup and install it.
@@ -202,7 +208,10 @@ impl Default for Settings {
             show_tray: true,
             close_to_tray: false,
             minimize_to_tray: false,
+            tray_double_click_activates: true,
             start_with_windows: false,
+            focus_used_input: true,
+            input_events: true,
             activate_on_start: false,
             check_updates: true,
             calibration: BTreeMap::new(),

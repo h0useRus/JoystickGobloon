@@ -153,10 +153,6 @@ impl HidHide {
         Driver::open()?.get_list(driver::GET_BLACKLIST)
     }
 
-    pub fn set_hidden(&self, instance_path: &str, hidden: bool) -> Result<(), Error> {
-        self.change_hidden(&[instance_path], hidden)
-    }
-
     /// Hides or shows all collections of a device together with its USB container.
     pub fn set_group_hidden(&self, group: &DeviceGroup, hidden: bool) -> Result<(), Error> {
         self.change_hidden(&group.instance_paths(), hidden)
@@ -260,11 +256,11 @@ fn vid_pid(instance_path: &str) -> Option<(u16, u16)> {
 /// File version of `%SystemRoot%\System32\drivers\HidHide.sys` as "major.minor.build".
 #[cfg(windows)]
 fn driver_version() -> Option<String> {
-    use windows::core::{w, PCWSTR};
     use windows::Win32::Storage::FileSystem::{
-        GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW, VS_FIXEDFILEINFO,
+        GetFileVersionInfoSizeW, GetFileVersionInfoW, VS_FIXEDFILEINFO, VerQueryValueW,
     };
     use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
+    use windows::core::{PCWSTR, w};
 
     let mut dir = [0u16; 260];
     // SAFETY: the buffer outlives the call.

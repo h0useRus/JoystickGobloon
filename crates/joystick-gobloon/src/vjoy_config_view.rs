@@ -3,7 +3,7 @@
 //! elevated (UAC, `--vjoy-config`) on a worker thread.
 
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{Receiver, channel};
 
 use eframe::egui::{self, RichText};
 use gob_i18n::I18n;

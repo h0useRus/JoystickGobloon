@@ -98,31 +98,30 @@ pub fn find() -> Vec<Found> {
 mod imp {
     use super::Found;
     use crate::HidDevice;
-    use windows::core::{GUID, PCWSTR};
     use windows::Win32::Devices::DeviceAndDriverInstallation::{
-        CM_Get_DevNode_PropertyW, CM_Get_Device_ID_ListW, CM_Get_Device_ID_List_SizeW,
-        CM_Get_Parent, CM_Locate_DevNodeW, SetupDiDestroyDeviceInfoList,
+        CM_GETIDLIST_FILTER_CLASS, CM_Get_DevNode_PropertyW, CM_Get_Device_ID_List_SizeW,
+        CM_Get_Device_ID_ListW, CM_Get_Parent, CM_LOCATE_DEVNODE_NORMAL, CM_LOCATE_DEVNODE_PHANTOM,
+        CM_Locate_DevNodeW, CR_SUCCESS, DIGCF_DEVICEINTERFACE, GUID_DEVCLASS_HIDCLASS,
+        SP_DEVICE_INTERFACE_DATA, SP_DEVICE_INTERFACE_DETAIL_DATA_W, SetupDiDestroyDeviceInfoList,
         SetupDiEnumDeviceInterfaces, SetupDiGetClassDevsW, SetupDiGetDeviceInterfaceDetailW,
-        CM_GETIDLIST_FILTER_CLASS, CM_LOCATE_DEVNODE_NORMAL, CM_LOCATE_DEVNODE_PHANTOM, CR_SUCCESS,
-        DIGCF_DEVICEINTERFACE, GUID_DEVCLASS_HIDCLASS, SP_DEVICE_INTERFACE_DATA,
-        SP_DEVICE_INTERFACE_DETAIL_DATA_W,
     };
     use windows::Win32::Devices::HumanInterfaceDevice::{
-        HidD_FreePreparsedData, HidD_GetAttributes, HidD_GetHidGuid, HidD_GetManufacturerString,
-        HidD_GetPreparsedData, HidD_GetProductString, HidP_GetCaps, HIDD_ATTRIBUTES, HIDP_CAPS,
-        HIDP_STATUS_SUCCESS, PHIDP_PREPARSED_DATA,
+        HIDD_ATTRIBUTES, HIDP_CAPS, HIDP_STATUS_SUCCESS, HidD_FreePreparsedData,
+        HidD_GetAttributes, HidD_GetHidGuid, HidD_GetManufacturerString, HidD_GetPreparsedData,
+        HidD_GetProductString, HidP_GetCaps, PHIDP_PREPARSED_DATA,
     };
     use windows::Win32::Devices::Properties::{
         DEVPKEY_Device_BusReportedDeviceDesc, DEVPKEY_Device_CompatibleIds,
         DEVPKEY_Device_ContainerId, DEVPKEY_Device_DeviceDesc, DEVPKEY_Device_FriendlyName,
-        DEVPKEY_Device_HardwareIds, DEVPKEY_Device_InstanceId, DEVPROPTYPE, DEVPROP_TYPE_GUID,
-        DEVPROP_TYPE_STRING, DEVPROP_TYPE_STRING_LIST,
+        DEVPKEY_Device_HardwareIds, DEVPKEY_Device_InstanceId, DEVPROP_TYPE_GUID,
+        DEVPROP_TYPE_STRING, DEVPROP_TYPE_STRING_LIST, DEVPROPTYPE,
     };
     use windows::Win32::Foundation::{CloseHandle, DEVPROPKEY};
     use windows::Win32::Storage::FileSystem::{
         CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
         FILE_SHARE_WRITE, OPEN_EXISTING,
     };
+    use windows::core::{GUID, PCWSTR};
 
     /// Container of devices that are part of the PC itself: not a separate device.
     const CONTAINER_ID_SYSTEM: GUID = GUID::from_u128(0x00000000_0000_0000_ffff_ffffffffffff);

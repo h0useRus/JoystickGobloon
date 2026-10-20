@@ -91,6 +91,9 @@ hidhide-hint = Нажмите на глаз, чтобы скрыть устро�
 hidhide-no-devices = Нет устройств для показа.
 action-refresh = Обновить
 settings-hidhide-self = Добавлять Joystick Gobloon в белый список HidHide при запуске
+settings-focus-input = Переходить к используемому вводу на странице «Устройства и назначения»
+settings-input-events = Считывать контроллеры по изменению
+settings-input-events-tip = Меньше задержка и нагрузка на процессор: контроллеры считываются, когда сообщают об изменении, и короткие нажатия кнопок не теряются. Выкл.: каждый контроллер опрашивается каждые 4 мс.
 status-whitelisted = Joystick Gobloon добавлен в белый список HidHide.
 
 # Applications
@@ -371,6 +374,7 @@ cond-logical = Вход логического устройства
 settings-tray = Показывать значок в трее
 settings-close-to-tray = Закрывать в трей
 settings-minimize-to-tray = Сворачивать в трей
+settings-tray-double-click = Двойной клик активирует профиль
 settings-tray-title = Значок в трее
 settings-autostart = Запускать вместе с Windows (свёрнутым)
 settings-activate-on-start = Активировать профиль при запуске

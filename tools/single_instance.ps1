@@ -6,6 +6,8 @@ using System; using System.Runtime.InteropServices; using System.Text;
 public class SI {
  public delegate bool EnumProc(IntPtr h, IntPtr l);
  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc p, IntPtr l);
+ [DllImport("user32.dll")] public static extern long GetWindowLongPtrW(IntPtr h, int i);
+ public static bool InTray(IntPtr h) { return (GetWindowLongPtrW(h, -20) & 0x80) != 0; }
  [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
@@ -25,11 +27,11 @@ foreach ($how in "tray", "minimized") {
   if ($how -eq "tray") { [SI]::PostMessage($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null }  # WM_CLOSE -> tray
   else { [SI]::ShowWindow($h, 6) | Out-Null }                                                          # SW_MINIMIZE
   Start-Sleep -Milliseconds 800
-  $before = "visible=$([SI]::IsWindowVisible($h)) minimized=$([SI]::IsIconic($h))"
+  $before = "tray=$([SI]::InTray($h)) visible=$([SI]::IsWindowVisible($h)) minimized=$([SI]::IsIconic($h))"
   $second = Start-Process -FilePath $Exe -PassThru
   $exited = $second.WaitForExit(5000)
   Start-Sleep -Milliseconds 800
-  $after = "visible=$([SI]::IsWindowVisible($h)) minimized=$([SI]::IsIconic($h)) front=$([SI]::GetForegroundWindow() -eq $h)"
+  $after = "tray=$([SI]::InTray($h)) visible=$([SI]::IsWindowVisible($h)) minimized=$([SI]::IsIconic($h)) front=$([SI]::GetForegroundWindow() -eq $h)"
   "$how : before $before | second start exited=$exited | after $after responds=$([SI]::Responds($h))"
   if (-not $exited) { Stop-Process -Id $second.Id }
 }

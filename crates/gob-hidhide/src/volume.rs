@@ -42,11 +42,11 @@ pub fn from_image_name_in(volumes: &[Volume], image: &str) -> Option<PathBuf> {
 /// All mounted volumes with at least one mount point.
 #[cfg(windows)]
 pub fn volumes() -> Vec<Volume> {
-    use windows::core::PCWSTR;
     use windows::Win32::Storage::FileSystem::{
         FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, GetVolumePathNamesForVolumeNameW,
         QueryDosDeviceW,
     };
+    use windows::core::PCWSTR;
 
     let wide = |s: &[u16]| {
         let end = s.iter().position(|&c| c == 0).unwrap_or(s.len());
