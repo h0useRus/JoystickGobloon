@@ -1,8 +1,8 @@
 //! Linux backend: the input service reads hidden devices exclusively (gob-input's `exclusive`,
 //! `EVIOCGRAB`), so games get nothing from them through evdev or joydev while Joystick Gobloon
-//! runs. Programs that open the raw HID device (hidraw: Steam, SDL's HIDAPI drivers) still see
-//! them; a udev rule closes that (docs/LINUX_PLAN.md, phase 4). No program list: the hiding
-//! program is the only one that reads.
+//! runs. Programs that open the raw HID device (hidraw: Steam, SDL's HIDAPI drivers) could still
+//! see them, but by default only root may open hidraw (Steam's rules open it for gamepads). No
+//! program list: the hiding program is the only one that reads.
 //!
 //! The switch and the hidden devices are kept in `hidden.gob` (TOML) in the data directory;
 //! hidden devices stay listed while unplugged.

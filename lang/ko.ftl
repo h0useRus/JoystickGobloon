@@ -26,7 +26,7 @@ settings-reopen-last = 시작할 때 마지막 프로필 다시 열기
 theme-light = 밝게
 theme-dark = 어둡게
 theme-system = 시스템
-theme-system-tip = Windows의 밝은/어두운 설정 따르기
+theme-system-tip = 시스템의 밝은/어두운 설정 따르기
 about-text = 장치 숨기기, 가상 조이스틱, 입력 매핑을 하나의 앱에서.
 
 # Empty states
@@ -305,7 +305,7 @@ edit-tts-hint = 읽을 텍스트; $current_mode는 현재 모드로 바뀝니다
 edit-tts-rate = 속도
 edit-tts-pitch = 음높이
 edit-tts-back = 모든 항목 뒤에 대기
-edit-tts-front = 다음 순서로 대기 (Windows 음성: 모든 항목 뒤와 같음)
+edit-tts-front = 다음 순서로 대기 (시스템 음성: 모든 항목 뒤와 같음)
 edit-tts-interrupt = 읽고 있는 내용 중단
 edit-preview = 미리 듣기
 
@@ -384,14 +384,14 @@ settings-close-to-tray = 닫을 때 트레이로
 settings-minimize-to-tray = 최소화할 때 트레이로
 settings-tray-double-click = 두 번 클릭하면 프로필 활성화
 settings-tray-title = 트레이 아이콘
-settings-autostart = Windows와 함께 시작 (최소화)
+settings-autostart = 로그인 시 시작 (최소화)
 settings-activate-on-start = 시작할 때 프로필 활성화
 tray-show = Joystick Gobloon 표시
 tray-hiding = 장치 숨기기
 tray-activate = “{ $name }” 활성화
 tray-activate-none = 프로필 활성화
 tray-quit = 종료
-autostart-error = Windows와 함께 시작 설정을 바꿀 수 없습니다: { $error }
+autostart-error = 로그인 시 시작 설정을 바꿀 수 없습니다: { $error }
 
 # About
 about-alpha = 알파 빌드

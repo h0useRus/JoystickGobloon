@@ -122,14 +122,14 @@ pub struct DeviceConfig {
 }
 
 impl DeviceConfig {
-    /// Defaults for a new device: every axis (Gremlin profiles expect them), 32 buttons, one
-    /// continuous hat, no force feedback.
+    /// Defaults for a new device: every axis (Gremlin profiles expect them), as many buttons
+    /// and continuous hats as the backend has (vJoy: 128 and 4), no force feedback.
     pub fn new(id: u32, capabilities: &Capabilities) -> Self {
         Self {
             id,
             axes: [true; AXIS_SLOTS],
-            buttons: 32.min(capabilities.max_buttons),
-            hats: 1.min(capabilities.max_hats),
+            buttons: capabilities.max_buttons,
+            hats: capabilities.max_hats,
             discrete_hats: false,
             effects: vec![false; capabilities.effects.len()],
         }

@@ -279,7 +279,7 @@ fn virtual_stick_reads_back() {
 fn keyboard_keys_as_scan_codes() {
     let _serial = serial();
     let mut keyboard = Virtual::keyboard("Test Keyboard");
-    // Our own output device (phase 3 creates it on uinput): its keys are not input.
+    // Our own output device (gob-engine's keyboard on uinput): its keys are not input.
     let mut own = Virtual::keyboard("Joystick Gobloon Keyboard");
     let input = InputService::start(|| {});
     let events = input.subscribe();

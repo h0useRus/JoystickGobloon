@@ -26,7 +26,7 @@ settings-reopen-last = Rouvrir le dernier profil au démarrage
 theme-light = Clair
 theme-dark = Sombre
 theme-system = Système
-theme-system-tip = Suivre le mode clair ou sombre de Windows
+theme-system-tip = Suivre le mode clair ou sombre du système
 about-text = Masquage des périphériques, joysticks virtuels et affectation des entrées dans une seule application.
 
 # Empty states
@@ -305,7 +305,7 @@ edit-tts-hint = Texte à prononcer ; $current_mode est remplacé par le mode act
 edit-tts-rate = Vitesse
 edit-tts-pitch = Hauteur
 edit-tts-back = Mettre en file après tout le reste
-edit-tts-front = Mettre ensuite (voix Windows : comme après tout le reste)
+edit-tts-front = Mettre ensuite (voix du système : comme après tout le reste)
 edit-tts-interrupt = Interrompre ce qui est en cours
 edit-preview = Aperçu
 
@@ -384,14 +384,14 @@ settings-close-to-tray = Fermer dans la zone de notification
 settings-minimize-to-tray = Réduire dans la zone de notification
 settings-tray-double-click = Un double-clic active le profil
 settings-tray-title = Icône de notification
-settings-autostart = Démarrer avec Windows (réduit)
+settings-autostart = Démarrer à l’ouverture de session (réduit)
 settings-activate-on-start = Activer le profil au démarrage
 tray-show = Afficher Joystick Gobloon
 tray-hiding = Masquage des périphériques
 tray-activate = Activer « { $name } »
 tray-activate-none = Activer le profil
 tray-quit = Quitter
-autostart-error = Impossible de modifier le démarrage avec Windows : { $error }
+autostart-error = Impossible de modifier le démarrage à l’ouverture de session : { $error }
 
 # About
 about-alpha = version alpha

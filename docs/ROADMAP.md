@@ -21,7 +21,6 @@ JoystickGobloon/
     gob-vjoy/      драйвер vJoy напрямую (IOCTL + реестр, docs/VJOY_PLAN.md): вывод осей/кнопок/хаток, конфиг устройств
     gob-hidhide/   IOCTL к \\.\HidHide: blacklist/whitelist, cloak on/off, авто-whitelist JoystickGobloon.exe
     gob-engine/    runtime: event loop (отдельный поток), режимы, исполнение дерева действий, кривые, tempo, макросы
-    gob-plugin/    trait `ActionPlugin` + регистрация (API для будущих плагинов; реализаций нет)
     gob-i18n/      Fluent (`fluent-bundle`), файлы `lang/en.ftl` (встроен) + внешние `lang/*.ftl`
     joystick-gobloon/ bin: eframe/egui GUI → JoystickGobloon.exe
   lang/en.ftl, lang/ru.ftl
@@ -51,7 +50,7 @@ JoystickGobloon/
 | 5 | `gob-engine`: root, map-to-vjoy, change-mode, response-curve, tempo, description, activation-mode | загрузить VKB-профиль → Star Citizen видит vJoy с корректными биндами |
 | 6 | GUI-редакторы профиля (дерево действий, кривые, режимы), сохранение в Gremlin-XML | редактирование + сохранение, открывается в самом Gremlin |
 | 7 | Остальные действия Gremlin R14 (chain, macro, map-to-keyboard/mouse, condition, smart-toggle, split/merge-axis, hat-buttons, load-profile и т.д.) | fixture-тест на каждый тип |
-| 8 | `gob-plugin` API (trait + реестр, загрузка dll через `libloading` — заготовка) | пример-заглушка компилируется |
+| 8 | ~~`gob-plugin` API (заготовка)~~ — убран: плагины не поддерживаются, неизвестные действия профиля сохраняются и не выполняются | — |
 | 9 | Трей, автозапуск, инсталлятор (cargo-wix/Inno Setup с ссылками на HidHide/vJoy) | установка на чистую систему |
 | 10 | Версия для Linux (evdev, uinput вместо vJoy, захват вместо HidHide, AppImage), план — docs/LINUX_PLAN.md | профиль работает на Linux и Steam Deck |
 

@@ -26,7 +26,7 @@ settings-reopen-last = Reopen the last profile on startup
 theme-light = Light
 theme-dark = Dark
 theme-system = System
-theme-system-tip = Follow the Windows light or dark setting
+theme-system-tip = Follow the system light or dark setting
 about-text = Device hiding, virtual joysticks and input mapping in one app.
 
 # Empty states
@@ -305,7 +305,7 @@ edit-tts-hint = Text to speak; $current_mode is replaced with the active mode
 edit-tts-rate = Speed
 edit-tts-pitch = Pitch
 edit-tts-back = Queue after everything else
-edit-tts-front = Queue next (Windows speech: same as after everything else)
+edit-tts-front = Queue next (the system's speech: same as after everything else)
 edit-tts-interrupt = Interrupt what is being said
 edit-preview = Preview
 
@@ -384,14 +384,14 @@ settings-close-to-tray = Close to the tray
 settings-minimize-to-tray = Minimize to the tray
 settings-tray-double-click = Double click activates the profile
 settings-tray-title = Tray icon
-settings-autostart = Start with Windows (minimized)
+settings-autostart = Start at logon (minimized)
 settings-activate-on-start = Activate the profile on startup
 tray-show = Show Joystick Gobloon
 tray-hiding = Device hiding
 tray-activate = Activate “{ $name }”
 tray-activate-none = Activate the profile
 tray-quit = Quit
-autostart-error = Could not change starting with Windows: { $error }
+autostart-error = Could not change starting at logon: { $error }
 
 # About
 about-alpha = alpha build

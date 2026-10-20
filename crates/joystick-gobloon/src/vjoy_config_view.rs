@@ -143,11 +143,7 @@ impl VJoyConfig {
             .iter()
             .min_by_key(|c| c.id)
             .cloned()
-            .unwrap_or(DeviceConfig {
-                buttons: caps.max_buttons,
-                hats: caps.max_hats,
-                ..DeviceConfig::new(id, &caps)
-            });
+            .unwrap_or_else(|| DeviceConfig::new(id, &caps));
         c.id = id;
         c
     }

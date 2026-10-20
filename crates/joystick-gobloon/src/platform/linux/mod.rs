@@ -1,6 +1,13 @@
-//! Linux desktop integration. Device access (the udev rule, gob-uinput's `access`) is Linux's
-//! own; the rest still comes from `none.rs` until phase 5 (docs/LINUX_PLAN.md): XDG paths, a
-//! socket for the single instance, fontconfig, the tray.
+//! Linux desktop integration: XDG folders, a socket for the single instance, XDG autostart,
+//! CJK fonts through fontconfig, the window and the tray (GTK thread), device access (the udev
+//! rule, gob-uinput's `access`), updates of the AppImage. The rest is shared with `none.rs`.
+
+mod autostart;
+mod fonts;
+mod instance;
+mod keys;
+mod update;
+mod window;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -11,36 +18,65 @@ use super::none::Desktop as Fallback;
 
 pub(crate) struct Desktop;
 
-impl super::Desktop for Desktop {
-    type InstanceEvent = <Fallback as super::Desktop>::InstanceEvent;
-    type Window = <Fallback as super::Desktop>::Window;
+/// `$XDG_CONFIG_HOME`, by default `~/.config`.
+fn config_home() -> Option<PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+}
 
+impl super::Desktop for Desktop {
+    type InstanceEvent = instance::Event;
+    type Window = window::Window;
+
+    /// `$XDG_CONFIG_HOME/JoystickGobloon`, where gob-virtual and gob-hide look without one too.
     fn default_data_dir() -> Option<PathBuf> {
-        Fallback::default_data_dir()
+        Some(config_home()?.join("JoystickGobloon"))
     }
 
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
-        Fallback::cjk_fonts()
+        fonts::cjk()
     }
 
+    /// In the user's editor for text files.
     fn open_text_file(path: &Path) {
-        Fallback::open_text_file(path);
+        if let Err(e) = std::process::Command::new("xdg-open").arg(path).spawn() {
+            log::warn!("xdg-open {}: {e}", path.display());
+        }
     }
 
+    /// Programs have no extension here: any file.
     fn program_extensions() -> &'static [&'static str] {
-        Fallback::program_extensions()
+        &[]
     }
 
     fn local_time() -> String {
-        Fallback::local_time()
+        // SAFETY: plain libc calls into locally owned structs.
+        unsafe {
+            let mut now: libc::timespec = std::mem::zeroed();
+            libc::clock_gettime(libc::CLOCK_REALTIME, &mut now);
+            let mut t: libc::tm = std::mem::zeroed();
+            libc::localtime_r(&now.tv_sec, &mut t);
+            format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
+                t.tm_year + 1900,
+                t.tm_mon + 1,
+                t.tm_mday,
+                t.tm_hour,
+                t.tm_min,
+                t.tm_sec,
+                now.tv_nsec / 1_000_000
+            )
+        }
     }
 
     fn claim_instance() -> Option<Self::InstanceEvent> {
-        Fallback::claim_instance()
+        instance::claim()
     }
 
     fn listen_instance(event: Self::InstanceEvent, show: Box<dyn Fn() + Send>) {
-        Fallback::listen_instance(event, show);
+        instance::listen(event, show);
     }
 
     /// Off for now: reading every keyboard needs the `input` group (the udev rule leaves
@@ -49,36 +85,40 @@ impl super::Desktop for Desktop {
         false
     }
 
-    fn held_keys() -> Vec<Key> {
-        Fallback::held_keys()
+    fn held_keys() -> Option<Vec<Key>> {
+        keys::held()
     }
 
     fn key_name(key: Key) -> String {
-        Fallback::key_name(key)
+        keys::name(key).unwrap_or_else(|| super::key_code(key))
     }
 
     fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Self::Window> {
-        Fallback::main_window(cc)
+        window::main_window(cc)
     }
 
-    fn hide_to_tray(window: Self::Window) {
-        Fallback::hide_to_tray(window);
+    fn hide_to_tray(w: Self::Window) {
+        window::hide_to_tray(w);
     }
 
-    fn show_window(window: Self::Window) {
-        Fallback::show_window(window);
+    fn show_window(w: Self::Window) {
+        window::show(w);
     }
 
-    fn minimize_window(window: Self::Window) {
-        Fallback::minimize_window(window);
+    fn on_tray_thread(f: Box<dyn FnOnce() + Send>) {
+        window::on_tray_thread(f);
     }
 
-    fn in_tray(window: Self::Window) -> bool {
-        Fallback::in_tray(window)
+    fn minimize_window(w: Self::Window) {
+        window::minimize(w);
     }
 
-    fn window_shown(window: Self::Window) -> bool {
-        Fallback::window_shown(window)
+    fn in_tray(w: Self::Window) -> bool {
+        window::in_tray(w)
+    }
+
+    fn window_shown(w: Self::Window) -> bool {
+        window::shown(w)
     }
 
     fn double_click_time() -> Duration {
@@ -90,7 +130,7 @@ impl super::Desktop for Desktop {
     }
 
     fn set_autostart(enabled: bool, arg: &str) -> Result<(), String> {
-        Fallback::set_autostart(enabled, arg)
+        autostart::set(enabled, arg)
     }
 
     fn device_access_missing() -> bool {
@@ -101,20 +141,23 @@ impl super::Desktop for Desktop {
         gob_uinput::access::install()
     }
 
-    fn installed_copy(exe_dir: &Path) -> bool {
-        Fallback::installed_copy(exe_dir)
+    /// Started from an AppImage (it updates as one file).
+    fn installed_copy(_exe_dir: &Path) -> bool {
+        update::installed_copy()
     }
 
+    /// Only AppImage copies update; a build or a package does not.
     fn update_asset(installed: bool) -> Option<&'static str> {
-        Fallback::update_asset(installed)
+        installed.then_some("-x86_64.AppImage")
     }
 
     fn exe_name() -> &'static str {
-        Fallback::exe_name()
+        "JoystickGobloon"
     }
 
+    /// The new AppImage replaces the running one and starts.
     fn run_installer(setup: &Path) -> Result<(), String> {
-        Fallback::run_installer(setup)
+        update::replace_appimage(setup)
     }
 
     fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
@@ -122,6 +165,6 @@ impl super::Desktop for Desktop {
     }
 
     fn wait_for_process(pid: u32, timeout: Duration) {
-        Fallback::wait_for_process(pid, timeout);
+        update::wait_for_process(pid, timeout);
     }
 }

@@ -126,7 +126,6 @@ cargo test --workspace
 | `gob-vjoy` | vJoy driver: output and device configuration |
 | `gob-hidhide` | HidHide driver: hiding, application list |
 | `gob-lighting` | Joystick LEDs through HID (VKB) |
-| `gob-plugin` | Plugin API (early) |
 | `gob-i18n` | Fluent translations |
 
 ## Translations

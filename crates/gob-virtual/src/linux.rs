@@ -463,6 +463,9 @@ mod tests {
             parse(None).unwrap(),
             vec![DeviceConfig::new(1, &CAPABILITIES)]
         );
+        let default = &parse(None).unwrap()[0];
+        assert_eq!((default.buttons, default.hats), (96, 4), "the whole layout");
+        assert_eq!(default.axes, [true; AXIS_SLOTS]);
         let mut c = DeviceConfig::new(3, &CAPABILITIES);
         c.axes[2] = false;
         c.discrete_hats = true;

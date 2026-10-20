@@ -1,5 +1,5 @@
-//! Platforms without their own module, and what Linux's module takes from here until phase 5
-//! (docs/LINUX_PLAN.md: XDG paths, a socket for the single instance, fontconfig).
+//! Platforms without their own module; Linux's module takes the double-click time, the tray
+//! icon size and zip unpacking from here.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -43,8 +43,8 @@ impl super::Desktop for Desktop {
         false
     }
 
-    fn held_keys() -> Vec<Key> {
-        Vec::new()
+    fn held_keys() -> Option<Vec<Key>> {
+        None
     }
 
     fn key_name(key: Key) -> String {
@@ -58,6 +58,10 @@ impl super::Desktop for Desktop {
     fn hide_to_tray(_window: ()) {}
 
     fn show_window(_window: ()) {}
+
+    fn on_tray_thread(f: Box<dyn FnOnce() + Send>) {
+        f();
+    }
 
     fn minimize_window(_window: ()) {}
 

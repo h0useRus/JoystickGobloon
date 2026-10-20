@@ -26,7 +26,7 @@ settings-reopen-last = Открывать последний профиль пр
 theme-light = Светлая
 theme-dark = Тёмная
 theme-system = Как в системе
-theme-system-tip = Светлая или тёмная, как выбрано в Windows
+theme-system-tip = Светлая или тёмная, как выбрано в системе
 about-text = Скрытие устройств, виртуальные джойстики и назначения в одной программе.
 
 # Empty states
@@ -305,7 +305,7 @@ edit-tts-hint = Текст для озвучивания; $current_mode заме
 edit-tts-rate = Скорость
 edit-tts-pitch = Высота голоса
 edit-tts-back = В конец очереди
-edit-tts-front = Следующим (в речи Windows — как в конец очереди)
+edit-tts-front = Следующим (в речи системы — как в конец очереди)
 edit-tts-interrupt = Прервать текущую речь
 edit-preview = Прослушать
 
@@ -384,7 +384,7 @@ settings-close-to-tray = Закрывать в трей
 settings-minimize-to-tray = Сворачивать в трей
 settings-tray-double-click = Двойной клик активирует профиль
 settings-tray-title = Значок в трее
-settings-autostart = Запускать вместе с Windows (свёрнутым)
+settings-autostart = Запускать при входе в систему (свёрнутым)
 settings-activate-on-start = Активировать профиль при запуске
 tray-show = Показать Joystick Gobloon
 tray-hiding = Скрытие устройств

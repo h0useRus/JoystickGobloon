@@ -26,7 +26,7 @@ settings-reopen-last = 启动时打开上次的配置文件
 theme-light = 浅色
 theme-dark = 深色
 theme-system = 跟随系统
-theme-system-tip = 跟随 Windows 的浅色或深色设置
+theme-system-tip = 跟随系统的浅色或深色设置
 about-text = 设备隐藏、虚拟摇杆和输入映射，集于一个应用。
 
 # Empty states
@@ -305,7 +305,7 @@ edit-tts-hint = 要朗读的文本；$current_mode 会替换为当前模式
 edit-tts-rate = 语速
 edit-tts-pitch = 音调
 edit-tts-back = 排在所有内容之后
-edit-tts-front = 排在下一个（Windows 语音：与排在所有内容之后相同）
+edit-tts-front = 排在下一个（系统语音：与排在所有内容之后相同）
 edit-tts-interrupt = 打断正在朗读的内容
 edit-preview = 试听
 
@@ -384,14 +384,14 @@ settings-close-to-tray = 关闭时最小化到托盘
 settings-minimize-to-tray = 最小化到托盘
 settings-tray-double-click = 双击激活配置文件
 settings-tray-title = 托盘图标
-settings-autostart = 随 Windows 启动（最小化）
+settings-autostart = 登录时启动（最小化）
 settings-activate-on-start = 启动时激活配置文件
 tray-show = 显示 Joystick Gobloon
 tray-hiding = 设备隐藏
 tray-activate = 激活“{ $name }”
 tray-activate-none = 激活配置文件
 tray-quit = 退出
-autostart-error = 无法更改随 Windows 启动：{ $error }
+autostart-error = 无法更改登录时启动：{ $error }
 
 # About
 about-alpha = 测试版

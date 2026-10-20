@@ -60,8 +60,8 @@ impl super::Desktop for Desktop {
         true
     }
 
-    fn held_keys() -> Vec<Key> {
-        keys::held()
+    fn held_keys() -> Option<Vec<Key>> {
+        Some(keys::held())
     }
 
     fn key_name(key: Key) -> String {
@@ -78,6 +78,11 @@ impl super::Desktop for Desktop {
 
     fn show_window(w: window::Window) {
         window::show(w);
+    }
+
+    /// The UI thread: the tray's hidden window gets its messages from winit's loop there.
+    fn on_tray_thread(f: Box<dyn FnOnce() + Send>) {
+        f();
     }
 
     fn minimize_window(w: window::Window) {

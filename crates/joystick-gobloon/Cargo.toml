@@ -16,7 +16,6 @@ gob-input.workspace = true
 gob-virtual.workspace = true
 gob-hide.workspace = true
 gob-engine.workspace = true
-gob-plugin.workspace = true
 gob-lighting.workspace = true
 rfd.workspace = true
 egui-phosphor.workspace = true
@@ -33,6 +32,9 @@ semver = "1.0.28"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gob-uinput.workspace = true
+libc.workspace = true
+# The tray icon's thread (platform/linux/window.rs); the version tray-icon uses.
+gtk = "0.18"
 
 [target.'cfg(windows)'.dependencies]
 # The main window's HWND (platform/windows/window.rs).

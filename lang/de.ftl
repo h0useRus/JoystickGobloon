@@ -26,7 +26,7 @@ settings-reopen-last = Beim Start das letzte Profil öffnen
 theme-light = Hell
 theme-dark = Dunkel
 theme-system = System
-theme-system-tip = Der hellen oder dunklen Windows-Einstellung folgen
+theme-system-tip = Der hellen oder dunklen Systemeinstellung folgen
 about-text = Geräte verbergen, virtuelle Joysticks und Eingabebelegung in einer App.
 
 # Empty states
@@ -305,7 +305,7 @@ edit-tts-hint = Zu sprechender Text; $current_mode wird durch den aktiven Modus 
 edit-tts-rate = Geschwindigkeit
 edit-tts-pitch = Tonhöhe
 edit-tts-back = Hinter allem anderen einreihen
-edit-tts-front = Als Nächstes einreihen (Windows-Sprachausgabe: wie hinter allem anderen)
+edit-tts-front = Als Nächstes einreihen (Sprachausgabe des Systems: wie hinter allem anderen)
 edit-tts-interrupt = Laufende Ansage unterbrechen
 edit-preview = Vorschau
 
@@ -384,14 +384,14 @@ settings-close-to-tray = Beim Schließen in den Infobereich
 settings-minimize-to-tray = Beim Minimieren in den Infobereich
 settings-tray-double-click = Doppelklick aktiviert das Profil
 settings-tray-title = Symbol im Infobereich
-settings-autostart = Mit Windows starten (minimiert)
+settings-autostart = Bei der Anmeldung starten (minimiert)
 settings-activate-on-start = Profil beim Start aktivieren
 tray-show = Joystick Gobloon anzeigen
 tray-hiding = Geräte verbergen
 tray-activate = „{ $name }“ aktivieren
 tray-activate-none = Profil aktivieren
 tray-quit = Beenden
-autostart-error = Der Start mit Windows konnte nicht geändert werden: { $error }
+autostart-error = Der Start bei der Anmeldung konnte nicht geändert werden: { $error }
 
 # About
 about-alpha = Alpha-Version
