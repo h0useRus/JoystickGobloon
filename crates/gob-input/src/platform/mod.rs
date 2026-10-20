@@ -24,6 +24,8 @@ pub(crate) trait Backend: Sized {
     /// What [`Backend::attached`] found, to open it.
     type Found;
     type Device: Device;
+    /// Devices can be read exclusively ([`Device::set_exclusive`], crate::exclusive).
+    const EXCLUSIVE: bool = false;
 
     /// `None` when the platform's input API is not available.
     fn new() -> Option<Self>;
@@ -47,6 +49,9 @@ pub(crate) trait Device {
     /// the device buffered go to `emit` in order (so short presses are not lost); the caller
     /// finds the rest by comparing `previous` and `state`. False when the device is gone.
     fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool;
+    /// Takes the device for this process alone, or lets go of it (only with
+    /// [`Backend::EXCLUSIVE`]).
+    fn set_exclusive(&mut self, _on: bool) {}
 }
 
 /// Formats GUID parts the way Gremlin writes device ids.

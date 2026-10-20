@@ -207,6 +207,7 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
     let mut events = shared.event_mode.load(Ordering::Relaxed);
     let mut cal = Calibrations::new();
     let mut cal_version = None;
+    let mut exclusive_version = None;
     while !shared.stop.load(Ordering::Relaxed) {
         let mut changed = false;
         let wanted = shared.event_mode.load(Ordering::Relaxed);
@@ -226,6 +227,9 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
                     && let Some(mut dev) = platform.open(found, events)
                 {
                     dev.set_calibrations(&cal);
+                    if Platform::EXCLUSIVE {
+                        dev.set_exclusive(crate::exclusive::wanted(id));
+                    }
                     devices.push(dev);
                 }
             }
@@ -247,6 +251,15 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
             );
             for dev in &mut devices {
                 dev.set_calibrations(&cal);
+            }
+        }
+
+        let version = crate::exclusive::version();
+        if Platform::EXCLUSIVE && exclusive_version != Some(version) {
+            exclusive_version = Some(version);
+            for dev in &mut devices {
+                let on = crate::exclusive::wanted(&dev.state().info.guid);
+                dev.set_exclusive(on);
             }
         }
 

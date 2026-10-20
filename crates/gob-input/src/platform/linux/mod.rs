@@ -60,6 +60,7 @@ pub(crate) struct Found {
 impl super::Backend for Platform {
     type Found = Found;
     type Device = Device;
+    const EXCLUSIVE: bool = true;
 
     fn new() -> Option<Self> {
         Some(Self {
@@ -287,6 +288,8 @@ pub(crate) struct Device {
     events: bool,
     /// Events were lost (`SYN_DROPPED`): read the whole state after this report.
     dropped: bool,
+    /// Grabbed (`EVIOCGRAB`): only this process gets its events.
+    grabbed: bool,
 }
 
 impl Device {
@@ -337,6 +340,7 @@ impl Device {
             hats,
             events,
             dropped: false,
+            grabbed: false,
         };
         dev.sync();
         dev.previous.copy_readings(&dev.state);
@@ -438,6 +442,27 @@ impl Device {
 }
 
 impl super::Device for Device {
+    fn set_exclusive(&mut self, on: bool) {
+        if on == self.grabbed {
+            return;
+        }
+        match self.node.grab(on) {
+            Ok(()) => {
+                self.grabbed = on;
+                log::info!(
+                    "{}: {}",
+                    self.state.info.name,
+                    if on {
+                        "hidden (grabbed)"
+                    } else {
+                        "shown again"
+                    }
+                );
+            }
+            Err(e) => log::warn!("{}: grab {on}: {e}", self.state.info.name),
+        }
+    }
+
     fn state(&self) -> &DeviceState {
         &self.state
     }
