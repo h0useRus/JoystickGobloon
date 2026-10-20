@@ -74,7 +74,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   portable zip. The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; uninstall runs `JoystickGobloon.exe
   --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) runs fmt,
-  clippy -D warnings and tests on pull requests and work branches.
+  cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches.
 - Discord: releases post through .github/scripts/discord-announce.ps1 to the DISCORD_WEBHOOK secret (alpha
   builds to DISCORD_WEBHOOK_ALPHA); no secret = no post. announce.yml re-posts a release by hand.
 - Rust version is pinned in rust-toolchain.toml (local and CI); bump it deliberately and fix new lints.
