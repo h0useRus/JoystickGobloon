@@ -106,7 +106,9 @@ UI и логику: например, заменить vJoy **своим дра�
    - [x] Клавиатура/мышь и речь: в gob-engine `platform/` с трейтами `Injector` и `SpeechEngine`;
      `platform/windows/` — SendInput и SAPI, `platform/none.rs` — ничего; `media.rs` (звук, очередь речи,
      список голосов) и `runner.rs` общие.
-   - [ ] HID-транспорт подсветки, рабочий стол (`platform` в GUI).
+   - [x] HID-транспорт подсветки: gob-lighting `hid/` — трейт `Transport` (коллекции производителя, get/set
+     feature report), `hid/windows.rs` — SetupAPI + `HidD_*`, `hid/none.rs` — без устройств.
+   - [ ] Рабочий стол (`platform` в GUI).
 2. **Ввод на Linux.** evdev + udev — Linux-реализация в gob-input. Результат: страница «Устройства», просмотр
    ввода и калибровка работают. **Первым делом**: сколько кнопок Linux показывает у VKB (128 кнопок; ядро
    отдаёт джойстикам 16 кодов `BTN_JOYSTICK` + 40 `BTN_TRIGGER_HAPPY`, остальное — как получится). Если
