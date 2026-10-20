@@ -33,7 +33,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   made in `prepare` when a profile starts; key_pressed via EVIOCGKEY). Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
   `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
-  capabilities), `find_device` (input device -> hideable device); windows.rs = HidHide via gob-hidhide
+  capabilities incl. `app_list`), `find_device` (input device -> hideable device); windows.rs = HidHide via
+  gob-hidhide, linux.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.

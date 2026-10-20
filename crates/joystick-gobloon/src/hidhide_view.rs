@@ -151,7 +151,9 @@ impl HidHideView {
                     ui.add_space(16.0);
                     ui.vertical(|ui| {
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(format!("{} {version}", caps.name)).weak());
+                            if !caps.name.is_empty() {
+                                ui.label(RichText::new(format!("{} {version}", caps.name)).weak());
+                            }
                             if style::icon_button(
                                 ui,
                                 true,

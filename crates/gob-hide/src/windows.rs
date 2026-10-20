@@ -9,7 +9,10 @@ use crate::{Backend, Capabilities, Device, Error, Part};
 
 pub const DOWNLOAD_URL: &str = "https://github.com/nefarius/HidHide/releases";
 
-const CAPABILITIES: Capabilities = Capabilities { name: "HidHide" };
+pub const CAPABILITIES: Capabilities = Capabilities {
+    name: "HidHide",
+    app_list: true,
+};
 
 pub fn load() -> Result<Arc<dyn Backend>, Error> {
     Ok(Arc::new(Hide(HidHide::find().map_err(error)?)))

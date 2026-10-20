@@ -95,10 +95,13 @@ pub fn show(
                     i18n.tr("settings-activate-on-start"),
                 ),
             );
-            let whitelist = ui.add(style::switch(
-                &mut settings.hidhide_whitelist_self,
-                i18n.tr("settings-hidhide-self"),
-            ));
+            // Only where hiding has a program list to put Joystick Gobloon on.
+            let whitelist = gob_hide::capabilities().app_list.then(|| {
+                ui.add(style::switch(
+                    &mut settings.hidhide_whitelist_self,
+                    i18n.tr("settings-hidhide-self"),
+                ))
+            });
             let focus = ui.add(style::switch(
                 &mut settings.focus_used_input,
                 i18n.tr("settings-focus-input"),
@@ -127,7 +130,6 @@ pub fn show(
                 .on_hover_text(i18n.tr("settings-experimental-tip"));
             let changed = [
                 &reopen,
-                &whitelist,
                 &focus,
                 &input_events,
                 &autostart,
@@ -136,7 +138,8 @@ pub fn show(
                 &experimental,
             ]
             .iter()
-            .any(|r| r.changed());
+            .any(|r| r.changed())
+                || whitelist.is_some_and(|r| r.changed());
             if changed {
                 settings.save();
             }

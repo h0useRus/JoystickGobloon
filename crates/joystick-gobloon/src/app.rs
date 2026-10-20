@@ -646,6 +646,10 @@ impl JoystickGobloonApp {
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
                 (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
             ] {
+                // The Applications page edits the hiding program list; not every platform has one.
+                if page == Page::Apps && !gob_hide::capabilities().app_list {
+                    continue;
+                }
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
                 }

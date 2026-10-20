@@ -159,6 +159,17 @@ UI и логику: например, заменить vJoy **своим дра�
      vJoy») — когда будет скрытие на Linux (фаза 4).
    - [ ] Проверка: `jstest`, игра через Proton (SDL), профиль целиком.
 4. **Скрытие на Linux.** Бэкенд `gob-hide` на захвате; установка правила udev через `pkexec`.
+   - [x] gob-input `exclusive`: список устройств, которые сервис ввода читает один (`set`, `devices`,
+     `supported`). На Linux поток ввода держит на них `EVIOCGRAB` (игры не получают событий ни через evdev,
+     ни через joydev), пока программа работает; на Windows не поддерживается (там HidHide). Захват —
+     у единственного `InputService` процесса. Тест `exclusive_hides_from_other_readers`.
+   - [x] gob-hide `linux.rs`: выключатель и скрытые устройства в `hidden.gob` (папка из
+     `gob_hide::set_data_dir`), отключённые скрытые остаются в списке; состояние применяется уже при
+     `load`. `Capabilities::app_list` (Windows да, Linux нет): страница «Приложения» и «добавить себя в
+     белый список» показываются только с ним; `gob_hide::capabilities()` — без загрузки бэкенда.
+   - [ ] hidraw: правило udev (права на hidraw скрытых устройств только у root, `uaccess` для
+     `/dev/uinput` и `/dev/input/event*`), установка через `pkexec` при первом запуске.
+   - [ ] `about-credits` («Использует драйверы HidHide и vJoy») на Linux.
 5. **Рабочий стол на Linux.** Linux-модули `platform/`: пути настроек, один экземпляр, автозапуск, трей, шрифты,
    речь; подсветка через hidraw.
 6. **Выпуск.** AppImage в `release.yml`, заметки и Discord как сейчас.
