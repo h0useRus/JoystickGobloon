@@ -42,6 +42,9 @@ pub(crate) trait Desktop {
     fn claim_instance() -> Option<Self::InstanceEvent>;
     /// Calls `show` whenever a later start wakes this copy.
     fn listen_instance(event: Self::InstanceEvent, show: Box<dyn Fn() + Send>);
+    /// Keyboard keys can be bound as inputs (the Keyboard tab): the program may read every
+    /// keyboard.
+    fn keyboard_bindings() -> bool;
     /// Keyboard keys held right now.
     fn held_keys() -> Vec<Key>;
     /// A key's name in the current keyboard layout, e.g. "Right Ctrl".
@@ -118,6 +121,10 @@ pub(crate) fn claim_instance() -> Option<InstanceEvent> {
 
 pub(crate) fn listen_instance(event: InstanceEvent, show: impl Fn() + Send + 'static) {
     Current::listen_instance(event, Box::new(show));
+}
+
+pub(crate) fn keyboard_bindings() -> bool {
+    Current::keyboard_bindings()
 }
 
 pub(crate) fn held_keys() -> Vec<Key> {

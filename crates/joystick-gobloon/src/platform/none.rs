@@ -39,6 +39,10 @@ impl super::Desktop for Desktop {
 
     fn listen_instance(_event: (), _show: Box<dyn Fn() + Send>) {}
 
+    fn keyboard_bindings() -> bool {
+        false
+    }
+
     fn held_keys() -> Vec<Key> {
         Vec::new()
     }

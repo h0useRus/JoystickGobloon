@@ -55,6 +55,11 @@ impl super::Desktop for Desktop {
         instance::listen(event, show);
     }
 
+    /// The low-level keyboard hook sees every key.
+    fn keyboard_bindings() -> bool {
+        true
+    }
+
     fn held_keys() -> Vec<Key> {
         keys::held()
     }

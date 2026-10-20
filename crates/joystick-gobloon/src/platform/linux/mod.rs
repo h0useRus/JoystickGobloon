@@ -43,6 +43,12 @@ impl super::Desktop for Desktop {
         Fallback::listen_instance(event, show);
     }
 
+    /// Off for now: reading every keyboard needs the `input` group (the udev rule leaves
+    /// keyboards out, any program of the user could read what is typed). Back if users ask.
+    fn keyboard_bindings() -> bool {
+        false
+    }
+
     fn held_keys() -> Vec<Key> {
         Fallback::held_keys()
     }

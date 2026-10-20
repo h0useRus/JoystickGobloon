@@ -194,14 +194,16 @@ impl DevicesView {
                     });
                 }
             }
-            // The keyboard, then the virtual (logical) device always last.
-            tabs.push(Tab {
-                guid: gob_core::KEYBOARD_GUID,
-                name: &keyboard_name,
-                live: None,
-                alias: None,
-                logical: false,
-            });
+            // The keyboard (where keys can be inputs), then the virtual (logical) device always last.
+            if crate::platform::keyboard_bindings() {
+                tabs.push(Tab {
+                    guid: gob_core::KEYBOARD_GUID,
+                    name: &keyboard_name,
+                    live: None,
+                    alias: None,
+                    logical: false,
+                });
+            }
             tabs.push(Tab {
                 guid: gob_core::LOGICAL_DEVICE_GUID,
                 name: &logical_name,
