@@ -135,6 +135,29 @@ UI и логику: например, заменить vJoy **своим дра�
 3. **Вывод на Linux.** uinput-бэкенд `gob-virtual` (джойстик) и `Injector` (клавиатура/мышь). Результат:
    профили работают. Проверка: чтение вывода через evdev, `jstest`, игра через Proton. Те же вопросы о числе
    кнопок — у игр (SDL).
+   - [x] Крейт-бэкенд `gob-uinput`: `VirtualDevice` (кнопки/клавиши, оси, REL), `emit` одним отчётом,
+     узел event через `UI_GET_SYSNAME`, `device_names`; пример `uinput_check`.
+   - [x] `gob-virtual/src/linux.rs`: устройство создаётся при `acquire` и исчезает при отпускании; раскладка
+     в `virtual.gob` (TOML, папка из `gob_virtual::set_data_dir`, без неё `$XDG_CONFIG_HOME/JoystickGobloon`;
+     без файла — одно устройство по умолчанию). Имя «Joystick Gobloon Joystick N», vendor/product как у
+     vJoy (0x1234/0xBEAD — gob-input считает их нашим выводом). Оси — коды, которые gob-input читает в те же
+     слоты (ползунки = `ABS_THROTTLE`/`ABS_RUDDER`), кнопки 1-32 = `BTN_JOYSTICK…`, 33-96 =
+     `BTN_TRIGGER_HAPPY…` (до `KEY_MAX`; **пока максимум 96**: больше — только другими кодами клавиш, их
+     порядок у SDL другой — решать после проверки игр). Хатки `ABS_HATnX/Y`, непрерывные — 8 направлений.
+     «Занято» = устройство с таким именем есть в системе, но не наше (вторая копия программы). Нет прав
+     на `/dev/uinput` → `Error::NoAccess`. Тест `tests/uinput.rs` (`check.ps1 --devices`).
+   - [x] `Injector` на uinput (gob-engine `platform/linux/`): два устройства, «Joystick Gobloon Keyboard»
+     (все клавиши из `gob_uinput::keys`) и «Joystick Gobloon Mouse» (REL_X/Y, колёса, 5 кнопок),
+     создаются при старте профиля (`Injector::prepare`: события сразу после создания рабочий стол
+     теряет) и живут до выхода. Scan code set 1 ↔ evdev — таблица `gob_uinput::keys` (обе стороны;
+     ей же пользуется клавиатура gob-input). `key_pressed` — `EVIOCGKEY`
+     по всем клавиатурам, включая нашу (как `GetAsyncKeyState`); нужно чтение `/dev/input`.
+     Тест в `injector.rs` (ignored, `check.ps1 --devices`). Речь на Linux — пока нет (фаза 5).
+   - [x] Страница vJoy на Linux: «vJoy» остаётся общим именем функции на обеих ОС; тексты про драйвер — по
+     возможностям (`switchable`: «Драйвер включён», `needs_admin`: щит и «права администратора»), нет прав на
+     `/dev/uinput` — свой текст (`vjoy-no-access`). Осталось: `about-credits` («Использует драйверы HidHide и
+     vJoy») — когда будет скрытие на Linux (фаза 4).
+   - [ ] Проверка: `jstest`, игра через Proton (SDL), профиль целиком.
 4. **Скрытие на Linux.** Бэкенд `gob-hide` на захвате; установка правила udev через `pkexec`.
 5. **Рабочий стол на Linux.** Linux-модули `platform/`: пути настроек, один экземпляр, автозапуск, трей, шрифты,
    речь; подсветка через hidraw.

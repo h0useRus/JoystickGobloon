@@ -18,6 +18,7 @@ windows = "0.61"
 libloading = "0.8"
 gob-vjoy = { path = "crates/gob-vjoy" }
 gob-virtual = { path = "crates/gob-virtual" }
+gob-uinput = { path = "crates/gob-uinput" }
 gob-hidhide = { path = "crates/gob-hidhide" }
 gob-hide = { path = "crates/gob-hide" }
 gob-engine = { path = "crates/gob-engine" }

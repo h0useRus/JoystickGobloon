@@ -26,7 +26,8 @@ const HAT_GRID: [Option<u16>; 9] = [
 ];
 
 pub struct VJoyView {
-    vjoy: Result<Arc<dyn Backend>, String>,
+    /// The backend, or why there is none: (i18n key, details).
+    vjoy: Result<Arc<dyn Backend>, (&'static str, String)>,
     devices: Vec<DeviceInfo>,
     refreshed: Option<Instant>,
     selected: u32,
@@ -52,7 +53,13 @@ struct Tester {
 
 impl VJoyView {
     pub fn new() -> Self {
-        let vjoy = gob_virtual::load().map_err(|e| e.to_string());
+        let vjoy = gob_virtual::load().map_err(|e| {
+            let key = match e {
+                gob_virtual::Error::NoAccess(_) => "vjoy-no-access",
+                _ => "vjoy-missing",
+            };
+            (key, e.to_string())
+        });
         let config = crate::vjoy_config_view::VJoyConfig::new(vjoy.as_ref().ok().cloned());
         Self {
             vjoy,
@@ -88,9 +95,9 @@ impl VJoyView {
         }
         let vjoy = match &self.vjoy {
             Ok(v) => v.clone(),
-            Err(e) => {
-                crate::app::empty_state(ui, icon::WARNING, &i18n.tr("vjoy-missing"));
-                ui.vertical_centered(|ui| ui.label(RichText::new(e).small().weak()));
+            Err((key, e)) => {
+                crate::app::empty_state(ui, icon::WARNING, &i18n.tr(key));
+                ui.vertical_centered(|ui| ui.label(RichText::new(e.as_str()).small().weak()));
                 return;
             }
         };
@@ -113,7 +120,10 @@ impl VJoyView {
                     .color(style::accent(ui)),
             );
             ui.label(format!("{} {}", caps.name, vjoy.version()));
-            ui.label(RichText::new(i18n.tr(key)).weak());
+            // Only a driver that can be switched off has an on/off state to show.
+            if caps.switchable {
+                ui.label(RichText::new(i18n.tr(key)).weak());
+            }
             if self.config.available() && caps.switchable {
                 let on = vjoy.enabled();
                 let tip = i18n.tr(if on { "vjoy-disable" } else { "vjoy-enable" });

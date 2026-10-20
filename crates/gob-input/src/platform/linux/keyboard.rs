@@ -11,12 +11,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use gob_uinput::keys::scan_code;
+
 use super::evdev::{EV_KEY, EV_REP, Node};
 
 /// Reports (scan code, extended, pressed).
 pub type KeySink = Arc<dyn Fn(u16, bool, bool) + Send + Sync>;
 
-/// Name prefix of the virtual devices Joystick Gobloon creates; their keys are not input.
+/// Name prefix of the virtual devices Joystick Gobloon creates (gob-virtual, gob-engine's
+/// keyboard and mouse); their keys are not input.
 pub(crate) const OWN_DEVICE_PREFIX: &str = "Joystick Gobloon";
 /// Look for new keyboards this often.
 const RESCAN: Duration = Duration::from_secs(2);
@@ -125,71 +128,4 @@ fn is_keyboard(node: &Node) -> bool {
             .iter()
             .all(|&k| caps.keys.has(k))
         && !node.name().starts_with(OWN_DEVICE_PREFIX)
-}
-
-/// evdev key code -> (set 1 scan code, E0 prefix). Codes 1..=88 are the scan codes themselves
-/// (the kernel's table started as set 1), except NumLock, which Windows (and Gremlin) report
-/// with E0 to tell it from Pause.
-pub(crate) fn scan_code(code: u16) -> Option<(u16, bool)> {
-    Some(match code {
-        69 => (0x45, true), // KEY_NUMLOCK
-        1..=88 => (code, false),
-        89 => (0x73, false),                       // KEY_RO
-        92 => (0x79, false),                       // KEY_HENKAN
-        93 => (0x70, false),                       // KEY_KATAKANAHIRAGANA
-        94 => (0x7b, false),                       // KEY_MUHENKAN
-        96 => (0x1c, true),                        // KEY_KPENTER
-        97 => (0x1d, true),                        // KEY_RIGHTCTRL
-        98 => (0x35, true),                        // KEY_KPSLASH
-        99 => (0x37, true),                        // KEY_SYSRQ (Print Screen)
-        100 => (0x38, true),                       // KEY_RIGHTALT
-        102 => (0x47, true),                       // KEY_HOME
-        103 => (0x48, true),                       // KEY_UP
-        104 => (0x49, true),                       // KEY_PAGEUP
-        105 => (0x4b, true),                       // KEY_LEFT
-        106 => (0x4d, true),                       // KEY_RIGHT
-        107 => (0x4f, true),                       // KEY_END
-        108 => (0x50, true),                       // KEY_DOWN
-        109 => (0x51, true),                       // KEY_PAGEDOWN
-        110 => (0x52, true),                       // KEY_INSERT
-        111 => (0x53, true),                       // KEY_DELETE
-        113 => (0x20, true),                       // KEY_MUTE
-        114 => (0x2e, true),                       // KEY_VOLUMEDOWN
-        115 => (0x30, true),                       // KEY_VOLUMEUP
-        117 => (0x59, false),                      // KEY_KPEQUAL
-        119 => (0x45, false),                      // KEY_PAUSE
-        121 => (0x7e, false),                      // KEY_KPCOMMA
-        122 => (0x72, false),                      // KEY_HANGEUL
-        123 => (0x71, false),                      // KEY_HANJA
-        124 => (0x7d, false),                      // KEY_YEN
-        125 => (0x5b, true),                       // KEY_LEFTMETA
-        126 => (0x5c, true),                       // KEY_RIGHTMETA
-        127 => (0x5d, true),                       // KEY_COMPOSE (Menu)
-        163 => (0x19, true),                       // KEY_NEXTSONG
-        164 => (0x22, true),                       // KEY_PLAYPAUSE
-        165 => (0x10, true),                       // KEY_PREVIOUSSONG
-        166 => (0x24, true),                       // KEY_STOPCD
-        183..=193 => (0x64 + (code - 183), false), // KEY_F13..KEY_F23
-        194 => (0x76, false),                      // KEY_F24
-        _ => return None,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::scan_code;
-
-    #[test]
-    fn scan_codes_like_windows() {
-        assert_eq!(scan_code(1), Some((0x01, false)), "Esc");
-        assert_eq!(scan_code(30), Some((0x1e, false)), "A");
-        assert_eq!(scan_code(88), Some((0x58, false)), "F12");
-        assert_eq!(scan_code(97), Some((0x1d, true)), "right Ctrl");
-        assert_eq!(scan_code(103), Some((0x48, true)), "up");
-        assert_eq!(scan_code(119), Some((0x45, false)), "Pause");
-        assert_eq!(scan_code(69), Some((0x45, true)), "NumLock");
-        assert_eq!(scan_code(183), Some((0x64, false)), "F13");
-        assert_eq!(scan_code(194), Some((0x76, false)), "F24");
-        assert_eq!(scan_code(0x120), None, "joystick button");
-    }
 }

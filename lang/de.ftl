@@ -15,7 +15,8 @@ label-mode = Modus
 # Settings
 settings-appearance = Darstellung
 settings-general = Allgemein
-settings-about = Info
+settings-about = Info
+
 settings-lighting = Beleuchtung
 settings-leds-hint = Wird ein Profil deaktiviert, das die LEDs eines Joysticks geändert hat, werden diese Farben gesetzt. Der Joystick behält geänderte Farben bis zum erneuten Anschließen, seine eigenen LED-Einstellungen lassen sich daher nicht zurückholen.
 settings-leds-none = Kein Joystick mit steuerbaren LEDs angeschlossen.
@@ -62,6 +63,7 @@ status-substituted = Steuerungen zugeordnet. Speichern Sie das Profil, um die Ä
 
 # vJoy
 vjoy-missing = vJoy ist nicht installiert oder konnte nicht geladen werden.
+vjoy-no-access = Keine Berechtigung, vJoy-Geräte zu erstellen.
 vjoy-enabled = Treiber aktiviert
 vjoy-disabled = Treiber deaktiviert
 vjoy-no-devices = Noch keine vJoy-Geräte eingerichtet.
@@ -74,7 +76,7 @@ vjoy-lock = Dieses Gerät exklusiv übernehmen, um seine Ausgabe zu testen
 vjoy-unlock = Gerät freigeben
 vjoy-free = Frei
 vjoy-own = Von Joystick Gobloon gesteuert
-vjoy-busy = Von einem anderen Programm verwendet (z. B. Joystick Gremlin)
+vjoy-busy = Von einem anderen Programm oder einer anderen Joystick-Gobloon-Instanz verwendet
 vjoy-unknown = Unbekannter Zustand
 vjoy-error = Das Gerät konnte nicht übernommen werden: { $error }
 
@@ -301,14 +303,16 @@ edit-tts-pitch = Tonhöhe
 edit-tts-back = Hinter allem anderen einreihen
 edit-tts-front = Als Nächstes einreihen (Windows-Sprachausgabe: wie hinter allem anderen)
 edit-tts-interrupt = Laufende Ansage unterbrechen
-edit-preview = Vorschau
+edit-preview = Vorschau
+
 kind-light-led = LED-Beleuchtung
 edit-led-device = Joystick mit LEDs
 edit-led-no-device = Dieser Joystick ist nicht verbunden oder seine LEDs lassen sich nicht steuern
 edit-led-id = LED
 led-vkb-grip = RGB oben am Griff
 led-vkb-hat = Kleine rote LED am Coolie-Hat
-edit-led-color = Farbe
+edit-led-color = Farbe
+
 edit-led-color2 = Zweite Farbe
 edit-led-blend = Farben
 led-blend-color1 = Eine Farbe
@@ -485,7 +489,8 @@ calibration-extrema-tip = Achse an beide Enden bewegen, dann erneut klicken
 calibration-in-window = Die Kalibrierung ist in einem eigenen Fenster geöffnet.
 
 # Device info
-device-info = Geräteinformationen
+device-info = Geräteinformationen
+
 device-leds = LEDs steuerbar (Aktion LED-Beleuchtung)
 device-info-name = Gerätename
 device-info-axes = Achsen

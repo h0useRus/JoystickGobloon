@@ -1946,7 +1946,9 @@ dependencies = [
  "gob-input",
  "gob-lighting",
  "gob-plugin",
+ "gob-uinput",
  "gob-virtual",
+ "libc",
  "log",
  "rodio",
  "windows 0.61.3",
@@ -1986,6 +1988,7 @@ dependencies = [
 name = "gob-input"
 version = "0.6.0"
 dependencies = [
+ "gob-uinput",
  "libc",
  "log",
  "windows 0.61.3",
@@ -2007,10 +2010,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "gob-uinput"
+version = "0.6.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "gob-virtual"
 version = "0.6.0"
 dependencies = [
+ "gob-uinput",
  "gob-vjoy",
+ "libc",
+ "log",
+ "serde",
+ "toml 0.8.2",
 ]
 
 [[package]]

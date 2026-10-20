@@ -230,12 +230,19 @@ impl VJoyConfig {
             } else {
                 "vjoy-config-apply"
             };
-            let apply = ui
-                .add_enabled(
-                    can && changed,
-                    egui::Button::new(format!("{}  {}", icon::SHIELD_CHECK, i18n.tr(caption))),
-                )
-                .on_hover_text(i18n.tr("vjoy-config-admin"));
+            let admin = self.capabilities().is_some_and(|c| c.needs_admin);
+            let glyph = if admin {
+                icon::SHIELD_CHECK
+            } else {
+                icon::CHECK
+            };
+            let mut apply = ui.add_enabled(
+                can && changed,
+                egui::Button::new(format!("{glyph}  {}", i18n.tr(caption))),
+            );
+            if admin {
+                apply = apply.on_hover_text(i18n.tr("vjoy-config-admin"));
+            }
             if apply.clicked() {
                 let label = i18n.trf("vjoy-config-label", &[("n", id.into())]);
                 self.run(label, Change::Set(edit));

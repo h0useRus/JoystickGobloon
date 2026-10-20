@@ -1,4 +1,4 @@
-//! Platforms without a backend yet (Linux gets uinput, docs/LINUX_PLAN.md phase 3).
+//! Platforms without virtual devices (neither Windows nor Linux).
 
 use std::sync::Arc;
 

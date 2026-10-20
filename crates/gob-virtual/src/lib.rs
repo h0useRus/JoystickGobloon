@@ -1,15 +1,19 @@
 //! Virtual joysticks: the common interface the engine and the GUI use, whatever provides the
 //! devices. Each platform has its own backend (docs/LINUX_PLAN.md, "Архитектура"): vJoy on
-//! Windows (`windows.rs`, over gob-vjoy); Linux (uinput) comes later, until then `unsupported.rs`.
+//! Windows (`windows.rs`, over gob-vjoy), uinput on Linux (`linux.rs`, over gob-uinput),
+//! `unsupported.rs` elsewhere.
 //! A new backend (e.g. our own Windows driver) only implements [`Backend`] and [`Device`].
 //!
 //! Device ids are 1-based like Gremlin's `vjoy-device`; axes use slots 1..=8 (X, Y, Z, Rx, Ry, Rz,
 //! Slider 0, Slider 1) like gob-input.
 
 use std::fmt;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(not(any(windows, target_os = "linux")))]
 mod unsupported;
 #[cfg(windows)]
 mod windows;
@@ -57,6 +61,8 @@ pub enum Error {
     Disabled,
     /// The device is missing, or owned by another program (e.g. Joystick Gremlin).
     Unavailable { id: u32, status: Status },
+    /// No permission to create virtual devices (e.g. no udev rule for them yet).
+    NoAccess(String),
     /// This platform has no virtual devices yet.
     Unsupported,
 }
@@ -67,6 +73,7 @@ impl fmt::Display for Error {
             Self::NotInstalled(e) => write!(f, "virtual devices are not available: {e}"),
             Self::Disabled => write!(f, "virtual devices are switched off"),
             Self::Unavailable { id, status } => write!(f, "virtual device {id} is {status:?}"),
+            Self::NoAccess(e) => write!(f, "no permission to create virtual devices: {e}"),
             Self::Unsupported => write!(f, "virtual devices are not supported on this system"),
         }
     }
@@ -86,6 +93,8 @@ pub struct Capabilities {
     pub effects: &'static [&'static str],
     /// The whole backend can be switched on and off ([`Change::Enable`]).
     pub switchable: bool,
+    /// Applying a configuration change asks the user for administrator rights.
+    pub needs_admin: bool,
 }
 
 /// No backend: nothing can be configured.
@@ -96,6 +105,7 @@ pub const NO_CAPABILITIES: Capabilities = Capabilities {
     max_hats: 0,
     effects: &[],
     switchable: false,
+    needs_admin: false,
 };
 
 /// One device's configuration, as the configuration page edits it.
@@ -179,8 +189,24 @@ pub trait Device: Send {
 pub fn load() -> Result<Arc<dyn Backend>, Error> {
     #[cfg(windows)]
     return windows::load();
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    return linux::load();
+    #[cfg(not(any(windows, target_os = "linux")))]
     return unsupported::load();
+}
+
+static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// The program's data folder (next to its settings), where a backend that keeps its own files
+/// (e.g. the device layouts on Linux) stores them. Set once at start; later calls are ignored.
+/// Without it a backend uses the platform's usual place.
+pub fn set_data_dir(dir: &Path) {
+    let _ = DATA_DIR.set(dir.to_path_buf());
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn data_dir() -> Option<PathBuf> {
+    DATA_DIR.get().cloned()
 }
 
 /// The elevated side of [`Backend::apply`]: when the program was started for it (`args` without
