@@ -279,6 +279,13 @@ impl JoystickGobloonApp {
                 app.toggle_runner(&cc.egui_ctx);
             }
         }
+        // Nothing reopened: start with an empty profile (like Gremlin), so inputs can get
+        // actions right away instead of only after "New profile".
+        if app.profile.is_none() {
+            let status = std::mem::take(&mut app.status);
+            app.new_profile();
+            app.status = status;
+        }
         app
     }
 
@@ -819,7 +826,12 @@ impl JoystickGobloonApp {
             None => {}
         }
         let no_devices = self.input.devices().iter().all(|d| d.info.is_vjoy());
-        if self.profile.is_none() && no_devices {
+        // Nothing to edit yet: a new, empty profile and no controllers. Offer the import.
+        let empty = self
+            .profile
+            .as_ref()
+            .is_none_or(|p| p.path.is_none() && !p.dirty && p.profile.devices.is_empty());
+        if empty && no_devices {
             empty_state(ui, icon::JOYSTICK, &self.i18n.tr("no-profile"));
             ui.vertical_centered(|ui| {
                 let open = format!("{}  {}", icon::FOLDER_OPEN, self.i18n.tr("action-open"));

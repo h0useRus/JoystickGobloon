@@ -29,6 +29,9 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     effects: &[],
     switchable: false,
     needs_admin: false,
+    // A device costs nothing until acquired: everything there is.
+    default_buttons: 96,
+    default_hats: 4,
 };
 const NAME_PREFIX: &str = "Joystick Gobloon Joystick ";
 const VENDOR: u16 = 0x1234;
@@ -463,6 +466,9 @@ mod tests {
             parse(None).unwrap(),
             vec![DeviceConfig::new(1, &CAPABILITIES)]
         );
+        let default = &parse(None).unwrap()[0];
+        assert_eq!((default.buttons, default.hats), (96, 4), "the whole layout");
+        assert_eq!(default.axes, [true; AXIS_SLOTS]);
         let mut c = DeviceConfig::new(3, &CAPABILITIES);
         c.axes[2] = false;
         c.discrete_hats = true;

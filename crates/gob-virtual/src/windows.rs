@@ -16,6 +16,9 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     effects: &vconfig::EFFECTS,
     switchable: true,
     needs_admin: true,
+    // vJoy's driver keeps every device's layout: start small, as before.
+    default_buttons: 32,
+    default_hats: 1,
 };
 
 pub fn load() -> Result<Arc<dyn Backend>, Error> {
