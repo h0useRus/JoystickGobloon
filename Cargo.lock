@@ -1988,6 +1988,7 @@ dependencies = [
 name = "gob-input"
 version = "0.6.0"
 dependencies = [
+ "gob-uinput",
  "libc",
  "log",
  "windows 0.61.3",

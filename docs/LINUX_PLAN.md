@@ -150,7 +150,7 @@ UI и логику: например, заменить vJoy **своим дра�
      (все клавиши из `gob_uinput::keys`) и «Joystick Gobloon Mouse» (REL_X/Y, колёса, 5 кнопок),
      создаются при старте профиля (`Injector::prepare`: события сразу после создания рабочий стол
      теряет) и живут до выхода. Scan code set 1 ↔ evdev — таблица `gob_uinput::keys` (обе стороны;
-     gob-input из фазы 2 после слияния перейти на неё вместо своей копии). `key_pressed` — `EVIOCGKEY`
+     ей же пользуется клавиатура gob-input). `key_pressed` — `EVIOCGKEY`
      по всем клавиатурам, включая нашу (как `GetAsyncKeyState`); нужно чтение `/dev/input`.
      Тест в `injector.rs` (ignored, `check.ps1 --devices`). Речь на Linux — пока нет (фаза 5).
    - [x] Страница vJoy на Linux: «vJoy» остаётся общим именем функции на обеих ОС; тексты про драйвер — по
