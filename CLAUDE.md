@@ -123,6 +123,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the
   running window and exits. tools/single_instance.ps1 checks it. Hidden setting `multi_instance = true`
   (top of settings.gob, not in the UI) turns this off.
+- Joystick lighting is an experimental feature for the user only: hidden setting `experimental = true`
+  (settings.gob, no switch in the UI) turns it on. Leave lighting alone unless asked (also on Linux).
 - target\debug\settings.gob = local debug settings (copy of the user's + `multi_instance = true`): debug runs
   never touch the installed copy's settings and may run next to the user's own debug window.
   `cargo clean` deletes it: recreate it the same way.

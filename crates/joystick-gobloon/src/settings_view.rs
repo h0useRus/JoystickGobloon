@@ -34,7 +34,7 @@ pub enum Change {
         device: String,
         leds: Vec<LedValue>,
     },
-    /// Default LED colors were edited or experimental features switched.
+    /// Default LED colors were edited.
     LedDefaults,
 }
 
@@ -121,13 +121,6 @@ pub fn show(
                 &mut settings.check_updates,
                 i18n.tr("settings-check-updates"),
             ));
-            ui.add_space(8.0);
-            let experimental = ui
-                .add(style::switch(
-                    &mut settings.experimental,
-                    i18n.tr("settings-experimental"),
-                ))
-                .on_hover_text(i18n.tr("settings-experimental-tip"));
             let changed = [
                 &reopen,
                 &focus,
@@ -135,7 +128,6 @@ pub fn show(
                 &autostart,
                 &activate,
                 &updates,
-                &experimental,
             ]
             .iter()
             .any(|r| r.changed())
@@ -143,13 +135,9 @@ pub fn show(
             if changed {
                 settings.save();
             }
-            if autostart.changed() {
-                Some(Change::Autostart(settings.start_with_windows))
-            } else if experimental.changed() {
-                Some(Change::LedDefaults)
-            } else {
-                None
-            }
+            autostart
+                .changed()
+                .then_some(Change::Autostart(settings.start_with_windows))
         }
         SettingsTab::Lighting => lighting(ui, i18n, settings, led_devices),
         SettingsTab::About => {

@@ -50,7 +50,8 @@ pub struct Settings {
     pub activate_on_start: bool,
     /// Look for a new release on startup and install it.
     pub check_updates: bool,
-    /// Experimental features (joystick LEDs): hidden and not run while off.
+    /// Experimental features (joystick LEDs): hidden and not run while off. Not in the UI:
+    /// `experimental = true` in settings.gob turns them on.
     pub experimental: bool,
     /// Axis calibrations: device GUID -> axis slot ("1".."8") -> values.
     pub calibration: BTreeMap<String, BTreeMap<String, AxisCalibration>>,

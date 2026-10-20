@@ -406,8 +406,6 @@ about-license = MIT 라이선스에 따른 무료 오픈 소스 소프트웨어�
 
 # Updates
 settings-check-updates = 시작할 때 새 버전을 확인하고 설치
-settings-experimental = 실험적 기능 사용
-settings-experimental-tip = 조이스틱 조명: LED 조명 동작과 조명 탭. 꺼져 있으면 숨겨지고 프로필의 LED 조명 동작은 실행되지 않습니다.
 update-check = 업데이트 확인
 update-checking = 새 버전을 찾는 중…
 update-latest = 최신 버전입니다

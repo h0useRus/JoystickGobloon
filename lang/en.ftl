@@ -406,8 +406,6 @@ about-license = Free and open source under the MIT license.
 
 # Updates
 settings-check-updates = Check for a new version on startup and install it
-settings-experimental = Enable experimental features
-settings-experimental-tip = Joystick lighting: the Light LED action and the Lighting tab. While off, they are hidden and Light LED actions in profiles do nothing.
 update-check = Check for updates
 update-checking = Looking for a new version…
 update-latest = You have the latest version

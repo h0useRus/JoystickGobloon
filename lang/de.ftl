@@ -406,8 +406,6 @@ about-license = Freie Open-Source-Software unter der MIT-Lizenz.
 
 # Updates
 settings-check-updates = Beim Start nach einer neuen Version suchen und sie installieren
-settings-experimental = Experimentelle Funktionen aktivieren
-settings-experimental-tip = Joystick-Beleuchtung: die Aktion LED-Beleuchtung und der Reiter Beleuchtung. Solange aus, sind sie ausgeblendet und LED-Aktionen in Profilen tun nichts.
 update-check = Nach Updates suchen
 update-checking = Suche nach einer neuen Version…
 update-latest = Sie haben die neueste Version
