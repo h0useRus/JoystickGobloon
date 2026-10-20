@@ -1,11 +1,12 @@
 //! Linux desktop integration: XDG folders, a socket for the single instance, XDG autostart,
-//! CJK fonts through fontconfig, device access (the udev rule, gob-uinput's `access`). The
-//! window, tray and updates still come from `none.rs` (docs/LINUX_PLAN.md, phase 5).
+//! CJK fonts through fontconfig, the window and the tray (GTK thread), device access (the udev
+//! rule, gob-uinput's `access`). Updates still come from `none.rs` (docs/LINUX_PLAN.md).
 
 mod autostart;
 mod fonts;
 mod instance;
 mod keys;
+mod window;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -26,7 +27,7 @@ fn config_home() -> Option<PathBuf> {
 
 impl super::Desktop for Desktop {
     type InstanceEvent = instance::Event;
-    type Window = <Fallback as super::Desktop>::Window;
+    type Window = window::Window;
 
     /// `$XDG_CONFIG_HOME/JoystickGobloon`, where gob-virtual and gob-hide look without one too.
     fn default_data_dir() -> Option<PathBuf> {
@@ -92,27 +93,31 @@ impl super::Desktop for Desktop {
     }
 
     fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Self::Window> {
-        Fallback::main_window(cc)
+        window::main_window(cc)
     }
 
-    fn hide_to_tray(window: Self::Window) {
-        Fallback::hide_to_tray(window);
+    fn hide_to_tray(w: Self::Window) {
+        window::hide_to_tray(w);
     }
 
-    fn show_window(window: Self::Window) {
-        Fallback::show_window(window);
+    fn show_window(w: Self::Window) {
+        window::show(w);
     }
 
-    fn minimize_window(window: Self::Window) {
-        Fallback::minimize_window(window);
+    fn on_tray_thread(f: Box<dyn FnOnce() + Send>) {
+        window::on_tray_thread(f);
     }
 
-    fn in_tray(window: Self::Window) -> bool {
-        Fallback::in_tray(window)
+    fn minimize_window(w: Self::Window) {
+        window::minimize(w);
     }
 
-    fn window_shown(window: Self::Window) -> bool {
-        Fallback::window_shown(window)
+    fn in_tray(w: Self::Window) -> bool {
+        window::in_tray(w)
+    }
+
+    fn window_shown(w: Self::Window) -> bool {
+        window::shown(w)
     }
 
     fn double_click_time() -> Duration {

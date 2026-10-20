@@ -59,6 +59,10 @@ impl super::Desktop for Desktop {
 
     fn show_window(_window: ()) {}
 
+    fn on_tray_thread(f: Box<dyn FnOnce() + Send>) {
+        f();
+    }
+
     fn minimize_window(_window: ()) {}
 
     fn in_tray(_window: ()) -> bool {

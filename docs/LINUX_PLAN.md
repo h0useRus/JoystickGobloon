@@ -190,7 +190,14 @@ UI и логику: например, заменить vJoy **своим дра�
      автозапуск — `~/.config/autostart/joystick-gobloon.desktop` (для AppImage — путь из `$APPIMAGE`, `Exec`
      экранирован по спецификации), лог — `xdg-open`, время — `localtime_r`. Тексты автозапуска и темы без
      «Windows».
-   - [ ] Окно и трей: tray-icon (AppIndicator/StatusNotifierItem), скрытие окна eframe; GNOME/Wayland без трея.
+   - [x] Окно и трей: `Desktop::on_tray_thread` — поток, где живёт значок (Windows: поток интерфейса, как
+     было; Linux: свой поток GTK с `gtk::main`, код туда — `glib::idle_add_once`). `tray.rs` гоняет через
+     него всё, что трогает значок и меню. Окно Linux — команды egui: в трей на X11 = `Visible(false)`, на
+     Wayland — свернуть (скрыться окно там не может). AppIndicator не сообщает щелчков: на Linux всё через
+     меню. Проверено в Xvfb (`tools/linux/gui_smoke.sh`): окно, поток трея, второй запуск будит первый.
+     Нужны библиотеки X11 (`libxkbcommon-x11`, `libxcursor`, `libxi`, `libxrandr`) — в AppImage.
+     **Не проверено**: значок на настоящем рабочем столе (KDE, GNOME с AppIndicator, Steam Deck), кадры
+     скрытого окна на X11, GNOME без расширения трея (скрытое окно вернёт только повторный запуск).
    - [x] Шрифты CJK: `fc-list :lang=zh-cn` / `:lang=ko`, предпочтение Noto Sans CJK / Source Han Sans
      (один файл на оба языка грузится один раз).
    - [x] Клавиши: `held_keys` → `Option` (`None` — состояния клавиатуры не видно); на Linux `EVIOCGKEY` по

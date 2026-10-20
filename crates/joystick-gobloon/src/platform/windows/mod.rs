@@ -80,6 +80,11 @@ impl super::Desktop for Desktop {
         window::show(w);
     }
 
+    /// The UI thread: the tray's hidden window gets its messages from winit's loop there.
+    fn on_tray_thread(f: Box<dyn FnOnce() + Send>) {
+        f();
+    }
+
     fn minimize_window(w: window::Window) {
         window::minimize(w);
     }
