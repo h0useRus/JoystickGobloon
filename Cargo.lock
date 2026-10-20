@@ -1946,7 +1946,7 @@ dependencies = [
  "gob-input",
  "gob-lighting",
  "gob-plugin",
- "gob-vjoy",
+ "gob-virtual",
  "log",
  "rodio",
  "windows 0.61.3",
@@ -1958,6 +1958,13 @@ version = "0.6.0"
 dependencies = [
  "gob-core",
  "quick-xml 0.37.5",
+]
+
+[[package]]
+name = "gob-hide"
+version = "0.6.0"
+dependencies = [
+ "gob-hidhide",
 ]
 
 [[package]]
@@ -1996,6 +2003,13 @@ version = "0.6.0"
 dependencies = [
  "gob-core",
  "libloading 0.8.9",
+]
+
+[[package]]
+name = "gob-virtual"
+version = "0.6.0"
+dependencies = [
+ "gob-vjoy",
 ]
 
 [[package]]
@@ -2452,12 +2466,12 @@ dependencies = [
  "gob-core",
  "gob-engine",
  "gob-gremlin",
- "gob-hidhide",
+ "gob-hide",
  "gob-i18n",
  "gob-input",
  "gob-lighting",
  "gob-plugin",
- "gob-vjoy",
+ "gob-virtual",
  "log",
  "raw-window-handle",
  "rfd",

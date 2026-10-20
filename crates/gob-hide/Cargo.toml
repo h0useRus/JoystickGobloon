@@ -1,0 +1,8 @@
+[package]
+name = "gob-hide"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+gob-hidhide.workspace = true

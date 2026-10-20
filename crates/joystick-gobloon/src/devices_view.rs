@@ -144,7 +144,7 @@ impl DevicesView {
         profile: Option<&LoadedProfile>,
         devices: &[DeviceState],
         ops: &mut Vec<Op>,
-        vjoy: &[gob_vjoy::DeviceInfo],
+        vjoy: &[gob_virtual::DeviceInfo],
     ) {
         let mut tabs: Vec<Tab> = devices
             .iter()
@@ -737,7 +737,7 @@ impl DevicesView {
         i18n: &I18n,
         profile: Option<&LoadedProfile>,
         ops: &mut Vec<Op>,
-        vjoy: &[gob_vjoy::DeviceInfo],
+        vjoy: &[gob_virtual::DeviceInfo],
         inputs: &[DeviceState],
         tab: &Tab,
         key: Key,

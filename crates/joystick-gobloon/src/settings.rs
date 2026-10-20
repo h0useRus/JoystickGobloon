@@ -246,9 +246,7 @@ pub fn data_dir() -> Option<&'static Path> {
             .ok()
             .and_then(|exe| exe.parent().map(Path::to_path_buf))
             .filter(|dir| dir.join("settings.gob").is_file());
-        local.or_else(|| {
-            std::env::var_os("APPDATA").map(|p| PathBuf::from(p).join("JoystickGobloon"))
-        })
+        local.or_else(crate::platform::default_data_dir)
     })
     .as_deref()
 }

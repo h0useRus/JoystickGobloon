@@ -1,36 +1,43 @@
 # Joystick Gobloon
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
-Plan: phases 0-9 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13).
+Plan: phases 0-10 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13); Linux port (phase 10, Linux only,
+no macOS): docs/LINUX_PLAN.md.
 "R14" = Gremlin profile format version 14, still current in Gremlin R15/R16; ref/JoystickGremlin is the develop
 branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
 - crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default) + de, es, fr, ko, ru, zh embedded; more `lang/*.ftl`
   load from `<exe>/lang/`. Chinese/Korean glyphs come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
-- crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe
+- crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe; OS code only in src/platform/ (`Desktop` trait:
+  data dir, fonts, single instance, keys, window/tray (`Window` handle), autostart, updates; windows/ = Win32 + Inno Setup)
 - crates/gob-core    profile model mirroring Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views
 - crates/gob-gremlin XML <-> Element <-> Profile, lossless round-trip; `report()` import warnings; example `resave`
-- crates/gob-input   DirectInput8 input thread (InputService: snapshot + events; polls every 4 ms, or with
-  `set_event_mode` waits for DI change events and reads buffered buttons/hats); ids = DI instance GUIDs like Gremlin;
-  links dinput8.lib/dxguid.lib statically (-bundle) for c_dfDIJoystick2; example `monitor`
-  + low-level keyboard hook -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
+- crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
+  platform/windows/ = DirectInput8 (polls every 4 ms, or with `set_event_mode` waits for DI change events and reads
+  buffered buttons/hats; ids = DI instance GUIDs like Gremlin; links dinput8.lib/dxguid.lib statically (-bundle)
+  for c_dfDIJoystick2), platform/none.rs elsewhere; example `monitor`
+  + low-level keyboard hook (platform/windows/keyboard.rs) -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
   use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine
 - crates/gob-vjoy    talks to the vJoy driver directly (direct.rs: device_NNN handles + IOCTLs, HID caps; no
   vJoyInterface.dll / vJoyConfig.exe); VJoy::acquire -> Device (reset+release on drop); axis slots 1..8 like
   gob-input. Config = HID descriptors in HKLM\...\services\vjoy\Parameters\DeviceNN (descriptor.rs, vJoy 2.1.9
   layout), changed by `JoystickGobloon.exe --vjoy-config <vJoyConfig-style args>` run elevated (configure.rs).
   Examples `vjoy_info [--sweep <id>]` (read-only), `vjoy_config <args>` (UAC, changes the user's vJoy)
+- crates/gob-virtual virtual joysticks, the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
+  + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, unsupported.rs elsewhere (Linux: uinput later)
+- crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
+  capabilities), `find_device` (input device -> hideable device); windows.rs = HidHide via gob-hidhide
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.
   Example `hidhide_info [--all]` (read-only). Session blacklist waits for a signed 1.7.x - check
   nefarius/HidHide#217 and its releases before each gob-hidhide session (docs/HIDHIDE_PLAN.md)
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
-  semantics (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy;
+  semantics; platform/ = keyboard/mouse output (`Injector`) and speech (`SpeechEngine`): windows/ SendInput + SAPI (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy;
   examples `dry_run` (profile -> printed vJoy output) and `runner_check`
 - crates/gob-lighting joystick LEDs: vendor-neutral `Device`/`Led` in lib.rs dispatching on `Vendor`; every vendor's
-  protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid.rs = shared SetupAPI +
-  HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
+  protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
+  hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: docs/LIGHTING_PLAN.md
 - docs/GREMLIN_ACTIONS.md  all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - crates/gob-plugin  ActionPlugin/Functor traits + Registry (in-process); Engine::with_plugins runs unknown action
@@ -58,6 +65,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   (env vars).
 - Gremlin import must round-trip: unknown actions kept as raw XML.
 - GUI never blocks; engine runs on its own thread, talks via channels.
+- Platform code (OS APIs, drivers) lives only in per-platform modules (`platform/windows.rs`, `platform/linux.rs`) or
+  backend crates behind a common interface; UI, engine and model use only the interface and its capabilities, never
+  `windows::`/`cfg(windows)`/`cfg(target_os)`. A platform part (e.g. our own Windows driver instead of vJoy) must be
+  replaceable without touching UI or logic. Layout and migration: docs/LINUX_PLAN.md, "Архитектура".
 - Settings: TOML text in %APPDATA%\JoystickGobloon\settings.gob (old settings.toml is read once), programs of
   the Applications page in apps.gob next to it. If the exe's folder has its own settings.gob, that folder is
   used instead for settings, apps and the log (joystick-gobloon/src/settings.rs `data_dir`).
@@ -67,18 +78,24 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   translated; routine info goes to the status bar. No report/diagnostics windows.
 - Branches: development happens on `dev`; every work branch is created from `dev` and merged back into it
   by pull request. `main` only receives release requests: a pull request from `dev` whose title contains
-  the final version, with `[workspace.package] version` in Cargo.toml bumped to that x.y.z (checked by
-  .github/workflows/release-request.yml). Never commit directly to `main`.
+  the version the merge releases (checked by .github/workflows/release-request.yml). Never commit directly
+  to `main`.
+- Versions come from the commits (.github/scripts/next-version.sh): Conventional Commits since the latest
+  final tag vX.Y.Z; feat -> minor, any other type -> patch, `type!:` / `BREAKING CHANGE:` -> major (minor
+  while 0.x). Never bump versions by hand; `[workspace.package] version` in Cargo.toml only names local builds.
+  `bash .github/scripts/next-version.sh` prints the next version.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
   pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss) and a
   portable zip. The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; uninstall runs `JoystickGobloon.exe
-  --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) runs fmt,
-  cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches.
+  --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) checks commit
+  messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches,
+  and clippy + tests on Linux (job `linux`).
 - Discord: releases post through .github/scripts/discord-announce.ps1 to the DISCORD_WEBHOOK secret (alpha
   builds to DISCORD_WEBHOOK_ALPHA); no secret = no post. announce.yml re-posts a release by hand.
 - Rust version is pinned in rust-toolchain.toml (local and CI); bump it deliberately and fix new lints.
-- Commits: Conventional Commits (feat/fix/docs/refactor/test/chore/build/ci; scope = crate, e.g. `feat(gob-gremlin): parse R14 library`).
+- Commits: Conventional Commits (feat/fix/perf/docs/refactor/test/chore/build/ci/style/revert; scope = crate,
+  e.g. `feat(gob-gremlin): parse R14 library`). CI rejects other messages; the type sets the release version.
 
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
@@ -90,6 +107,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
   setup with /UPDATE=1 (it restarts the app), portable copies swap their files. Debug builds never update.
   Network tests: `cargo test -p joystick-gobloon update:: -- --ignored`.
+- Linux (docs/LINUX_PLAN.md): `tools\linux\check.ps1` runs clippy + tests (or any command) in Podman (machine
+  pod-h0use, start it first); Windows-only code stays behind `cfg(windows)`, so the Linux build must stay clean.
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
   window stays responsive; needs "close button hides to tray" on.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the

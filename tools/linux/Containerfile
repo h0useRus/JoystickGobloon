@@ -1,0 +1,18 @@
+# Linux build environment (docs/LINUX_PLAN.md): Debian with the system libraries eframe, tray-icon,
+# rfd, rodio and ureq link against. The Rust version comes from rust-toolchain.toml on first use.
+FROM docker.io/library/rust:1-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        pkg-config \
+        libasound2-dev \
+        libgtk-3-dev \
+        libxdo-dev \
+        libayatana-appindicator3-dev \
+        libudev-dev \
+        libssl-dev \
+        libxkbcommon-dev \
+        libwayland-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CARGO_TARGET_DIR=/target
+WORKDIR /src

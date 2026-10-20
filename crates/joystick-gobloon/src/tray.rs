@@ -1,7 +1,7 @@
-//! Notification area (tray) icon and the Windows autostart entry.
+//! Notification area (tray) icon and the autostart entry.
 //!
-//! The tray callbacks show the window directly through Win32 and only then ask egui to
-//! repaint. "Activate" works without the window: it starts the engine through
+//! The tray callbacks show the window directly through the platform (`platform::show_window`)
+//! and only then ask egui to repaint. "Activate" works without the window: it starts the engine through
 //! [`Activation`] and updates the icon itself.
 //!
 //! Left click: show the window, or minimize it when it is on screen (to the tray with
@@ -11,13 +11,14 @@
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use eframe::egui;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 use crate::activation::Activation;
+use crate::platform::{self, Window};
 
 /// What shows the profile state: the icon, its tooltip and the "Activate" check mark. Kept on
 /// the UI thread, where the menu callbacks run (muda handles the menu in the tray's window).
@@ -79,16 +80,7 @@ const ICONS: [(u32, &[u8], &[u8]); 4] = [
 
 /// The tray image for the current display scaling (16 px at 100 %, 20 at 125 %, ...).
 fn tray_image(active: bool) -> Result<tray_icon::Icon, String> {
-    #[cfg(windows)]
-    // SAFETY: a plain metrics query.
-    let want = unsafe {
-        windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(
-            windows::Win32::UI::WindowsAndMessaging::SM_CXSMICON,
-        )
-    }
-    .max(16) as u32;
-    #[cfg(not(windows))]
-    let want = 16;
+    let want = platform::tray_icon_size().max(16);
     let (_, on, off) = ICONS
         .iter()
         .rev()
@@ -117,7 +109,7 @@ impl Tray {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: &egui::Context,
-        hwnd: isize,
+        hwnd: Window,
         restored: Arc<AtomicBool>,
         activation: Activation,
         tooltip: &str,
@@ -134,9 +126,9 @@ impl Tray {
         menu.append(&show_item).map_err(|e| e.to_string())?;
         menu.append(&activate_item).map_err(|e| e.to_string())?;
         // Device hiding on/off without opening the window (HidHide installed only).
-        let hidhide = gob_hidhide::HidHide::find().ok().map(Arc::new);
+        let hidhide = gob_hide::load().ok();
         let cloak_item = hidhide.as_ref().map(|hh| {
-            let on = hh.cloaked().unwrap_or(false);
+            let on = hh.enabled().unwrap_or(false);
             CheckMenuItem::new(hiding, true, on, None)
         });
         if let Some(item) = &cloak_item {
@@ -162,7 +154,7 @@ impl Tray {
             // nothing followed it within the double-click time.
             let clicks = Arc::new(AtomicU64::new(0));
             let double_at: Arc<Mutex<Option<Instant>>> = Arc::default();
-            let wait = double_click_time();
+            let wait = platform::double_click_time();
             let activates = double_click_activates.clone();
             TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| match event {
                 TrayIconEvent::Click {
@@ -226,7 +218,7 @@ impl Tray {
                     if let Some(hh) = hidhide.clone() {
                         let (ctx, changed) = (ctx.clone(), cloak_changed.clone());
                         std::thread::spawn(move || {
-                            let result = hh.cloaked().and_then(|on| hh.set_cloaked(!on));
+                            let result = hh.enabled().and_then(|on| hh.set_enabled(!on));
                             if let Err(e) = result {
                                 log::error!("tray: switching device hiding: {e}");
                             }
@@ -237,7 +229,7 @@ impl Tray {
                 }
                 if event.id == show_id || event.id == quit_id {
                     restored.store(true, Ordering::Relaxed);
-                    show_window(hwnd);
+                    platform::show_window(hwnd);
                     ctx.request_repaint();
                 }
             }));
@@ -331,213 +323,23 @@ fn toggle_activation(activation: &Activation) {
 /// A left click on the icon that was not part of a double click: minimizes the window when
 /// it is on screen (the app moves it on to the tray with "minimize to tray"), otherwise
 /// shows it. Runs on a helper thread: only async window calls.
-fn single_click(hwnd: isize, restored: &AtomicBool, ctx: &egui::Context) {
-    if window_shown(hwnd) && !in_tray(hwnd) {
-        #[cfg(windows)]
-        {
-            use windows::Win32::UI::WindowsAndMessaging::{SW_MINIMIZE, ShowWindowAsync};
-            // SAFETY: the app's own window; the request is only posted to its thread.
-            unsafe {
-                let _ = ShowWindowAsync(handle(hwnd), SW_MINIMIZE);
-            }
-        }
+fn single_click(window: Window, restored: &AtomicBool, ctx: &egui::Context) {
+    if platform::window_shown(window) {
+        platform::minimize_window(window);
     } else {
         restored.store(true, Ordering::Relaxed);
-        show_window(hwnd);
+        platform::show_window(window);
     }
     ctx.request_repaint();
 }
 
-/// Windows' double-click time: a click waits this long before it counts as a single click.
-fn double_click_time() -> Duration {
-    #[cfg(windows)]
-    {
-        // SAFETY: plain query without arguments.
-        let ms = unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime() };
-        Duration::from_millis(u64::from(ms))
-    }
-    #[cfg(not(windows))]
-    Duration::from_millis(500)
-}
-
-/// Puts the main window into the tray: a transparent, click-through tool window (off the
-/// taskbar and Alt+Tab), not minimized. It is not hidden (SW_HIDE): Windows does not paint
-/// hidden windows, so eframe would never run a frame and its event loop would spin a CPU
-/// core on every repaint request. Not minimized either: Windows draws a minimized tool
-/// window as a small title bar above the taskbar, whatever its transparency.
-pub fn hide_window(hwnd: isize) {
-    #[cfg(windows)]
-    {
-        use windows::Win32::UI::WindowsAndMessaging::{
-            SW_HIDE, SW_SHOWNOACTIVATE, ShowWindowAsync,
-        };
-        let window = handle(hwnd);
-        set_tray_style(window, true);
-        // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
-        // Async: callers may run inside winit's message handling. Hiding first makes the
-        // taskbar notice the style change; SW_SHOWNOACTIVATE also un-minimizes.
-        unsafe {
-            let _ = ShowWindowAsync(window, SW_HIDE);
-            let _ = ShowWindowAsync(window, SW_SHOWNOACTIVATE);
-        }
-    }
-    #[cfg(not(windows))]
-    let _ = hwnd;
-}
-
-/// Shows the main window again (from the tray, or minimized). Called from tray callbacks,
-/// which run inside the window message handling: the async variant only posts the request,
-/// so winit is not re-entered. The app then syncs winit's state on its next frame (its
-/// `restored` flag).
-pub fn show_window(hwnd: isize) {
-    #[cfg(windows)]
-    {
-        use windows::Win32::UI::WindowsAndMessaging::{
-            IsIconic, SW_HIDE, SW_RESTORE, SW_SHOW, ShowWindowAsync,
-        };
-        let hwnd = handle(hwnd);
-        let from_tray = in_tray_handle(hwnd);
-        set_tray_style(hwnd, false);
-        // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
-        unsafe {
-            if from_tray {
-                // Hide first so the taskbar adds the button back.
-                let _ = ShowWindowAsync(hwnd, SW_HIDE);
-            }
-            let _ = ShowWindowAsync(hwnd, SW_SHOW);
-            if from_tray || IsIconic(hwnd).as_bool() {
-                let _ = ShowWindowAsync(hwnd, SW_RESTORE);
-            }
-        }
-    }
-    #[cfg(not(windows))]
-    let _ = hwnd;
-}
-
-/// The main window is in the tray (see [`hide_window`]).
-pub fn in_tray(hwnd: isize) -> bool {
-    #[cfg(windows)]
-    return in_tray_handle(handle(hwnd));
-    #[cfg(not(windows))]
-    {
-        let _ = hwnd;
-        false
-    }
-}
-
-/// The main window is on screen: visible, not minimized, not in the tray.
-pub fn window_shown(hwnd: isize) -> bool {
-    #[cfg(windows)]
-    {
-        use windows::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible};
-        let hwnd = handle(hwnd);
-        // SAFETY: `hwnd` is the app's own top-level window, alive while the app runs.
-        unsafe { IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() }
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = hwnd;
-        true
-    }
-}
-
-#[cfg(windows)]
-fn handle(hwnd: isize) -> windows::Win32::Foundation::HWND {
-    windows::Win32::Foundation::HWND(hwnd as *mut _)
-}
-
-#[cfg(windows)]
-fn in_tray_handle(hwnd: windows::Win32::Foundation::HWND) -> bool {
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GetWindowLongPtrW, WS_EX_TOOLWINDOW,
-    };
-    // SAFETY: reading the style of the app's own window.
-    let style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
-    style & WS_EX_TOOLWINDOW.0 as isize != 0
-}
-
-/// Tray style: a tool window (off the taskbar and Alt+Tab), fully transparent and
-/// click-through.
-#[cfg(windows)]
-fn set_tray_style(hwnd: windows::Win32::Foundation::HWND, on: bool) {
-    use windows::Win32::Foundation::COLORREF;
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GetWindowLongPtrW, LWA_ALPHA, SetLayeredWindowAttributes, SetWindowLongPtrW,
-        WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
-    };
-    let tray = (WS_EX_TOOLWINDOW.0 | WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0) as isize;
-    // SAFETY: changing the extended style of the app's own window.
-    unsafe {
-        let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        if on {
-            SetWindowLongPtrW(
-                hwnd,
-                GWL_EXSTYLE,
-                (style | tray) & !(WS_EX_APPWINDOW.0 as isize),
-            );
-            let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_ALPHA);
-        } else {
-            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style & !tray);
-        }
-    }
-}
-
-/// Native handle of the main window, for the tray callbacks.
-pub fn window_handle(cc: &eframe::CreationContext<'_>) -> Option<isize> {
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    match cc.window_handle().ok()?.as_raw() {
-        RawWindowHandle::Win32(h) => Some(h.hwnd.get()),
-        _ => None,
-    }
-}
-
-/// `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry starting Joystick Gobloon minimized.
+/// Entry that starts Joystick Gobloon at logon (Windows: the registry's Run key).
 pub mod autostart {
-    /// Started by Windows at logon: start hidden in the tray (or minimized).
+    /// Started at logon: start hidden in the tray (or minimized).
     pub const ARG: &str = "--minimized";
-    #[cfg(windows)]
-    const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-    #[cfg(windows)]
-    const VALUE: &str = "JoystickGobloon";
 
     /// Adds or removes the entry for the running exe.
     pub fn set(enabled: bool) -> Result<(), String> {
-        #[cfg(windows)]
-        {
-            use windows::Win32::System::Registry::{
-                HKEY_CURRENT_USER, REG_SZ, RegDeleteKeyValueW, RegSetKeyValueW,
-            };
-            use windows::core::HSTRING;
-            let (key, value) = (HSTRING::from(RUN_KEY), HSTRING::from(VALUE));
-            // SAFETY: plain registry calls with valid, NUL-terminated strings.
-            let status = unsafe {
-                if enabled {
-                    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-                    let command = format!("\"{}\" {ARG}", exe.display());
-                    let data: Vec<u16> = command.encode_utf16().chain([0]).collect();
-                    RegSetKeyValueW(
-                        HKEY_CURRENT_USER,
-                        &key,
-                        &value,
-                        REG_SZ.0,
-                        Some(data.as_ptr().cast()),
-                        (data.len() * 2) as u32,
-                    )
-                } else {
-                    RegDeleteKeyValueW(HKEY_CURRENT_USER, &key, &value)
-                }
-            };
-            // Deleting an entry that is not there is fine.
-            if status.is_ok() || (!enabled && status.0 == 2) {
-                Ok(())
-            } else {
-                Err(format!("registry error {}", status.0))
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = enabled;
-            Ok(())
-        }
+        crate::platform::set_autostart(enabled, ARG)
     }
 }

@@ -81,7 +81,7 @@ pub struct JoystickGobloonApp {
     /// (eframe shows it after its first frame whatever the viewport said).
     hide_frames: u8,
     /// Main window handle, for showing it from the tray.
-    hwnd: Option<isize>,
+    main_window: Option<crate::platform::Window>,
     /// Input changes repaint the window only while it shows live input values.
     live_input: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The window was on screen last frame (not in the tray, not minimized).
@@ -112,7 +112,10 @@ enum Pending {
 impl JoystickGobloonApp {
     /// `instance`: the single-instance wake-up event (another start shows this window);
     /// `None` when several copies may run.
-    pub fn new(cc: &eframe::CreationContext<'_>, instance: Option<crate::instance::Event>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        instance: Option<crate::platform::InstanceEvent>,
+    ) -> Self {
         let settings = Settings::load();
         let lang_dir = std::env::current_exe()
             .ok()
@@ -139,13 +142,13 @@ impl JoystickGobloonApp {
             .clone()
             .filter(|p| settings.reopen_last && p.exists());
         let live_input = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let hwnd = crate::tray::window_handle(cc);
+        let main_window = crate::platform::main_window(cc);
         let input = {
             let (ctx, live) = (cc.egui_ctx.clone(), live_input.clone());
             gob_input::InputService::start(move || {
                 // `live` is set per frame; the tray check covers the time after hiding.
                 if live.load(std::sync::atomic::Ordering::Relaxed)
-                    && !hwnd.is_some_and(crate::tray::in_tray)
+                    && !main_window.is_some_and(crate::platform::in_tray)
                 {
                     ctx.request_repaint();
                 }
@@ -190,7 +193,7 @@ impl JoystickGobloonApp {
             tray: None,
             restored: Default::default(),
             hide_frames: 0,
-            hwnd,
+            main_window,
             live_input,
             was_shown: true,
         };
@@ -200,12 +203,12 @@ impl JoystickGobloonApp {
         for ((device, slot), c) in &app.calibrations {
             app.input.set_calibration(device, *slot, Some(*c));
         }
-        if let (Some(hwnd), Some(instance)) = (app.hwnd, instance) {
+        if let (Some(main_window), Some(instance)) = (app.main_window, instance) {
             let (restored, ctx) = (app.restored.clone(), cc.egui_ctx.clone());
-            crate::instance::listen(instance, move || {
+            crate::platform::listen_instance(instance, move || {
                 log::info!("started again: showing the running window");
                 restored.store(true, std::sync::atomic::Ordering::Relaxed);
-                crate::tray::show_window(hwnd);
+                crate::platform::show_window(main_window);
                 ctx.request_repaint();
             });
         }
@@ -278,14 +281,18 @@ impl JoystickGobloonApp {
 
     /// Creates or drops the tray icon to match the settings.
     fn update_tray(&mut self, ctx: &egui::Context) {
-        match (self.settings.show_tray, self.tray.is_some(), self.hwnd) {
-            (true, false, Some(hwnd)) => {
+        match (
+            self.settings.show_tray,
+            self.tray.is_some(),
+            self.main_window,
+        ) {
+            (true, false, Some(main_window)) => {
                 let (show, quit) = (self.i18n.tr("tray-show"), self.i18n.tr("tray-quit"));
                 let hiding = self.i18n.tr("tray-hiding");
                 let restored = self.restored.clone();
                 let tray = crate::tray::Tray::new(
                     ctx,
-                    hwnd,
+                    main_window,
                     restored,
                     self.activation.clone(),
                     crate::APP_NAME,
@@ -427,8 +434,8 @@ impl JoystickGobloonApp {
     /// Runs `action`, first asking to save unsaved changes.
     /// Close or minimize to tray. Without a window handle (not Windows) the window is hidden.
     fn hide_to_tray(&self, ctx: &egui::Context) {
-        match self.hwnd {
-            Some(hwnd) => crate::tray::hide_window(hwnd),
+        match self.main_window {
+            Some(main_window) => crate::platform::hide_to_tray(main_window),
             None => ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false)),
         }
     }
@@ -567,7 +574,7 @@ impl JoystickGobloonApp {
                         .on_hover_text(path.display().to_string())
                         .clicked()
                     {
-                        let _ = std::process::Command::new("notepad.exe").arg(&path).spawn();
+                        crate::platform::open_text_file(&path);
                     }
                 }
             });
@@ -1074,12 +1081,12 @@ impl eframe::App for JoystickGobloonApp {
             }
         }
         self.input.set_event_mode(self.settings.input_events);
-        let in_tray = self.hwnd.is_some_and(crate::tray::in_tray);
-        let shown = !in_tray && self.hwnd.is_none_or(crate::tray::window_shown);
+        let in_tray = self.main_window.is_some_and(crate::platform::in_tray);
+        let shown = !in_tray && self.main_window.is_none_or(crate::platform::window_shown);
         if in_tray && self.pending.is_some() {
             // A question needs the window, e.g. Quit from the tray with unsaved changes.
-            if let Some(hwnd) = self.hwnd {
-                crate::tray::show_window(hwnd);
+            if let Some(main_window) = self.main_window {
+                crate::platform::show_window(main_window);
             }
             self.restored
                 .store(true, std::sync::atomic::Ordering::Relaxed);
