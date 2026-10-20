@@ -17,6 +17,7 @@ gob-input = { path = "crates/gob-input" }
 windows = "0.61"
 libloading = "0.8"
 gob-vjoy = { path = "crates/gob-vjoy" }
+gob-virtual = { path = "crates/gob-virtual" }
 gob-hidhide = { path = "crates/gob-hidhide" }
 gob-engine = { path = "crates/gob-engine" }
 gob-plugin = { path = "crates/gob-plugin" }

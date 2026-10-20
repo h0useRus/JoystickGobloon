@@ -39,13 +39,11 @@ pub const VERSION: &str = match option_env!("JOYSTICK_GOBLOON_VERSION") {
 const HIDHIDE_UNREGISTER: &str = "--hidhide-unregister";
 
 fn main() -> eframe::Result {
-    // Elevated copy started by the vJoy configuration editor: apply one change and quit,
+    // Elevated copy started by the virtual device configuration: apply one change and quit,
     // before the single-instance check and without touching the log.
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if let Some((first, rest)) = args.split_first()
-        && first == gob_vjoy::configure::ARG
-    {
-        std::process::exit(gob_vjoy::configure::run_admin(rest));
+    if let Some(code) = gob_virtual::admin_entry(&args) {
+        std::process::exit(code);
     }
     // Restarted by a portable update: let the old copy exit before the single-instance check.
     update::wait_for_previous();

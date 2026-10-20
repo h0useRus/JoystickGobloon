@@ -1946,7 +1946,7 @@ dependencies = [
  "gob-input",
  "gob-lighting",
  "gob-plugin",
- "gob-vjoy",
+ "gob-virtual",
  "log",
  "rodio",
  "windows 0.61.3",
@@ -1996,6 +1996,13 @@ version = "0.6.0"
 dependencies = [
  "gob-core",
  "libloading 0.8.9",
+]
+
+[[package]]
+name = "gob-virtual"
+version = "0.6.0"
+dependencies = [
+ "gob-vjoy",
 ]
 
 [[package]]
@@ -2457,7 +2464,7 @@ dependencies = [
  "gob-input",
  "gob-lighting",
  "gob-plugin",
- "gob-vjoy",
+ "gob-virtual",
  "log",
  "raw-window-handle",
  "rfd",

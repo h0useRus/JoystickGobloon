@@ -21,6 +21,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   gob-input. Config = HID descriptors in HKLM\...\services\vjoy\Parameters\DeviceNN (descriptor.rs, vJoy 2.1.9
   layout), changed by `JoystickGobloon.exe --vjoy-config <vJoyConfig-style args>` run elevated (configure.rs).
   Examples `vjoy_info [--sweep <id>]` (read-only), `vjoy_config <args>` (UAC, changes the user's vJoy)
+- crates/gob-virtual virtual joysticks, the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
+  + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, unsupported.rs elsewhere (Linux: uinput later)
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.

@@ -2,7 +2,7 @@
 //!
 //! [`Engine`] is pure logic driven by [`Engine::process`] and [`Engine::tick`]
 //! with explicit timestamps, so it can be tested without hardware. [`Runner`]
-//! wires it to `gob-input` and `gob-vjoy` on a background thread.
+//! wires it to `gob-input` and `gob-virtual` (virtual joysticks) on a background thread.
 //!
 //! Semantics follow Joystick Gremlin R14: actions of a root run in order and
 //! share one mutable value, modes form a stack with inheritance, vJoy buttons

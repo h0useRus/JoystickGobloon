@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 
 use gob_core::Profile;
 use gob_input::{DeviceState, InputEvent};
-use gob_vjoy::VJoy;
 
 use crate::{Engine, InputKey, InputKind, Output, Value};
 
@@ -31,7 +30,7 @@ pub struct Runner {
 }
 
 struct SystemOutput {
-    devices: HashMap<u32, gob_vjoy::Device>,
+    devices: HashMap<u32, Box<dyn gob_virtual::Device>>,
     /// Last values written, read back by vJoy conditions.
     written: HashMap<(u32, InputKind, u32), Value>,
     media: crate::media::Media,
@@ -126,7 +125,7 @@ impl Runner {
         on_change: impl Fn() + Send + 'static,
     ) -> Result<Self, String> {
         let mut engine = Engine::new(profile, aliases);
-        let vjoy = VJoy::load().map_err(|e| e.to_string())?;
+        let virtual_devices = gob_virtual::load().map_err(|e| e.to_string())?;
         let mut out = SystemOutput {
             devices: HashMap::new(),
             written: HashMap::new(),
@@ -143,7 +142,7 @@ impl Runner {
         };
         for id in engine.vjoy_devices() {
             out.devices
-                .insert(id, vjoy.acquire(id).map_err(|e| e.to_string())?);
+                .insert(id, virtual_devices.acquire(id).map_err(|e| e.to_string())?);
         }
 
         let now = Instant::now();
