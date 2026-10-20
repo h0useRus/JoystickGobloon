@@ -1,11 +1,12 @@
 //! Linux desktop integration: XDG folders, a socket for the single instance, XDG autostart,
 //! CJK fonts through fontconfig, the window and the tray (GTK thread), device access (the udev
-//! rule, gob-uinput's `access`). Updates still come from `none.rs` (docs/LINUX_PLAN.md).
+//! rule, gob-uinput's `access`), updates of the AppImage. The rest is shared with `none.rs`.
 
 mod autostart;
 mod fonts;
 mod instance;
 mod keys;
+mod update;
 mod window;
 
 use std::path::{Path, PathBuf};
@@ -140,20 +141,23 @@ impl super::Desktop for Desktop {
         gob_uinput::access::install()
     }
 
-    fn installed_copy(exe_dir: &Path) -> bool {
-        Fallback::installed_copy(exe_dir)
+    /// Started from an AppImage (it updates as one file).
+    fn installed_copy(_exe_dir: &Path) -> bool {
+        update::installed_copy()
     }
 
+    /// Only AppImage copies update; a build or a package does not.
     fn update_asset(installed: bool) -> Option<&'static str> {
-        Fallback::update_asset(installed)
+        installed.then_some("-x86_64.AppImage")
     }
 
     fn exe_name() -> &'static str {
-        Fallback::exe_name()
+        "JoystickGobloon"
     }
 
+    /// The new AppImage replaces the running one and starts.
     fn run_installer(setup: &Path) -> Result<(), String> {
-        Fallback::run_installer(setup)
+        update::replace_appimage(setup)
     }
 
     fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
@@ -161,6 +165,6 @@ impl super::Desktop for Desktop {
     }
 
     fn wait_for_process(pid: u32, timeout: Duration) {
-        Fallback::wait_for_process(pid, timeout);
+        update::wait_for_process(pid, timeout);
     }
 }

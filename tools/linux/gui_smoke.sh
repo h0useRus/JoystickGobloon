@@ -9,20 +9,26 @@
 set -e
 apt-get update -qq >/dev/null
 apt-get install -y -qq --no-install-recommends xvfb x11-apps imagemagick libgl1-mesa-dri libegl1 libxkbcommon-x11-0 libxcursor1 libxi6 libxrandr2 >/dev/null 2>&1
-cargo build -q -p joystick-gobloon
+# APP: the program to start (e.g. an AppImage); by default a fresh debug build.
+if [ -z "${APP:-}" ]; then
+    cargo build -q -p joystick-gobloon
+    APP=/target/debug/JoystickGobloon
+fi
+# No FUSE in containers: an AppImage runs from its extracted copy.
+export APPIMAGE_EXTRACT_AND_RUN=1
 export HOME=/tmp/smokehome
 rm -rf "$HOME" && mkdir -p "$HOME"
 Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
 sleep 2
 export DISPLAY=:99
 export JOYSTICK_GOBLOON_START_PAGE="${1:-about}"
-/target/debug/JoystickGobloon &
-APP=$!
+"$APP" &
+PID=$!
 sleep 10
 # A second start must wake the first and exit at once.
-timeout 5 /target/debug/JoystickGobloon && echo "second start exited" || echo "second start: exit $?"
+timeout 5 "$APP" && echo "second start exited" || echo "second start: exit $?"
 xwd -root -silent | convert xwd:- png:/out/linux-smoke.png
-kill $APP 2>/dev/null || true
+kill $PID 2>/dev/null || true
 sleep 1
 echo "--- data dir:"
 ls -la "$HOME/.config/JoystickGobloon" 2>&1
