@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::thread::JoinHandle;
+#[cfg(windows)]
 use std::time::{Duration, Instant};
 
 use crate::{Calibration, DeviceState, InputEvent};
@@ -12,10 +13,13 @@ use crate::{Calibration, DeviceState, InputEvent};
 pub type Calibrations = std::collections::HashMap<(String, u8), Calibration>;
 
 /// Polling mode: time between two reads of every device.
+#[cfg(windows)]
 const POLL_INTERVAL: Duration = Duration::from_millis(4);
 /// Event mode: devices are also read this often without a change signal, as a fallback.
+#[cfg(windows)]
 const EVENT_TIMEOUT: Duration = Duration::from_millis(20);
 /// Re-enumerate devices this often to catch hot-plugging.
+#[cfg(windows)]
 const RESCAN: Duration = Duration::from_secs(2);
 const EVENT_BUFFER: usize = 4096;
 
@@ -187,6 +191,8 @@ impl Drop for InputService {
 }
 
 /// What the polling thread shares with [`InputService`].
+// Linux has no polling thread yet (docs/LINUX_PLAN.md, phase 1).
+#[cfg_attr(not(windows), allow(dead_code))]
 struct Shared<'a> {
     snapshot: &'a RwLock<Vec<DeviceState>>,
     stop: &'a AtomicBool,
@@ -327,6 +333,7 @@ fn guid_of(inst: &windows::Win32::Devices::HumanInterfaceDevice::DIDEVICEINSTANC
 }
 
 /// Sends one event per changed input; returns whether anything changed.
+#[cfg(windows)]
 fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &Broadcast) -> bool {
     let device = || new.info.guid.clone();
     let mut changed = false;

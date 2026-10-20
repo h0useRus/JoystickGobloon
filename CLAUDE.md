@@ -79,7 +79,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   portable zip. The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; uninstall runs `JoystickGobloon.exe
   --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) checks commit
-  messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches.
+  messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches,
+  and clippy + tests on Linux (job `linux`).
 - Discord: releases post through .github/scripts/discord-announce.ps1 to the DISCORD_WEBHOOK secret (alpha
   builds to DISCORD_WEBHOOK_ALPHA); no secret = no post. announce.yml re-posts a release by hand.
 - Rust version is pinned in rust-toolchain.toml (local and CI); bump it deliberately and fix new lints.
@@ -96,6 +97,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
   setup with /UPDATE=1 (it restarts the app), portable copies swap their files. Debug builds never update.
   Network tests: `cargo test -p joystick-gobloon update:: -- --ignored`.
+- Linux (docs/LINUX_PLAN.md): `tools\linux\check.ps1` runs clippy + tests (or any command) in Podman (machine
+  pod-h0use, start it first); Windows-only code stays behind `cfg(windows)`, so the Linux build must stay clean.
 - tools/tray_cycle.ps1 hides to tray / restores N times via window messages (no mouse) and checks the
   window stays responsive; needs "close button hides to tray" on.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the

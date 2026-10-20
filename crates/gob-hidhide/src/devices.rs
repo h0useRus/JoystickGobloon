@@ -75,6 +75,7 @@ pub fn group(found: Vec<Found>, gaming_only: bool) -> Vec<DeviceGroup> {
 
 /// `(usage page, usage)` from a HID id like `HID_DEVICE_UP:0001_U:0004` or
 /// `HID\VID_231D&UP:0001_U:0004`.
+#[cfg(any(windows, test))]
 fn parse_usage(id: &str) -> Option<(u16, u16)> {
     let start = id.find("UP:")? + 3;
     let (page, usage) = id[start..].split_once("_U:")?;

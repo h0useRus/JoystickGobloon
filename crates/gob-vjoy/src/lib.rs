@@ -15,6 +15,7 @@ use direct::{Acquired, Direct};
 /// vJoy supports device ids 1..=16.
 pub const MAX_DEVICES: u32 = 16;
 /// HID usages of X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1 (axis slots 1..=8).
+#[cfg(any(windows, test))]
 pub(crate) const AXIS_USAGES: [u32; 8] = [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37];
 
 #[derive(Debug)]

@@ -115,6 +115,7 @@ impl DeviceState {
     }
 
     /// Copies the live values (not the info) from `other`, reusing this state's buffers.
+    #[cfg(windows)]
     pub(crate) fn copy_readings(&mut self, other: &DeviceState) {
         self.axes = other.axes;
         self.raw = other.raw;

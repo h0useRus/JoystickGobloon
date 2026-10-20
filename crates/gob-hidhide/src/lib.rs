@@ -124,7 +124,7 @@ pub struct HidHide {
 impl HidHide {
     /// Finds the driver; `Error::NotInstalled` without it.
     pub fn find() -> Result<Self, Error> {
-        drop(Driver::open()?);
+        let _ = Driver::open()?;
         Ok(Self {
             version: driver_version().unwrap_or_default(),
         })

@@ -137,6 +137,7 @@ impl Speech {
 }
 
 /// SAPI XML so every request carries its own rate, volume and pitch.
+#[cfg(any(windows, test))]
 fn speech_xml(r: &SpeechRequest) -> String {
     let escaped = r
         .text

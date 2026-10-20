@@ -350,13 +350,15 @@ fn prepare(release: &Release) -> Result<Prepared, String> {
     }
 }
 
-fn hidden(mut cmd: std::process::Command) -> std::process::Command {
+fn hidden(cmd: std::process::Command) -> std::process::Command {
     #[cfg(windows)]
-    {
+    let cmd = {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut cmd = cmd;
         cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+        cmd
+    };
     cmd
 }
 
