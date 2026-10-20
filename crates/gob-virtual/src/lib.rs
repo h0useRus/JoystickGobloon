@@ -95,9 +95,6 @@ pub struct Capabilities {
     pub switchable: bool,
     /// Applying a configuration change asks the user for administrator rights.
     pub needs_admin: bool,
-    /// Buttons and hats a new device gets ([`DeviceConfig::new`]).
-    pub default_buttons: u32,
-    pub default_hats: u32,
 }
 
 /// No backend: nothing can be configured.
@@ -109,8 +106,6 @@ pub const NO_CAPABILITIES: Capabilities = Capabilities {
     effects: &[],
     switchable: false,
     needs_admin: false,
-    default_buttons: 0,
-    default_hats: 0,
 };
 
 /// One device's configuration, as the configuration page edits it.
@@ -127,14 +122,14 @@ pub struct DeviceConfig {
 }
 
 impl DeviceConfig {
-    /// Defaults for a new device: every axis (Gremlin profiles expect them), the backend's
-    /// default buttons and continuous hats, no force feedback.
+    /// Defaults for a new device: every axis (Gremlin profiles expect them), as many buttons
+    /// and continuous hats as the backend has (vJoy: 128 and 4), no force feedback.
     pub fn new(id: u32, capabilities: &Capabilities) -> Self {
         Self {
             id,
             axes: [true; AXIS_SLOTS],
-            buttons: capabilities.default_buttons.min(capabilities.max_buttons),
-            hats: capabilities.default_hats.min(capabilities.max_hats),
+            buttons: capabilities.max_buttons,
+            hats: capabilities.max_hats,
             discrete_hats: false,
             effects: vec![false; capabilities.effects.len()],
         }

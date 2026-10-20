@@ -29,9 +29,6 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     effects: &[],
     switchable: false,
     needs_admin: false,
-    // A device costs nothing until acquired: everything there is.
-    default_buttons: 96,
-    default_hats: 4,
 };
 const NAME_PREFIX: &str = "Joystick Gobloon Joystick ";
 const VENDOR: u16 = 0x1234;
