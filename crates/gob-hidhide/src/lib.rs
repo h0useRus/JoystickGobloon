@@ -153,13 +153,9 @@ impl HidHide {
         Driver::open()?.get_list(driver::GET_BLACKLIST)
     }
 
-    /// Hides or shows all collections of a device together with its USB container.
-    pub fn set_group_hidden(&self, group: &DeviceGroup, hidden: bool) -> Result<(), Error> {
-        self.change_hidden(&group.instance_paths(), hidden)
-    }
-
-    /// One read-modify-write of the device list.
-    fn change_hidden(&self, paths: &[&str], hide: bool) -> Result<(), Error> {
+    /// Hides or shows devices by instance path (for a whole device: [`DeviceGroup::instance_paths`],
+    /// its collections and USB container), in one read-modify-write of the device list.
+    pub fn set_paths_hidden(&self, paths: &[&str], hide: bool) -> Result<(), Error> {
         let driver = Driver::open()?;
         let list = driver.get_list(driver::GET_BLACKLIST)?;
         let next = edit_list(&list, paths, hide);
@@ -206,14 +202,6 @@ impl HidHide {
             driver.set_list(driver::SET_WHITELIST, &next)?;
         }
         Ok(())
-    }
-
-    /// Adds `exe` to the whitelist unless it is there already; returns whether it was added.
-    pub fn ensure_app(&self, exe: &Path) -> Result<bool, Error> {
-        if self.apps()?.iter().any(|a| same_path(a, exe)) {
-            return Ok(false);
-        }
-        self.set_app(exe, true).map(|()| true)
     }
 
     /// HID devices known to Windows (present or not); only game controllers with `gaming_only`.

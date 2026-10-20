@@ -134,9 +134,9 @@ impl Tray {
         menu.append(&show_item).map_err(|e| e.to_string())?;
         menu.append(&activate_item).map_err(|e| e.to_string())?;
         // Device hiding on/off without opening the window (HidHide installed only).
-        let hidhide = gob_hidhide::HidHide::find().ok().map(Arc::new);
+        let hidhide = gob_hide::load().ok();
         let cloak_item = hidhide.as_ref().map(|hh| {
-            let on = hh.cloaked().unwrap_or(false);
+            let on = hh.enabled().unwrap_or(false);
             CheckMenuItem::new(hiding, true, on, None)
         });
         if let Some(item) = &cloak_item {
@@ -226,7 +226,7 @@ impl Tray {
                     if let Some(hh) = hidhide.clone() {
                         let (ctx, changed) = (ctx.clone(), cloak_changed.clone());
                         std::thread::spawn(move || {
-                            let result = hh.cloaked().and_then(|on| hh.set_cloaked(!on));
+                            let result = hh.enabled().and_then(|on| hh.set_enabled(!on));
                             if let Err(e) = result {
                                 log::error!("tray: switching device hiding: {e}");
                             }

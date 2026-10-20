@@ -1961,6 +1961,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gob-hide"
+version = "0.6.0"
+dependencies = [
+ "gob-hidhide",
+]
+
+[[package]]
 name = "gob-hidhide"
 version = "0.6.0"
 dependencies = [
@@ -2459,7 +2466,7 @@ dependencies = [
  "gob-core",
  "gob-engine",
  "gob-gremlin",
- "gob-hidhide",
+ "gob-hide",
  "gob-i18n",
  "gob-input",
  "gob-lighting",

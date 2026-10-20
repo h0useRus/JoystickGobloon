@@ -34,7 +34,7 @@ pub const VERSION: &str = match option_env!("JOYSTICK_GOBLOON_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
-/// Command-line switch for the uninstaller: take this exe off HidHide's application list
+/// Command-line switch for the uninstaller: take this exe off the device hiding's application list
 /// (Joystick Gobloon adds itself on start) and quit without a window.
 const HIDHIDE_UNREGISTER: &str = "--hidhide-unregister";
 
@@ -48,7 +48,7 @@ fn main() -> eframe::Result {
     // Restarted by a portable update: let the old copy exit before the single-instance check.
     update::wait_for_previous();
     if std::env::args().any(|a| a == HIDHIDE_UNREGISTER) {
-        if let (Ok(hh), Ok(exe)) = (gob_hidhide::HidHide::find(), std::env::current_exe()) {
+        if let (Ok(hh), Ok(exe)) = (gob_hide::load(), std::env::current_exe()) {
             let _ = hh.set_app(&exe, false);
         }
         return Ok(());
