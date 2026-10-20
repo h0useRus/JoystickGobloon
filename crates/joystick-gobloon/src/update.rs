@@ -91,9 +91,15 @@ pub fn enabled() -> bool {
     !cfg!(debug_assertions)
 }
 
-/// Copies installed by the setup have its uninstaller next to the exe.
+/// Managed by the system's installer (Windows: the setup's uninstaller is next to the exe).
 fn installed() -> bool {
-    exe_dir().is_some_and(|d| d.join("unins000.exe").exists())
+    exe_dir().is_some_and(|d| crate::platform::installed_copy(&d))
+}
+
+/// Where a portable update moves the running program file (it can be renamed, not overwritten).
+fn old_exe(exe: &Path) -> PathBuf {
+    let name = exe.file_name().unwrap_or_default().to_string_lossy();
+    exe.with_file_name(format!("{name}.{OLD_SUFFIX}"))
 }
 
 fn exe_dir() -> Option<PathBuf> {
@@ -264,6 +270,9 @@ fn agent() -> ureq::Agent {
 /// The latest final release, when it is newer than this build and has the asset this copy
 /// updates from (installer or portable zip).
 fn latest() -> Result<Option<Release>, String> {
+    let Some(suffix) = crate::platform::update_asset(installed()) else {
+        return Ok(None);
+    };
     let current = Version::parse(crate::VERSION).map_err(|e| format!("own version: {e}"))?;
     let release: GhRelease = agent()
         .get(LATEST)
@@ -281,11 +290,6 @@ fn latest() -> Result<Option<Release>, String> {
     if !version.pre.is_empty() || version <= current {
         return Ok(None);
     }
-    let suffix = if installed() {
-        "-setup.exe"
-    } else {
-        "-portable.zip"
-    };
     let asset = release
         .assets
         .into_iter()
@@ -325,41 +329,20 @@ fn prepare(release: &Release) -> Result<Prepared, String> {
     let file = dir.join(&release.asset.name);
     std::fs::write(&file, &bytes).map_err(|e| e.to_string())?;
     if release.asset.name.ends_with(".zip") {
-        // tar.exe (Windows 10 1803+) unpacks zip files.
         let out = dir.join("unpacked");
         std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-        let status = hidden(std::process::Command::new("tar"))
-            .arg("-xf")
-            .arg(&file)
-            .arg("-C")
-            .arg(&out)
-            .status()
-            .map_err(|e| format!("tar: {e}"))?;
-        if !status.success() {
-            return Err(format!("tar: {status}"));
-        }
+        crate::platform::unpack_zip(&file, &out)?;
         // The zip holds a JoystickGobloon folder.
         let root = out.join("JoystickGobloon");
         let root = if root.is_dir() { root } else { out };
-        if !root.join("JoystickGobloon.exe").exists() {
-            return Err("the portable zip has no JoystickGobloon.exe".into());
+        let exe = crate::platform::exe_name();
+        if !root.join(exe).exists() {
+            return Err(format!("the portable zip has no {exe}"));
         }
         Ok(Prepared::Portable(root))
     } else {
         Ok(Prepared::Installer(file))
     }
-}
-
-fn hidden(cmd: std::process::Command) -> std::process::Command {
-    #[cfg(windows)]
-    let cmd = {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        let mut cmd = cmd;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-        cmd
-    };
-    cmd
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -376,15 +359,12 @@ pub fn apply(prepared: &Prepared) -> Result<(), String> {
     match prepared {
         Prepared::Installer(setup) => {
             log::info!("update: running {}", setup.display());
-            shell_open(
-                setup,
-                "/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /UPDATE=1",
-            )
+            crate::platform::run_installer(setup)
         }
         Prepared::Portable(new) => {
             let exe = std::env::current_exe().map_err(|e| e.to_string())?;
             let dir = exe.parent().ok_or("no exe folder")?.to_path_buf();
-            let old = exe.with_extension(format!("exe.{OLD_SUFFIX}"));
+            let old = old_exe(&exe);
             let _ = std::fs::remove_file(&old);
             // A running exe can be renamed, not overwritten.
             std::fs::rename(&exe, &old).map_err(|e| format!("rename {}: {e}", exe.display()))?;
@@ -410,7 +390,7 @@ fn copy_portable(from: &Path, to: &Path) -> Result<(), String> {
             .map(|_| ())
             .map_err(|e| format!("{}: {e}", name.display()))
     };
-    copy(Path::new("JoystickGobloon.exe"))?;
+    copy(Path::new(crate::platform::exe_name()))?;
     if from.join("LICENSE").exists() {
         copy(Path::new("LICENSE"))?;
     }
@@ -430,7 +410,7 @@ fn copy_portable(from: &Path, to: &Path) -> Result<(), String> {
 /// Removes the exe a portable update left behind.
 pub fn cleanup() {
     if let Ok(exe) = std::env::current_exe() {
-        let _ = std::fs::remove_file(exe.with_extension(format!("exe.{OLD_SUFFIX}")));
+        let _ = std::fs::remove_file(old_exe(&exe));
     }
 }
 
@@ -445,56 +425,7 @@ pub fn wait_for_previous() {
     else {
         return;
     };
-    #[cfg(windows)]
-    // SAFETY: the handle is closed after the wait.
-    unsafe {
-        use windows::Win32::Foundation::CloseHandle;
-        use windows::Win32::System::Threading::{
-            OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
-        };
-        if let Ok(h) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
-            WaitForSingleObject(h, 15_000);
-            let _ = CloseHandle(h);
-        }
-    }
-    #[cfg(not(windows))]
-    let _ = pid;
-}
-
-/// ShellExecute "open": the installer's manifest asks for administrator rights (UAC).
-fn shell_open(file: &Path, params: &str) -> Result<(), String> {
-    #[cfg(windows)]
-    {
-        use windows::Win32::UI::Shell::ShellExecuteW;
-        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-        use windows::core::{HSTRING, PCWSTR};
-        let (file, params) = (HSTRING::from(file.as_os_str()), HSTRING::from(params));
-        // SAFETY: the strings outlive the call.
-        let h = unsafe {
-            ShellExecuteW(
-                None,
-                &HSTRING::from("open"),
-                &file,
-                &params,
-                PCWSTR::null(),
-                SW_SHOWNORMAL,
-            )
-        };
-        // Values above 32 mean success; 5 = access denied (UAC refused).
-        if h.0 as isize > 32 {
-            Ok(())
-        } else {
-            Err(format!(
-                "could not start the installer (code {})",
-                h.0 as isize
-            ))
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = (file, params);
-        Err("updates need Windows".into())
-    }
+    crate::platform::wait_for_process(pid, std::time::Duration::from_secs(15));
 }
 
 #[cfg(test)]
@@ -533,7 +464,7 @@ mod tests {
         let Prepared::Portable(dir) = prepare(&release).unwrap() else {
             panic!("expected the portable folder");
         };
-        assert!(dir.join("JoystickGobloon.exe").exists());
+        assert!(dir.join(crate::platform::exe_name()).exists());
         assert!(dir.join("lang").join("en.ftl").exists());
         let _ = std::fs::remove_dir_all(dir.parent().unwrap().parent().unwrap());
     }

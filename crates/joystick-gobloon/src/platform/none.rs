@@ -76,4 +76,26 @@ impl super::Desktop for Desktop {
     fn set_autostart(_enabled: bool, _arg: &str) -> Result<(), String> {
         Ok(())
     }
+
+    fn installed_copy(_exe_dir: &Path) -> bool {
+        false
+    }
+
+    fn update_asset(_installed: bool) -> Option<&'static str> {
+        None
+    }
+
+    fn exe_name() -> &'static str {
+        "JoystickGobloon"
+    }
+
+    fn run_installer(_setup: &Path) -> Result<(), String> {
+        Err("no installer on this system".into())
+    }
+
+    fn unpack_zip(_zip: &Path, _to: &Path) -> Result<(), String> {
+        Err("unpacking is not supported on this system".into())
+    }
+
+    fn wait_for_process(_pid: u32, _timeout: Duration) {}
 }

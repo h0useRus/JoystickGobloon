@@ -2,6 +2,7 @@
 
 mod instance;
 mod keys;
+mod update;
 mod window;
 
 use std::path::{Path, PathBuf};
@@ -96,5 +97,29 @@ impl super::Desktop for Desktop {
 
     fn set_autostart(enabled: bool, arg: &str) -> Result<(), String> {
         window::set_autostart(enabled, arg)
+    }
+
+    fn installed_copy(exe_dir: &Path) -> bool {
+        update::installed_copy(exe_dir)
+    }
+
+    fn update_asset(installed: bool) -> Option<&'static str> {
+        Some(update::update_asset(installed))
+    }
+
+    fn exe_name() -> &'static str {
+        "JoystickGobloon.exe"
+    }
+
+    fn run_installer(setup: &Path) -> Result<(), String> {
+        update::run_installer(setup)
+    }
+
+    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
+        update::unpack_zip(zip, to)
+    }
+
+    fn wait_for_process(pid: u32, timeout: Duration) {
+        update::wait_for_process(pid, timeout);
     }
 }

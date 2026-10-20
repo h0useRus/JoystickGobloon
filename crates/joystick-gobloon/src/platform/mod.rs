@@ -62,6 +62,19 @@ pub(crate) trait Desktop {
     fn tray_icon_size() -> u32;
     /// Starts the running program with `arg` when the user logs on, or stops doing so.
     fn set_autostart(enabled: bool, arg: &str) -> Result<(), String>;
+
+    /// The copy in `exe_dir` is managed by the system's installer (it updates through a new one).
+    fn installed_copy(exe_dir: &Path) -> bool;
+    /// End of the release asset name this copy updates from; `None`: no updates here yet.
+    fn update_asset(installed: bool) -> Option<&'static str>;
+    /// File name of the program in a release.
+    fn exe_name() -> &'static str;
+    /// Runs a downloaded installer; it closes this copy and starts the new one.
+    fn run_installer(setup: &Path) -> Result<(), String>;
+    /// Unpacks a downloaded zip into `to`.
+    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String>;
+    /// Waits until process `pid` exits, at most `timeout`.
+    fn wait_for_process(pid: u32, timeout: Duration);
 }
 
 /// What a later start signals to wake this copy.
@@ -139,6 +152,30 @@ pub(crate) fn tray_icon_size() -> u32 {
 
 pub(crate) fn set_autostart(enabled: bool, arg: &str) -> Result<(), String> {
     Current::set_autostart(enabled, arg)
+}
+
+pub(crate) fn installed_copy(exe_dir: &Path) -> bool {
+    Current::installed_copy(exe_dir)
+}
+
+pub(crate) fn update_asset(installed: bool) -> Option<&'static str> {
+    Current::update_asset(installed)
+}
+
+pub(crate) fn exe_name() -> &'static str {
+    Current::exe_name()
+}
+
+pub(crate) fn run_installer(setup: &Path) -> Result<(), String> {
+    Current::run_installer(setup)
+}
+
+pub(crate) fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
+    Current::unpack_zip(zip, to)
+}
+
+pub(crate) fn wait_for_process(pid: u32, timeout: Duration) {
+    Current::wait_for_process(pid, timeout);
 }
 
 /// A key as its code, when the system has no name for it: `0x1d`, `E0 0x1d`.
