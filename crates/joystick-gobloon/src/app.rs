@@ -112,7 +112,10 @@ enum Pending {
 impl JoystickGobloonApp {
     /// `instance`: the single-instance wake-up event (another start shows this window);
     /// `None` when several copies may run.
-    pub fn new(cc: &eframe::CreationContext<'_>, instance: Option<crate::instance::Event>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        instance: Option<crate::platform::InstanceEvent>,
+    ) -> Self {
         let settings = Settings::load();
         let lang_dir = std::env::current_exe()
             .ok()
@@ -202,7 +205,7 @@ impl JoystickGobloonApp {
         }
         if let (Some(hwnd), Some(instance)) = (app.hwnd, instance) {
             let (restored, ctx) = (app.restored.clone(), cc.egui_ctx.clone());
-            crate::instance::listen(instance, move || {
+            crate::platform::listen_instance(instance, move || {
                 log::info!("started again: showing the running window");
                 restored.store(true, std::sync::atomic::Ordering::Relaxed);
                 crate::tray::show_window(hwnd);
@@ -567,7 +570,7 @@ impl JoystickGobloonApp {
                         .on_hover_text(path.display().to_string())
                         .clicked()
                     {
-                        let _ = std::process::Command::new("notepad.exe").arg(&path).spawn();
+                        crate::platform::open_text_file(&path);
                     }
                 }
             });

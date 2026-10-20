@@ -9,12 +9,12 @@ mod condition_editor;
 mod curve_editor;
 mod devices_view;
 mod hidhide_view;
-mod instance;
 mod key_capture;
 mod leds;
 mod logfile;
 mod macro_editor;
 mod modes_view;
+mod platform;
 mod profile_view;
 mod settings;
 mod settings_view;
@@ -59,7 +59,7 @@ fn main() -> eframe::Result {
     let instance = if settings.multi_instance {
         None
     } else {
-        match instance::claim() {
+        match platform::claim_instance() {
             Some(event) => Some(event),
             None => return Ok(()),
         }

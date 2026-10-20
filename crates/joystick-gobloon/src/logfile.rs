@@ -63,20 +63,5 @@ pub fn init() {
 
 /// Local time like `2026-10-16 14:03:27.512`.
 fn timestamp() -> String {
-    #[cfg(windows)]
-    {
-        // SAFETY: GetLocalTime only writes the returned struct.
-        let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
-        format!(
-            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
-            t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, t.wMilliseconds
-        )
-    }
-    #[cfg(not(windows))]
-    {
-        let d = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default();
-        format!("{}.{:03}", d.as_secs(), d.subsec_millis())
-    }
+    crate::platform::local_time()
 }

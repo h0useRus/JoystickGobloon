@@ -9,82 +9,10 @@ use gob_i18n::I18n;
 
 use crate::style::{self, icon};
 
-#[cfg(windows)]
-mod os {
-    use gob_core::Key;
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        GetAsyncKeyState, GetKeyNameTextW, MAPVK_VK_TO_VSC_EX, MapVirtualKeyW,
-    };
-
-    /// Keys held right now. Mouse buttons and the side-neutral Shift/Ctrl/Alt codes are
-    /// skipped (their left/right versions are reported instead).
-    pub fn held() -> Vec<Key> {
-        let mut keys = Vec::new();
-        for vk in 0x08..=0xFEi32 {
-            if matches!(vk, 0x10..=0x12) {
-                continue;
-            }
-            // SAFETY: plain Win32 state queries.
-            let down = unsafe { GetAsyncKeyState(vk) } < 0;
-            if !down {
-                continue;
-            }
-            let code = unsafe { MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC_EX) };
-            let scan_code = (code & 0xFF) as u16;
-            if scan_code == 0 {
-                continue;
-            }
-            let key = Key {
-                scan_code,
-                extended: code >> 8 == 0xE0,
-            };
-            if !keys.contains(&key) {
-                keys.push(key);
-            }
-        }
-        keys
-    }
-
-    /// Name in the current keyboard layout, e.g. "Right Ctrl".
-    pub fn name(key: Key) -> String {
-        let lparam = (i32::from(key.scan_code) << 16) | (i32::from(key.extended) << 24);
-        let mut buf = [0u16; 64];
-        // SAFETY: the buffer outlives the call; the length is passed with it.
-        let n = unsafe { GetKeyNameTextW(lparam, &mut buf) };
-        if n > 0 {
-            String::from_utf16_lossy(&buf[..n as usize])
-        } else {
-            fallback(key)
-        }
-    }
-
-    fn fallback(key: Key) -> String {
-        format!(
-            "{}{:#04x}",
-            if key.extended { "E0 " } else { "" },
-            key.scan_code
-        )
-    }
+/// A key's name in the current keyboard layout, e.g. "Right Ctrl".
+pub fn name(key: gob_core::Key) -> String {
+    crate::platform::key_name(key)
 }
-
-#[cfg(not(windows))]
-mod os {
-    use gob_core::Key;
-
-    pub fn held() -> Vec<Key> {
-        Vec::new()
-    }
-
-    pub fn name(key: Key) -> String {
-        format!(
-            "{}{:#04x}",
-            if key.extended { "E0 " } else { "" },
-            key.scan_code
-        )
-    }
-}
-
-pub use os::name;
 
 /// Recording in progress: keys in the order they went down.
 #[derive(Clone, Default)]
@@ -131,7 +59,7 @@ pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) ->
                 }
             }
             Some(mut rec) => {
-                let held = os::held();
+                let held = crate::platform::held_keys();
                 for k in &held {
                     if !rec.keys.contains(k) {
                         rec.keys.push(*k);
@@ -152,24 +80,4 @@ pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) ->
         }
     });
     result
-}
-
-#[cfg(all(test, windows))]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn windows_names_keys_left_and_right() {
-        let l_ctrl = name(Key {
-            scan_code: 0x1D,
-            extended: false,
-        });
-        let r_ctrl = name(Key {
-            scan_code: 0x1D,
-            extended: true,
-        });
-        println!("{l_ctrl} / {r_ctrl}");
-        assert!(!l_ctrl.contains("0x") && !r_ctrl.contains("0x"));
-        assert_ne!(l_ctrl, r_ctrl, "the E0 flag tells right from left");
-    }
 }

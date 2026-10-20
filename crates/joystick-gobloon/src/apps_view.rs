@@ -133,9 +133,7 @@ impl AppsView {
         ui.horizontal(|ui| {
             let add = format!("{}  {}", icon::PLUS, i18n.tr("apps-add"));
             if ui.button(add).clicked()
-                && let Some(path) = rfd::FileDialog::new()
-                    .add_filter("exe", &["exe"])
-                    .pick_file()
+                && let Some(path) = program_dialog().pick_file()
             {
                 if !self.list.apps.iter().any(|a| same_path(&a.path, &path)) {
                     self.list.apps.push(AppEntry { path: path.clone() });
@@ -308,5 +306,16 @@ fn row(
     );
     if style::icon_button(ui, true, icon::TRASH, &i18n.tr("apps-remove")).clicked() {
         *remove = Some(path.to_path_buf());
+    }
+}
+
+/// File picker for programs, filtered to the platform's program files (Windows: `.exe`).
+fn program_dialog() -> rfd::FileDialog {
+    let extensions = crate::platform::program_extensions();
+    let dialog = rfd::FileDialog::new();
+    if extensions.is_empty() {
+        dialog
+    } else {
+        dialog.add_filter(extensions.join(", "), extensions)
     }
 }

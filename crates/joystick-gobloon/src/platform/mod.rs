@@ -1,0 +1,90 @@
+//! Desktop integration per platform behind one interface, so the pages and the app logic stay the
+//! same everywhere (docs/LINUX_PLAN.md, "Архитектура"). `windows/`: Win32; `none.rs`: what other
+//! platforms get until their own module (Linux: phase 5).
+
+use std::path::{Path, PathBuf};
+
+use gob_core::Key;
+
+#[cfg(not(windows))]
+mod none;
+#[cfg(windows)]
+mod windows;
+
+#[cfg(not(windows))]
+use none::Desktop as Current;
+#[cfg(windows)]
+use windows::Desktop as Current;
+
+/// One platform's desktop integration.
+pub(crate) trait Desktop {
+    /// Wakes a running copy (see [`claim_instance`]).
+    type InstanceEvent: Send + 'static;
+
+    /// Folder for settings, the app list and the log when the program has no portable one.
+    fn default_data_dir() -> Option<PathBuf>;
+    /// Font files with Chinese and Korean glyphs: (egui font name, file).
+    fn cjk_fonts() -> Vec<(&'static str, PathBuf)>;
+    /// Opens a text file (the log) in the system's editor.
+    fn open_text_file(path: &Path);
+    /// File extensions of programs, for the file picker; empty: any file.
+    fn program_extensions() -> &'static [&'static str];
+    /// Local date and time for log lines.
+    fn local_time() -> String;
+    /// `Some` for the first running copy; `None` when another copy runs (it was woken).
+    fn claim_instance() -> Option<Self::InstanceEvent>;
+    /// Calls `show` whenever a later start wakes this copy.
+    fn listen_instance(event: Self::InstanceEvent, show: Box<dyn Fn() + Send>);
+    /// Keyboard keys held right now.
+    fn held_keys() -> Vec<Key>;
+    /// A key's name in the current keyboard layout, e.g. "Right Ctrl".
+    fn key_name(key: Key) -> String;
+}
+
+/// What a later start signals to wake this copy.
+pub(crate) type InstanceEvent = <Current as Desktop>::InstanceEvent;
+
+pub(crate) fn default_data_dir() -> Option<PathBuf> {
+    Current::default_data_dir()
+}
+
+pub(crate) fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
+    Current::cjk_fonts()
+}
+
+pub(crate) fn open_text_file(path: &Path) {
+    Current::open_text_file(path);
+}
+
+pub(crate) fn program_extensions() -> &'static [&'static str] {
+    Current::program_extensions()
+}
+
+pub(crate) fn local_time() -> String {
+    Current::local_time()
+}
+
+pub(crate) fn claim_instance() -> Option<InstanceEvent> {
+    Current::claim_instance()
+}
+
+pub(crate) fn listen_instance(event: InstanceEvent, show: impl Fn() + Send + 'static) {
+    Current::listen_instance(event, Box::new(show));
+}
+
+pub(crate) fn held_keys() -> Vec<Key> {
+    Current::held_keys()
+}
+
+pub(crate) fn key_name(key: Key) -> String {
+    Current::key_name(key)
+}
+
+/// A key as its code, when the system has no name for it: `0x1d`, `E0 0x1d`.
+fn key_code(key: Key) -> String {
+    format!(
+        "{}{:#04x}",
+        if key.extended { "E0 " } else { "" },
+        key.scan_code
+    )
+}
