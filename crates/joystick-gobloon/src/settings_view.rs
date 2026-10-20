@@ -401,6 +401,14 @@ fn about(
         ui.add_space(10.0);
         ui.label(RichText::new(i18n.tr("about-text")).size(15.0));
         ui.add_space(6.0);
+        for (key, backend) in backends() {
+            let text = match &backend.version {
+                Some(v) => format!("{} {v}", backend.name).trim().to_string(),
+                None => format!("{} ({})", backend.name, i18n.tr("about-not-installed")),
+            };
+            ui.label(RichText::new(i18n.trf(key, &[("backend", text.into())])).weak());
+        }
+        ui.add_space(6.0);
         ui.label(RichText::new(i18n.trf("about-created", &[("name", AUTHOR.into())])).weak());
 
         ui.add_space(16.0);
@@ -454,13 +462,6 @@ fn about(
         ui.add_space(20.0);
         ui.separator();
         ui.add_space(6.0);
-        for (key, backend) in backends() {
-            let text = match &backend.version {
-                Some(v) => format!("{} {v}", backend.name).trim().to_string(),
-                None => format!("{} ({})", backend.name, i18n.tr("about-not-installed")),
-            };
-            ui.label(RichText::new(i18n.trf(key, &[("backend", text.into())])).weak());
-        }
         ui.label(RichText::new(i18n.tr("about-gremlin")).weak());
         ui.label(RichText::new(i18n.tr("about-license")).weak());
     });
