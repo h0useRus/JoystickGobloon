@@ -43,8 +43,8 @@ impl super::Desktop for Desktop {
         false
     }
 
-    fn held_keys() -> Vec<Key> {
-        Vec::new()
+    fn held_keys() -> Option<Vec<Key>> {
+        None
     }
 
     fn key_name(key: Key) -> String {

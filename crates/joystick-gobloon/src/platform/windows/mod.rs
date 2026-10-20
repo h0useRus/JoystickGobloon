@@ -60,8 +60,8 @@ impl super::Desktop for Desktop {
         true
     }
 
-    fn held_keys() -> Vec<Key> {
-        keys::held()
+    fn held_keys() -> Option<Vec<Key>> {
+        Some(keys::held())
     }
 
     fn key_name(key: Key) -> String {

@@ -191,7 +191,13 @@ UI и логику: например, заменить vJoy **своим дра�
      экранирован по спецификации), лог — `xdg-open`, время — `localtime_r`. Тексты автозапуска и темы без
      «Windows».
    - [ ] Окно и трей: tray-icon (AppIndicator/StatusNotifierItem), скрытие окна eframe; GNOME/Wayland без трея.
-   - [ ] Шрифты CJK через fontconfig (`fc-match`), речь через speech-dispatcher, имена клавиш.
+   - [x] Шрифты CJK: `fc-list :lang=zh-cn` / `:lang=ko`, предпочтение Noto Sans CJK / Source Han Sans
+     (один файл на оба языка грузится один раз).
+   - [x] Клавиши: `held_keys` → `Option` (`None` — состояния клавиатуры не видно); на Linux `EVIOCGKEY` по
+     клавиатурам при группе `input`, иначе запись клавиш берёт события окна (физические клавиши egui → scan
+     code; Ctrl/Shift/Alt — левые, правые egui не различает). Имена клавиш на Linux — английская таблица по
+     scan code.
+   - [ ] Речь через speech-dispatcher (gob-engine).
 6. **Выпуск.** AppImage в `release.yml`, заметки и Discord как сейчас.
 
 ## Тестирование

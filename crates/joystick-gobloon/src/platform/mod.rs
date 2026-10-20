@@ -45,8 +45,9 @@ pub(crate) trait Desktop {
     /// Keyboard keys can be bound as inputs (the Keyboard tab): the program may read every
     /// keyboard.
     fn keyboard_bindings() -> bool;
-    /// Keyboard keys held right now.
-    fn held_keys() -> Vec<Key>;
+    /// Keyboard keys held right now; `None` when the program cannot see the keyboard's state
+    /// (key recording then uses the window's own key events).
+    fn held_keys() -> Option<Vec<Key>>;
     /// A key's name in the current keyboard layout, e.g. "Right Ctrl".
     fn key_name(key: Key) -> String;
 
@@ -127,7 +128,7 @@ pub(crate) fn keyboard_bindings() -> bool {
     Current::keyboard_bindings()
 }
 
-pub(crate) fn held_keys() -> Vec<Key> {
+pub(crate) fn held_keys() -> Option<Vec<Key>> {
     Current::held_keys()
 }
 

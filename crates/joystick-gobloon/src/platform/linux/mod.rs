@@ -1,9 +1,11 @@
 //! Linux desktop integration: XDG folders, a socket for the single instance, XDG autostart,
-//! device access (the udev rule, gob-uinput's `access`). The window, tray, fonts and updates
-//! still come from `none.rs` (docs/LINUX_PLAN.md, phase 5).
+//! CJK fonts through fontconfig, device access (the udev rule, gob-uinput's `access`). The
+//! window, tray and updates still come from `none.rs` (docs/LINUX_PLAN.md, phase 5).
 
 mod autostart;
+mod fonts;
 mod instance;
+mod keys;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -32,7 +34,7 @@ impl super::Desktop for Desktop {
     }
 
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
-        Fallback::cjk_fonts()
+        fonts::cjk()
     }
 
     /// In the user's editor for text files.
@@ -81,12 +83,12 @@ impl super::Desktop for Desktop {
         false
     }
 
-    fn held_keys() -> Vec<Key> {
-        Fallback::held_keys()
+    fn held_keys() -> Option<Vec<Key>> {
+        keys::held()
     }
 
     fn key_name(key: Key) -> String {
-        Fallback::key_name(key)
+        keys::name(key).unwrap_or_else(|| super::key_code(key))
     }
 
     fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Self::Window> {
