@@ -7,6 +7,12 @@ license.workspace = true
 [dependencies]
 log.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+libc.workspace = true
+
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = [
     "Win32_Devices_HumanInterfaceDevice",

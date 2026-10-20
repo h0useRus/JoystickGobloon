@@ -1,9 +1,8 @@
-//! Physical game controller input via DirectInput 8.
+//! Physical game controller and keyboard input: DirectInput 8 on Windows, evdev on Linux.
 //!
-//! Devices are identified by their DirectInput instance GUID, the same id
-//! Joystick Gremlin stores in profiles. A background thread polls every
-//! attached controller, keeps a shared snapshot for the GUI and emits change
-//! events for the engine.
+//! Devices are identified by GUID-formatted ids: on Windows the DirectInput instance GUID, the
+//! same id Joystick Gremlin stores in profiles. A background thread reads every attached
+//! controller, keeps a shared snapshot for the GUI and emits change events for the engine.
 
 mod platform;
 mod service;
