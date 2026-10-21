@@ -63,6 +63,8 @@ pub(crate) trait Desktop {
     /// Runs `f` on the thread the tray icon lives on (where its menu callbacks run too): the
     /// calling thread, or the platform's own tray thread.
     fn on_tray_thread(f: Box<dyn FnOnce() + Send>);
+    /// Whether a tray icon can be shown; `Err` says why not (e.g. a missing system library).
+    fn tray_supported() -> Result<(), String>;
     fn minimize_window(window: Self::Window);
     fn in_tray(window: Self::Window) -> bool;
     /// On screen: visible, not minimized, not in the tray.
@@ -153,6 +155,10 @@ pub(crate) fn show_window(window: Window) {
 
 pub(crate) fn on_tray_thread(f: Box<dyn FnOnce() + Send>) {
     Current::on_tray_thread(f);
+}
+
+pub(crate) fn tray_supported() -> Result<(), String> {
+    Current::tray_supported()
 }
 
 pub(crate) fn minimize_window(window: Window) {

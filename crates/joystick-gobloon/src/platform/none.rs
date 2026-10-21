@@ -63,6 +63,10 @@ impl super::Desktop for Desktop {
         f();
     }
 
+    fn tray_supported() -> Result<(), String> {
+        Ok(())
+    }
+
     fn minimize_window(_window: ()) {}
 
     fn in_tray(_window: ()) -> bool {

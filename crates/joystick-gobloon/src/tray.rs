@@ -132,6 +132,7 @@ impl Tray {
         hiding: &str,
         quit: &str,
     ) -> Result<Self, String> {
+        platform::tray_supported()?;
         let quit_flag = Arc::new(AtomicBool::new(false));
         let double_click_activates = Arc::new(AtomicBool::new(true));
         let cloak_changed = Arc::new(AtomicBool::new(false));

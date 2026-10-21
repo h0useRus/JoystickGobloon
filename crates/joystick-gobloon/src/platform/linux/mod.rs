@@ -109,6 +109,10 @@ impl super::Desktop for Desktop {
         window::on_tray_thread(f);
     }
 
+    fn tray_supported() -> Result<(), String> {
+        window::tray_supported()
+    }
+
     fn minimize_window(w: Self::Window) {
         window::minimize(w);
     }
