@@ -23,7 +23,10 @@ pub const REL_Y: u16 = 0x01;
 pub const REL_HWHEEL: u16 = 0x06;
 pub const REL_WHEEL: u16 = 0x08;
 
-/// First joystick button (`BTN_TRIGGER`); joystick and gamepad buttons run to 0x13f.
+/// First of the 16 "misc" buttons (`BTN_0`).
+pub const BTN_MISC: u16 = 0x100;
+/// First joystick button (`BTN_TRIGGER`); the 16 joystick buttons run to 0x12f, the gamepad
+/// ones (`BTN_SOUTH`...) follow.
 pub const BTN_JOYSTICK: u16 = 0x120;
 /// First of the 64 extra buttons up to `KEY_MAX` (`BTN_TRIGGER_HAPPY1`).
 pub const BTN_TRIGGER_HAPPY: u16 = 0x2c0;

@@ -143,9 +143,10 @@ UI и логику: например, заменить vJoy **своим дра�
      в `virtual.gob` (TOML, папка из `gob_virtual::set_data_dir`, без неё `$XDG_CONFIG_HOME/JoystickGobloon`;
      без файла — одно устройство по умолчанию). Имя «Joystick Gobloon Joystick N», vendor/product как у
      vJoy (0x1234/0xBEAD — gob-input считает их нашим выводом). Оси — коды, которые gob-input читает в те же
-     слоты (ползунки = `ABS_THROTTLE`/`ABS_RUDDER`), кнопки 1-32 = `BTN_JOYSTICK…`, 33-96 =
-     `BTN_TRIGGER_HAPPY…` (до `KEY_MAX`; **максимум 96 — решено оставить**: больше — только кодами клавиш
-     клавиатуры, их SDL и игры считают иначе). Новое устройство — всё по максимуму (96 кнопок, 4 хатки). Хатки `ABS_HATnX/Y`, непрерывные — 8 направлений.
+     слоты (ползунки = `ABS_THROTTLE`/`ABS_RUDDER`), кнопки — только коды джойстика: 1-16 =
+     `BTN_JOYSTICK…`, 17-79 = `BTN_TRIGGER_HAPPY1-63`, 80-95 = `BTN_0…` (**максимум 95**: коды геймпада
+     `BTN_SOUTH…` делали из устройства геймпад в SDL2/3, #31; `KEY_MAX` SDL не считает, #32; проверено
+     SDL2, SDL3 и `jstest` — джойстик, 95 кнопок). Новое устройство — всё по максимуму (95 кнопок, 4 хатки). Хатки `ABS_HATnX/Y`, непрерывные — 8 направлений.
      «Занято» = устройство с таким именем есть в системе, но не наше (вторая копия программы). Нет прав
      на `/dev/uinput` → `Error::NoAccess`. Тест `tests/uinput.rs` (`check.ps1 --devices`).
    - [x] `Injector` на uinput (gob-engine `platform/linux/`): два устройства, «Joystick Gobloon Keyboard»
