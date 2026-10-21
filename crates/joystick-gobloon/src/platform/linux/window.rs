@@ -66,6 +66,37 @@ pub(super) fn shown(w: Window) -> bool {
     !in_tray(w) && !minimized
 }
 
+/// The AppIndicator libraries tray-icon loads at run time (libappindicator-sys), in its order.
+const APPINDICATOR: [&str; 2] = ["libayatana-appindicator3.so.1", "libappindicator3.so.1"];
+
+/// tray-icon panics on its thread when no AppIndicator library loads, while the app would go on
+/// as if the icon were there (and could hide the window to it): check first.
+pub(super) fn tray_supported() -> Result<(), String> {
+    let loads = |name: &str| {
+        let Ok(name) = std::ffi::CString::new(name) else {
+            return false;
+        };
+        // SAFETY: dlopen with a valid C string; the handle is closed right away.
+        unsafe {
+            let handle = libc::dlopen(name.as_ptr(), libc::RTLD_LAZY | libc::RTLD_LOCAL);
+            if handle.is_null() {
+                return false;
+            }
+            libc::dlclose(handle);
+        }
+        true
+    };
+    if APPINDICATOR.iter().any(|lib| loads(lib)) {
+        Ok(())
+    } else {
+        Err(
+            "no AppIndicator library: install libayatana-appindicator3 (or libappindicator3) \
+             for the tray icon"
+                .into(),
+        )
+    }
+}
+
 /// Runs `f` on the GTK thread, which is started (with `gtk::init` and its main loop) on first
 /// use. Without a display GTK does not start and `f` never runs (logged once).
 pub(super) fn on_tray_thread(f: Box<dyn FnOnce() + Send>) {

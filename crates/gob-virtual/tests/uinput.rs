@@ -74,7 +74,7 @@ fn acquire_drive_release() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("virtual.gob"),
-        "[[device]]\nid = 1\naxes = [1, 2, 7]\nbuttons = 96\nhats = 2\n\n\
+        "[[device]]\nid = 1\naxes = [1, 2, 7]\nbuttons = 95\nhats = 2\n\n\
          [[device]]\nid = 2\naxes = [1]\nbuttons = 8\nhats = 0\n",
     )
     .unwrap();
@@ -84,7 +84,7 @@ fn acquire_drive_release() {
     let devices = backend.devices();
     assert_eq!(devices.len(), 2);
     assert_eq!(devices[0].axes, vec![1, 2, 7]);
-    assert_eq!((devices[0].buttons, devices[0].cont_hats), (96, 2));
+    assert_eq!((devices[0].buttons, devices[0].cont_hats), (95, 2));
     assert_eq!(backend.status(1), Status::Free);
     assert_eq!(backend.status(3), Status::Missing);
     assert!(backend.acquire(3).is_err());
@@ -104,8 +104,8 @@ fn acquire_drive_release() {
         .unwrap();
     read_events(&mut node);
 
-    assert!(device.set_button(96, true));
-    assert!(!device.set_button(97, true), "beyond the layout");
+    assert!(device.set_button(95, true));
+    assert!(!device.set_button(96, true), "beyond the layout");
     assert!(device.set_hat(2, Some(13500)));
     assert!(device.set_axis(7, 1.0));
     assert!(!device.set_axis(3, 1.0), "Z is not in the layout");
@@ -113,7 +113,7 @@ fn acquire_drive_release() {
     assert_eq!(
         events,
         vec![
-            (EV_KEY, 0x2ff, 1),
+            (EV_KEY, 0x10f, 1),
             (EV_ABS, ABS_HAT1X, 1),
             (EV_ABS, ABS_HAT1Y, 1),
             (EV_ABS, ABS_THROTTLE, 32767),
@@ -121,7 +121,7 @@ fn acquire_drive_release() {
     );
     assert!(device.reset());
     let events = read_events(&mut node);
-    assert!(events.contains(&(EV_KEY, 0x2ff, 0)), "{events:?}");
+    assert!(events.contains(&(EV_KEY, 0x10f, 0)), "{events:?}");
     assert!(events.contains(&(EV_ABS, ABS_THROTTLE, 0)), "{events:?}");
 
     drop(device);

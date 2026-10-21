@@ -85,6 +85,10 @@ impl super::Desktop for Desktop {
         f();
     }
 
+    fn tray_supported() -> Result<(), String> {
+        Ok(())
+    }
+
     fn minimize_window(w: window::Window) {
         window::minimize(w);
     }

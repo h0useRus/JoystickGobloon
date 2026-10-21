@@ -4,8 +4,10 @@
 //!
 //! Devices look like vJoy's (vendor 0x1234, product 0xBEAD, so gob-input knows them as our
 //! output) and are named "Joystick Gobloon Joystick N". Axes use the codes gob-input reads
-//! back into the same slots (X..Rz, throttle and rudder as the sliders); buttons 1-32 are the
-//! joystick/gamepad codes, 33-96 the extra ("trigger happy") ones, in the order SDL counts them.
+//! back into the same slots (X..Rz, throttle and rudder as the sliders). Buttons use joystick
+//! codes only, never gamepad ones (SDL2/3 would map the device as a gamepad, #31) nor `KEY_MAX`
+//! (SDL does not count it, #32): 1-16 `BTN_JOYSTICK`..., 17-79 `BTN_TRIGGER_HAPPY1-63`,
+//! 80-95 `BTN_0`..., the order in which SDL, joydev and gob-input count them.
 
 use std::collections::HashSet;
 use std::io;
@@ -22,9 +24,8 @@ use crate::{
 pub const CAPABILITIES: Capabilities = Capabilities {
     name: "Linux uinput",
     max_devices: crate::PROFILE_DEVICES,
-    // Joystick buttons the kernel has codes for below KEY_MAX; more would need other key codes,
-    // which games may count differently.
-    max_buttons: 96,
+    // Joystick button codes that SDL counts as joystick buttons (see the module comment).
+    max_buttons: 95,
     max_hats: 4,
     effects: &[],
     switchable: false,
@@ -301,8 +302,9 @@ impl Backend for Uinput {
 /// Button `n` (1-based) -> its key code.
 fn button_code(n: u32) -> Option<u16> {
     match n {
-        1..=32 => Some(codes::BTN_JOYSTICK + (n - 1) as u16),
-        33..=96 => Some(codes::BTN_TRIGGER_HAPPY + (n - 33) as u16),
+        1..=16 => Some(codes::BTN_JOYSTICK + (n - 1) as u16),
+        17..=79 => Some(codes::BTN_TRIGGER_HAPPY + (n - 17) as u16),
+        80..=95 => Some(codes::BTN_MISC + (n - 80) as u16),
         _ => None,
     }
 }
@@ -438,10 +440,23 @@ mod tests {
     #[test]
     fn buttons_hats_and_axes() {
         assert_eq!(button_code(1), Some(0x120));
-        assert_eq!(button_code(32), Some(0x13f));
-        assert_eq!(button_code(33), Some(0x2c0));
-        assert_eq!(button_code(96), Some(0x2ff));
-        assert_eq!(button_code(97), None);
+        assert_eq!(button_code(16), Some(0x12f));
+        assert_eq!(button_code(17), Some(0x2c0));
+        assert_eq!(button_code(79), Some(0x2fe));
+        assert_eq!(button_code(80), Some(0x100));
+        assert_eq!(button_code(95), Some(0x10f));
+        assert_eq!(button_code(96), None);
+        let codes: Vec<u16> = (1..=95).filter_map(button_code).collect();
+        assert!(
+            codes
+                .iter()
+                .all(|c| !(0x130..0x140).contains(c) && *c != 0x2ff),
+            "no gamepad codes, no KEY_MAX"
+        );
+        // SDL's order: BTN_JOYSTICK up to KEY_MAX, then everything below BTN_JOYSTICK.
+        let mut sdl = codes.clone();
+        sdl.sort_by_key(|&c| (c < 0x120, c));
+        assert_eq!(sdl, codes, "button numbers follow SDL's order");
         assert_eq!(hat_xy(None, false), (0, 0));
         assert_eq!(hat_xy(Some(0), false), (0, -1));
         assert_eq!(hat_xy(Some(4500), false), (1, -1));
@@ -464,7 +479,7 @@ mod tests {
             vec![DeviceConfig::new(1, &CAPABILITIES)]
         );
         let default = &parse(None).unwrap()[0];
-        assert_eq!((default.buttons, default.hats), (96, 4), "the whole layout");
+        assert_eq!((default.buttons, default.hats), (95, 4), "the whole layout");
         assert_eq!(default.axes, [true; AXIS_SLOTS]);
         let mut c = DeviceConfig::new(3, &CAPABILITIES);
         c.axes[2] = false;

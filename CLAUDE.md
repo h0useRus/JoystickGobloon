@@ -27,7 +27,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Examples `vjoy_info [--sweep <id>]` (read-only), `vjoy_config <args>` (UAC, changes the user's vJoy)
 - crates/gob-virtual virtual joysticks, the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
   + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
-  made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`), unsupported.rs elsewhere
+  made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`; 95 buttons with joystick codes only,
+  no gamepad codes or KEY_MAX, so SDL sees a joystick; example `virtual_hold` keeps one up for jstest/SDL checks),
+  unsupported.rs elsewhere
 - crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`, `keys` = set 1 scan
   codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers, installed via pkexec from the
   Devices page banner); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
