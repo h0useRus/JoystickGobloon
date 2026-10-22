@@ -212,3 +212,6 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 - Gremlin keeps "symmetric" only while editing; Joystick Gobloon saves it as a `symmetric` bool property
   (Gremlin ignores it). Symmetric: mirrored knots/handles through the origin, a fixed center knot, paired
   add/remove; the deadzone is not affected. Changing the type starts from that type's identity line.
+- Not in Gremlin: setting "Curves only rise or fall" (`monotonic_curves`, on by default) stops a drag
+  where a monotonic curve would turn back (cross zero again) and puts a new knot that would do so onto
+  the curve; curves that already turn back (imported) are edited freely. Evaluation is unchanged.
