@@ -274,9 +274,14 @@ impl DevicesView {
                     if style::icon_button(ui, true, icon::STACK, &i18n.tr("modes-edit")).clicked() {
                         self.open_modes = true;
                     }
+                    ui.separator();
                     let tip = i18n.tr("modifiers-edit");
                     if style::icon_button(ui, true, icon::ARROW_FAT_LINE_UP, &tip).clicked() {
                         self.open_modifiers = true;
+                    }
+                    // The modifiers, lit while their button is held (right to left: last first).
+                    for m in p.profile.modifiers.iter().rev() {
+                        modifier_chip(ui, i18n, m, &tabs);
                     }
                     ui.separator();
                 }
@@ -1014,6 +1019,54 @@ impl DevicesView {
             .cloned()
             .unwrap_or(selected)
     }
+}
+
+/// A modifier's name, filled with the accent while its button is held on the controller.
+fn modifier_chip(ui: &mut egui::Ui, i18n: &I18n, m: &gob_core::Modifier, tabs: &[Tab]) {
+    let button: u32 = m.input_id.trim().parse().unwrap_or(0);
+    // The attached device, also when it stands in for the profile's device under another GUID.
+    let tab = tabs.iter().find(|t| {
+        t.guid.eq_ignore_ascii_case(&m.device_id)
+            || t.alias
+                .is_some_and(|a| a.eq_ignore_ascii_case(&m.device_id))
+    });
+    let held = tab
+        .and_then(|t| t.live)
+        .zip((button as usize).checked_sub(1))
+        .and_then(|(d, i)| d.buttons.get(i).copied())
+        .unwrap_or(false);
+    let accent = style::accent(ui);
+    let (fill, text) = if held {
+        (
+            accent,
+            RichText::new(&m.name)
+                .strong()
+                .color(ui.visuals().extreme_bg_color),
+        )
+    } else {
+        (Color32::TRANSPARENT, RichText::new(&m.name).weak())
+    };
+    let device = tab.map_or(m.device_id.as_str(), |t| t.name);
+    let tip = format!(
+        "{}: {}",
+        device.trim(),
+        i18n.trf("vjoy-button-n", &[("n", button.into())])
+    );
+    egui::Frame::new()
+        .fill(fill)
+        .stroke(Stroke::new(
+            1.0_f32,
+            if held {
+                accent
+            } else {
+                ui.visuals().widgets.noninteractive.bg_stroke.color
+            },
+        ))
+        .corner_radius(style::RADIUS)
+        .inner_margin(Margin::symmetric(6, 2))
+        .show(ui, |ui| ui.label(text))
+        .response
+        .on_hover_text(tip);
 }
 
 /// The base layer, then every combination of `names`: singles first, then pairs, ...
