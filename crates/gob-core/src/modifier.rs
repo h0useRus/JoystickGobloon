@@ -205,6 +205,54 @@ impl Profile {
         true
     }
 
+    /// Removes the configurations of one layer of an input in a mode (the whole binding when no
+    /// layer is left) and every action only they used.
+    pub fn unbind_layer(
+        &mut self,
+        device_id: &str,
+        input_type: &str,
+        input_id: &str,
+        mode: &str,
+        layer: &Layer,
+    ) {
+        for b in self.inputs.iter_mut().filter(|b| {
+            b.device_id.eq_ignore_ascii_case(device_id)
+                && b.input_type == input_type
+                && b.input_id == input_id
+                && b.mode == mode
+        }) {
+            b.configs.retain(|c| c.layer != *layer);
+        }
+        self.inputs.retain(|b| !b.configs.is_empty());
+        self.collect_garbage();
+    }
+
+    /// Makes one layer of an input in a mode additive (runs on top) or exclusive.
+    pub fn set_layer_additive(
+        &mut self,
+        device_id: &str,
+        input_type: &str,
+        input_id: &str,
+        mode: &str,
+        layer: &Layer,
+        additive: bool,
+    ) {
+        for c in self
+            .inputs
+            .iter_mut()
+            .filter(|b| {
+                b.device_id.eq_ignore_ascii_case(device_id)
+                    && b.input_type == input_type
+                    && b.input_id == input_id
+                    && b.mode == mode
+            })
+            .flat_map(|b| b.configs.iter_mut())
+            .filter(|c| c.layer == *layer)
+        {
+            c.additive = additive;
+        }
+    }
+
     /// Removes a modifier and every configuration of a layer that needs it.
     pub fn remove_modifier(&mut self, name: &str) -> bool {
         let before = self.modifiers.len();
@@ -280,9 +328,26 @@ mod tests {
         assert!(!p.set_modifier_input("M1", "{DEV-A}", "button", "3"));
         assert!(p.set_modifier_input("M1", "{DEV-A}", "button", "5"));
 
+        p.set_layer_additive(
+            "{DEV-B}",
+            "button",
+            "4",
+            "Default",
+            &Layer::parse("M1+Shift"),
+            true,
+        );
+        assert!(p.inputs[0].configs[1].additive);
+
         assert!(p.remove_modifier("Shift"));
         assert_eq!(p.inputs[0].configs.len(), 1);
         assert!(p.action(&layered).is_none(), "its actions are gone");
         assert!(p.action(&base).is_some());
+
+        let m1 = p.bind_layer("{DEV-B}", "button", "4", "Default", &Layer::parse("M1"));
+        p.unbind_layer("{DEV-B}", "button", "4", "Default", &Layer::base());
+        assert!(p.action(&base).is_none());
+        assert_eq!(p.inputs[0].configs.len(), 1, "the M1 layer stays");
+        p.unbind_layer("{DEV-B}", "button", "4", "Default", &Layer::parse("M1"));
+        assert!(p.inputs.is_empty() && p.action(&m1).is_none());
     }
 }
