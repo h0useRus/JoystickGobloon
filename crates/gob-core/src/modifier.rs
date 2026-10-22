@@ -1,12 +1,14 @@
 //! Modifiers: inputs that, while held, choose which layer of an input's actions runs (issue #39).
 //!
-//! A profile names a few modifiers (`M1` = TWCS button 2, ...). Every action configuration of an
+//! A profile names a few modifiers (`M1` = button 2 of one stick, ...). Every action configuration of an
 //! input belongs to a [`Layer`]: the set of modifiers that must be held for it. The base layer
-//! (no modifiers) is what runs with no modifier held. The engine picks, when an input is used:
+//! (no modifiers) is what runs with no modifier held. An input without exclusive (non-additive)
+//! layers ignores the modifiers for its base (an axis with only a base keeps working while M1 is held). For
+//! an input with exclusive layers the engine picks, when it is used:
 //! - the configurations whose layer is exactly the held set (nothing when there is none: an
 //!   undefined combination does nothing, it does not fall back to the base layer);
 //! - plus the *additive* ones whose layer is held (a subset of the held set): they run on top,
-//!   e.g. an axis that always drives pitch and with M1 also the wheel brakes.
+//!   e.g. an axis that always drives one output and, while M1 is held, a second one too.
 //!
 //! A button chooses its layer when pressed and its release goes to the same layer, whatever the
 //! modifiers do meanwhile. Modifier inputs only switch layers; bindings on them are not run.
@@ -51,6 +53,9 @@ impl Modifier {
 pub struct Layer(Vec<String>);
 
 impl Layer {
+    /// The base layer, usable in constants.
+    pub const EMPTY: Layer = Layer(Vec::new());
+
     pub fn new<S: Into<String>>(names: impl IntoIterator<Item = S>) -> Self {
         let mut names: Vec<String> = names
             .into_iter()
@@ -223,7 +228,7 @@ mod tests {
     fn modifier(name: &str, button: &str) -> Modifier {
         Modifier {
             name: name.into(),
-            device_id: "{TWCS}".into(),
+            device_id: "{DEV-A}".into(),
             input_type: "button".into(),
             input_id: button.into(),
         }
@@ -261,10 +266,10 @@ mod tests {
         assert!(!p.add_modifier(modifier("A+B", "3")), "separator");
         assert!(p.add_modifier(modifier("M2", "3")));
         assert!(p.order.contains(&Section::Modifiers));
-        assert_eq!(p.modifier_at("{twcs}", "button", "3").unwrap().name, "M2");
+        assert_eq!(p.modifier_at("{dev-a}", "button", "3").unwrap().name, "M2");
 
-        let base = p.bind("{T16000}", "button", "4", "Default");
-        let layered = p.bind_layer("{T16000}", "button", "4", "Default", &Layer::parse("M1+M2"));
+        let base = p.bind("{DEV-B}", "button", "4", "Default");
+        let layered = p.bind_layer("{DEV-B}", "button", "4", "Default", &Layer::parse("M1+M2"));
         assert_ne!(base, layered);
         assert_eq!(p.inputs[0].configs.len(), 2);
 
@@ -272,8 +277,8 @@ mod tests {
         assert_eq!(p.inputs[0].configs[1].layer.to_string(), "M1+Shift");
         assert!(!p.rename_modifier("M1", "Shift"), "name taken");
 
-        assert!(!p.set_modifier_input("M1", "{TWCS}", "button", "3"));
-        assert!(p.set_modifier_input("M1", "{TWCS}", "button", "5"));
+        assert!(!p.set_modifier_input("M1", "{DEV-A}", "button", "3"));
+        assert!(p.set_modifier_input("M1", "{DEV-A}", "button", "5"));
 
         assert!(p.remove_modifier("Shift"));
         assert_eq!(p.inputs[0].configs.len(), 1);
