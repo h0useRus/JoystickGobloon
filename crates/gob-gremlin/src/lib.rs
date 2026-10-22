@@ -1,6 +1,7 @@
-//! Profile files: Joystick Gobloon's own XML format (`<profile app="Gobloon" version="1">`)
-//! and the import of Joystick Gremlin R14+ profiles it grew from. Profiles are always written in
-//! Joystick Gobloon's format; everything not understood is kept verbatim and written back.
+//! Profile files: Joystick Gremlin R14+ XML and Joystick Gobloon's own format grown from it
+//! (`<profile app="Gobloon" version="1">`). A profile is written in Gremlin's format while it
+//! uses nothing only Joystick Gobloon has (`Profile::needs_own_format`), so Gremlin can still
+//! open it; everything not understood is kept verbatim and written back.
 
 mod convert;
 mod report;

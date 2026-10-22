@@ -107,9 +107,14 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
 }
 
 pub fn profile_to_element(p: &Profile) -> Element {
-    let mut root = Element::new("profile")
-        .with_attr("app", APP)
-        .with_attr("version", FORMAT_VERSION.to_string());
+    // Gremlin's header while Joystick Gremlin can still open the profile.
+    let mut root = if p.needs_own_format() {
+        Element::new("profile")
+            .with_attr("app", APP)
+            .with_attr("version", FORMAT_VERSION.to_string())
+    } else {
+        Element::new("profile").with_attr("version", MIN_VERSION.to_string())
+    };
     for section in &p.order {
         if *section == Section::Modifiers && p.modifiers.is_empty() {
             continue;

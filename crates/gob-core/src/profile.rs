@@ -223,6 +223,19 @@ impl Default for Profile {
 }
 
 impl Profile {
+    /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
+    /// light-led actions): it is then written in Joystick Gobloon's own format, which
+    /// Joystick Gremlin cannot open.
+    pub fn needs_own_format(&self) -> bool {
+        !self.modifiers.is_empty()
+            || self
+                .inputs
+                .iter()
+                .flat_map(|b| &b.configs)
+                .any(|c| c.additive || !c.layer.is_base())
+            || self.library.iter().any(|a| a.kind == "light-led")
+    }
+
     pub fn action(&self, id: &str) -> Option<&Action> {
         self.library.iter().find(|a| a.id == id)
     }

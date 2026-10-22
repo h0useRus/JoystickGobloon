@@ -6,15 +6,19 @@ use gob_gremlin::{Warning, profile_to_element, report, xmltext};
 const SAMPLE: &str = include_str!("../../../tests/fixtures/sample_r14.xml");
 const LOCAL_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/local");
 
-/// Import -> export must reproduce the same XML tree (with Joystick Gobloon's header, the format
-/// it is always written in), and export must be stable.
+/// Import -> export must reproduce the same XML tree (with the header its content calls for),
+/// and export must be stable.
 fn assert_round_trip(text: &str) -> Profile {
     let mut original = xmltext::parse(text).unwrap();
-    original.attrs = vec![
-        ("app".into(), gob_gremlin::APP.into()),
-        ("version".into(), gob_gremlin::FORMAT_VERSION.to_string()),
-    ];
     let profile = gob_gremlin::from_str(text).unwrap();
+    original.attrs = if profile.needs_own_format() {
+        vec![
+            ("app".into(), gob_gremlin::APP.into()),
+            ("version".into(), gob_gremlin::FORMAT_VERSION.to_string()),
+        ]
+    } else {
+        vec![("version".into(), gob_gremlin::MIN_VERSION.to_string())]
+    };
     assert_eq!(
         profile_to_element(&profile),
         original,
@@ -313,8 +317,15 @@ fn modifiers_and_layers_round_trip() {
 fn format_headers() {
     let body = "<inputs/><modes><mode>Default</mode></modes>";
     let parse = |root: &str| gob_gremlin::from_str(&format!("{root}{body}</profile>"));
-    let p = parse(r#"<profile version="14">"#).unwrap();
+    let mut p = parse(r#"<profile version="14">"#).unwrap();
     assert_eq!(p.source, "Joystick Gremlin 14");
+    assert!(gob_gremlin::to_string(&p).contains(r#"<profile version="14">"#));
+    p.add_modifier(gob_core::Modifier {
+        name: "M1".into(),
+        device_id: "{DEV-A}".into(),
+        input_type: "button".into(),
+        input_id: "2".into(),
+    });
     assert!(gob_gremlin::to_string(&p).contains(r#"<profile app="Gobloon" version="1">"#));
     assert_eq!(
         parse(r#"<profile app="Gobloon" version="1">"#)
