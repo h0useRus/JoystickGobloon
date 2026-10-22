@@ -82,63 +82,7 @@ pub fn show(
             ui.add_space(18.0);
             tray_section(ui, i18n, settings).or(change)
         }
-        SettingsTab::General => {
-            let reopen = ui.add(style::switch(
-                &mut settings.reopen_last,
-                i18n.tr("settings-reopen-last"),
-            ));
-            // Only a reopened profile can be activated on startup.
-            let activate = ui.add_enabled(
-                settings.reopen_last,
-                style::switch(
-                    &mut settings.activate_on_start,
-                    i18n.tr("settings-activate-on-start"),
-                ),
-            );
-            // Only where hiding has a program list to put Joystick Gobloon on.
-            let whitelist = gob_hide::capabilities().app_list.then(|| {
-                ui.add(style::switch(
-                    &mut settings.hidhide_whitelist_self,
-                    i18n.tr("settings-hidhide-self"),
-                ))
-            });
-            let focus = ui.add(style::switch(
-                &mut settings.focus_used_input,
-                i18n.tr("settings-focus-input"),
-            ));
-            let input_events = ui
-                .add(style::switch(
-                    &mut settings.input_events,
-                    i18n.tr("settings-input-events"),
-                ))
-                .on_hover_text(i18n.tr("settings-input-events-tip"));
-            ui.add_space(8.0);
-            let autostart = ui.add(style::switch(
-                &mut settings.start_with_windows,
-                i18n.tr("settings-autostart"),
-            ));
-            let updates = ui.add(style::switch(
-                &mut settings.check_updates,
-                i18n.tr("settings-check-updates"),
-            ));
-            let changed = [
-                &reopen,
-                &focus,
-                &input_events,
-                &autostart,
-                &activate,
-                &updates,
-            ]
-            .iter()
-            .any(|r| r.changed())
-                || whitelist.is_some_and(|r| r.changed());
-            if changed {
-                settings.save();
-            }
-            autostart
-                .changed()
-                .then_some(Change::Autostart(settings.start_with_windows))
-        }
+        SettingsTab::General => general(ui, i18n, settings),
         SettingsTab::Lighting => lighting(ui, i18n, settings, led_devices),
         SettingsTab::About => {
             about(ui, i18n, logo, updater);
@@ -243,17 +187,91 @@ fn lighting(
     change
 }
 
+/// Short title above a group of options.
+fn section_title(ui: &mut egui::Ui, glyph: &str, title: &str) {
+    ui.label(RichText::new(format!("{glyph}  {title}")).strong());
+    ui.add_space(4.0);
+}
+
+/// General tab: startup, devices, editor.
+fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Change> {
+    section_title(ui, icon::POWER, &i18n.tr("settings-group-startup"));
+    let autostart = ui.add(style::switch(
+        &mut settings.start_with_windows,
+        i18n.tr("settings-autostart"),
+    ));
+    let reopen = ui.add(style::switch(
+        &mut settings.reopen_last,
+        i18n.tr("settings-reopen-last"),
+    ));
+    // Only a reopened profile can be activated on startup.
+    let activate = ui.add_enabled(
+        settings.reopen_last,
+        style::switch(
+            &mut settings.activate_on_start,
+            i18n.tr("settings-activate-on-start"),
+        ),
+    );
+    let updates = ui.add(style::switch(
+        &mut settings.check_updates,
+        i18n.tr("settings-check-updates"),
+    ));
+
+    ui.add_space(18.0);
+    section_title(ui, icon::JOYSTICK, &i18n.tr("settings-group-devices"));
+    let input_events = ui
+        .add(style::switch(
+            &mut settings.input_events,
+            i18n.tr("settings-input-events"),
+        ))
+        .on_hover_text(i18n.tr("settings-input-events-tip"));
+    // Only where hiding has a program list to put Joystick Gobloon on.
+    let see_hidden = gob_hide::capabilities().app_list.then(|| {
+        ui.add(style::switch(
+            &mut settings.hidhide_whitelist_self,
+            i18n.tr("settings-see-hidden"),
+        ))
+        .on_hover_text(i18n.tr("settings-see-hidden-tip"))
+    });
+
+    ui.add_space(18.0);
+    section_title(ui, icon::PENCIL_SIMPLE, &i18n.tr("settings-group-editor"));
+    let focus = ui
+        .add(style::switch(
+            &mut settings.focus_used_input,
+            i18n.tr("settings-focus-input"),
+        ))
+        .on_hover_text(i18n.tr("settings-focus-input-tip"));
+    let curves = ui
+        .add(style::switch(
+            &mut settings.monotonic_curves,
+            i18n.tr("settings-monotonic-curves"),
+        ))
+        .on_hover_text(i18n.tr("settings-monotonic-curves-tip"));
+
+    let changed = [
+        &autostart,
+        &reopen,
+        &activate,
+        &updates,
+        &input_events,
+        &focus,
+        &curves,
+    ]
+    .iter()
+    .any(|r| r.changed())
+        || see_hidden.is_some_and(|r| r.changed());
+    if changed {
+        settings.save();
+    }
+    autostart
+        .changed()
+        .then_some(Change::Autostart(settings.start_with_windows))
+}
+
 /// Tray icon options (Appearance tab).
 fn tray_section(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Change> {
-    ui.label(
-        RichText::new(format!(
-            "{}  {}",
-            icon::TRAY,
-            i18n.tr("settings-tray-title")
-        ))
-        .strong(),
-    );
-    ui.add_space(4.0);
+    section_title(ui, icon::TRAY, &i18n.tr("settings-tray-title"));
     let tray = ui.add(style::switch(
         &mut settings.show_tray,
         i18n.tr("settings-tray"),

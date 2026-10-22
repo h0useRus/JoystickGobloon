@@ -220,13 +220,16 @@ pub fn toolbar_toggle(
 /// Red of hidden devices and the record dot.
 pub const RED: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
 
-/// Device eye: closed and red when hidden by HidHide, open and green when visible.
-pub fn eye(ui: &egui::Ui, hidden: bool) -> (&'static str, Color32) {
-    if hidden {
-        (icon::EYE_CLOSED, RED)
-    } else {
-        (icon::EYE, accent(ui))
-    }
+/// Device eye: closed and red when hidden by HidHide, open and green when visible; gray
+/// while device hiding is off as a whole (`active` false).
+pub fn eye(ui: &egui::Ui, hidden: bool, active: bool) -> (&'static str, Color32) {
+    let glyph = if hidden { icon::EYE_CLOSED } else { icon::EYE };
+    let color = match (active, hidden) {
+        (false, _) => ui.visuals().weak_text_color(),
+        (true, true) => RED,
+        (true, false) => accent(ui),
+    };
+    (glyph, color)
 }
 
 /// [`icon_button`] with a colored icon.

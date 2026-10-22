@@ -277,6 +277,12 @@ impl JoystickGobloonApp {
                 app.toggle_runner(&cc.egui_ctx);
             }
         }
+        // Nothing (re)opened: start with a new profile, so bindings can be added right away.
+        if app.profile.is_none() {
+            let status = std::mem::take(&mut app.status);
+            app.new_profile();
+            app.status = status;
+        }
         app
     }
 
@@ -855,6 +861,9 @@ impl JoystickGobloonApp {
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
         let gaming_only = self.settings.hidhide_gaming_only;
+        self.hidhide_view
+            .track_inputs(devices.iter().map(|d| d.info.guid.clone()).collect());
+        self.devices_view.hiding_on = self.hidhide_view.cloak(gaming_only) == Some(true);
         self.devices_view.hidden = devices
             .iter()
             .filter(|d| !d.info.is_vjoy())
@@ -864,6 +873,7 @@ impl JoystickGobloonApp {
             })
             .collect();
         self.devices_view.experimental = self.settings.experimental;
+        self.devices_view.monotonic_curves = self.settings.monotonic_curves;
         self.devices_view.leds = if self.settings.experimental {
             self.leds.update(&devices, ui.ctx());
             self.leds.guids(&devices)

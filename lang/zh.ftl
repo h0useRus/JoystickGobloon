@@ -96,10 +96,17 @@ hidhide-enable = 启用设备隐藏
 hidhide-hint = 点击眼睛图标可对其他程序隐藏设备（闭眼）。之后重新连接设备使更改生效。
 hidhide-no-devices = 没有可显示的设备。
 action-refresh = 刷新
-settings-hidhide-self = 启动时将 Joystick Gobloon 添加到 HidHide 白名单
-settings-focus-input = 在“设备与绑定”页面跳转到正在使用的输入
+settings-see-hidden = 查看隐藏的设备
+settings-see-hidden-tip = 启动时 Joystick Gobloon 会将自己加入仍可看到隐藏设备的程序，使配置文件继续工作。
+settings-group-startup = 启动
+settings-group-devices = 设备
+settings-group-editor = 编辑器
+settings-focus-input = 跟随正在使用的输入
+settings-focus-input-tip = 使用轴、按钮或苦力帽时，“设备与绑定”页面会选中其设备标签页并滚动到该输入。
 settings-input-events = 在变化时读取控制器
 settings-input-events-tip = 更低延迟和 CPU 占用：控制器报告变化时才读取，短按按钮也不会丢失。关闭时每 4 毫秒读取一次所有控制器。
+settings-monotonic-curves = 曲线只升或只降
+settings-monotonic-curves-tip = 响应曲线编辑器：点或控制柄会停在曲线即将折返的位置，因此曲线只穿过零一次。已经折返的曲线可自由编辑。
 status-whitelisted = 已将 Joystick Gobloon 添加到 HidHide 白名单。
 
 # Applications
