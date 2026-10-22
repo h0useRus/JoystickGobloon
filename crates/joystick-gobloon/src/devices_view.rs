@@ -275,13 +275,14 @@ impl DevicesView {
                         self.open_modes = true;
                     }
                     ui.separator();
+                    // The modifiers, lit while their button is held (right to left: last first),
+                    // after the button that edits them.
+                    for m in p.profile.modifiers.iter().rev() {
+                        modifier_chip(ui, i18n, m, &tabs);
+                    }
                     let tip = i18n.tr("modifiers-edit");
                     if style::icon_button(ui, true, icon::ARROW_FAT_LINE_UP, &tip).clicked() {
                         self.open_modifiers = true;
-                    }
-                    // The modifiers, lit while their button is held (right to left: last first).
-                    for m in p.profile.modifiers.iter().rev() {
-                        modifier_chip(ui, i18n, m, &tabs);
                     }
                     ui.separator();
                 }
