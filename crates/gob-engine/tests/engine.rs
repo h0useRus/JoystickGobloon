@@ -1419,3 +1419,163 @@ fn light_led_follows_device_aliases() {
         )]
     );
 }
+
+/// One input with one configuration per (layer, additive, root).
+fn layered_input(kind: &str, id: u32, configs: &[(&str, bool, &str)]) -> String {
+    let configs: String = configs
+        .iter()
+        .map(|(layer, additive, root)| {
+            let layer = if layer.is_empty() {
+                String::new()
+            } else {
+                format!(r#" layer="{layer}""#)
+            };
+            let additive = if *additive { r#" additive="true""# } else { "" };
+            format!(
+                "<action-configuration{layer}{additive}><root-action>{root}</root-action>\
+                 <behavior>{kind}</behavior></action-configuration>"
+            )
+        })
+        .collect();
+    format!(
+        "<input><device-id>{DEV}</device-id><input-type>{kind}</input-type><mode>Default</mode>\
+         <input-id>{id}</input-id>{configs}</input>"
+    )
+}
+
+/// M1 = button 30, M2 = button 31.
+/// Button 4: base -> vJoy 1, M2 -> 2, M1 -> 3, M1+M2 undefined. Button 5: base only -> 5.
+/// Button 30 (M1) also has a binding, which must not run.
+/// Axis 2: base -> axis 1, M1 additive -> axis 2.
+/// Axis 3: base -> axis 3, M1 -> axis 3 and axis 4.
+fn modifier_rig() -> (Engine, Recorder) {
+    let inputs = [
+        layered_input(
+            "button",
+            4,
+            &[("", false, "r1"), ("M2", false, "r2"), ("M1", false, "r3")],
+        ),
+        layered_input("button", 5, &[("", false, "r5")]),
+        layered_input("button", 30, &[("", false, "r9")]),
+        layered_input("axis", 2, &[("", false, "ra1"), ("M1", true, "ra2")]),
+        layered_input("axis", 3, &[("", false, "ra3"), ("M1", false, "ra34")]),
+    ]
+    .concat();
+    let library = [
+        root("r1", &["b1"]),
+        root("r2", &["b2"]),
+        root("r3", &["b3"]),
+        root("r5", &["b5"]),
+        root("r9", &["b9"]),
+        root("ra1", &["x1"]),
+        root("ra2", &["x2"]),
+        root("ra3", &["x3"]),
+        root("ra34", &["x3", "x4"]),
+        vjoy("b1", "button", 1),
+        vjoy("b2", "button", 2),
+        vjoy("b3", "button", 3),
+        vjoy("b5", "button", 5),
+        vjoy("b9", "button", 9),
+        vjoy("x1", "axis", 1),
+        vjoy("x2", "axis", 2),
+        vjoy("x3", "axis", 3),
+        vjoy("x4", "axis", 4),
+    ]
+    .concat();
+    let xml = format!(
+        r#"<profile version="14"><inputs>{inputs}</inputs><settings/><library>{library}</library>
+        <modes><mode>Default</mode></modes><modifiers>
+        <modifier name="M1" device-id="{DEV}" input-type="button" input-id="30"/>
+        <modifier name="M2" device-id="{DEV}" input-type="button" input-id="31"/>
+        </modifiers></profile>"#
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    (Engine::new(&p, &HashMap::new()), Recorder::default())
+}
+
+fn send(engine: &mut Engine, out: &mut Recorder, kind: InputKind, id: u32, value: Value) {
+    engine.process(&InputKey::new(DEV, kind, id), value, Instant::now(), out);
+}
+
+fn button(engine: &mut Engine, out: &mut Recorder, id: u32, pressed: bool) {
+    send(engine, out, InputKind::Button, id, Value::Button(pressed));
+}
+
+#[test]
+fn modifiers_choose_the_layer_of_a_button() {
+    let (mut e, mut out) = modifier_rig();
+    let tap = |e: &mut Engine, out: &mut Recorder| {
+        button(e, out, 4, true);
+        button(e, out, 4, false);
+        std::mem::take(&mut out.0)
+    };
+    assert_eq!(
+        tap(&mut e, &mut out),
+        [Out::Button(1, true), Out::Button(1, false)]
+    );
+    button(&mut e, &mut out, 31, true);
+    assert_eq!(
+        tap(&mut e, &mut out),
+        [Out::Button(2, true), Out::Button(2, false)]
+    );
+    button(&mut e, &mut out, 30, true);
+    assert!(tap(&mut e, &mut out).is_empty(), "M1+M2 is undefined");
+    button(&mut e, &mut out, 31, false);
+    assert_eq!(
+        tap(&mut e, &mut out),
+        [Out::Button(3, true), Out::Button(3, false)]
+    );
+    // Inputs without layers ignore the modifiers; the modifier's own binding never runs.
+    button(&mut e, &mut out, 5, true);
+    button(&mut e, &mut out, 30, false);
+    assert_eq!(out.0, [Out::Button(5, true)]);
+}
+
+#[test]
+fn a_release_goes_to_the_layer_of_its_press() {
+    let (mut e, mut out) = modifier_rig();
+    button(&mut e, &mut out, 30, true);
+    button(&mut e, &mut out, 4, true);
+    button(&mut e, &mut out, 30, false);
+    button(&mut e, &mut out, 4, false);
+    assert_eq!(out.0, [Out::Button(3, true), Out::Button(3, false)]);
+}
+
+#[test]
+fn additive_axis_layer_and_neutral_on_leave() {
+    let (mut e, mut out) = modifier_rig();
+    send(&mut e, &mut out, InputKind::Axis, 2, Value::Axis(-0.5));
+    assert_eq!(std::mem::take(&mut out.0), [Out::Axis(1, -0.5)]);
+    button(&mut e, &mut out, 30, true);
+    assert_eq!(
+        std::mem::take(&mut out.0),
+        [Out::Axis(2, -0.5)],
+        "the additive layer joins, the base output is untouched"
+    );
+    send(&mut e, &mut out, InputKind::Axis, 2, Value::Axis(-0.8));
+    assert_eq!(
+        std::mem::take(&mut out.0),
+        [Out::Axis(1, -0.8), Out::Axis(2, -0.8)]
+    );
+    button(&mut e, &mut out, 30, false);
+    assert_eq!(
+        out.0,
+        [Out::Axis(2, 0.0)],
+        "the additive output goes back to rest"
+    );
+}
+
+#[test]
+fn an_axis_both_layers_drive_does_not_jump() {
+    let (mut e, mut out) = modifier_rig();
+    send(&mut e, &mut out, InputKind::Axis, 3, Value::Axis(0.6));
+    assert_eq!(std::mem::take(&mut out.0), [Out::Axis(3, 0.6)]);
+    button(&mut e, &mut out, 30, true);
+    assert_eq!(
+        std::mem::take(&mut out.0),
+        [Out::Axis(3, 0.6), Out::Axis(4, 0.6)],
+        "no neutral 0 on axis 3 in between"
+    );
+    button(&mut e, &mut out, 30, false);
+    assert_eq!(out.0, [Out::Axis(3, 0.6), Out::Axis(4, 0.0)]);
+}

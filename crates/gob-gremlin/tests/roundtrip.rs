@@ -279,20 +279,20 @@ fn modifiers_and_layers_round_trip() {
     for (name, button) in [("M1", "2"), ("M2", "3")] {
         assert!(p.add_modifier(Modifier {
             name: name.into(),
-            device_id: "{TWCS}".into(),
+            device_id: "{DEV-A}".into(),
             input_type: "button".into(),
             input_id: button.into(),
         }));
     }
-    p.bind("{T16000}", "button", "4", "Default");
-    p.bind_layer("{T16000}", "button", "4", "Default", &Layer::parse("M2+M1"));
-    p.bind_layer("{T16000}", "axis", "2", "Default", &Layer::parse("M1"));
+    p.bind("{DEV-B}", "button", "4", "Default");
+    p.bind_layer("{DEV-B}", "button", "4", "Default", &Layer::parse("M2+M1"));
+    p.bind_layer("{DEV-B}", "axis", "2", "Default", &Layer::parse("M1"));
     p.inputs[1].configs[0].additive = true;
 
     let written = gob_gremlin::to_string(&p);
     assert!(
         written.contains(
-            r#"<modifier name="M1" device-id="{TWCS}" input-type="button" input-id="2"/>"#
+            r#"<modifier name="M1" device-id="{DEV-A}" input-type="button" input-id="2"/>"#
         )
     );
     assert!(written.contains(r#"<action-configuration layer="M1+M2">"#));
