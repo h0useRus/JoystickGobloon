@@ -71,7 +71,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Never "JoyGob"/"joygob" (it was only a chat nickname): not in code, identifiers, crate or file names, comments
   or docs. Code uses `joystick-gobloon` (crate), `JoystickGobloon` (types, exe and file names), `JOYSTICK_GOBLOON_`
   (env vars).
-- Gremlin import must round-trip: unknown actions kept as raw XML.
+- Profiles are Joystick Gobloon's own format (since 2026-10-23): human-readable XML, changed freely for what
+  Joystick Gobloon needs; no workarounds to stay readable by Gremlin. Gremlin profiles must still import
+  (unknown actions kept as raw XML); export to Gremlin may come later.
 - GUI never blocks; engine runs on its own thread, talks via channels.
 - Platform code (OS APIs, drivers) lives only in per-platform modules (`platform/windows.rs`, `platform/linux.rs`) or
   backend crates behind a common interface; UI, engine and model use only the interface and its capabilities, never
