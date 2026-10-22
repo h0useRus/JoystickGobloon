@@ -17,6 +17,8 @@ pub struct LoadedProfile {
     pub path: Option<PathBuf>,
     /// Changed since it was loaded or saved.
     pub dirty: bool,
+    /// The file on disk (or a new profile) still opens in Joystick Gremlin.
+    pub gremlin_file: bool,
     undo: Vec<Profile>,
     redo: Vec<Profile>,
     last_checkpoint: Option<Instant>,
@@ -28,10 +30,12 @@ const UNDO_LIMIT: usize = 100;
 
 impl LoadedProfile {
     pub fn new(profile: Profile, path: Option<PathBuf>) -> Self {
+        let gremlin_file = !profile.source.starts_with("Joystick Gobloon") || path.is_none();
         Self {
             profile,
             path,
             dirty: false,
+            gremlin_file,
             undo: Vec::new(),
             redo: Vec::new(),
             last_checkpoint: None,

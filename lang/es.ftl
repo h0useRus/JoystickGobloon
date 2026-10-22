@@ -107,6 +107,10 @@ settings-input-events = Leer los mandos al cambiar
 settings-input-events-tip = Menos latencia y uso de CPU: los mandos se leen cuando informan de un cambio y las pulsaciones cortas nunca se pierden. Desactivado: cada mando se lee cada 4 ms.
 settings-monotonic-curves = Las curvas solo suben o bajan
 settings-monotonic-curves-tip = Editor de curvas de respuesta: un punto o tirador se detiene donde la curva daría la vuelta, así cruza el cero una sola vez. Las curvas que ya dan la vuelta se editan libremente.
+settings-warn-gremlin = Avisar antes de que un perfil deje de abrirse en Joystick Gremlin
+gremlin-format-title = Joystick Gremlin no lo abrirá
+gremlin-format-text = { $file } usa funciones que solo tiene Joystick Gobloon (modificadores y capas, acciones de LED). Una vez guardado, Joystick Gremlin ya no podrá abrirlo.
+gremlin-format-dont-ask = No volver a preguntar
 status-whitelisted = Joystick Gobloon se añadió a la lista blanca de HidHide.
 
 # Applications

@@ -107,6 +107,10 @@ settings-input-events = Lire les manettes lors d’un changement
 settings-input-events-tip = Moins de latence et de charge CPU : les manettes sont lues quand elles signalent un changement, et les appuis courts ne sont jamais perdus. Désactivé : chaque manette est lue toutes les 4 ms.
 settings-monotonic-curves = Les courbes ne font que monter ou descendre
 settings-monotonic-curves-tip = Éditeur de courbe de réponse : un point ou une poignée s’arrête là où la courbe repartirait en arrière, elle ne croise donc zéro qu’une fois. Les courbes qui repartent déjà en arrière s’éditent librement.
+settings-warn-gremlin = Avertir avant qu’un profil ne s’ouvre plus dans Joystick Gremlin
+gremlin-format-title = Joystick Gremlin ne l’ouvrira pas
+gremlin-format-text = { $file } utilise des fonctions propres à Joystick Gobloon (modificateurs et couches, actions LED). Une fois enregistré, Joystick Gremlin ne pourra plus l’ouvrir.
+gremlin-format-dont-ask = Ne plus demander
 status-whitelisted = Joystick Gobloon a été ajouté à la liste blanche de HidHide.
 
 # Applications

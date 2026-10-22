@@ -107,6 +107,10 @@ settings-input-events = Считывать контроллеры по изме�
 settings-input-events-tip = Меньше задержка и нагрузка на процессор: контроллеры считываются, когда сообщают об изменении, и короткие нажатия кнопок не теряются. Выкл.: каждый контроллер опрашивается каждые 4 мс.
 settings-monotonic-curves = Кривые только растут или падают
 settings-monotonic-curves-tip = Редактор кривой отклика: точка или рычаг останавливается там, где кривая повернула бы назад, поэтому она пересекает ноль только один раз. Уже немонотонные кривые правятся свободно.
+settings-warn-gremlin = Предупреждать, когда профиль перестанет открываться в Joystick Gremlin
+gremlin-format-title = Joystick Gremlin не откроет этот профиль
+gremlin-format-text = В { $file } есть возможности только Joystick Gobloon (модификаторы и слои, действия подсветки). После сохранения Joystick Gremlin больше не сможет его открыть.
+gremlin-format-dont-ask = Больше не спрашивать
 status-whitelisted = Joystick Gobloon добавлен в белый список HidHide.
 
 # Applications

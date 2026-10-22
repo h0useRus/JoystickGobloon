@@ -107,6 +107,10 @@ settings-input-events = 변경 시 컨트롤러 읽기
 settings-input-events-tip = 지연과 CPU 사용량 감소: 컨트롤러가 변경을 알릴 때 읽으며, 짧은 버튼 입력도 놓치지 않습니다. 끄면 모든 컨트롤러를 4ms마다 읽습니다.
 settings-monotonic-curves = 곡선은 증가 또는 감소만
 settings-monotonic-curves-tip = 응답 곡선 편집기: 곡선이 되돌아가려는 지점에서 점이나 핸들이 멈추므로 0을 한 번만 지납니다. 이미 되돌아가는 곡선은 자유롭게 편집됩니다.
+settings-warn-gremlin = 프로필이 Joystick Gremlin에서 더 이상 열리지 않게 되기 전에 경고
+gremlin-format-title = Joystick Gremlin에서 열 수 없습니다
+gremlin-format-text = { $file }에는 Joystick Gobloon에만 있는 기능(모디파이어와 레이어, LED 동작)이 사용됩니다. 저장하면 Joystick Gremlin에서 더 이상 열 수 없습니다.
+gremlin-format-dont-ask = 다시 묻지 않기
 status-whitelisted = Joystick Gobloon을 HidHide 허용 목록에 추가했습니다.
 
 # Applications

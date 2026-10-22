@@ -248,6 +248,10 @@ fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Ch
             i18n.tr("settings-monotonic-curves"),
         ))
         .on_hover_text(i18n.tr("settings-monotonic-curves-tip"));
+    let gremlin = ui.add(style::switch(
+        &mut settings.warn_gremlin_format,
+        i18n.tr("settings-warn-gremlin"),
+    ));
 
     let changed = [
         &autostart,
@@ -257,6 +261,7 @@ fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Ch
         &input_events,
         &focus,
         &curves,
+        &gremlin,
     ]
     .iter()
     .any(|r| r.changed())

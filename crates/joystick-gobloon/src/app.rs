@@ -67,6 +67,10 @@ pub struct JoystickGobloonApp {
     edited: Option<std::time::Instant>,
     /// Action waiting for the "save changes?" answer.
     pending: Option<Pending>,
+    /// Save waiting for "Joystick Gremlin will not open it": the file, then the action to run.
+    gremlin_warning: Option<(PathBuf, Option<Pending>)>,
+    /// The "don't ask again" switch of that dialog.
+    gremlin_dont_ask: bool,
     /// The user already agreed to close without saving.
     allow_close: bool,
     /// The window was minimized last frame ("minimize to tray" acts once per minimize).
@@ -184,6 +188,8 @@ impl JoystickGobloonApp {
             was_active: false,
             edited: None,
             pending: None,
+            gremlin_warning: None,
+            gremlin_dont_ask: false,
             allow_close: false,
             was_minimized: false,
             show_modes: false,
@@ -383,13 +389,38 @@ impl JoystickGobloonApp {
 
     /// Saves to the current file, asking for one when the profile is new.
     fn save(&mut self) -> bool {
+        self.save_then(None)
+    }
+
+    /// [`Self::save`], then `after` once saved. Returns `false` when not saved now (cancelled,
+    /// failed, or waiting for the Joystick Gremlin question, which runs `after` itself).
+    fn save_then(&mut self, after: Option<Pending>) -> bool {
         match self.profile.as_ref().and_then(|p| p.path.clone()) {
-            Some(path) => self.save_to(path),
-            None => self.save_as(),
+            Some(path) => self.save_checked(path, after),
+            None => self.save_as_then(after),
         }
     }
 
+    /// Saves, unless that makes a file Joystick Gremlin opens one it cannot: then asks first.
+    fn save_checked(&mut self, path: PathBuf, after: Option<Pending>) -> bool {
+        let ask = self.settings.warn_gremlin_format
+            && self
+                .profile
+                .as_ref()
+                .is_some_and(|p| p.gremlin_file && p.profile.needs_own_format());
+        if ask {
+            self.gremlin_dont_ask = false;
+            self.gremlin_warning = Some((path, after));
+            return false;
+        }
+        self.save_to(path)
+    }
+
     fn save_as(&mut self) -> bool {
+        self.save_as_then(None)
+    }
+
+    fn save_as_then(&mut self, after: Option<Pending>) -> bool {
         let Some(loaded) = &self.profile else {
             return false;
         };
@@ -400,7 +431,7 @@ impl JoystickGobloonApp {
             dialog = dialog.set_directory(dir);
         }
         match dialog.save_file() {
-            Some(path) => self.save_to(path),
+            Some(path) => self.save_checked(path, after),
             None => false,
         }
     }
@@ -418,6 +449,7 @@ impl JoystickGobloonApp {
                 );
                 loaded.path = Some(path.clone());
                 loaded.dirty = false;
+                loaded.gremlin_file = !loaded.profile.needs_own_format();
                 self.settings.last_profile = Some(path);
                 self.settings.save();
                 true
@@ -595,6 +627,63 @@ impl JoystickGobloonApp {
         }
     }
 
+    /// "Joystick Gremlin will not open it" before a save that makes it so.
+    fn gremlin_dialog(&mut self, ctx: &egui::Context) {
+        let Some((path, _)) = &self.gremlin_warning else {
+            return;
+        };
+        let file = path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let mut choice = None;
+        egui::Modal::new(egui::Id::new("gremlin-format")).show(ctx, |ui| {
+            ui.set_width(420.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(icon::WARNING)
+                        .size(style::ICON_SIZE)
+                        .color(ui.visuals().warn_fg_color),
+                );
+                ui.heading(self.i18n.tr("gremlin-format-title"));
+            });
+            ui.add_space(4.0);
+            ui.label(
+                self.i18n
+                    .trf("gremlin-format-text", &[("file", file.into())]),
+            );
+            ui.add_space(8.0);
+            ui.add(style::switch(
+                &mut self.gremlin_dont_ask,
+                self.i18n.tr("gremlin-format-dont-ask"),
+            ));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                let save = format!("{}  {}", icon::FLOPPY_DISK, self.i18n.tr("action-save"));
+                if ui.button(save).clicked() {
+                    choice = Some(true);
+                }
+                if ui.button(self.i18n.tr("cancel")).clicked() {
+                    choice = Some(false);
+                }
+            });
+        });
+        let Some(save) = choice else { return };
+        let Some((path, after)) = self.gremlin_warning.take() else {
+            return;
+        };
+        if self.gremlin_dont_ask {
+            self.settings.warn_gremlin_format = false;
+            self.settings.save();
+        }
+        if save
+            && self.save_to(path)
+            && let Some(action) = after
+        {
+            self.perform(action, ctx);
+        }
+    }
+
     /// "Save changes?" dialog for a pending action.
     fn unsaved_dialog(&mut self, ctx: &egui::Context) {
         let Some(action) = self.pending.clone() else {
@@ -633,7 +722,7 @@ impl JoystickGobloonApp {
         match choice {
             Some(0) => {
                 self.pending = None;
-                if self.save() {
+                if self.save_then(Some(action.clone())) {
                     self.perform(action, ctx);
                 }
             }
@@ -1358,6 +1447,7 @@ impl eframe::App for JoystickGobloonApp {
             }
         }
         self.unsaved_dialog(ctx);
+        self.gremlin_dialog(ctx);
         self.alert_dialog(ctx);
         self.detached_windows(ctx);
     }
