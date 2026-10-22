@@ -96,10 +96,17 @@ hidhide-enable = Geräte verbergen aktivieren
 hidhide-hint = Klicken Sie auf das Auge, um ein Gerät vor anderen Programmen zu verbergen (geschlossenes Auge). Verbinden Sie es danach neu, damit die Änderung wirkt.
 hidhide-no-devices = Keine Geräte anzuzeigen.
 action-refresh = Aktualisieren
-settings-hidhide-self = Joystick Gobloon beim Start zur HidHide-Positivliste hinzufügen
-settings-focus-input = Auf der Seite „Geräte und Belegungen“ zur benutzten Eingabe springen
+settings-see-hidden = Verborgene Geräte sehen
+settings-see-hidden-tip = Beim Start fügt sich Joystick Gobloon zu den Programmen hinzu, die verborgene Geräte weiterhin sehen, damit Profile funktionieren.
+settings-group-startup = Start
+settings-group-devices = Geräte
+settings-group-editor = Editor
+settings-focus-input = Der benutzten Eingabe folgen
+settings-focus-input-tip = Wird eine Achse, Taste oder ein Hat benutzt, wählt die Seite „Geräte und Belegungen“ den Tab des Geräts und scrollt dorthin.
 settings-input-events = Controller bei Änderung lesen
 settings-input-events-tip = Weniger Latenz und CPU-Last: Controller werden gelesen, wenn sie eine Änderung melden, und kurze Tastendrücke gehen nie verloren. Aus: jeder Controller wird alle 4 ms abgefragt.
+settings-monotonic-curves = Kurven steigen oder fallen nur
+settings-monotonic-curves-tip = Kurveneditor: Ein Punkt oder Anfasser hält dort an, wo die Kurve umkehren würde, sodass sie die Null nur einmal kreuzt. Kurven, die bereits umkehren, lassen sich frei bearbeiten.
 status-whitelisted = Joystick Gobloon wurde zur HidHide-Positivliste hinzugefügt.
 
 # Applications

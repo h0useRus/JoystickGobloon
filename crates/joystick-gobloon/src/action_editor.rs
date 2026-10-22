@@ -510,6 +510,8 @@ pub struct Editor<'a> {
     pub leds: &'a HashSet<String>,
     /// Experimental features (light-led) are on; off, light-led cannot be added or edited.
     pub experimental: bool,
+    /// Curve edits keep a rising (or falling) curve from turning back.
+    pub monotonic_curves: bool,
 }
 
 impl Editor<'_> {

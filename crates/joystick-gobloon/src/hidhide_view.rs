@@ -18,6 +18,8 @@ pub struct HidHideView {
     cloaked: bool,
     groups: Vec<Device>,
     error: Option<String>,
+    /// Connected input devices when the list was read: a device plugged in later is not in it.
+    inputs: Vec<String>,
 }
 
 impl HidHideView {
@@ -29,6 +31,7 @@ impl HidHideView {
             cloaked: false,
             groups: Vec::new(),
             error: None,
+            inputs: Vec::new(),
         }
     }
 
@@ -98,6 +101,15 @@ impl HidHideView {
 
     pub fn set_cloak(&mut self, on: bool) {
         self.apply(|hh| hh.set_enabled(on));
+    }
+
+    /// The connected input devices (ids); when they change the list is read again when next
+    /// needed, so newly plugged devices get their state.
+    pub fn track_inputs(&mut self, ids: Vec<String>) {
+        if ids != self.inputs {
+            self.inputs = ids;
+            self.loaded = false;
+        }
     }
 
     /// Device hiding was changed elsewhere (tray menu): read it again when next needed.
@@ -189,12 +201,8 @@ impl HidHideView {
                         let hidden = group.hidden;
                         ui.horizontal(|ui| {
                             // Closed eye: hidden from other programs; a click switches it.
-                            let (glyph, color) = style::eye(ui, hidden);
-                            let tip = i18n.tr(if hidden {
-                                "hidhide-hidden"
-                            } else {
-                                "hidhide-visible"
-                            });
+                            let (glyph, color) = style::eye(ui, hidden, self.cloaked);
+                            let tip = eye_tip(i18n, hidden, self.cloaked);
                             if style::icon_button_colored(ui, true, glyph, color, &tip).clicked() {
                                 toggle = Some((i, !hidden));
                             }
@@ -214,5 +222,23 @@ impl HidHideView {
             self.apply(|hh| hh.set_hidden(&group, hide));
         }
         changed
+    }
+}
+
+/// Tooltip of a device eye; while hiding is off it says so, the eye shows the saved state.
+pub fn eye_tip(i18n: &I18n, hidden: bool, hiding_on: bool) -> String {
+    let state = i18n.tr(if hidden {
+        "hidhide-hidden"
+    } else {
+        "hidhide-visible"
+    });
+    if hiding_on {
+        state
+    } else {
+        format!(
+            "{state}
+{}",
+            i18n.tr("hidhide-off")
+        )
     }
 }

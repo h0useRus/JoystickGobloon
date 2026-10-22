@@ -96,10 +96,17 @@ hidhide-enable = Activar la ocultación de dispositivos
 hidhide-hint = Haga clic en el ojo para ocultar un dispositivo a otros programas (ojo cerrado). Después vuelva a conectarlo para que el cambio surta efecto.
 hidhide-no-devices = No hay dispositivos que mostrar.
 action-refresh = Actualizar
-settings-hidhide-self = Añadir Joystick Gobloon a la lista blanca de HidHide al iniciar
-settings-focus-input = Saltar a la entrada en uso en la página «Dispositivos y asignaciones»
+settings-see-hidden = Ver los dispositivos ocultos
+settings-see-hidden-tip = Al iniciar, Joystick Gobloon se añade a los programas que siguen viendo los dispositivos ocultos, para que los perfiles sigan funcionando.
+settings-group-startup = Inicio
+settings-group-devices = Dispositivos
+settings-group-editor = Editor
+settings-focus-input = Seguir la entrada en uso
+settings-focus-input-tip = Al usar un eje, botón o hat, la página «Dispositivos y asignaciones» selecciona la pestaña de su dispositivo y se desplaza hasta la entrada.
 settings-input-events = Leer los mandos al cambiar
 settings-input-events-tip = Menos latencia y uso de CPU: los mandos se leen cuando informan de un cambio y las pulsaciones cortas nunca se pierden. Desactivado: cada mando se lee cada 4 ms.
+settings-monotonic-curves = Las curvas solo suben o bajan
+settings-monotonic-curves-tip = Editor de curvas de respuesta: un punto o tirador se detiene donde la curva daría la vuelta, así cruza el cero una sola vez. Las curvas que ya dan la vuelta se editan libremente.
 status-whitelisted = Joystick Gobloon se añadió a la lista blanca de HidHide.
 
 # Applications

@@ -50,6 +50,8 @@ pub struct Settings {
     pub activate_on_start: bool,
     /// Look for a new release on startup and install it.
     pub check_updates: bool,
+    /// Response curve editor: edits never make a rising (or falling) curve turn back.
+    pub monotonic_curves: bool,
     /// Experimental features (joystick LEDs): hidden and not run while off. Not in the UI:
     /// `experimental = true` in settings.gob turns them on.
     pub experimental: bool,
@@ -215,6 +217,7 @@ impl Default for Settings {
             input_events: true,
             activate_on_start: false,
             check_updates: true,
+            monotonic_curves: true,
             calibration: BTreeMap::new(),
             leds: BTreeMap::new(),
             experimental: false,
