@@ -75,9 +75,12 @@ impl Editor<'_> {
 
         ui.horizontal_top(|ui| {
             let help = self.i18n.tr("edit-curve-help");
-            let (new, sel) = chart(
-                ui, &id, kind, points, deadzone, size, selected, symmetric, &help,
-            );
+            let edit = Edit {
+                kind,
+                symmetric,
+                monotonic: self.monotonic_curves,
+            };
+            let (new, sel) = chart(ui, &id, edit, points, deadzone, size, selected, &help);
             if sel != selected {
                 selected = sel;
                 ui.data_mut(|d| d.insert_temp(sel_id, sel));
@@ -122,7 +125,12 @@ impl Editor<'_> {
                         ui.end_row();
                     });
                 if changed {
-                    self.set_points(&id, &Editable::set(kind, points, selected, x, y, symmetric));
+                    let edit = Edit {
+                        kind,
+                        symmetric,
+                        monotonic: self.monotonic_curves,
+                    };
+                    self.set_points(&id, &edit.set(points, selected, x, y));
                 }
             });
         });
@@ -177,6 +185,33 @@ impl Editor<'_> {
     }
 }
 
+/// How chart and fields change the points.
+#[derive(Clone, Copy)]
+struct Edit {
+    kind: CurveType,
+    symmetric: bool,
+    /// Keep a monotonic curve monotonic (setting).
+    monotonic: bool,
+}
+
+impl Edit {
+    fn set(self, points: &[(f64, f64)], i: usize, x: f64, y: f64) -> Vec<(f64, f64)> {
+        if self.monotonic {
+            Editable::set_monotonic(self.kind, points, i, x, y, self.symmetric)
+        } else {
+            Editable::set(self.kind, points, i, x, y, self.symmetric)
+        }
+    }
+
+    fn add(self, points: &[(f64, f64)], x: f64, y: f64) -> Option<(Vec<(f64, f64)>, usize)> {
+        if self.monotonic {
+            Editable::add_monotonic(self.kind, points, x, y, self.symmetric)
+        } else {
+            Some(Editable::add(self.kind, points, x, y, self.symmetric))
+        }
+    }
+}
+
 fn type_key(k: CurveType) -> &'static str {
     match k {
         CurveType::PiecewiseLinear => "curve-linear",
@@ -196,14 +231,16 @@ fn x_of(rect: Rect, v: f64) -> f32 {
 fn chart(
     ui: &mut egui::Ui,
     id: &str,
-    kind: CurveType,
+    edit: Edit,
     points: &[(f64, f64)],
     deadzone: [f64; 4],
     size: f32,
     selected: usize,
-    symmetric: bool,
     help: &str,
 ) -> (Option<Vec<(f64, f64)>>, usize) {
+    let Edit {
+        kind, symmetric, ..
+    } = edit;
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click_and_drag());
     let response = response.on_hover_text(help);
     let half = size / 2.0;
@@ -307,10 +344,7 @@ fn chart(
         let dragging: Option<usize> = ui.data(|d| d.get_temp(drag_id));
         if let (Some(i), Some(pos)) = (dragging, response.interact_pointer_pos()) {
             let (x, y) = to_curve(pos);
-            return (
-                Some(Editable::set(kind, points, i, x, y, symmetric)),
-                selected,
-            );
+            return (Some(edit.set(points, i, x, y)), selected);
         }
     }
     if response.drag_stopped() {
@@ -334,8 +368,10 @@ fn chart(
             .filter(|_| on_point.is_none())
         {
             let (x, y) = to_curve(pos);
-            if x > -1.0 && x < 1.0 {
-                let (p, at) = Editable::add(kind, points, x, y, symmetric);
+            if x > -1.0
+                && x < 1.0
+                && let Some((p, at)) = edit.add(points, x, y)
+            {
                 return (Some(p), at);
             }
         }

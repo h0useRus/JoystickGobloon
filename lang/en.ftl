@@ -96,10 +96,17 @@ hidhide-enable = Enable device hiding
 hidhide-hint = Click the eye to hide a device from other programs (closed eye). Reconnect it afterwards for the change to take effect.
 hidhide-no-devices = No devices to show.
 action-refresh = Refresh
-settings-hidhide-self = Add Joystick Gobloon to the HidHide whitelist on startup
-settings-focus-input = Jump to the input in use on the Devices and bindings page
+settings-see-hidden = See hidden devices
+settings-see-hidden-tip = On startup Joystick Gobloon adds itself to the programs that still see hidden devices, so profiles keep working.
+settings-group-startup = Startup
+settings-group-devices = Devices
+settings-group-editor = Editor
+settings-focus-input = Follow the input in use
+settings-focus-input-tip = When an axis, button or hat is used, the Devices and bindings page selects its device tab and scrolls to it.
 settings-input-events = Read controllers on change
 settings-input-events-tip = Lower latency and less CPU: controllers are read when they report a change, and short button presses are never missed. Off: every controller is read every 4 ms.
+settings-monotonic-curves = Curves only rise or fall
+settings-monotonic-curves-tip = Response curve editor: a knot or handle stops where the curve would turn back, so it crosses zero only once. Curves that already turn back are edited freely.
 status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
 
 # Applications

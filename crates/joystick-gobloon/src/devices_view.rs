@@ -52,12 +52,16 @@ pub struct DevicesView {
     /// HidHide state of connected devices (GUID -> hidden), filled by the app; devices
     /// without an entry have no eye icon.
     pub hidden: HashMap<String, bool>,
+    /// Device hiding is on as a whole; while off the eyes are gray.
+    pub hiding_on: bool,
     /// The eye icon was clicked: (device GUID, hide). The app applies it.
     pub hide_request: Option<(String, bool)>,
     /// GUIDs of connected devices with LED control (light-led), filled by the app.
     pub leds: std::collections::HashSet<String>,
     /// Experimental features (light-led) are on, filled by the app.
     pub experimental: bool,
+    /// Curve edits keep curves monotonic (setting), filled by the app.
+    pub monotonic_curves: bool,
 }
 
 struct Tab<'a> {
@@ -284,15 +288,15 @@ impl DevicesView {
                         let mut r = if !t.logical && !is_keyboard(t) {
                             let info_tip = i18n.tr("device-info");
                             let hidden = self.hidden.get(t.guid).copied();
-                            let eye_tip = i18n.tr(if hidden == Some(true) {
-                                "hidhide-hidden"
-                            } else {
-                                "hidhide-visible"
-                            });
+                            let eye_tip = crate::hidhide_view::eye_tip(
+                                i18n,
+                                hidden == Some(true),
+                                self.hiding_on,
+                            );
                             let led_tip = i18n.tr("device-leds");
                             let mut icons = Vec::new();
                             if let Some(hidden) = hidden {
-                                let (glyph, color) = style::eye(ui, hidden);
+                                let (glyph, color) = style::eye(ui, hidden, self.hiding_on);
                                 icons.push(style::TabIcon {
                                     glyph,
                                     color: Some(color),
@@ -862,6 +866,7 @@ impl DevicesView {
                     input: Some((&b.device_id, key.1)),
                     leds: &self.leds,
                     experimental: self.experimental,
+                    monotonic_curves: self.monotonic_curves,
                 };
                 for cfg in &b.configs {
                     editor.container(ui, &cfg.root_action, "actions", 0);
@@ -897,6 +902,7 @@ impl DevicesView {
                     input: Some((&device, key.1)),
                     leds: &self.leds,
                     experimental: self.experimental,
+                    monotonic_curves: self.monotonic_curves,
                 };
                 editor.add_menu(ui, None, |kind| bind(Some(kind)));
             }

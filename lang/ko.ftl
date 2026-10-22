@@ -96,10 +96,17 @@ hidhide-enable = 장치 숨기기 사용
 hidhide-hint = 눈 아이콘을 클릭하면 다른 프로그램에서 장치를 숨깁니다(감은 눈). 변경 내용을 적용하려면 장치를 다시 연결하세요.
 hidhide-no-devices = 표시할 장치가 없습니다.
 action-refresh = 새로 고침
-settings-hidhide-self = 시작할 때 Joystick Gobloon을 HidHide 허용 목록에 추가
-settings-focus-input = 장치 및 바인딩 페이지에서 사용 중인 입력으로 이동
+settings-see-hidden = 숨긴 장치 보기
+settings-see-hidden-tip = 시작할 때 Joystick Gobloon이 숨긴 장치를 계속 볼 수 있는 프로그램에 자신을 추가하여 프로필이 계속 작동합니다.
+settings-group-startup = 시작
+settings-group-devices = 장치
+settings-group-editor = 편집기
+settings-focus-input = 사용 중인 입력 따라가기
+settings-focus-input-tip = 축, 버튼 또는 햇을 사용하면 장치 및 바인딩 페이지가 해당 장치 탭을 선택하고 그 입력으로 스크롤합니다.
 settings-input-events = 변경 시 컨트롤러 읽기
 settings-input-events-tip = 지연과 CPU 사용량 감소: 컨트롤러가 변경을 알릴 때 읽으며, 짧은 버튼 입력도 놓치지 않습니다. 끄면 모든 컨트롤러를 4ms마다 읽습니다.
+settings-monotonic-curves = 곡선은 증가 또는 감소만
+settings-monotonic-curves-tip = 응답 곡선 편집기: 곡선이 되돌아가려는 지점에서 점이나 핸들이 멈추므로 0을 한 번만 지납니다. 이미 되돌아가는 곡선은 자유롭게 편집됩니다.
 status-whitelisted = Joystick Gobloon을 HidHide 허용 목록에 추가했습니다.
 
 # Applications

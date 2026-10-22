@@ -80,6 +80,22 @@ impl Curve {
             Self::Bezier(segments) => bezier(segments, x),
         }
     }
+
+    /// Whether the output only rises or only falls over the input range (flat parts allowed),
+    /// so it crosses zero, or any other level, at most once.
+    pub fn monotonic(&self) -> bool {
+        const STEPS: u32 = 400;
+        const EPS: f64 = 1e-6;
+        let y: Vec<f64> = (0..=STEPS)
+            .map(|i| self.eval(-1.0 + 2.0 * f64::from(i) / f64::from(STEPS)))
+            .collect();
+        let steps = || y.windows(2).map(|w| w[1] - w[0]);
+        steps().all(|d| d >= -EPS) || steps().all(|d| d <= EPS)
+    }
+}
+
+fn monotonic(kind: CurveType, points: &[(f64, f64)]) -> bool {
+    Curve::new(kind, points).monotonic()
 }
 
 fn linear(p: &[(f64, f64)], x: f64) -> f64 {
@@ -396,6 +412,56 @@ impl Editable {
         }
         p
     }
+
+    /// [`Editable::set`] that keeps a monotonic curve monotonic: the point stops where the
+    /// curve would start to turn back. A curve that is not monotonic already is edited freely.
+    pub fn set_monotonic(
+        kind: CurveType,
+        points: &[(f64, f64)],
+        i: usize,
+        x: f64,
+        y: f64,
+        symmetric: bool,
+    ) -> Vec<(f64, f64)> {
+        let new = Self::set(kind, points, i, x, y, symmetric);
+        if i >= points.len() || monotonic(kind, &new) || !monotonic(kind, points) {
+            return new;
+        }
+        // Bisect along the move for the farthest point that keeps the curve monotonic.
+        let from = points[i];
+        let at = |t: f64| {
+            let (tx, ty) = (from.0 + (x - from.0) * t, from.1 + (y - from.1) * t);
+            Self::set(kind, points, i, tx, ty, symmetric)
+        };
+        let (mut lo, mut hi) = (0.0, 1.0);
+        for _ in 0..16 {
+            let mid = (lo + hi) / 2.0;
+            if monotonic(kind, &at(mid)) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        if lo == 0.0 { points.to_vec() } else { at(lo) }
+    }
+
+    /// [`Editable::add`] that keeps a monotonic curve monotonic: a knot that would make it turn
+    /// back goes onto the curve at that x instead, or is not added (`None`).
+    pub fn add_monotonic(
+        kind: CurveType,
+        points: &[(f64, f64)],
+        x: f64,
+        y: f64,
+        symmetric: bool,
+    ) -> Option<(Vec<(f64, f64)>, usize)> {
+        let added = Self::add(kind, points, x, y, symmetric);
+        if monotonic(kind, &added.0) || !monotonic(kind, points) {
+            return Some(added);
+        }
+        let on_curve = Curve::new(kind, points).eval(x);
+        let added = Self::add(kind, points, x, on_curve, symmetric);
+        monotonic(kind, &added.0).then_some(added)
+    }
 }
 
 #[cfg(test)]
@@ -451,5 +517,47 @@ mod tests {
         assert_eq!(s[k[k.len() / 2]], (0.0, 0.0));
         let c = Curve::new(kind, &s);
         assert!(c.eval(0.0).abs() < 0.02);
+    }
+
+    #[test]
+    fn monotonic_edits_stop_before_the_curve_turns_back() {
+        for kind in CurveType::ALL {
+            let (p, _) = Editable::add(kind, &kind.default_points(), 0.0, 0.0, false);
+            assert!(Curve::new(kind, &p).monotonic(), "{kind:?}");
+            // Pull the right end below zero: the curve would go up and then down.
+            let last = p.len() - 1;
+            let free = Editable::set(kind, &p, last, 1.0, -0.5, false);
+            assert!(!Curve::new(kind, &free).monotonic(), "{kind:?}");
+            let kept = Editable::set_monotonic(kind, &p, last, 1.0, -0.5, false);
+            assert!(Curve::new(kind, &kept).monotonic(), "{kind:?}");
+            assert!(kept[last].1 < 0.9, "{kind:?}: moved toward the target");
+            assert!(kept[last].1 > -0.5, "{kind:?}: stopped before turning back");
+        }
+        // A curve that turns back already is edited freely.
+        let wavy = [(-1.0, -1.0), (0.0, 0.8), (1.0, -0.5)];
+        assert!(!Curve::new(CurveType::PiecewiseLinear, &wavy).monotonic());
+        let moved = Editable::set_monotonic(CurveType::PiecewiseLinear, &wavy, 2, 1.0, -0.9, false);
+        assert_eq!(moved[2], (1.0, -0.9));
+        // Inverted curves (falling) count as monotonic.
+        let falling = [(-1.0, 1.0), (1.0, -1.0)];
+        assert!(Curve::new(CurveType::CubicSpline, &falling).monotonic());
+    }
+
+    #[test]
+    fn monotonic_add_puts_the_knot_on_the_curve() {
+        let kind = CurveType::PiecewiseLinear;
+        let p = kind.default_points();
+        let (added, i) = Editable::add_monotonic(
+            kind,
+            &[(-1.0, -1.0), (0.5, 0.5), (1.0, 1.0)],
+            0.8,
+            -0.5,
+            false,
+        )
+        .unwrap();
+        assert!(Curve::new(kind, &added).monotonic());
+        assert!((added[i].1 - 0.8).abs() < 1e-9);
+        let (added, i) = Editable::add_monotonic(kind, &p, 0.5, 0.2, false).unwrap();
+        assert_eq!(added[i], (0.5, 0.2));
     }
 }

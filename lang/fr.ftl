@@ -96,10 +96,17 @@ hidhide-enable = Activer le masquage des périphériques
 hidhide-hint = Cliquez sur l’œil pour masquer un périphérique aux autres programmes (œil fermé). Reconnectez-le ensuite pour que la modification prenne effet.
 hidhide-no-devices = Aucun périphérique à afficher.
 action-refresh = Actualiser
-settings-hidhide-self = Ajouter Joystick Gobloon à la liste blanche de HidHide au démarrage
-settings-focus-input = Aller à l’entrée utilisée sur la page « Périphériques et affectations »
+settings-see-hidden = Voir les périphériques masqués
+settings-see-hidden-tip = Au démarrage, Joystick Gobloon s’ajoute aux programmes qui voient encore les périphériques masqués, pour que les profils continuent de fonctionner.
+settings-group-startup = Démarrage
+settings-group-devices = Périphériques
+settings-group-editor = Éditeur
+settings-focus-input = Suivre l’entrée utilisée
+settings-focus-input-tip = Quand un axe, un bouton ou un chapeau est utilisé, la page « Périphériques et affectations » sélectionne l’onglet de son périphérique et fait défiler la liste jusqu’à l’entrée.
 settings-input-events = Lire les manettes lors d’un changement
 settings-input-events-tip = Moins de latence et de charge CPU : les manettes sont lues quand elles signalent un changement, et les appuis courts ne sont jamais perdus. Désactivé : chaque manette est lue toutes les 4 ms.
+settings-monotonic-curves = Les courbes ne font que monter ou descendre
+settings-monotonic-curves-tip = Éditeur de courbe de réponse : un point ou une poignée s’arrête là où la courbe repartirait en arrière, elle ne croise donc zéro qu’une fois. Les courbes qui repartent déjà en arrière s’éditent librement.
 status-whitelisted = Joystick Gobloon a été ajouté à la liste blanche de HidHide.
 
 # Applications
