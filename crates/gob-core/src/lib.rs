@@ -1,14 +1,15 @@
 //! Profile model shared by the importer, the engine and the GUI.
 //!
-//! The model mirrors Joystick Gremlin's R14 profile format closely so that
-//! profiles round-trip without loss. Typed views (see [`action::ActionKind`])
-//! are decoded on demand from the generic property tree.
+//! Joystick Gobloon's own profile model. It started from Joystick Gremlin's R14 format, which
+//! is still imported, and grows with what Joystick Gobloon needs (e.g. [`modifier`]s). Typed
+//! views (see [`action::ActionKind`]) are decoded on demand from the generic property tree.
 
 pub mod action;
 pub mod condition;
 pub mod curve;
 pub mod edit;
 pub mod logical;
+pub mod modifier;
 pub mod profile;
 pub mod xml;
 
@@ -22,6 +23,7 @@ pub use edit::{NewAction, child_groups, new_uuid};
 pub use logical::{
     KEYBOARD_GUID, LOGICAL_DEVICE_GUID, LogicalInput, key_from_input_id, key_input_id,
 };
+pub use modifier::{Layer, Modifier};
 pub use profile::{
     ActionConfig, AxisDirection, Device, InputBinding, Mode, Profile, Section, VirtualButton,
     same_device_name,

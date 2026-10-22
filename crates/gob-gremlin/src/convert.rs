@@ -1,8 +1,9 @@
-//! [`Element`] tree <-> [`Profile`] for Gremlin R14+ profiles.
+//! [`Element`] tree <-> [`Profile`]: Joystick Gobloon profiles and the Gremlin R14+ profiles
+//! they grew from.
 
 use gob_core::{
-    Action, ActionConfig, Device, Element, InputBinding, Item, Mode, Node, Profile, Property,
-    Section,
+    Action, ActionConfig, Device, Element, InputBinding, Item, Layer, Mode, Modifier, Node,
+    Profile, Property, Section,
 };
 
 use crate::Error;
@@ -51,6 +52,20 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
                     .collect();
                 Section::Modes
             }
+            "modifiers" => {
+                p.modifiers = named(section, "modifier")
+                    .map(|m| {
+                        let attr = |n: &str| m.attr(n).unwrap_or_default().to_string();
+                        Modifier {
+                            name: attr("name"),
+                            device_id: attr("device-id"),
+                            input_type: attr("input-type"),
+                            input_id: attr("input-id"),
+                        }
+                    })
+                    .collect();
+                Section::Modifiers
+            }
             "scripts" => {
                 p.scripts = section.clone();
                 Section::Scripts
@@ -77,6 +92,9 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
 pub fn profile_to_element(p: &Profile) -> Element {
     let mut root = Element::new("profile").with_attr("version", &p.version);
     for section in &p.order {
+        if *section == Section::Modifiers && p.modifiers.is_empty() {
+            continue;
+        }
         root.push(match *section {
             Section::Inputs => container("inputs", p.inputs.iter().map(input_to)),
             Section::Settings => p.settings.clone(),
@@ -90,6 +108,16 @@ pub fn profile_to_element(p: &Profile) -> Element {
                         Some(parent) => el.with_attr("parent", parent),
                         None => el,
                     }
+                }),
+            ),
+            Section::Modifiers => container(
+                "modifiers",
+                p.modifiers.iter().map(|m| {
+                    Element::new("modifier")
+                        .with_attr("name", &m.name)
+                        .with_attr("device-id", &m.device_id)
+                        .with_attr("input-type", &m.input_type)
+                        .with_attr("input-id", &m.input_id)
                 }),
             ),
             Section::Scripts => p.scripts.clone(),
@@ -154,6 +182,8 @@ fn config_from(e: &Element) -> ActionConfig {
         root_action: String::new(),
         behavior: String::new(),
         virtual_button: None,
+        layer: Layer::parse(e.attr("layer").unwrap_or_default()),
+        additive: e.attr("additive").is_some_and(|v| v == "true"),
         extra: Vec::new(),
     };
     for c in e.elements() {
@@ -169,7 +199,7 @@ fn config_from(e: &Element) -> ActionConfig {
 
 fn input_to(b: &InputBinding) -> Element {
     let configs = b.configs.iter().map(|cfg| {
-        container(
+        let mut el = container(
             "action-configuration",
             [
                 leaf("root-action", &cfg.root_action),
@@ -178,7 +208,14 @@ fn input_to(b: &InputBinding) -> Element {
             .into_iter()
             .chain(cfg.virtual_button.iter().cloned())
             .chain(cfg.extra.iter().cloned()),
-        )
+        );
+        if !cfg.layer.is_base() {
+            el = el.with_attr("layer", cfg.layer.to_string());
+        }
+        if cfg.additive {
+            el = el.with_attr("additive", "true");
+        }
+        el
     });
     container(
         "input",

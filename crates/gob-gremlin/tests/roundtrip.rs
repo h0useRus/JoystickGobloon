@@ -271,3 +271,35 @@ fn multiple_configs_and_virtual_buttons_round_trip() {
     );
     assert_eq!(axis.configs[0].virtual_button(axis.input_type()), None);
 }
+
+#[test]
+fn modifiers_and_layers_round_trip() {
+    use gob_core::{Layer, Modifier};
+    let mut p = Profile::default();
+    for (name, button) in [("M1", "2"), ("M2", "3")] {
+        assert!(p.add_modifier(Modifier {
+            name: name.into(),
+            device_id: "{TWCS}".into(),
+            input_type: "button".into(),
+            input_id: button.into(),
+        }));
+    }
+    p.bind("{T16000}", "button", "4", "Default");
+    p.bind_layer("{T16000}", "button", "4", "Default", &Layer::parse("M2+M1"));
+    p.bind_layer("{T16000}", "axis", "2", "Default", &Layer::parse("M1"));
+    p.inputs[1].configs[0].additive = true;
+
+    let written = gob_gremlin::to_string(&p);
+    assert!(
+        written.contains(
+            r#"<modifier name="M1" device-id="{TWCS}" input-type="button" input-id="2"/>"#
+        )
+    );
+    assert!(written.contains(r#"<action-configuration layer="M1+M2">"#));
+    assert!(written.contains(r#"<action-configuration layer="M1" additive="true">"#));
+    assert_round_trip(&written);
+    assert_eq!(gob_gremlin::from_str(&written).unwrap(), p);
+
+    // Without modifiers the section is left out.
+    assert!(!gob_gremlin::to_string(&Profile::default()).contains("modifiers"));
+}

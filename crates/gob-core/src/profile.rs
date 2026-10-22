@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::action::{Action, InputType, Item};
+use crate::modifier::{Layer, Modifier};
 use crate::xml::Element;
 
 /// A physical input bound to one or more action sequences in one mode.
@@ -11,7 +12,8 @@ pub struct InputBinding {
     pub input_type: String,
     pub mode: String,
     pub input_id: String,
-    /// One entry per `<action-configuration>`; all of them run for every event.
+    /// One entry per `<action-configuration>`; those of the layer the held modifiers choose run
+    /// for every event (see [`crate::modifier`]).
     pub configs: Vec<ActionConfig>,
     /// Unknown children of `<input>`, kept verbatim.
     pub extra: Vec<Element>,
@@ -31,6 +33,10 @@ pub struct ActionConfig {
     pub behavior: String,
     /// `<virtual-button>` used when an axis or hat behaves as a button; kept verbatim.
     pub virtual_button: Option<Element>,
+    /// Modifiers that must be held for it to run; the base layer runs without any.
+    pub layer: Layer,
+    /// Runs on top of the configurations of the held layer instead of only alone.
+    pub additive: bool,
     /// Unknown children, kept verbatim.
     pub extra: Vec<Element>,
 }
@@ -160,6 +166,7 @@ pub enum Section {
     LogicalDevice,
     Library,
     Modes,
+    Modifiers,
     Scripts,
     Devices,
     /// Index into [`Profile::extra`].
@@ -175,6 +182,7 @@ pub struct Profile {
     pub logical_device: Element,
     pub library: Vec<Action>,
     pub modes: Vec<Mode>,
+    pub modifiers: Vec<Modifier>,
     /// User Python scripts (plugins). Preserved, not executed.
     pub scripts: Element,
     pub devices: Vec<Device>,
@@ -194,6 +202,7 @@ impl Default for Profile {
                 name: "Default".into(),
                 parent: None,
             }],
+            modifiers: Vec::new(),
             scripts: Element::new("scripts"),
             devices: Vec::new(),
             extra: Vec::new(),
@@ -203,6 +212,7 @@ impl Default for Profile {
                 Section::LogicalDevice,
                 Section::Library,
                 Section::Modes,
+                Section::Modifiers,
                 Section::Scripts,
                 Section::Devices,
             ],
@@ -243,6 +253,12 @@ impl Profile {
         for b in &mut self.inputs {
             if b.device_id.eq_ignore_ascii_case(old) {
                 b.device_id = new.to_string();
+                count += 1;
+            }
+        }
+        for m in &mut self.modifiers {
+            if m.device_id.eq_ignore_ascii_case(old) {
+                m.device_id = new.to_string();
                 count += 1;
             }
         }
