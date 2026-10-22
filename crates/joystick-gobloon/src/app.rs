@@ -73,6 +73,8 @@ pub struct JoystickGobloonApp {
     was_minimized: bool,
     show_modes: bool,
     modes_window: crate::modes_view::ModesWindow,
+    show_modifiers: bool,
+    modifiers_window: crate::modifiers_view::ModifiersWindow,
     /// Sound and speech previews from the editor.
     media: gob_engine::Media,
     leds: crate::leds::Leds,
@@ -186,6 +188,8 @@ impl JoystickGobloonApp {
             was_minimized: false,
             show_modes: false,
             modes_window: Default::default(),
+            show_modifiers: false,
+            modifiers_window: Default::default(),
             title: crate::APP_NAME.into(),
             media: Default::default(),
             leds: Default::default(),
@@ -897,6 +901,9 @@ impl JoystickGobloonApp {
         if std::mem::take(&mut self.devices_view.open_modes) {
             self.show_modes = true;
         }
+        if std::mem::take(&mut self.devices_view.open_modifiers) {
+            self.show_modifiers = true;
+        }
         self.apply_ops(ops);
     }
 
@@ -1326,6 +1333,25 @@ impl eframe::App for JoystickGobloonApp {
                 for op in ops {
                     loaded.checkpoint();
                     crate::modes_view::apply(&mut loaded.profile, op);
+                }
+                loaded.refresh();
+                self.edited = Some(std::time::Instant::now());
+            }
+        }
+        if let (true, Some(loaded)) = (self.show_modifiers, &self.profile) {
+            let mut open = true;
+            let devices = self.input.devices();
+            let ops =
+                self.modifiers_window
+                    .show(ctx, &self.i18n, &loaded.profile, &devices, &mut open);
+            drop(devices);
+            self.show_modifiers = open;
+            if !ops.is_empty()
+                && let Some(loaded) = &mut self.profile
+            {
+                for op in ops {
+                    loaded.checkpoint();
+                    crate::modifiers_view::apply(&mut loaded.profile, op);
                 }
                 loaded.refresh();
                 self.edited = Some(std::time::Instant::now());
