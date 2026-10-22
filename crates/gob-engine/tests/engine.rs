@@ -1483,7 +1483,7 @@ fn modifier_rig() -> (Engine, Recorder) {
     ]
     .concat();
     let xml = format!(
-        r#"<profile version="14"><inputs>{inputs}</inputs><settings/><library>{library}</library>
+        r#"<profile app="Gobloon" version="1"><inputs>{inputs}</inputs><settings/><library>{library}</library>
         <modes><mode>Default</mode></modes><modifiers>
         <modifier name="M1" device-id="{DEV}" input-type="button" input-id="30"/>
         <modifier name="M2" device-id="{DEV}" input-type="button" input-id="31"/>

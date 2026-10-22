@@ -10,17 +10,34 @@ use crate::Error;
 
 /// First profile format version written by Gremlin R14.
 pub const MIN_VERSION: u32 = 14;
+/// `app` attribute of Joystick Gobloon's profiles.
+pub const APP: &str = "Gobloon";
+/// Version of Joystick Gobloon's profile format this build writes and the newest it reads.
+pub const FORMAT_VERSION: u32 = 1;
 
 pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
     if root.name != "profile" {
         return Err(Error::NotAProfile);
     }
     let version = root.attr("version").unwrap_or_default().to_string();
-    if version.parse::<u32>().map_or(true, |v| v < MIN_VERSION) {
-        return Err(Error::UnsupportedVersion(version));
-    }
+    let number = version.parse::<u32>().ok();
+    let source = match root.attr("app") {
+        Some(APP) => {
+            if number.is_none_or(|v| v > FORMAT_VERSION) {
+                return Err(Error::NewerFormat(version));
+            }
+            format!("Joystick Gobloon {version}")
+        }
+        Some(_) => return Err(Error::NotAProfile),
+        None => {
+            if number.is_none_or(|v| v < MIN_VERSION) {
+                return Err(Error::UnsupportedVersion(version));
+            }
+            format!("Joystick Gremlin {version}")
+        }
+    };
     let mut p = Profile {
-        version,
+        source,
         order: Vec::new(),
         modes: Vec::new(),
         ..Default::default()
@@ -90,7 +107,9 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
 }
 
 pub fn profile_to_element(p: &Profile) -> Element {
-    let mut root = Element::new("profile").with_attr("version", &p.version);
+    let mut root = Element::new("profile")
+        .with_attr("app", APP)
+        .with_attr("version", FORMAT_VERSION.to_string());
     for section in &p.order {
         if *section == Section::Modifiers && p.modifiers.is_empty() {
             continue;

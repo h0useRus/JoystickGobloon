@@ -6,9 +6,14 @@ use gob_gremlin::{Warning, profile_to_element, report, xmltext};
 const SAMPLE: &str = include_str!("../../../tests/fixtures/sample_r14.xml");
 const LOCAL_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/local");
 
-/// Import -> export must reproduce the same XML tree, and export must be stable.
+/// Import -> export must reproduce the same XML tree (with Joystick Gobloon's header, the format
+/// it is always written in), and export must be stable.
 fn assert_round_trip(text: &str) -> Profile {
-    let original = xmltext::parse(text).unwrap();
+    let mut original = xmltext::parse(text).unwrap();
+    original.attrs = vec![
+        ("app".into(), gob_gremlin::APP.into()),
+        ("version".into(), gob_gremlin::FORMAT_VERSION.to_string()),
+    ];
     let profile = gob_gremlin::from_str(text).unwrap();
     assert_eq!(
         profile_to_element(&profile),
@@ -302,4 +307,31 @@ fn modifiers_and_layers_round_trip() {
 
     // Without modifiers the section is left out.
     assert!(!gob_gremlin::to_string(&Profile::default()).contains("modifiers"));
+}
+
+#[test]
+fn format_headers() {
+    let body = "<inputs/><modes><mode>Default</mode></modes>";
+    let parse = |root: &str| gob_gremlin::from_str(&format!("{root}{body}</profile>"));
+    let p = parse(r#"<profile version="14">"#).unwrap();
+    assert_eq!(p.source, "Joystick Gremlin 14");
+    assert!(gob_gremlin::to_string(&p).contains(r#"<profile app="Gobloon" version="1">"#));
+    assert_eq!(
+        parse(r#"<profile app="Gobloon" version="1">"#)
+            .unwrap()
+            .source,
+        "Joystick Gobloon 1"
+    );
+    assert!(matches!(
+        parse(r#"<profile app="Gobloon" version="2">"#),
+        Err(gob_gremlin::Error::NewerFormat(_))
+    ));
+    assert!(matches!(
+        parse(r#"<profile version="13">"#),
+        Err(gob_gremlin::Error::UnsupportedVersion(_))
+    ));
+    assert!(matches!(
+        parse(r#"<profile app="Other" version="1">"#),
+        Err(gob_gremlin::Error::NotAProfile)
+    ));
 }

@@ -175,7 +175,9 @@ pub enum Section {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Profile {
-    pub version: String,
+    /// Format the profile was read from, for the import report (e.g. `Joystick Gremlin 14`);
+    /// profiles are always written in Joystick Gobloon's own format.
+    pub source: String,
     pub inputs: Vec<InputBinding>,
     /// `<settings>` kept as a tree; see [`Profile::startup_mode`].
     pub settings: Element,
@@ -193,7 +195,7 @@ pub struct Profile {
 impl Default for Profile {
     fn default() -> Self {
         Self {
-            version: "14".into(),
+            source: "Joystick Gobloon 1".into(),
             inputs: Vec::new(),
             settings: Element::new("settings"),
             logical_device: Element::new("logical-device"),
