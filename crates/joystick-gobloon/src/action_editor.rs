@@ -5,8 +5,8 @@ use std::collections::HashSet;
 
 use eframe::egui::{self, RichText};
 use gob_core::{
-    Action, ActionKind, InputType, Item, MergeOp, MouseAction, MouseButton, NewAction, Profile,
-    Property, child_groups,
+    Action, ActionKind, InputType, Item, Layer, MergeOp, MouseAction, MouseButton, NewAction,
+    Profile, Property, child_groups,
 };
 use gob_i18n::I18n;
 
@@ -65,13 +65,25 @@ pub enum Op {
         input_type: String,
         input_id: String,
         mode: String,
+        /// Layer the actions go on (the base without modifiers).
+        layer: Layer,
         add: Option<AddKind>,
     },
+    /// Removes one layer of an input's binding (the binding when it was the last one).
     Unbind {
         device: String,
         input_type: String,
         input_id: String,
         mode: String,
+        layer: Layer,
+    },
+    SetLayerAdditive {
+        device: String,
+        input_type: String,
+        input_id: String,
+        mode: String,
+        layer: Layer,
+        additive: bool,
     },
     Add {
         parent: String,
@@ -188,6 +200,7 @@ pub fn apply(p: &mut Profile, op: Op) {
             input_type,
             input_id,
             mode,
+            layer,
             add,
         } => {
             // Neither the logical device nor the keyboard is listed in <devices>.
@@ -199,7 +212,7 @@ pub fn apply(p: &mut Profile, op: Op) {
                     name,
                 });
             }
-            let root = p.bind(&device, &input_type, &input_id, &mode);
+            let root = p.bind_layer(&device, &input_type, &input_id, &mode, &layer);
             if let Some(kind) = add {
                 add_to(p, &root, "actions", &kind);
             }
@@ -209,7 +222,16 @@ pub fn apply(p: &mut Profile, op: Op) {
             input_type,
             input_id,
             mode,
-        } => p.unbind(&device, &input_type, &input_id, &mode),
+            layer,
+        } => p.unbind_layer(&device, &input_type, &input_id, &mode, &layer),
+        Op::SetLayerAdditive {
+            device,
+            input_type,
+            input_id,
+            mode,
+            layer,
+            additive,
+        } => p.set_layer_additive(&device, &input_type, &input_id, &mode, &layer, additive),
         Op::Add {
             parent,
             group,

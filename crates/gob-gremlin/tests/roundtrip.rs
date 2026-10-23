@@ -6,10 +6,19 @@ use gob_gremlin::{Warning, profile_to_element, report, xmltext};
 const SAMPLE: &str = include_str!("../../../tests/fixtures/sample_r14.xml");
 const LOCAL_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/local");
 
-/// Import -> export must reproduce the same XML tree, and export must be stable.
+/// Import -> export must reproduce the same XML tree (with the header its content calls for),
+/// and export must be stable.
 fn assert_round_trip(text: &str) -> Profile {
-    let original = xmltext::parse(text).unwrap();
+    let mut original = xmltext::parse(text).unwrap();
     let profile = gob_gremlin::from_str(text).unwrap();
+    original.attrs = if profile.needs_own_format() {
+        vec![
+            ("app".into(), gob_gremlin::APP.into()),
+            ("version".into(), gob_gremlin::FORMAT_VERSION.to_string()),
+        ]
+    } else {
+        vec![("version".into(), gob_gremlin::MIN_VERSION.to_string())]
+    };
     assert_eq!(
         profile_to_element(&profile),
         original,
@@ -270,4 +279,70 @@ fn multiple_configs_and_virtual_buttons_round_trip() {
         })
     );
     assert_eq!(axis.configs[0].virtual_button(axis.input_type()), None);
+}
+
+#[test]
+fn modifiers_and_layers_round_trip() {
+    use gob_core::{Layer, Modifier};
+    let mut p = Profile::default();
+    for (name, button) in [("M1", "2"), ("M2", "3")] {
+        assert!(p.add_modifier(Modifier {
+            name: name.into(),
+            device_id: "{DEV-A}".into(),
+            input_type: "button".into(),
+            input_id: button.into(),
+        }));
+    }
+    p.bind("{DEV-B}", "button", "4", "Default");
+    p.bind_layer("{DEV-B}", "button", "4", "Default", &Layer::parse("M2+M1"));
+    p.bind_layer("{DEV-B}", "axis", "2", "Default", &Layer::parse("M1"));
+    p.inputs[1].configs[0].additive = true;
+
+    let written = gob_gremlin::to_string(&p);
+    assert!(
+        written.contains(
+            r#"<modifier name="M1" device-id="{DEV-A}" input-type="button" input-id="2"/>"#
+        )
+    );
+    assert!(written.contains(r#"<action-configuration layer="M1+M2">"#));
+    assert!(written.contains(r#"<action-configuration layer="M1" additive="true">"#));
+    assert_round_trip(&written);
+    assert_eq!(gob_gremlin::from_str(&written).unwrap(), p);
+
+    // Without modifiers the section is left out.
+    assert!(!gob_gremlin::to_string(&Profile::default()).contains("modifiers"));
+}
+
+#[test]
+fn format_headers() {
+    let body = "<inputs/><modes><mode>Default</mode></modes>";
+    let parse = |root: &str| gob_gremlin::from_str(&format!("{root}{body}</profile>"));
+    let mut p = parse(r#"<profile version="14">"#).unwrap();
+    assert_eq!(p.source, "Joystick Gremlin 14");
+    assert!(gob_gremlin::to_string(&p).contains(r#"<profile version="14">"#));
+    p.add_modifier(gob_core::Modifier {
+        name: "M1".into(),
+        device_id: "{DEV-A}".into(),
+        input_type: "button".into(),
+        input_id: "2".into(),
+    });
+    assert!(gob_gremlin::to_string(&p).contains(r#"<profile app="Gobloon" version="1">"#));
+    assert_eq!(
+        parse(r#"<profile app="Gobloon" version="1">"#)
+            .unwrap()
+            .source,
+        "Joystick Gobloon 1"
+    );
+    assert!(matches!(
+        parse(r#"<profile app="Gobloon" version="2">"#),
+        Err(gob_gremlin::Error::NewerFormat(_))
+    ));
+    assert!(matches!(
+        parse(r#"<profile version="13">"#),
+        Err(gob_gremlin::Error::UnsupportedVersion(_))
+    ));
+    assert!(matches!(
+        parse(r#"<profile app="Other" version="1">"#),
+        Err(gob_gremlin::Error::NotAProfile)
+    ));
 }

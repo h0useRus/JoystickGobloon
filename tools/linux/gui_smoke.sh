@@ -1,7 +1,7 @@
 #!/bin/sh
 # GUI smoke test for the Linux build: starts it under Xvfb (no desktop, no tray host), checks that
 # a second start wakes the first, saves a screenshot to /out/linux-smoke.png and prints the log.
-# Runs in the build container with an /out folder (docs/LINUX_PLAN.md, "Тестирование"):
+# Runs in the build container with an /out folder:
 #   tools\linux\check.ps1 is not used here, as the script needs /out:
 #   podman run --rm -v "${PWD}:/src:ro" -v joystick-gobloon-target:/target
 #     -v joystick-gobloon-cargo:/usr/local/cargo/registry -v joystick-gobloon-rustup:/usr/local/rustup

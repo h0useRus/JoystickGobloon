@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use eframe::egui::{
     self, Align, Align2, Color32, FontId, Layout, Margin, Rect, RichText, Sense, Stroke, Vec2,
 };
-use gob_core::{Action, InputBinding, InputType, same_device_name};
+use gob_core::{Action, ActionConfig, InputBinding, InputType, Layer, Profile, same_device_name};
 use gob_i18n::I18n;
 use gob_input::{DeviceState, InputEvent};
 
@@ -60,6 +60,10 @@ pub struct DevicesView {
     pub leds: std::collections::HashSet<String>,
     /// Experimental features (light-led) are on, filled by the app.
     pub experimental: bool,
+    /// Layer shown per (device tab, input).
+    layer_sel: HashMap<(String, Key), Layer>,
+    /// The modifiers button was clicked: the app opens the modifiers window.
+    pub open_modifiers: bool,
     /// Curve edits keep curves monotonic (setting), filled by the app.
     pub monotonic_curves: bool,
 }
@@ -271,6 +275,16 @@ impl DevicesView {
                         self.open_modes = true;
                     }
                     ui.separator();
+                    // The modifiers, lit while their button is held (right to left: last first),
+                    // after the button that edits them.
+                    for m in p.profile.modifiers.iter().rev() {
+                        modifier_chip(ui, i18n, m, &tabs);
+                    }
+                    let tip = i18n.tr("modifiers-edit");
+                    if style::icon_button(ui, true, icon::ARROW_FAT_LINE_UP, &tip).clicked() {
+                        self.open_modifiers = true;
+                    }
+                    ui.separator();
                 }
                 let tabs_layout = Layout::left_to_right(Align::Center).with_main_wrap(true);
                 ui.with_layout(tabs_layout, |ui| {
@@ -458,7 +472,9 @@ impl DevicesView {
                         for (&key, &bound) in &rows {
                             let label = labels.get(&key).map(String::as_str);
                             let is_sel = selected == Some(key);
-                            if self.card(ui, i18n, tab, key, bound, &index, label, is_sel) {
+                            let marker = profile
+                                .and_then(|p| card_marker(i18n, &p.profile, tab, key, bound));
+                            if self.card(ui, i18n, tab, key, bound, &index, label, is_sel, marker) {
                                 self.selected_input.insert(tab.guid.to_string(), key);
                             }
                         }
@@ -592,6 +608,7 @@ impl DevicesView {
                             input_type: "key".into(),
                             input_id: gob_core::key_input_id(k).to_string(),
                             mode: mode.clone(),
+                            layer: Layer::base(),
                             add: None,
                         });
                     }
@@ -650,6 +667,8 @@ impl DevicesView {
         index: &HashMap<&str, &Action>,
         label: Option<&str>,
         selected: bool,
+        // Lock and name of a modifier or the layers icon, with its tooltip.
+        marker: Option<Marker>,
     ) -> bool {
         let visuals = ui.visuals();
         let fill = if selected {
@@ -668,7 +687,12 @@ impl DevicesView {
             Bound::None => None,
         };
         let root = binding
-            .and_then(|b| b.configs.first())
+            .and_then(|b| {
+                b.configs
+                    .iter()
+                    .find(|c| c.layer.is_base())
+                    .or(b.configs.first())
+            })
             .and_then(|c| index.get(c.root_action.as_str()).copied());
         let inherited = matches!(bound, Bound::Inherited(_));
         let response = egui::Frame::new()
@@ -688,6 +712,17 @@ impl DevicesView {
                         live_widget(ui, tab.live, key);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        match &marker {
+                            Some(Marker::Modifier { tip, .. }) => {
+                                ui.label(RichText::new(icon::LOCK_SIMPLE).weak())
+                                    .on_hover_text(tip);
+                            }
+                            Some(Marker::Layers(tip)) => {
+                                ui.label(RichText::new(icon::STACK_SIMPLE).weak())
+                                    .on_hover_text(tip);
+                            }
+                            None => {}
+                        }
                         if inherited {
                             let mode = binding.map(|b| b.mode.clone()).unwrap_or_default();
                             ui.label(RichText::new(icon::ARROW_BEND_UP_LEFT).weak())
@@ -700,6 +735,10 @@ impl DevicesView {
                         }
                     });
                 });
+                // A modifier's name where an input's actions are shown.
+                if let Some(Marker::Modifier { name, tip }) = &marker {
+                    name_chip(ui, name, false).on_hover_text(tip);
+                }
                 if let Some(root) = root {
                     let children: Vec<&Action> = root
                         .child_ids()
@@ -754,24 +793,20 @@ impl DevicesView {
     ) {
         // Bindings are written for the profile's device id (the alias when linked by name).
         let device = tab.alias.unwrap_or(tab.guid).to_string();
-        let input_type = match key.0 {
-            Kind::Axis => "axis",
-            Kind::Hat => "hat",
-            Kind::Key => "key",
-            Kind::Button | Kind::Other => "button",
-        };
+        let input_type = input_type_name(key.0);
         // Keys act like buttons.
         let behavior = match key.0 {
             Kind::Key => InputType::Button,
             _ => InputType::parse(input_type),
         };
         let mode = self.mode.clone().unwrap_or_default();
-        let bind = |add| Op::Bind {
+        let bind = |add, layer: &Layer| Op::Bind {
             device: device.clone(),
             name: tab.name.to_string(),
             input_type: input_type.into(),
             input_id: key.1.to_string(),
             mode: mode.clone(),
+            layer: layer.clone(),
             add,
         };
 
@@ -819,9 +854,27 @@ impl DevicesView {
         ui.add_space(4.0);
 
         let Some(p) = profile else { return };
+        // A modifier only switches layers: nothing to bind.
+        if let Some(m) = p
+            .profile
+            .modifier_at(&device, input_type, &key.1.to_string())
+        {
+            let text = i18n.trf("modifier-input", &[("name", m.name.clone().into())]);
+            ui.label(RichText::new(format!("{}  {text}", icon::LOCK_SIMPLE)).weak());
+            return;
+        }
+        let layer = self.layer_chips(ui, i18n, &p.profile, tab, key, bound);
+        let in_layer = |b: &'_ InputBinding| -> Vec<ActionConfig> {
+            b.configs
+                .iter()
+                .filter(|c| c.layer == layer)
+                .cloned()
+                .collect()
+        };
         match bound {
-            Bound::Own(b) => {
-                let root = b.configs.first().map(|c| c.root_action.clone());
+            Bound::Own(b) if !in_layer(b).is_empty() => {
+                let configs = in_layer(b);
+                let root = configs.first().map(|c| c.root_action.clone());
                 ui.horizontal(|ui| {
                     // The binding's description: the root action's label, like Gremlin.
                     if let Some(root_id) = &root
@@ -851,11 +904,29 @@ impl DevicesView {
                             input_type: b.input_type.clone(),
                             input_id: b.input_id.clone(),
                             mode: b.mode.clone(),
+                            layer: layer.clone(),
                         });
                     }
                 });
+                if !layer.is_base() {
+                    let mut additive = configs.iter().any(|c| c.additive);
+                    if ui
+                        .add(style::switch(&mut additive, i18n.tr("layer-additive")))
+                        .on_hover_text(i18n.tr("layer-additive-tip"))
+                        .changed()
+                    {
+                        ops.push(Op::SetLayerAdditive {
+                            device: b.device_id.clone(),
+                            input_type: b.input_type.clone(),
+                            input_id: b.input_id.clone(),
+                            mode: b.mode.clone(),
+                            layer: layer.clone(),
+                            additive,
+                        });
+                    }
+                }
                 ui.add_space(4.0);
-                let behavior = b.configs.first().map_or(behavior, |c| c.behavior());
+                let behavior = configs.first().map_or(behavior, |c| c.behavior());
                 let mut editor = Editor {
                     profile: &p.profile,
                     i18n,
@@ -868,11 +939,11 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                 };
-                for cfg in &b.configs {
+                for cfg in &configs {
                     editor.container(ui, &cfg.root_action, "actions", 0);
                 }
             }
-            Bound::Inherited(b) => {
+            Bound::Inherited(b) if !in_layer(b).is_empty() => {
                 ui.label(
                     RichText::new(format!(
                         "{}  {}",
@@ -881,16 +952,16 @@ impl DevicesView {
                     ))
                     .weak(),
                 );
-                for cfg in &b.configs {
+                for cfg in &in_layer(b) {
                     action_tree(ui, index, &cfg.root_action, 0);
                 }
                 ui.add_space(6.0);
                 let text = format!("{}  {}", icon::PENCIL_SIMPLE, i18n.tr("edit-override"));
                 if ui.button(text).clicked() {
-                    ops.push(bind(None));
+                    ops.push(bind(None, &layer));
                 }
             }
-            Bound::None => {
+            _ => {
                 ui.label(RichText::new(i18n.tr("edit-unbound")).weak());
                 let mut editor = Editor {
                     profile: &p.profile,
@@ -904,10 +975,167 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                 };
-                editor.add_menu(ui, None, |kind| bind(Some(kind)));
+                editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));
             }
         }
     }
+
+    /// Layer chips above an input's actions when the profile has modifiers: the base, then every
+    /// combination of modifiers. Returns the layer to show (the base without modifiers).
+    fn layer_chips(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        profile: &Profile,
+        tab: &Tab,
+        key: Key,
+        bound: Bound,
+    ) -> Layer {
+        if profile.modifiers.is_empty() {
+            return Layer::base();
+        }
+        let names: Vec<&str> = profile.modifiers.iter().map(|m| m.name.as_str()).collect();
+        let layers = all_layers(&names);
+        let sel_key = (tab.guid.to_string(), key);
+        let selected = self
+            .layer_sel
+            .get(&sel_key)
+            .filter(|l| layers.contains(l))
+            .cloned()
+            .unwrap_or_default();
+        let binding = match bound {
+            Bound::Own(b) | Bound::Inherited(b) => Some(b),
+            Bound::None => None,
+        };
+        ui.horizontal_wrapped(|ui| {
+            for layer in &layers {
+                let used = binding.is_some_and(|b| b.configs.iter().any(|c| c.layer == *layer));
+                let (glyph, name) = if layer.is_base() {
+                    (icon::SQUARE, i18n.tr("layer-base"))
+                } else {
+                    (icon::ARROW_FAT_LINE_UP, layer.to_string())
+                };
+                let caption = if used { format!("{name} •") } else { name };
+                let tip = i18n.tr(if used { "layer-set" } else { "layer-empty" });
+                if style::tab(ui, *layer == selected, glyph, &caption)
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    self.layer_sel.insert(sel_key.clone(), layer.clone());
+                }
+            }
+        });
+        ui.add_space(4.0);
+        self.layer_sel
+            .get(&sel_key)
+            .filter(|l| layers.contains(l))
+            .cloned()
+            .unwrap_or(selected)
+    }
+}
+
+/// A modifier's name, filled with the accent while its button is held on the controller.
+fn modifier_chip(ui: &mut egui::Ui, i18n: &I18n, m: &gob_core::Modifier, tabs: &[Tab]) {
+    let button: u32 = m.input_id.trim().parse().unwrap_or(0);
+    // The attached device, also when it stands in for the profile's device under another GUID.
+    let tab = tabs.iter().find(|t| {
+        t.guid.eq_ignore_ascii_case(&m.device_id)
+            || t.alias
+                .is_some_and(|a| a.eq_ignore_ascii_case(&m.device_id))
+    });
+    let held = tab
+        .and_then(|t| t.live)
+        .zip((button as usize).checked_sub(1))
+        .and_then(|(d, i)| d.buttons.get(i).copied())
+        .unwrap_or(false);
+    let device = tab.map_or(m.device_id.as_str(), |t| t.name);
+    let tip = format!(
+        "{}: {}",
+        device.trim(),
+        i18n.trf("vjoy-button-n", &[("n", button.into())])
+    );
+    name_chip(ui, &m.name, held).on_hover_text(tip);
+}
+
+/// A modifier's name in a rounded frame, filled with the accent when `lit`.
+fn name_chip(ui: &mut egui::Ui, name: &str, lit: bool) -> egui::Response {
+    let accent = style::accent(ui);
+    let (fill, stroke, text) = if lit {
+        let text = RichText::new(name)
+            .strong()
+            .color(ui.visuals().extreme_bg_color);
+        (accent, accent, text)
+    } else {
+        let stroke = ui.visuals().widgets.noninteractive.bg_stroke.color;
+        (Color32::TRANSPARENT, stroke, RichText::new(name).weak())
+    };
+    egui::Frame::new()
+        .fill(fill)
+        .stroke(Stroke::new(1.0_f32, stroke))
+        .corner_radius(style::RADIUS)
+        .inner_margin(Margin::symmetric(6, 2))
+        .show(ui, |ui| ui.label(text))
+        .inner
+}
+
+/// The base layer, then every combination of `names`: singles first, then pairs, ...
+fn all_layers(names: &[&str]) -> Vec<Layer> {
+    let n = names.len().min(8);
+    let mut masks: Vec<u32> = (0..1u32 << n).collect();
+    masks.sort_by_key(|m| (m.count_ones(), *m));
+    masks
+        .into_iter()
+        .map(|m| Layer::new((0..n).filter(|i| m & (1 << i) != 0).map(|i| names[i])))
+        .collect()
+}
+
+/// Profile input type of a row kind.
+fn input_type_name(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Axis => "axis",
+        Kind::Hat => "hat",
+        Kind::Key => "key",
+        Kind::Button | Kind::Other => "button",
+    }
+}
+
+/// Right side of an input card.
+enum Marker {
+    /// The input is this modifier: a lock, and its name where actions are shown.
+    Modifier { name: String, tip: String },
+    /// The input has layers (the tooltip lists them).
+    Layers(String),
+}
+
+/// The modifier marker on a modifier's card, the layers icon on an input with layers.
+fn card_marker(
+    i18n: &I18n,
+    profile: &Profile,
+    tab: &Tab,
+    key: Key,
+    bound: Bound,
+) -> Option<Marker> {
+    let device = tab.alias.unwrap_or(tab.guid);
+    if let Some(m) = profile.modifier_at(device, input_type_name(key.0), &key.1.to_string()) {
+        let tip = i18n.trf("modifier-input", &[("name", m.name.clone().into())]);
+        return Some(Marker::Modifier {
+            name: m.name.clone(),
+            tip,
+        });
+    }
+    let b = match bound {
+        Bound::Own(b) | Bound::Inherited(b) => b,
+        Bound::None => return None,
+    };
+    let mut layers: Vec<String> = b
+        .configs
+        .iter()
+        .filter(|c| !c.layer.is_base())
+        .map(|c| c.layer.to_string())
+        .collect();
+    layers.dedup();
+    (!layers.is_empty())
+        .then(|| Marker::Layers(i18n.trf("layers-tip", &[("layers", layers.join(", ").into())])))
 }
 
 /// Name like Gremlin shows it: X Axis ... Slider, Dial; Button 3; Hat 1; key name.

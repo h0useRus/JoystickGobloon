@@ -38,7 +38,7 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
-  # The Linux version (docs/LINUX_PLAN.md): the same code must build and pass there too.
+  # The Linux version: the same code must build and pass there too.
   linux:
     runs-on: ubuntu-latest
     steps:

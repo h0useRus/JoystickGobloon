@@ -6,7 +6,8 @@
 //!
 //! Semantics follow Joystick Gremlin R14: actions of a root run in order and
 //! share one mutable value, modes form a stack with inheritance, vJoy buttons
-//! are auto-released when their input is released in another mode.
+//! are auto-released when their input is released in another mode. On top of that,
+//! modifiers choose layers of an input's configurations (`gob_core::modifier`).
 
 mod engine;
 mod lighting;

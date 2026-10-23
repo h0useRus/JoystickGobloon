@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::action::{Action, InputType, Item};
+use crate::modifier::{Layer, Modifier};
 use crate::xml::Element;
 
 /// A physical input bound to one or more action sequences in one mode.
@@ -11,7 +12,8 @@ pub struct InputBinding {
     pub input_type: String,
     pub mode: String,
     pub input_id: String,
-    /// One entry per `<action-configuration>`; all of them run for every event.
+    /// One entry per `<action-configuration>`; those of the layer the held modifiers choose run
+    /// for every event (see [`crate::modifier`]).
     pub configs: Vec<ActionConfig>,
     /// Unknown children of `<input>`, kept verbatim.
     pub extra: Vec<Element>,
@@ -31,6 +33,10 @@ pub struct ActionConfig {
     pub behavior: String,
     /// `<virtual-button>` used when an axis or hat behaves as a button; kept verbatim.
     pub virtual_button: Option<Element>,
+    /// Modifiers that must be held for it to run; the base layer runs without any.
+    pub layer: Layer,
+    /// Runs on top of the configurations of the held layer instead of only alone.
+    pub additive: bool,
     /// Unknown children, kept verbatim.
     pub extra: Vec<Element>,
 }
@@ -160,6 +166,7 @@ pub enum Section {
     LogicalDevice,
     Library,
     Modes,
+    Modifiers,
     Scripts,
     Devices,
     /// Index into [`Profile::extra`].
@@ -168,13 +175,16 @@ pub enum Section {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Profile {
-    pub version: String,
+    /// Format the profile was read from, for the import report (e.g. `Joystick Gremlin 14`);
+    /// profiles are always written in Joystick Gobloon's own format.
+    pub source: String,
     pub inputs: Vec<InputBinding>,
     /// `<settings>` kept as a tree; see [`Profile::startup_mode`].
     pub settings: Element,
     pub logical_device: Element,
     pub library: Vec<Action>,
     pub modes: Vec<Mode>,
+    pub modifiers: Vec<Modifier>,
     /// User Python scripts (plugins). Preserved, not executed.
     pub scripts: Element,
     pub devices: Vec<Device>,
@@ -185,7 +195,7 @@ pub struct Profile {
 impl Default for Profile {
     fn default() -> Self {
         Self {
-            version: "14".into(),
+            source: "Joystick Gobloon 1".into(),
             inputs: Vec::new(),
             settings: Element::new("settings"),
             logical_device: Element::new("logical-device"),
@@ -194,6 +204,7 @@ impl Default for Profile {
                 name: "Default".into(),
                 parent: None,
             }],
+            modifiers: Vec::new(),
             scripts: Element::new("scripts"),
             devices: Vec::new(),
             extra: Vec::new(),
@@ -203,6 +214,7 @@ impl Default for Profile {
                 Section::LogicalDevice,
                 Section::Library,
                 Section::Modes,
+                Section::Modifiers,
                 Section::Scripts,
                 Section::Devices,
             ],
@@ -211,6 +223,19 @@ impl Default for Profile {
 }
 
 impl Profile {
+    /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
+    /// light-led actions): it is then written in Joystick Gobloon's own format, which
+    /// Joystick Gremlin cannot open.
+    pub fn needs_own_format(&self) -> bool {
+        !self.modifiers.is_empty()
+            || self
+                .inputs
+                .iter()
+                .flat_map(|b| &b.configs)
+                .any(|c| c.additive || !c.layer.is_base())
+            || self.library.iter().any(|a| a.kind == "light-led")
+    }
+
     pub fn action(&self, id: &str) -> Option<&Action> {
         self.library.iter().find(|a| a.id == id)
     }
@@ -243,6 +268,12 @@ impl Profile {
         for b in &mut self.inputs {
             if b.device_id.eq_ignore_ascii_case(old) {
                 b.device_id = new.to_string();
+                count += 1;
+            }
+        }
+        for m in &mut self.modifiers {
+            if m.device_id.eq_ignore_ascii_case(old) {
+                m.device_id = new.to_string();
                 count += 1;
             }
         }

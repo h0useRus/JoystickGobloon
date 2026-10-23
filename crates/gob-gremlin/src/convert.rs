@@ -1,25 +1,43 @@
-//! [`Element`] tree <-> [`Profile`] for Gremlin R14+ profiles.
+//! [`Element`] tree <-> [`Profile`]: Joystick Gobloon profiles and the Gremlin R14+ profiles
+//! they grew from.
 
 use gob_core::{
-    Action, ActionConfig, Device, Element, InputBinding, Item, Mode, Node, Profile, Property,
-    Section,
+    Action, ActionConfig, Device, Element, InputBinding, Item, Layer, Mode, Modifier, Node,
+    Profile, Property, Section,
 };
 
 use crate::Error;
 
 /// First profile format version written by Gremlin R14.
 pub const MIN_VERSION: u32 = 14;
+/// `app` attribute of Joystick Gobloon's profiles.
+pub const APP: &str = "Gobloon";
+/// Version of Joystick Gobloon's profile format this build writes and the newest it reads.
+pub const FORMAT_VERSION: u32 = 1;
 
 pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
     if root.name != "profile" {
         return Err(Error::NotAProfile);
     }
     let version = root.attr("version").unwrap_or_default().to_string();
-    if version.parse::<u32>().map_or(true, |v| v < MIN_VERSION) {
-        return Err(Error::UnsupportedVersion(version));
-    }
+    let number = version.parse::<u32>().ok();
+    let source = match root.attr("app") {
+        Some(APP) => {
+            if number.is_none_or(|v| v > FORMAT_VERSION) {
+                return Err(Error::NewerFormat(version));
+            }
+            format!("Joystick Gobloon {version}")
+        }
+        Some(_) => return Err(Error::NotAProfile),
+        None => {
+            if number.is_none_or(|v| v < MIN_VERSION) {
+                return Err(Error::UnsupportedVersion(version));
+            }
+            format!("Joystick Gremlin {version}")
+        }
+    };
     let mut p = Profile {
-        version,
+        source,
         order: Vec::new(),
         modes: Vec::new(),
         ..Default::default()
@@ -51,6 +69,20 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
                     .collect();
                 Section::Modes
             }
+            "modifiers" => {
+                p.modifiers = named(section, "modifier")
+                    .map(|m| {
+                        let attr = |n: &str| m.attr(n).unwrap_or_default().to_string();
+                        Modifier {
+                            name: attr("name"),
+                            device_id: attr("device-id"),
+                            input_type: attr("input-type"),
+                            input_id: attr("input-id"),
+                        }
+                    })
+                    .collect();
+                Section::Modifiers
+            }
             "scripts" => {
                 p.scripts = section.clone();
                 Section::Scripts
@@ -75,8 +107,18 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
 }
 
 pub fn profile_to_element(p: &Profile) -> Element {
-    let mut root = Element::new("profile").with_attr("version", &p.version);
+    // Gremlin's header while Joystick Gremlin can still open the profile.
+    let mut root = if p.needs_own_format() {
+        Element::new("profile")
+            .with_attr("app", APP)
+            .with_attr("version", FORMAT_VERSION.to_string())
+    } else {
+        Element::new("profile").with_attr("version", MIN_VERSION.to_string())
+    };
     for section in &p.order {
+        if *section == Section::Modifiers && p.modifiers.is_empty() {
+            continue;
+        }
         root.push(match *section {
             Section::Inputs => container("inputs", p.inputs.iter().map(input_to)),
             Section::Settings => p.settings.clone(),
@@ -90,6 +132,16 @@ pub fn profile_to_element(p: &Profile) -> Element {
                         Some(parent) => el.with_attr("parent", parent),
                         None => el,
                     }
+                }),
+            ),
+            Section::Modifiers => container(
+                "modifiers",
+                p.modifiers.iter().map(|m| {
+                    Element::new("modifier")
+                        .with_attr("name", &m.name)
+                        .with_attr("device-id", &m.device_id)
+                        .with_attr("input-type", &m.input_type)
+                        .with_attr("input-id", &m.input_id)
                 }),
             ),
             Section::Scripts => p.scripts.clone(),
@@ -154,6 +206,8 @@ fn config_from(e: &Element) -> ActionConfig {
         root_action: String::new(),
         behavior: String::new(),
         virtual_button: None,
+        layer: Layer::parse(e.attr("layer").unwrap_or_default()),
+        additive: e.attr("additive").is_some_and(|v| v == "true"),
         extra: Vec::new(),
     };
     for c in e.elements() {
@@ -169,7 +223,7 @@ fn config_from(e: &Element) -> ActionConfig {
 
 fn input_to(b: &InputBinding) -> Element {
     let configs = b.configs.iter().map(|cfg| {
-        container(
+        let mut el = container(
             "action-configuration",
             [
                 leaf("root-action", &cfg.root_action),
@@ -178,7 +232,14 @@ fn input_to(b: &InputBinding) -> Element {
             .into_iter()
             .chain(cfg.virtual_button.iter().cloned())
             .chain(cfg.extra.iter().cloned()),
-        )
+        );
+        if !cfg.layer.is_base() {
+            el = el.with_attr("layer", cfg.layer.to_string());
+        }
+        if cfg.additive {
+            el = el.with_attr("additive", "true");
+        }
+        el
     });
     container(
         "input",

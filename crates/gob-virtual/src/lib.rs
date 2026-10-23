@@ -1,5 +1,5 @@
 //! Virtual joysticks: the common interface the engine and the GUI use, whatever provides the
-//! devices. Each platform has its own backend (docs/LINUX_PLAN.md, "Архитектура"): vJoy on
+//! devices. Each platform has its own backend: vJoy on
 //! Windows (`windows.rs`, over gob-vjoy), uinput on Linux (`linux.rs`, over gob-uinput),
 //! `unsupported.rs` elsewhere.
 //! A new backend (e.g. our own Windows driver) only implements [`Backend`] and [`Device`].

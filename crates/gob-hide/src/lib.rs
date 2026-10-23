@@ -1,6 +1,6 @@
 //! Hiding physical devices from other programs (games then see only the virtual devices): the
-//! common interface the GUI uses, whatever does the hiding. Each platform has its own backend
-//! (docs/LINUX_PLAN.md, "Архитектура"): HidHide on Windows (`windows.rs`, over gob-hidhide),
+//! common interface the GUI uses, whatever does the hiding. Each platform has its own backend:
+//! HidHide on Windows (`windows.rs`, over gob-hidhide),
 //! exclusive reading on Linux (`linux.rs`, over gob-input), `unsupported.rs` elsewhere.
 
 use std::fmt;
