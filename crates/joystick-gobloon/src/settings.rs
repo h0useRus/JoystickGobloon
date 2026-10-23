@@ -52,6 +52,8 @@ pub struct Settings {
     pub check_updates: bool,
     /// Response curve editor: edits never make a rising (or falling) curve turn back.
     pub monotonic_curves: bool,
+    /// Ask before saving makes a profile Joystick Gremlin cannot open.
+    pub warn_gremlin_format: bool,
     /// Experimental features (joystick LEDs): hidden and not run while off. Not in the UI:
     /// `experimental = true` in settings.gob turns them on.
     pub experimental: bool,
@@ -218,6 +220,7 @@ impl Default for Settings {
             activate_on_start: false,
             check_updates: true,
             monotonic_curves: true,
+            warn_gremlin_format: true,
             calibration: BTreeMap::new(),
             leds: BTreeMap::new(),
             experimental: false,

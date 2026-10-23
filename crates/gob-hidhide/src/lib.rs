@@ -1,6 +1,5 @@
 //! HidHide control straight through its driver (`\\.\HidHide` IOCTLs): no HidHideCLI or
-//! HidHide client needed. Works with the signed 1.5.x driver (IOCTL 2048-2055, see
-//! docs/HIDHIDE_PLAN.md).
+//! HidHide client needed. Works with the signed 1.5.x driver (IOCTL 2048-2055).
 
 mod devices;
 mod driver;

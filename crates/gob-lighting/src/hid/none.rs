@@ -1,4 +1,4 @@
-//! Platforms without HID access yet (Linux gets hidraw, docs/LINUX_PLAN.md phase 5): no devices.
+//! Platforms without HID access yet (Linux gets hidraw): no devices.
 
 use std::io;
 

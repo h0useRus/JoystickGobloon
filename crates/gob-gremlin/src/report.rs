@@ -36,8 +36,8 @@ impl std::fmt::Display for ImportReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "format {}: {} inputs, {} actions, {} devices, {} modes, {} warnings",
-            self.version,
+            "{}: {} inputs, {} actions, {} devices, {} modes, {} warnings",
+            self.format,
             self.inputs,
             self.actions,
             self.devices,
@@ -49,7 +49,8 @@ impl std::fmt::Display for ImportReport {
 
 #[derive(Debug, Clone, Default)]
 pub struct ImportReport {
-    pub version: String,
+    /// Format the file was in, e.g. `Joystick Gremlin 14`.
+    pub format: String,
     pub inputs: usize,
     pub actions: usize,
     pub devices: usize,
@@ -60,7 +61,7 @@ pub struct ImportReport {
 
 pub fn report(p: &Profile) -> ImportReport {
     let mut r = ImportReport {
-        version: p.version.clone(),
+        format: p.source.clone(),
         inputs: p.inputs.len(),
         actions: p.library.len(),
         devices: p.devices.len(),

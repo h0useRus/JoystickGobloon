@@ -1,4 +1,4 @@
-//! vJoy straight through its driver, without vJoyInterface.dll (docs/VJOY_PLAN.md).
+//! vJoy straight through its driver, without vJoyInterface.dll.
 //!
 //! - Control channel `<namespace>device_000` (interface `GUID_DEVINTERFACE_VJOY`): driver info and
 //!   per-device status (exists, opened by which process).

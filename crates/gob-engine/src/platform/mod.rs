@@ -1,5 +1,5 @@
 //! Keyboard/mouse output and speech per platform behind one interface, so the engine and the
-//! runner stay the same everywhere (docs/LINUX_PLAN.md, "Архитектура"). `windows/`: SendInput
+//! runner stay the same everywhere. `windows/`: SendInput
 //! and SAPI; `linux/`: uinput (speech-dispatcher later); `none.rs`: nothing.
 
 use gob_core::MouseButton;

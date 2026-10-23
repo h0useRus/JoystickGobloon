@@ -15,6 +15,7 @@ mod leds;
 mod logfile;
 mod macro_editor;
 mod modes_view;
+mod modifiers_view;
 mod platform;
 mod profile_view;
 mod settings;

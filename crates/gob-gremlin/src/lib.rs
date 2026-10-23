@@ -1,7 +1,7 @@
-//! Joystick Gremlin profile import/export (R14+ XML format).
-//!
-//! Profiles round-trip without loss: everything Joystick Gobloon does not understand is
-//! kept verbatim and written back unchanged.
+//! Profile files: Joystick Gremlin R14+ XML and Joystick Gobloon's own format grown from it
+//! (`<profile app="Gobloon" version="1">`). A profile is written in Gremlin's format while it
+//! uses nothing only Joystick Gobloon has (`Profile::needs_own_format`), so Gremlin can still
+//! open it; everything not understood is kept verbatim and written back.
 
 mod convert;
 mod report;
@@ -12,7 +12,7 @@ use std::path::Path;
 
 use gob_core::Profile;
 
-pub use convert::{MIN_VERSION, profile_from_element, profile_to_element};
+pub use convert::{APP, FORMAT_VERSION, MIN_VERSION, profile_from_element, profile_to_element};
 pub use report::{ImportReport, Warning, report};
 
 #[derive(Debug)]
@@ -20,7 +20,10 @@ pub enum Error {
     Io(std::io::Error),
     Xml(String),
     NotAProfile,
+    /// A Gremlin profile older than R14.
     UnsupportedVersion(String),
+    /// Written by a newer Joystick Gobloon.
+    NewerFormat(String),
 }
 
 impl fmt::Display for Error {
@@ -28,13 +31,17 @@ impl fmt::Display for Error {
         match self {
             Self::Io(e) => write!(f, "{e}"),
             Self::Xml(e) => write!(f, "invalid XML: {e}"),
-            Self::NotAProfile => write!(f, "not a Joystick Gremlin profile"),
+            Self::NotAProfile => write!(f, "not a Joystick Gobloon or Joystick Gremlin profile"),
             Self::UnsupportedVersion(v) => {
                 write!(
                     f,
-                    "profile format version {v:?} is not supported (need {MIN_VERSION} or newer)"
+                    "Joystick Gremlin profile format version {v:?} is not supported (need {MIN_VERSION} or newer)"
                 )
             }
+            Self::NewerFormat(v) => write!(
+                f,
+                "profile format version {v:?} is from a newer Joystick Gobloon (this one reads up to {FORMAT_VERSION})"
+            ),
         }
     }
 }

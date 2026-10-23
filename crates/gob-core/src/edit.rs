@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
 
 use crate::action::{Action, HAT_BUTTONS, InputType, Item, Property};
+use crate::modifier::Layer;
 use crate::profile::{ActionConfig, InputBinding, Mode, Profile};
 
 /// Action types the editor can create.
@@ -587,7 +588,7 @@ impl Profile {
         self.library.iter_mut().find(|a| a.id == id)
     }
 
-    /// Root action of an input in a mode, creating the binding if needed.
+    /// Root action of an input's base layer in a mode, creating the binding if needed.
     pub fn bind(
         &mut self,
         device_id: &str,
@@ -595,13 +596,27 @@ impl Profile {
         input_id: &str,
         mode: &str,
     ) -> String {
+        self.bind_layer(device_id, input_type, input_id, mode, &Layer::base())
+    }
+
+    /// Root action of an input's `layer` in a mode, creating the binding if needed.
+    pub fn bind_layer(
+        &mut self,
+        device_id: &str,
+        input_type: &str,
+        input_id: &str,
+        mode: &str,
+        layer: &Layer,
+    ) -> String {
         let found = self.inputs.iter().position(|b| {
             b.device_id.eq_ignore_ascii_case(device_id)
                 && b.input_type == input_type
                 && b.input_id == input_id
                 && b.mode == mode
         });
-        if let Some(cfg) = found.and_then(|i| self.inputs[i].configs.first()) {
+        if let Some(cfg) =
+            found.and_then(|i| self.inputs[i].configs.iter().find(|c| c.layer == *layer))
+        {
             return cfg.root_action.clone();
         }
         let root = Action::new_root();
@@ -611,6 +626,8 @@ impl Profile {
             root_action: id.clone(),
             behavior: input_type.into(),
             virtual_button: None,
+            layer: layer.clone(),
+            additive: false,
             extra: Vec::new(),
         };
         match found {

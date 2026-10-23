@@ -3,7 +3,8 @@ use std::time::{Duration, Instant};
 
 use gob_core::{
     Action, ActionKind, ActivationMode, AxisDirection, Comparator, ConditionSource, InputType,
-    Item, Key, MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton, Profile, VirtualButton,
+    Item, Key, Layer, MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton, Profile,
+    VirtualButton,
 };
 
 use crate::media::{SpeechQueue, SpeechRequest};
@@ -391,6 +392,20 @@ struct Config {
     virtual_id: u32,
     /// light-led actions of this binding set when its mode becomes active.
     lights: Vec<Light>,
+    /// Modifiers it needs (see `gob_core::modifier`).
+    layer: Layer,
+    additive: bool,
+}
+
+impl Config {
+    /// `exclusive` is the held layer as the binding's exclusive configurations see it.
+    fn runs(&self, held: &Layer, exclusive: &Layer) -> bool {
+        if self.additive {
+            self.layer.runs(true, held)
+        } else {
+            self.layer.runs(false, exclusive)
+        }
+    }
 }
 
 pub struct Engine {
@@ -436,6 +451,10 @@ pub struct Engine {
     aliases: HashMap<String, String>,
     /// On-activate light-led actions met while compiling the current binding.
     compiled_lights: Vec<Light>,
+    /// Modifier inputs and their names; they only choose layers, their bindings do not run.
+    modifiers: Vec<(InputKey, String)>,
+    /// Layer a button or hat chose when pressed; its release goes there too.
+    pressed_layers: HashMap<InputKey, Layer>,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -504,7 +523,23 @@ impl Engine {
                 .map(|(k, v)| (k.to_ascii_lowercase(), v.to_ascii_lowercase()))
                 .collect(),
             compiled_lights: Vec::new(),
+            modifiers: Vec::new(),
+            pressed_layers: HashMap::new(),
         };
+        for m in &profile.modifiers {
+            let kind = match m.input_type.trim() {
+                "button" | "key" => InputKind::Button,
+                _ => continue,
+            };
+            if let Ok(id) = m.input_id.trim().parse() {
+                let key = InputKey {
+                    device: engine.device(&m.device_id),
+                    kind,
+                    id,
+                };
+                engine.modifiers.push((key, m.name.clone()));
+            }
+        }
         let mut virtual_id = 0;
         for b in &profile.inputs {
             let kind = match b.input_type() {
@@ -557,6 +592,8 @@ impl Engine {
                     vbutton,
                     virtual_id,
                     lights: std::mem::take(&mut engine.compiled_lights),
+                    layer: cfg.layer.clone(),
+                    additive: cfg.additive,
                 });
             }
         }
@@ -1056,10 +1093,129 @@ impl Engine {
 
     /// Handles one physical input change.
     pub fn process(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
+        let layer = self.held_layer();
         self.seed(key, value);
+        if self.is_modifier(key) {
+            self.after_layer_change(&layer, now, out);
+            return;
+        }
         let before = self.modes.current().to_string();
         self.dispatch(key, value, now, out);
         self.after_mode_change(&before, now, out);
+    }
+
+    fn is_modifier(&self, key: &InputKey) -> bool {
+        self.modifiers.iter().any(|(k, _)| k == key)
+    }
+
+    /// The modifiers held right now.
+    fn held_layer(&self) -> Layer {
+        Layer::new(
+            self.modifiers
+                .iter()
+                .filter(|(k, _)| self.buttons.get(k).copied().unwrap_or(false))
+                .map(|(_, name)| name.as_str()),
+        )
+    }
+
+    /// Layer an event runs in: buttons and hats keep the one they were pressed in until
+    /// released, axes follow the held modifiers.
+    fn event_layer(&mut self, key: &InputKey, value: Value) -> Layer {
+        if self.modifiers.is_empty() {
+            return Layer::base();
+        }
+        match value {
+            Value::Axis(_) => self.held_layer(),
+            Value::Button(true) | Value::Hat(Some(_)) => {
+                if let Some(layer) = self.pressed_layers.get(key) {
+                    return layer.clone();
+                }
+                let layer = self.held_layer();
+                self.pressed_layers.insert(key.clone(), layer.clone());
+                layer
+            }
+            Value::Button(false) | Value::Hat(None) => self
+                .pressed_layers
+                .remove(key)
+                .unwrap_or_else(|| self.held_layer()),
+        }
+    }
+
+    /// The held modifiers changed: axis configurations that stop running get the input at rest
+    /// (their outputs go back to neutral) and the ones that start get the current position.
+    /// Neutral values that a starting configuration writes anyway are not sent, so an output both
+    /// layers drive does not jump.
+    fn after_layer_change(&mut self, before: &Layer, now: Instant, out: &mut dyn Output) {
+        let held = self.held_layer();
+        if held == *before {
+            return;
+        }
+        let mode = self.modes.current().to_string();
+        let mut axes: Vec<(InputKey, f32, usize)> = self
+            .axes
+            .iter()
+            .filter_map(|(k, &v)| {
+                let set = *self.lookup.get(k)?.get(&mode)?;
+                Some((k.clone(), v, set))
+            })
+            .collect();
+        axes.sort_by(|a, b| (&a.0.device, a.0.id).cmp(&(&b.0.device, b.0.id)));
+        let changed = |engine: &Self, set: usize, starting: bool| -> Vec<usize> {
+            (0..engine.sets[set].len())
+                .filter(|&ci| {
+                    let c = &engine.sets[set][ci];
+                    let (was, runs) = (
+                        c.runs(before, engine.exclusive(set, before)),
+                        c.runs(&held, engine.exclusive(set, &held)),
+                    );
+                    if starting { !was && runs } else { was && !runs }
+                })
+                .collect()
+        };
+        let mut neutral = Deferred::new(out);
+        for (key, _, set) in &axes {
+            let src = self.source(key);
+            for ci in changed(self, *set, false) {
+                self.run_config((*set, ci), &src, Value::Axis(0.0), now, &mut neutral);
+            }
+        }
+        let (pending, out) = neutral.into_parts();
+        let mut written = Recording::new(out);
+        for (key, v, set) in &axes {
+            let src = self.source(key);
+            for ci in changed(self, *set, true) {
+                self.run_config((*set, ci), &src, Value::Axis(*v), now, &mut written);
+            }
+        }
+        let (targets, out) = written.into_parts();
+        for w in pending
+            .into_iter()
+            .filter(|w| !targets.contains(&w.target()))
+        {
+            w.send(out);
+        }
+    }
+
+    /// The held layer as a binding's exclusive configurations see it: one without exclusive
+    /// layers ignores the modifiers (its base keeps running, additive layers join it).
+    fn exclusive<'a>(&self, set: usize, held: &'a Layer) -> &'a Layer {
+        static BASE: Layer = Layer::EMPTY;
+        if self.sets[set]
+            .iter()
+            .any(|c| !c.additive && !c.layer.is_base())
+        {
+            held
+        } else {
+            &BASE
+        }
+    }
+
+    fn source(&self, key: &InputKey) -> Source {
+        Source {
+            key: key.clone(),
+            mode: self.modes.current().to_string(),
+            no_auto_release: false,
+        }
     }
 
     /// Fires due timers (tempo thresholds, pulse releases).
@@ -1137,31 +1293,11 @@ impl Engine {
             mode: self.modes.current().to_string(),
             no_auto_release: false,
         };
+        let layer = self.event_layer(key, value);
         if let Some(&set) = self.lookup.get(key).and_then(|m| m.get(&src.mode)) {
             for ci in 0..self.sets[set].len() {
-                if self.paused && !self.sets[set][ci].always {
-                    continue;
-                }
-                let (root, virtual_id) = (self.sets[set][ci].root, self.sets[set][ci].virtual_id);
-                let states = match self.sets[set][ci].vbutton.as_mut() {
-                    None => {
-                        self.run(root, &src, &mut value.clone(), now, out, 0);
-                        continue;
-                    }
-                    Some(vb) => vb.feed(value),
-                };
-                let vsrc = Source {
-                    key: InputKey {
-                        device: VIRTUAL_DEVICE.into(),
-                        kind: InputKind::Button,
-                        id: virtual_id,
-                    },
-                    mode: src.mode.clone(),
-                    no_auto_release: false,
-                };
-                for pressed in states {
-                    self.run(root, &vsrc, &mut Value::Button(pressed), now, out, 0);
-                    self.process_release(&vsrc.key, pressed, now, out);
+                if self.sets[set][ci].runs(&layer, self.exclusive(set, &layer)) {
+                    self.run_config((set, ci), &src, value, now, out);
                 }
             }
         }
@@ -1169,6 +1305,41 @@ impl Engine {
             Value::Button(pressed) => self.process_release(key, pressed, now, out),
             Value::Hat(None) => self.process_release(key, false, now, out),
             _ => {}
+        }
+    }
+
+    /// Runs one configuration of a binding for an input event.
+    fn run_config(
+        &mut self,
+        (set, ci): (usize, usize),
+        src: &Source,
+        value: Value,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        if self.paused && !self.sets[set][ci].always {
+            return;
+        }
+        let (root, virtual_id) = (self.sets[set][ci].root, self.sets[set][ci].virtual_id);
+        let states = match self.sets[set][ci].vbutton.as_mut() {
+            None => {
+                self.run(root, src, &mut value.clone(), now, out, 0);
+                return;
+            }
+            Some(vb) => vb.feed(value),
+        };
+        let vsrc = Source {
+            key: InputKey {
+                device: VIRTUAL_DEVICE.into(),
+                kind: InputKind::Button,
+                id: virtual_id,
+            },
+            mode: src.mode.clone(),
+            no_auto_release: false,
+        };
+        for pressed in states {
+            self.run(root, &vsrc, &mut Value::Button(pressed), now, out, 0);
+            self.process_release(&vsrc.key, pressed, now, out);
         }
     }
 
@@ -2324,6 +2495,145 @@ impl Engine {
             }
         }
     }
+}
+
+/// A vJoy output written during a layer change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Axis(u32, u8),
+    Button(u32, u8),
+    Hat(u32, u8),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Write {
+    Axis(u32, u8, f32),
+    Button(u32, u8, bool),
+    Hat(u32, u8, Option<u16>),
+}
+
+impl Write {
+    fn target(&self) -> Target {
+        match *self {
+            Write::Axis(d, a, _) => Target::Axis(d, a),
+            Write::Button(d, b, _) => Target::Button(d, b),
+            Write::Hat(d, h, _) => Target::Hat(d, h),
+        }
+    }
+
+    fn send(self, out: &mut dyn Output) {
+        match self {
+            Write::Axis(d, a, v) => out.axis(d, a, v),
+            Write::Button(d, b, p) => out.button(d, b, p),
+            Write::Hat(d, h, v) => out.hat(d, h, v),
+        }
+    }
+}
+
+/// Forwards to `out` but holds back vJoy writes (the neutral values of a layer change).
+struct Deferred<'a> {
+    out: &'a mut dyn Output,
+    pending: Vec<Write>,
+}
+
+impl<'a> Deferred<'a> {
+    fn new(out: &'a mut dyn Output) -> Self {
+        Self {
+            out,
+            pending: Vec::new(),
+        }
+    }
+
+    fn into_parts(self) -> (Vec<Write>, &'a mut dyn Output) {
+        (self.pending, self.out)
+    }
+}
+
+/// Forwards to `out` and notes which vJoy outputs were written.
+struct Recording<'a> {
+    out: &'a mut dyn Output,
+    written: Vec<Target>,
+}
+
+impl<'a> Recording<'a> {
+    fn new(out: &'a mut dyn Output) -> Self {
+        Self {
+            out,
+            written: Vec::new(),
+        }
+    }
+
+    fn into_parts(self) -> (Vec<Target>, &'a mut dyn Output) {
+        (self.written, self.out)
+    }
+}
+
+/// The non-vJoy outputs of a wrapper go straight through to `self.out`.
+macro_rules! forward_output {
+    () => {
+        fn mouse_move(&mut self, dx: i32, dy: i32) {
+            self.out.mouse_move(dx, dy)
+        }
+        fn mouse_button(&mut self, button: MouseButton, pressed: bool) {
+            self.out.mouse_button(button, pressed)
+        }
+        fn mouse_wheel(&mut self, notches: i32) {
+            self.out.mouse_wheel(notches)
+        }
+        fn key(&mut self, scan_code: u16, extended: bool, pressed: bool) {
+            self.out.key(scan_code, extended, pressed)
+        }
+        fn run_command(&mut self, executable: &str, arguments: &[String]) {
+            self.out.run_command(executable, arguments)
+        }
+        fn play_sound(&mut self, file: &str, volume: u8) {
+            self.out.play_sound(file, volume)
+        }
+        fn light_led(&mut self, light: &Light) {
+            self.out.light_led(light)
+        }
+        fn speak(&mut self, request: SpeechRequest) {
+            self.out.speak(request)
+        }
+        fn load_profile(&mut self, file: &str) {
+            self.out.load_profile(file)
+        }
+        fn vjoy_state(&self, device: u32, kind: InputKind, id: u32) -> Option<Value> {
+            self.out.vjoy_state(device, kind, id)
+        }
+        fn key_pressed(&self, scan_code: u16, extended: bool) -> bool {
+            self.out.key_pressed(scan_code, extended)
+        }
+    };
+}
+
+impl Output for Deferred<'_> {
+    fn axis(&mut self, device: u32, axis: u8, value: f32) {
+        self.pending.push(Write::Axis(device, axis, value));
+    }
+    fn button(&mut self, device: u32, button: u8, pressed: bool) {
+        self.pending.push(Write::Button(device, button, pressed));
+    }
+    fn hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
+        self.pending.push(Write::Hat(device, hat, direction));
+    }
+    forward_output!();
+}
+
+impl Output for Recording<'_> {
+    fn axis(&mut self, device: u32, axis: u8, value: f32) {
+        self.written.push(Target::Axis(device, axis));
+        self.out.axis(device, axis, value);
+    }
+    fn button(&mut self, device: u32, button: u8, pressed: bool) {
+        self.written.push(Target::Button(device, button));
+        self.out.button(device, button, pressed);
+    }
+    fn hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
+        self.written.push(Target::Hat(device, hat));
+        self.out.hat(device, hat, direction);
+    }
+    forward_output!();
 }
 
 /// Gremlin's comparators. Python compares bools and floats as numbers (True == 1.0).
