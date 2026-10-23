@@ -45,7 +45,6 @@ The app and its profiles are the same on both systems; what does the work undern
 | Keyboard keys as inputs | Yes | No: reading every keyboard would expose what you type (key and mouse **output** works) |
 | Text to speech | Windows voices (SAPI) | speech-dispatcher (`spd-say`) |
 | Tray icon | Yes | Needs AppIndicator (on GNOME an extension); on Wayland "hide to tray" minimizes |
-| Joystick lighting (experimental) | Yes | Not yet |
 
 ## Features
 
@@ -53,7 +52,7 @@ The app and its profiles are the same on both systems; what does the work undern
 
 - **Opens Joystick Gremlin profiles** — imports Gremlin R14 profiles without losing anything; actions Joystick Gobloon
   does not run yet are kept untouched. A profile stays in Gremlin's format until you use something only Joystick
-  Gobloon has (modifiers, LED actions); then it is saved in Joystick Gobloon's own format, and the app asks first.
+  Gobloon has (modifiers); then it is saved in Joystick Gobloon's own format, and the app asks first.
 - **All Gremlin R14 actions**: map to vJoy, response curves (piecewise linear, cubic spline, Bézier), modes,
   tempo (short / long press), double tap, chain, smart toggle, macros, keyboard and mouse output, split / merge axis,
   axis delta, dual-axis deadzone, hat as buttons, conditions, sounds, text to speech, run command, load profile and more
@@ -105,14 +104,6 @@ The app and its profiles are the same on both systems; what does the work undern
   <img src="docs/screenshots/hidhide.png" width="32%" alt="Device hiding window: the VKB sticks are hidden, the vJoy devices are visible">
 </p>
 
-### Joystick lighting (experimental)
-
-- **Light LED** action for VKB Gladiator NXT / EVO sticks: the RGB light on top of the grip, the hat light and the two
-  base lights, each with its own color and blink mode — on press, on release or when a profile or mode becomes active.
-- Default colors per stick (Settings → Lighting), set again when the profile stops.
-- Turn it on in Settings → General → *Enable experimental features*. Profiles that use Light LED no longer open in
-  Joystick Gremlin.
-
 ### Everyday comfort
 
 - Tray icon: click to show or hide the window, double click to activate the profile; in the tray the app uses
@@ -162,7 +153,6 @@ cargo test --workspace
 | `gob-input` | DirectInput input (on change or polling) and the keyboard hook |
 | `gob-vjoy` | vJoy driver: output and device configuration |
 | `gob-hidhide` | HidHide driver: hiding, application list |
-| `gob-lighting` | Joystick LEDs through HID (VKB) |
 | `gob-i18n` | Fluent translations |
 
 ## Translations
@@ -178,8 +168,6 @@ Joystick Gobloon stands on the shoulders of
 [vJoy](https://github.com/shauleiz/vJoy) by Shaul Eizikovich (signed 2.1.9.1 build by
 [Justin Shafer](https://github.com/jshafer817/vJoy)) and
 [Joystick Gremlin](https://github.com/WhiteMagic/JoystickGremlin) by Lionel Ott.
-The VKB LED protocol follows [pyvkb](https://github.com/ventorvar/pyvkb) by Ventorvar and
-[vkb_led_jg_plugin](https://github.com/WesCov/vkb_led_jg_plugin) by WesCov.
 
 Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
 [SignPath Foundation](https://signpath.org/).

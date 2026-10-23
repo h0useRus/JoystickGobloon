@@ -109,7 +109,7 @@ settings-monotonic-curves = Curves only rise or fall
 settings-monotonic-curves-tip = Response curve editor: a knot or handle stops where the curve would turn back, so it crosses zero only once. Curves that already turn back are edited freely.
 settings-warn-gremlin = Warn before a profile stops opening in Joystick Gremlin
 gremlin-format-title = Joystick Gremlin will not open it
-gremlin-format-text = { $file } uses features only Joystick Gobloon has (modifiers and layers, LED actions). Once saved, Joystick Gremlin cannot open it any more.
+gremlin-format-text = { $file } uses features only Joystick Gobloon has (modifiers and layers). Once saved, Joystick Gremlin cannot open it any more.
 gremlin-format-dont-ask = Don't ask again
 status-whitelisted = Joystick Gobloon was added to the HidHide whitelist.
 

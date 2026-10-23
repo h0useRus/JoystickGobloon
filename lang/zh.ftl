@@ -109,7 +109,7 @@ settings-monotonic-curves = 曲线只升或只降
 settings-monotonic-curves-tip = 响应曲线编辑器：点或控制柄会停在曲线即将折返的位置，因此曲线只穿过零一次。已经折返的曲线可自由编辑。
 settings-warn-gremlin = 在配置文件将无法在 Joystick Gremlin 中打开之前提醒
 gremlin-format-title = Joystick Gremlin 将无法打开
-gremlin-format-text = { $file } 使用了只有 Joystick Gobloon 才有的功能（修饰键和层、LED 动作）。保存后 Joystick Gremlin 将无法再打开它。
+gremlin-format-text = { $file } 使用了只有 Joystick Gobloon 才有的功能（修饰键和层）。保存后 Joystick Gremlin 将无法再打开它。
 gremlin-format-dont-ask = 不再询问
 status-whitelisted = 已将 Joystick Gobloon 添加到 HidHide 白名单。
 
