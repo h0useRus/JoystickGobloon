@@ -227,6 +227,7 @@ impl JoystickGobloonApp {
         #[cfg(debug_assertions)]
         match std::env::var("JOYSTICK_GOBLOON_START_PAGE").as_deref() {
             Ok("hidhide") => app.hidhide_window = true,
+            Ok("modifiers") => app.show_modifiers = true,
             Ok("apps") => app.page = Page::Apps,
             Ok("vjoy") => app.page = Page::VJoy,
             Ok("viewer") => app.page = Page::Viewer,
