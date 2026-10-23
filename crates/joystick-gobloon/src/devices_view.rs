@@ -667,8 +667,8 @@ impl DevicesView {
         index: &HashMap<&str, &Action>,
         label: Option<&str>,
         selected: bool,
-        // Lock of a modifier or the layers icon, with its tooltip.
-        marker: Option<(&str, String)>,
+        // Lock and name of a modifier or the layers icon, with its tooltip.
+        marker: Option<Marker>,
     ) -> bool {
         let visuals = ui.visuals();
         let fill = if selected {
@@ -712,8 +712,16 @@ impl DevicesView {
                         live_widget(ui, tab.live, key);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if let Some((glyph, tip)) = &marker {
-                            ui.label(RichText::new(*glyph).weak()).on_hover_text(tip);
+                        match &marker {
+                            Some(Marker::Modifier { tip, .. }) => {
+                                ui.label(RichText::new(icon::LOCK_SIMPLE).weak())
+                                    .on_hover_text(tip);
+                            }
+                            Some(Marker::Layers(tip)) => {
+                                ui.label(RichText::new(icon::STACK_SIMPLE).weak())
+                                    .on_hover_text(tip);
+                            }
+                            None => {}
                         }
                         if inherited {
                             let mode = binding.map(|b| b.mode.clone()).unwrap_or_default();
@@ -727,6 +735,10 @@ impl DevicesView {
                         }
                     });
                 });
+                // A modifier's name where an input's actions are shown.
+                if let Some(Marker::Modifier { name, tip }) = &marker {
+                    name_chip(ui, name, false).on_hover_text(tip);
+                }
                 if let Some(root) = root {
                     let children: Vec<&Action> = root
                         .child_ids()
@@ -1036,38 +1048,34 @@ fn modifier_chip(ui: &mut egui::Ui, i18n: &I18n, m: &gob_core::Modifier, tabs: &
         .zip((button as usize).checked_sub(1))
         .and_then(|(d, i)| d.buttons.get(i).copied())
         .unwrap_or(false);
-    let accent = style::accent(ui);
-    let (fill, text) = if held {
-        (
-            accent,
-            RichText::new(&m.name)
-                .strong()
-                .color(ui.visuals().extreme_bg_color),
-        )
-    } else {
-        (Color32::TRANSPARENT, RichText::new(&m.name).weak())
-    };
     let device = tab.map_or(m.device_id.as_str(), |t| t.name);
     let tip = format!(
         "{}: {}",
         device.trim(),
         i18n.trf("vjoy-button-n", &[("n", button.into())])
     );
+    name_chip(ui, &m.name, held).on_hover_text(tip);
+}
+
+/// A modifier's name in a rounded frame, filled with the accent when `lit`.
+fn name_chip(ui: &mut egui::Ui, name: &str, lit: bool) -> egui::Response {
+    let accent = style::accent(ui);
+    let (fill, stroke, text) = if lit {
+        let text = RichText::new(name)
+            .strong()
+            .color(ui.visuals().extreme_bg_color);
+        (accent, accent, text)
+    } else {
+        let stroke = ui.visuals().widgets.noninteractive.bg_stroke.color;
+        (Color32::TRANSPARENT, stroke, RichText::new(name).weak())
+    };
     egui::Frame::new()
         .fill(fill)
-        .stroke(Stroke::new(
-            1.0_f32,
-            if held {
-                accent
-            } else {
-                ui.visuals().widgets.noninteractive.bg_stroke.color
-            },
-        ))
+        .stroke(Stroke::new(1.0_f32, stroke))
         .corner_radius(style::RADIUS)
         .inner_margin(Margin::symmetric(6, 2))
         .show(ui, |ui| ui.label(text))
-        .response
-        .on_hover_text(tip);
+        .inner
 }
 
 /// The base layer, then every combination of `names`: singles first, then pairs, ...
@@ -1091,18 +1099,29 @@ fn input_type_name(kind: Kind) -> &'static str {
     }
 }
 
-/// A lock on a modifier's card, a layers icon on an input with layers.
+/// Right side of an input card.
+enum Marker {
+    /// The input is this modifier: a lock, and its name where actions are shown.
+    Modifier { name: String, tip: String },
+    /// The input has layers (the tooltip lists them).
+    Layers(String),
+}
+
+/// The modifier marker on a modifier's card, the layers icon on an input with layers.
 fn card_marker(
     i18n: &I18n,
     profile: &Profile,
     tab: &Tab,
     key: Key,
     bound: Bound,
-) -> Option<(&'static str, String)> {
+) -> Option<Marker> {
     let device = tab.alias.unwrap_or(tab.guid);
     if let Some(m) = profile.modifier_at(device, input_type_name(key.0), &key.1.to_string()) {
-        let text = i18n.trf("modifier-input", &[("name", m.name.clone().into())]);
-        return Some((icon::LOCK_SIMPLE, text));
+        let tip = i18n.trf("modifier-input", &[("name", m.name.clone().into())]);
+        return Some(Marker::Modifier {
+            name: m.name.clone(),
+            tip,
+        });
     }
     let b = match bound {
         Bound::Own(b) | Bound::Inherited(b) => b,
@@ -1115,10 +1134,8 @@ fn card_marker(
         .map(|c| c.layer.to_string())
         .collect();
     layers.dedup();
-    (!layers.is_empty()).then(|| {
-        let text = i18n.trf("layers-tip", &[("layers", layers.join(", ").into())]);
-        (icon::STACK_SIMPLE, text)
-    })
+    (!layers.is_empty())
+        .then(|| Marker::Layers(i18n.trf("layers-tip", &[("layers", layers.join(", ").into())])))
 }
 
 /// Name like Gremlin shows it: X Axis ... Slider, Dial; Button 3; Hat 1; key name.
