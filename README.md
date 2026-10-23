@@ -56,7 +56,7 @@ The app and its profiles are the same on both systems; what does the work undern
 - **All Gremlin R14 actions**: map to vJoy, response curves (piecewise linear, cubic spline, Bézier), modes,
   tempo (short / long press), double tap, chain, smart toggle, macros, keyboard and mouse output, split / merge axis,
   axis delta, dual-axis deadzone, hat as buttons, conditions, sounds, text to speech, run command, load profile and more
-  ([full list](docs/GREMLIN_ACTIONS.md)).
+  ([all actions with pictures](docs/ACTIONS.md)).
 - **Modes** with inheritance, per-mode overrides, **undo / redo**.
 - **Keyboard keys and a logical device** as inputs, bound exactly like joystick buttons and axes.
 - **Map controls** — a profile made on another PC is matched to your devices in one click.
