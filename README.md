@@ -17,6 +17,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><b>Download</b></a> ·
+  <a href="#getting-started"><b>Getting started</b></a> ·
+  <a href="docs/ACTIONS.md"><b>Documentation</b></a>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/devices.png" width="860" alt="Bindings of a VKB Gladiator stick: a tempo action with a short press to vJoy and a long press that changes the mode">
 </p>
 
@@ -133,6 +139,13 @@ warn on the first start: choose *More info → Run anyway*.
 
 > **Status:** alpha. Daily-driver features are in place and used with a Star Citizen dual-VKB profile; expect rough
 > edges. See the [releases](https://github.com/h0useRus/JoystickGobloon/releases).
+
+## Documentation
+
+- [Actions](docs/ACTIONS.md) — what every action does, with a picture of its editor.
+- [Modifiers](#modifiers) — buttons that switch inputs to other layers of actions.
+- [Windows and Linux](#windows-and-linux) — what each system uses and its limits.
+- [Code signing policy](docs/CODE_SIGNING.md).
 
 ## Building from source
 
