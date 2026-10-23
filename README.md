@@ -5,13 +5,14 @@
 <h1 align="center">Joystick Gobloon</h1>
 
 <p align="center">
-  <b>Device hiding, virtual joysticks and input mapping for Windows — in one app.</b>
+  <b>Device hiding, virtual joysticks and input mapping for Windows and Linux — in one app.</b>
 </p>
 
 <p align="center">
   <a href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/h0useRus/JoystickGobloon?label=release"></a>
   <a href="https://github.com/h0useRus/JoystickGobloon/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/h0useRus/JoystickGobloon/ci.yml?branch=dev&label=CI"></a>
   <img alt="Windows 10 / 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4">
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-AppImage-FCC624">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
 
@@ -29,6 +30,22 @@ Flight-sim and space-sim players with HOTAS setups usually run three tools side 
 **Joystick Gobloon** replaces the user interfaces of all three with a single fast, native app written in Rust.
 It talks to the HidHide and vJoy drivers directly, opens your Joystick Gremlin profiles as they are, and keeps the
 Gremlin workflow you already know.
+
+## Windows and Linux
+
+The app and its profiles are the same on both systems; what does the work underneath differs, and so do the limits.
+
+| | Windows 10 / 11 (x64) | Linux (x86_64: desktop distributions, Steam Deck desktop mode; X11 and Wayland) |
+| --- | --- | --- |
+| Package | Installer (also installs the HidHide and vJoy drivers) or portable zip; updates itself | AppImage; updates itself |
+| Virtual joysticks | **vJoy** driver: up to 16 devices, each up to 8 axes, 128 buttons, 4 hats; devices are configured in the app (one UAC prompt per change) | **uinput**, no driver: devices appear when a profile is activated; each up to 8 axes, 95 buttons, 4 hats |
+| Device hiding | **HidHide** driver: hidden for every program, also when Joystick Gobloon is closed; a list of programs that still see hidden devices | Joystick Gobloon reads hidden devices exclusively, so games get nothing from them — **only while Joystick Gobloon runs**; no program list; programs that read raw HID (`hidraw`, e.g. Steam) are not covered |
+| Physical controllers | DirectInput: all buttons (128 on VKB) | evdev: the kernel reports at most **80 buttons** per device; split bigger sticks into several virtual HID devices in the vendor's tool |
+| Access | Administrator rights only to install drivers and change vJoy devices | One-time *Grant access* on the Devices page (a udev rule, asks for your password) |
+| Keyboard keys as inputs | Yes | No: reading every keyboard would expose what you type (key and mouse **output** works) |
+| Text to speech | Windows voices (SAPI) | speech-dispatcher (`spd-say`) |
+| Tray icon | Yes | Needs AppIndicator (on GNOME an extension); on Wayland "hide to tray" minimizes |
+| Joystick lighting (experimental) | Yes | Not yet |
 
 ## Features
 
@@ -115,6 +132,9 @@ Gremlin workflow you already know.
 4. Hide your physical sticks (eye button in the toolbar) and press **Activate** (▶).
 
 Requirements: Windows 10 or 11 (x64).
+
+**Linux:** download `JoystickGobloon-<version>-x86_64.AppImage`, make it executable (`chmod +x`) and start it. On the
+Devices page click **Grant access** once, then import your profile as above.
 
 Code signing of releases through SignPath is being set up (see the [code signing policy](docs/CODE_SIGNING.md)).
 Until then — and for a while after, until a new release has been downloaded often enough — Windows SmartScreen may
