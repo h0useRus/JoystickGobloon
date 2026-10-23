@@ -160,7 +160,7 @@ Input types: A = axis, B = button, H = hat, K = keyboard.
 
 ## light-led (Joystick Gobloon's own)
 
-- Sets a joystick LED; VKB only so far (crates/gob-lighting, docs/LIGHTING_PLAN.md). Properties: `device-guid`
+- Sets a joystick LED; VKB only so far (crates/gob-lighting). Properties: `device-guid`
   uuid (DirectInput instance GUID, device aliases apply), `led-id` int (VKB NXT/EVO: 10 RGB on top of the grip,
   11 small red at the hat, 0 base), `led-element` int (0 whole LED; VKB base: 1 blue, 2 red - set one by one,
   sharing one blink mode), `color` / `color2` string `#RRGGBB` (VKB: 8 levels per channel; single-color LEDs use

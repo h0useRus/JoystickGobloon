@@ -1,7 +1,7 @@
 # Joystick Gobloon
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
-Plan: phases 0-10 in docs/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13); Linux port (phase 10, Linux only,
-no macOS): docs/LINUX_PLAN.md.
+Plans (local only, gitignored): phases 0-10 in plans/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13); Linux port (phase 10, Linux only,
+no macOS): plans/LINUX_PLAN.md. Plans and roadmaps live in plans/, never in git.
 "R14" = Gremlin profile format version 14, still current in Gremlin R15/R16; ref/JoystickGremlin is the develop
 branch (16.x) - read it for behavior. Work on ONE crate per session.
 
@@ -44,14 +44,14 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.
   Example `hidhide_info [--all]` (read-only). Session blacklist waits for a signed 1.7.x - check
-  nefarius/HidHide#217 and its releases before each gob-hidhide session (docs/HIDHIDE_PLAN.md)
+  nefarius/HidHide#217 and its releases before each gob-hidhide session (plans/HIDHIDE_PLAN.md)
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
   semantics; platform/ = keyboard/mouse output (`Injector`) and speech (`SpeechEngine`): windows/ SendInput + SAPI (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy;
   examples `dry_run` (profile -> printed vJoy output) and `runner_check`
 - crates/gob-lighting joystick LEDs: vendor-neutral `Device`/`Led` in lib.rs dispatching on `Vendor`; every vendor's
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
-  DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: docs/LIGHTING_PLAN.md
+  DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
 - docs/GREMLIN_ACTIONS.md  all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
@@ -80,7 +80,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - Platform code (OS APIs, drivers) lives only in per-platform modules (`platform/windows.rs`, `platform/linux.rs`) or
   backend crates behind a common interface; UI, engine and model use only the interface and its capabilities, never
   `windows::`/`cfg(windows)`/`cfg(target_os)`. A platform part (e.g. our own Windows driver instead of vJoy) must be
-  replaceable without touching UI or logic. Layout and migration: docs/LINUX_PLAN.md, "Архитектура".
+  replaceable without touching UI or logic. Layout and migration: plans/LINUX_PLAN.md, "Архитектура".
 - Settings: TOML text in %APPDATA%\JoystickGobloon\settings.gob (old settings.toml is read once), programs of
   the Applications page in apps.gob next to it. If the exe's folder has its own settings.gob, that folder is
   used instead for settings, apps and the log (joystick-gobloon/src/settings.rs `data_dir`).
@@ -119,7 +119,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
   setup with /UPDATE=1 (it restarts the app), portable copies swap their files. Debug builds never update.
   Network tests: `cargo test -p joystick-gobloon update:: -- --ignored`.
-- Linux (docs/LINUX_PLAN.md): `tools\linux\check.ps1` runs clippy + tests (or any command) in Podman (machine
+- Linux (plans/LINUX_PLAN.md): `tools\linux\check.ps1` runs clippy + tests (or any command) in Podman (machine
   pod-h0use, start it first); Windows-only code stays behind `cfg(windows)`, so the Linux build must stay clean.
   `check.ps1 --devices` adds /dev (uinput tests); tools/linux/gui_smoke.sh starts the GUI (or `APP=` an
   AppImage) under Xvfb for a screenshot; no real tray or desktop there.

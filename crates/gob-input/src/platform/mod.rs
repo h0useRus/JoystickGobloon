@@ -1,6 +1,6 @@
 //! Controller and keyboard access per platform behind one interface, so the input service
-//! (`service.rs`) and everything above it stay the same everywhere (docs/LINUX_PLAN.md,
-//! "Архитектура"). `windows/`: DirectInput, the keyboard hook and WinMM controller numbers;
+//! (`service.rs`) and everything above it stay the same everywhere.
+//! `windows/`: DirectInput, the keyboard hook and WinMM controller numbers;
 //! `linux/`: evdev controllers and keyboards, joydev numbers; `none.rs`: no controllers.
 
 use crate::{Calibrations, DeviceState, InputEvent};

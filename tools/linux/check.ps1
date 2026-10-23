@@ -1,4 +1,4 @@
-# Runs a cargo command for Linux in Podman (docs/LINUX_PLAN.md), default: clippy and tests.
+# Runs a cargo command for Linux in Podman, default: clippy and tests.
 #   tools\linux\check.ps1                      clippy -D warnings + tests
 #   tools\linux\check.ps1 cargo check --workspace
 #   tools\linux\check.ps1 --devices cargo test ...   privileged, with the machine's /dev: uinput and

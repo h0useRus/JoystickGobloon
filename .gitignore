@@ -3,3 +3,6 @@
 
 # personal / unlicensed Gremlin profiles used by tests when present
 /tests/fixtures/local/
+
+# local plans and roadmaps, not published
+/plans/

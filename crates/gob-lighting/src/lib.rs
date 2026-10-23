@@ -1,5 +1,5 @@
 //! Joystick LEDs. Vendor-neutral API here; each vendor's protocol/SDK lives in its own file
-//! (`vkb.rs`, later others) and `Device` dispatches on `Vendor`. See docs/LIGHTING_PLAN.md.
+//! (`vkb.rs`, later others) and `Device` dispatches on `Vendor`.
 //!
 //! Writes are temporary: they last until the device is reconnected and change neither the
 //! firmware nor the vendor's own profile. A written LED keeps its last state until reconnect,

@@ -1,6 +1,6 @@
 //! HID access: present HID interfaces of a vendor, their feature reports, Get/SetFeature. One
-//! interface for every vendor's protocol (`vkb.rs`), one implementation per platform
-//! (docs/LINUX_PLAN.md, "Архитектура"): `windows.rs` (SetupAPI + `HidD_*`); `none.rs` until
+//! interface for every vendor's protocol (`vkb.rs`), one implementation per platform:
+//! `windows.rs` (SetupAPI + `HidD_*`); `none.rs` until
 //! Linux gets hidraw.
 
 use std::io;

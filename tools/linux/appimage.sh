@@ -1,6 +1,6 @@
 #!/bin/sh
-# Builds the Linux release file JoystickGobloon-<version>-x86_64.AppImage (docs/LINUX_PLAN.md,
-# phase 6) from a built program. Used by .github/workflows/release.yml; locally in Podman:
+# Builds the Linux release file JoystickGobloon-<version>-x86_64.AppImage
+# from a built program. Used by .github/workflows/release.yml; locally in Podman:
 #   podman run --rm -v "${PWD}:/src:ro" -v joystick-gobloon-target:/target ... joystick-gobloon-linux
 #     sh /src/tools/linux/appimage.sh <version> /target/appimage /target/release/JoystickGobloon
 #

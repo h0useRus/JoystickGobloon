@@ -132,7 +132,7 @@ Until then — and for a while after, until a new release has been downloaded of
 warn on the first start: choose *More info → Run anyway*.
 
 > **Status:** alpha. Daily-driver features are in place and used with a Star Citizen dual-VKB profile; expect rough
-> edges. See the [roadmap](docs/ROADMAP.md) and [releases](https://github.com/h0useRus/JoystickGobloon/releases).
+> edges. See the [releases](https://github.com/h0useRus/JoystickGobloon/releases).
 
 ## Building from source
 
