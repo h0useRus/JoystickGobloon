@@ -34,8 +34,9 @@ Gremlin workflow you already know.
 
 ### Profiles and bindings
 
-- **Joystick Gremlin compatible** — opens Gremlin R14 profiles and saves them back in Gremlin's format without losing
-  anything; actions Joystick Gobloon does not run yet are kept untouched.
+- **Opens Joystick Gremlin profiles** — imports Gremlin R14 profiles without losing anything; actions Joystick Gobloon
+  does not run yet are kept untouched. A profile stays in Gremlin's format until you use something only Joystick
+  Gobloon has (modifiers, LED actions); then it is saved in Joystick Gobloon's own format, and the app asks first.
 - **All Gremlin R14 actions**: map to vJoy, response curves (piecewise linear, cubic spline, Bézier), modes,
   tempo (short / long press), double tap, chain, smart toggle, macros, keyboard and mouse output, split / merge axis,
   axis delta, dual-axis deadzone, hat as buttons, conditions, sounds, text to speech, run command, load profile and more
@@ -43,6 +44,22 @@ Gremlin workflow you already know.
 - **Modes** with inheritance, per-mode overrides, **undo / redo**.
 - **Keyboard keys and a logical device** as inputs, bound exactly like joystick buttons and axes.
 - **Map controls** — a profile made on another PC is matched to your devices in one click.
+
+### Modifiers
+
+- Name a few buttons as **modifiers** (M1, M2, ...): press *Add a modifier* and then the button on your stick.
+- While a modifier is held, every input that has a **layer** for it runs that layer's actions instead of its base:
+  one button can do different things with nothing, M1, M2 or M1+M2 held.
+- Layers are chips above an input's actions; a dot marks the ones in use. Inputs without layers ignore modifiers.
+- An **additive** layer runs together with the base instead of replacing it, e.g. an axis that drives a second output
+  only while M1 is held.
+- A button keeps the layer it was pressed in until it is released, so letting go of the modifier first never leaves
+  anything stuck; outputs of a layer that stops go back to rest.
+- The modifiers light up next to the mode selector while held; a modifier's own button shows a lock and runs no actions.
+
+<p align="center">
+  <img src="docs/screenshots/modifiers.png" width="860" alt="Layers Base, M1, M2 and M1+M2 above a button's actions, with the Modifiers window: M1 and M2 on two buttons of the right stick">
+</p>
 
 ### Virtual joysticks (vJoy)
 
@@ -119,8 +136,8 @@ cargo test --workspace
 | Crate | Purpose |
 | --- | --- |
 | `joystick-gobloon` | The eframe / egui application |
-| `gob-core` | Profile model mirroring Joystick Gremlin R14 |
-| `gob-gremlin` | Gremlin XML import / export, lossless round trip |
+| `gob-core` | Profile model: Joystick Gremlin R14 plus Joystick Gobloon's own features (modifiers and layers) |
+| `gob-gremlin` | Profile files: Gremlin R14 import, Gremlin or Joystick Gobloon format on save, lossless round trip |
 | `gob-engine` | Runs a profile: input → actions → vJoy, keyboard, mouse |
 | `gob-input` | DirectInput input (on change or polling) and the keyboard hook |
 | `gob-vjoy` | vJoy driver: output and device configuration |
