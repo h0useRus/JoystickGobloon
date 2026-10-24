@@ -72,6 +72,7 @@ The app and its profiles are the same on both systems; what does the work undern
 - Name a few buttons as **modifiers** (M1, M2, ...): press *Add a modifier* and then the button on your stick.
 - While a modifier is held, every input that has a **layer** for it runs that layer's actions instead of its base:
   one button can do different things with nothing, M1, M2 or M1+M2 held.
+  Only the layer of the exact combination runs: M1's layer does not run while M1+M2 is held.
 - Layers are chips above an input's actions; a dot marks the ones in use. Inputs without layers ignore modifiers.
 - An **additive** layer runs together with the base instead of replacing it, e.g. an axis that drives a second output
   only while M1 is held.

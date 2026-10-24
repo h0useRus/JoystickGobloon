@@ -23,7 +23,7 @@ pub use edit::{NewAction, child_groups, new_uuid};
 pub use logical::{
     KEYBOARD_GUID, LOGICAL_DEVICE_GUID, LogicalInput, key_from_input_id, key_input_id,
 };
-pub use modifier::{Layer, Modifier};
+pub use modifier::{Layer, Modifier, Selection};
 pub use profile::{
     ActionConfig, AxisDirection, Device, InputBinding, Mode, Profile, Section, VirtualButton,
     same_device_name,

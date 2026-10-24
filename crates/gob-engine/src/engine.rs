@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use gob_core::{
     Action, ActionKind, ActivationMode, AxisDirection, Comparator, ConditionSource, InputType,
     Item, Key, Layer, MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton, Profile,
-    VirtualButton,
+    Selection, VirtualButton,
 };
 
 use crate::media::{SpeechQueue, SpeechRequest};
@@ -395,17 +395,6 @@ struct Config {
     /// Modifiers it needs (see `gob_core::modifier`).
     layer: Layer,
     additive: bool,
-}
-
-impl Config {
-    /// `exclusive` is the held layer as the binding's exclusive configurations see it.
-    fn runs(&self, held: &Layer, exclusive: &Layer) -> bool {
-        if self.additive {
-            self.layer.runs(true, held)
-        } else {
-            self.layer.runs(false, exclusive)
-        }
-    }
 }
 
 pub struct Engine {
@@ -1161,13 +1150,11 @@ impl Engine {
             .collect();
         axes.sort_by(|a, b| (&a.0.device, a.0.id).cmp(&(&b.0.device, b.0.id)));
         let changed = |engine: &Self, set: usize, starting: bool| -> Vec<usize> {
+            let (was, is) = (engine.selection(set, before), engine.selection(set, &held));
             (0..engine.sets[set].len())
                 .filter(|&ci| {
-                    let c = &engine.sets[set][ci];
-                    let (was, runs) = (
-                        c.runs(before, engine.exclusive(set, before)),
-                        c.runs(&held, engine.exclusive(set, &held)),
-                    );
+                    let layer = &engine.sets[set][ci].layer;
+                    let (was, runs) = (was.runs(layer), is.runs(layer));
                     if starting { !was && runs } else { was && !runs }
                 })
                 .collect()
@@ -1196,18 +1183,9 @@ impl Engine {
         }
     }
 
-    /// The held layer as a binding's exclusive configurations see it: one without exclusive
-    /// layers ignores the modifiers (its base keeps running, additive layers join it).
-    fn exclusive<'a>(&self, set: usize, held: &'a Layer) -> &'a Layer {
-        static BASE: Layer = Layer::EMPTY;
-        if self.sets[set]
-            .iter()
-            .any(|c| !c.additive && !c.layer.is_base())
-        {
-            held
-        } else {
-            &BASE
-        }
+    /// Which configurations of a binding run while `held` is held.
+    fn selection(&self, set: usize, held: &Layer) -> Selection {
+        Selection::new(self.sets[set].iter().map(|c| (&c.layer, c.additive)), held)
     }
 
     fn source(&self, key: &InputKey) -> Source {
@@ -1295,8 +1273,9 @@ impl Engine {
         };
         let layer = self.event_layer(key, value);
         if let Some(&set) = self.lookup.get(key).and_then(|m| m.get(&src.mode)) {
+            let selection = self.selection(set, &layer);
             for ci in 0..self.sets[set].len() {
-                if self.sets[set][ci].runs(&layer, self.exclusive(set, &layer)) {
+                if selection.runs(&self.sets[set][ci].layer) {
                     self.run_config((set, ci), &src, value, now, out);
                 }
             }
