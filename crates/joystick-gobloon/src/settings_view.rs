@@ -38,6 +38,14 @@ pub enum Change {
     LedDefaults,
 }
 
+/// What the attached controllers tell the settings pages.
+pub struct Attached<'a> {
+    /// Joysticks with LED control.
+    pub led_devices: &'a [LedDevice],
+    /// Some controller is read at the poll interval (else its slider is off).
+    pub polls_devices: bool,
+}
+
 pub fn show(
     ui: &mut egui::Ui,
     i18n: &I18n,
@@ -45,7 +53,7 @@ pub fn show(
     tab: &mut SettingsTab,
     logo: &egui::TextureHandle,
     updater: &mut crate::update::Updater,
-    led_devices: &[LedDevice],
+    attached: &Attached,
 ) -> Option<Change> {
     if !settings.experimental && *tab == SettingsTab::Lighting {
         *tab = SettingsTab::General;
@@ -82,8 +90,8 @@ pub fn show(
             ui.add_space(18.0);
             tray_section(ui, i18n, settings).or(change)
         }
-        SettingsTab::General => general(ui, i18n, settings),
-        SettingsTab::Lighting => lighting(ui, i18n, settings, led_devices),
+        SettingsTab::General => general(ui, i18n, settings, attached.polls_devices),
+        SettingsTab::Lighting => lighting(ui, i18n, settings, attached.led_devices),
         SettingsTab::About => {
             about(ui, i18n, logo, updater);
             None
@@ -194,7 +202,13 @@ fn section_title(ui: &mut egui::Ui, glyph: &str, title: &str) {
 }
 
 /// General tab: startup, devices, editor.
-fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Change> {
+/// `polls_devices`: some controller is read at the poll interval (else its slider is off).
+fn general(
+    ui: &mut egui::Ui,
+    i18n: &I18n,
+    settings: &mut Settings,
+    polls_devices: bool,
+) -> Option<Change> {
     section_title(ui, icon::POWER, &i18n.tr("settings-group-startup"));
     let autostart = ui.add(style::switch(
         &mut settings.start_with_windows,
@@ -225,6 +239,19 @@ fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Ch
             i18n.tr("settings-input-events"),
         ))
         .on_hover_text(i18n.tr("settings-input-events-tip"));
+    let (min, max) = (
+        gob_input::MIN_POLL_INTERVAL.as_millis() as u8,
+        gob_input::MAX_POLL_INTERVAL.as_millis() as u8,
+    );
+    let poll = ui
+        .add_enabled(
+            polls_devices,
+            egui::Slider::new(&mut settings.poll_interval_ms, min..=max)
+                .suffix(" ms")
+                .text(i18n.tr("settings-poll-interval")),
+        )
+        .on_hover_text(i18n.tr("settings-poll-interval-tip"))
+        .on_disabled_hover_text(i18n.tr("settings-poll-interval-unused"));
     // Only where hiding has a program list to put Joystick Gobloon on.
     let see_hidden = gob_hide::capabilities().app_list.then(|| {
         ui.add(style::switch(
@@ -270,6 +297,7 @@ fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Ch
         &activate,
         &updates,
         &input_events,
+        &poll,
         &focus,
         &focus_modifiers,
         &curves,

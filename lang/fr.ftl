@@ -113,7 +113,10 @@ settings-focus-input-tip = Quand un axe, un bouton ou un chapeau est utilisé, l
 settings-focus-skip-modifiers = Ne pas sauter aux modificateurs
 settings-focus-skip-modifiers-tip = Appuyer sur un bouton ou une touche modificateur ne fait pas défiler la liste jusqu’à lui : l’entrée que vous configurez reste visible.
 settings-input-events = Lire les manettes lors d’un changement
-settings-input-events-tip = Moins de latence et de charge CPU : les manettes sont lues quand elles signalent un changement, et les appuis courts ne sont jamais perdus. Désactivé : chaque manette est lue toutes les 4 ms.
+settings-input-events-tip = Moins de latence et de charge CPU : les manettes sont lues quand elles signalent un changement, et les appuis courts ne sont jamais perdus. Désactivé : chaque manette est lue à l’intervalle d’interrogation.
+settings-poll-interval = Intervalle d’interrogation
+settings-poll-interval-tip = Fréquence d’interrogation d’une manette : toutes les manettes si « Lire les manettes lors d’un changement » est désactivé, sinon seulement celles qui ne peuvent pas signaler les changements. Plus court : moins de latence et un peu plus de CPU.
+settings-poll-interval-unused = Inutilisé pour l’instant : chaque manette connectée signale ses changements, aucune n’est donc interrogée. S’applique si « Lire les manettes lors d’un changement » est désactivé ou si une manette ne peut pas signaler ses changements.
 settings-monotonic-curves = Les courbes ne font que monter ou descendre
 settings-monotonic-curves-tip = Éditeur de courbe de réponse : un point ou une poignée s’arrête là où la courbe repartirait en arrière, elle ne croise donc zéro qu’une fois. Les courbes qui repartent déjà en arrière s’éditent librement.
 settings-warn-gremlin = Avertir si l’enregistrement change le format du profil
@@ -255,6 +258,7 @@ run-executable = Programme
 run-arguments = Arguments
 run-browse = Choisir un programme
 status-paused = Profil en pause
+status-latency = Latence entre la lecture d’une manette et la sortie virtuelle, dernière seconde : moyenne { $average } ms, max { $max } ms. Le délai propre de la manette n’est pas inclus.
 
 # Double tap, chain
 kind-double-tap = Double appui

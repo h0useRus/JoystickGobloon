@@ -24,7 +24,7 @@ impl super::Backend for Platform {
         None
     }
 
-    fn wait(&self, _: &[NoDevice], _: bool) {}
+    fn wait(&self, _: &[NoDevice], _: bool, _: std::time::Duration) {}
 }
 
 impl super::Device for NoDevice {

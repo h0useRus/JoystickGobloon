@@ -8,14 +8,16 @@ use std::cell::RefCell;
 use std::time::Duration;
 
 use windows::Win32::Devices::HumanInterfaceDevice::DIDEVICEINSTANCEW;
-use windows::Win32::Foundation::HANDLE;
-use windows::Win32::System::Threading::WaitForMultipleObjects;
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
+use windows::Win32::System::Threading::{
+    CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, CreateWaitableTimerExW, SetWaitableTimer,
+    TIMER_ALL_ACCESS, WaitForMultipleObjects,
+};
+use windows::core::PCWSTR;
 
 use super::{format_guid, normalize_axis};
 use crate::{Calibrations, DeviceState, InputEvent};
 
-/// Polling mode: time between two reads of every device.
-const POLL_INTERVAL: Duration = Duration::from_millis(4);
 /// Event mode: devices are also read this often without a change signal, as a fallback.
 const EVENT_TIMEOUT: Duration = Duration::from_millis(20);
 /// WaitForMultipleObjects takes at most this many handles.
@@ -25,6 +27,18 @@ pub(crate) struct Platform {
     di: dinput::DirectInput,
     /// Reused by `wait`, so waiting does not allocate.
     handles: RefCell<Vec<HANDLE>>,
+    /// High resolution timer that paces the polled devices while waiting for the others'
+    /// change signals; `None` before Windows 10 1803.
+    timer: Option<HANDLE>,
+}
+
+impl Drop for Platform {
+    fn drop(&mut self) {
+        if let Some(timer) = self.timer {
+            // SAFETY: created in `new` and only closed here.
+            let _ = unsafe { CloseHandle(timer) };
+        }
+    }
 }
 
 impl super::Backend for Platform {
@@ -33,9 +47,20 @@ impl super::Backend for Platform {
 
     fn new() -> Option<Self> {
         let di = dinput::DirectInput::new().ok()?;
+        // SAFETY: an unnamed timer without security attributes, closed in Drop.
+        let timer = unsafe {
+            CreateWaitableTimerExW(
+                None,
+                PCWSTR::null(),
+                CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+                TIMER_ALL_ACCESS.0,
+            )
+        }
+        .ok();
         Some(Self {
             di,
             handles: RefCell::default(),
+            timer,
         })
     }
 
@@ -54,26 +79,44 @@ impl super::Backend for Platform {
         self.di.open(found, events).ok()
     }
 
-    fn wait(&self, devices: &[dinput::Device], events: bool) {
+    fn wait(&self, devices: &[dinput::Device], events: bool, poll: Duration) {
+        if !events {
+            std::thread::sleep(poll);
+            return;
+        }
+        if devices.is_empty() {
+            std::thread::sleep(EVENT_TIMEOUT);
+            return;
+        }
         let mut handles = self.handles.borrow_mut();
         handles.clear();
         handles.extend(
             devices
                 .iter()
                 .filter_map(dinput::Device::event)
-                .take(MAX_WAIT),
+                .take(MAX_WAIT - 1),
         );
-        // A device without an event (polling mode, or it refused one) needs the short interval.
-        let all_signal = !devices.is_empty() && handles.len() == devices.len();
-        if events && all_signal {
-            // SAFETY: the handles belong to `devices`, which stay open during the wait.
-            unsafe {
-                WaitForMultipleObjects(&handles, false, EVENT_TIMEOUT.as_millis() as u32);
+        if handles.is_empty() {
+            std::thread::sleep(poll);
+            return;
+        }
+        let mut timeout = EVENT_TIMEOUT.as_millis() as u32;
+        if handles.len() < devices.len() {
+            // Some devices refused a change signal: wake for the signals and, every `poll`,
+            // for those devices. The timer is precise; a wait timeout is not (~15 ms steps).
+            let due = -((poll.as_nanos() / 100) as i64);
+            // SAFETY: our own timer, relative due time in 100 ns units, no completion routine.
+            let armed = self
+                .timer
+                .filter(|&t| unsafe { SetWaitableTimer(t, &due, 0, None, None, false) }.is_ok());
+            match armed {
+                Some(timer) => handles.push(timer),
+                None => timeout = (poll.as_millis() as u32).max(1),
             }
-        } else if events && devices.is_empty() {
-            std::thread::sleep(EVENT_TIMEOUT);
-        } else {
-            std::thread::sleep(POLL_INTERVAL);
+        }
+        // SAFETY: the handles belong to `devices` (open during the wait) and to `self`.
+        unsafe {
+            WaitForMultipleObjects(&handles, false, timeout);
         }
     }
 }
@@ -89,6 +132,10 @@ impl super::Device for dinput::Device {
 
     fn set_calibrations(&mut self, calibrations: &Calibrations) {
         self.use_calibrations(calibrations);
+    }
+
+    fn signals(&self) -> bool {
+        self.event().is_some()
     }
 
     fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool {
