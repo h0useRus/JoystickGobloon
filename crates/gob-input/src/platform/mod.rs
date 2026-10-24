@@ -34,8 +34,9 @@ pub(crate) trait Backend: Sized {
     /// Opens a controller. `events`: it is read when it signals a change (event mode) instead
     /// of being polled.
     fn open(&self, found: &Self::Found, events: bool) -> Option<Self::Device>;
-    /// Waits until a device may have changed (event mode) or the poll interval passed.
-    fn wait(&self, devices: &[Self::Device], events: bool);
+    /// Waits until a device may have changed (event mode) or `poll` passed. In event mode
+    /// `poll` paces only the devices that cannot signal a change.
+    fn wait(&self, devices: &[Self::Device], events: bool, poll: std::time::Duration);
 }
 
 /// An open controller.
@@ -49,6 +50,10 @@ pub(crate) trait Device {
     /// the device buffered go to `emit` in order (so short presses are not lost); the caller
     /// finds the rest by comparing `previous` and `state`. False when the device is gone.
     fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool;
+    /// Signals its changes, so `wait` wakes for it (event mode); false: it is polled.
+    fn signals(&self) -> bool {
+        true
+    }
     /// Takes the device for this process alone, or lets go of it (only with
     /// [`Backend::EXCLUSIVE`]).
     fn set_exclusive(&mut self, _on: bool) {}

@@ -1,6 +1,6 @@
 //! Lists attached controllers and prints input changes:
 //! `cargo run -p gob-input --example monitor [seconds] [--events]`
-//! (`--events`: read on DirectInput change signals instead of polling every 4 ms)
+//! (`--events`: read on DirectInput change signals instead of polling every 1 ms)
 use std::time::{Duration, Instant};
 
 fn main() {
