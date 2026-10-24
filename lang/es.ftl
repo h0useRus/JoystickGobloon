@@ -116,6 +116,7 @@ settings-input-events = Leer los mandos al cambiar
 settings-input-events-tip = Menos latencia y uso de CPU: los mandos se leen cuando informan de un cambio y las pulsaciones cortas nunca se pierden. Desactivado: cada mando se lee en cada intervalo de sondeo.
 settings-poll-interval = Intervalo de sondeo
 settings-poll-interval-tip = Cada cuánto se sondea un mando: todos los mandos si «Leer los mandos al cambiar» está desactivado; si no, solo los que no pueden informar de cambios. Más corto significa menos latencia y algo más de CPU.
+settings-poll-interval-unused = Ahora no se usa: todos los mandos conectados informan de sus cambios, así que ninguno se sondea. Se aplica si «Leer los mandos al cambiar» está desactivado o un mando no puede informar de cambios.
 settings-monotonic-curves = Las curvas solo suben o bajan
 settings-monotonic-curves-tip = Editor de curvas de respuesta: un punto o tirador se detiene donde la curva daría la vuelta, así cruza el cero una sola vez. Las curvas que ya dan la vuelta se editan libremente.
 settings-warn-gremlin = Avisar si al guardar cambia el formato del perfil

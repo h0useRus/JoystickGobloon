@@ -116,6 +116,7 @@ settings-input-events = 在变化时读取控制器
 settings-input-events-tip = 更低延迟和 CPU 占用：控制器报告变化时才读取，短按按钮也不会丢失。关闭时按轮询间隔读取所有控制器。
 settings-poll-interval = 轮询间隔
 settings-poll-interval-tip = 控制器的轮询频率：关闭“在变化时读取控制器”时适用于所有控制器，否则只适用于无法报告变化的控制器。间隔越短延迟越低，CPU 占用略高。
+settings-poll-interval-unused = 当前未使用：所有已连接的控制器都会报告变化，因此不轮询任何控制器。关闭“在变化时读取控制器”或有控制器无法报告变化时才生效。
 settings-monotonic-curves = 曲线只升或只降
 settings-monotonic-curves-tip = 响应曲线编辑器：点或控制柄会停在曲线即将折返的位置，因此曲线只穿过零一次。已经折返的曲线可自由编辑。
 settings-warn-gremlin = 保存会改变配置文件格式时提醒

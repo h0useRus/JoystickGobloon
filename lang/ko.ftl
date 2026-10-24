@@ -116,6 +116,7 @@ settings-input-events = 변경 시 컨트롤러 읽기
 settings-input-events-tip = 지연과 CPU 사용량 감소: 컨트롤러가 변경을 알릴 때 읽으며, 짧은 버튼 입력도 놓치지 않습니다. 끄면 모든 컨트롤러를 폴링 간격마다 읽습니다.
 settings-poll-interval = 폴링 간격
 settings-poll-interval-tip = 컨트롤러를 얼마나 자주 읽을지: "변경 시 컨트롤러 읽기"가 꺼져 있으면 모든 컨트롤러, 켜져 있으면 변경을 알릴 수 없는 컨트롤러만. 짧을수록 지연이 줄고 CPU 사용량이 약간 늘어납니다.
+settings-poll-interval-unused = 지금은 사용되지 않음: 연결된 모든 컨트롤러가 변경을 알리므로 폴링하는 컨트롤러가 없습니다. "변경 시 컨트롤러 읽기"가 꺼져 있거나 변경을 알릴 수 없는 컨트롤러가 있을 때 적용됩니다.
 settings-monotonic-curves = 곡선은 증가 또는 감소만
 settings-monotonic-curves-tip = 응답 곡선 편집기: 곡선이 되돌아가려는 지점에서 점이나 핸들이 멈추므로 0을 한 번만 지납니다. 이미 되돌아가는 곡선은 자유롭게 편집됩니다.
 settings-warn-gremlin = 저장 시 프로필 형식이 바뀌면 경고

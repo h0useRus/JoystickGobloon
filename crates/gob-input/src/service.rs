@@ -107,6 +107,8 @@ pub struct InputService {
     event_mode: Arc<AtomicBool>,
     /// See [`InputService::set_poll_interval`], in microseconds.
     poll_interval: Arc<AtomicU64>,
+    /// See [`InputService::polls_devices`].
+    polling: Arc<AtomicBool>,
     /// Keyboard keys as events (low-level hook); `None` if it could not be installed.
     _keyboard: Option<crate::platform::keyboard::Hook>,
 }
@@ -120,6 +122,7 @@ impl InputService {
         let calibration_version = Arc::new(AtomicU64::new(0));
         let event_mode = Arc::new(AtomicBool::new(false));
         let poll_interval = Arc::new(AtomicU64::new(DEFAULT_POLL_INTERVAL.as_micros() as u64));
+        let polling = Arc::new(AtomicBool::new(true));
         let snapshot = Arc::new(RwLock::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let broadcast = Broadcast::default();
@@ -128,7 +131,7 @@ impl InputService {
             let (snapshot, stop, tx) = (snapshot.clone(), stop.clone(), broadcast.clone());
             let (on_change, cal) = (on_change.clone(), calibrations.clone());
             let (version, mode) = (calibration_version.clone(), event_mode.clone());
-            let poll = poll_interval.clone();
+            let (poll, polling) = (poll_interval.clone(), polling.clone());
             std::thread::Builder::new()
                 .name("gob-input".into())
                 .spawn(move || {
@@ -140,6 +143,7 @@ impl InputService {
                         calibration_version: &version,
                         event_mode: &mode,
                         poll_interval: &poll,
+                        polling: &polling,
                     };
                     run(&shared, &*on_change)
                 })
@@ -167,6 +171,7 @@ impl InputService {
             calibration_version,
             event_mode,
             poll_interval,
+            polling,
             _keyboard: keyboard,
         }
     }
@@ -197,6 +202,12 @@ impl InputService {
         let interval = interval.clamp(MIN_POLL_INTERVAL, MAX_POLL_INTERVAL);
         self.poll_interval
             .store(interval.as_micros() as u64, Ordering::Relaxed);
+    }
+
+    /// Whether the poll interval matters now: polling mode, or in event mode a device that
+    /// cannot signal its changes.
+    pub fn polls_devices(&self) -> bool {
+        self.polling.load(Ordering::Relaxed)
     }
 
     /// Current state of every attached device.
@@ -247,6 +258,7 @@ struct Shared<'a> {
     calibration_version: &'a AtomicU64,
     event_mode: &'a AtomicBool,
     poll_interval: &'a AtomicU64,
+    polling: &'a AtomicBool,
 }
 
 /// The input thread: finds, opens and reads controllers through this platform's backend.
@@ -357,6 +369,8 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
             drop(snapshot);
             on_change();
         }
+        let polled = !events || devices.iter().any(|d| !d.signals());
+        shared.polling.store(polled, Ordering::Relaxed);
         let poll = Duration::from_micros(shared.poll_interval.load(Ordering::Relaxed));
         platform.wait(&devices, events, poll);
     }

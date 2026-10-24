@@ -116,6 +116,7 @@ settings-input-events = Read controllers on change
 settings-input-events-tip = Lower latency and less CPU: controllers are read when they report a change, and short button presses are never missed. Off: every controller is read at the poll interval.
 settings-poll-interval = Poll interval
 settings-poll-interval-tip = How often a controller is polled: every controller when "Read controllers on change" is off, otherwise only the ones that cannot report changes. Shorter means lower latency and a little more CPU.
+settings-poll-interval-unused = Not used now: every connected controller reports its changes, so none is polled. It applies when "Read controllers on change" is off or a controller cannot report changes.
 settings-monotonic-curves = Curves only rise or fall
 settings-monotonic-curves-tip = Response curve editor: a knot or handle stops where the curve would turn back, so it crosses zero only once. Curves that already turn back are edited freely.
 settings-warn-gremlin = Warn when saving changes the profile format

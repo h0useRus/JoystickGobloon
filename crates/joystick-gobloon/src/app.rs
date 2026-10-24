@@ -1494,7 +1494,10 @@ impl eframe::App for JoystickGobloonApp {
                         &mut self.settings_tab,
                         &self.logo,
                         &mut self.updater,
-                        &led_devices,
+                        &settings_view::Attached {
+                            led_devices: &led_devices,
+                            polls_devices: self.input.polls_devices(),
+                        },
                     );
                     if let Some(change) = change {
                         self.apply_change(ctx, change);
