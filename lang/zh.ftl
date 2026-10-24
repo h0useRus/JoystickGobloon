@@ -113,7 +113,9 @@ settings-focus-input-tip = 使用轴、按钮或苦力帽时，“设备与绑�
 settings-focus-skip-modifiers = 按修饰键时不跳转
 settings-focus-skip-modifiers-tip = 按下修饰键按钮或按键时列表不会滚动到它，正在设置的输入保持可见。
 settings-input-events = 在变化时读取控制器
-settings-input-events-tip = 更低延迟和 CPU 占用：控制器报告变化时才读取，短按按钮也不会丢失。关闭时每 4 毫秒读取一次所有控制器。
+settings-input-events-tip = 更低延迟和 CPU 占用：控制器报告变化时才读取，短按按钮也不会丢失。关闭时按轮询间隔读取所有控制器。
+settings-poll-interval = 轮询间隔
+settings-poll-interval-tip = 控制器的轮询频率：关闭“在变化时读取控制器”时适用于所有控制器，否则只适用于无法报告变化的控制器。间隔越短延迟越低，CPU 占用略高。
 settings-monotonic-curves = 曲线只升或只降
 settings-monotonic-curves-tip = 响应曲线编辑器：点或控制柄会停在曲线即将折返的位置，因此曲线只穿过零一次。已经折返的曲线可自由编辑。
 settings-warn-gremlin = 保存会改变配置文件格式时提醒
@@ -255,6 +257,7 @@ run-executable = 程序
 run-arguments = 参数
 run-browse = 选择程序
 status-paused = 配置文件已暂停
+status-latency = 从读取控制器到虚拟输出的延迟（最近一秒）：平均 { $average } ms，最大 { $max } ms。不含控制器自身的延迟。
 
 # Double tap, chain
 kind-double-tap = 双击

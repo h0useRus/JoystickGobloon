@@ -8,13 +8,15 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use gob_core::Profile;
-use gob_input::{DeviceState, InputEvent};
+use gob_input::{DeviceState, InputEvent, Timed};
 
 use crate::platform::Injector;
 use crate::{Engine, InputKey, InputKind, Output, Value};
 
 /// Upper bound on how long the loop sleeps without events.
 const IDLE: Duration = Duration::from_millis(20);
+/// [`Latency`] covers this much time.
+const LATENCY_WINDOW: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Default)]
 pub struct RunnerStatus {
@@ -22,6 +24,54 @@ pub struct RunnerStatus {
     pub paused: bool,
     /// Profile file a load-profile action asked for; the GUI takes it.
     pub load_profile: Option<String>,
+    /// Of the last window with input; `None` until the first.
+    pub latency: Option<Latency>,
+}
+
+/// Time from reading a device to the end of the outputs its event caused (vJoy written,
+/// keys sent), over the events of one [`LATENCY_WINDOW`]. The device's own delay is not in it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Latency {
+    pub average: Duration,
+    pub max: Duration,
+}
+
+/// Collects [`Latency`] for the current window.
+struct LatencyWindow {
+    start: Instant,
+    total: Duration,
+    max: Duration,
+    count: u32,
+}
+
+impl LatencyWindow {
+    fn new(now: Instant) -> Self {
+        Self {
+            start: now,
+            total: Duration::ZERO,
+            max: Duration::ZERO,
+            count: 0,
+        }
+    }
+
+    fn add(&mut self, latency: Duration) {
+        self.total += latency;
+        self.max = self.max.max(latency);
+        self.count += 1;
+    }
+
+    /// The finished window's result, once it is over and had events; then starts a new one.
+    fn finish(&mut self, now: Instant) -> Option<Latency> {
+        if now.duration_since(self.start) < LATENCY_WINDOW {
+            return None;
+        }
+        let result = (self.count > 0).then(|| Latency {
+            average: self.total / self.count,
+            max: self.max,
+        });
+        *self = Self::new(now);
+        result
+    }
 }
 
 pub struct Runner {
@@ -120,7 +170,7 @@ impl Runner {
     pub fn start(
         profile: &Profile,
         aliases: &HashMap<String, String>,
-        events: Receiver<InputEvent>,
+        events: Receiver<Timed>,
         initial: &[DeviceState],
         led_defaults: Option<&[crate::Light]>,
         on_change: impl Fn() + Send + 'static,
@@ -177,6 +227,7 @@ impl Runner {
             mode: engine.current_mode().to_string(),
             paused: false,
             load_profile: None,
+            latency: None,
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
@@ -222,11 +273,12 @@ impl Drop for Runner {
 fn run(
     mut engine: Engine,
     mut out: SystemOutput,
-    events: &Receiver<InputEvent>,
+    events: &Receiver<Timed>,
     status: &Mutex<RunnerStatus>,
     stop: &AtomicBool,
     on_change: &dyn Fn(),
 ) {
+    let mut window = LatencyWindow::new(Instant::now());
     while !stop.load(Ordering::Relaxed) {
         let wait = engine.next_deadline().map_or(IDLE, |d| {
             d.saturating_duration_since(Instant::now()).min(IDLE)
@@ -236,20 +288,30 @@ fn run(
             Err(RecvTimeoutError::Timeout) => None,
             Err(RecvTimeoutError::Disconnected) => break,
         };
-        for event in first.into_iter().chain(events.try_iter()) {
-            if let Some((key, value)) = convert(&event) {
+        for timed in first.into_iter().chain(events.try_iter()) {
+            if let Some((key, value)) = convert(&timed.event) {
                 engine.process(&key, value, Instant::now(), &mut out);
+                window.add(timed.read.elapsed());
             }
         }
-        engine.tick(Instant::now(), &mut out);
+        let now = Instant::now();
+        engine.tick(now, &mut out);
 
         let mut s = status.lock().unwrap_or_else(|e| e.into_inner());
         let load = out.load_profile.take();
-        if s.mode != engine.current_mode() || s.paused != engine.is_paused() || load.is_some() {
+        let latency = window.finish(now);
+        if s.mode != engine.current_mode()
+            || s.paused != engine.is_paused()
+            || load.is_some()
+            || latency.is_some_and(|l| s.latency != Some(l))
+        {
             s.mode = engine.current_mode().to_string();
             s.paused = engine.is_paused();
             if load.is_some() {
                 s.load_profile = load;
+            }
+            if latency.is_some() {
+                s.latency = latency;
             }
             on_change();
         }
@@ -299,4 +361,34 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
         }
         InputEvent::DevicesChanged => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn latency_window() {
+        let t0 = Instant::now();
+        let mut w = LatencyWindow::new(t0);
+        w.add(Duration::from_micros(100));
+        w.add(Duration::from_micros(300));
+        assert_eq!(
+            w.finish(t0 + Duration::from_millis(500)),
+            None,
+            "not over yet"
+        );
+        assert_eq!(
+            w.finish(t0 + LATENCY_WINDOW),
+            Some(Latency {
+                average: Duration::from_micros(200),
+                max: Duration::from_micros(300),
+            })
+        );
+        assert_eq!(
+            w.finish(t0 + 2 * LATENCY_WINDOW),
+            None,
+            "a window without events"
+        );
+    }
 }

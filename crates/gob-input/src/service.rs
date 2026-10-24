@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crate::{Calibration, DeviceState, InputEvent};
+use crate::{Calibration, DeviceState, InputEvent, Timed};
 
 /// Calibration per (device GUID, axis slot); axes without one use DirectInput's range.
 pub type Calibrations = std::collections::HashMap<(String, u8), Calibration>;
@@ -14,6 +14,10 @@ pub type Calibrations = std::collections::HashMap<(String, u8), Calibration>;
 /// Re-enumerate devices this often to catch hot-plugging.
 const RESCAN: Duration = Duration::from_secs(2);
 const EVENT_BUFFER: usize = 4096;
+/// Range and default of [`InputService::set_poll_interval`].
+pub const MIN_POLL_INTERVAL: Duration = Duration::from_millis(1);
+pub const MAX_POLL_INTERVAL: Duration = Duration::from_millis(5);
+pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(1);
 
 /// Shared, read-only side of an [`InputService`]: see [`InputService::handle`].
 #[derive(Clone)]
@@ -35,26 +39,57 @@ impl InputHandle {
     pub fn subscribe(&self) -> Receiver<InputEvent> {
         self.broadcast.subscribe()
     }
+
+    /// Like [`InputService::subscribe_timed`].
+    pub fn subscribe_timed(&self) -> Receiver<Timed> {
+        self.broadcast.subscribe_timed()
+    }
+}
+
+enum Subscriber {
+    Plain(SyncSender<InputEvent>),
+    Timed(SyncSender<Timed>),
 }
 
 /// Fan-out of input events to every subscriber; dead subscribers are dropped.
 #[derive(Clone, Default)]
-struct Broadcast(Arc<Mutex<Vec<SyncSender<InputEvent>>>>);
+struct Broadcast(Arc<Mutex<Vec<Subscriber>>>);
 
 impl Broadcast {
     fn subscribe(&self) -> Receiver<InputEvent> {
         let (tx, rx) = mpsc::sync_channel(EVENT_BUFFER);
-        self.0.lock().unwrap_or_else(|e| e.into_inner()).push(tx);
+        self.add(Subscriber::Plain(tx));
         rx
     }
 
-    fn send(&self, event: InputEvent) {
+    fn subscribe_timed(&self) -> Receiver<Timed> {
+        let (tx, rx) = mpsc::sync_channel(EVENT_BUFFER);
+        self.add(Subscriber::Timed(tx));
+        rx
+    }
+
+    fn add(&self, subscriber: Subscriber) {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(subscriber);
+    }
+
+    /// `read`: when the device was read.
+    fn send(&self, event: InputEvent, read: Instant) {
         let mut subs = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        subs.retain(|tx| {
-            !matches!(
+        subs.retain(|sub| match sub {
+            Subscriber::Plain(tx) => !matches!(
                 tx.try_send(event.clone()),
                 Err(TrySendError::Disconnected(_))
-            )
+            ),
+            Subscriber::Timed(tx) => !matches!(
+                tx.try_send(Timed {
+                    event: event.clone(),
+                    read,
+                }),
+                Err(TrySendError::Disconnected(_))
+            ),
         });
     }
 }
@@ -70,6 +105,8 @@ pub struct InputService {
     calibration_version: Arc<AtomicU64>,
     /// See [`InputService::set_event_mode`].
     event_mode: Arc<AtomicBool>,
+    /// See [`InputService::set_poll_interval`], in microseconds.
+    poll_interval: Arc<AtomicU64>,
     /// Keyboard keys as events (low-level hook); `None` if it could not be installed.
     _keyboard: Option<crate::platform::keyboard::Hook>,
 }
@@ -82,6 +119,7 @@ impl InputService {
         let calibrations: Arc<RwLock<Calibrations>> = Arc::default();
         let calibration_version = Arc::new(AtomicU64::new(0));
         let event_mode = Arc::new(AtomicBool::new(false));
+        let poll_interval = Arc::new(AtomicU64::new(DEFAULT_POLL_INTERVAL.as_micros() as u64));
         let snapshot = Arc::new(RwLock::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let broadcast = Broadcast::default();
@@ -90,6 +128,7 @@ impl InputService {
             let (snapshot, stop, tx) = (snapshot.clone(), stop.clone(), broadcast.clone());
             let (on_change, cal) = (on_change.clone(), calibrations.clone());
             let (version, mode) = (calibration_version.clone(), event_mode.clone());
+            let poll = poll_interval.clone();
             std::thread::Builder::new()
                 .name("gob-input".into())
                 .spawn(move || {
@@ -100,6 +139,7 @@ impl InputService {
                         calibrations: &cal,
                         calibration_version: &version,
                         event_mode: &mode,
+                        poll_interval: &poll,
                     };
                     run(&shared, &*on_change)
                 })
@@ -108,11 +148,12 @@ impl InputService {
         let keyboard = {
             let tx = broadcast.clone();
             crate::platform::keyboard::start(Arc::new(move |scan_code, extended, pressed| {
-                tx.send(InputEvent::Key {
+                let event = InputEvent::Key {
                     scan_code,
                     extended,
                     pressed,
-                });
+                };
+                tx.send(event, Instant::now());
                 on_change();
             }))
         };
@@ -125,6 +166,7 @@ impl InputService {
             calibrations,
             calibration_version,
             event_mode,
+            poll_interval,
             _keyboard: keyboard,
         }
     }
@@ -142,10 +184,19 @@ impl InputService {
 
     /// Event mode (`true`): devices are read when DirectInput signals a change, and button and
     /// hat changes come from its buffer, so short presses between two reads are kept.
-    /// Polling mode (`false`, the default): every device is read every 4 ms. Switching
-    /// reopens the devices.
+    /// Polling mode (`false`, the default): every device is read every poll interval.
+    /// Switching reopens the devices.
     pub fn set_event_mode(&self, on: bool) {
         self.event_mode.store(on, Ordering::Relaxed);
+    }
+
+    /// Time between two reads of a polled device: every device in polling mode, the ones
+    /// that cannot signal a change in event mode. Clamped to
+    /// [`MIN_POLL_INTERVAL`]..=[`MAX_POLL_INTERVAL`].
+    pub fn set_poll_interval(&self, interval: Duration) {
+        let interval = interval.clamp(MIN_POLL_INTERVAL, MAX_POLL_INTERVAL);
+        self.poll_interval
+            .store(interval.as_micros() as u64, Ordering::Relaxed);
     }
 
     /// Current state of every attached device.
@@ -156,6 +207,11 @@ impl InputService {
     /// A separate event stream, e.g. for the mapping engine. Drop the receiver to unsubscribe.
     pub fn subscribe(&self) -> Receiver<InputEvent> {
         self.broadcast.subscribe()
+    }
+
+    /// Like [`Self::subscribe`], each event with the time its device was read.
+    pub fn subscribe_timed(&self) -> Receiver<Timed> {
+        self.broadcast.subscribe_timed()
     }
 
     /// The device states and the event stream for other owners (e.g. a tray menu that starts
@@ -190,6 +246,7 @@ struct Shared<'a> {
     calibrations: &'a RwLock<Calibrations>,
     calibration_version: &'a AtomicU64,
     event_mode: &'a AtomicBool,
+    poll_interval: &'a AtomicU64,
 }
 
 /// The input thread: finds, opens and reads controllers through this platform's backend.
@@ -235,7 +292,7 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
             }
             if devices.len() != before || announce {
                 announce = false;
-                tx.send(InputEvent::DevicesChanged);
+                tx.send(InputEvent::DevicesChanged, Instant::now());
                 changed = true;
             }
         }
@@ -265,15 +322,16 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
 
         let mut lost = false;
         for dev in &mut devices {
+            let at = Instant::now();
             let read = dev.read(&mut |event| {
-                tx.send(event);
+                tx.send(event, at);
                 changed = true;
             });
             if !read {
                 lost = true;
                 continue;
             }
-            changed |= emit_changes(dev.previous(), dev.state(), tx);
+            changed |= emit_changes(dev.previous(), dev.state(), tx, at);
             // Raw values matter to the calibration page even when the scaled value stays.
             changed |= dev.previous().raw != dev.state().raw;
         }
@@ -299,12 +357,13 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
             drop(snapshot);
             on_change();
         }
-        platform.wait(&devices, events);
+        let poll = Duration::from_micros(shared.poll_interval.load(Ordering::Relaxed));
+        platform.wait(&devices, events, poll);
     }
 }
 
-/// Sends one event per changed input; returns whether anything changed.
-fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &Broadcast) -> bool {
+/// Sends one event per changed input, read at `at`; returns whether anything changed.
+fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &Broadcast, at: Instant) -> bool {
     let device = || new.info.guid.clone();
     let mut changed = false;
     for &id in &new.info.axes {
@@ -312,31 +371,40 @@ fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &Broadcast) -> bool {
         // Ignore sensor noise below ~0.05%.
         if (old.axes[i] - new.axes[i]).abs() > 0.0005 {
             changed = true;
-            tx.send(InputEvent::Axis {
-                device: device(),
-                id,
-                value: new.axes[i],
-            });
+            tx.send(
+                InputEvent::Axis {
+                    device: device(),
+                    id,
+                    value: new.axes[i],
+                },
+                at,
+            );
         }
     }
     for (i, (&a, &b)) in old.buttons.iter().zip(&new.buttons).enumerate() {
         if a != b {
             changed = true;
-            tx.send(InputEvent::Button {
-                device: device(),
-                id: i as u16 + 1,
-                pressed: b,
-            });
+            tx.send(
+                InputEvent::Button {
+                    device: device(),
+                    id: i as u16 + 1,
+                    pressed: b,
+                },
+                at,
+            );
         }
     }
     for (i, (&a, &b)) in old.hats.iter().zip(&new.hats).enumerate() {
         if a != b {
             changed = true;
-            tx.send(InputEvent::Hat {
-                device: device(),
-                id: i as u8 + 1,
-                direction: b,
-            });
+            tx.send(
+                InputEvent::Hat {
+                    device: device(),
+                    id: i as u8 + 1,
+                    direction: b,
+                },
+                at,
+            );
         }
     }
     changed

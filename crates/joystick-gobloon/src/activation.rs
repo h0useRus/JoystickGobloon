@@ -94,7 +94,7 @@ impl Activation {
         let runner = Runner::start(
             profile,
             &aliases,
-            inner.input.subscribe(),
+            inner.input.subscribe_timed(),
             &devices,
             inner.led_defaults.as_deref(),
             repaint,

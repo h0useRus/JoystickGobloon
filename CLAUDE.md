@@ -15,7 +15,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-gremlin XML <-> Element <-> Profile: Gremlin R14+ import, written as `<profile version="14">` while
   Gremlin can read it, else `<profile app="Gobloon" version="1">`; lossless round-trip; `report()`; example `resave`
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
-  platform/windows/ = DirectInput8 (polls every 4 ms, or with `set_event_mode` waits for DI change events and reads
+  platform/windows/ = DirectInput8 (polls every `set_poll_interval`, 1-5 ms, or with `set_event_mode` waits for DI change events (a high resolution timer paces devices without them) and reads
   buffered buttons/hats; ids = DI instance GUIDs like Gremlin; links dinput8.lib/dxguid.lib statically (-bundle)
   for c_dfDIJoystick2), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
   order, keyboards -> set 1 scan codes; tests/uinput.rs = virtual devices, `check.ps1 --devices`),
@@ -46,7 +46,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Example `hidhide_info [--all]` (read-only). Session blacklist waits for a signed 1.7.x - check
   nefarius/HidHide#217 and its releases before each gob-hidhide session (plans/HIDHIDE_PLAN.md)
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
-  semantics; platform/ = keyboard/mouse output (`Injector`) and speech (`SpeechEngine`): windows/ SendInput + SAPI (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy;
+  semantics; platform/ = keyboard/mouse output (`Injector`) and speech (`SpeechEngine`): windows/ SendInput + SAPI (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy (`subscribe_timed`: RunnerStatus.latency = device read -> outputs written, per second, shown in the status bar);
   examples `dry_run` (profile -> printed vJoy output) and `runner_check`
 - crates/gob-lighting joystick LEDs: vendor-neutral `Device`/`Led` in lib.rs dispatching on `Vendor`; every vendor's
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
