@@ -225,6 +225,17 @@ fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Ch
             i18n.tr("settings-input-events"),
         ))
         .on_hover_text(i18n.tr("settings-input-events-tip"));
+    let (min, max) = (
+        gob_input::MIN_POLL_INTERVAL.as_millis() as u8,
+        gob_input::MAX_POLL_INTERVAL.as_millis() as u8,
+    );
+    let poll = ui
+        .add(
+            egui::Slider::new(&mut settings.poll_interval_ms, min..=max)
+                .suffix(" ms")
+                .text(i18n.tr("settings-poll-interval")),
+        )
+        .on_hover_text(i18n.tr("settings-poll-interval-tip"));
     // Only where hiding has a program list to put Joystick Gobloon on.
     let see_hidden = gob_hide::capabilities().app_list.then(|| {
         ui.add(style::switch(
@@ -270,6 +281,7 @@ fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Ch
         &activate,
         &updates,
         &input_events,
+        &poll,
         &focus,
         &focus_modifiers,
         &curves,

@@ -113,7 +113,9 @@ settings-focus-input-tip = When an axis, button or hat is used, the Devices and 
 settings-focus-skip-modifiers = Stay in place on modifiers
 settings-focus-skip-modifiers-tip = Pressing a modifier button or key does not scroll to it, so the input you are setting up stays in view.
 settings-input-events = Read controllers on change
-settings-input-events-tip = Lower latency and less CPU: controllers are read when they report a change, and short button presses are never missed. Off: every controller is read every 4 ms.
+settings-input-events-tip = Lower latency and less CPU: controllers are read when they report a change, and short button presses are never missed. Off: every controller is read at the poll interval.
+settings-poll-interval = Poll interval
+settings-poll-interval-tip = How often a controller is polled: every controller when "Read controllers on change" is off, otherwise only the ones that cannot report changes. Shorter means lower latency and a little more CPU.
 settings-monotonic-curves = Curves only rise or fall
 settings-monotonic-curves-tip = Response curve editor: a knot or handle stops where the curve would turn back, so it crosses zero only once. Curves that already turn back are edited freely.
 settings-warn-gremlin = Warn when saving changes the profile format
@@ -255,6 +257,7 @@ run-executable = Program
 run-arguments = Arguments
 run-browse = Choose program
 status-paused = Profile paused
+status-latency = Latency from reading a controller to the virtual output, last second: average { $average } ms, max { $max } ms. The controller's own delay is not included.
 
 # Double tap, chain
 kind-double-tap = Double tap

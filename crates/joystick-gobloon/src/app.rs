@@ -1274,6 +1274,10 @@ impl eframe::App for JoystickGobloonApp {
             }
         }
         self.input.set_event_mode(self.settings.input_events);
+        self.input
+            .set_poll_interval(std::time::Duration::from_millis(u64::from(
+                self.settings.poll_interval_ms,
+            )));
         let in_tray = self.main_window.is_some_and(crate::platform::in_tray);
         let shown = !in_tray && self.main_window.is_none_or(crate::platform::window_shown);
         if in_tray && self.pending.is_some() {
@@ -1371,6 +1375,21 @@ impl eframe::App for JoystickGobloonApp {
                     );
                     ui.label(RichText::new(format!("{}  {mode}", icon::STACK)).size(12.0))
                         .on_hover_text(self.i18n.tr("label-mode"));
+                    if let Some(latency) = status.latency {
+                        let ms = |d: std::time::Duration| format!("{:.2}", d.as_secs_f64() * 1e3);
+                        ui.separator();
+                        ui.label(
+                            RichText::new(format!("{}  {} ms", icon::TIMER, ms(latency.average)))
+                                .size(12.0),
+                        )
+                        .on_hover_text(self.i18n.trf(
+                            "status-latency",
+                            &[
+                                ("average", ms(latency.average).into()),
+                                ("max", ms(latency.max).into()),
+                            ],
+                        ));
+                    }
                     ui.separator();
                 }
                 ui.label(RichText::new(&self.status).size(12.0).weak());

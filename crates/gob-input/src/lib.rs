@@ -8,7 +8,10 @@ pub mod exclusive;
 mod platform;
 mod service;
 
-pub use service::{Calibrations, InputHandle, InputService};
+pub use service::{
+    Calibrations, DEFAULT_POLL_INTERVAL, InputHandle, InputService, MAX_POLL_INTERVAL,
+    MIN_POLL_INTERVAL,
+};
 
 /// Number of DirectInput axis slots: X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1.
 pub const AXIS_SLOTS: usize = 8;
@@ -156,6 +159,13 @@ pub enum InputEvent {
     },
     /// Devices were attached or removed.
     DevicesChanged,
+}
+
+/// An event with the time its device was read, for measuring latency.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Timed {
+    pub event: InputEvent,
+    pub read: std::time::Instant,
 }
 
 /// The system's own controller numbers of the connected controllers with this vendor and product

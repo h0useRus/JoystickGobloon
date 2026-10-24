@@ -20,7 +20,7 @@ mod runner;
 pub use engine::Engine;
 pub use lighting::to_led;
 pub use media::{Media, SpeechQueue, SpeechRequest, voices};
-pub use runner::{Runner, RunnerStatus};
+pub use runner::{Latency, Runner, RunnerStatus};
 
 /// Value flowing through an action tree.
 #[derive(Debug, Clone, Copy, PartialEq)]

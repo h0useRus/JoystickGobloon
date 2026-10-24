@@ -34,8 +34,9 @@ pub(crate) trait Backend: Sized {
     /// Opens a controller. `events`: it is read when it signals a change (event mode) instead
     /// of being polled.
     fn open(&self, found: &Self::Found, events: bool) -> Option<Self::Device>;
-    /// Waits until a device may have changed (event mode) or the poll interval passed.
-    fn wait(&self, devices: &[Self::Device], events: bool);
+    /// Waits until a device may have changed (event mode) or `poll` passed. In event mode
+    /// `poll` paces only the devices that cannot signal a change.
+    fn wait(&self, devices: &[Self::Device], events: bool, poll: std::time::Duration);
 }
 
 /// An open controller.
