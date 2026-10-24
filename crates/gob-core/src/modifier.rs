@@ -2,13 +2,15 @@
 //!
 //! A profile names a few modifiers (`M1` = button 2 of one stick, ...). Every action configuration of an
 //! input belongs to a [`Layer`]: the set of modifiers that must be held for it. The base layer
-//! (no modifiers) is what runs with no modifier held. An input without exclusive (non-additive)
-//! layers ignores the modifiers for its base (an axis with only a base keeps working while M1 is held). For
-//! an input with exclusive layers the engine picks, when it is used:
-//! - the configurations whose layer is exactly the held set (nothing when there is none: an
-//!   undefined combination does nothing, it does not fall back to the base layer);
-//! - plus the *additive* ones whose layer is held (a subset of the held set): they run on top,
-//!   e.g. an axis that always drives one output and, while M1 is held, a second one too.
+//! (no modifiers) is what runs with no modifier held. When an input is used, the engine picks
+//! (see [`Selection`]):
+//! - the configurations whose layer is exactly the held set; other layers never join, M1 does not
+//!   run while M1+M2 is held;
+//! - plus the base when that layer is *additive* ("add to the base"), e.g. an axis that always
+//!   drives one output and, while M1 is held, a second one too;
+//! - for a held set without a layer: nothing (an undefined combination does not fall back to the
+//!   base), unless the input has no exclusive (non-additive) layers. Such an input keeps its base
+//!   (an axis with only a base, or a base plus additive M1, keeps working while M2 is held).
 //!
 //! A button chooses its layer when pressed and its release goes to the same layer, whatever the
 //! modifiers do meanwhile. Modifier inputs only switch layers; bindings on them are not run.
@@ -90,20 +92,6 @@ impl Layer {
         self.0.iter().any(|n| n == name)
     }
 
-    /// Every modifier of this layer is in `held`.
-    pub fn is_held(&self, held: &Layer) -> bool {
-        self.0.iter().all(|n| held.contains(n))
-    }
-
-    /// Whether a configuration on this layer runs while `held` is held.
-    pub fn runs(&self, additive: bool, held: &Layer) -> bool {
-        if additive {
-            self.is_held(held)
-        } else {
-            self == held
-        }
-    }
-
     fn rename(&mut self, old: &str, new: &str) {
         if self.contains(old) {
             *self = Self::new(self.0.iter().map(|n| if n == old { new } else { n }));
@@ -114,6 +102,45 @@ impl Layer {
 impl fmt::Display for Layer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0.join(&SEPARATOR.to_string()))
+    }
+}
+
+/// Which configurations of one input run while some modifiers are held (rules in the module docs).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Selection {
+    /// The held layer, when the input has it.
+    layer: Option<Layer>,
+    /// The base runs too.
+    base: bool,
+}
+
+impl Selection {
+    /// `configs`: the layer of each configuration of the input and whether it is additive.
+    pub fn new<'a>(configs: impl IntoIterator<Item = (&'a Layer, bool)>, held: &Layer) -> Self {
+        let (mut found, mut adds, mut exclusive) = (false, false, false);
+        for (layer, additive) in configs {
+            if layer == held {
+                found = true;
+                adds |= additive;
+            }
+            exclusive |= !additive && !layer.is_base();
+        }
+        if found {
+            Self {
+                layer: Some(held.clone()),
+                base: adds,
+            }
+        } else {
+            Self {
+                layer: None,
+                base: !exclusive,
+            }
+        }
+    }
+
+    /// Whether the configurations on `layer` run.
+    pub fn runs(&self, layer: &Layer) -> bool {
+        self.layer.as_ref() == Some(layer) || (self.base && layer.is_base())
     }
 }
 
@@ -291,18 +318,73 @@ mod tests {
         assert_eq!(Layer::base().to_string(), "");
     }
 
+    /// Base, M1, M2, M1+M2 with the given additive flags; the layers that run for each held set.
+    fn selected(additive: [bool; 4]) -> Vec<Vec<String>> {
+        let layers = ["", "M1", "M2", "M1+M2"].map(Layer::parse);
+        layers
+            .iter()
+            .map(|held| {
+                let s = Selection::new(layers.iter().zip(additive), held);
+                layers
+                    .iter()
+                    .filter(|l| s.runs(l))
+                    .map(|l| {
+                        if l.is_base() {
+                            "base".into()
+                        } else {
+                            l.to_string()
+                        }
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
     #[test]
     fn exact_and_additive_layers() {
-        let (none, m1, both) = (Layer::base(), Layer::parse("M1"), Layer::parse("M1+M2"));
-        // Exclusive: only the exact combination.
-        assert!(none.runs(false, &none));
-        assert!(!none.runs(false, &m1));
-        assert!(m1.runs(false, &m1));
-        assert!(!m1.runs(false, &both));
-        // Additive: whenever its modifiers are held.
-        assert!(none.runs(true, &both));
-        assert!(m1.runs(true, &both));
-        assert!(!both.runs(true, &m1));
+        // Issue #45: only the held layer, plus the base when it adds to it.
+        let rows = |r: [&[&str]; 4]| -> Vec<Vec<String>> {
+            r.iter()
+                .map(|v| v.iter().map(|s| s.to_string()).collect())
+                .collect()
+        };
+        assert_eq!(
+            selected([false; 4]),
+            rows([&["base"], &["M1"], &["M2"], &["M1+M2"]])
+        );
+        assert_eq!(
+            selected([false, true, false, false]),
+            rows([&["base"], &["base", "M1"], &["M2"], &["M1+M2"]])
+        );
+        assert_eq!(
+            selected([false, false, true, false]),
+            rows([&["base"], &["M1"], &["base", "M2"], &["M1+M2"]])
+        );
+        assert_eq!(
+            selected([false, false, false, true]),
+            rows([&["base"], &["M1"], &["M2"], &["base", "M1+M2"]])
+        );
+        assert_eq!(
+            selected([false, true, true, true]),
+            rows([
+                &["base"],
+                &["base", "M1"],
+                &["base", "M2"],
+                &["base", "M1+M2"]
+            ])
+        );
+    }
+
+    #[test]
+    fn undefined_combinations() {
+        let (base, m1, m2) = (Layer::base(), Layer::parse("M1"), Layer::parse("M2"));
+        // Exclusive M1: M2 held does nothing.
+        let s = Selection::new([(&base, false), (&m1, false)], &m2);
+        assert!(!s.runs(&base) && !s.runs(&m1));
+        // Only additive layers (or none): the base keeps running.
+        let s = Selection::new([(&base, false), (&m1, true)], &m2);
+        assert!(s.runs(&base) && !s.runs(&m1));
+        assert!(Selection::new([(&base, false)], &m1).runs(&base));
     }
 
     #[test]
