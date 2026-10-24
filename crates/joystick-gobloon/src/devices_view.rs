@@ -82,11 +82,13 @@ impl DevicesView {
     /// Pressing a button, moving a hat or clearly moving an axis selects its device and
     /// scrolls the list to the input (`focus` off: events are only drained). The row is not
     /// highlighted: its live widget already shows the input; a click selects it.
+    /// Inputs that are one of `modifiers` are skipped, so holding one keeps the list in place.
     pub fn handle_events(
         &mut self,
         events: impl Iterator<Item = InputEvent>,
         devices: &[DeviceState],
         focus: bool,
+        modifiers: &[gob_core::Modifier],
     ) {
         for event in events {
             if !focus {
@@ -122,16 +124,24 @@ impl DevicesView {
                         scan_code,
                         extended,
                     });
-                    if self.selected.as_deref() == Some(gob_core::KEYBOARD_GUID) {
+                    let modifier = modifiers
+                        .iter()
+                        .any(|m| m.is_input(gob_core::KEYBOARD_GUID, "key", &id.to_string()));
+                    if !modifier && self.selected.as_deref() == Some(gob_core::KEYBOARD_GUID) {
                         self.scroll_to = Some((gob_core::KEYBOARD_GUID.into(), (Kind::Key, id)));
                     }
                     continue;
                 }
                 _ => continue,
             };
+            let (kind, id) = key;
             if devices
                 .iter()
                 .any(|d| d.info.guid == device && d.info.is_vjoy())
+                || (kind == Kind::Button
+                    && modifiers
+                        .iter()
+                        .any(|m| m.is_input(&device, "button", &id.to_string())))
             {
                 continue;
             }

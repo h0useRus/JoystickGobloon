@@ -242,16 +242,27 @@ fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Ch
             i18n.tr("settings-focus-input"),
         ))
         .on_hover_text(i18n.tr("settings-focus-input-tip"));
+    let focus_modifiers = ui
+        .add_enabled(
+            settings.focus_used_input,
+            style::switch(
+                &mut settings.focus_skips_modifiers,
+                i18n.tr("settings-focus-skip-modifiers"),
+            ),
+        )
+        .on_hover_text(i18n.tr("settings-focus-skip-modifiers-tip"));
     let curves = ui
         .add(style::switch(
             &mut settings.monotonic_curves,
             i18n.tr("settings-monotonic-curves"),
         ))
         .on_hover_text(i18n.tr("settings-monotonic-curves-tip"));
-    let gremlin = ui.add(style::switch(
-        &mut settings.warn_gremlin_format,
-        i18n.tr("settings-warn-gremlin"),
-    ));
+    let gremlin = ui
+        .add(style::switch(
+            &mut settings.warn_gremlin_format,
+            i18n.tr("settings-warn-gremlin"),
+        ))
+        .on_hover_text(i18n.tr("settings-warn-gremlin-tip"));
 
     let changed = [
         &autostart,
@@ -260,6 +271,7 @@ fn general(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> Option<Ch
         &updates,
         &input_events,
         &focus,
+        &focus_modifiers,
         &curves,
         &gremlin,
     ]
