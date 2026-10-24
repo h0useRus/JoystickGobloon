@@ -50,6 +50,10 @@ pub(crate) trait Device {
     /// the device buffered go to `emit` in order (so short presses are not lost); the caller
     /// finds the rest by comparing `previous` and `state`. False when the device is gone.
     fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool;
+    /// Signals its changes, so `wait` wakes for it (event mode); false: it is polled.
+    fn signals(&self) -> bool {
+        true
+    }
     /// Takes the device for this process alone, or lets go of it (only with
     /// [`Backend::EXCLUSIVE`]).
     fn set_exclusive(&mut self, _on: bool) {}

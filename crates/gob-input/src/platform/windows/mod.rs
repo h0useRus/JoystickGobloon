@@ -134,6 +134,10 @@ impl super::Device for dinput::Device {
         self.use_calibrations(calibrations);
     }
 
+    fn signals(&self) -> bool {
+        self.event().is_some()
+    }
+
     fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool {
         if self.event().is_some() {
             self.read_buffered(emit)

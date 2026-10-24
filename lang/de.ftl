@@ -116,6 +116,7 @@ settings-input-events = Controller bei Änderung lesen
 settings-input-events-tip = Weniger Latenz und CPU-Last: Controller werden gelesen, wenn sie eine Änderung melden, und kurze Tastendrücke gehen nie verloren. Aus: jeder Controller wird im Abfrageintervall abgefragt.
 settings-poll-interval = Abfrageintervall
 settings-poll-interval-tip = Wie oft ein Controller abgefragt wird: alle Controller, wenn „Controller bei Änderung lesen“ aus ist, sonst nur die, die keine Änderungen melden können. Kürzer heißt weniger Latenz und etwas mehr CPU-Last.
+settings-poll-interval-unused = Derzeit nicht verwendet: Jeder angeschlossene Controller meldet seine Änderungen, daher wird keiner abgefragt. Gilt, wenn „Controller bei Änderung lesen“ aus ist oder ein Controller keine Änderungen melden kann.
 settings-monotonic-curves = Kurven steigen oder fallen nur
 settings-monotonic-curves-tip = Kurveneditor: Ein Punkt oder Anfasser hält dort an, wo die Kurve umkehren würde, sodass sie die Null nur einmal kreuzt. Kurven, die bereits umkehren, lassen sich frei bearbeiten.
 settings-warn-gremlin = Warnen, wenn Speichern das Profilformat ändert
