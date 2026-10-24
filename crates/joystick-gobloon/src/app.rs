@@ -71,6 +71,10 @@ pub struct JoystickGobloonApp {
     gremlin_warning: Option<(PathBuf, Option<Pending>)>,
     /// The "don't ask again" switch of that dialog.
     gremlin_dont_ask: bool,
+    /// Time of a single click on the device hiding eye, waiting to see if a second one follows.
+    cloak_click: Option<f64>,
+    /// Asking whether to switch device hiding to this state.
+    cloak_confirm: Option<bool>,
     /// The user already agreed to close without saving.
     allow_close: bool,
     /// The window was minimized last frame ("minimize to tray" acts once per minimize).
@@ -190,6 +194,8 @@ impl JoystickGobloonApp {
             pending: None,
             gremlin_warning: None,
             gremlin_dont_ask: false,
+            cloak_click: None,
+            cloak_confirm: None,
             allow_close: false,
             was_minimized: false,
             show_modes: false,
@@ -682,6 +688,67 @@ impl JoystickGobloonApp {
             && let Some(action) = after
         {
             self.perform(action, ctx);
+        }
+    }
+
+    /// "Turn device hiding on / off?" after a single click on the status bar eye.
+    fn cloak_dialog(&mut self, ctx: &egui::Context) {
+        let Some(on) = self.cloak_confirm else {
+            return;
+        };
+        let (glyph, title, text, action) = if on {
+            (
+                icon::EYE_SLASH,
+                "hidhide-confirm-on-title",
+                "hidhide-confirm-on-text",
+                "action-turn-on",
+            )
+        } else {
+            (
+                icon::EYE,
+                "hidhide-confirm-off-title",
+                "hidhide-confirm-off-text",
+                "action-turn-off",
+            )
+        };
+        let mut choice = None;
+        let modal = egui::Modal::new(egui::Id::new("cloak-confirm")).show(ctx, |ui| {
+            ui.set_width(380.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(glyph).size(style::ICON_SIZE));
+                ui.heading(self.i18n.tr(title));
+            });
+            ui.add_space(4.0);
+            ui.label(self.i18n.tr(text));
+            ui.add_space(8.0);
+            egui::Frame::group(ui.style()).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(icon::INFO).color(style::accent(ui)));
+                    ui.label(RichText::new(self.i18n.tr("hidhide-confirm-hint")).weak());
+                });
+            });
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .button(format!("{glyph}  {}", self.i18n.tr(action)))
+                    .clicked()
+                {
+                    choice = Some(true);
+                }
+                if ui.button(self.i18n.tr("cancel")).clicked() {
+                    choice = Some(false);
+                }
+            });
+        });
+        if modal.should_close() {
+            choice.get_or_insert(false);
+        }
+        if let Some(switch) = choice {
+            self.cloak_confirm = None;
+            if switch {
+                self.hidhide_view.set_cloak(on);
+            }
         }
     }
 
@@ -1207,6 +1274,10 @@ impl eframe::App for JoystickGobloonApp {
             }
         }
         self.input.set_event_mode(self.settings.input_events);
+        self.input
+            .set_poll_interval(std::time::Duration::from_millis(u64::from(
+                self.settings.poll_interval_ms,
+            )));
         let in_tray = self.main_window.is_some_and(crate::platform::in_tray);
         let shown = !in_tray && self.main_window.is_none_or(crate::platform::window_shown);
         if in_tray && self.pending.is_some() {
@@ -1228,8 +1299,16 @@ impl eframe::App for JoystickGobloonApp {
         // Always drained; events from before the window came back are stale and only dropped.
         let focus =
             self.settings.focus_used_input && shown && self.was_shown && self.page == Page::Devices;
-        self.devices_view
-            .handle_events(self.input.events(), &self.input.devices(), focus);
+        let modifiers = match &self.profile {
+            Some(p) if self.settings.focus_skips_modifiers => p.profile.modifiers.as_slice(),
+            _ => &[],
+        };
+        self.devices_view.handle_events(
+            self.input.events(),
+            &self.input.devices(),
+            focus,
+            modifiers,
+        );
         self.was_shown = shown;
         // In the tray only the logic above runs: nothing is drawn, so no page or window
         // schedules repaints. Detached windows close and come back with the main window.
@@ -1254,7 +1333,8 @@ impl eframe::App for JoystickGobloonApp {
         let mut switch_cloak = None;
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                // Device hiding indicator, clicked to switch it: green crossed eye while on.
+                // Device hiding indicator: green crossed eye while on. A click asks before
+                // switching it, a double click switches it at once.
                 if let Some(on) = cloak {
                     let (glyph, tip) = if on {
                         (icon::EYE_SLASH, "hidhide-on")
@@ -1270,8 +1350,11 @@ impl eframe::App for JoystickGobloonApp {
                     let response = ui
                         .add(egui::Button::new(text).frame(false))
                         .on_hover_text(self.i18n.tr(tip));
-                    if response.clicked() {
+                    if response.double_clicked() {
+                        self.cloak_click = None;
                         switch_cloak = Some(!on);
+                    } else if response.clicked() {
+                        self.cloak_click = Some(ui.input(|i| i.time));
                     }
                     ui.separator();
                 }
@@ -1292,11 +1375,36 @@ impl eframe::App for JoystickGobloonApp {
                     );
                     ui.label(RichText::new(format!("{}  {mode}", icon::STACK)).size(12.0))
                         .on_hover_text(self.i18n.tr("label-mode"));
+                    if let Some(latency) = status.latency {
+                        let ms = |d: std::time::Duration| format!("{:.2}", d.as_secs_f64() * 1e3);
+                        ui.separator();
+                        ui.label(
+                            RichText::new(format!("{}  {} ms", icon::TIMER, ms(latency.average)))
+                                .size(12.0),
+                        )
+                        .on_hover_text(self.i18n.trf(
+                            "status-latency",
+                            &[
+                                ("average", ms(latency.average).into()),
+                                ("max", ms(latency.max).into()),
+                            ],
+                        ));
+                    }
                     ui.separator();
                 }
                 ui.label(RichText::new(&self.status).size(12.0).weak());
             });
         });
+        if let Some(clicked) = self.cloak_click {
+            let wait = ctx.options(|o| o.input_options.max_double_click_delay);
+            let left = clicked + wait - ctx.input(|i| i.time);
+            if left <= 0.0 {
+                self.cloak_click = None;
+                self.cloak_confirm = cloak.map(|on| !on);
+            } else {
+                ctx.request_repaint_after(std::time::Duration::from_secs_f64(left));
+            }
+        }
         if let Some(on) = switch_cloak {
             self.hidhide_view.set_cloak(on);
         }
@@ -1386,7 +1494,10 @@ impl eframe::App for JoystickGobloonApp {
                         &mut self.settings_tab,
                         &self.logo,
                         &mut self.updater,
-                        &led_devices,
+                        &settings_view::Attached {
+                            led_devices: &led_devices,
+                            polls_devices: self.input.polls_devices(),
+                        },
                     );
                     if let Some(change) = change {
                         self.apply_change(ctx, change);
@@ -1449,6 +1560,7 @@ impl eframe::App for JoystickGobloonApp {
         }
         self.unsaved_dialog(ctx);
         self.gremlin_dialog(ctx);
+        self.cloak_dialog(ctx);
         self.alert_dialog(ctx);
         self.detached_windows(ctx);
     }

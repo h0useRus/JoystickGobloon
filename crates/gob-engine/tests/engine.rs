@@ -1448,6 +1448,7 @@ fn layered_input(kind: &str, id: u32, configs: &[(&str, bool, &str)]) -> String 
 /// Button 30 (M1) also has a binding, which must not run.
 /// Axis 2: base -> axis 1, M1 additive -> axis 2.
 /// Axis 3: base -> axis 3, M1 -> axis 3 and axis 4.
+/// Axis 6: base -> axis 1, M1 additive -> 2, M2 additive -> 3, M1+M2 additive -> 4.
 fn modifier_rig() -> (Engine, Recorder) {
     let inputs = [
         layered_input(
@@ -1459,6 +1460,16 @@ fn modifier_rig() -> (Engine, Recorder) {
         layered_input("button", 30, &[("", false, "r9")]),
         layered_input("axis", 2, &[("", false, "ra1"), ("M1", true, "ra2")]),
         layered_input("axis", 3, &[("", false, "ra3"), ("M1", false, "ra34")]),
+        layered_input(
+            "axis",
+            6,
+            &[
+                ("", false, "ra1"),
+                ("M1", true, "ra2"),
+                ("M2", true, "ra3"),
+                ("M1+M2", true, "ra4"),
+            ],
+        ),
     ]
     .concat();
     let library = [
@@ -1471,6 +1482,7 @@ fn modifier_rig() -> (Engine, Recorder) {
         root("ra2", &["x2"]),
         root("ra3", &["x3"]),
         root("ra34", &["x3", "x4"]),
+        root("ra4", &["x4"]),
         vjoy("b1", "button", 1),
         vjoy("b2", "button", 2),
         vjoy("b3", "button", 3),
@@ -1562,6 +1574,36 @@ fn additive_axis_layer_and_neutral_on_leave() {
         out.0,
         [Out::Axis(2, 0.0)],
         "the additive output goes back to rest"
+    );
+}
+
+#[test]
+fn only_the_held_layer_adds_to_the_base() {
+    let (mut e, mut out) = modifier_rig();
+    let moved = |e: &mut Engine, out: &mut Recorder| {
+        send(e, out, InputKind::Axis, 6, Value::Axis(0.5));
+        send(e, out, InputKind::Axis, 6, Value::Axis(0.7));
+        let all = std::mem::take(&mut out.0);
+        all.into_iter()
+            .filter(|o| matches!(o, Out::Axis(_, v) if *v == 0.7))
+            .collect::<Vec<_>>()
+    };
+    button(&mut e, &mut out, 30, true);
+    out.0.clear();
+    assert_eq!(
+        moved(&mut e, &mut out),
+        [Out::Axis(1, 0.7), Out::Axis(2, 0.7)]
+    );
+    button(&mut e, &mut out, 31, true);
+    assert_eq!(
+        std::mem::take(&mut out.0),
+        [Out::Axis(4, 0.7), Out::Axis(2, 0.0)],
+        "M1 leaves, M1+M2 joins, the base stays"
+    );
+    assert_eq!(
+        moved(&mut e, &mut out),
+        [Out::Axis(1, 0.7), Out::Axis(4, 0.7)],
+        "issue #45: M1 and M2 do not run with M1+M2"
     );
 }
 

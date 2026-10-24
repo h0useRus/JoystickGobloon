@@ -20,8 +20,6 @@ use evdev::{ABS_CNT, Bits, Caps, EV_ABS, EV_KEY, EV_SYN, KEY_CNT, Node, SYN_DROP
 use super::{format_guid, normalize_axis};
 use crate::{AXIS_SLOTS, Calibration, Calibrations, DeviceInfo, DeviceState, InputEvent};
 
-/// Polling mode: time between two reads of every device.
-const POLL_INTERVAL: Duration = Duration::from_millis(4);
 /// Event mode: devices are also read this often without new events, as a fallback.
 const EVENT_TIMEOUT: Duration = Duration::from_millis(20);
 /// Buttons and hats a device can have, as on Windows (DIJOYSTATE2).
@@ -117,9 +115,9 @@ impl super::Backend for Platform {
         }
     }
 
-    fn wait(&self, devices: &[Device], events: bool) {
+    fn wait(&self, devices: &[Device], events: bool, poll: Duration) {
         if !events || devices.is_empty() {
-            std::thread::sleep(if events { EVENT_TIMEOUT } else { POLL_INTERVAL });
+            std::thread::sleep(if events { EVENT_TIMEOUT } else { poll });
             return;
         }
         let mut fds = self.fds.borrow_mut();

@@ -44,8 +44,13 @@ pub struct Settings {
     pub start_with_windows: bool,
     /// Devices page: using an input selects its device tab and scrolls the list to it.
     pub focus_used_input: bool,
-    /// Read controllers when DirectInput signals a change instead of polling every 4 ms.
+    /// ... except for the profile's modifier buttons and keys.
+    pub focus_skips_modifiers: bool,
+    /// Read controllers when DirectInput signals a change instead of polling them.
     pub input_events: bool,
+    /// Milliseconds between two reads of a polled controller (all of them without
+    /// `input_events`, the ones that cannot signal a change with it).
+    pub poll_interval_ms: u8,
     /// Activate the reopened profile on startup.
     pub activate_on_start: bool,
     /// Look for a new release on startup and install it.
@@ -216,7 +221,9 @@ impl Default for Settings {
             tray_double_click_activates: true,
             start_with_windows: false,
             focus_used_input: true,
+            focus_skips_modifiers: true,
             input_events: true,
+            poll_interval_ms: gob_input::DEFAULT_POLL_INTERVAL.as_millis() as u8,
             activate_on_start: false,
             check_updates: true,
             monotonic_curves: true,
