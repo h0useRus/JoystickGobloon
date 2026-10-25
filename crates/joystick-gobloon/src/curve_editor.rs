@@ -357,20 +357,13 @@ fn chart(
     {
         selected = i;
     }
-    // A single click on empty space inverts right away (no timer: a delayed repaint may not
-    // come before the mouse moves); when it turns out to be the first half of a double-click,
-    // the curve is flipped back and a point is added instead.
-    let flip = |points: &[(f64, f64)]| -> Vec<(f64, f64)> {
-        points.iter().map(|&(x, y)| (x, -y)).collect()
-    };
-    let inverted_id = ui.make_persistent_id(("curve-invert", id));
+    // A single click on empty space inverts, but only once it is clear it was not the
+    // first half of a double-click (which adds a point instead).
+    const DOUBLE_CLICK: f64 = 0.3;
+    let pending_id = ui.make_persistent_id(("curve-invert", id));
+    let now = ui.input(|i| i.time);
     if response.double_clicked() {
-        let inverted = ui.data_mut(|d| d.remove_temp::<bool>(inverted_id)) == Some(true);
-        let base = if inverted {
-            flip(points)
-        } else {
-            points.to_vec()
-        };
+        ui.data_mut(|d| d.remove::<f64>(pending_id));
         if let Some(pos) = response
             .interact_pointer_pos()
             .filter(|_| on_point.is_none())
@@ -378,20 +371,24 @@ fn chart(
             let (x, y) = to_curve(pos);
             if x > -1.0
                 && x < 1.0
-                && let Some((p, at)) = edit.add(&base, x, y)
+                && let Some((p, at)) = edit.add(points, x, y)
             {
                 return (Some(p), at);
             }
         }
-        if inverted {
-            return (Some(base), selected);
+    } else if response.clicked() && on_point.is_none() {
+        ui.data_mut(|d| d.insert_temp(pending_id, now));
+    }
+    if let Some(clicked_at) = ui.data(|d| d.get_temp::<f64>(pending_id)) {
+        if now - clicked_at >= DOUBLE_CLICK {
+            ui.data_mut(|d| d.remove::<f64>(pending_id));
+            return (
+                Some(points.iter().map(|&(x, y)| (x, -y)).collect()),
+                selected,
+            );
         }
-    } else if response.clicked() {
-        let empty = on_point.is_none();
-        ui.data_mut(|d| d.insert_temp(inverted_id, empty));
-        if empty {
-            return (Some(flip(points)), selected);
-        }
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs_f64(DOUBLE_CLICK));
     }
     if response.secondary_clicked()
         && let Some(i) = on_point
