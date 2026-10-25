@@ -882,6 +882,20 @@ impl JoystickGobloonApp {
         self.was_active = self.activation.is_active();
     }
 
+    /// Applies the edited profile to the running engine without releasing its virtual devices.
+    fn reload_runner(&mut self) {
+        self.sync_activation();
+        // The vJoy tester must not hold a device the profile now needs.
+        self.vjoy_view.release();
+        match self.activation.reload() {
+            Ok(()) => self.status = self.i18n.tr("status-active"),
+            Err(e) => {
+                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
+                self.error(text);
+            }
+        }
+    }
+
     /// Hands the current profile to the shared activation (for the tray menu too).
     fn sync_activation(&mut self) {
         self.activation
@@ -1280,8 +1294,7 @@ impl eframe::App for JoystickGobloonApp {
                 self.edited = None;
             } else if t.elapsed() >= settle {
                 self.edited = None;
-                self.activation.stop();
-                self.toggle_runner(ctx);
+                self.reload_runner();
             } else {
                 ctx.request_repaint_after(settle - t.elapsed());
             }

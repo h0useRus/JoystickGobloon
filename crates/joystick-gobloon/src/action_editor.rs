@@ -1163,13 +1163,23 @@ impl Editor<'_> {
         let current = GamepadControl::parse(control);
         let pad_name = |n: u32| self.i18n.trf("gamepad-n", &[("n", n.into())]);
         let control_name = |c: GamepadControl| self.i18n.tr(&format!("pad-{}", c.name()));
+        // Configured gamepads (and the one in use); without any, every id the system can have.
+        let mut pads: Vec<u32> = if self.gamepads.is_empty() {
+            (1..=self.max_gamepads).collect()
+        } else {
+            self.gamepads.iter().map(|g| g.id).collect()
+        };
+        if !pads.contains(&gamepad) {
+            pads.push(gamepad);
+        }
+        pads.sort_unstable();
         let mut set_pad = None;
         let mut set_control = None;
         ui.horizontal_wrapped(|ui| {
             egui::ComboBox::from_id_salt(("gamepad", &id))
                 .selected_text(pad_name(gamepad))
                 .show_ui(ui, |ui| {
-                    for n in 1..=self.max_gamepads.max(gamepad) {
+                    for n in pads {
                         if ui.selectable_label(n == gamepad, pad_name(n)).clicked() {
                             set_pad = Some(n);
                         }

@@ -107,6 +107,23 @@ impl Activation {
         Ok(())
     }
 
+    /// Hands the current profile to the running engine, which keeps its virtual devices (a game
+    /// keeps them too); not running: nothing to do. On an error the old profile keeps running.
+    pub fn reload(&self) -> Result<(), String> {
+        let inner = self.lock();
+        let (Some(runner), Some((profile, name))) = (&inner.runner, &inner.profile) else {
+            return Ok(());
+        };
+        let devices = inner.input.devices();
+        let aliases = crate::substitute_view::auto_aliases(profile, &devices);
+        runner.reload(profile, &aliases, &devices)?;
+        log::info!(
+            "profile {name} reloaded, {} device substitution(s)",
+            aliases.len()
+        );
+        Ok(())
+    }
+
     /// Start or stop, for the tray menu: a failed start is kept for [`Self::take_error`].
     pub fn toggle_from_tray(&self) {
         if self.stop() {
