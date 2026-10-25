@@ -91,7 +91,7 @@ impl super::Backend for Platform {
             .xinput
             .as_ref()
             .filter(|_| xinput::is_xinput_path(&di.state.info.hid_path))
-            .map(|x| xinput::Pad::new(x.clone(), self.slots.clone(), &di.state.info));
+            .map(|x| xinput::Pad::new(x.clone() as _, self.slots.clone(), &di.state.info));
         Some(Controller { di, pad })
     }
 
