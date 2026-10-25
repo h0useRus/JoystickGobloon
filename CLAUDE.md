@@ -140,6 +140,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - Profile device GUIDs come from another PC: use "Map controls" (banner on the Devices page).
 - Joystick Gobloon whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.
 - vJoy reports only on change: start `monitor` BEFORE activating a profile to see vJoy output.
+- No real Xbox controller here: ViGEmBus 1.22 (signed, installed 2026-10-25) makes virtual Xbox 360 pads;
+  `cargo test -p gob-input --test vigem -- --ignored` reads one back through XInput (vigem-client, tests only).
 
 ## Commands
 - cargo build / cargo run -p joystick-gobloon
