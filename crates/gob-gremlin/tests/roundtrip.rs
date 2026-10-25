@@ -297,6 +297,7 @@ fn modifiers_and_layers_round_trip() {
     p.bind_layer("{DEV-B}", "button", "4", "Default", &Layer::parse("M2+M1"));
     p.bind_layer("{DEV-B}", "axis", "2", "Default", &Layer::parse("M1"));
     p.inputs[1].configs[0].additive = true;
+    p.inputs[1].configs[0].keep_value = true;
 
     let written = gob_gremlin::to_string(&p);
     assert!(
@@ -305,7 +306,9 @@ fn modifiers_and_layers_round_trip() {
         )
     );
     assert!(written.contains(r#"<action-configuration layer="M1+M2">"#));
-    assert!(written.contains(r#"<action-configuration layer="M1" additive="true">"#));
+    assert!(
+        written.contains(r#"<action-configuration layer="M1" additive="true" keep-value="true">"#)
+    );
     assert_round_trip(&written);
     assert_eq!(gob_gremlin::from_str(&written).unwrap(), p);
 

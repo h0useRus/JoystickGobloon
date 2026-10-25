@@ -1,5 +1,7 @@
 //! Response curves like Gremlin's `gremlin/spline.py`: piecewise linear, natural cubic
-//! spline and cubic Bezier spline, with Gremlin's symmetric editing rules.
+//! spline and cubic Bezier spline, with Gremlin's symmetric editing rules. Joystick Gobloon
+//! adds a monotone cubic (Fritsch-Carlson, like PCHIP): smooth through the knots like the
+//! cubic spline, but it never overshoots them, so it neither wiggles nor runs past -1 / 1.
 //!
 //! Points are kept as Gremlin stores them in `<control-points>`: for linear and cubic
 //! curves the knots sorted by x; for Bezier the flat list `center, right handle,
@@ -10,10 +12,17 @@ pub enum CurveType {
     PiecewiseLinear,
     CubicSpline,
     CubicBezier,
+    /// Joystick Gobloon only.
+    MonotoneCubic,
 }
 
 impl CurveType {
-    pub const ALL: [CurveType; 3] = [Self::PiecewiseLinear, Self::CubicSpline, Self::CubicBezier];
+    pub const ALL: [CurveType; 4] = [
+        Self::PiecewiseLinear,
+        Self::CubicSpline,
+        Self::MonotoneCubic,
+        Self::CubicBezier,
+    ];
 
     /// Value of the `curve-type` property.
     pub fn name(self) -> &'static str {
@@ -21,6 +30,7 @@ impl CurveType {
             Self::PiecewiseLinear => "PiecewiseLinear",
             Self::CubicSpline => "CubicSpline",
             Self::CubicBezier => "CubicBezierSpline",
+            Self::MonotoneCubic => "MonotoneCubicSpline",
         }
     }
 
@@ -28,6 +38,7 @@ impl CurveType {
         match s.trim() {
             "CubicSpline" => Self::CubicSpline,
             "CubicBezierSpline" => Self::CubicBezier,
+            "MonotoneCubicSpline" => Self::MonotoneCubic,
             _ => Self::PiecewiseLinear,
         }
     }
@@ -47,6 +58,8 @@ pub enum Curve {
     Linear(Vec<(f64, f64)>),
     /// Knots and second derivatives.
     Cubic(Vec<(f64, f64)>, Vec<f64>),
+    /// Knots and slopes (cubic Hermite).
+    Hermite(Vec<(f64, f64)>, Vec<f64>),
     /// Per segment: 101 samples of (x, y) along t.
     Bezier(Vec<Vec<(f64, f64)>>),
 }
@@ -68,6 +81,11 @@ impl Curve {
                 Self::Cubic(p, z)
             }
             CurveType::CubicBezier => Self::Bezier(bezier_lookup(points)),
+            CurveType::MonotoneCubic => {
+                let p = sorted();
+                let m = monotone_slopes(&p);
+                Self::Hermite(p, m)
+            }
         }
     }
 
@@ -77,6 +95,7 @@ impl Curve {
         match self {
             Self::Linear(p) => linear(p, x),
             Self::Cubic(p, z) => cubic(p, z, x),
+            Self::Hermite(p, m) => hermite(p, m, x),
             Self::Bezier(segments) => bezier(segments, x),
         }
     }
@@ -151,6 +170,65 @@ fn cubic(p: &[(f64, f64)], z: &[f64], x: f64) -> f64 {
     let mut t = z[i] / 2.0 + dx * (z[i + 1] - z[i]) / (6.0 * h);
     t = -(h / 6.0) * (z[i + 1] + 2.0 * z[i]) + (p[i + 1].1 - p[i].1) / h + dx * t;
     (p[i].1 + dx * t).clamp(-1.0, 1.0)
+}
+
+/// Fritsch-Carlson slopes (as PCHIP): zero at a local extremum of the knots, else a weighted
+/// harmonic mean of the neighbouring secants, which keeps every segment within its knots.
+fn monotone_slopes(p: &[(f64, f64)]) -> Vec<f64> {
+    let n = p.len();
+    if n < 2 {
+        return vec![0.0; n];
+    }
+    let h: Vec<f64> = p
+        .windows(2)
+        .map(|w| (w[1].0 - w[0].0).max(MIN_SEGMENT))
+        .collect();
+    let d: Vec<f64> = p
+        .windows(2)
+        .zip(&h)
+        .map(|(w, h)| (w[1].1 - w[0].1) / h)
+        .collect();
+    if n == 2 {
+        return vec![d[0]; 2];
+    }
+    let mut m = vec![0.0; n];
+    for i in 1..n - 1 {
+        if d[i - 1] * d[i] > 0.0 {
+            let (w1, w2) = (2.0 * h[i] + h[i - 1], h[i] + 2.0 * h[i - 1]);
+            m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i]);
+        }
+    }
+    // Ends: three-point estimate, kept from overshooting.
+    let end = |h0: f64, h1: f64, d0: f64, d1: f64| {
+        let s = ((2.0 * h0 + h1) * d0 - h0 * d1) / (h0 + h1);
+        if s * d0 <= 0.0 {
+            0.0
+        } else if d0 * d1 <= 0.0 && s.abs() > 3.0 * d0.abs() {
+            3.0 * d0
+        } else {
+            s
+        }
+    };
+    m[0] = end(h[0], h[1], d[0], d[1]);
+    m[n - 1] = end(h[n - 2], h[n - 3], d[n - 2], d[n - 3]);
+    m
+}
+
+fn hermite(p: &[(f64, f64)], m: &[f64], x: f64) -> f64 {
+    if p.len() < 2 {
+        return x;
+    }
+    let i = (0..p.len() - 1)
+        .find(|&i| p[i].0 <= x && x <= p[i + 1].0)
+        .unwrap_or(p.len() - 2);
+    let h = (p[i + 1].0 - p[i].0).max(MIN_SEGMENT);
+    let t = ((x - p[i].0) / h).clamp(0.0, 1.0);
+    let (t2, t3) = (t * t, t * t * t);
+    let y = (2.0 * t3 - 3.0 * t2 + 1.0) * p[i].1
+        + (t3 - 2.0 * t2 + t) * h * m[i]
+        + (-2.0 * t3 + 3.0 * t2) * p[i + 1].1
+        + (t3 - t2) * h * m[i + 1];
+    y.clamp(-1.0, 1.0)
 }
 
 /// Splits the flat Bezier list into segments `[center, right, left, center]`.
@@ -467,6 +545,40 @@ impl Editable {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Symmetric knots at (+-0.75, +-0.25) or (+-0.25, +-0.75): the natural cubic spline turns
+    /// back or runs past 1 (clamped flat); the monotone cubic stays between its knots.
+    #[test]
+    fn monotone_cubic_never_overshoots() {
+        for (a, b) in [(0.75, 0.25), (0.25, 0.75)] {
+            let p = [(-1.0, -1.0), (-a, -b), (0.0, 0.0), (a, b), (1.0, 1.0)];
+            let c = Curve::new(CurveType::MonotoneCubic, &p);
+            assert!(c.monotonic(), "{p:?}");
+            for w in p.windows(2) {
+                for i in 1..20 {
+                    let x = w[0].0 + (w[1].0 - w[0].0) * f64::from(i) / 20.0;
+                    let y = c.eval(x);
+                    assert!(y > w[0].1 && y < w[1].1, "{p:?} at {x}: {y}");
+                }
+            }
+            for &(x, y) in &p {
+                assert!((c.eval(x) - y).abs() < 1e-9, "through the knot {x}");
+            }
+        }
+        let spline = |a: f64, b: f64| {
+            let p = [(-1.0, -1.0), (-a, -b), (0.0, 0.0), (a, b), (1.0, 1.0)];
+            Curve::new(CurveType::CubicSpline, &p)
+        };
+        assert!(
+            !spline(0.75, 0.25).monotonic(),
+            "the natural spline turns back"
+        );
+        assert_eq!(
+            spline(0.25, 0.75).eval(0.9),
+            1.0,
+            "and is clamped flat before x = 1"
+        );
+    }
 
     #[test]
     fn identity_for_every_type() {

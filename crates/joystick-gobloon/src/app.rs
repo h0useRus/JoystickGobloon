@@ -536,6 +536,8 @@ impl JoystickGobloonApp {
     fn detached_windows(&mut self, ctx: &egui::Context) {
         let devices = self.input.devices().clone();
         if self.viewer_window {
+            let mut devices = devices.clone();
+            devices.extend(self.logical_device());
             let (viewer, i18n) = (&mut self.viewer_view, &self.i18n);
             let title = i18n.tr("nav-viewer");
             let attach = detached_window(ctx, "input-viewer", &title, BIG_WINDOW, |ui| {
@@ -968,6 +970,15 @@ impl JoystickGobloonApp {
         });
     }
 
+    /// The profile's logical device with the values of the running profile.
+    fn logical_device(&self) -> Option<gob_input::DeviceState> {
+        crate::viewer_view::logical_device(
+            &self.profile.as_ref()?.profile,
+            self.activation.logical().as_ref(),
+            self.i18n.tr("logical-device"),
+        )
+    }
+
     fn devices_page(&mut self, ui: &mut egui::Ui) {
         match self.device_access.show(ui, &self.i18n) {
             Some(Ok(())) => {
@@ -1018,6 +1029,7 @@ impl JoystickGobloonApp {
             });
             ui.add_space(4.0);
         }
+        self.devices_view.logical = self.logical_device();
         let devices = self.input.devices();
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
@@ -1442,7 +1454,8 @@ impl eframe::App for JoystickGobloonApp {
                     });
                 }
                 Page::Viewer => {
-                    let devices = self.input.devices().clone();
+                    let mut devices = self.input.devices().clone();
+                    devices.extend(self.logical_device());
                     if self.viewer_view.show(ui, &self.i18n, &devices, false) {
                         self.viewer_window = true;
                     }

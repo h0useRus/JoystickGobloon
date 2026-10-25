@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use eframe::egui;
 use gob_core::Profile;
-use gob_engine::{Runner, RunnerStatus};
+use gob_engine::{LogicalValues, Runner, RunnerStatus};
 use gob_input::InputHandle;
 
 #[derive(Clone)]
@@ -124,6 +124,11 @@ impl Activation {
 
     pub fn status(&self) -> Option<RunnerStatus> {
         self.lock().runner.as_ref().map(|r| r.status())
+    }
+
+    /// Values of the logical device while a profile runs.
+    pub fn logical(&self) -> Option<LogicalValues> {
+        self.lock().runner.as_ref().map(|r| r.logical())
     }
 
     /// A "load profile" action asked for this file.

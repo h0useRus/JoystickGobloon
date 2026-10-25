@@ -37,6 +37,9 @@ pub struct ActionConfig {
     pub layer: Layer,
     /// Runs on top of the configurations of the held layer instead of only alone.
     pub additive: bool,
+    /// Axis outputs keep their last value when this layer stops running instead of going back
+    /// to rest.
+    pub keep_value: bool,
     /// Unknown children, kept verbatim.
     pub extra: Vec<Element>,
 }
@@ -224,7 +227,7 @@ impl Default for Profile {
 
 impl Profile {
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led actions): it is then written in Joystick Gobloon's own format, which
+    /// light-led actions, monotone cubic curves): it is then written in Joystick Gobloon's own format, which
     /// Joystick Gremlin cannot open.
     pub fn needs_own_format(&self) -> bool {
         !self.modifiers.is_empty()
@@ -232,8 +235,13 @@ impl Profile {
                 .inputs
                 .iter()
                 .flat_map(|b| &b.configs)
-                .any(|c| c.additive || !c.layer.is_base())
-            || self.library.iter().any(|a| a.kind == "light-led")
+                .any(|c| c.additive || c.keep_value || !c.layer.is_base())
+            || self.library.iter().any(|a| {
+                a.kind == "light-led"
+                    || (a.kind == "response-curve"
+                        && a.str("curve-type").map(crate::curve::CurveType::parse)
+                            == Some(crate::curve::CurveType::MonotoneCubic))
+            })
     }
 
     pub fn action(&self, id: &str) -> Option<&Action> {

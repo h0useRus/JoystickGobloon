@@ -208,6 +208,7 @@ fn config_from(e: &Element) -> ActionConfig {
         virtual_button: None,
         layer: Layer::parse(e.attr("layer").unwrap_or_default()),
         additive: e.attr("additive").is_some_and(|v| v == "true"),
+        keep_value: e.attr("keep-value").is_some_and(|v| v == "true"),
         extra: Vec::new(),
     };
     for c in e.elements() {
@@ -238,6 +239,9 @@ fn input_to(b: &InputBinding) -> Element {
         }
         if cfg.additive {
             el = el.with_attr("additive", "true");
+        }
+        if cfg.keep_value {
+            el = el.with_attr("keep-value", "true");
         }
         el
     });

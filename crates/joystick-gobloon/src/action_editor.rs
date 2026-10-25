@@ -85,6 +85,14 @@ pub enum Op {
         layer: Layer,
         additive: bool,
     },
+    SetLayerKeepValue {
+        device: String,
+        input_type: String,
+        input_id: String,
+        mode: String,
+        layer: Layer,
+        keep: bool,
+    },
     Add {
         parent: String,
         group: String,
@@ -232,6 +240,14 @@ pub fn apply(p: &mut Profile, op: Op) {
             layer,
             additive,
         } => p.set_layer_additive(&device, &input_type, &input_id, &mode, &layer, additive),
+        Op::SetLayerKeepValue {
+            device,
+            input_type,
+            input_id,
+            mode,
+            layer,
+            keep,
+        } => p.set_layer_keep_value(&device, &input_type, &input_id, &mode, &layer, keep),
         Op::Add {
             parent,
             group,
@@ -1871,20 +1887,49 @@ impl Editor<'_> {
     }
 
     fn axis_pickers(&mut self, ui: &mut egui::Ui, id: &str, axes: [(&str, u32); 2]) {
-        let devices = self.device_choices();
+        let mut devices = self.device_choices();
+        // Logical axes (by input id, with their labels) can be merged too.
+        let logical: Vec<(u32, String)> = self
+            .profile
+            .logical_inputs()
+            .into_iter()
+            .filter(|i| i.input_type == InputType::Axis)
+            .map(|i| (i.id, i.label))
+            .collect();
+        if !logical.is_empty() {
+            devices.retain(|(g, _)| g != gob_core::LOGICAL_DEVICE_GUID);
+            devices.push((
+                gob_core::LOGICAL_DEVICE_GUID.to_string(),
+                self.i18n.tr("logical-device"),
+            ));
+        }
         for (n, (device, axis)) in axes.into_iter().enumerate() {
             let device = device.to_ascii_lowercase();
             let name = devices
                 .iter()
                 .find(|(g, _)| *g == device)
                 .map_or_else(|| self.i18n.tr("edit-merge-no-device"), |(_, n)| n.clone());
-            let live = self
-                .inputs
-                .iter()
-                .find(|d| d.info.guid == device || gob_core::same_device_name(&d.info.name, &name));
-            let slots: Vec<u32> = live.map_or((1..=8).collect(), |d| {
-                d.info.axes.iter().map(|&a| u32::from(a)).collect()
-            });
+            let slots: Vec<(u32, String)> = if device == gob_core::LOGICAL_DEVICE_GUID {
+                logical.clone()
+            } else {
+                let live = self.inputs.iter().find(|d| {
+                    d.info.guid == device || gob_core::same_device_name(&d.info.name, &name)
+                });
+                live.map_or((1..=8).collect(), |d| {
+                    d.info
+                        .axes
+                        .iter()
+                        .map(|&a| u32::from(a))
+                        .collect::<Vec<_>>()
+                })
+                .into_iter()
+                .map(|s| (s, self.i18n.tr(&format!("vjoy-axis-{s}"))))
+                .collect()
+            };
+            let shown = slots.iter().find(|(s, _)| *s == axis).map_or_else(
+                || self.i18n.tr(&format!("vjoy-axis-{axis}")),
+                |(_, l)| l.clone(),
+            );
             let prefix = format!("axis{}", n + 1);
             ui.horizontal(|ui| {
                 ui.label(RichText::new((n + 1).to_string()).strong());
@@ -1895,14 +1940,20 @@ impl Editor<'_> {
                         for (g, label) in &devices {
                             if ui.selectable_label(*g == device, label).clicked() {
                                 self.set(id, &format!("{prefix}-guid"), "uuid", g.clone());
+                                if g == gob_core::LOGICAL_DEVICE_GUID
+                                    && let Some((first, _)) = logical.first()
+                                    && logical.iter().all(|(s, _)| *s != axis)
+                                {
+                                    let first = first.to_string();
+                                    self.set(id, &format!("{prefix}-axis"), "int", first);
+                                }
                             }
                         }
                     });
                 egui::ComboBox::from_id_salt((&prefix, "axis", id))
-                    .selected_text(self.i18n.tr(&format!("vjoy-axis-{axis}")))
+                    .selected_text(shown)
                     .show_ui(ui, |ui| {
-                        for s in slots {
-                            let text = self.i18n.tr(&format!("vjoy-axis-{s}"));
+                        for (s, text) in slots {
                             if ui.selectable_label(s == axis, text).clicked() {
                                 self.set(id, &format!("{prefix}-axis"), "int", s.to_string());
                             }

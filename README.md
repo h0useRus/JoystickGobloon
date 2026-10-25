@@ -78,6 +78,8 @@ The app and its profiles are the same on both systems; what does the work undern
   only while M1 is held.
 - A button keeps the layer it was pressed in until it is released, so letting go of the modifier first never leaves
   anything stuck; outputs of a layer that stops go back to rest.
+- An axis layer can **keep the last value** instead: a trim axis on M1 holds its setting after M1 is released, and the
+  main axis on the base holds its position while M1 is held.
 - The modifiers light up next to the mode selector while held; a modifier's own button shows a lock and runs no actions.
 
 <p align="center">

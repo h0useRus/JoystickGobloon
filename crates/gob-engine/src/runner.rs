@@ -11,7 +11,7 @@ use gob_core::Profile;
 use gob_input::{DeviceState, InputEvent, Timed};
 
 use crate::platform::Injector;
-use crate::{Engine, InputKey, InputKind, Output, Value};
+use crate::{Engine, InputKey, InputKind, LogicalValues, Output, Value};
 
 /// Upper bound on how long the loop sleeps without events.
 const IDLE: Duration = Duration::from_millis(20);
@@ -78,6 +78,7 @@ pub struct Runner {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     status: Arc<Mutex<RunnerStatus>>,
+    logical: Arc<Mutex<LogicalValues>>,
 }
 
 struct SystemOutput {
@@ -229,18 +230,21 @@ impl Runner {
             load_profile: None,
             latency: None,
         }));
+        engine.take_logical_changed();
+        let logical = Arc::new(Mutex::new(engine.logical_values()));
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
-            let (status, stop) = (status.clone(), stop.clone());
+            let (status, logical, stop) = (status.clone(), logical.clone(), stop.clone());
             std::thread::Builder::new()
                 .name("gob-engine".into())
-                .spawn(move || run(engine, out, &events, &status, &stop, &on_change))
+                .spawn(move || run(engine, out, &events, &status, &logical, &stop, &on_change))
                 .map_err(|e| e.to_string())?
         };
         Ok(Self {
             stop,
             thread: Some(thread),
             status,
+            logical,
         })
     }
 
@@ -255,6 +259,14 @@ impl Runner {
 
     pub fn status(&self) -> RunnerStatus {
         self.status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Current values of the logical device's inputs.
+    pub fn logical(&self) -> LogicalValues {
+        self.logical
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
@@ -275,6 +287,7 @@ fn run(
     mut out: SystemOutput,
     events: &Receiver<Timed>,
     status: &Mutex<RunnerStatus>,
+    logical: &Mutex<LogicalValues>,
     stop: &AtomicBool,
     on_change: &dyn Fn(),
 ) {
@@ -297,6 +310,10 @@ fn run(
         let now = Instant::now();
         engine.tick(now, &mut out);
 
+        if engine.take_logical_changed() {
+            *logical.lock().unwrap_or_else(|e| e.into_inner()) = engine.logical_values();
+            on_change();
+        }
         let mut s = status.lock().unwrap_or_else(|e| e.into_inner());
         let load = out.load_profile.take();
         let latency = window.finish(now);
