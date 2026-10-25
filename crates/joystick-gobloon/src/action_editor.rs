@@ -1198,6 +1198,10 @@ impl Editor<'_> {
                     self.set(&id, "inverted", "bool", if inv { "True" } else { "False" });
                 }
             }
+            if self.behavior == InputType::Button {
+                ui.separator();
+                self.activation(ui, action);
+            }
         });
         if !self.gamepads.iter().any(|g| g.id == gamepad) {
             let text = self.i18n.trf("gamepad-missing", &[("n", gamepad.into())]);
