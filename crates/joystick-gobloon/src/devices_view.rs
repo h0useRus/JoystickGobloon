@@ -68,6 +68,9 @@ pub struct DevicesView {
     pub monotonic_curves: bool,
     /// The profile's logical device with its live values, filled by the app for each frame.
     pub logical: Option<DeviceState>,
+    /// Configured virtual gamepads and how many the system can have, filled by the app.
+    pub gamepads: Vec<gob_virtual::GamepadInfo>,
+    pub max_gamepads: u32,
 }
 
 struct Tab<'a> {
@@ -964,6 +967,8 @@ impl DevicesView {
                     ops,
                     behavior,
                     vjoy,
+                    gamepads: &self.gamepads,
+                    max_gamepads: self.max_gamepads,
                     inputs,
                     input: Some((&b.device_id, key.1)),
                     leds: &self.leds,
@@ -1000,6 +1005,8 @@ impl DevicesView {
                     ops,
                     behavior,
                     vjoy,
+                    gamepads: &self.gamepads,
+                    max_gamepads: self.max_gamepads,
                     inputs,
                     input: Some((&device, key.1)),
                     leds: &self.leds,
@@ -1211,6 +1218,13 @@ fn chip_text(i18n: &I18n, a: &Action) -> String {
             _ => "B",
         };
         return format!("{name}: vJoy #{device} {t}{input_id}");
+    }
+    if let gob_core::ActionKind::MapToGamepad {
+        gamepad, control, ..
+    } = a.kind()
+    {
+        let pad = i18n.trf("gamepad-n", &[("n", gamepad.into())]);
+        return format!("{name}: {pad} {}", i18n.tr(&format!("pad-{control}")));
     }
     if let gob_core::ActionKind::Description { text } = a.kind() {
         let text = text.trim();

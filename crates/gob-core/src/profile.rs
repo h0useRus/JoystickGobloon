@@ -227,7 +227,7 @@ impl Default for Profile {
 
 impl Profile {
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led actions, monotone cubic curves): it is then written in Joystick Gobloon's own format, which
+    /// light-led and map-to-gamepad actions, monotone cubic curves): it is then written in Joystick Gobloon's own format, which
     /// Joystick Gremlin cannot open.
     pub fn needs_own_format(&self) -> bool {
         !self.modifiers.is_empty()
@@ -238,6 +238,7 @@ impl Profile {
                 .any(|c| c.additive || c.keep_value || !c.layer.is_base())
             || self.library.iter().any(|a| {
                 a.kind == "light-led"
+                    || a.kind == "map-to-gamepad"
                     || (a.kind == "response-curve"
                         && a.str("curve-type").map(crate::curve::CurveType::parse)
                             == Some(crate::curve::CurveType::MonotoneCubic))

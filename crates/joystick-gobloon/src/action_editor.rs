@@ -418,12 +418,18 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "play-sound" => icon::SPEAKER_HIGH,
         "text-to-speech" => icon::CHAT_TEXT,
         "light-led" => icon::LIGHTBULB,
+        "map-to-gamepad" => icon::GAME_CONTROLLER,
         _ => icon::PUZZLE_PIECE,
     }
 }
 
-/// Action types offered in the "add" menu: (icon, i18n key, template).
-fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, NewAction)> {
+/// Action types offered in the "add" menu: (icon, i18n key, template). `gamepads`: the
+/// system can create virtual gamepads.
+fn addable(
+    behavior: InputType,
+    mode: &str,
+    gamepads: bool,
+) -> Vec<(&'static str, &'static str, NewAction)> {
     let mut list = vec![(
         icon::GAME_CONTROLLER,
         "kind-map-to-vjoy",
@@ -431,6 +437,15 @@ fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, 
             input_type: behavior,
         },
     )];
+    if gamepads && behavior != InputType::Other {
+        list.push((
+            icon::GAME_CONTROLLER,
+            "kind-map-to-gamepad",
+            NewAction::MapToGamepad {
+                input_type: behavior,
+            },
+        ));
+    }
     if behavior == InputType::Axis {
         list.push((
             icon::CHART_LINE,
@@ -540,6 +555,10 @@ pub struct Editor<'a> {
     pub behavior: InputType,
     /// Configured vJoy devices (empty when vJoy is unavailable).
     pub vjoy: &'a [gob_virtual::DeviceInfo],
+    /// Configured virtual gamepads, and how many the system can have (0: none, no gamepad
+    /// actions are offered).
+    pub gamepads: &'a [gob_virtual::GamepadInfo],
+    pub max_gamepads: u32,
     /// Attached controllers, for actions that name physical inputs.
     pub inputs: &'a [gob_input::DeviceState],
     /// Input being edited (profile device id, input id), for templates that refer to it.
@@ -566,7 +585,7 @@ impl Editor<'_> {
             RichText::new(icon::PLUS_CIRCLE).size(style::ICON_SIZE),
             |ui| {
                 let experimental = self.experimental;
-                let all = addable(self.behavior, mode);
+                let all = addable(self.behavior, mode, self.max_gamepads > 0);
                 let offered = all
                     .into_iter()
                     .filter(|(_, _, k)| experimental || !matches!(k, NewAction::LightLed { .. }));
@@ -688,6 +707,11 @@ impl Editor<'_> {
                     input_id,
                     inverted,
                 } => self.vjoy(ui, action, device, input_type, input_id, inverted),
+                ActionKind::MapToGamepad {
+                    gamepad,
+                    control,
+                    inverted,
+                } => self.gamepad(ui, action, gamepad, control, inverted),
                 ActionKind::ChangeMode { change_type, .. } => {
                     self.change_mode(ui, action, change_type)
                 }
@@ -1116,6 +1140,74 @@ impl Editor<'_> {
             if style::icon_toggle(ui, current == value, glyph, &self.i18n.tr(key)).clicked() {
                 self.set(&action.id, "activation-mode", "activation-mode", value);
             }
+        }
+    }
+
+    /// map-to-gamepad: the gamepad, a control that suits the input, inverted.
+    fn gamepad(
+        &mut self,
+        ui: &mut egui::Ui,
+        action: &Action,
+        gamepad: u32,
+        control: &str,
+        inverted: bool,
+    ) {
+        use gob_virtual::{ControlKind, GamepadControl};
+        let id = action.id.clone();
+        let fits = |c: &GamepadControl| match self.behavior {
+            InputType::Axis => matches!(c.kind(), ControlKind::Stick | ControlKind::Trigger),
+            InputType::Hat => c.kind() == ControlKind::Dpad,
+            _ => matches!(c.kind(), ControlKind::Button | ControlKind::Trigger),
+        };
+        let controls: Vec<GamepadControl> = GamepadControl::ALL.into_iter().filter(fits).collect();
+        let current = GamepadControl::parse(control);
+        let pad_name = |n: u32| self.i18n.trf("gamepad-n", &[("n", n.into())]);
+        let control_name = |c: GamepadControl| self.i18n.tr(&format!("pad-{}", c.name()));
+        let mut set_pad = None;
+        let mut set_control = None;
+        ui.horizontal_wrapped(|ui| {
+            egui::ComboBox::from_id_salt(("gamepad", &id))
+                .selected_text(pad_name(gamepad))
+                .show_ui(ui, |ui| {
+                    for n in 1..=self.max_gamepads.max(gamepad) {
+                        if ui.selectable_label(n == gamepad, pad_name(n)).clicked() {
+                            set_pad = Some(n);
+                        }
+                    }
+                });
+            let shown = current.map_or_else(|| control.to_string(), control_name);
+            egui::ComboBox::from_id_salt(("gamepad-control", &id))
+                .selected_text(shown)
+                .height(320.0)
+                .show_ui(ui, |ui| {
+                    for &c in &controls {
+                        if ui
+                            .selectable_label(current == Some(c), control_name(c))
+                            .clicked()
+                        {
+                            set_control = Some(c);
+                        }
+                    }
+                });
+            if current.is_some_and(|c| c.kind() != ControlKind::Dpad) {
+                let mut inv = inverted;
+                if ui
+                    .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
+                    .changed()
+                {
+                    self.set(&id, "inverted", "bool", if inv { "True" } else { "False" });
+                }
+            }
+        });
+        if !self.gamepads.iter().any(|g| g.id == gamepad) {
+            let text = self.i18n.trf("gamepad-missing", &[("n", gamepad.into())]);
+            ui.label(RichText::new(format!("{}  {text}", icon::WARNING)).weak());
+        }
+        if let Some(n) = set_pad {
+            self.set(&id, "gamepad-id", "int", n.to_string());
+        }
+        if let Some(c) = set_control {
+            self.set(&id, "control", "string", c.name());
         }
     }
 

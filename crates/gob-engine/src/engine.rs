@@ -10,7 +10,8 @@ use gob_core::{
 use crate::media::{SpeechQueue, SpeechRequest};
 use crate::modes::ModeStack;
 use crate::motion::{Motion, compass};
-use crate::{InputKey, InputKind, Light, LogicalValues, Output, Value};
+use crate::{GamepadControl, InputKey, InputKind, Light, LogicalValues, Output, Value};
+use gob_virtual::ControlKind;
 
 /// Delay between press and release of a pulse (Gremlin: 50 ms).
 const PULSE: Duration = Duration::from_millis(50);
@@ -53,6 +54,13 @@ enum Node {
         act: ActivationMode,
         /// Relative axis mode: speed (Gremlin's axis-scaling); absolute when `None`.
         relative: Option<f32>,
+    },
+    /// map-to-gamepad.
+    Gamepad {
+        gamepad: u32,
+        control: GamepadControl,
+        inverted: bool,
+        act: ActivationMode,
     },
     ChangeMode {
         kind: ChangeKind,
@@ -290,6 +298,7 @@ struct Timer {
 #[derive(Debug, Clone, PartialEq)]
 enum ReleaseAction {
     VjoyButton(u32, u8),
+    GamepadButton(u32, GamepadControl),
     LeaveTemporary(String),
     TempoRelease(NodeId),
     StopMacro(NodeId),
@@ -664,6 +673,16 @@ impl Engine {
                         relative,
                     })
                 }
+                ActionKind::MapToGamepad {
+                    gamepad,
+                    control,
+                    inverted,
+                } => GamepadControl::parse(control).map_or(Node::Noop, |control| Node::Gamepad {
+                    gamepad,
+                    control,
+                    inverted,
+                    act: action.activation_mode(),
+                }),
                 ActionKind::ChangeMode { change_type, .. } => Node::ChangeMode {
                     kind: match change_type {
                         "Previous" => ChangeKind::Previous,
@@ -1043,6 +1062,17 @@ impl Engine {
                     })
                     .collect(),
                 _ => Vec::new(),
+            })
+            .collect()
+    }
+
+    /// Virtual gamepad ids the profile writes to.
+    pub fn gamepads(&self) -> BTreeSet<u32> {
+        self.nodes
+            .iter()
+            .filter_map(|n| match n {
+                Node::Gamepad { gamepad, .. } => Some(*gamepad),
+                _ => None,
             })
             .collect()
     }
@@ -1434,6 +1464,17 @@ impl Engine {
                     }
                 }
             }
+            Node::Gamepad {
+                gamepad,
+                control,
+                inverted,
+                act,
+            } => {
+                if !should_execute(act, *value) {
+                    return;
+                }
+                self.gamepad(gamepad, control, inverted, *value, src, out);
+            }
             Node::ChangeMode { kind, targets, act } => {
                 if !should_execute(act, *value) && !matches!(kind, ChangeKind::Temporary) {
                     return;
@@ -1776,6 +1817,60 @@ impl Engine {
         if let Node::Keys { keys, .. } = &self.nodes[node] {
             for k in keys.iter().rev() {
                 out.key(k.scan_code, k.extended, false);
+            }
+        }
+    }
+
+    /// map-to-gamepad: buttons like vJoy buttons (released with their input, also in another
+    /// mode), sticks take the axis as it is, triggers its -1..1 as 0..1, the d-pad a hat. A
+    /// button input pushes a stick or trigger fully, released back to rest.
+    fn gamepad(
+        &mut self,
+        gamepad: u32,
+        control: GamepadControl,
+        inverted: bool,
+        value: Value,
+        src: &Source,
+        out: &mut dyn Output,
+    ) {
+        match control.kind() {
+            ControlKind::Button => {
+                let pressed = match value {
+                    Value::Button(b) => b,
+                    Value::Axis(v) => v != 0.0,
+                    Value::Hat(d) => d.is_some(),
+                } != inverted;
+                out.gamepad_button(gamepad, control, pressed);
+                if pressed && !src.no_auto_release {
+                    self.register(
+                        &src.key,
+                        ReleaseEntry {
+                            mode: src.mode.clone(),
+                            any_mode: false,
+                            on_press: inverted,
+                            action: ReleaseAction::GamepadButton(gamepad, control),
+                        },
+                    );
+                }
+            }
+            kind @ (ControlKind::Stick | ControlKind::Trigger) => {
+                let v = match value {
+                    Value::Axis(v) => v,
+                    Value::Button(b) => f32::from(u8::from(b)),
+                    Value::Hat(_) => return,
+                };
+                let v = if inverted { -v } else { v };
+                let v = match kind {
+                    ControlKind::Trigger if matches!(value, Value::Axis(_)) => (v + 1.0) / 2.0,
+                    ControlKind::Trigger => v.abs(),
+                    _ => v,
+                };
+                out.gamepad_axis(gamepad, control, v);
+            }
+            ControlKind::Dpad => {
+                if let Value::Hat(d) = value {
+                    out.gamepad_dpad(gamepad, d);
+                }
             }
         }
     }
@@ -2458,6 +2553,9 @@ impl Engine {
         for entry in fire {
             match entry.action {
                 ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
+                ReleaseAction::GamepadButton(gamepad, control) => {
+                    out.gamepad_button(gamepad, control, false)
+                }
                 ReleaseAction::LeaveTemporary(mode) => self.leave_temporary(&mode),
                 ReleaseAction::ReleaseKeys(node) => self.release_keys(node, out),
                 ReleaseAction::Logical(key) => {

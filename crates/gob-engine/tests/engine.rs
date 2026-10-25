@@ -22,6 +22,9 @@ enum Out {
     Speak(String),
     Load(String),
     Light(String, u8, [u8; 3], gob_core::LedMode),
+    /// Gamepad, control name, value (buttons 0/1).
+    Pad(u32, &'static str, f32),
+    PadDpad(u32, Option<u16>),
 }
 
 #[derive(Default)]
@@ -39,6 +42,23 @@ impl Output for Recorder {
         });
     }
     fn hat(&mut self, _device: u32, _hat: u8, _direction: Option<u16>) {}
+    fn gamepad_button(&mut self, gamepad: u32, control: gob_engine::GamepadControl, pressed: bool) {
+        self.0.push(Out::Pad(
+            gamepad,
+            control.name(),
+            f32::from(u8::from(pressed)),
+        ));
+    }
+    fn gamepad_axis(&mut self, gamepad: u32, control: gob_engine::GamepadControl, value: f32) {
+        self.0.push(Out::Pad(
+            gamepad,
+            control.name(),
+            (value * 1000.0).round() / 1000.0,
+        ));
+    }
+    fn gamepad_dpad(&mut self, gamepad: u32, direction: Option<u16>) {
+        self.0.push(Out::PadDpad(gamepad, direction));
+    }
     fn mouse_move(&mut self, dx: i32, dy: i32) {
         self.0.push(Out::Move(dx, dy));
     }
@@ -1332,6 +1352,92 @@ fn merge_axis_of_logical_axes() {
     assert_eq!(
         values.axes.into_iter().collect::<Vec<_>>(),
         [(1, 0.5), (2, 0.25)]
+    );
+}
+
+/// map-to-gamepad: button 1 -> A, button 2 -> LT, axis 1 -> left Y, axis 2 -> RT, axis 3 ->
+/// right X inverted, hat 1 -> d-pad, all on gamepad 1; button 3 -> B on gamepad 2.
+#[test]
+fn map_to_gamepad() {
+    let pad = |id: &str, gamepad: &str, control: &str, inverted: bool| {
+        act(
+            id,
+            "map-to-gamepad",
+            &format!(
+                "{}{}{}",
+                prop("int", "gamepad-id", gamepad),
+                prop("string", "control", control),
+                prop("bool", "inverted", if inverted { "True" } else { "False" }),
+            ),
+        )
+    };
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs>{}</inputs><settings/><library>{}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        [
+            input("button", 1, "Default", "r1", ""),
+            input("button", 2, "Default", "r2", ""),
+            input("button", 3, "Default", "r3", ""),
+            input("axis", 1, "Default", "r4", ""),
+            input("axis", 2, "Default", "r5", ""),
+            input("axis", 3, "Default", "r6", ""),
+            input("hat", 1, "Default", "r7", ""),
+        ]
+        .concat(),
+        [
+            root("r1", &["p1"]),
+            root("r2", &["p2"]),
+            root("r3", &["p3"]),
+            root("r4", &["p4"]),
+            root("r5", &["p5"]),
+            root("r6", &["p6"]),
+            root("r7", &["p7"]),
+            pad("p1", "1", "a", false),
+            pad("p2", "1", "lt", false),
+            pad("p3", "2", "b", false),
+            pad("p4", "1", "left-y", false),
+            pad("p5", "1", "rt", false),
+            pad("p6", "1", "right-x", true),
+            pad("p7", "1", "dpad", false),
+        ]
+        .concat(),
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut e = Engine::new(&p, &HashMap::new());
+    assert_eq!(e.gamepads().into_iter().collect::<Vec<_>>(), [1, 2]);
+    let mut out = Recorder::default();
+    let mut send = |kind, id, value| {
+        e.process(
+            &InputKey::new(DEV, kind, id),
+            value,
+            Instant::now(),
+            &mut out,
+        );
+    };
+    send(InputKind::Button, 1, Value::Button(true));
+    send(InputKind::Button, 1, Value::Button(false));
+    send(InputKind::Button, 2, Value::Button(true));
+    send(InputKind::Button, 3, Value::Button(true));
+    send(InputKind::Axis, 1, Value::Axis(-0.5));
+    send(InputKind::Axis, 2, Value::Axis(-1.0));
+    send(InputKind::Axis, 2, Value::Axis(0.0));
+    send(InputKind::Axis, 3, Value::Axis(0.25));
+    send(InputKind::Hat, 1, Value::Hat(Some(9000)));
+    send(InputKind::Hat, 1, Value::Hat(None));
+    assert_eq!(
+        out.0,
+        [
+            Out::Pad(1, "a", 1.0),
+            Out::Pad(1, "a", 0.0),
+            Out::Pad(1, "lt", 1.0),
+            Out::Pad(2, "b", 1.0),
+            Out::Pad(1, "left-y", -0.5),
+            Out::Pad(1, "rt", 0.0),
+            Out::Pad(1, "rt", 0.5),
+            Out::Pad(1, "right-x", -0.25),
+            Out::PadDpad(1, Some(9000)),
+            Out::PadDpad(1, None),
+        ]
     );
 }
 

@@ -1033,6 +1033,8 @@ impl JoystickGobloonApp {
         let devices = self.input.devices();
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
+        (self.devices_view.max_gamepads, self.devices_view.gamepads) =
+            self.vjoy_view.gamepad_list();
         let gaming_only = self.settings.hidhide_gaming_only;
         self.hidhide_view
             .track_inputs(devices.iter().map(|d| d.info.guid.clone()).collect());
