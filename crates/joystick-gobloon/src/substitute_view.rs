@@ -47,7 +47,7 @@ pub fn missing_devices<'a>(
 impl SubstituteDialog {
     /// Pre-selects an attached device with the same name when it is unambiguous.
     pub fn new(profile: &Profile, devices: &[DeviceState]) -> Self {
-        let free: Vec<&DeviceState> = devices.iter().filter(|s| !s.info.is_vjoy()).collect();
+        let free: Vec<&DeviceState> = devices.iter().filter(|s| !s.info.is_own()).collect();
         let free_ids = free
             .iter()
             .map(|s| (s.info.guid.clone(), s.info.name.clone()))
@@ -125,7 +125,7 @@ impl SubstituteDialog {
         devices: &[DeviceState],
         open: &mut bool,
     ) -> Option<Vec<Substitution>> {
-        let physical: Vec<&DeviceState> = devices.iter().filter(|d| !d.info.is_vjoy()).collect();
+        let physical: Vec<&DeviceState> = devices.iter().filter(|d| !d.info.is_own()).collect();
         let keep = i18n.tr("subst-keep");
         let mut apply = false;
         egui::Window::new(i18n.tr("subst-title"))
@@ -256,7 +256,7 @@ pub fn auto_aliases(profile: &Profile, devices: &[DeviceState]) -> HashMap<Strin
     let free: Vec<&DeviceState> = devices
         .iter()
         .filter(|s| {
-            !s.info.is_vjoy()
+            !s.info.is_own()
                 && !profile
                     .devices
                     .iter()

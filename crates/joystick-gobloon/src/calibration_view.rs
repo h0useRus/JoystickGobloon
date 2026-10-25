@@ -52,7 +52,7 @@ impl CalibrationView {
         let mut out = Output::default();
         ui.ctx()
             .request_repaint_after(std::time::Duration::from_millis(33));
-        let physical: Vec<&DeviceState> = devices.iter().filter(|d| !d.info.is_vjoy()).collect();
+        let physical: Vec<&DeviceState> = devices.iter().filter(|d| !d.info.is_own()).collect();
 
         ui.horizontal(|ui| {
             ui.label(RichText::new(i18n.tr("nav-calibration")).strong());

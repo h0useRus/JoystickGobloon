@@ -1746,7 +1746,7 @@ impl Editor<'_> {
             .iter()
             .map(|d| (d.id.to_ascii_lowercase(), d.name.trim().to_string()))
             .collect();
-        for d in self.inputs.iter().filter(|d| !d.info.is_vjoy()) {
+        for d in self.inputs.iter().filter(|d| !d.info.is_own()) {
             if !devices.iter().any(|(g, _)| *g == d.info.guid) {
                 devices.push((d.info.guid.clone(), d.info.name.trim().to_string()));
             }
@@ -1757,7 +1757,7 @@ impl Editor<'_> {
     /// Attached device for a profile device: same GUID, or the same name (profile from
     /// another PC).
     fn live_device(&self, guid: &str, name: &str) -> Option<&gob_input::DeviceState> {
-        self.inputs.iter().filter(|d| !d.info.is_vjoy()).find(|d| {
+        self.inputs.iter().filter(|d| !d.info.is_own()).find(|d| {
             d.info.guid.eq_ignore_ascii_case(guid)
                 || (!name.is_empty() && gob_core::same_device_name(&d.info.name, name))
         })

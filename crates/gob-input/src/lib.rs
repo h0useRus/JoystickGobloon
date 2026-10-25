@@ -30,12 +30,17 @@ pub struct DeviceInfo {
     /// HID interface path (`DIPROP_GUIDANDPATH`), empty when unknown. Links the device to
     /// gob-lighting's LED control (same path there, compare ignoring case).
     pub hid_path: String,
+    /// Set by the backend for Joystick Gobloon's own devices that cannot be told by their ids:
+    /// on Linux the uinput devices named "Joystick Gobloon ..." (a gamepad has a real Xbox
+    /// controller's ids).
+    pub own: bool,
 }
 
 impl DeviceInfo {
-    /// vJoy virtual devices (our own output), as opposed to physical controllers.
-    pub fn is_vjoy(&self) -> bool {
-        self.vendor_id == 0x1234 && self.product_id == 0xBEAD
+    /// Joystick Gobloon's own virtual output (vJoy devices, our uinput devices), as opposed to
+    /// physical controllers.
+    pub fn is_own(&self) -> bool {
+        self.own || (self.vendor_id == 0x1234 && self.product_id == 0xBEAD)
     }
 }
 

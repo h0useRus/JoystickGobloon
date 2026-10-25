@@ -215,7 +215,7 @@ impl Runner {
         }
 
         let now = Instant::now();
-        for d in initial.iter().filter(|d| !d.info.is_vjoy()) {
+        for d in initial.iter().filter(|d| !d.info.is_own()) {
             for (i, &b) in d.buttons.iter().enumerate() {
                 let key = InputKey::new(&d.info.guid, InputKind::Button, i as u32 + 1);
                 engine.seed(&key, Value::Button(b));

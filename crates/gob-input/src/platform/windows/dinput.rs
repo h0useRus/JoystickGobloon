@@ -143,6 +143,7 @@ impl DirectInput {
                 buttons: (caps.dwButtons as usize).min(128),
                 hats: (caps.dwPOVs as usize).min(4),
                 hid_path: hid_path(&dev),
+                own: false,
             };
             let state = DeviceState::new(info);
             Ok(Device {

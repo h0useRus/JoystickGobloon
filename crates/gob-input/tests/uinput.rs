@@ -274,6 +274,34 @@ fn virtual_stick_reads_back() {
     assert!(!input.devices().iter().any(|d| d.info.name == NAME));
 }
 
+/// Our own Xbox-style gamepad has a real controller's ids (045e:028e): its name tells it is our
+/// output, while the same ids under another name are a controller.
+#[test]
+#[ignore = "needs /dev/uinput"]
+fn own_gamepad_is_output_by_name() {
+    let _serial = serial();
+    let pad = |name| {
+        let buttons = [0x130, 0x131, 0x133, 0x134].into_iter();
+        let axes = [(ABS_X, -32768, 32767), (ABS_Y, -32768, 32767)];
+        Virtual::create(name, [0x03, 0x045e, 0x028e, 0x0114], &[], buttons, &axes)
+    };
+    let (own, other) = ("Joystick Gobloon Test Gamepad", "Test Xbox 360 pad");
+    let _devices = (pad(own), pad(other));
+    let input = InputService::start(|| {});
+    let end = Instant::now() + Duration::from_secs(5);
+    let found = loop {
+        let devices = input.devices();
+        let find = |name: &str| devices.iter().find(|d| d.info.name == name).cloned();
+        if let (Some(a), Some(b)) = (find(own), find(other)) {
+            break (a, b);
+        }
+        assert!(Instant::now() < end, "gamepads not found");
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert!(found.0.info.is_own(), "ours by its name");
+    assert!(!found.1.info.is_own(), "a controller with the same ids");
+}
+
 #[test]
 #[ignore = "needs /dev/uinput"]
 fn keyboard_keys_as_scan_codes() {

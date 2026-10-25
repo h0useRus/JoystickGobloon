@@ -139,7 +139,7 @@ impl DevicesView {
             let (kind, id) = key;
             if devices
                 .iter()
-                .any(|d| d.info.guid == device && d.info.is_vjoy())
+                .any(|d| d.info.guid == device && d.info.is_own())
                 || (kind == Kind::Button
                     && modifiers
                         .iter()
@@ -169,7 +169,7 @@ impl DevicesView {
         let logical = self.logical.take();
         let mut tabs: Vec<Tab> = devices
             .iter()
-            .filter(|d| !d.info.is_vjoy())
+            .filter(|d| !d.info.is_own())
             .map(|d| Tab {
                 guid: &d.info.guid,
                 name: &d.info.name,

@@ -225,7 +225,7 @@ impl ModifiersWindow {
 
 /// Pressed buttons of the physical controllers: (device id, 0-based button).
 fn down(devices: &[DeviceState]) -> impl Iterator<Item = (String, usize)> + '_ {
-    devices.iter().filter(|d| !d.info.is_vjoy()).flat_map(|d| {
+    devices.iter().filter(|d| !d.info.is_own()).flat_map(|d| {
         d.buttons
             .iter()
             .enumerate()
