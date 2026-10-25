@@ -1,22 +1,34 @@
 //! Creates a virtual joystick for a few seconds, moves its X axis and presses button 1, so
-//! `evtest` or `jstest` can show it. Shows whether uinput is usable for this user.
-//!   cargo run -p gob-uinput --example uinput_check
+//! `evtest` or `jstest` can show it. Shows whether uinput is usable for this user. With
+//! `--gamepad` it creates an Xbox-style gamepad instead (moves the left stick, presses A), for
+//! `evtest`, `sdl2-jstest --list` or Steam.
+//!   cargo run -p gob-uinput --example uinput_check [-- --gamepad]
 
 #[cfg(target_os = "linux")]
 fn main() {
-    use gob_uinput::{Axis, Spec, VirtualDevice, codes};
+    use gob_uinput::{Axis, Spec, VirtualDevice, codes, gamepad};
 
+    let gamepad = std::env::args().any(|a| a == "--gamepad");
     let axes = [Axis {
         code: codes::ABS_X,
         min: -32768,
         max: 32767,
     }];
-    let spec = Spec {
-        name: "Joystick Gobloon uinput check",
-        bus: codes::BUS_VIRTUAL,
-        keys: &[codes::BTN_JOYSTICK],
-        axes: &axes,
-        ..Spec::default()
+    let spec = if gamepad {
+        gamepad::spec("Joystick Gobloon uinput check gamepad")
+    } else {
+        Spec {
+            name: "Joystick Gobloon uinput check",
+            bus: codes::BUS_VIRTUAL,
+            keys: &[codes::BTN_JOYSTICK],
+            axes: &axes,
+            ..Spec::default()
+        }
+    };
+    let button = if gamepad {
+        codes::BTN_SOUTH
+    } else {
+        codes::BTN_JOYSTICK
     };
     let dev = match VirtualDevice::create(&spec) {
         Ok(dev) => dev,
@@ -31,7 +43,7 @@ fn main() {
         let pressed = i32::from(step % 10 < 5);
         if let Err(e) = dev.emit(&[
             (codes::EV_ABS, codes::ABS_X, x),
-            (codes::EV_KEY, codes::BTN_JOYSTICK, pressed),
+            (codes::EV_KEY, button, pressed),
         ]) {
             eprintln!("write: {e}");
         }
