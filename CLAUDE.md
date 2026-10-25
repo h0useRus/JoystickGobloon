@@ -97,7 +97,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   to `main`.
 - Versions come from the commits (.github/scripts/next-version.sh): Conventional Commits since the latest
   final tag vX.Y.Z; feat -> minor, any other type -> patch, `type!:` / `BREAKING CHANGE:` -> major (minor
-  while 0.x). Never bump versions by hand; `[workspace.package] version` in Cargo.toml only names local builds.
+  while 0.x). Never bump versions by hand; local builds show the latest git tag + commits since it
+  (`0.9.0-alpha.45+3.g728daf5`, joystick-gobloon build.rs), `[workspace.package] version` only without git.
   `bash .github/scripts/next-version.sh` prints the next version.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
   pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss), a
