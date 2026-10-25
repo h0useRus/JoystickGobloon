@@ -8,17 +8,23 @@
 //! codes only, never gamepad ones (SDL2/3 would map the device as a gamepad, #31) nor `KEY_MAX`
 //! (SDL does not count it, #32): 1-16 `BTN_JOYSTICK`..., 17-79 `BTN_TRIGGER_HAPPY1-63`,
 //! 80-95 `BTN_0`..., the order in which SDL, joydev and gob-input count them.
+//!
+//! Gamepads ("Joystick Gobloon Gamepad N", `[[gamepad]]` in `virtual.gob`) have gob-uinput's
+//! fixed Xbox 360 layout and ids, so SDL, Steam and Proton take them for an Xbox controller;
+//! gob-input knows them as ours by the name.
 
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use gob_uinput::{Axis, Spec, VirtualDevice, codes};
+use gob_uinput::{Axis, Spec, VirtualDevice, codes, gamepad};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AXIS_SLOTS, Backend, Capabilities, Change, DeviceConfig, DeviceInfo, Error, Outcome, Status,
+    AXIS_SLOTS, Backend, Capabilities, Change, ControlKind, DeviceConfig, DeviceInfo, Error,
+    GamepadControl, GamepadInfo, Outcome, Status,
 };
 
 pub const CAPABILITIES: Capabilities = Capabilities {
@@ -30,8 +36,11 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     effects: &[],
     switchable: false,
     needs_admin: false,
+    // As many as XInput games handle.
+    max_gamepads: 4,
 };
 const NAME_PREFIX: &str = "Joystick Gobloon Joystick ";
+const GAMEPAD_PREFIX: &str = "Joystick Gobloon Gamepad ";
 const VENDOR: u16 = 0x1234;
 const PRODUCT: u16 = 0xBEAD;
 const CONFIG_FILE: &str = "virtual.gob";
@@ -60,10 +69,32 @@ const HAT_SECTORS: [(i32, i32); 8] = [
     (-1, -1),
 ];
 
-/// Device ids acquired by this process (every [`load`] shares them).
-static OWNED: Mutex<Option<HashSet<u32>>> = Mutex::new(None);
+/// A joystick or a gamepad: they have ids of their own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Slot {
+    Joystick(u32),
+    Gamepad(u32),
+}
 
-fn owned<R>(f: impl FnOnce(&mut HashSet<u32>) -> R) -> R {
+impl Slot {
+    fn name(self) -> String {
+        match self {
+            Self::Joystick(id) => format!("{NAME_PREFIX}{id}"),
+            Self::Gamepad(id) => format!("{GAMEPAD_PREFIX}{id}"),
+        }
+    }
+
+    fn id(self) -> u32 {
+        match self {
+            Self::Joystick(id) | Self::Gamepad(id) => id,
+        }
+    }
+}
+
+/// Devices acquired by this process (every [`load`] shares them).
+static OWNED: Mutex<Option<HashSet<Slot>>> = Mutex::new(None);
+
+fn owned<R>(f: impl FnOnce(&mut HashSet<Slot>) -> R) -> R {
     let mut guard = OWNED.lock().unwrap_or_else(|e| e.into_inner());
     f(guard.get_or_insert_default())
 }
@@ -78,10 +109,6 @@ fn access_error(e: &io::Error) -> Error {
         io::ErrorKind::PermissionDenied => Error::NoAccess(format!("/dev/uinput: {e}")),
         _ => Error::NotInstalled(format!("/dev/uinput: {e}")),
     }
-}
-
-fn device_name(id: u32) -> String {
-    format!("{NAME_PREFIX}{id}")
 }
 
 fn config_path() -> Option<PathBuf> {
@@ -100,6 +127,20 @@ fn config_path() -> Option<PathBuf> {
 struct Stored {
     #[serde(default, rename = "device")]
     devices: Vec<StoredDevice>,
+    #[serde(default, rename = "gamepad", skip_serializing_if = "Vec::is_empty")]
+    gamepads: Vec<StoredGamepad>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct StoredGamepad {
+    id: u32,
+}
+
+/// Every configured device: joysticks with their layouts, gamepad ids.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Layout {
+    devices: Vec<DeviceConfig>,
+    gamepads: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -149,24 +190,35 @@ impl From<&StoredDevice> for DeviceConfig {
     }
 }
 
-/// The text of `virtual.gob` -> configurations; without a file, one default device.
-fn parse(text: Option<&str>) -> Result<Vec<DeviceConfig>, String> {
+/// The text of `virtual.gob` -> configurations; without a file, one default joystick.
+fn parse(text: Option<&str>) -> Result<Layout, String> {
     let Some(text) = text else {
-        return Ok(vec![DeviceConfig::new(1, &CAPABILITIES)]);
+        return Ok(Layout {
+            devices: vec![DeviceConfig::new(1, &CAPABILITIES)],
+            gamepads: Vec::new(),
+        });
     };
     let stored: Stored = toml::from_str(text).map_err(|e| format!("{CONFIG_FILE}: {e}"))?;
-    let mut configs: Vec<DeviceConfig> = stored
+    let mut devices: Vec<DeviceConfig> = stored
         .devices
         .iter()
         .filter(|d| (1..=CAPABILITIES.max_devices).contains(&d.id))
         .map(DeviceConfig::from)
         .collect();
-    configs.sort_by_key(|c| c.id);
-    configs.dedup_by_key(|c| c.id);
-    Ok(configs)
+    devices.sort_by_key(|c| c.id);
+    devices.dedup_by_key(|c| c.id);
+    let mut gamepads: Vec<u32> = stored
+        .gamepads
+        .iter()
+        .map(|g| g.id)
+        .filter(|id| (1..=CAPABILITIES.max_gamepads).contains(id))
+        .collect();
+    gamepads.sort_unstable();
+    gamepads.dedup();
+    Ok(Layout { devices, gamepads })
 }
 
-fn read_configs() -> Result<Vec<DeviceConfig>, String> {
+fn read_configs() -> Result<Layout, String> {
     let text = match config_path().map(std::fs::read_to_string) {
         Some(Ok(text)) => Some(text),
         Some(Err(e)) if e.kind() != io::ErrorKind::NotFound => {
@@ -178,7 +230,8 @@ fn read_configs() -> Result<Vec<DeviceConfig>, String> {
 }
 
 /// Configurations with the change applied.
-fn changed(mut configs: Vec<DeviceConfig>, change: &Change) -> Result<Vec<DeviceConfig>, String> {
+fn changed(mut layout: Layout, change: &Change) -> Result<Layout, String> {
+    let configs = &mut layout.devices;
     match change {
         Change::Set(c) => {
             if !(1..=CAPABILITIES.max_devices).contains(&c.id) {
@@ -190,13 +243,28 @@ fn changed(mut configs: Vec<DeviceConfig>, change: &Change) -> Result<Vec<Device
         }
         Change::Delete(id) => configs.retain(|d| d.id != *id),
         Change::Enable(_) => return Err("uinput devices cannot be switched off".into()),
+        Change::AddGamepad(id) => {
+            if !(1..=CAPABILITIES.max_gamepads).contains(id) {
+                return Err(format!("gamepad id {id} is out of range"));
+            }
+            if !layout.gamepads.contains(id) {
+                layout.gamepads.push(*id);
+                layout.gamepads.sort_unstable();
+            }
+        }
+        Change::DeleteGamepad(id) => layout.gamepads.retain(|g| g != id),
     }
-    Ok(configs)
+    Ok(layout)
 }
 
-fn to_text(configs: &[DeviceConfig]) -> Result<String, String> {
+fn to_text(layout: &Layout) -> Result<String, String> {
     let stored = Stored {
-        devices: configs.iter().map(StoredDevice::from).collect(),
+        devices: layout.devices.iter().map(StoredDevice::from).collect(),
+        gamepads: layout
+            .gamepads
+            .iter()
+            .map(|&id| StoredGamepad { id })
+            .collect(),
     };
     toml::to_string_pretty(&stored).map_err(|e| e.to_string())
 }
@@ -204,7 +272,7 @@ fn to_text(configs: &[DeviceConfig]) -> Result<String, String> {
 fn info(c: &DeviceConfig) -> DeviceInfo {
     DeviceInfo {
         id: c.id,
-        status: status(c.id, true),
+        status: status(Slot::Joystick(c.id), true),
         axes: (1..=AXIS_SLOTS as u8)
             .filter(|&s| c.axes[usize::from(s) - 1])
             .collect(),
@@ -214,12 +282,12 @@ fn info(c: &DeviceConfig) -> DeviceInfo {
     }
 }
 
-fn status(id: u32, configured: bool) -> Status {
-    if owned(|o| o.contains(&id)) {
+fn status(slot: Slot, configured: bool) -> Status {
+    if owned(|o| o.contains(&slot)) {
         Status::Own
     } else if !configured {
         Status::Missing
-    } else if gob_uinput::device_names().contains(&device_name(id)) {
+    } else if gob_uinput::device_names().contains(&slot.name()) {
         // Another program (e.g. a second copy of ours) has it.
         Status::Busy
     } else {
@@ -235,7 +303,7 @@ impl Backend for Uinput {
     }
 
     fn enabled(&self) -> bool {
-        read_configs().is_ok_and(|c| !c.is_empty())
+        read_configs().is_ok_and(|l| !l.devices.is_empty() || !l.gamepads.is_empty())
     }
 
     fn version(&self) -> String {
@@ -245,13 +313,13 @@ impl Backend for Uinput {
     }
 
     fn status(&self, id: u32) -> Status {
-        let configured = read_configs().is_ok_and(|c| c.iter().any(|d| d.id == id));
-        status(id, configured)
+        let configured = read_configs().is_ok_and(|l| l.devices.iter().any(|d| d.id == id));
+        status(Slot::Joystick(id), configured)
     }
 
     fn devices(&self) -> Vec<DeviceInfo> {
         match read_configs() {
-            Ok(configs) => configs.iter().map(info).collect(),
+            Ok(layout) => layout.devices.iter().map(info).collect(),
             Err(e) => {
                 log::warn!("{e}");
                 Vec::new()
@@ -262,30 +330,60 @@ impl Backend for Uinput {
     fn acquire(&self, id: u32) -> Result<Box<dyn crate::Device>, Error> {
         let config = read_configs()
             .map_err(Error::NotInstalled)?
+            .devices
             .into_iter()
             .find(|c| c.id == id)
             .ok_or(Error::Unavailable {
                 id,
                 status: Status::Missing,
             })?;
-        let busy = || Error::Unavailable {
-            id,
-            status: status(id, true),
-        };
-        if gob_uinput::device_names().contains(&device_name(id)) || !owned(|o| o.insert(id)) {
-            return Err(busy());
-        }
+        let slot = take(Slot::Joystick(id))?;
         match Device::create(config) {
             Ok(dev) => Ok(Box::new(dev)),
             Err(e) => {
-                owned(|o| o.remove(&id));
+                owned(|o| o.remove(&slot));
                 Err(access_error(&e))
             }
         }
     }
 
     fn read_config(&self) -> Result<Vec<DeviceConfig>, String> {
-        read_configs()
+        read_configs().map(|l| l.devices)
+    }
+
+    fn gamepads(&self) -> Vec<GamepadInfo> {
+        match read_configs() {
+            Ok(layout) => layout
+                .gamepads
+                .iter()
+                .map(|&id| GamepadInfo {
+                    id,
+                    status: status(Slot::Gamepad(id), true),
+                })
+                .collect(),
+            Err(e) => {
+                log::warn!("{e}");
+                Vec::new()
+            }
+        }
+    }
+
+    fn acquire_gamepad(&self, id: u32) -> Result<Box<dyn crate::Gamepad>, Error> {
+        let layout = read_configs().map_err(Error::NotInstalled)?;
+        if !layout.gamepads.contains(&id) {
+            return Err(Error::Unavailable {
+                id,
+                status: Status::Missing,
+            });
+        }
+        let slot = take(Slot::Gamepad(id))?;
+        match Pad::create(id) {
+            Ok(pad) => Ok(Box::new(pad)),
+            Err(e) => {
+                owned(|o| o.remove(&slot));
+                Err(access_error(&e))
+            }
+        }
     }
 
     fn apply(&self, change: &Change) -> Result<Outcome, String> {
@@ -297,6 +395,17 @@ impl Backend for Uinput {
         std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
         Ok(Outcome::Done)
     }
+}
+
+/// Marks a configured device as ours, unless this process or another program has it.
+fn take(slot: Slot) -> Result<Slot, Error> {
+    if gob_uinput::device_names().contains(&slot.name()) || !owned(|o| o.insert(slot)) {
+        return Err(Error::Unavailable {
+            id: slot.id(),
+            status: status(slot, true),
+        });
+    }
+    Ok(slot)
 }
 
 /// Button `n` (1-based) -> its key code.
@@ -352,7 +461,7 @@ impl Device {
             }))
             .collect();
         let keys: Vec<u16> = (1..=config.buttons).filter_map(button_code).collect();
-        let name = device_name(config.id);
+        let name = Slot::Joystick(config.id).name();
         let spec = Spec {
             name: &name,
             bus: codes::BUS_VIRTUAL,
@@ -371,7 +480,7 @@ impl Device {
         match self.dev.emit(events) {
             Ok(()) => true,
             Err(e) => {
-                log::warn!("{}: {e}", device_name(self.config.id));
+                log::warn!("{}: {e}", Slot::Joystick(self.config.id).name());
                 false
             }
         }
@@ -429,7 +538,149 @@ impl crate::Device for Device {
 impl Drop for Device {
     fn drop(&mut self) {
         // The kernel removes the device with `dev`; games see it unplugged.
-        owned(|o| o.remove(&self.config.id));
+        owned(|o| o.remove(&Slot::Joystick(self.config.id)));
+    }
+}
+
+/// A gamepad button's key code, or a stick's or trigger's axis code; `None` for the d-pad.
+fn pad_code(control: GamepadControl) -> Option<u16> {
+    use GamepadControl as C;
+    Some(match control {
+        C::A => codes::BTN_SOUTH,
+        C::B => codes::BTN_EAST,
+        C::X => codes::BTN_NORTH,
+        C::Y => codes::BTN_WEST,
+        C::Lb => codes::BTN_TL,
+        C::Rb => codes::BTN_TR,
+        C::Back => codes::BTN_SELECT,
+        C::Start => codes::BTN_START,
+        C::Guide => codes::BTN_MODE,
+        C::LeftStick => codes::BTN_THUMBL,
+        C::RightStick => codes::BTN_THUMBR,
+        C::LeftX => codes::ABS_X,
+        C::LeftY => codes::ABS_Y,
+        C::RightX => codes::ABS_RX,
+        C::RightY => codes::ABS_RY,
+        C::Lt => codes::ABS_Z,
+        C::Rt => codes::ABS_RZ,
+        C::DpadUp | C::DpadDown | C::DpadLeft | C::DpadRight | C::Dpad => return None,
+    })
+}
+
+/// D-pad direction bits, pressed one by one (`DpadUp`...) or set from a hat.
+const UP: u8 = 1;
+const DOWN: u8 = 2;
+const LEFT: u8 = 4;
+const RIGHT: u8 = 8;
+
+/// D-pad bits -> `ABS_HAT0X` / `ABS_HAT0Y` (up is -1); opposite directions cancel.
+fn dpad_xy(bits: u8) -> (i32, i32) {
+    let on = |b: u8| i32::from(bits & b != 0);
+    (on(RIGHT) - on(LEFT), on(DOWN) - on(UP))
+}
+
+/// Hat values -> d-pad bits.
+fn dpad_bits((x, y): (i32, i32)) -> u8 {
+    [(y < 0, UP), (y > 0, DOWN), (x < 0, LEFT), (x > 0, RIGHT)]
+        .into_iter()
+        .filter(|(on, _)| *on)
+        .fold(0, |bits, (_, b)| bits | b)
+}
+
+struct Pad {
+    id: u32,
+    dev: VirtualDevice,
+    /// D-pad directions held.
+    dpad: Cell<u8>,
+}
+
+impl Pad {
+    fn create(id: u32) -> io::Result<Self> {
+        let name = Slot::Gamepad(id).name();
+        let dev = VirtualDevice::create(&gamepad::spec(&name))?;
+        Ok(Self {
+            id,
+            dev,
+            dpad: Cell::new(0),
+        })
+    }
+
+    fn emit(&self, events: &[(u16, u16, i32)]) -> bool {
+        match self.dev.emit(events) {
+            Ok(()) => true,
+            Err(e) => {
+                log::warn!("{}: {e}", Slot::Gamepad(self.id).name());
+                false
+            }
+        }
+    }
+
+    fn emit_dpad(&self, bits: u8) -> bool {
+        self.dpad.set(bits);
+        let (x, y) = dpad_xy(bits);
+        self.emit(&[
+            (codes::EV_ABS, codes::ABS_HAT0X, x),
+            (codes::EV_ABS, codes::ABS_HAT0Y, y),
+        ])
+    }
+}
+
+impl crate::Gamepad for Pad {
+    fn set_button(&self, control: GamepadControl, pressed: bool) -> bool {
+        let bit = match control {
+            GamepadControl::DpadUp => UP,
+            GamepadControl::DpadDown => DOWN,
+            GamepadControl::DpadLeft => LEFT,
+            GamepadControl::DpadRight => RIGHT,
+            c if c.kind() == ControlKind::Button => {
+                return pad_code(c)
+                    .is_some_and(|code| self.emit(&[(codes::EV_KEY, code, i32::from(pressed))]));
+            }
+            _ => return false,
+        };
+        let bits = self.dpad.get();
+        self.emit_dpad(if pressed { bits | bit } else { bits & !bit })
+    }
+
+    fn set_axis(&self, control: GamepadControl, value: f32) -> bool {
+        let value = match control.kind() {
+            ControlKind::Stick => gamepad::stick(value),
+            ControlKind::Trigger => gamepad::trigger(value),
+            _ => return false,
+        };
+        pad_code(control).is_some_and(|code| self.emit(&[(codes::EV_ABS, code, value)]))
+    }
+
+    fn set_dpad(&self, direction: Option<u16>) -> bool {
+        self.emit_dpad(dpad_bits(gamepad::dpad(direction)))
+    }
+
+    fn reset(&self) -> bool {
+        let mut events: Vec<(u16, u16, i32)> = gamepad::BUTTONS
+            .iter()
+            .map(|&code| (codes::EV_KEY, code, 0))
+            .collect();
+        for c in GamepadControl::ALL {
+            let value = match c.kind() {
+                ControlKind::Stick => gamepad::stick(0.0),
+                ControlKind::Trigger => 0,
+                _ => continue,
+            };
+            events.extend(pad_code(c).map(|code| (codes::EV_ABS, code, value)));
+        }
+        self.dpad.set(0);
+        events.extend([
+            (codes::EV_ABS, codes::ABS_HAT0X, 0),
+            (codes::EV_ABS, codes::ABS_HAT0Y, 0),
+        ]);
+        self.emit(&events)
+    }
+}
+
+impl Drop for Pad {
+    fn drop(&mut self) {
+        // The kernel removes the device with `dev`; games see it unplugged.
+        owned(|o| o.remove(&Slot::Gamepad(self.id)));
     }
 }
 
@@ -474,27 +725,66 @@ mod tests {
 
     #[test]
     fn config_file_round_trip() {
+        let default = parse(None).unwrap();
+        assert_eq!(default.devices, vec![DeviceConfig::new(1, &CAPABILITIES)]);
+        assert!(default.gamepads.is_empty(), "no gamepad until one is added");
+        let joystick = &default.devices[0];
         assert_eq!(
-            parse(None).unwrap(),
-            vec![DeviceConfig::new(1, &CAPABILITIES)]
+            (joystick.buttons, joystick.hats),
+            (95, 4),
+            "the whole layout"
         );
-        let default = &parse(None).unwrap()[0];
-        assert_eq!((default.buttons, default.hats), (95, 4), "the whole layout");
-        assert_eq!(default.axes, [true; AXIS_SLOTS]);
+        assert_eq!(joystick.axes, [true; AXIS_SLOTS]);
         let mut c = DeviceConfig::new(3, &CAPABILITIES);
         c.axes[2] = false;
         c.discrete_hats = true;
-        let configs = changed(parse(None).unwrap(), &Change::Set(c.clone())).unwrap();
-        let text = to_text(&configs).unwrap();
+        let layout = changed(default, &Change::Set(c.clone())).unwrap();
+        let layout = changed(layout, &Change::AddGamepad(2)).unwrap();
+        let text = to_text(&layout).unwrap();
         assert!(text.contains("[[device]]"), "{text}");
-        assert_eq!(parse(Some(&text)).unwrap(), configs);
-        let configs = changed(configs, &Change::Delete(1)).unwrap();
-        assert_eq!(configs, vec![c]);
-        assert!(changed(configs.clone(), &Change::Enable(false)).is_err());
-        assert_eq!(
-            parse(Some("")).unwrap(),
-            Vec::new(),
-            "an empty file: no devices"
+        assert!(text.contains("[[gamepad]]\nid = 2"), "{text}");
+        assert_eq!(parse(Some(&text)).unwrap(), layout);
+        let layout = changed(layout, &Change::Delete(1)).unwrap();
+        assert_eq!(layout.devices, vec![c]);
+        assert!(changed(layout.clone(), &Change::Enable(false)).is_err());
+        assert!(
+            changed(layout.clone(), &Change::AddGamepad(5)).is_err(),
+            "4 at most"
         );
+        let layout = changed(layout, &Change::DeleteGamepad(2)).unwrap();
+        assert!(layout.gamepads.is_empty());
+        assert!(!to_text(&layout).unwrap().contains("gamepad"));
+        let empty = parse(Some("")).unwrap();
+        assert!(
+            empty.devices.is_empty() && empty.gamepads.is_empty(),
+            "no devices"
+        );
+    }
+
+    #[test]
+    fn gamepad_controls_and_dpad() {
+        let buttons: Vec<u16> = GamepadControl::ALL
+            .into_iter()
+            .filter(|c| c.kind() == ControlKind::Button)
+            .filter_map(pad_code)
+            .collect();
+        assert_eq!(
+            buttons.len(),
+            gamepad::BUTTONS.len(),
+            "every button has a code"
+        );
+        assert!(buttons.iter().all(|b| gamepad::BUTTONS.contains(b)));
+        for c in GamepadControl::ALL {
+            let axis = matches!(c.kind(), ControlKind::Stick | ControlKind::Trigger);
+            if axis {
+                assert!(pad_code(c).is_some(), "{c:?}");
+            }
+        }
+        assert_eq!(dpad_xy(0), (0, 0));
+        assert_eq!(dpad_xy(UP | RIGHT), (1, -1));
+        assert_eq!(dpad_xy(UP | DOWN), (0, 0), "opposites cancel");
+        for xy in [(0, 0), (1, -1), (-1, 0), (0, 1)] {
+            assert_eq!(dpad_xy(dpad_bits(xy)), xy);
+        }
     }
 }

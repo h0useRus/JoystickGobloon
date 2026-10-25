@@ -9,11 +9,16 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use gob_virtual::Status;
+use gob_virtual::{GamepadControl, Status};
 
 const EV_KEY: u16 = 1;
 const EV_ABS: u16 = 3;
+const ABS_Y: u16 = 1;
+const ABS_Z: u16 = 2;
 const ABS_THROTTLE: u16 = 6;
+const ABS_HAT0X: u16 = 0x10;
+const ABS_HAT0Y: u16 = 0x11;
+const BTN_SOUTH: u16 = 0x130;
 const ABS_HAT1X: u16 = 0x12;
 const ABS_HAT1Y: u16 = 0x13;
 
@@ -75,7 +80,8 @@ fn acquire_drive_release() {
     std::fs::write(
         dir.join("virtual.gob"),
         "[[device]]\nid = 1\naxes = [1, 2, 7]\nbuttons = 95\nhats = 2\n\n\
-         [[device]]\nid = 2\naxes = [1]\nbuttons = 8\nhats = 0\n",
+         [[device]]\nid = 2\naxes = [1]\nbuttons = 8\nhats = 0\n\n\
+         [[gamepad]]\nid = 1\n",
     )
     .unwrap();
     gob_virtual::set_data_dir(&dir);
@@ -132,6 +138,8 @@ fn acquire_drive_release() {
     }
     assert_eq!(backend.status(1), Status::Free);
 
+    gamepad(&*backend);
+
     // The configuration page's changes land in the file.
     let mut c = backend.read_config().unwrap().remove(1);
     c.buttons = 12;
@@ -140,5 +148,64 @@ fn acquire_drive_release() {
     let configs = backend.read_config().unwrap();
     assert_eq!(configs.len(), 1);
     assert_eq!((configs[0].id, configs[0].buttons), (2, 12));
+    backend
+        .apply(&gob_virtual::Change::DeleteGamepad(1))
+        .unwrap();
+    assert!(backend.gamepads().is_empty());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Gamepad 1 of the same configuration: an Xbox 360 pad as the kernel reports it.
+fn gamepad(backend: &dyn gob_virtual::Backend) {
+    assert_eq!(backend.capabilities().max_gamepads, 4);
+    let pads = backend.gamepads();
+    assert_eq!(pads.len(), 1);
+    assert_eq!((pads[0].id, pads[0].status), (1, Status::Free));
+    assert!(backend.acquire_gamepad(2).is_err(), "not configured");
+    let pad = backend.acquire_gamepad(1).expect("acquire gamepad 1");
+    assert_eq!(backend.gamepads()[0].status, Status::Own);
+    assert!(backend.acquire_gamepad(1).is_err(), "already held");
+
+    let name = "Joystick Gobloon Gamepad 1";
+    let path = event_node(name).expect("event node of gamepad 1");
+    assert_eq!(sys_id(&path, "vendor"), "045e");
+    assert_eq!(sys_id(&path, "product"), "028e");
+    let mut node = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(&path)
+        .unwrap();
+    read_events(&mut node);
+
+    assert!(pad.set_button(GamepadControl::A, true));
+    assert!(pad.set_axis(GamepadControl::LeftY, -1.0));
+    assert!(pad.set_axis(GamepadControl::Lt, 1.0));
+    assert!(!pad.set_axis(GamepadControl::A, 1.0), "a button is no axis");
+    assert!(pad.set_button(GamepadControl::DpadUp, true));
+    assert!(pad.set_button(GamepadControl::DpadRight, true));
+    assert_eq!(
+        read_events(&mut node),
+        vec![
+            (EV_KEY, BTN_SOUTH, 1),
+            (EV_ABS, ABS_Y, -32768),
+            (EV_ABS, ABS_Z, 255),
+            (EV_ABS, ABS_HAT0Y, -1),
+            (EV_ABS, ABS_HAT0X, 1),
+        ],
+        "the kernel drops values that did not change"
+    );
+    assert!(pad.set_dpad(None));
+    assert!(pad.reset());
+    let events = read_events(&mut node);
+    assert!(events.contains(&(EV_ABS, ABS_HAT0X, 0)), "{events:?}");
+    assert!(events.contains(&(EV_KEY, BTN_SOUTH, 0)), "{events:?}");
+    assert!(events.contains(&(EV_ABS, ABS_Z, 0)), "{events:?}");
+
+    drop(pad);
+    let end = Instant::now() + Duration::from_secs(2);
+    while event_node(name).is_some() {
+        assert!(Instant::now() < end, "gamepad still there after release");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(backend.gamepads()[0].status, Status::Free);
 }
