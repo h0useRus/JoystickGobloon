@@ -307,8 +307,17 @@ fn bezier(segments: &[Vec<(f64, f64)>], x: f64) -> f64 {
     y.clamp(-1.0, 1.0)
 }
 
-/// Editable points: knots, plus for Bezier the handles beside each knot.
+/// Editable points: knots, plus for Bezier the handles beside each knot. Edits return the
+/// points as the profile stores them (4 decimals), so a curve kept monotonic stays so once saved.
 pub struct Editable;
+
+fn stored(mut p: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+    let round = |v: f64| (v * 10_000.0).round() / 10_000.0;
+    for q in &mut p {
+        *q = (round(q.0), round(q.1));
+    }
+    p
+}
 
 impl Editable {
     /// Indices of the knots (centers) in the stored list.
@@ -376,7 +385,7 @@ impl Editable {
                 }
             }
         }
-        p
+        stored(p)
     }
 
     /// Adds a knot at (x, y) (and its mirror when symmetric); returns the new points and
@@ -412,7 +421,7 @@ impl Editable {
                 idx += if kind == CurveType::CubicBezier { 3 } else { 1 };
             }
         }
-        (p, idx)
+        (stored(p), idx)
     }
 
     /// Removes knot at stored index `i` (and its mirror); end knots and the symmetric
@@ -497,7 +506,7 @@ impl Editable {
             let (dx, dy) = (-p[i].0 - p[mirror].0, -p[i].1 - p[mirror].1);
             shift(&mut p, mirror, dx, dy);
         }
-        p
+        stored(p)
     }
 
     /// [`Editable::set`] that keeps a monotonic curve monotonic: the point stops where the
@@ -697,6 +706,47 @@ mod tests {
         }
         let (x, y) = moved[i];
         assert!((x - 0.8).abs() < 0.01 && y.abs() < 0.01, "({x}, {y})");
+    }
+
+    /// Fast drags stop the point right at the limit; the profile keeps 4 decimals, and the
+    /// rounded points must not end up past the limit (the curve would then be edited freely).
+    #[test]
+    fn monotonic_edits_survive_rounding() {
+        let round = |p: Vec<(f64, f64)>| -> Vec<(f64, f64)> {
+            let r = |v: f64| (v * 10_000.0).round() / 10_000.0;
+            p.into_iter().map(|(x, y)| (r(x), r(y))).collect()
+        };
+        for kind in [CurveType::CubicSpline, CurveType::CubicBezier] {
+            for (tx, ty) in [(0.32, -0.41), (0.7, -0.9), (0.2, -1.0), (0.9, 0.05)] {
+                let p = Editable::symmetric(kind, &kind.default_points());
+                let (mut p, i) = Editable::add(kind, &p, 0.5, 0.5, true);
+                let i = if kind == CurveType::CubicBezier {
+                    i - 1
+                } else {
+                    i
+                };
+                for step in 1..=8 {
+                    let t = f64::from(step) / 8.0;
+                    let (x, y) = (0.5 + (tx - 0.5) * t, 0.5 + (ty - 0.5) * t);
+                    p = round(Editable::set_monotonic(kind, &p, i, x, y, true));
+                    assert!(Curve::new(kind, &p).monotonic(), "{kind:?} to ({tx}, {ty})");
+                }
+            }
+        }
+    }
+
+    /// The center handle of a symmetric Bezier pulled back past the center (the curve would
+    /// dip and jump there) stops before that.
+    #[test]
+    fn bezier_center_handle_stops() {
+        let kind = CurveType::CubicBezier;
+        let p = Editable::symmetric(kind, &kind.default_points());
+        let right = p.len() / 2 + 1;
+        assert_eq!(p[right - 1], (0.0, 0.0), "center knot");
+        let free = Editable::set(kind, &p, right, 0.41, -0.55, true);
+        assert!(!Curve::new(kind, &free).monotonic());
+        let kept = Editable::set_monotonic(kind, &p, right, 0.41, -0.55, true);
+        assert!(Curve::new(kind, &kept).monotonic());
     }
 
     /// A Bezier handle that makes the curve loop back in x is caught, although y(x) read from
