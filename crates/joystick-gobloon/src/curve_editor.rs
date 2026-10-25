@@ -359,7 +359,7 @@ fn chart(
     }
     // A single click on empty space inverts, but only once it is clear it was not the
     // first half of a double-click (which adds a point instead).
-    const DOUBLE_CLICK: f64 = 0.3;
+    const DOUBLE_CLICK: f64 = 0.2;
     let pending_id = ui.make_persistent_id(("curve-invert", id));
     let now = ui.input(|i| i.time);
     if response.double_clicked() {
