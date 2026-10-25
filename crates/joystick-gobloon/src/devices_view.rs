@@ -66,6 +66,8 @@ pub struct DevicesView {
     pub open_modifiers: bool,
     /// Curve edits keep curves monotonic (setting), filled by the app.
     pub monotonic_curves: bool,
+    /// The profile's logical device with its live values, filled by the app for each frame.
+    pub logical: Option<DeviceState>,
 }
 
 struct Tab<'a> {
@@ -164,6 +166,7 @@ impl DevicesView {
         ops: &mut Vec<Op>,
         vjoy: &[gob_virtual::DeviceInfo],
     ) {
+        let logical = self.logical.take();
         let mut tabs: Vec<Tab> = devices
             .iter()
             .filter(|d| !d.info.is_vjoy())
@@ -225,7 +228,7 @@ impl DevicesView {
             tabs.push(Tab {
                 guid: gob_core::LOGICAL_DEVICE_GUID,
                 name: &logical_name,
-                live: None,
+                live: logical.as_ref(),
                 alias: None,
                 logical: true,
             });
@@ -392,7 +395,8 @@ impl DevicesView {
         };
 
         let mut rows: BTreeMap<Key, Bound> = BTreeMap::new();
-        if let Some(d) = tab.live {
+        // The logical device's rows come from the profile below; its live state only shows values.
+        if let Some(d) = tab.live.filter(|_| !tab.logical) {
             rows.extend(
                 d.info
                     .axes
@@ -935,8 +939,25 @@ impl DevicesView {
                         });
                     }
                 }
-                ui.add_space(4.0);
                 let behavior = configs.first().map_or(behavior, |c| c.behavior());
+                if !p.profile.modifiers.is_empty() && behavior == InputType::Axis {
+                    let mut keep = configs.iter().any(|c| c.keep_value);
+                    if ui
+                        .add(style::switch(&mut keep, i18n.tr("layer-keep-value")))
+                        .on_hover_text(i18n.tr("layer-keep-value-tip"))
+                        .changed()
+                    {
+                        ops.push(Op::SetLayerKeepValue {
+                            device: b.device_id.clone(),
+                            input_type: b.input_type.clone(),
+                            input_id: b.input_id.clone(),
+                            mode: b.mode.clone(),
+                            layer: layer.clone(),
+                            keep,
+                        });
+                    }
+                }
+                ui.add_space(4.0);
                 let mut editor = Editor {
                     profile: &p.profile,
                     i18n,

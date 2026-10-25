@@ -1,6 +1,6 @@
 //! Runs the engine on a background thread against real devices.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
@@ -11,7 +11,7 @@ use gob_core::Profile;
 use gob_input::{DeviceState, InputEvent, Timed};
 
 use crate::platform::Injector;
-use crate::{Engine, InputKey, InputKind, Output, Value};
+use crate::{Engine, InputKey, InputKind, LogicalValues, Output, Value};
 
 /// Upper bound on how long the loop sleeps without events.
 const IDLE: Duration = Duration::from_millis(20);
@@ -78,40 +78,57 @@ pub struct Runner {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     status: Arc<Mutex<RunnerStatus>>,
+    logical: Arc<Mutex<LogicalValues>>,
 }
 
 struct SystemOutput {
     devices: HashMap<u32, Box<dyn gob_virtual::Device>>,
     /// Last values written, read back by vJoy conditions.
     written: HashMap<(u32, InputKind, u32), Value>,
+    /// Outputs whose last write the driver refused; logged once until one succeeds again.
+    failing: HashSet<(u32, InputKind, u32)>,
     media: crate::media::Media,
     lighting: crate::lighting::Lighting,
     load_profile: Option<String>,
 }
 
+impl SystemOutput {
+    /// Records a write; a refused one is logged when it starts failing and when it works again.
+    fn wrote(&mut self, key: (u32, InputKind, u32), value: Value, ok: Option<bool>) {
+        self.written.insert(key, value);
+        let (device, kind, id) = key;
+        match ok {
+            Some(false) if self.failing.insert(key) => {
+                log::warn!("virtual device {device}: writing {kind:?} {id} = {value:?} failed");
+            }
+            Some(true) if self.failing.remove(&key) => {
+                log::info!("virtual device {device}: writing {kind:?} {id} works again");
+            }
+            _ => {}
+        }
+    }
+}
+
 impl Output for SystemOutput {
     fn axis(&mut self, device: u32, axis: u8, value: f32) {
-        if let Some(d) = self.devices.get(&device) {
-            d.set_axis(axis, value);
-        }
+        let ok = self.devices.get(&device).map(|d| d.set_axis(axis, value));
         let key = (device, InputKind::Axis, u32::from(axis));
-        self.written.insert(key, Value::Axis(value));
+        self.wrote(key, Value::Axis(value), ok);
     }
 
     fn button(&mut self, device: u32, button: u8, pressed: bool) {
-        if let Some(d) = self.devices.get(&device) {
-            d.set_button(button, pressed);
-        }
+        let ok = self
+            .devices
+            .get(&device)
+            .map(|d| d.set_button(button, pressed));
         let key = (device, InputKind::Button, u32::from(button));
-        self.written.insert(key, Value::Button(pressed));
+        self.wrote(key, Value::Button(pressed), ok);
     }
 
     fn hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
-        if let Some(d) = self.devices.get(&device) {
-            d.set_hat(hat, direction);
-        }
+        let ok = self.devices.get(&device).map(|d| d.set_hat(hat, direction));
         let key = (device, InputKind::Hat, u32::from(hat));
-        self.written.insert(key, Value::Hat(direction));
+        self.wrote(key, Value::Hat(direction), ok);
     }
 
     fn play_sound(&mut self, file: &str, volume: u8) {
@@ -180,6 +197,7 @@ impl Runner {
         let mut out = SystemOutput {
             devices: HashMap::new(),
             written: HashMap::new(),
+            failing: HashSet::new(),
             media: Default::default(),
             lighting: crate::lighting::Lighting::new(
                 initial
@@ -229,18 +247,21 @@ impl Runner {
             load_profile: None,
             latency: None,
         }));
+        engine.take_logical_changed();
+        let logical = Arc::new(Mutex::new(engine.logical_values()));
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
-            let (status, stop) = (status.clone(), stop.clone());
+            let (status, logical, stop) = (status.clone(), logical.clone(), stop.clone());
             std::thread::Builder::new()
                 .name("gob-engine".into())
-                .spawn(move || run(engine, out, &events, &status, &stop, &on_change))
+                .spawn(move || run(engine, out, &events, &status, &logical, &stop, &on_change))
                 .map_err(|e| e.to_string())?
         };
         Ok(Self {
             stop,
             thread: Some(thread),
             status,
+            logical,
         })
     }
 
@@ -255,6 +276,14 @@ impl Runner {
 
     pub fn status(&self) -> RunnerStatus {
         self.status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Current values of the logical device's inputs.
+    pub fn logical(&self) -> LogicalValues {
+        self.logical
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
@@ -275,6 +304,7 @@ fn run(
     mut out: SystemOutput,
     events: &Receiver<Timed>,
     status: &Mutex<RunnerStatus>,
+    logical: &Mutex<LogicalValues>,
     stop: &AtomicBool,
     on_change: &dyn Fn(),
 ) {
@@ -297,6 +327,10 @@ fn run(
         let now = Instant::now();
         engine.tick(now, &mut out);
 
+        if engine.take_logical_changed() {
+            *logical.lock().unwrap_or_else(|e| e.into_inner()) = engine.logical_values();
+            on_change();
+        }
         let mut s = status.lock().unwrap_or_else(|e| e.into_inner());
         let load = out.load_profile.take();
         let latency = window.finish(now);

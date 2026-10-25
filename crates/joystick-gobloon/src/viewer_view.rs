@@ -1,12 +1,14 @@
 //! Input viewer (like Gremlin's): per device an axis history graph, the current axis
-//! values and the buttons and hats, for physical and vJoy devices alike.
+//! values and the buttons and hats, for physical, vJoy and the profile's logical device alike.
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Sense, Stroke, Vec2};
+use gob_core::{InputType, Profile};
+use gob_engine::LogicalValues;
 use gob_i18n::I18n;
-use gob_input::DeviceState;
+use gob_input::{AXIS_SLOTS, DeviceInfo, DeviceState};
 
 use crate::devices_view::hat_glyph;
 use crate::style::{self, icon};
@@ -111,7 +113,9 @@ impl ViewerView {
                             .shown
                             .entry(d.info.guid.clone())
                             .or_insert_with(|| Shown::initial(&d.info.name));
-                        let glyph = if d.info.is_vjoy() {
+                        let glyph = if d.info.guid == gob_core::LOGICAL_DEVICE_GUID {
+                            icon::CPU
+                        } else if d.info.is_vjoy() {
                             icon::GAME_CONTROLLER
                         } else {
                             icon::JOYSTICK
@@ -186,6 +190,55 @@ impl ViewerView {
         self.history
             .retain(|guid, _| devices.iter().any(|d| &d.info.guid == guid));
     }
+}
+
+/// The profile's logical device as a device: its inputs from the profile, the values a running
+/// profile wrote (else at rest). `None` when the profile has no logical inputs. Axes past the
+/// eight slots are left out.
+pub fn logical_device(
+    profile: &Profile,
+    values: Option<&LogicalValues>,
+    name: String,
+) -> Option<DeviceState> {
+    let inputs = profile.logical_inputs();
+    if inputs.is_empty() {
+        return None;
+    }
+    let ids = |t: InputType| {
+        inputs
+            .iter()
+            .filter(move |i| i.input_type == t)
+            .map(|i| i.id)
+    };
+    let mut d = DeviceState::new(DeviceInfo {
+        guid: gob_core::LOGICAL_DEVICE_GUID.into(),
+        name,
+        axes: ids(InputType::Axis)
+            .filter(|&id| (1..=AXIS_SLOTS as u32).contains(&id))
+            .map(|id| id as u8)
+            .collect(),
+        buttons: ids(InputType::Button).max().unwrap_or(0) as usize,
+        hats: ids(InputType::Hat).max().unwrap_or(0) as usize,
+        ..Default::default()
+    });
+    d.info.axes.sort_unstable();
+    let Some(values) = values else {
+        return Some(d);
+    };
+    for &slot in &d.info.axes {
+        d.axes[usize::from(slot) - 1] = values.axes.get(&u32::from(slot)).copied().unwrap_or(0.0);
+    }
+    for (&id, &pressed) in &values.buttons {
+        if let Some(b) = d.buttons.get_mut(id as usize - 1) {
+            *b = pressed;
+        }
+    }
+    for (&id, &direction) in &values.hats {
+        if let Some(h) = d.hats.get_mut(id as usize - 1) {
+            *h = direction;
+        }
+    }
+    Some(d)
 }
 
 fn section(ui: &mut egui::Ui, title: &str) {

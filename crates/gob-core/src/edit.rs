@@ -628,6 +628,7 @@ impl Profile {
             virtual_button: None,
             layer: layer.clone(),
             additive: false,
+            keep_value: false,
             extra: Vec::new(),
         };
         match found {

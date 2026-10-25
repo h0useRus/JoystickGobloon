@@ -2,7 +2,7 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -47,8 +47,10 @@ impl InputHandle {
 }
 
 enum Subscriber {
+    /// The GUI: its queue fills while the window is hidden, which is expected.
     Plain(SyncSender<InputEvent>),
-    Timed(SyncSender<Timed>),
+    /// The mapping engine, with the number of events lost since its queue filled up.
+    Timed(SyncSender<Timed>, u64),
 }
 
 /// Fan-out of input events to every subscriber; dead subscribers are dropped.
@@ -64,7 +66,7 @@ impl Broadcast {
 
     fn subscribe_timed(&self) -> Receiver<Timed> {
         let (tx, rx) = mpsc::sync_channel(EVENT_BUFFER);
-        self.add(Subscriber::Timed(tx));
+        self.add(Subscriber::Timed(tx, 0));
         rx
     }
 
@@ -75,21 +77,35 @@ impl Broadcast {
             .push(subscriber);
     }
 
-    /// `read`: when the device was read.
+    /// `read`: when the device was read. A full queue drops the event: the input thread
+    /// never waits for a subscriber. Losses of the engine's events are logged.
     fn send(&self, event: InputEvent, read: Instant) {
         let mut subs = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        subs.retain(|sub| match sub {
+        subs.retain_mut(|sub| match sub {
             Subscriber::Plain(tx) => !matches!(
                 tx.try_send(event.clone()),
                 Err(TrySendError::Disconnected(_))
             ),
-            Subscriber::Timed(tx) => !matches!(
-                tx.try_send(Timed {
-                    event: event.clone(),
-                    read,
-                }),
-                Err(TrySendError::Disconnected(_))
-            ),
+            Subscriber::Timed(tx, lost) => match tx.try_send(Timed {
+                event: event.clone(),
+                read,
+            }) {
+                Ok(()) => {
+                    if *lost > 0 {
+                        log::warn!("input: {lost} event(s) lost while the engine fell behind");
+                        *lost = 0;
+                    }
+                    true
+                }
+                Err(TrySendError::Full(_)) => {
+                    if *lost == 0 {
+                        log::warn!("input: the engine's event queue is full, events are lost");
+                    }
+                    *lost += 1;
+                    true
+                }
+                Err(TrySendError::Disconnected(_)) => false,
+            },
         });
     }
 }
@@ -211,8 +227,11 @@ impl InputService {
     }
 
     /// Current state of every attached device.
-    pub fn devices(&self) -> RwLockReadGuard<'_, Vec<DeviceState>> {
-        self.snapshot.read().unwrap_or_else(|e| e.into_inner())
+    pub fn devices(&self) -> Vec<DeviceState> {
+        self.snapshot
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// A separate event stream, e.g. for the mapping engine. Drop the receiver to unsubscribe.
@@ -422,4 +441,37 @@ fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &Broadcast, at: Instan
         }
     }
     changed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A full engine queue drops events without blocking and counts them until it drains.
+    #[test]
+    fn full_engine_queue_counts_lost_events() {
+        let broadcast = Broadcast::default();
+        let rx = broadcast.subscribe_timed();
+        let lost = || match &broadcast.0.lock().unwrap()[0] {
+            Subscriber::Timed(_, lost) => *lost,
+            Subscriber::Plain(_) => unreachable!(),
+        };
+        for _ in 0..EVENT_BUFFER + 3 {
+            broadcast.send(InputEvent::DevicesChanged, Instant::now());
+        }
+        assert_eq!(lost(), 3);
+        rx.recv().unwrap();
+        broadcast.send(InputEvent::DevicesChanged, Instant::now());
+        assert_eq!(
+            lost(),
+            0,
+            "reported and reset once the queue takes events again"
+        );
+        drop(rx);
+        broadcast.send(InputEvent::DevicesChanged, Instant::now());
+        assert!(
+            broadcast.0.lock().unwrap().is_empty(),
+            "gone with its receiver"
+        );
+    }
 }

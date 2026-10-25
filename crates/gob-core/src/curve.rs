@@ -1,5 +1,7 @@
 //! Response curves like Gremlin's `gremlin/spline.py`: piecewise linear, natural cubic
-//! spline and cubic Bezier spline, with Gremlin's symmetric editing rules.
+//! spline and cubic Bezier spline, with Gremlin's symmetric editing rules. Joystick Gobloon
+//! adds a monotone cubic (Fritsch-Carlson, like PCHIP): smooth through the knots like the
+//! cubic spline, but it never overshoots them, so it neither wiggles nor runs past -1 / 1.
 //!
 //! Points are kept as Gremlin stores them in `<control-points>`: for linear and cubic
 //! curves the knots sorted by x; for Bezier the flat list `center, right handle,
@@ -10,10 +12,17 @@ pub enum CurveType {
     PiecewiseLinear,
     CubicSpline,
     CubicBezier,
+    /// Joystick Gobloon only.
+    MonotoneCubic,
 }
 
 impl CurveType {
-    pub const ALL: [CurveType; 3] = [Self::PiecewiseLinear, Self::CubicSpline, Self::CubicBezier];
+    pub const ALL: [CurveType; 4] = [
+        Self::PiecewiseLinear,
+        Self::CubicSpline,
+        Self::MonotoneCubic,
+        Self::CubicBezier,
+    ];
 
     /// Value of the `curve-type` property.
     pub fn name(self) -> &'static str {
@@ -21,6 +30,7 @@ impl CurveType {
             Self::PiecewiseLinear => "PiecewiseLinear",
             Self::CubicSpline => "CubicSpline",
             Self::CubicBezier => "CubicBezierSpline",
+            Self::MonotoneCubic => "MonotoneCubicSpline",
         }
     }
 
@@ -28,6 +38,7 @@ impl CurveType {
         match s.trim() {
             "CubicSpline" => Self::CubicSpline,
             "CubicBezierSpline" => Self::CubicBezier,
+            "MonotoneCubicSpline" => Self::MonotoneCubic,
             _ => Self::PiecewiseLinear,
         }
     }
@@ -47,6 +58,8 @@ pub enum Curve {
     Linear(Vec<(f64, f64)>),
     /// Knots and second derivatives.
     Cubic(Vec<(f64, f64)>, Vec<f64>),
+    /// Knots and slopes (cubic Hermite).
+    Hermite(Vec<(f64, f64)>, Vec<f64>),
     /// Per segment: 101 samples of (x, y) along t.
     Bezier(Vec<Vec<(f64, f64)>>),
 }
@@ -68,6 +81,11 @@ impl Curve {
                 Self::Cubic(p, z)
             }
             CurveType::CubicBezier => Self::Bezier(bezier_lookup(points)),
+            CurveType::MonotoneCubic => {
+                let p = sorted();
+                let m = monotone_slopes(&p);
+                Self::Hermite(p, m)
+            }
         }
     }
 
@@ -77,20 +95,30 @@ impl Curve {
         match self {
             Self::Linear(p) => linear(p, x),
             Self::Cubic(p, z) => cubic(p, z, x),
+            Self::Hermite(p, m) => hermite(p, m, x),
             Self::Bezier(segments) => bezier(segments, x),
         }
     }
 
     /// Whether the output only rises or only falls over the input range (flat parts allowed),
-    /// so it crosses zero, or any other level, at most once.
+    /// so it crosses zero, or any other level, at most once. A Bezier curve is followed as
+    /// drawn: it must not loop back in x either.
     pub fn monotonic(&self) -> bool {
         const STEPS: u32 = 400;
         const EPS: f64 = 1e-6;
-        let y: Vec<f64> = (0..=STEPS)
-            .map(|i| self.eval(-1.0 + 2.0 * f64::from(i) / f64::from(STEPS)))
-            .collect();
-        let steps = || y.windows(2).map(|w| w[1] - w[0]);
-        steps().all(|d| d >= -EPS) || steps().all(|d| d <= EPS)
+        let (x, y): (Vec<f64>, Vec<f64>) = match self {
+            Self::Bezier(segments) => segments.iter().flatten().copied().unzip(),
+            _ => (0..=STEPS)
+                .map(|i| {
+                    let x = -1.0 + 2.0 * f64::from(i) / f64::from(STEPS);
+                    (x, self.eval(x))
+                })
+                .unzip(),
+        };
+        let steps = |v: &[f64]| v.windows(2).map(|w| w[1] - w[0]).collect::<Vec<_>>();
+        let (dx, dy) = (steps(&x), steps(&y));
+        dx.iter().all(|&d| d >= -EPS)
+            && (dy.iter().all(|&d| d >= -EPS) || dy.iter().all(|&d| d <= EPS))
     }
 }
 
@@ -151,6 +179,65 @@ fn cubic(p: &[(f64, f64)], z: &[f64], x: f64) -> f64 {
     let mut t = z[i] / 2.0 + dx * (z[i + 1] - z[i]) / (6.0 * h);
     t = -(h / 6.0) * (z[i + 1] + 2.0 * z[i]) + (p[i + 1].1 - p[i].1) / h + dx * t;
     (p[i].1 + dx * t).clamp(-1.0, 1.0)
+}
+
+/// Fritsch-Carlson slopes (as PCHIP): zero at a local extremum of the knots, else a weighted
+/// harmonic mean of the neighbouring secants, which keeps every segment within its knots.
+fn monotone_slopes(p: &[(f64, f64)]) -> Vec<f64> {
+    let n = p.len();
+    if n < 2 {
+        return vec![0.0; n];
+    }
+    let h: Vec<f64> = p
+        .windows(2)
+        .map(|w| (w[1].0 - w[0].0).max(MIN_SEGMENT))
+        .collect();
+    let d: Vec<f64> = p
+        .windows(2)
+        .zip(&h)
+        .map(|(w, h)| (w[1].1 - w[0].1) / h)
+        .collect();
+    if n == 2 {
+        return vec![d[0]; 2];
+    }
+    let mut m = vec![0.0; n];
+    for i in 1..n - 1 {
+        if d[i - 1] * d[i] > 0.0 {
+            let (w1, w2) = (2.0 * h[i] + h[i - 1], h[i] + 2.0 * h[i - 1]);
+            m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i]);
+        }
+    }
+    // Ends: three-point estimate, kept from overshooting.
+    let end = |h0: f64, h1: f64, d0: f64, d1: f64| {
+        let s = ((2.0 * h0 + h1) * d0 - h0 * d1) / (h0 + h1);
+        if s * d0 <= 0.0 {
+            0.0
+        } else if d0 * d1 <= 0.0 && s.abs() > 3.0 * d0.abs() {
+            3.0 * d0
+        } else {
+            s
+        }
+    };
+    m[0] = end(h[0], h[1], d[0], d[1]);
+    m[n - 1] = end(h[n - 2], h[n - 3], d[n - 2], d[n - 3]);
+    m
+}
+
+fn hermite(p: &[(f64, f64)], m: &[f64], x: f64) -> f64 {
+    if p.len() < 2 {
+        return x;
+    }
+    let i = (0..p.len() - 1)
+        .find(|&i| p[i].0 <= x && x <= p[i + 1].0)
+        .unwrap_or(p.len() - 2);
+    let h = (p[i + 1].0 - p[i].0).max(MIN_SEGMENT);
+    let t = ((x - p[i].0) / h).clamp(0.0, 1.0);
+    let (t2, t3) = (t * t, t * t * t);
+    let y = (2.0 * t3 - 3.0 * t2 + 1.0) * p[i].1
+        + (t3 - 2.0 * t2 + t) * h * m[i]
+        + (-2.0 * t3 + 3.0 * t2) * p[i + 1].1
+        + (t3 - t2) * h * m[i + 1];
+    y.clamp(-1.0, 1.0)
 }
 
 /// Splits the flat Bezier list into segments `[center, right, left, center]`.
@@ -220,8 +307,17 @@ fn bezier(segments: &[Vec<(f64, f64)>], x: f64) -> f64 {
     y.clamp(-1.0, 1.0)
 }
 
-/// Editable points: knots, plus for Bezier the handles beside each knot.
+/// Editable points: knots, plus for Bezier the handles beside each knot. Edits return the
+/// points as the profile stores them (4 decimals), so a curve kept monotonic stays so once saved.
 pub struct Editable;
+
+fn stored(mut p: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+    let round = |v: f64| (v * 10_000.0).round() / 10_000.0;
+    for q in &mut p {
+        *q = (round(q.0), round(q.1));
+    }
+    p
+}
 
 impl Editable {
     /// Indices of the knots (centers) in the stored list.
@@ -289,7 +385,7 @@ impl Editable {
                 }
             }
         }
-        p
+        stored(p)
     }
 
     /// Adds a knot at (x, y) (and its mirror when symmetric); returns the new points and
@@ -325,7 +421,7 @@ impl Editable {
                 idx += if kind == CurveType::CubicBezier { 3 } else { 1 };
             }
         }
-        (p, idx)
+        (stored(p), idx)
     }
 
     /// Removes knot at stored index `i` (and its mirror); end knots and the symmetric
@@ -410,11 +506,13 @@ impl Editable {
             let (dx, dy) = (-p[i].0 - p[mirror].0, -p[i].1 - p[mirror].1);
             shift(&mut p, mirror, dx, dy);
         }
-        p
+        stored(p)
     }
 
     /// [`Editable::set`] that keeps a monotonic curve monotonic: the point stops where the
-    /// curve would start to turn back. A curve that is not monotonic already is edited freely.
+    /// curve would start to turn back, and slides along that limit toward the pointer instead
+    /// of sticking there. A curve that is not monotonic already is
+    /// edited freely.
     pub fn set_monotonic(
         kind: CurveType,
         points: &[(f64, f64)],
@@ -427,22 +525,37 @@ impl Editable {
         if i >= points.len() || monotonic(kind, &new) || !monotonic(kind, points) {
             return new;
         }
-        // Bisect along the move for the farthest point that keeps the curve monotonic.
         let from = points[i];
-        let at = |t: f64| {
-            let (tx, ty) = (from.0 + (x - from.0) * t, from.1 + (y - from.1) * t);
-            Self::set(kind, points, i, tx, ty, symmetric)
-        };
-        let (mut lo, mut hi) = (0.0, 1.0);
-        for _ in 0..16 {
-            let mid = (lo + hi) / 2.0;
-            if monotonic(kind, &at(mid)) {
-                lo = mid;
-            } else {
-                hi = mid;
+        // Bisects the move from `from` to (tx, ty) for the farthest point that keeps the
+        // curve monotonic.
+        let farthest = |tx: f64, ty: f64| {
+            let at = |t: f64| {
+                let (px, py) = (from.0 + (tx - from.0) * t, from.1 + (ty - from.1) * t);
+                Self::set(kind, points, i, px, py, symmetric)
+            };
+            let (mut lo, mut hi) = (0.0, 1.0);
+            for _ in 0..16 {
+                let mid = (lo + hi) / 2.0;
+                if monotonic(kind, &at(mid)) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
             }
-        }
-        if lo == 0.0 { points.to_vec() } else { at(lo) }
+            at(lo)
+        };
+        // Straight to the pointer, or turned up to 80 degrees either way (along the limit):
+        // the result that ends nearest the pointer wins.
+        let (dx, dy) = (x - from.0, y - from.1);
+        let off = |p: &[(f64, f64)]| (p[i].0 - x).hypot(p[i].1 - y);
+        [0.0f64, 20.0, -20.0, 40.0, -40.0, 60.0, -60.0, 80.0, -80.0]
+            .into_iter()
+            .map(|deg| {
+                let (sin, cos) = deg.to_radians().sin_cos();
+                farthest(from.0 + dx * cos - dy * sin, from.1 + dx * sin + dy * cos)
+            })
+            .min_by(|a, b| off(a).total_cmp(&off(b)))
+            .unwrap_or_else(|| points.to_vec())
     }
 
     /// [`Editable::add`] that keeps a monotonic curve monotonic: a knot that would make it turn
@@ -467,6 +580,40 @@ impl Editable {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Symmetric knots at (+-0.75, +-0.25) or (+-0.25, +-0.75): the natural cubic spline turns
+    /// back or runs past 1 (clamped flat); the monotone cubic stays between its knots.
+    #[test]
+    fn monotone_cubic_never_overshoots() {
+        for (a, b) in [(0.75, 0.25), (0.25, 0.75)] {
+            let p = [(-1.0, -1.0), (-a, -b), (0.0, 0.0), (a, b), (1.0, 1.0)];
+            let c = Curve::new(CurveType::MonotoneCubic, &p);
+            assert!(c.monotonic(), "{p:?}");
+            for w in p.windows(2) {
+                for i in 1..20 {
+                    let x = w[0].0 + (w[1].0 - w[0].0) * f64::from(i) / 20.0;
+                    let y = c.eval(x);
+                    assert!(y > w[0].1 && y < w[1].1, "{p:?} at {x}: {y}");
+                }
+            }
+            for &(x, y) in &p {
+                assert!((c.eval(x) - y).abs() < 1e-9, "through the knot {x}");
+            }
+        }
+        let spline = |a: f64, b: f64| {
+            let p = [(-1.0, -1.0), (-a, -b), (0.0, 0.0), (a, b), (1.0, 1.0)];
+            Curve::new(CurveType::CubicSpline, &p)
+        };
+        assert!(
+            !spline(0.75, 0.25).monotonic(),
+            "the natural spline turns back"
+        );
+        assert_eq!(
+            spline(0.25, 0.75).eval(0.9),
+            1.0,
+            "and is clamped flat before x = 1"
+        );
+    }
 
     #[test]
     fn identity_for_every_type() {
@@ -541,6 +688,75 @@ mod tests {
         // Inverted curves (falling) count as monotonic.
         let falling = [(-1.0, 1.0), (1.0, -1.0)];
         assert!(Curve::new(CurveType::CubicSpline, &falling).monotonic());
+    }
+
+    /// At the limit the point slides along it instead of sticking. Symmetric linear curve: the
+    /// knot at x = 0.5 must stay at y >= 0 (the center knot).
+    #[test]
+    fn monotonic_edits_slide_along_the_limit() {
+        let kind = CurveType::PiecewiseLinear;
+        let p = Editable::symmetric(kind, &kind.default_points());
+        let (p, i) = Editable::add(kind, &p, 0.5, 0.5, true);
+        // Straight there it would stop at y = 0 on the way; then it follows the pointer
+        // along the limit, also when every step straight to the pointer is forbidden.
+        let mut moved = p.clone();
+        for _ in 0..20 {
+            moved = Editable::set_monotonic(kind, &moved, i, 0.8, -1.0, true);
+            assert!(Curve::new(kind, &moved).monotonic());
+        }
+        let (x, y) = moved[i];
+        assert!((x - 0.8).abs() < 0.01 && y.abs() < 0.01, "({x}, {y})");
+    }
+
+    /// Fast drags stop the point right at the limit; the profile keeps 4 decimals, and the
+    /// rounded points must not end up past the limit (the curve would then be edited freely).
+    #[test]
+    fn monotonic_edits_survive_rounding() {
+        let round = |p: Vec<(f64, f64)>| -> Vec<(f64, f64)> {
+            let r = |v: f64| (v * 10_000.0).round() / 10_000.0;
+            p.into_iter().map(|(x, y)| (r(x), r(y))).collect()
+        };
+        for kind in [CurveType::CubicSpline, CurveType::CubicBezier] {
+            for (tx, ty) in [(0.32, -0.41), (0.7, -0.9), (0.2, -1.0), (0.9, 0.05)] {
+                let p = Editable::symmetric(kind, &kind.default_points());
+                let (mut p, i) = Editable::add(kind, &p, 0.5, 0.5, true);
+                let i = if kind == CurveType::CubicBezier {
+                    i - 1
+                } else {
+                    i
+                };
+                for step in 1..=8 {
+                    let t = f64::from(step) / 8.0;
+                    let (x, y) = (0.5 + (tx - 0.5) * t, 0.5 + (ty - 0.5) * t);
+                    p = round(Editable::set_monotonic(kind, &p, i, x, y, true));
+                    assert!(Curve::new(kind, &p).monotonic(), "{kind:?} to ({tx}, {ty})");
+                }
+            }
+        }
+    }
+
+    /// The center handle of a symmetric Bezier pulled back past the center (the curve would
+    /// dip and jump there) stops before that.
+    #[test]
+    fn bezier_center_handle_stops() {
+        let kind = CurveType::CubicBezier;
+        let p = Editable::symmetric(kind, &kind.default_points());
+        let right = p.len() / 2 + 1;
+        assert_eq!(p[right - 1], (0.0, 0.0), "center knot");
+        let free = Editable::set(kind, &p, right, 0.41, -0.55, true);
+        assert!(!Curve::new(kind, &free).monotonic());
+        let kept = Editable::set_monotonic(kind, &p, right, 0.41, -0.55, true);
+        assert!(Curve::new(kind, &kept).monotonic());
+    }
+
+    /// A Bezier handle that makes the curve loop back in x is caught, although y(x) read from
+    /// the curve looks fine.
+    #[test]
+    fn bezier_loops_are_not_monotonic() {
+        let ok = [(-1.0, -1.0), (-0.5, -1.0), (0.5, 1.0), (1.0, 1.0)];
+        assert!(Curve::new(CurveType::CubicBezier, &ok).monotonic());
+        let looped = [(-1.0, -1.0), (1.6, -1.0), (-0.6, 1.0), (1.0, 1.0)];
+        assert!(!Curve::new(CurveType::CubicBezier, &looped).monotonic());
     }
 
     #[test]

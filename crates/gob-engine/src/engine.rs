@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use gob_core::{
@@ -10,7 +10,7 @@ use gob_core::{
 use crate::media::{SpeechQueue, SpeechRequest};
 use crate::modes::ModeStack;
 use crate::motion::{Motion, compass};
-use crate::{InputKey, InputKind, Light, Output, Value};
+use crate::{InputKey, InputKind, Light, LogicalValues, Output, Value};
 
 /// Delay between press and release of a pulse (Gremlin: 50 ms).
 const PULSE: Duration = Duration::from_millis(50);
@@ -395,6 +395,8 @@ struct Config {
     /// Modifiers it needs (see `gob_core::modifier`).
     layer: Layer,
     additive: bool,
+    /// Axis outputs keep their value when the layer stops.
+    keep_value: bool,
 }
 
 pub struct Engine {
@@ -419,6 +421,8 @@ pub struct Engine {
     logical_relative: HashMap<InputKey, RelativeAxis>,
     /// Nesting of logical device dispatches, against loops in broken profiles.
     logical_depth: usize,
+    /// A logical device input changed since [`Engine::take_logical_changed`].
+    logical_changed: bool,
     /// Physical button and hat states, for conditions.
     buttons: HashMap<InputKey, bool>,
     hats: HashMap<InputKey, Option<u16>>,
@@ -497,6 +501,7 @@ impl Engine {
             hats: HashMap::new(),
             logical_relative: HashMap::new(),
             logical_depth: 0,
+            logical_changed: false,
             cond_cache: HashMap::new(),
             keys_down: HashSet::new(),
             macro_delay: profile
@@ -583,6 +588,7 @@ impl Engine {
                     lights: std::mem::take(&mut engine.compiled_lights),
                     layer: cfg.layer.clone(),
                     additive: cfg.additive,
+                    keep_value: cfg.keep_value,
                 });
             }
         }
@@ -1001,6 +1007,26 @@ impl Engine {
         self.modes.current()
     }
 
+    /// Whether a logical device input changed since the last call.
+    pub fn take_logical_changed(&mut self) -> bool {
+        std::mem::take(&mut self.logical_changed)
+    }
+
+    /// Current values of the logical device's inputs (input viewer).
+    pub fn logical_values(&self) -> LogicalValues {
+        fn of<T: Copy>(map: &HashMap<InputKey, T>) -> BTreeMap<u32, T> {
+            map.iter()
+                .filter(|(k, _)| k.device == gob_core::LOGICAL_DEVICE_GUID)
+                .map(|(k, &v)| (k.id, v))
+                .collect()
+        }
+        LogicalValues {
+            axes: of(&self.axes),
+            buttons: of(&self.buttons),
+            hats: of(&self.hats),
+        }
+    }
+
     /// vJoy device ids the profile writes to.
     pub fn vjoy_devices(&self) -> BTreeSet<u32> {
         self.nodes
@@ -1131,7 +1157,8 @@ impl Engine {
     }
 
     /// The held modifiers changed: axis configurations that stop running get the input at rest
-    /// (their outputs go back to neutral) and the ones that start get the current position.
+    /// (their outputs go back to neutral, unless they keep their value) and the ones that start
+    /// get the current position.
     /// Neutral values that a starting configuration writes anyway are not sent, so an output both
     /// layers drive does not jump.
     fn after_layer_change(&mut self, before: &Layer, now: Instant, out: &mut dyn Output) {
@@ -1163,6 +1190,9 @@ impl Engine {
         for (key, _, set) in &axes {
             let src = self.source(key);
             for ci in changed(self, *set, false) {
+                if self.sets[*set][ci].keep_value {
+                    continue;
+                }
                 self.run_config((*set, ci), &src, Value::Axis(0.0), now, &mut neutral);
             }
         }
@@ -2131,6 +2161,7 @@ impl Engine {
             return;
         }
         self.logical_depth += 1;
+        self.logical_changed = true;
         self.seed(key, value);
         self.dispatch(key, value, now, out);
         self.logical_depth -= 1;

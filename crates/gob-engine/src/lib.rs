@@ -9,6 +9,8 @@
 //! are auto-released when their input is released in another mode. On top of that,
 //! modifiers choose layers of an input's configurations (`gob_core::modifier`).
 
+use std::collections::BTreeMap;
+
 mod engine;
 mod lighting;
 mod media;
@@ -21,6 +23,14 @@ pub use engine::Engine;
 pub use lighting::to_led;
 pub use media::{Media, SpeechQueue, SpeechRequest, voices};
 pub use runner::{Latency, Runner, RunnerStatus};
+
+/// Values of the logical device's inputs that actions wrote, by input id.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LogicalValues {
+    pub axes: BTreeMap<u32, f32>,
+    pub buttons: BTreeMap<u32, bool>,
+    pub hats: BTreeMap<u32, Option<u16>>,
+}
 
 /// Value flowing through an action tree.
 #[derive(Debug, Clone, Copy, PartialEq)]
