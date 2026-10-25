@@ -22,10 +22,14 @@
 //! </modifiers>
 //! <action-configuration layer="M1+M2" additive="true">...</action-configuration>
 //! ```
+//!
+//! When the held modifiers change, the axis outputs of a layer that stops go back to rest (an
+//! additive brake axis is released with its modifier), unless the layer keeps its value
+//! (`keep-value="true"`, e.g. a trim axis on M1, or the base flight axis while M1 trims).
 
 use std::fmt;
 
-use crate::profile::{Profile, Section};
+use crate::profile::{ActionConfig, Profile, Section};
 
 /// Separator of modifier names in a layer (`M1+M2`); not allowed in names.
 pub const SEPARATOR: char = '+';
@@ -254,6 +258,27 @@ impl Profile {
         self.collect_garbage();
     }
 
+    /// The configurations of one layer of an input in a mode.
+    fn layer_configs_mut<'a>(
+        &'a mut self,
+        device_id: &'a str,
+        input_type: &'a str,
+        input_id: &'a str,
+        mode: &'a str,
+        layer: &'a Layer,
+    ) -> impl Iterator<Item = &'a mut ActionConfig> {
+        self.inputs
+            .iter_mut()
+            .filter(move |b| {
+                b.device_id.eq_ignore_ascii_case(device_id)
+                    && b.input_type == input_type
+                    && b.input_id == input_id
+                    && b.mode == mode
+            })
+            .flat_map(|b| b.configs.iter_mut())
+            .filter(move |c| c.layer == *layer)
+    }
+
     /// Makes one layer of an input in a mode additive (runs on top) or exclusive.
     pub fn set_layer_additive(
         &mut self,
@@ -264,19 +289,24 @@ impl Profile {
         layer: &Layer,
         additive: bool,
     ) {
-        for c in self
-            .inputs
-            .iter_mut()
-            .filter(|b| {
-                b.device_id.eq_ignore_ascii_case(device_id)
-                    && b.input_type == input_type
-                    && b.input_id == input_id
-                    && b.mode == mode
-            })
-            .flat_map(|b| b.configs.iter_mut())
-            .filter(|c| c.layer == *layer)
-        {
+        for c in self.layer_configs_mut(device_id, input_type, input_id, mode, layer) {
             c.additive = additive;
+        }
+    }
+
+    /// Makes the axis outputs of one layer of an input in a mode keep their last value when the
+    /// layer stops, or go back to rest.
+    pub fn set_layer_keep_value(
+        &mut self,
+        device_id: &str,
+        input_type: &str,
+        input_id: &str,
+        mode: &str,
+        layer: &Layer,
+        keep: bool,
+    ) {
+        for c in self.layer_configs_mut(device_id, input_type, input_id, mode, layer) {
+            c.keep_value = keep;
         }
     }
 
@@ -419,6 +449,9 @@ mod tests {
             true,
         );
         assert!(p.inputs[0].configs[1].additive);
+        p.set_layer_keep_value("{dev-b}", "button", "4", "Default", &Layer::base(), true);
+        assert!(p.inputs[0].configs[0].keep_value);
+        assert!(!p.inputs[0].configs[1].keep_value);
 
         assert!(p.remove_modifier("Shift"));
         assert_eq!(p.inputs[0].configs.len(), 1);

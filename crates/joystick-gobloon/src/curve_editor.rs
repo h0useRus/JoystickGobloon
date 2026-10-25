@@ -217,6 +217,7 @@ fn type_key(k: CurveType) -> &'static str {
         CurveType::PiecewiseLinear => "curve-linear",
         CurveType::CubicSpline => "curve-cubic",
         CurveType::CubicBezier => "curve-bezier",
+        CurveType::MonotoneCubic => "curve-monotone",
     }
 }
 

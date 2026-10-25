@@ -1268,6 +1268,73 @@ fn logical_device_button_runs_its_own_binding() {
     assert_eq!(r.take(), [Out::Button(52, false)]);
 }
 
+/// Axes 1 and 2 drive logical axes 1 and 2; one merge-axis (sum) of both logical axes -> vJoy axis 3.
+#[test]
+fn merge_axis_of_logical_axes() {
+    let logical = gob_core::LOGICAL_DEVICE_GUID;
+    let to_logical = |id: &str| {
+        act(
+            &format!("to-l{id}"),
+            "map-to-logical-device",
+            &format!(
+                "{}{}",
+                prop("int", "logical-input-id", id),
+                prop("input_type", "logical-input-type", "axis"),
+            ),
+        )
+    };
+    let logical_input = |id: u32| {
+        format!(
+            "<input><device-id>{logical}</device-id><input-type>axis</input-type><mode>Default</mode>\
+             <input-id>{id}</input-id><action-configuration><root-action>r-merge</root-action>\
+             <behavior>axis</behavior></action-configuration></input>"
+        )
+    };
+    let xml = format!(
+        r#"<profile version="14"><inputs>{}{}{}{}</inputs><settings/><library>{}{}{}{}{}{}{}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        input("axis", 1, "Default", "r1", ""),
+        input("axis", 2, "Default", "r2", ""),
+        logical_input(1),
+        logical_input(2),
+        root("r1", &["to-l1"]),
+        root("r2", &["to-l2"]),
+        to_logical("1"),
+        to_logical("2"),
+        root("r-merge", &["merge"]),
+        act(
+            "merge",
+            "merge-axis",
+            &format!(
+                "{}{}{}{}{}<actions><action-id>va3</action-id></actions>",
+                prop("uuid", "axis1-guid", logical),
+                prop("int", "axis1-axis", "1"),
+                prop("uuid", "axis2-guid", logical),
+                prop("int", "axis2-axis", "2"),
+                prop("string", "operation", "sum"),
+            ),
+        ),
+        vjoy("va3", "axis", 3),
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut engine = Engine::new(&p, &HashMap::new());
+    let mut out = Recorder::default();
+    let mut axis = |id: u32, v: f32, out: &mut Recorder| {
+        let key = InputKey::new(DEV, InputKind::Axis, id);
+        engine.process(&key, Value::Axis(v), Instant::now(), out);
+    };
+    axis(1, 0.5, &mut out);
+    axis(2, 0.25, &mut out);
+    assert_eq!(out.0, [Out::Axis(3, 0.5), Out::Axis(3, 0.75)]);
+    assert!(engine.take_logical_changed());
+    assert!(!engine.take_logical_changed());
+    let values = engine.logical_values();
+    assert_eq!(
+        values.axes.into_iter().collect::<Vec<_>>(),
+        [(1, 0.5), (2, 0.25)]
+    );
+}
+
 #[test]
 fn unknown_action_types_do_nothing() {
     let xml = format!(
@@ -1449,6 +1516,7 @@ fn layered_input(kind: &str, id: u32, configs: &[(&str, bool, &str)]) -> String 
 /// Axis 2: base -> axis 1, M1 additive -> axis 2.
 /// Axis 3: base -> axis 3, M1 -> axis 3 and axis 4.
 /// Axis 6: base -> axis 1, M1 additive -> 2, M2 additive -> 3, M1+M2 additive -> 4.
+/// Axis 7: base -> axis 1, M1 -> axis 4, both keep their value.
 fn modifier_rig() -> (Engine, Recorder) {
     let inputs = [
         layered_input(
@@ -1469,6 +1537,10 @@ fn modifier_rig() -> (Engine, Recorder) {
                 ("M2", true, "ra3"),
                 ("M1+M2", true, "ra4"),
             ],
+        ),
+        layered_input("axis", 7, &[("", false, "ra1"), ("M1", false, "ra4")]).replace(
+            "<action-configuration",
+            r#"<action-configuration keep-value="true""#,
         ),
     ]
     .concat();
@@ -1574,6 +1646,29 @@ fn additive_axis_layer_and_neutral_on_leave() {
         out.0,
         [Out::Axis(2, 0.0)],
         "the additive output goes back to rest"
+    );
+}
+
+#[test]
+fn layers_that_keep_their_value() {
+    let (mut e, mut out) = modifier_rig();
+    send(&mut e, &mut out, InputKind::Axis, 7, Value::Axis(1.0));
+    assert_eq!(std::mem::take(&mut out.0), [Out::Axis(1, 1.0)]);
+    button(&mut e, &mut out, 30, true);
+    assert_eq!(
+        std::mem::take(&mut out.0),
+        [Out::Axis(4, 1.0)],
+        "the base output keeps its value while M1 drives its own"
+    );
+    send(&mut e, &mut out, InputKind::Axis, 7, Value::Axis(0.3));
+    assert_eq!(std::mem::take(&mut out.0), [Out::Axis(4, 0.3)]);
+    send(&mut e, &mut out, InputKind::Axis, 7, Value::Axis(0.6));
+    out.0.clear();
+    button(&mut e, &mut out, 30, false);
+    assert_eq!(
+        out.0,
+        [Out::Axis(1, 0.6)],
+        "the M1 output keeps 0.6, the base follows the stick again"
     );
 }
 
