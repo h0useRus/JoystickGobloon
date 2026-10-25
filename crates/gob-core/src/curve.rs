@@ -101,15 +101,24 @@ impl Curve {
     }
 
     /// Whether the output only rises or only falls over the input range (flat parts allowed),
-    /// so it crosses zero, or any other level, at most once.
+    /// so it crosses zero, or any other level, at most once. A Bezier curve is followed as
+    /// drawn: it must not loop back in x either.
     pub fn monotonic(&self) -> bool {
         const STEPS: u32 = 400;
         const EPS: f64 = 1e-6;
-        let y: Vec<f64> = (0..=STEPS)
-            .map(|i| self.eval(-1.0 + 2.0 * f64::from(i) / f64::from(STEPS)))
-            .collect();
-        let steps = || y.windows(2).map(|w| w[1] - w[0]);
-        steps().all(|d| d >= -EPS) || steps().all(|d| d <= EPS)
+        let (x, y): (Vec<f64>, Vec<f64>) = match self {
+            Self::Bezier(segments) => segments.iter().flatten().copied().unzip(),
+            _ => (0..=STEPS)
+                .map(|i| {
+                    let x = -1.0 + 2.0 * f64::from(i) / f64::from(STEPS);
+                    (x, self.eval(x))
+                })
+                .unzip(),
+        };
+        let steps = |v: &[f64]| v.windows(2).map(|w| w[1] - w[0]).collect::<Vec<_>>();
+        let (dx, dy) = (steps(&x), steps(&y));
+        dx.iter().all(|&d| d >= -EPS)
+            && (dy.iter().all(|&d| d >= -EPS) || dy.iter().all(|&d| d <= EPS))
     }
 }
 
@@ -492,7 +501,9 @@ impl Editable {
     }
 
     /// [`Editable::set`] that keeps a monotonic curve monotonic: the point stops where the
-    /// curve would start to turn back. A curve that is not monotonic already is edited freely.
+    /// curve would start to turn back, and slides along that limit toward the pointer instead
+    /// of sticking there. A curve that is not monotonic already is
+    /// edited freely.
     pub fn set_monotonic(
         kind: CurveType,
         points: &[(f64, f64)],
@@ -505,22 +516,37 @@ impl Editable {
         if i >= points.len() || monotonic(kind, &new) || !monotonic(kind, points) {
             return new;
         }
-        // Bisect along the move for the farthest point that keeps the curve monotonic.
         let from = points[i];
-        let at = |t: f64| {
-            let (tx, ty) = (from.0 + (x - from.0) * t, from.1 + (y - from.1) * t);
-            Self::set(kind, points, i, tx, ty, symmetric)
-        };
-        let (mut lo, mut hi) = (0.0, 1.0);
-        for _ in 0..16 {
-            let mid = (lo + hi) / 2.0;
-            if monotonic(kind, &at(mid)) {
-                lo = mid;
-            } else {
-                hi = mid;
+        // Bisects the move from `from` to (tx, ty) for the farthest point that keeps the
+        // curve monotonic.
+        let farthest = |tx: f64, ty: f64| {
+            let at = |t: f64| {
+                let (px, py) = (from.0 + (tx - from.0) * t, from.1 + (ty - from.1) * t);
+                Self::set(kind, points, i, px, py, symmetric)
+            };
+            let (mut lo, mut hi) = (0.0, 1.0);
+            for _ in 0..16 {
+                let mid = (lo + hi) / 2.0;
+                if monotonic(kind, &at(mid)) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
             }
-        }
-        if lo == 0.0 { points.to_vec() } else { at(lo) }
+            at(lo)
+        };
+        // Straight to the pointer, or turned up to 80 degrees either way (along the limit):
+        // the result that ends nearest the pointer wins.
+        let (dx, dy) = (x - from.0, y - from.1);
+        let off = |p: &[(f64, f64)]| (p[i].0 - x).hypot(p[i].1 - y);
+        [0.0f64, 20.0, -20.0, 40.0, -40.0, 60.0, -60.0, 80.0, -80.0]
+            .into_iter()
+            .map(|deg| {
+                let (sin, cos) = deg.to_radians().sin_cos();
+                farthest(from.0 + dx * cos - dy * sin, from.1 + dx * sin + dy * cos)
+            })
+            .min_by(|a, b| off(a).total_cmp(&off(b)))
+            .unwrap_or_else(|| points.to_vec())
     }
 
     /// [`Editable::add`] that keeps a monotonic curve monotonic: a knot that would make it turn
@@ -653,6 +679,34 @@ mod tests {
         // Inverted curves (falling) count as monotonic.
         let falling = [(-1.0, 1.0), (1.0, -1.0)];
         assert!(Curve::new(CurveType::CubicSpline, &falling).monotonic());
+    }
+
+    /// At the limit the point slides along it instead of sticking. Symmetric linear curve: the
+    /// knot at x = 0.5 must stay at y >= 0 (the center knot).
+    #[test]
+    fn monotonic_edits_slide_along_the_limit() {
+        let kind = CurveType::PiecewiseLinear;
+        let p = Editable::symmetric(kind, &kind.default_points());
+        let (p, i) = Editable::add(kind, &p, 0.5, 0.5, true);
+        // Straight there it would stop at y = 0 on the way; then it follows the pointer
+        // along the limit, also when every step straight to the pointer is forbidden.
+        let mut moved = p.clone();
+        for _ in 0..20 {
+            moved = Editable::set_monotonic(kind, &moved, i, 0.8, -1.0, true);
+            assert!(Curve::new(kind, &moved).monotonic());
+        }
+        let (x, y) = moved[i];
+        assert!((x - 0.8).abs() < 0.01 && y.abs() < 0.01, "({x}, {y})");
+    }
+
+    /// A Bezier handle that makes the curve loop back in x is caught, although y(x) read from
+    /// the curve looks fine.
+    #[test]
+    fn bezier_loops_are_not_monotonic() {
+        let ok = [(-1.0, -1.0), (-0.5, -1.0), (0.5, 1.0), (1.0, 1.0)];
+        assert!(Curve::new(CurveType::CubicBezier, &ok).monotonic());
+        let looped = [(-1.0, -1.0), (1.6, -1.0), (-0.6, 1.0), (1.0, 1.0)];
+        assert!(!Curve::new(CurveType::CubicBezier, &looped).monotonic());
     }
 
     #[test]
