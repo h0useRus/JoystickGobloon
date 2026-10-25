@@ -148,6 +148,16 @@ impl VJoyConfig {
         c
     }
 
+    /// Adds or deletes virtual gamepad `id`.
+    pub fn gamepad(&mut self, add: bool, id: u32, i18n: &I18n) {
+        let (key, change) = if add {
+            ("gamepad-add-n", Change::AddGamepad(id))
+        } else {
+            ("gamepad-delete-n", Change::DeleteGamepad(id))
+        };
+        self.run(i18n.trf(key, &[("n", id.into())]), change);
+    }
+
     pub fn enable(&mut self, on: bool, i18n: &I18n) {
         let label = i18n.tr(if on { "vjoy-enable" } else { "vjoy-disable" });
         self.run(label, Change::Enable(on));

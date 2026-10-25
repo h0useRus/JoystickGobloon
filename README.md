@@ -45,8 +45,9 @@ The app and its profiles are the same on both systems; what does the work undern
 | --- | --- | --- |
 | Package | Installer (also installs the HidHide and vJoy drivers) or portable zip; updates itself | AppImage; updates itself |
 | Virtual joysticks | **vJoy** driver: up to 16 devices, each up to 8 axes, 128 buttons, 4 hats; devices are configured in the app (one UAC prompt per change) | **uinput**, no driver: devices appear when a profile is activated; each up to 8 axes, 95 buttons, 4 hats |
+| Virtual gamepads | Not yet (needs a driver) | **Xbox-style gamepads** (up to 4) on uinput: games, Steam and Proton see an Xbox 360 controller |
 | Device hiding | **HidHide** driver: hidden for every program, also when Joystick Gobloon is closed; a list of programs that still see hidden devices | Joystick Gobloon reads hidden devices exclusively, so games get nothing from them — **only while Joystick Gobloon runs**; no program list; programs that read raw HID (`hidraw`, e.g. Steam) are not covered |
-| Physical controllers | DirectInput: all buttons (128 on VKB) | evdev: the kernel reports at most **80 buttons** per device; split bigger sticks into several virtual HID devices in the vendor's tool |
+| Physical controllers | DirectInput: all buttons (128 on VKB); Xbox controllers through XInput, also in the background: LT and RT as separate axes, Guide as button 11 | evdev: the kernel reports at most **80 buttons** per device; split bigger sticks into several virtual HID devices in the vendor's tool |
 | Access | Administrator rights only to install drivers and change vJoy devices | One-time *Grant access* on the Devices page (a udev rule, asks for your password) |
 | Keyboard keys as inputs | Yes | No: reading every keyboard would expose what you type (key and mouse **output** works) |
 | Text to speech | Windows voices (SAPI) | speech-dispatcher (`spd-say`) |

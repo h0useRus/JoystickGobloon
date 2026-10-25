@@ -34,7 +34,7 @@ pub fn devices() -> Vec<DeviceInfo> {
         .iter()
         .filter_map(|(_, found)| platform.open(found, false))
         .map(|d| d.state().info.clone())
-        .filter(|info| !info.is_vjoy())
+        .filter(|info| !info.is_own())
         .collect()
 }
 

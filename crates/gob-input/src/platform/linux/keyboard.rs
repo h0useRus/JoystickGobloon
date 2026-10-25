@@ -18,8 +18,9 @@ use super::evdev::{EV_KEY, EV_REP, Node};
 /// Reports (scan code, extended, pressed).
 pub type KeySink = Arc<dyn Fn(u16, bool, bool) + Send + Sync>;
 
-/// Name prefix of the virtual devices Joystick Gobloon creates (gob-virtual, gob-engine's
-/// keyboard and mouse); their keys are not input.
+/// Name prefix of the virtual devices Joystick Gobloon creates (gob-virtual's joysticks and
+/// gamepads, gob-engine's keyboard and mouse): their keys are not input, and they are our
+/// output, not controllers (`DeviceInfo::own`).
 pub(crate) const OWN_DEVICE_PREFIX: &str = "Joystick Gobloon";
 /// Look for new keyboards this often.
 const RESCAN: Duration = Duration::from_secs(2);

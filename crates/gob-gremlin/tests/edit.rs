@@ -554,6 +554,64 @@ fn light_led_round_trips() {
 }
 
 #[test]
+fn map_to_gamepad_round_trips() {
+    let mut p = sample();
+    assert!(!p.needs_own_format());
+    for (input_type, id, control) in [
+        (InputType::Button, "3", "a"),
+        (InputType::Axis, "1", "left-x"),
+        (InputType::Hat, "1", "dpad"),
+    ] {
+        let kind = match input_type {
+            InputType::Axis => "axis",
+            InputType::Hat => "hat",
+            _ => "button",
+        };
+        let root = p.bind(DEV, kind, id, "Default");
+        let action = p
+            .add_child(
+                &root,
+                "actions",
+                gob_core::Action::new(&NewAction::MapToGamepad { input_type }),
+            )
+            .unwrap();
+        assert_eq!(
+            p.action(&action).unwrap().kind(),
+            ActionKind::MapToGamepad {
+                gamepad: 1,
+                control,
+                inverted: false,
+            }
+        );
+    }
+    assert!(p.needs_own_format(), "Gremlin has no gamepads");
+    let action = p
+        .library
+        .iter()
+        .find(|a| a.kind == "map-to-gamepad")
+        .unwrap()
+        .id
+        .clone();
+    let a = p.action_mut(&action).unwrap();
+    a.set("gamepad-id", "int", "2");
+    a.set("control", "string", "lt");
+    a.set("inverted", "bool", "True");
+
+    let xml = gob_gremlin::to_string(&p);
+    assert!(xml.contains(r#"type="map-to-gamepad""#));
+    let p = reload(&p);
+    assert_eq!(
+        p.action(&action).unwrap().kind(),
+        ActionKind::MapToGamepad {
+            gamepad: 2,
+            control: "lt",
+            inverted: true,
+        }
+    );
+    assert_eq!(gob_gremlin::to_string(&p), xml, "saved again unchanged");
+}
+
+#[test]
 fn led_colors_and_modes_parse() {
     assert_eq!(gob_core::parse_color("#00ff7F"), Some([0, 0xFF, 0x7F]));
     assert_eq!(gob_core::parse_color("12"), None);

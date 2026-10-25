@@ -11,6 +11,8 @@
 
 use std::collections::BTreeMap;
 
+pub use gob_virtual::GamepadControl;
+
 mod engine;
 mod lighting;
 mod media;
@@ -98,6 +100,12 @@ pub trait Output {
     fn axis(&mut self, device: u32, axis: u8, value: f32);
     fn button(&mut self, device: u32, button: u8, pressed: bool);
     fn hat(&mut self, device: u32, hat: u8, direction: Option<u16>);
+    /// Presses or releases a button or one d-pad direction of virtual gamepad `gamepad`.
+    fn gamepad_button(&mut self, _gamepad: u32, _control: GamepadControl, _pressed: bool) {}
+    /// Moves a gamepad stick axis (-1.0..=1.0) or trigger (0.0..=1.0).
+    fn gamepad_axis(&mut self, _gamepad: u32, _control: GamepadControl, _value: f32) {}
+    /// Points a gamepad's d-pad (hundredths of a degree, `None` released).
+    fn gamepad_dpad(&mut self, _gamepad: u32, _direction: Option<u16>) {}
     /// Relative cursor movement in pixels.
     fn mouse_move(&mut self, _dx: i32, _dy: i32) {}
     fn mouse_button(&mut self, _button: gob_core::MouseButton, _pressed: bool) {}

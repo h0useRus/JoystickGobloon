@@ -24,3 +24,6 @@ windows = { workspace = true, features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_Media_Multimedia",
 ] }
+
+[target.'cfg(windows)'.dev-dependencies]
+vigem-client.workspace = true

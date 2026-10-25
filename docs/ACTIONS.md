@@ -13,8 +13,8 @@ existing action, so several inputs share it, or copy one.
 - **Modes and modifiers.** A mode can give an input different actions, and a held modifier can switch to another
   layer of actions. Both are described in the [README](../README.md#modifiers).
 
-**Output:** [Map to vJoy](#map-to-vjoy) · [Map to keyboard](#map-to-keyboard) · [Map to mouse](#map-to-mouse) ·
-[Map to logical device](#map-to-logical-device)
+**Output:** [Map to vJoy](#map-to-vjoy) · [Map to gamepad](#map-to-gamepad) · [Map to keyboard](#map-to-keyboard) ·
+[Map to mouse](#map-to-mouse) · [Map to logical device](#map-to-logical-device)
 **Axes:** [Response curve](#response-curve) · [Split axis](#split-axis) · [Merge axis](#merge-axis) ·
 [Dual axis deadzone](#dual-axis-deadzone) · [Axis delta](#axis-delta)
 **Buttons and hats:** [Tempo](#tempo) · [Double tap](#double-tap) · [Smart toggle](#smart-toggle) · [Chain](#chain) ·
@@ -34,6 +34,20 @@ device and its input; a button can be inverted. An axis can also be **relative**
 at which the vJoy axis moves, and the axis stays where it is when you let go.
 
 <img src="actions/map-to-vjoy.png" width="500" alt="Map to vJoy: vJoy device 1, button 1, not inverted, runs on press and release">
+
+### Map to gamepad
+
+Linux only for now. Sends the value to a virtual **Xbox-style gamepad**: games, Steam and Proton see an Xbox 360
+controller, so games that only understand gamepads can be played with a stick. Add the gamepad on the *Virtual
+joysticks* page first (up to four), then pick it and a control that suits the input:
+
+- a button presses a gamepad button, a d-pad direction or a trigger;
+- an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel);
+- a hat drives the d-pad.
+
+Buttons and axes can be inverted.
+
+<img src="actions/map-to-gamepad.png" width="500" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release">
 
 ### Map to keyboard
 

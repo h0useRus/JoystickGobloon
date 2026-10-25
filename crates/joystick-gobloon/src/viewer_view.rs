@@ -115,7 +115,7 @@ impl ViewerView {
                             .or_insert_with(|| Shown::initial(&d.info.name));
                         let glyph = if d.info.guid == gob_core::LOGICAL_DEVICE_GUID {
                             icon::CPU
-                        } else if d.info.is_vjoy() {
+                        } else if d.info.is_own() {
                             icon::GAME_CONTROLLER
                         } else {
                             icon::JOYSTICK

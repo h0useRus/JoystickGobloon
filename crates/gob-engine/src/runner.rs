@@ -11,7 +11,7 @@ use gob_core::Profile;
 use gob_input::{DeviceState, InputEvent, Timed};
 
 use crate::platform::Injector;
-use crate::{Engine, InputKey, InputKind, LogicalValues, Output, Value};
+use crate::{Engine, GamepadControl, InputKey, InputKind, LogicalValues, Output, Value};
 
 /// Upper bound on how long the loop sleeps without events.
 const IDLE: Duration = Duration::from_millis(20);
@@ -83,10 +83,12 @@ pub struct Runner {
 
 struct SystemOutput {
     devices: HashMap<u32, Box<dyn gob_virtual::Device>>,
+    gamepads: HashMap<u32, Box<dyn gob_virtual::Gamepad>>,
     /// Last values written, read back by vJoy conditions.
     written: HashMap<(u32, InputKind, u32), Value>,
     /// Outputs whose last write the driver refused; logged once until one succeeds again.
     failing: HashSet<(u32, InputKind, u32)>,
+    failing_pads: HashSet<(u32, Option<GamepadControl>)>,
     media: crate::media::Media,
     lighting: crate::lighting::Lighting,
     load_profile: Option<String>,
@@ -97,15 +99,31 @@ impl SystemOutput {
     fn wrote(&mut self, key: (u32, InputKind, u32), value: Value, ok: Option<bool>) {
         self.written.insert(key, value);
         let (device, kind, id) = key;
-        match ok {
-            Some(false) if self.failing.insert(key) => {
-                log::warn!("virtual device {device}: writing {kind:?} {id} = {value:?} failed");
-            }
-            Some(true) if self.failing.remove(&key) => {
-                log::info!("virtual device {device}: writing {kind:?} {id} works again");
-            }
-            _ => {}
-        }
+        log_refused(&mut self.failing, key, ok, || {
+            format!("virtual device {device}: writing {kind:?} {id} = {value:?}")
+        });
+    }
+
+    /// A gamepad write (`control` `None`: the d-pad as a whole), logged like [`Self::wrote`].
+    fn wrote_pad(&mut self, gamepad: u32, control: Option<GamepadControl>, ok: Option<bool>) {
+        log_refused(&mut self.failing_pads, (gamepad, control), ok, || {
+            let control = control.map_or("dpad", GamepadControl::name);
+            format!("virtual gamepad {gamepad}: writing {control}")
+        });
+    }
+}
+
+/// Logs a write the driver refused when it starts failing, and when it works again.
+fn log_refused<K: Copy + Eq + std::hash::Hash>(
+    failing: &mut HashSet<K>,
+    key: K,
+    ok: Option<bool>,
+    what: impl FnOnce() -> String,
+) {
+    match ok {
+        Some(false) if failing.insert(key) => log::warn!("{} failed", what()),
+        Some(true) if failing.remove(&key) => log::info!("{} works again", what()),
+        _ => {}
     }
 }
 
@@ -129,6 +147,27 @@ impl Output for SystemOutput {
         let ok = self.devices.get(&device).map(|d| d.set_hat(hat, direction));
         let key = (device, InputKind::Hat, u32::from(hat));
         self.wrote(key, Value::Hat(direction), ok);
+    }
+
+    fn gamepad_button(&mut self, gamepad: u32, control: GamepadControl, pressed: bool) {
+        let ok = self
+            .gamepads
+            .get(&gamepad)
+            .map(|p| p.set_button(control, pressed));
+        self.wrote_pad(gamepad, Some(control), ok);
+    }
+
+    fn gamepad_axis(&mut self, gamepad: u32, control: GamepadControl, value: f32) {
+        let ok = self
+            .gamepads
+            .get(&gamepad)
+            .map(|p| p.set_axis(control, value));
+        self.wrote_pad(gamepad, Some(control), ok);
+    }
+
+    fn gamepad_dpad(&mut self, gamepad: u32, direction: Option<u16>) {
+        let ok = self.gamepads.get(&gamepad).map(|p| p.set_dpad(direction));
+        self.wrote_pad(gamepad, None, ok);
     }
 
     fn play_sound(&mut self, file: &str, volume: u8) {
@@ -196,8 +235,10 @@ impl Runner {
         let virtual_devices = gob_virtual::load().map_err(|e| e.to_string())?;
         let mut out = SystemOutput {
             devices: HashMap::new(),
+            gamepads: HashMap::new(),
             written: HashMap::new(),
             failing: HashSet::new(),
+            failing_pads: HashSet::new(),
             media: Default::default(),
             lighting: crate::lighting::Lighting::new(
                 initial
@@ -213,9 +254,15 @@ impl Runner {
             out.devices
                 .insert(id, virtual_devices.acquire(id).map_err(|e| e.to_string())?);
         }
+        for id in engine.gamepads() {
+            let pad = virtual_devices
+                .acquire_gamepad(id)
+                .map_err(|e| format!("gamepad {id}: {e}"))?;
+            out.gamepads.insert(id, pad);
+        }
 
         let now = Instant::now();
-        for d in initial.iter().filter(|d| !d.info.is_vjoy()) {
+        for d in initial.iter().filter(|d| !d.info.is_own()) {
             for (i, &b) in d.buttons.iter().enumerate() {
                 let key = InputKey::new(&d.info.guid, InputKind::Button, i as u32 + 1);
                 engine.seed(&key, Value::Button(b));

@@ -994,7 +994,7 @@ impl JoystickGobloonApp {
             }
             None => {}
         }
-        let no_devices = self.input.devices().iter().all(|d| d.info.is_vjoy());
+        let no_devices = self.input.devices().iter().all(|d| d.info.is_own());
         if self.profile.is_none() && no_devices {
             empty_state(ui, icon::JOYSTICK, &self.i18n.tr("no-profile"));
             ui.vertical_centered(|ui| {
@@ -1008,7 +1008,7 @@ impl JoystickGobloonApp {
         let missing = self.profile.as_ref().map_or(0, |p| {
             missing_devices(&p.profile, &self.input.devices()).len()
         });
-        let any_physical = self.input.devices().iter().any(|d| !d.info.is_vjoy());
+        let any_physical = self.input.devices().iter().any(|d| !d.info.is_own());
         if missing > 0 && any_physical {
             let banner = egui::Frame::new()
                 .fill(ui.visuals().faint_bg_color)
@@ -1033,13 +1033,15 @@ impl JoystickGobloonApp {
         let devices = self.input.devices();
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
+        (self.devices_view.max_gamepads, self.devices_view.gamepads) =
+            self.vjoy_view.gamepad_list();
         let gaming_only = self.settings.hidhide_gaming_only;
         self.hidhide_view
             .track_inputs(devices.iter().map(|d| d.info.guid.clone()).collect());
         self.devices_view.hiding_on = self.hidhide_view.cloak(gaming_only) == Some(true);
         self.devices_view.hidden = devices
             .iter()
-            .filter(|d| !d.info.is_vjoy())
+            .filter(|d| !d.info.is_own())
             .filter_map(|d| {
                 let hidden = self.hidhide_view.device_hidden(&d.info, gaming_only)?;
                 Some((d.info.guid.clone(), hidden))

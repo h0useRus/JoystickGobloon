@@ -3,7 +3,8 @@
 //! and gob-engine (keyboard and mouse output); `keys` maps key codes to Gremlin's scan codes.
 //! No driver to install; writing `/dev/uinput` needs root or a udev rule (`access`).
 //!
-//! Example `uinput_check`: creates a joystick for a few seconds (shows whether uinput works).
+//! Example `uinput_check`: creates a joystick (or with `--gamepad` an Xbox-style gamepad) for a
+//! few seconds (shows whether uinput works).
 #![cfg(target_os = "linux")]
 
 use std::fs::{File, OpenOptions};
@@ -13,6 +14,7 @@ use std::path::{Path, PathBuf};
 
 pub mod access;
 pub mod codes;
+pub mod gamepad;
 pub mod keys;
 
 const UINPUT: &str = "/dev/uinput";

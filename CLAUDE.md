@@ -17,7 +17,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
   platform/windows/ = DirectInput8 (polls every `set_poll_interval`, 1-5 ms, or with `set_event_mode` waits for DI change events (a high resolution timer paces devices without them) and reads
   buffered buttons/hats; ids = DI instance GUIDs like Gremlin; links dinput8.lib/dxguid.lib statically (-bundle)
-  for c_dfDIJoystick2), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
+  for c_dfDIJoystick2; Xbox controllers (`IG_` in the path) are read through XInput in xinput.rs: LT=Z, RT=Rz,
+  Guide = button 11), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
   order, keyboards -> set 1 scan codes; tests/uinput.rs = virtual devices, `check.ps1 --devices`),
   platform/none.rs elsewhere; example `monitor`
   + low-level keyboard hook (platform/windows/keyboard.rs) -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
@@ -139,6 +140,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - Profile device GUIDs come from another PC: use "Map controls" (banner on the Devices page).
 - Joystick Gobloon whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.
 - vJoy reports only on change: start `monitor` BEFORE activating a profile to see vJoy output.
+- No real Xbox controller here: ViGEmBus 1.22 (signed, installed 2026-10-25) makes virtual Xbox 360 pads;
+  `cargo test -p gob-input --test vigem -- --ignored` reads one back through XInput (vigem-client, tests only).
 
 ## Commands
 - cargo build / cargo run -p joystick-gobloon

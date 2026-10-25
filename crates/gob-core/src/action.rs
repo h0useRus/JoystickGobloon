@@ -76,6 +76,14 @@ pub enum ActionKind<'a> {
         input_id: u32,
         inverted: bool,
     },
+    /// Joystick Gobloon's own action (not in Gremlin): drives `control` of virtual gamepad
+    /// `gamepad` (1-based). `control` is a name like `a`, `left-x`, `lt` or `dpad` (gob-virtual's
+    /// `GamepadControl`); `inverted` flips a button or an axis.
+    MapToGamepad {
+        gamepad: u32,
+        control: &'a str,
+        inverted: bool,
+    },
     ChangeMode {
         change_type: &'a str,
         target: Option<&'a str>,
@@ -524,6 +532,7 @@ pub(crate) const HAT_BUTTONS: [&str; 8] = [
 pub const SUPPORTED_KINDS: &[&str] = &[
     "root",
     "map-to-vjoy",
+    "map-to-gamepad",
     "change-mode",
     "response-curve",
     "tempo",
@@ -592,6 +601,11 @@ impl Action {
                 input_type: InputType::parse(self.str("vjoy-input-type").unwrap_or_default()),
                 input_id: self.parse("vjoy-input-id").unwrap_or(1),
                 inverted: self.bool("button-inverted"),
+            },
+            "map-to-gamepad" => ActionKind::MapToGamepad {
+                gamepad: self.parse("gamepad-id").unwrap_or(1),
+                control: self.str("control").unwrap_or_default().trim(),
+                inverted: self.bool("inverted"),
             },
             "change-mode" => ActionKind::ChangeMode {
                 change_type: self.str("change-type").unwrap_or("Switch"),
