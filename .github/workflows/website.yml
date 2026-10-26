@@ -1,5 +1,5 @@
-# The website (site/ on the web branch) is published to gobloon.github.io: the files are pushed to
-# the Gobloon/gobloon.github.io repository, which serves them with GitHub Pages. Needs the
+# The website (site/ on the web branch) is published to h0userus.github.io/gobloon: the files are pushed to
+# the h0useRus/gobloon repository, which serves them with GitHub Pages. Needs the
 # GOBLOON_PAGES_TOKEN secret (a fine-grained token with contents: write on that repository).
 # Builds and releases of the app never run for this branch.
 name: Website
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Push to gobloon.github.io
+      - name: Push to h0useRus/gobloon
         env:
           TOKEN: ${{ secrets.GOBLOON_PAGES_TOKEN }}
         run: |
@@ -27,7 +27,7 @@ jobs:
             echo "::warning::GOBLOON_PAGES_TOKEN is not set, nothing published."
             exit 0
           fi
-          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/Gobloon/gobloon.github.io.git" out
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/h0useRus/gobloon.git" out
           find out -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -r site/. out/
           cd out
