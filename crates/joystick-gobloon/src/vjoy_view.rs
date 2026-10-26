@@ -186,6 +186,13 @@ impl VJoyView {
                     });
                 }
                 ui.separator();
+            } else if let (true, Some(id)) = (self.config.available(), free) {
+                // A gamepad is shown: the device row keeps its "+" so a device can be added.
+                let can = !locked && !self.config.busy();
+                if style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add")).clicked() {
+                    self.add(id);
+                }
+                ui.separator();
             }
             self.gamepads_section(ui, i18n, &vjoy, caps.max_gamepads, locked);
             return;
