@@ -2,6 +2,7 @@
 //! vJoyConfig.exe). Reading and applying the configuration may block (vJoy: the registry, an
 //! elevated copy of this exe behind a UAC prompt), so both run on worker threads.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, channel};
 
@@ -26,6 +27,8 @@ pub struct VJoyConfig {
     /// Edited copy of the selected device (or of a new one).
     pub edit: Option<DeviceConfig>,
     job: Option<Receiver<Done>>,
+    /// Changes waiting for the running one, see [`Self::run_all`].
+    queue: VecDeque<(String, Change)>,
     pub message: Option<Result<String, String>>,
     confirm_remove: Option<u32>,
     /// Cancel was pressed on a new device's editor (the page drops its draft).
@@ -39,6 +42,7 @@ impl VJoyConfig {
             configs: Vec::new(),
             edit: None,
             job: None,
+            queue: VecDeque::new(),
             message: None,
             confirm_remove: None,
             cancelled: false,
@@ -84,6 +88,14 @@ impl VJoyConfig {
         self.message = None;
     }
 
+    /// Runs `changes` one after another (labels for the log); a failed one drops the rest.
+    pub fn run_all(&mut self, changes: Vec<(String, Change)>) {
+        self.queue = changes.into();
+        if let Some((label, change)) = self.queue.pop_front() {
+            self.run(label, change);
+        }
+    }
+
     /// Collects finished background work; `Some(succeeded)` when a change finished.
     pub fn poll(&mut self, i18n: &I18n) -> Option<bool> {
         let Some(rx) = &self.job else { return None };
@@ -123,6 +135,13 @@ impl VJoyConfig {
                     }
                 }
                 self.edit = None;
+                match self.queue.pop_front() {
+                    Some((label, change)) if ok => {
+                        self.run(label, change);
+                        return None;
+                    }
+                    _ => self.queue.clear(),
+                }
                 self.reload();
                 Some(ok)
             }

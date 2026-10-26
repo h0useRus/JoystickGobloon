@@ -48,6 +48,7 @@ impl Backend for Hide {
                     name: g.name().to_string(),
                     present: g.present(),
                     hidden: g.is_hidden(&hidden),
+                    exposed: false,
                     parts: g
                         .devices
                         .iter()

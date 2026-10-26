@@ -8,13 +8,12 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, RichText, Vec2};
 use gob_i18n::I18n;
 use gob_virtual::{
-    Backend, Capabilities, ControlKind, DeviceConfig, DeviceInfo, GamepadControl, GamepadInfo,
-    Status,
+    Backend, Capabilities, Change, ControlKind, DeviceConfig, DeviceInfo, GamepadControl,
+    GamepadInfo, Status,
 };
 
 use crate::style::{self, icon};
 
-const AXIS_NAMES: [&str; 8] = ["X", "Y", "Z", "Rx", "Ry", "Rz", "S1", "S2"];
 const REFRESH: Duration = Duration::from_millis(500);
 /// Hat directions for the 3x3 tester grid (hundredths of a degree), row by row.
 const HAT_GRID: [Option<u16>; 9] = [
@@ -104,12 +103,46 @@ impl VJoyView {
         }
     }
 
-    /// `locked`: a profile is active and holds vJoy devices, so they cannot be reconfigured.
-    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, locked: bool) {
-        if self.config.poll(i18n).is_some() {
+    /// Collects finished configuration work; `Some(succeeded)` when changes finished. Call it
+    /// every frame, also while the page is not shown.
+    pub fn poll(&mut self, i18n: &I18n) -> Option<bool> {
+        let done = self.config.poll(i18n);
+        if done.is_some() {
             self.refreshed = None;
             self.test = None;
         }
+        done
+    }
+
+    /// Whether configuration changes are running.
+    pub fn busy(&self) -> bool {
+        self.config.busy()
+    }
+
+    /// The backend's capabilities, `None` without virtual devices.
+    pub fn capabilities(&self) -> Option<Capabilities> {
+        self.vjoy.as_ref().ok().map(|v| v.capabilities())
+    }
+
+    /// The stored configuration of the devices (may still be loading).
+    pub fn configs(&self) -> &[DeviceConfig] {
+        &self.config.configs
+    }
+
+    /// The last configuration result for the user (done, or why it failed).
+    pub fn config_message(&self) -> Option<&Result<String, String>> {
+        self.config.message.as_ref()
+    }
+
+    /// Applies `changes` one after another (each may ask for administrator rights).
+    pub fn apply(&mut self, changes: Vec<Change>) {
+        self.release();
+        let labelled = changes.into_iter().map(|c| (format!("{c:?}"), c)).collect();
+        self.config.run_all(labelled);
+    }
+
+    /// `locked`: a profile is active and holds vJoy devices, so they cannot be reconfigured.
+    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, locked: bool) {
         if std::mem::take(&mut self.config.cancelled) {
             self.draft = None;
         }
@@ -184,6 +217,13 @@ impl VJoyView {
                             self.add(id);
                         }
                     });
+                }
+                ui.separator();
+            } else if let (true, Some(id)) = (self.config.available(), free) {
+                // A gamepad is shown: the device row keeps its "+" so a device can be added.
+                let can = !locked && !self.config.busy();
+                if style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add")).clicked() {
+                    self.add(id);
                 }
                 ui.separator();
             }
@@ -338,7 +378,7 @@ impl VJoyView {
                 ui.add_space(6.0);
                 let held = self.test.as_ref().is_some_and(|t| t.device.is_some());
                 if let Some(test) = &mut self.test {
-                    ui.add_enabled_ui(can && held, |ui| test.show(ui, &layout));
+                    ui.add_enabled_ui(can && held, |ui| test.show(ui, i18n, &layout));
                 }
             });
     }
@@ -551,7 +591,7 @@ impl Tester {
         }
     }
 
-    fn show(&mut self, ui: &mut egui::Ui, info: &DeviceInfo) {
+    fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, info: &DeviceInfo) {
         ui.spacing_mut().slider_width = 320.0;
         egui::Grid::new("vjoy-axes")
             .num_columns(2)
@@ -559,7 +599,7 @@ impl Tester {
             .show(ui, |ui| {
                 for &slot in &info.axes {
                     let i = usize::from(slot) - 1;
-                    ui.label(RichText::new(AXIS_NAMES[i]).monospace());
+                    ui.label(crate::devices_view::axis_name(i18n, slot.into()));
                     ui.horizontal(|ui| {
                         let slider =
                             egui::Slider::new(&mut self.axes[i], -1.0..=1.0).fixed_decimals(2);

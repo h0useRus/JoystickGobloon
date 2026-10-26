@@ -542,6 +542,37 @@ impl Drop for Device {
     }
 }
 
+/// A gamepad as gob-input reads it back: axes X..Rz keep their slots, buttons count in code
+/// order (like SDL), the d-pad is hat 1.
+pub(crate) fn gamepad_inputs(device_name: &str) -> Option<crate::GamepadInputs> {
+    device_name
+        .strip_prefix(GAMEPAD_PREFIX)?
+        .trim()
+        .parse::<u32>()
+        .ok()?;
+    let coded = |kinds: &[ControlKind]| {
+        let mut v: Vec<(u16, GamepadControl)> = GamepadControl::ALL
+            .into_iter()
+            .filter(|c| kinds.contains(&c.kind()))
+            .filter_map(|c| Some((pad_code(c)?, c)))
+            .collect();
+        v.sort_unstable_by_key(|&(code, _)| code);
+        v
+    };
+    Some(crate::GamepadInputs {
+        axes: coded(&[ControlKind::Stick, ControlKind::Trigger])
+            .into_iter()
+            .map(|(code, c)| (code as u8 + 1, c))
+            .collect(),
+        buttons: coded(&[ControlKind::Button])
+            .into_iter()
+            .enumerate()
+            .map(|(i, (_, c))| (i as u32 + 1, c))
+            .collect(),
+        dpad: Some(1),
+    })
+}
+
 /// A gamepad button's key code, or a stick's or trigger's axis code; `None` for the d-pad.
 fn pad_code(control: GamepadControl) -> Option<u16> {
     use GamepadControl as C;
@@ -687,6 +718,44 @@ impl Drop for Pad {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gamepad_read_back_as_input_device() {
+        use GamepadControl as C;
+        assert_eq!(gamepad_inputs("Joystick Gobloon Joystick 1"), None);
+        assert_eq!(gamepad_inputs("Some Pad"), None);
+        let pad = gamepad_inputs("Joystick Gobloon Gamepad 2").unwrap();
+        assert_eq!(
+            pad.axes,
+            [
+                (1, C::LeftX),
+                (2, C::LeftY),
+                (3, C::Lt),
+                (4, C::RightX),
+                (5, C::RightY),
+                (6, C::Rt)
+            ]
+        );
+        let buttons: Vec<C> = pad.buttons.iter().map(|&(_, c)| c).collect();
+        assert_eq!(
+            buttons,
+            [
+                C::A,
+                C::B,
+                C::X,
+                C::Y,
+                C::Lb,
+                C::Rb,
+                C::Back,
+                C::Start,
+                C::Guide,
+                C::LeftStick,
+                C::RightStick
+            ]
+        );
+        assert_eq!(pad.buttons[0].0, 1);
+        assert_eq!(pad.dpad, Some(1));
+    }
 
     #[test]
     fn buttons_hats_and_axes() {

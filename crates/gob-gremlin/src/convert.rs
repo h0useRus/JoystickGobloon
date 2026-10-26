@@ -3,7 +3,7 @@
 
 use gob_core::{
     Action, ActionConfig, Device, Element, InputBinding, Item, Layer, Mode, Modifier, Node,
-    Profile, Property, Section,
+    Profile, Property, Section, VirtualDevices, VirtualJoystick,
 };
 
 use crate::Error;
@@ -14,6 +14,8 @@ pub const MIN_VERSION: u32 = 14;
 pub const APP: &str = "Gobloon";
 /// Version of Joystick Gobloon's profile format this build writes and the newest it reads.
 pub const FORMAT_VERSION: u32 = 1;
+/// Axis names of virtual joysticks by slot (vJoy's), as `<joystick axes="...">` lists them.
+const AXIS_NAMES: [&str; 8] = ["X", "Y", "Z", "Rx", "Ry", "Rz", "Sl0", "Sl1"];
 
 pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
     if root.name != "profile" {
@@ -96,6 +98,10 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
                     .collect();
                 Section::Devices
             }
+            "virtual-devices" => {
+                p.virtual_devices = virtual_from(section);
+                Section::VirtualDevices
+            }
             _ => {
                 p.extra.push(section.clone());
                 Section::Extra(p.extra.len() - 1)
@@ -116,7 +122,12 @@ pub fn profile_to_element(p: &Profile) -> Element {
         Element::new("profile").with_attr("version", MIN_VERSION.to_string())
     };
     for section in &p.order {
-        if *section == Section::Modifiers && p.modifiers.is_empty() {
+        let empty = match section {
+            Section::Modifiers => p.modifiers.is_empty(),
+            Section::VirtualDevices => p.virtual_devices.is_empty(),
+            _ => false,
+        };
+        if empty {
             continue;
         }
         root.push(match *section {
@@ -154,10 +165,69 @@ pub fn profile_to_element(p: &Profile) -> Element {
                     )
                 }),
             ),
+            Section::VirtualDevices => virtual_to(&p.virtual_devices),
             Section::Extra(i) => p.extra[i].clone(),
         });
     }
     root
+}
+
+/// `<virtual-devices>`: `<joystick id="1" axes="X Y Rz" buttons="32" hats="1"
+/// hat-type="continuous"/>` and `<gamepad id="1"/>`; unknown axis names are skipped.
+fn virtual_from(section: &Element) -> VirtualDevices {
+    let number = |e: &Element, name: &str| e.attr(name).and_then(|v| v.trim().parse().ok());
+    VirtualDevices {
+        joysticks: named(section, "joystick")
+            .filter_map(|j| {
+                Some(VirtualJoystick {
+                    id: number(j, "id")?,
+                    axes: j
+                        .attr("axes")
+                        .unwrap_or_default()
+                        .split_whitespace()
+                        .filter_map(|a| {
+                            let i = AXIS_NAMES.iter().position(|n| n.eq_ignore_ascii_case(a))?;
+                            Some(i as u8 + 1)
+                        })
+                        .collect(),
+                    buttons: number(j, "buttons").unwrap_or(0),
+                    hats: number(j, "hats").unwrap_or(0),
+                    discrete_hats: j.attr("hat-type") == Some("discrete"),
+                })
+            })
+            .collect(),
+        gamepads: named(section, "gamepad")
+            .filter_map(|g| number(g, "id"))
+            .collect(),
+    }
+}
+
+fn virtual_to(v: &VirtualDevices) -> Element {
+    let joysticks = v.joysticks.iter().map(|j| {
+        let axes: Vec<&str> = j
+            .axes
+            .iter()
+            .filter_map(|&s| AXIS_NAMES.get(usize::from(s).checked_sub(1)?).copied())
+            .collect();
+        Element::new("joystick")
+            .with_attr("id", j.id.to_string())
+            .with_attr("axes", axes.join(" "))
+            .with_attr("buttons", j.buttons.to_string())
+            .with_attr("hats", j.hats.to_string())
+            .with_attr(
+                "hat-type",
+                if j.discrete_hats {
+                    "discrete"
+                } else {
+                    "continuous"
+                },
+            )
+    });
+    let gamepads = v
+        .gamepads
+        .iter()
+        .map(|id| Element::new("gamepad").with_attr("id", id.to_string()));
+    container("virtual-devices", joysticks.chain(gamepads))
 }
 
 fn named<'a>(parent: &'a Element, name: &'a str) -> impl Iterator<Item = &'a Element> {
