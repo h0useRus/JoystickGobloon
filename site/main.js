@@ -33,15 +33,6 @@
     if (e.target.closest("a") && !matchMedia("(min-width: 900px)").matches) toc.open = false;
   });
 
-  // The download buttons name the visitor's system.
-  const platform = (navigator.userAgentData?.platform || navigator.platform || "").toLowerCase();
-  const label = platform.includes("win")
-    ? "Download for Windows"
-    : platform.includes("linux") && !/android/i.test(navigator.userAgent)
-      ? "Download for Linux"
-      : null;
-  if (label) document.querySelectorAll("[data-download-label]").forEach((el) => (el.textContent = label));
-
   if (!("IntersectionObserver" in window)) {
     document.querySelectorAll(".reveal").forEach((el) => el.classList.add("in"));
     document.querySelectorAll(".tagline .w").forEach((el) => el.classList.add("on"));
