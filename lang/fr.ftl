@@ -300,6 +300,7 @@ hat-center = Centre
 # Merge axis
 kind-merge-axis = Fusionner des axes
 edit-reuse = Ajouter aussi ici cette action existante (partagée, comme Gremlin la lie aux deux axes)
+edit-merge-full = Elle fusionne déjà deux autres axes ; changez l’un d’eux dans son éditeur.
 edit-merge-name = Nom
 edit-merge-no-device = (aucun périphérique)
 edit-merged = Axe fusionné

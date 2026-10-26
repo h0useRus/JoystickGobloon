@@ -300,6 +300,7 @@ hat-center = Center
 # Merge axis
 kind-merge-axis = Merge axis
 edit-reuse = Add this existing action here too (shared, like Gremlin binds it to both axes)
+edit-merge-full = It already merges two other axes; change one of them in its editor.
 edit-merge-name = Name
 edit-merge-no-device = (no device)
 edit-merged = Merged axis

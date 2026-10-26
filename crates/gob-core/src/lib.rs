@@ -11,6 +11,7 @@ pub mod edit;
 pub mod logical;
 pub mod modifier;
 pub mod profile;
+pub mod two_axis;
 pub mod xml;
 
 pub use action::{
@@ -28,4 +29,5 @@ pub use profile::{
     ActionConfig, AxisDirection, Device, InputBinding, Mode, Profile, Section, VirtualButton,
     VirtualDevices, VirtualJoystick, same_device_name,
 };
+pub use two_axis::{AxisInput, TWO_AXIS_KINDS};
 pub use xml::{Element, Node};

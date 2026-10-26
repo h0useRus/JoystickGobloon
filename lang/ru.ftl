@@ -300,6 +300,7 @@ hat-center = Центр
 # Merge axis
 kind-merge-axis = Объединение осей
 edit-reuse = Добавить сюда и это действие (общее, как в Gremlin для обеих осей)
+edit-merge-full = Оно уже объединяет две другие оси; смените одну из них в его редакторе.
 edit-merge-name = Название
 edit-merge-no-device = (нет устройства)
 edit-merged = Объединённая ось

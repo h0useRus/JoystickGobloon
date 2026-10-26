@@ -300,6 +300,7 @@ hat-center = Centro
 # Merge axis
 kind-merge-axis = Combinar ejes
 edit-reuse = Añadir aquí también esta acción existente (compartida, como Gremlin la vincula a ambos ejes)
+edit-merge-full = Ya combina otros dos ejes; cambie uno de ellos en su editor.
 edit-merge-name = Nombre
 edit-merge-no-device = (sin dispositivo)
 edit-merged = Eje combinado

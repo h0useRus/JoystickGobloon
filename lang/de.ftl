@@ -300,6 +300,7 @@ hat-center = Mitte
 # Merge axis
 kind-merge-axis = Achsen zusammenführen
 edit-reuse = Diese vorhandene Aktion auch hier hinzufügen (geteilt, wie Gremlin sie an beide Achsen bindet)
+edit-merge-full = Sie führt bereits zwei andere Achsen zusammen; ändere eine davon in ihrem Editor.
 edit-merge-name = Name
 edit-merge-no-device = (kein Gerät)
 edit-merged = Zusammengeführte Achse

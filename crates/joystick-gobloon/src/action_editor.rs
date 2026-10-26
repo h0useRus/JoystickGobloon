@@ -26,6 +26,18 @@ pub enum AddKind {
     Duplicate(String),
 }
 
+/// Adds a bound device to the profile's `<devices>` (not the logical device or the keyboard).
+fn list_device(p: &mut Profile, device: &str, name: String) {
+    let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
+        || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID);
+    if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device)) {
+        p.devices.push(gob_core::Device {
+            id: device.to_string(),
+            name,
+        });
+    }
+}
+
 fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
     match kind {
         // Id 0: the first logical input of that type, created when there is none.
@@ -97,6 +109,25 @@ pub enum Op {
         parent: String,
         group: String,
         action: AddKind,
+    },
+    /// Sets axis `slot` of a two-axis action (merge-axis, dual-axis-deadzone) and moves its
+    /// binding along: bound to the new axis, unbound from the old one (logged).
+    TwoAxisInput {
+        action: String,
+        slot: u8,
+        device: String,
+        /// Device name for the profile's device list.
+        name: String,
+        axis: u32,
+        mode: String,
+        layer: Layer,
+    },
+    /// A two-axis action is being linked to `device`'s `axis`: a new one takes it as its
+    /// second axis (logged).
+    TwoAxisAdopt {
+        action: String,
+        device: String,
+        axis: u32,
     },
     Remove {
         parent: String,
@@ -211,15 +242,7 @@ pub fn apply(p: &mut Profile, op: Op) {
             layer,
             add,
         } => {
-            // Neither the logical device nor the keyboard is listed in <devices>.
-            let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
-                || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID);
-            if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(&device)) {
-                p.devices.push(gob_core::Device {
-                    id: device.clone(),
-                    name,
-                });
-            }
+            list_device(p, &device, name);
             let root = p.bind_layer(&device, &input_type, &input_id, &mode, &layer);
             if let Some(kind) = add {
                 add_to(p, &root, "actions", &kind);
@@ -253,6 +276,29 @@ pub fn apply(p: &mut Profile, op: Op) {
             group,
             action,
         } => add_to(p, &parent, &group, &action),
+        Op::TwoAxisInput {
+            action,
+            slot,
+            device,
+            name,
+            axis,
+            mode,
+            layer,
+        } => {
+            list_device(p, &device, name);
+            for line in p.set_two_axis_input(&action, slot, &(device, axis), &mode, &layer) {
+                log::info!("{line}");
+            }
+        }
+        Op::TwoAxisAdopt {
+            action,
+            device,
+            axis,
+        } => {
+            if let Some(line) = p.two_axis_adopt(&action, &(device, axis)) {
+                log::info!("{line}");
+            }
+        }
         Op::Remove {
             parent,
             group,
@@ -377,8 +423,7 @@ pub fn py_float(v: f32) -> String {
     }
 }
 
-/// Actions that read two physical axes and are usually bound to both of them.
-const TWO_AXIS_KINDS: [&str; 2] = ["merge-axis", "dual-axis-deadzone"];
+use gob_core::TWO_AXIS_KINDS;
 
 /// Two-axis actions are told apart by their own `label` property.
 fn merge_label(a: &Action, i18n: &I18n) -> String {
@@ -563,6 +608,8 @@ pub struct Editor<'a> {
     pub inputs: &'a [gob_input::DeviceState],
     /// Input being edited (profile device id, input id), for templates that refer to it.
     pub input: Option<(&'a str, u32)>,
+    /// Mode and layer of the edited binding, where two-axis actions get bound.
+    pub place: Option<(&'a str, &'a Layer)>,
     /// GUIDs of the attached devices with LED control.
     pub leds: &'a HashSet<String>,
     /// Experimental features (light-led) are on; off, light-led cannot be added or edited.
@@ -1534,12 +1581,48 @@ impl Editor<'_> {
                     .max_height(360.0)
                     .show(ui, |ui| {
                         for (name, a) in &candidates {
-                            if ui.button(name).on_hover_text(&a.kind).clicked() {
+                            let full = key == "edit-link-existing" && !self.accepts(&a.id);
+                            let r = ui
+                                .add_enabled(!full, egui::Button::new(name))
+                                .on_hover_text(&a.kind)
+                                .on_disabled_hover_text(self.i18n.tr("edit-merge-full"));
+                            if r.clicked() {
+                                if key == "edit-link-existing" {
+                                    self.adopt(&a.id);
+                                }
                                 self.ops.push(make(kind(a.id.clone())));
                                 ui.close_menu();
                             }
                         }
                     });
+            });
+        }
+    }
+
+    /// The edited axis, when it is one.
+    fn edited_axis(&self) -> Option<gob_core::AxisInput> {
+        let (device, id) = self.input?;
+        (self.behavior == InputType::Axis).then(|| (device.to_string(), id))
+    }
+
+    /// Whether action `id` may be linked to the edited input: a two-axis action only to an
+    /// axis it reads or, while new, takes as its second one.
+    fn accepts(&self, id: &str) -> bool {
+        match self.edited_axis() {
+            Some(axis) => self.profile.two_axis_accepts(id, &axis),
+            None => true,
+        }
+    }
+
+    /// Linking two-axis action `id` to the edited axis makes it its second axis while new.
+    fn adopt(&mut self, id: &str) {
+        if let Some((device, axis)) = self.edited_axis()
+            && self.profile.two_axis_inputs(id).is_some()
+        {
+            self.ops.push(Op::TwoAxisAdopt {
+                action: id.to_string(),
+                device,
+                axis,
             });
         }
     }
@@ -1584,11 +1667,14 @@ impl Editor<'_> {
                 kind_icon(&a.kind),
                 merge_label(a, self.i18n)
             );
+            let full = !self.accepts(&a.id);
             if ui
-                .button(text)
+                .add_enabled(!full, egui::Button::new(text))
                 .on_hover_text(self.i18n.tr("edit-reuse"))
+                .on_disabled_hover_text(self.i18n.tr("edit-merge-full"))
                 .clicked()
             {
+                self.adopt(&a.id);
                 self.ops.push(make(AddKind::Reuse(a.id.clone())));
                 ui.close_menu();
             }
@@ -1622,6 +1708,26 @@ impl Editor<'_> {
                 });
         });
         self.axis_pickers(ui, &id, axes);
+    }
+
+    /// Sets axis `slot` of two-axis action `id`; where the binding is known the action is
+    /// bound to the new axis and unbound from the old one.
+    fn pick_axis(&mut self, id: &str, slot: u8, device: &str, name: &str, axis: u32) {
+        match self.place {
+            Some((mode, layer)) => self.ops.push(Op::TwoAxisInput {
+                action: id.to_string(),
+                slot,
+                device: device.to_string(),
+                name: name.to_string(),
+                axis,
+                mode: mode.to_string(),
+                layer: layer.clone(),
+            }),
+            None => {
+                self.set(id, &format!("axis{slot}-guid"), "uuid", device.to_string());
+                self.set(id, &format!("axis{slot}-axis"), "int", axis.to_string());
+            }
+        }
     }
 
     /// Device and axis dropdowns for `axis1-*` / `axis2-*` (merge-axis, dual-axis-deadzone).
@@ -2013,6 +2119,7 @@ impl Editor<'_> {
         }
         for (n, (device, axis)) in axes.into_iter().enumerate() {
             let device = device.to_ascii_lowercase();
+            let slot = n as u8 + 1;
             let name = devices
                 .iter()
                 .find(|(g, _)| *g == device)
@@ -2047,14 +2154,16 @@ impl Editor<'_> {
                     .show_ui(ui, |ui| {
                         for (g, label) in &devices {
                             if ui.selectable_label(*g == device, label).clicked() {
-                                self.set(id, &format!("{prefix}-guid"), "uuid", g.clone());
-                                if g == gob_core::LOGICAL_DEVICE_GUID
-                                    && let Some((first, _)) = logical.first()
-                                    && logical.iter().all(|(s, _)| *s != axis)
-                                {
-                                    let first = first.to_string();
-                                    self.set(id, &format!("{prefix}-axis"), "int", first);
-                                }
+                                let axis = match logical.first() {
+                                    Some((first, _))
+                                        if g == gob_core::LOGICAL_DEVICE_GUID
+                                            && logical.iter().all(|(s, _)| *s != axis) =>
+                                    {
+                                        *first
+                                    }
+                                    _ => axis,
+                                };
+                                self.pick_axis(id, slot, g, label, axis);
                             }
                         }
                     });
@@ -2063,7 +2172,7 @@ impl Editor<'_> {
                     .show_ui(ui, |ui| {
                         for (s, text) in slots {
                             if ui.selectable_label(s == axis, text).clicked() {
-                                self.set(id, &format!("{prefix}-axis"), "int", s.to_string());
+                                self.pick_axis(id, slot, &device, &name, s);
                             }
                         }
                     });

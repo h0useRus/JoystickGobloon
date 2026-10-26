@@ -300,6 +300,7 @@ hat-center = 중앙
 # Merge axis
 kind-merge-axis = 축 병합
 edit-reuse = 이 기존 동작을 여기에도 추가 (Gremlin처럼 두 축에 공유로 바인딩)
+edit-merge-full = 이미 다른 두 축을 합치고 있습니다. 편집기에서 그중 하나를 바꾸세요.
 edit-merge-name = 이름
 edit-merge-no-device = (장치 없음)
 edit-merged = 병합된 축

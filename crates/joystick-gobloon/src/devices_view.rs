@@ -159,6 +159,45 @@ impl DevicesView {
         }
     }
 
+    /// When a two-axis action's axis moves away from the shown input (which then loses the
+    /// action), the page shows the input it moved to.
+    fn follow_moved_axis(&mut self, profile: &Profile, ops: &[Op], device: &str, key: Key) {
+        if key.0 != Kind::Axis {
+            return;
+        }
+        let shown = (device.to_string(), key.1);
+        let same = |a: &gob_core::AxisInput, b: &gob_core::AxisInput| {
+            a.0.eq_ignore_ascii_case(&b.0) && a.1 == b.1
+        };
+        for op in ops {
+            let Op::TwoAxisInput {
+                action,
+                slot,
+                device,
+                axis,
+                ..
+            } = op
+            else {
+                continue;
+            };
+            let Some(axes) = profile.two_axis_inputs(action) else {
+                continue;
+            };
+            let i = usize::from(slot.clamp(&1, &2) - 1);
+            let new = (device.clone(), *axis);
+            if same(&axes[i], &shown) && !same(&axes[1 - i], &shown) && !same(&new, &shown) {
+                let key = (Kind::Axis, *axis);
+                log::info!(
+                    "two-axis action {action}: the editor follows it to {device} axis {axis}"
+                );
+                self.selected = Some(device.clone());
+                self.user_selected = true;
+                self.selected_input.insert(device.clone(), key);
+                self.scroll_to = Some((device.clone(), key));
+            }
+        }
+    }
+
     /// Forget the selected mode, e.g. after loading another profile.
     pub fn reset_mode(&mut self) {
         self.mode = None;
@@ -983,14 +1022,17 @@ impl DevicesView {
                     max_gamepads: self.max_gamepads,
                     inputs,
                     input: Some((&b.device_id, key.1)),
+                    place: Some((&b.mode, &layer)),
                     leds: &self.leds,
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
                 };
+                let first_op = editor.ops.len();
                 for cfg in &configs {
                     editor.container(ui, &cfg.root_action, "actions", 0);
                 }
+                self.follow_moved_axis(&p.profile, &ops[first_op..], &b.device_id, key);
             }
             Bound::Inherited(b) if !in_layer(b).is_empty() => {
                 ui.label(
@@ -1022,6 +1064,7 @@ impl DevicesView {
                     max_gamepads: self.max_gamepads,
                     inputs,
                     input: Some((&device, key.1)),
+                    place: Some((&mode, &layer)),
                     leds: &self.leds,
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,

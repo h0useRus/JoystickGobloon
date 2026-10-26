@@ -300,6 +300,7 @@ hat-center = 中心
 # Merge axis
 kind-merge-axis = 合并轴
 edit-reuse = 在此处也添加这个现有动作（共享，与 Gremlin 绑定到两个轴的方式相同）
+edit-merge-full = 它已在合并另外两个轴；请在其编辑器中更改其中一个。
 edit-merge-name = 名称
 edit-merge-no-device = （无设备）
 edit-merged = 合并轴

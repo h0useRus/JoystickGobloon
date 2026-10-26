@@ -98,8 +98,10 @@ rudder axis.
 ### Merge axis
 
 Combines two axes into one value: average, minimum, maximum, sum, difference (for two pedals as one rudder),
-the one deflected most, or the one closer to the center. Bind it to both axes; the add menu offers an existing
-merge so both share it.
+the one deflected most, or the one closer to the center. It runs when either axis moves, so it is bound to both:
+picking an axis in its editor binds it there (and removes it from the axis it no longer reads), and linking an
+existing new merge to another axis makes that its second axis. A merge reads two axes, so it cannot be linked to a
+third one.
 
 <img src="actions/merge-axis.png" width="500" alt="Merge axis with its two axes and the operation">
 
