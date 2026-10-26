@@ -3,16 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Emulation | Joystick Gobloon</title>
-  <meta name="description" content="How Joystick Gobloon emulates joysticks: create vJoy devices on Windows and virtual joysticks on Linux, hide the real sticks with HidHide, and set up a two stick game.">
+  <title>Virtual joystick emulation with vJoy and HidHide | Joystick Gobloon</title>
+  <meta name="description" content="How to emulate joysticks with Joystick Gobloon: create vJoy virtual joysticks on Windows and uinput joysticks on Linux, hide the real sticks with HidHide, choose which programs see them, and set up a two stick game.">
   <link rel="canonical" href="https://h0userus.github.io/gobloon/emulation.html">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Joystick Gobloon">
-  <meta property="og:title" content="Joystick emulation with Joystick Gobloon">
-  <meta property="og:description" content="Virtual joysticks, device hiding and a two stick setup, explained with a diagram.">
+  <meta property="og:title" content="Virtual joystick emulation with vJoy and HidHide | Joystick Gobloon">
+  <meta property="og:description" content="How to emulate joysticks with Joystick Gobloon: create vJoy virtual joysticks on Windows and uinput joysticks on Linux, hide the real sticks with HidHide, choose which programs see them, and set up a two stick game.">
   <meta property="og:url" content="https://h0userus.github.io/gobloon/emulation.html">
-  <meta property="og:image" content="https://h0userus.github.io/gobloon/img/devices.png">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Virtual joystick emulation with vJoy and HidHide | Joystick Gobloon">
+  <meta name="twitter:description" content="How to emulate joysticks with Joystick Gobloon: create vJoy virtual joysticks on Windows and uinput joysticks on Linux, hide the real sticks with HidHide, choose which programs see them, and set up a two stick game.">
+  <meta name="twitter:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta name="author" content="Denis Ibragimov">
   <meta name="theme-color" content="#131209">
   <link rel="icon" href="img/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="img/icon-256.png">
@@ -22,6 +30,49 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
   <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "Joystick emulation: virtual joysticks and device hiding",
+      "description": "How to emulate joysticks with Joystick Gobloon: create vJoy virtual joysticks on Windows and uinput joysticks on Linux, hide the real sticks with HidHide, choose which programs see them, and set up a two stick game.",
+      "url": "https://h0userus.github.io/gobloon/emulation.html",
+      "inLanguage": "en",
+      "image": "https://h0userus.github.io/gobloon/img/og.jpg",
+      "author": {
+        "@type": "Person",
+        "name": "Denis Ibragimov",
+        "url": "https://github.com/h0useRus"
+      },
+      "about": {
+        "@id": "https://h0userus.github.io/gobloon/#app"
+      },
+      "isPartOf": {
+        "@id": "https://h0userus.github.io/gobloon/#website"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Joystick Gobloon",
+          "item": "https://h0userus.github.io/gobloon/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Emulation",
+          "item": "https://h0userus.github.io/gobloon/emulation.html"
+        }
+      ]
+    }
+  ]
+}
+  </script>
   <script>document.documentElement.classList.remove("no-js")</script>
 </head>
 <body>

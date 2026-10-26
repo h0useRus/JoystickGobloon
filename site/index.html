@@ -3,17 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Joystick Gobloon: device hiding, virtual joysticks and input mapping</title>
-  <meta name="description" content="One free app for Windows and Linux that hides your physical joysticks, runs virtual joysticks and maps one to the other. Imports Joystick Gremlin profiles.">
+  <title>Joystick Gobloon: free joystick mapper for HOTAS, vJoy and HidHide</title>
+  <meta name="description" content="Free, open source joystick mapper for Windows and Linux. Hide your physical sticks, create virtual joysticks and map buttons and axes with modes, modifiers and response curves. Imports Joystick Gremlin profiles.">
   <link rel="canonical" href="https://h0userus.github.io/gobloon/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Joystick Gobloon">
-  <meta property="og:title" content="Joystick Gobloon">
-  <meta property="og:description" content="Device hiding, virtual joysticks and input mapping for Windows and Linux in one app.">
+  <meta property="og:title" content="Joystick Gobloon: free joystick mapper for Windows and Linux">
+  <meta property="og:description" content="Hide physical joysticks, create vJoy virtual joysticks and map every input with modes, modifiers and curves. Free and open source.">
   <meta property="og:url" content="https://h0userus.github.io/gobloon/">
-  <meta property="og:image" content="https://h0userus.github.io/gobloon/img/devices.png">
-  <meta property="og:image:alt" content="Joystick Gobloon showing the bindings of a flight stick">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Joystick Gobloon: free joystick mapper for Windows and Linux">
+  <meta name="twitter:description" content="Hide physical joysticks, create vJoy virtual joysticks and map every input with modes, modifiers and curves. Free and open source.">
+  <meta name="twitter:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta name="author" content="Denis Ibragimov">
   <meta name="theme-color" content="#131209">
   <link rel="icon" href="img/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="img/icon-256.png">
@@ -24,16 +31,141 @@
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
   <link rel="stylesheet" href="styles.css">
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Joystick Gobloon",
-    "applicationCategory": "UtilitiesApplication",
-    "operatingSystem": "Windows 10, Windows 11, Linux",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "license": "https://opensource.org/licenses/MIT",
-    "downloadUrl": "https://github.com/h0useRus/JoystickGobloon/releases/latest"
-  }
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://h0userus.github.io/gobloon/#website",
+      "url": "https://h0userus.github.io/gobloon/",
+      "name": "Joystick Gobloon",
+      "inLanguage": "en"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://h0userus.github.io/gobloon/#app",
+      "name": "Joystick Gobloon",
+      "url": "https://h0userus.github.io/gobloon/",
+      "description": "Free, open source joystick mapper for Windows and Linux. Hide your physical sticks, create virtual joysticks and map buttons and axes with modes, modifiers and response curves. Imports Joystick Gremlin profiles.",
+      "applicationCategory": "UtilitiesApplication",
+      "applicationSubCategory": "Joystick mapper",
+      "operatingSystem": "Windows 10, Windows 11, Linux",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "license": "https://opensource.org/licenses/MIT",
+      "downloadUrl": "https://github.com/h0useRus/JoystickGobloon/releases/latest",
+      "installUrl": "https://github.com/h0useRus/JoystickGobloon/releases/latest",
+      "codeRepository": "https://github.com/h0useRus/JoystickGobloon",
+      "screenshot": [
+        "https://h0userus.github.io/gobloon/img/devices.png",
+        "https://h0userus.github.io/gobloon/img/vjoy.png",
+        "https://h0userus.github.io/gobloon/img/modifiers.png",
+        "https://h0userus.github.io/gobloon/img/viewer.png"
+      ],
+      "image": "https://h0userus.github.io/gobloon/img/og.jpg",
+      "featureList": [
+        "Hide physical joysticks from games (HidHide on Windows)",
+        "Create and configure vJoy virtual joysticks",
+        "Virtual joysticks on Linux through uinput",
+        "Map buttons, axes and hats with 23 actions",
+        "Modes, modifiers and input layers",
+        "Response curves, tempo, double tap, macros, conditions",
+        "Imports Joystick Gremlin profiles",
+        "Input viewer and axis calibration"
+      ],
+      "author": {
+        "@type": "Person",
+        "name": "Denis Ibragimov",
+        "url": "https://github.com/h0useRus"
+      },
+      "sameAs": [
+        "https://github.com/h0useRus/JoystickGobloon"
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://h0userus.github.io/gobloon/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is Joystick Gobloon free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. It is open source under the MIT license. There is no account, no trial and nothing to buy."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I import my Joystick Gremlin profiles?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Open one from the toolbar and it runs. Anything not supported yet is kept as it was in the file."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I still need HidHide and vJoy installed?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "You need the HidHide and vJoy drivers on Windows, and the installer adds them when they are missing. You do not need their own user interfaces."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it need administrator rights?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Only to install the drivers and when you change vJoy devices, with one UAC prompt per change. Everyday use runs as a normal user."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it run on the Steam Deck?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, in desktop mode, like on any x86_64 Linux desktop. Make the AppImage executable, start it and click Grant access on the Devices page once."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does Windows SmartScreen warn on the first start?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Code signing through SignPath is being set up, and new releases need some downloads before SmartScreen trusts them. Choose More info, then Run anyway."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is it ready for daily use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It is in alpha. The daily features are in place and used every day with a dual stick setup, but expect rough edges. Bugs reported on GitHub get fixed quickly."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I try it without installing anything?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Use the portable zip: unpack it anywhere and start it. Delete the folder and it is gone. On Linux the AppImage is a single file."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which languages does it speak?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "English, Русский, Deutsch, Español, Français, 简体中文 and 한국어. Another language is one text file: copy lang/en.ftl, translate it and put it next to the app."
+          }
+        }
+      ]
+    }
+  ]
+}
   </script>
   <script>
     document.documentElement.classList.remove("no-js");
@@ -109,7 +241,7 @@
           </g>
           </g>
         </svg>
-        <p class="eyebrow" data-k="up"><span class="dot" aria-hidden="true"></span> Free and open source for Windows and Linux</p>
+        <p class="eyebrow" data-k="up"><span class="dot" aria-hidden="true"></span> Free, open source joystick mapper for Windows and Linux</p>
         <h1 class="gradient" data-k="up">Your whole stick setup<br>in one app</h1>
         <p class="sub" data-k="up">Joystick Gobloon hides your physical controllers from games, runs virtual joysticks and maps one to the other. It can import your Joystick Gremlin profiles.</p>
         <div class="hero-actions" data-k="up">
@@ -121,7 +253,7 @@
         <p class="hero-note" data-k="up">Windows installer, portable zip and Linux AppImage. MIT license, no account.</p>
 
         <figure class="shot" data-k="card">
-          <div class="stage" data-story="devices"><img src="img/devices.png" width="1102" height="732" alt="Joystick Gobloon Devices page: the inputs of a flight stick on the left, the actions of the selected button on the right, a short press mapped to vJoy and a long press that changes the mode"></div>
+          <div class="stage" data-story="devices"><img src="img/devices.png" width="1102" height="732" fetchpriority="high" alt="Joystick Gobloon Devices page: the inputs of a flight stick on the left, the actions of the selected button on the right, a short press mapped to vJoy and a long press that changes the mode"></div>
         </figure>
 
         <ul class="proof" aria-label="At a glance">
