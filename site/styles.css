@@ -1322,3 +1322,277 @@ footer {
   max-width: 560px;
   margin: var(--s-300) 0 0;
 }
+
+/* Motion: sections with a visual load in when they scroll into view (rise and resolve from blur),
+   then every visual acts out what it does on a loop (main.js). Only with JS and full motion. */
+
+:root {
+  --e: cubic-bezier(0.16, 1, 0.3, 1);
+  --e2: cubic-bezier(0.33, 1, 0.68, 1);
+  --io: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.motion .anim [data-k] {
+  transition:
+    transform 1.05s var(--e) var(--d, 0s),
+    opacity 0.75s var(--e2) var(--d, 0s),
+    filter 0.75s var(--e2) var(--d, 0s);
+}
+
+.motion .anim [data-k="card"] {
+  transition:
+    transform 0.9s var(--e) var(--d, 0s),
+    opacity 0.6s var(--e2) var(--d, 0s),
+    filter 0.6s var(--e2) var(--d, 0s);
+}
+
+.motion .anim:not(.in) [data-k="card"] {
+  opacity: 0;
+  transform: translateY(24px) scale(0.985);
+  filter: blur(6px);
+}
+
+.motion .anim:not(.in) [data-k="up"] {
+  opacity: 0;
+  transform: translateY(10px);
+  filter: blur(4px);
+}
+
+.motion .anim:not(.in) [data-k="left"] {
+  opacity: 0;
+  transform: translateX(-10px);
+  filter: blur(4px);
+}
+
+.motion .anim:not(.in) [data-k="pop"] {
+  opacity: 0;
+  transform: scale(0.85);
+  filter: blur(4px);
+}
+
+/* A screenshot is the product: a skeleton in the app's own surface colour, then the picture
+   resolves from blur to sharp. */
+.stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: #1b1d22;
+  isolation: isolate;
+}
+
+.stage > img {
+  border-radius: 0;
+}
+
+.ovs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.motion .stage > img,
+.motion .stage > .ovs {
+  transition:
+    filter 0.8s var(--e2) var(--d, 0s),
+    opacity 0.8s var(--e2) var(--d, 0s);
+}
+
+.motion .anim:not(.in) .stage > img,
+.motion .stage:not(.ready) > img,
+.motion .anim:not(.in) .stage > .ovs,
+.motion .stage:not(.ready) > .ovs {
+  opacity: 0;
+  filter: blur(14px) saturate(0.6);
+}
+
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 38%;
+  background: rgba(255, 255, 255, 0.035);
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+.motion .stage:not(.ready)::before {
+  animation: glimmer 2.4s linear infinite;
+}
+
+@keyframes glimmer {
+  to {
+    transform: translateX(270%);
+  }
+}
+
+/* Overlays drawn over a screenshot at its own pixel positions (main.js); at rest they equal
+   the picture. --s is the screenshot's scale on screen. */
+.ov {
+  position: absolute;
+  pointer-events: none;
+}
+
+.ov-track {
+  background: #2a2d34;
+  border-radius: calc(var(--s, 1) * 4px);
+  overflow: hidden;
+}
+
+.ov-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #535353;
+}
+
+.ov-half {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #8cc82c;
+}
+
+.ov-dot {
+  border-radius: 50%;
+  background: #8cc82c;
+  opacity: 0;
+}
+
+.ov-glow {
+  border: 1px solid #6e9b29;
+  background: rgba(140, 200, 44, 0.28);
+  opacity: 0;
+}
+
+.ov-line {
+  background: #8cc82c;
+  transform-origin: top;
+  transform: scaleY(0);
+}
+
+.ov-fill {
+  background: rgba(140, 200, 44, 0.45);
+  border-radius: calc(var(--s, 1) * 4px);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.ov-row {
+  background: rgba(140, 200, 44, 0.12);
+  border-radius: calc(var(--s, 1) * 4px);
+  opacity: 0;
+}
+
+.ov-ring {
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0;
+}
+
+.ov-slider {
+  background: #1b1d22;
+}
+
+.ov-slider .rail {
+  position: absolute;
+  left: 1.2%;
+  right: 1.5%;
+  top: 33.3%;
+  height: 33.3%;
+  background: #2b2b2b;
+  border-radius: calc(var(--s, 1) * 4px);
+}
+
+.ov-slider .knob {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #2b2b2b;
+  box-shadow: inset 0 0 0 calc(var(--s, 1) * 1px) #525252;
+}
+
+.ov-bar {
+  background: #0a0a0a;
+  border-radius: calc(var(--s, 1) * 3px);
+  overflow: hidden;
+}
+
+.ov-bar i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  border-radius: calc(var(--s, 1) * 3px);
+  transform-origin: bottom;
+}
+
+.ov-cell {
+  background: #8cc82c;
+  border-radius: calc(var(--s, 1) * 4px);
+  opacity: 0;
+}
+
+/* Page level stories (comparison rows, the action grid). */
+.tool-list li,
+.actions li,
+.motion .anim li[data-k] {
+  transition:
+    background-color 300ms var(--ease),
+    border-color 300ms var(--ease),
+    box-shadow 300ms var(--ease),
+    transform 1.05s var(--e) var(--d, 0s),
+    opacity 0.75s var(--e2) var(--d, 0s),
+    filter 0.75s var(--e2) var(--d, 0s);
+}
+
+.tool-list li.lit {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface-2));
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.tool-list li.dim {
+  opacity: 0.45;
+}
+
+.tool-list i {
+  transition: transform 500ms var(--ease);
+}
+
+.tool-list li.lit i {
+  transform: scale(1.15);
+}
+
+.actions li.lit {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.arrow i {
+  position: relative;
+}
+
+.arrow .pulse {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.arrow {
+  position: relative;
+}
+
+.still *,
+.still *::before {
+  transition: none !important;
+  animation: none !important;
+}

@@ -35,7 +35,11 @@
     "downloadUrl": "https://github.com/h0useRus/JoystickGobloon/releases/latest"
   }
   </script>
-  <script>document.documentElement.classList.remove("no-js")</script>
+  <script>
+    document.documentElement.classList.remove("no-js");
+    if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches)
+      document.documentElement.classList.add("motion");
+  </script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -73,29 +77,29 @@
 
   <main id="main">
     <!-- Hero -->
-    <header class="hero" id="top">
+    <header class="hero anim" id="top">
       <div class="wrap">
-        <img class="hero-logo" src="img/icon.svg" alt="Joystick Gobloon logo, a green goblin head" width="96" height="96">
-        <p class="eyebrow"><span class="dot" aria-hidden="true"></span> Free and open source for Windows and Linux</p>
-        <h1 class="gradient">Your whole stick setup<br>in one app</h1>
-        <p class="sub">Joystick Gobloon hides your physical controllers from games, runs virtual joysticks and maps one to the other. It can import your Joystick Gremlin profiles.</p>
-        <div class="hero-actions">
+        <img class="hero-logo" data-k="pop" src="img/icon.svg" alt="Joystick Gobloon logo, a green goblin head" width="96" height="96">
+        <p class="eyebrow" data-k="up"><span class="dot" aria-hidden="true"></span> Free and open source for Windows and Linux</p>
+        <h1 class="gradient" data-k="up">Your whole stick setup<br>in one app</h1>
+        <p class="sub" data-k="up">Joystick Gobloon hides your physical controllers from games, runs virtual joysticks and maps one to the other. It can import your Joystick Gremlin profiles.</p>
+        <div class="hero-actions" data-k="up">
           <a class="btn btn-primary" id="download" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
             <i class="ph-bold ph-download-simple" aria-hidden="true"></i>
             <span data-download-label>Download free</span>
           </a>
         </div>
-        <p class="hero-note">Windows installer, portable zip and Linux AppImage. MIT license, no account.</p>
+        <p class="hero-note" data-k="up">Windows installer, portable zip and Linux AppImage. MIT license, no account.</p>
 
-        <figure class="shot reveal">
-          <img src="img/devices.png" width="1102" height="732" alt="Joystick Gobloon Devices page: the inputs of a flight stick on the left, the actions of the selected button on the right, a short press mapped to vJoy and a long press that changes the mode">
+        <figure class="shot" data-k="card">
+          <div class="stage" data-story="devices"><img src="img/devices.png" width="1102" height="732" alt="Joystick Gobloon Devices page: the inputs of a flight stick on the left, the actions of the selected button on the right, a short press mapped to vJoy and a long press that changes the mode"></div>
         </figure>
 
-        <ul class="proof reveal" aria-label="At a glance">
-          <li><strong>23</strong><span>actions for buttons, axes and hats</span></li>
-          <li><strong>16</strong><span>vJoy devices with 128 buttons each</span></li>
-          <li><strong>7</strong><span>languages built in</span></li>
-          <li><strong>2</strong><span>systems: Windows and Linux</span></li>
+        <ul class="proof" aria-label="At a glance">
+          <li data-k="up"><strong data-count="23">23</strong><span>actions for buttons, axes and hats</span></li>
+          <li data-k="up"><strong data-count="16">16</strong><span>vJoy devices with 128 buttons each</span></li>
+          <li data-k="up"><strong data-count="7">7</strong><span>languages built in</span></li>
+          <li data-k="up"><strong data-count="2">2</strong><span>systems: Windows and Linux</span></li>
         </ul>
       </div>
     </header>
@@ -109,22 +113,22 @@
           <p>Each one has its own window, its own settings and its own way of failing. Joystick Gobloon replaces their user interfaces with one native app and talks to the same drivers directly.</p>
         </div>
 
-        <div class="compare reveal">
-          <div class="card">
+        <div class="compare anim" data-story="compare">
+          <div class="card" data-k="card">
             <h3>Before</h3>
             <ul class="tool-list">
-              <li><i class="ph ph-eye-slash" aria-hidden="true"></i><div><b>HidHide</b><span>to hide physical sticks from games</span></div></li>
-              <li><i class="ph ph-joystick" aria-hidden="true"></i><div><b>vJoy and Configure vJoy</b><span>to create virtual joysticks</span></div></li>
-              <li><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>A mapping tool</b><span>to map one to the other</span></div></li>
+              <li data-k="left"><i class="ph ph-eye-slash" aria-hidden="true"></i><div><b>HidHide</b><span>to hide physical sticks from games</span></div></li>
+              <li data-k="left"><i class="ph ph-joystick" aria-hidden="true"></i><div><b>vJoy and Configure vJoy</b><span>to create virtual joysticks</span></div></li>
+              <li data-k="left"><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>A mapping tool</b><span>to map one to the other</span></div></li>
             </ul>
           </div>
-          <div class="arrow" aria-hidden="true"><i class="ph ph-arrow-right"></i></div>
-          <div class="card solution">
+          <div class="arrow" data-k="pop" aria-hidden="true"><i class="ph ph-arrow-right"></i></div>
+          <div class="card solution" data-k="card">
             <h3>With Joystick Gobloon</h3>
             <ul class="tool-list">
-              <li><i class="ph ph-eye-slash" aria-hidden="true"></i><div><b>Hide a stick</b><span>one click on its eye, in the same window</span></div></li>
-              <li><i class="ph ph-joystick" aria-hidden="true"></i><div><b>Edit vJoy devices</b><span>right in the app, one UAC prompt per change</span></div></li>
-              <li><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>Map and run profiles</b><span>build profiles here or import your old ones</span></div></li>
+              <li data-k="left"><i class="ph ph-eye-slash" aria-hidden="true"></i><div><b>Hide a stick</b><span>one click on its eye, in the same window</span></div></li>
+              <li data-k="left"><i class="ph ph-joystick" aria-hidden="true"></i><div><b>Edit vJoy devices</b><span>right in the app, one UAC prompt per change</span></div></li>
+              <li data-k="left"><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>Map and run profiles</b><span>build profiles here or import your old ones</span></div></li>
             </ul>
           </div>
         </div>
@@ -147,67 +151,67 @@
           <p>Written in Rust, it reads controllers the moment they change and sits almost idle in the tray.</p>
         </div>
 
-        <article class="benefit reveal">
+        <article class="benefit anim">
           <div>
-            <div class="benefit-icon"><i class="ph ph-file-arrow-up" aria-hidden="true"></i></div>
-            <h3>Keep the profile you already built</h3>
-            <p>Import a Joystick Gremlin profile and it runs. Anything not supported yet is kept in the file, so nothing gets lost.</p>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-file-arrow-up" aria-hidden="true"></i></div>
+            <h3 data-k="up">Keep the profile you already built</h3>
+            <p data-k="up">Import a Joystick Gremlin profile and it runs. Anything not supported yet is kept in the file, so nothing gets lost.</p>
             <ul class="ticks">
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>Modes with inheritance and per mode overrides</li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>Map controls matches a profile from another PC to your devices in one click</li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>Undo and redo for every edit</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Modes with inheritance and per mode overrides</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Map controls matches a profile from another PC to your devices in one click</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Undo and redo for every edit</li>
             </ul>
           </div>
-          <figure class="shot"><img src="img/actions/tempo.png" loading="lazy" alt="Tempo action editor: a short press and a long press, each with its own actions"></figure>
+          <figure class="shot" data-k="card"><div class="stage" data-story="tempo"><img src="img/actions/tempo.png" loading="lazy" width="597" height="535" alt="Tempo action editor: a short press and a long press, each with its own actions"></div></figure>
         </article>
 
-        <article class="benefit flip reveal">
+        <article class="benefit flip anim">
           <div>
-            <div class="benefit-icon"><i class="ph ph-stack" aria-hidden="true"></i></div>
-            <h3>One button, four jobs with modifiers</h3>
-            <p>Name a few buttons as modifiers. While M1 or M2 is held, every input with a layer for it runs that layer instead. Nothing gets stuck when you let go in the wrong order.</p>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-stack" aria-hidden="true"></i></div>
+            <h3 data-k="up">One button, four jobs with modifiers</h3>
+            <p data-k="up">Name a few buttons as modifiers. While M1 or M2 is held, every input with a layer for it runs that layer instead. Nothing gets stuck when you let go in the wrong order.</p>
             <ul class="ticks">
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>Layers for nothing, M1, M2 and M1 plus M2</li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>Additive layers that run together with the base</li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>Trim axes that keep their last value</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Layers for nothing, M1, M2 and M1 plus M2</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Additive layers that run together with the base</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Trim axes that keep their last value</li>
             </ul>
           </div>
-          <figure class="shot"><img src="img/modifiers.png" loading="lazy" width="1102" height="732" alt="Layers Base, M1, M2 and M1 plus M2 above the actions of a button, next to the Modifiers window"></figure>
+          <figure class="shot" data-k="card"><div class="stage" data-story="modifiers"><img src="img/modifiers.png" loading="lazy" width="1102" height="732" alt="Layers Base, M1, M2 and M1 plus M2 above the actions of a button, next to the Modifiers window"></div></figure>
         </article>
 
-        <article class="benefit reveal">
+        <article class="benefit anim">
           <div>
-            <div class="benefit-icon"><i class="ph ph-joystick" aria-hidden="true"></i></div>
-            <h3>Virtual joysticks without Configure vJoy</h3>
-            <p>Create, change and remove vJoy devices from the app. Each one shows its axes, buttons and hats at a glance, and a built in tester moves them by hand.</p>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-joystick" aria-hidden="true"></i></div>
+            <h3 data-k="up">Virtual joysticks without Configure vJoy</h3>
+            <p data-k="up">Create, change and remove vJoy devices from the app. Each one shows its axes, buttons and hats at a glance, and a built in tester moves them by hand.</p>
             <ul class="ticks">
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>Up to 16 devices, 8 axes, 128 buttons and 4 hats each</li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>A new device starts as a copy of the first one</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Up to 16 devices, 8 axes, 128 buttons and 4 hats each</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>A new device starts as a copy of the first one</li>
             </ul>
           </div>
-          <figure class="shot"><img src="img/vjoy.png" loading="lazy" width="1102" height="732" alt="vJoy page: device tabs, the device editor and the output tester"></figure>
+          <figure class="shot" data-k="card"><div class="stage" data-story="vjoy"><img src="img/vjoy.png" loading="lazy" width="1102" height="732" alt="vJoy page: device tabs, the device editor and the output tester"></div></figure>
         </article>
 
-        <article class="benefit flip reveal">
+        <article class="benefit flip anim">
           <div>
-            <div class="benefit-icon"><i class="ph ph-eye-slash" aria-hidden="true"></i></div>
-            <h3>Games see only the virtual stick</h3>
-            <p>Hide a physical controller with one click and stop double inputs for good. Joystick Gobloon still sees it, and you choose which other programs may too.</p>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-eye-slash" aria-hidden="true"></i></div>
+            <h3 data-k="up">Games see only the virtual stick</h3>
+            <p data-k="up">Hide a physical controller with one click and stop double inputs for good. Joystick Gobloon still sees it, and you choose which other programs may too.</p>
             <ul class="ticks">
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>Switch hiding for the whole system from the toolbar or tray</li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i>HidHide inverse mode supported</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Switch hiding for the whole system from the toolbar or tray</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>HidHide inverse mode supported</li>
             </ul>
           </div>
-          <figure class="shot"><img src="img/hidhide.png" loading="lazy" width="722" height="452" alt="Device hiding window: two flight sticks are hidden, the vJoy devices are visible"></figure>
+          <figure class="shot" data-k="card"><div class="stage" data-story="hidhide"><img src="img/hidhide.png" loading="lazy" width="722" height="452" alt="Device hiding window: two flight sticks are hidden, the vJoy devices are visible"></div></figure>
         </article>
 
-        <article class="benefit reveal">
+        <article class="benefit anim">
           <div>
-            <div class="benefit-icon"><i class="ph ph-chart-line" aria-hidden="true"></i></div>
-            <h3>See every input move live</h3>
-            <p>Graphs of every axis, button and hat for physical sticks and vJoy devices alike, in the main window or a window of its own. Calibrate center and end points on the spot.</p>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-chart-line" aria-hidden="true"></i></div>
+            <h3 data-k="up">See every input move live</h3>
+            <p data-k="up">Graphs of every axis, button and hat for physical sticks and vJoy devices alike, in the main window or a window of its own. Calibrate center and end points on the spot.</p>
           </div>
-          <figure class="shot"><img src="img/viewer.png" loading="lazy" width="1102" height="732" alt="Input viewer: axes over time, current axis values, buttons and hats of a vJoy device"></figure>
+          <figure class="shot" data-k="card"><div class="stage" data-story="viewer"><img src="img/viewer.png" loading="lazy" width="1102" height="732" alt="Input viewer: axes over time, current axis values, buttons and hats of a vJoy device"></div></figure>
         </article>
       </div>
     </section>
@@ -220,30 +224,30 @@
           <h2 id="actions-title">23 actions for every input</h2>
           <p>Stack them on any input. They run top to bottom and pass the value on, so a response curve can shape an axis before it reaches vJoy.</p>
         </div>
-        <ul class="actions reveal">
-          <li><i class="ph ph-joystick" aria-hidden="true"></i>Map to vJoy</li>
-          <li><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</li>
-          <li><i class="ph ph-mouse" aria-hidden="true"></i>Map to mouse</li>
-          <li><i class="ph ph-cube" aria-hidden="true"></i>Map to logical device</li>
-          <li><i class="ph ph-chart-line" aria-hidden="true"></i>Response curve</li>
-          <li><i class="ph ph-arrows-split" aria-hidden="true"></i>Split axis</li>
-          <li><i class="ph ph-arrows-merge" aria-hidden="true"></i>Merge axis</li>
-          <li><i class="ph ph-crosshair" aria-hidden="true"></i>Dual axis deadzone</li>
-          <li><i class="ph ph-trend-up" aria-hidden="true"></i>Axis delta</li>
-          <li><i class="ph ph-timer" aria-hidden="true"></i>Tempo</li>
-          <li><i class="ph ph-hand-tap" aria-hidden="true"></i>Double tap</li>
-          <li><i class="ph ph-toggle-right" aria-hidden="true"></i>Smart toggle</li>
-          <li><i class="ph ph-link" aria-hidden="true"></i>Chain</li>
-          <li><i class="ph ph-list-numbers" aria-hidden="true"></i>Macro</li>
-          <li><i class="ph ph-compass" aria-hidden="true"></i>Hat buttons</li>
-          <li><i class="ph ph-git-branch" aria-hidden="true"></i>Condition</li>
-          <li><i class="ph ph-swap" aria-hidden="true"></i>Change mode</li>
-          <li><i class="ph ph-pause" aria-hidden="true"></i>Pause and resume</li>
-          <li><i class="ph ph-folder-open" aria-hidden="true"></i>Load profile</li>
-          <li><i class="ph ph-speaker-high" aria-hidden="true"></i>Play sound</li>
-          <li><i class="ph ph-chat-text" aria-hidden="true"></i>Text to speech</li>
-          <li><i class="ph ph-terminal-window" aria-hidden="true"></i>Run command</li>
-          <li><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</li>
+        <ul class="actions anim" data-story="actions">
+          <li data-k="up"><i class="ph ph-joystick" aria-hidden="true"></i>Map to vJoy</li>
+          <li data-k="up"><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</li>
+          <li data-k="up"><i class="ph ph-mouse" aria-hidden="true"></i>Map to mouse</li>
+          <li data-k="up"><i class="ph ph-cube" aria-hidden="true"></i>Map to logical device</li>
+          <li data-k="up"><i class="ph ph-chart-line" aria-hidden="true"></i>Response curve</li>
+          <li data-k="up"><i class="ph ph-arrows-split" aria-hidden="true"></i>Split axis</li>
+          <li data-k="up"><i class="ph ph-arrows-merge" aria-hidden="true"></i>Merge axis</li>
+          <li data-k="up"><i class="ph ph-crosshair" aria-hidden="true"></i>Dual axis deadzone</li>
+          <li data-k="up"><i class="ph ph-trend-up" aria-hidden="true"></i>Axis delta</li>
+          <li data-k="up"><i class="ph ph-timer" aria-hidden="true"></i>Tempo</li>
+          <li data-k="up"><i class="ph ph-hand-tap" aria-hidden="true"></i>Double tap</li>
+          <li data-k="up"><i class="ph ph-toggle-right" aria-hidden="true"></i>Smart toggle</li>
+          <li data-k="up"><i class="ph ph-link" aria-hidden="true"></i>Chain</li>
+          <li data-k="up"><i class="ph ph-list-numbers" aria-hidden="true"></i>Macro</li>
+          <li data-k="up"><i class="ph ph-compass" aria-hidden="true"></i>Hat buttons</li>
+          <li data-k="up"><i class="ph ph-git-branch" aria-hidden="true"></i>Condition</li>
+          <li data-k="up"><i class="ph ph-swap" aria-hidden="true"></i>Change mode</li>
+          <li data-k="up"><i class="ph ph-pause" aria-hidden="true"></i>Pause and resume</li>
+          <li data-k="up"><i class="ph ph-folder-open" aria-hidden="true"></i>Load profile</li>
+          <li data-k="up"><i class="ph ph-speaker-high" aria-hidden="true"></i>Play sound</li>
+          <li data-k="up"><i class="ph ph-chat-text" aria-hidden="true"></i>Text to speech</li>
+          <li data-k="up"><i class="ph ph-terminal-window" aria-hidden="true"></i>Run command</li>
+          <li data-k="up"><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</li>
         </ul>
         <p class="more reveal"><a href="learn.html">Learn every action <i class="ph-bold ph-arrow-right" aria-hidden="true"></i></a></p>
       </div>
@@ -355,7 +359,7 @@
     <section class="support-section" aria-labelledby="support-title">
       <div class="wrap">
         <div class="support card reveal">
-          <div class="benefit-icon"><i class="ph ph-heart" aria-hidden="true"></i></div>
+          <div class="benefit-icon" data-k="pop"><i class="ph ph-heart" aria-hidden="true"></i></div>
           <div>
             <h2 id="support-title">Free for everyone, kept going by donations</h2>
             <p>Joystick Gobloon has no ads, no paid tier and no tracking. If it saved you an evening of setup, a donation helps pay for the time that goes into every release.</p>
@@ -415,5 +419,6 @@
   </footer>
 
   <script src="main.js" defer></script>
+  <script src="motion.js" defer></script>
 </body>
 </html>
