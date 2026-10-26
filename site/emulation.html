@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Emulation | Joystick Gobloon</title>
+  <meta name="description" content="How Joystick Gobloon emulates joysticks: create vJoy devices on Windows and virtual joysticks on Linux, hide the real sticks with HidHide, and set up a two stick game.">
+  <link rel="canonical" href="https://h0userus.github.io/gobloon/emulation.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Joystick Gobloon">
+  <meta property="og:title" content="Joystick emulation with Joystick Gobloon">
+  <meta property="og:description" content="Virtual joysticks, device hiding and a two stick setup, explained with a diagram.">
+  <meta property="og:url" content="https://h0userus.github.io/gobloon/emulation.html">
+  <meta property="og:image" content="https://h0userus.github.io/gobloon/img/devices.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#131209">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+  <link rel="stylesheet" href="styles.css">
+  <script>document.documentElement.classList.remove("no-js")</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <nav class="nav" aria-label="Main">
+    <a class="brand" href="index.html" aria-label="Joystick Gobloon home">
+      <img src="img/icon.svg" alt="" width="24" height="24">
+      Joystick Gobloon
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html#how">How it works</a></li>
+      <li><a href="learn.html">Learning</a></li>
+      <li><a href="emulation.html" aria-current="page">Emulation</a></li>
+      <li><a href="index.html#platforms">Windows and Linux</a></li>
+      <li><a href="index.html#faq">FAQ</a></li>
+    </ul>
+    <a class="btn btn-primary btn-sm nav-cta" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
+      <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+      <span></span><span></span>
+    </button>
+  </nav>
+
+  <div class="menu" id="menu" aria-hidden="true">
+    <ul>
+      <li style="--i:0"><a href="index.html#features">Features</a></li>
+      <li style="--i:1"><a href="index.html#how">How it works</a></li>
+      <li style="--i:2"><a href="learn.html">Learning</a></li>
+      <li style="--i:3"><a href="emulation.html" aria-current="page">Emulation</a></li>
+      <li style="--i:4"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:5"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:6"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download free</a></li>
+    </ul>
+  </div>
+
+  <main id="main">
+    <header class="learn-hero">
+      <div class="wrap">
+        <p class="kicker">Emulation</p>
+        <h1 class="gradient">Your sticks in,<br>virtual joysticks out</h1>
+        <p class="sub">How Joystick Gobloon stands between your controllers and a game: create virtual joysticks, hide the physical ones, choose which programs still see them, and set up a two stick game from start to finish.</p>
+      </div>
+    </header>
+
+    <div class="wrap learn">
+      <aside class="toc" aria-label="On this page">
+        <details>
+          <summary>On this page<i class="ph-bold ph-caret-down" aria-hidden="true"></i></summary>
+          <ul>
+          <li><a class="toc-group" href="#idea">The idea</a><ul>
+            <li><a href="#how-it-works">How it works</a></li>
+            <li><a href="#example">A two stick game</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#virtual">Virtual joysticks</a><ul>
+            <li><a href="#vjoy-windows">On Windows (vJoy)</a></li>
+            <li><a href="#virtual-linux">On Linux</a></li>
+            <li><a href="#test-output">Test the output</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#hiding">Hiding devices</a><ul>
+            <li><a href="#hide-windows">On Windows (HidHide)</a></li>
+            <li><a href="#applications">Programs that see hidden devices</a></li>
+            <li><a href="#hide-linux">On Linux</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#setup">Putting it together</a><ul>
+            <li><a href="#walkthrough">Step by step</a></li>
+            <li><a href="#troubleshooting">When something is off</a></li>
+          </ul></li>
+          </ul>
+        </details>
+      </aside>
+
+      <div class="learn-body">
+        <section class="learn-group" id="idea" aria-labelledby="idea-title">
+          <h2 id="idea-title">The idea</h2>
+          <article class="learn-action" id="how-it-works">
+            <h3><i class="ph ph-flow-arrow" aria-hidden="true"></i>How it works</h3>
+            <p>A game reads joysticks through the system. Joystick Gobloon reads your real sticks first, runs your profile on every change, and writes the result to <strong>virtual joysticks</strong>. The game is set up to use only those virtual joysticks.</p>
+            <p>The real sticks are then <strong>hidden</strong> from the game. Otherwise it would see every input twice: once from the stick itself and once from the virtual joystick.</p>
+
+            <figure class="diagram" aria-labelledby="diagram-caption">
+              <svg class="diagram-wide" viewBox="0 0 1000 400" role="img" aria-label="Two physical sticks feed Joystick Gobloon, which drives virtual joysticks 1 and 2; the game reads only the virtual joysticks, while the direct path from the sticks to the game is blocked by device hiding">
+                <defs>
+                  <marker id="arrow-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="arrowhead"/></marker>
+                </defs>
+                <!-- blocked direct paths -->
+                <path id="w-block-1" class="wire blocked" d="M110 70V30H835"/>
+                <path id="w-block-2" class="wire blocked" d="M110 330V370H835"/>
+                <g class="barrier"><path d="M845 14V46M845 354V386"/><path d="M836 24l18 12M854 24l-18 12M836 364l18 12M854 364l-18 12" class="cross"/></g>
+                <text x="470" y="20" class="note" text-anchor="middle">Hidden: the game never sees the real sticks</text>
+                <!-- wires -->
+                <path id="w-1" class="wire" d="M200 102C250 102 240 170 290 170" marker-end="url(#arrow-w)"/>
+                <path id="w-2" class="wire" d="M200 298C250 298 240 230 290 230" marker-end="url(#arrow-w)"/>
+                <path id="w-3" class="wire" d="M530 170C580 170 570 102 620 102" marker-end="url(#arrow-w)"/>
+                <path id="w-4" class="wire" d="M530 230C580 230 570 298 620 298" marker-end="url(#arrow-w)"/>
+                <path id="w-5" class="wire" d="M790 102C830 102 830 170 870 170" marker-end="url(#arrow-w)"/>
+                <path id="w-6" class="wire" d="M790 298C830 298 830 230 870 230" marker-end="url(#arrow-w)"/>
+                <!-- nodes -->
+                <g class="node"><rect x="20" y="70" width="180" height="64" rx="12"/><text x="110" y="98" text-anchor="middle">Left stick</text><text x="110" y="120" class="sub" text-anchor="middle">physical</text></g>
+                <g class="node"><rect x="20" y="266" width="180" height="64" rx="12"/><text x="110" y="294" text-anchor="middle">Right stick</text><text x="110" y="316" class="sub" text-anchor="middle">physical</text></g>
+                <g class="node app"><rect x="290" y="120" width="240" height="160" rx="16"/><text x="410" y="160" text-anchor="middle" class="strong">Joystick Gobloon</text><text x="410" y="192" class="sub" text-anchor="middle">profile: modes, modifiers</text><text x="410" y="214" class="sub" text-anchor="middle">and actions</text><text x="410" y="252" class="sub" text-anchor="middle">runs on every change</text></g>
+                <g class="node virt"><rect x="620" y="70" width="170" height="64" rx="12"/><text x="705" y="98" text-anchor="middle">vJoy #1</text><text x="705" y="120" class="sub" text-anchor="middle">virtual joystick</text></g>
+                <g class="node virt"><rect x="620" y="266" width="170" height="64" rx="12"/><text x="705" y="294" text-anchor="middle">vJoy #2</text><text x="705" y="316" class="sub" text-anchor="middle">virtual joystick</text></g>
+                <g class="node game"><rect x="870" y="110" width="110" height="180" rx="16"/><text x="925" y="196" text-anchor="middle" class="strong">Game</text><text x="925" y="218" class="sub" text-anchor="middle">binds vJoy</text></g>
+                <!-- pulses -->
+                <g class="pulses">
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#w-1"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#w-2"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="1.6s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="0.9s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#w-3"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="0.9s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="2.5s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#w-4"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="2.5s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="1.8s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#w-5"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="1.8s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="3.4s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#w-6"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="3.4s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse stopped"><animateMotion dur="4.8s" begin="0.4s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.33 1 0.68 1;0 0 1 1"><mpath href="#w-block-1"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.4;0.48;1" dur="4.8s" begin="0.4s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse stopped"><animateMotion dur="4.8s" begin="2.8s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.33 1 0.68 1;0 0 1 1"><mpath href="#w-block-2"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.4;0.48;1" dur="4.8s" begin="2.8s" repeatCount="indefinite"/></circle>
+                </g>
+              </svg>
+
+              <svg class="diagram-tall" viewBox="0 0 360 640" role="img" aria-label="Two physical sticks feed Joystick Gobloon, which drives virtual joysticks 1 and 2; the game reads only the virtual joysticks, while the direct path from the sticks to the game is blocked by device hiding">
+                <defs>
+                  <marker id="arrow-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="arrowhead"/></marker>
+                </defs>
+                <path id="t-block-1" class="wire blocked" d="M28 48H10V585H86"/>
+                <path id="t-block-2" class="wire blocked" d="M332 48H350V585H274"/>
+                <g class="barrier"><path d="M96 570V600M264 570V600"/><path d="M87 576l18 18M105 576l-18 18M255 576l18 18M273 576l-18 18" class="cross"/></g>
+                <path id="t-1" class="wire" d="M95 80C95 120 150 120 150 170" marker-end="url(#arrow-t)"/>
+                <path id="t-2" class="wire" d="M265 80C265 120 210 120 210 170" marker-end="url(#arrow-t)"/>
+                <path id="t-3" class="wire" d="M150 300C150 340 95 330 95 370" marker-end="url(#arrow-t)"/>
+                <path id="t-4" class="wire" d="M210 300C210 340 265 330 265 370" marker-end="url(#arrow-t)"/>
+                <path id="t-5" class="wire" d="M95 430C95 470 150 470 150 520" marker-end="url(#arrow-t)"/>
+                <path id="t-6" class="wire" d="M265 430C265 470 210 470 210 520" marker-end="url(#arrow-t)"/>
+                <g class="node"><rect x="28" y="20" width="134" height="60" rx="12"/><text x="95" y="46" text-anchor="middle">Left stick</text><text x="95" y="66" class="sub" text-anchor="middle">physical</text></g>
+                <g class="node"><rect x="198" y="20" width="134" height="60" rx="12"/><text x="265" y="46" text-anchor="middle">Right stick</text><text x="265" y="66" class="sub" text-anchor="middle">physical</text></g>
+                <g class="node app"><rect x="40" y="170" width="280" height="130" rx="16"/><text x="180" y="210" text-anchor="middle" class="strong">Joystick Gobloon</text><text x="180" y="240" class="sub" text-anchor="middle">profile: modes, modifiers</text><text x="180" y="262" class="sub" text-anchor="middle">and actions</text></g>
+                <g class="node virt"><rect x="28" y="370" width="134" height="60" rx="12"/><text x="95" y="396" text-anchor="middle">vJoy #1</text><text x="95" y="416" class="sub" text-anchor="middle">virtual</text></g>
+                <g class="node virt"><rect x="198" y="370" width="134" height="60" rx="12"/><text x="265" y="396" text-anchor="middle">vJoy #2</text><text x="265" y="416" class="sub" text-anchor="middle">virtual</text></g>
+                <g class="node game"><rect x="110" y="520" width="140" height="100" rx="16"/><text x="180" y="566" text-anchor="middle" class="strong">Game</text><text x="180" y="590" class="sub" text-anchor="middle">binds vJoy</text></g>
+                <g class="pulses">
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#t-1"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#t-2"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="1.6s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="0.9s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#t-3"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="0.9s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="2.5s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#t-4"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="2.5s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="1.8s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#t-5"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="1.8s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse"><animateMotion dur="3.2s" begin="3.4s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.25;1" calcMode="spline" keySplines="0.65 0 0.35 1;0 0 1 1"><mpath href="#t-6"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.24;0.27;1" dur="3.2s" begin="3.4s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse stopped"><animateMotion dur="4.8s" begin="0.4s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.33 1 0.68 1;0 0 1 1"><mpath href="#t-block-1"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.4;0.48;1" dur="4.8s" begin="0.4s" repeatCount="indefinite"/></circle>
+                  <circle r="6" class="pulse stopped"><animateMotion dur="4.8s" begin="2.8s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.33 1 0.68 1;0 0 1 1"><mpath href="#t-block-2"/></animateMotion><animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.4;0.48;1" dur="4.8s" begin="2.8s" repeatCount="indefinite"/></circle>
+                </g>
+              </svg>
+              <figcaption id="diagram-caption">Green pulses are inputs that reach the game through Joystick Gobloon. Red ones are the direct path from a real stick, which device hiding stops.</figcaption>
+            </figure>
+          </article>
+
+          <article class="learn-action" id="example">
+            <h3><i class="ph ph-joystick" aria-hidden="true"></i>A two stick game</h3>
+            <p>Take a game flown with a stick in each hand. It has two kinds of controls: a <strong>Combat</strong> mode and a <strong>Travel</strong> mode, where the same buttons do different jobs. You want:</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Each real stick to appear in the game as its own virtual joystick: the left one as <span class="term">vJoy #1</span>, the right one as <span class="term">vJoy #2</span>.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>A short press on one button to cycle the game's mode, and a long press to jump straight between Combat and Travel (a <a href="learn.html#tempo">Tempo</a> action).</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>A thumb button held as <strong>M1</strong> to give the other buttons a second layer of jobs (<a href="learn.html#modifiers">modifiers</a>).</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>A softer response curve on the pitch and yaw axes for fine aiming (<a href="learn.html#response-curve">Response curve</a>).</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>The game to see only the two virtual joysticks, never the real sticks.</span></li>
+            </ul>
+            <p>The rest of this page sets that up. The last section walks through it in order.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="virtual" aria-labelledby="virtual-title">
+          <h2 id="virtual-title">Virtual joysticks</h2>
+          <article class="learn-action" id="vjoy-windows">
+            <h3><i class="ph ph-windows-logo" aria-hidden="true"></i>On Windows (vJoy)</h3>
+            <p>On Windows the virtual joysticks come from the <strong>vJoy</strong> driver. The Joystick Gobloon installer adds the signed vJoy 2.1.9.1 driver if it is missing. You never need the separate Configure vJoy tool: devices are made right in the app.</p>
+            <ol class="numbered">
+              <li>Open the <span class="term">Virtual joysticks</span> page in the left rail (the gamepad icon).</li>
+              <li>Press <span class="term">+</span> next to the device tabs to add a device. A new device starts as a copy of the first one.</li>
+              <li>Switch on the axes the game should see, set the number of <span class="term">Buttons</span> (up to 128) and <span class="term">Hats</span> (up to 4, either <span class="term">Continuous</span> or <span class="term">4 directions</span>).</li>
+              <li>Press <span class="term">Create</span>, or <span class="term">Apply</span> for an existing device. Windows asks for administrator rights once per change.</li>
+              <li>Repeat for the second stick. vJoy supports up to 16 devices.</li>
+            </ol>
+            <p>Devices cannot be changed while a profile runs: stop it first. Now and then Windows needs a restart before a changed device shows up; the app says so when it happens.</p>
+            <figure class="shot"><img src="img/vjoy.png" loading="lazy" width="1102" height="732" alt="Virtual joysticks page: vJoy 2.1.9 enabled, two devices vJoy #1 and vJoy #2 with 8 axes, 128 and 127 buttons and 4 hats, and the output tester below"></figure>
+          </article>
+
+          <article class="learn-action" id="virtual-linux">
+            <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
+            <p>Linux needs no driver: the virtual joysticks are made by the kernel's uinput module. They use the same <span class="term">Virtual joysticks</span> page and the same profiles.</p>
+            <ol class="numbered">
+              <li>On the Devices page, click <span class="term">Grant access</span> once. It installs a rule that lets your user read controllers and create virtual devices, and asks for your password.</li>
+              <li>Add and set up devices on the <span class="term">Virtual joysticks</span> page as on Windows, with up to 8 axes, 95 buttons and 4 hats each. No administrator prompt is needed.</li>
+              <li>The devices appear when you activate a profile and disappear when you stop it. Games see them as <span class="term">Joystick Gobloon Joystick 1</span>, <span class="term">Joystick Gobloon Joystick 2</span> and so on.</li>
+            </ol>
+            <p>The Linux kernel reports at most 80 buttons per physical device. A stick with more buttons can be split into several virtual HID devices in its vendor's tool.</p>
+          </article>
+
+          <article class="learn-action" id="test-output">
+            <h3><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>Test the output</h3>
+            <p>Below the device settings is a tester. Lock the device to take control of it, then move its axes, buttons and hats by hand. Open the game's control settings next to it: when you move an axis here, the game should react to it. The <a href="index.html#features">input viewer</a> shows the same device live while a profile runs.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="hiding" aria-labelledby="hiding-title">
+          <h2 id="hiding-title">Hiding devices</h2>
+          <article class="learn-action" id="hide-windows">
+            <h3><i class="ph ph-eye-slash" aria-hidden="true"></i>On Windows (HidHide)</h3>
+            <p>On Windows the <strong>HidHide</strong> driver hides devices for every program, even when Joystick Gobloon is closed. The installer adds the signed driver if it is missing.</p>
+            <ol class="numbered">
+              <li>Click the eye button in the top toolbar to open the <span class="term">Device hiding</span> window.</li>
+              <li>Click the eye of each real stick. A closed red eye means hidden; an open green eye means every program sees it.</li>
+              <li>Unplug the stick and plug it back in. Windows applies the change on reconnect.</li>
+              <li>Keep <span class="term">Enable device hiding</span> on. The same switch sits in the status bar at the bottom of the window and on the tray icon, for the moments you want every program to see everything again.</li>
+            </ol>
+            <p>Leave the virtual joysticks visible: they are what the game should read.</p>
+            <figure class="shot"><img src="img/hidhide.png" loading="lazy" width="722" height="452" alt="Device hiding window: the two vJoy devices are visible with open green eyes, the two real sticks are hidden with closed red eyes"></figure>
+          </article>
+
+          <article class="learn-action" id="applications">
+            <h3><i class="ph ph-app-window" aria-hidden="true"></i>Programs that see hidden devices</h3>
+            <p>A hidden stick is not gone: a short list of programs still sees it. Joystick Gobloon puts itself on that list at start, so your profile keeps reading the sticks. You can turn that off in Settings with <span class="term">See hidden devices</span>, but then the profile cannot read hidden sticks.</p>
+            <ol class="numbered">
+              <li>Open the <span class="term">Applications</span> page in the left rail.</li>
+              <li>Press <span class="term">Add application</span> and pick the program, for example the stick vendor's configuration tool or a calibration utility.</li>
+              <li>Each row shows whether that program <span class="term">Sees hidden devices</span> or <span class="term">Does not see hidden devices</span>; switch it per program.</li>
+            </ol>
+            <p><span class="term">Inverse application cloak</span> turns the list around: then only the listed programs are blind to hidden devices and every other program sees them. Use it when only one or two games should be kept from the real sticks.</p>
+            <p>The game itself should not be on the list in normal mode. If it is, it sees the real sticks again and inputs come in twice.</p>
+          </article>
+
+          <article class="learn-action" id="hide-linux">
+            <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
+            <p>Linux has no HidHide. Instead Joystick Gobloon reads a hidden stick <strong>exclusively</strong>: while the app runs, no other program gets input from it, games included. Hide sticks with the same eye buttons.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Hiding lasts only while Joystick Gobloon runs. Close the app and every program sees the sticks again.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>There is no list of programs that still see hidden devices.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Programs that read raw HID (hidraw), Steam for example, are not covered. Turn off Steam Input for the sticks if Steam sees them twice.</span></li>
+            </ul>
+          </article>
+        </section>
+
+        <section class="learn-group" id="setup" aria-labelledby="setup-title">
+          <h2 id="setup-title">Putting it together</h2>
+          <article class="learn-action" id="walkthrough">
+            <h3><i class="ph ph-list-checks" aria-hidden="true"></i>Step by step</h3>
+            <p>The two stick game from the start of this page, from nothing to playing:</p>
+            <ol class="numbered">
+              <li><strong>Create two virtual joysticks</strong> on the Virtual joysticks page: vJoy #1 for the left stick and vJoy #2 for the right one, each with the axes and as many buttons as the stick has.</li>
+              <li><strong>Build or import the profile.</strong> Import a Joystick Gremlin profile from the toolbar, or start a new one. If it was made on another PC, use <span class="term">Map controls</span> on the Devices page to match it to your sticks.</li>
+              <li><strong>Map every input.</strong> Select an input on the Devices page and add <a href="learn.html#map-to-vjoy">Map to vJoy</a>: left stick inputs to vJoy #1, right stick inputs to vJoy #2.</li>
+              <li><strong>Add the extras.</strong> A Tempo action on the mode button: a short press sends one vJoy button that the game uses to cycle modes, a long press sends another that jumps between Combat and Travel. Make a thumb button the M1 modifier and give the buttons you want doubled an M1 layer. Put a response curve before Map to vJoy on pitch and yaw.</li>
+              <li><strong>Hide the real sticks</strong> in the Device hiding window and reconnect them.</li>
+              <li><strong>Activate the profile</strong> with the play button. The virtual joysticks now follow your sticks.</li>
+              <li><strong>Bind the controls in the game</strong> by moving your real sticks: the game only sees vJoy #1 and vJoy #2, so every binding lands on a virtual joystick. Save the profile.</li>
+            </ol>
+            <p>From then on: start Joystick Gobloon, press play, start the game. In Settings, Joystick Gobloon can start with Windows and activate the profile on its own.</p>
+          </article>
+
+          <article class="learn-action" id="troubleshooting">
+            <h3><i class="ph ph-first-aid-kit" aria-hidden="true"></i>When something is off</h3>
+            <dl class="trouble">
+              <dt>The game sees every input twice</dt>
+              <dd>A real stick is still visible to it. Hide the stick, reconnect it, and make sure the game is not on the Applications list.</dd>
+              <dt>The game sees nothing at all</dt>
+              <dd>Check that the profile is active (the play button) and that the input uses Map to vJoy. The tester on the Virtual joysticks page shows whether the device itself reaches the game.</dd>
+              <dt>Joystick Gobloon does not see a hidden stick</dt>
+              <dd>Keep <span class="term">See hidden devices</span> on in Settings, so the app stays on the list of programs that see hidden devices.</dd>
+              <dt>A changed vJoy device does not show up</dt>
+              <dd>Stop the profile before changing devices. If the app asks for it, restart Windows.</dd>
+              <dt>The game bound the wrong device</dt>
+              <dd>Games remember devices by order or by name. Clear its bindings, keep the real sticks hidden, and bind again by moving the sticks while the profile runs.</dd>
+            </dl>
+          </article>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div>
+          <a class="brand" href="index.html"><img src="img/icon.svg" alt="" width="24" height="24"> Joystick Gobloon</a>
+          <p>Built on <a href="https://github.com/nefarius/HidHide">HidHide</a> by Nefarius and <a href="https://github.com/shauleiz/vJoy">vJoy</a> by Shaul Eizikovich.</p>
+        </div>
+        <div>
+          <h3>Project</h3>
+          <ul>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/releases">Releases</a></li>
+            <li><a href="learn.html">Learning</a></li>
+            <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
+            <li><a href="https://www.paypal.com/paypalme/h0userus" rel="noopener">Donate with PayPal</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Legal</h3>
+          <ul>
+            <li><a href="privacy.html">Privacy</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/LICENSE">License and terms (MIT)</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/docs/CODE_SIGNING.md">Code signing policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="copyright">© 2026 Denis Ibragimov. Joystick Gobloon is released under the MIT license.</p>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

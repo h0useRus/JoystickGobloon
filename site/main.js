@@ -21,6 +21,11 @@
     if (e.key === "Escape") setMenu(false);
   });
 
+  // Animated SVGs (the logo, diagrams) stand still for reduced motion.
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    document.querySelectorAll("svg").forEach((svg) => svg.pauseAnimations?.());
+  }
+
   // The table of contents of the Learning page is a sidebar on wide screens, folded on phones.
   const toc = document.querySelector(".toc details");
   if (toc && matchMedia("(min-width: 900px)").matches) toc.open = true;
