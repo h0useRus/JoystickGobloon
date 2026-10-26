@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Joystick Gobloon: device hiding, virtual joysticks and input mapping</title>
-  <meta name="description" content="One free app for Windows and Linux that hides your physical joysticks, runs virtual joysticks and maps one to the other. Opens Joystick Gremlin profiles as they are.">
+  <meta name="description" content="One free app for Windows and Linux that hides your physical joysticks, runs virtual joysticks and maps one to the other. Imports Joystick Gremlin profiles.">
   <link rel="canonical" href="https://h0userus.github.io/gobloon/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Joystick Gobloon">
@@ -77,7 +77,7 @@
         <img class="hero-logo" src="img/icon.svg" alt="Joystick Gobloon logo, a green goblin head" width="96" height="96">
         <p class="eyebrow"><span class="dot" aria-hidden="true"></span> Free and open source for Windows and Linux</p>
         <h1 class="gradient">Your whole stick setup<br>in one app</h1>
-        <p class="sub">Joystick Gobloon hides your physical controllers from games, runs virtual joysticks and maps one to the other. It opens your Joystick Gremlin profiles as they are.</p>
+        <p class="sub">Joystick Gobloon hides your physical controllers from games, runs virtual joysticks and maps one to the other. It can import your Joystick Gremlin profiles.</p>
         <div class="hero-actions">
           <a class="btn btn-primary" id="download" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
             <i class="ph-bold ph-download-simple" aria-hidden="true"></i>
@@ -91,7 +91,7 @@
         </figure>
 
         <ul class="proof reveal" aria-label="At a glance">
-          <li><strong>23</strong><span>Gremlin actions, all supported</span></li>
+          <li><strong>23</strong><span>actions for buttons, axes and hats</span></li>
           <li><strong>16</strong><span>vJoy devices with 128 buttons each</span></li>
           <li><strong>7</strong><span>languages built in</span></li>
           <li><strong>2</strong><span>systems: Windows and Linux</span></li>
@@ -114,7 +114,7 @@
             <ul class="tool-list">
               <li><i class="ph ph-eye-slash" aria-hidden="true"></i><div><b>HidHide</b><span>to hide physical sticks from games</span></div></li>
               <li><i class="ph ph-joystick" aria-hidden="true"></i><div><b>vJoy and Configure vJoy</b><span>to create virtual joysticks</span></div></li>
-              <li><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>Joystick Gremlin</b><span>to map one to the other</span></div></li>
+              <li><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>A mapping tool</b><span>to map one to the other</span></div></li>
             </ul>
           </div>
           <div class="arrow" aria-hidden="true"><i class="ph ph-arrow-right"></i></div>
@@ -123,7 +123,7 @@
             <ul class="tool-list">
               <li><i class="ph ph-eye-slash" aria-hidden="true"></i><div><b>Hide a stick</b><span>one click on its eye, in the same window</span></div></li>
               <li><i class="ph ph-joystick" aria-hidden="true"></i><div><b>Edit vJoy devices</b><span>right in the app, one UAC prompt per change</span></div></li>
-              <li><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>Map and run profiles</b><span>your Gremlin profiles, opened as they are</span></div></li>
+              <li><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>Map and run profiles</b><span>build profiles here or import your old ones</span></div></li>
             </ul>
           </div>
         </div>
@@ -142,7 +142,7 @@
       <div class="wrap">
         <div class="section-head reveal">
           <p class="kicker">Features</p>
-          <h2 id="features-title">Everything Gremlin did, in a faster app</h2>
+          <h2 id="features-title">Everything your setup needs, in one fast app</h2>
           <p>Written in Rust, it reads controllers the moment they change and sits almost idle in the tray.</p>
         </div>
 
@@ -150,7 +150,7 @@
           <div>
             <div class="benefit-icon"><i class="ph ph-file-arrow-up" aria-hidden="true"></i></div>
             <h3>Keep the profile you already built</h3>
-            <p>Import a Joystick Gremlin R14 profile and it runs. Actions Joystick Gobloon does not run yet are kept untouched, so nothing gets lost.</p>
+            <p>Import a Joystick Gremlin profile and it runs. Anything not supported yet is kept in the file, so nothing gets lost.</p>
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i>Modes with inheritance and per mode overrides</li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i>Map controls matches a profile from another PC to your devices in one click</li>
@@ -216,7 +216,7 @@
       <div class="wrap">
         <div class="section-head reveal">
           <p class="kicker">Actions</p>
-          <h2 id="actions-title">All 23 Joystick Gremlin actions</h2>
+          <h2 id="actions-title">23 actions for every input</h2>
           <p>Stack them on any input. They run top to bottom and pass the value on, so a response curve can shape an axis before it reaches vJoy.</p>
         </div>
         <ul class="actions reveal">
@@ -261,8 +261,8 @@
             <p>Run the installer. It adds the signed HidHide and vJoy 2.1.9.1 drivers when they are missing. On Linux, start the AppImage and click Grant access once.</p>
           </li>
           <li class="card">
-            <h3>Import your profile</h3>
-            <p>Open a Joystick Gremlin profile from the toolbar. Made on another PC? Map controls matches it to your sticks.</p>
+            <h3>Set up your profile</h3>
+            <p>Start a new profile, or import a Joystick Gremlin one from the toolbar. Made on another PC? Map controls matches it to your sticks.</p>
           </li>
           <li class="card">
             <h3>Hide and activate</h3>
@@ -315,12 +315,12 @@
             <div class="answer"><p>Yes. It is open source under the MIT license. There is no account, no trial and nothing to buy.</p></div>
           </details>
           <details>
-            <summary>Will my Joystick Gremlin profiles work?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
-            <div class="answer"><p>Profiles in the Gremlin R14 format and newer import directly. Every Gremlin action runs, and anything unknown is kept as it was in the file.</p></div>
+            <summary>Can I import my Joystick Gremlin profiles?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>Yes. Open one from the toolbar and it runs. Anything not supported yet is kept as it was in the file.</p></div>
           </details>
           <details>
-            <summary>Do I still need HidHide, vJoy or Gremlin installed?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
-            <div class="answer"><p>You need the HidHide and vJoy drivers on Windows, and the installer adds them when they are missing. You do not need their user interfaces or Joystick Gremlin.</p></div>
+            <summary>Do I still need HidHide and vJoy installed?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>You need the HidHide and vJoy drivers on Windows, and the installer adds them when they are missing. You do not need their own user interfaces.</p></div>
           </details>
           <details>
             <summary>Does it need administrator rights?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
@@ -355,7 +355,7 @@
       <div class="wrap">
         <div class="final reveal">
           <h2 id="final-title" class="gradient">Bring your profile.<br>Leave the three tools behind.</h2>
-          <p>Free, open source and portable if you want it. Your Gremlin profile opens in the first minute.</p>
+          <p>Free, open source and portable if you want it. Import a profile or build one from scratch.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
               <i class="ph-bold ph-download-simple" aria-hidden="true"></i>
@@ -372,7 +372,7 @@
       <div class="foot">
         <div>
           <a class="brand" href="#top"><img src="img/icon.svg" alt="" width="24" height="24"> Joystick Gobloon</a>
-          <p>Built on <a href="https://github.com/nefarius/HidHide">HidHide</a> by Nefarius, <a href="https://github.com/shauleiz/vJoy">vJoy</a> by Shaul Eizikovich and <a href="https://github.com/WhiteMagic/JoystickGremlin">Joystick Gremlin</a> by Lionel Ott.</p>
+          <p>Built on <a href="https://github.com/nefarius/HidHide">HidHide</a> by Nefarius and <a href="https://github.com/shauleiz/vJoy">vJoy</a> by Shaul Eizikovich.</p>
         </div>
         <div>
           <h3>Project</h3>
