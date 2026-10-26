@@ -5,10 +5,17 @@
 
 (() => {
   const root = document.documentElement;
-  if (!root.classList.contains("motion")) return;
+  if (!root.classList.contains("motion")) {
+    // Reduced motion: the logo's own SVG animations stand still too.
+    document.querySelectorAll("svg.hero-logo").forEach((svg) => svg.pauseAnimations());
+    return;
+  }
   // ?still: everything loaded and every overlay at rest, no motion (to check against the screenshots).
   const still = new URLSearchParams(location.search).has("still");
-  if (still) root.classList.add("still");
+  if (still) {
+    root.classList.add("still");
+    document.querySelectorAll("svg.hero-logo").forEach((svg) => svg.pauseAnimations());
+  }
 
   // Eased keyframe tracks: [[time, value], ...], values may be numbers or arrays.
   const io = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);

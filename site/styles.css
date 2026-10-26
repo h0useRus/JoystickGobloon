@@ -391,9 +391,32 @@ code {
 }
 
 .hero-logo {
-  width: 96px;
-  height: 96px;
+  display: block;
+  width: 128px;
+  height: 128px;
   margin: 0 auto var(--s-300);
+  overflow: visible;
+}
+
+@media (min-width: 768px) {
+  .hero-logo {
+    width: 160px;
+    height: 160px;
+  }
+}
+
+/* The logo floats gently; its stick, eye and ears move by their own SVG animations. */
+.motion .hero-logo .bob {
+  animation: bob 2.8s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
+}
+
+@keyframes bob {
+  from {
+    transform: translateY(-3px);
+  }
+  to {
+    transform: translateY(3px);
+  }
 }
 
 .eyebrow {
