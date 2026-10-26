@@ -161,6 +161,33 @@ pub struct Device {
     pub name: String,
 }
 
+/// Virtual devices the profile writes to, as they were set up when it was last saved, so
+/// another system can set them up the same way (Joystick Gobloon only).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VirtualDevices {
+    pub joysticks: Vec<VirtualJoystick>,
+    /// Gamepad ids (their layout is fixed).
+    pub gamepads: Vec<u32>,
+}
+
+impl VirtualDevices {
+    pub fn is_empty(&self) -> bool {
+        self.joysticks.is_empty() && self.gamepads.is_empty()
+    }
+}
+
+/// A virtual joystick's layout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VirtualJoystick {
+    pub id: u32,
+    /// Axis slots 1..=8 (X, Y, Z, Rx, Ry, Rz, slider, dial).
+    pub axes: Vec<u8>,
+    pub buttons: u32,
+    pub hats: u32,
+    /// 4-direction hats instead of continuous ones.
+    pub discrete_hats: bool,
+}
+
 /// Top-level profile sections, in the order they appear in the file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
@@ -172,6 +199,7 @@ pub enum Section {
     Modifiers,
     Scripts,
     Devices,
+    VirtualDevices,
     /// Index into [`Profile::extra`].
     Extra(usize),
 }
@@ -191,6 +219,7 @@ pub struct Profile {
     /// User Python scripts (plugins). Preserved, not executed.
     pub scripts: Element,
     pub devices: Vec<Device>,
+    pub virtual_devices: VirtualDevices,
     pub extra: Vec<Element>,
     pub order: Vec<Section>,
 }
@@ -210,6 +239,7 @@ impl Default for Profile {
             modifiers: Vec::new(),
             scripts: Element::new("scripts"),
             devices: Vec::new(),
+            virtual_devices: VirtualDevices::default(),
             extra: Vec::new(),
             order: vec![
                 Section::Inputs,
@@ -226,11 +256,25 @@ impl Default for Profile {
 }
 
 impl Profile {
+    /// Replaces the stored virtual devices, adding their section to a profile that had none.
+    pub fn set_virtual_devices(&mut self, devices: VirtualDevices) {
+        if !self.order.contains(&Section::VirtualDevices) {
+            let at = self
+                .order
+                .iter()
+                .position(|s| *s == Section::Devices)
+                .map_or(self.order.len(), |i| i + 1);
+            self.order.insert(at, Section::VirtualDevices);
+        }
+        self.virtual_devices = devices;
+    }
+
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led and map-to-gamepad actions, monotone cubic curves): it is then written in Joystick Gobloon's own format, which
+    /// light-led and map-to-gamepad actions, monotone cubic curves, stored virtual devices): it is then written in Joystick Gobloon's own format, which
     /// Joystick Gremlin cannot open.
     pub fn needs_own_format(&self) -> bool {
         !self.modifiers.is_empty()
+            || !self.virtual_devices.is_empty()
             || self
                 .inputs
                 .iter()

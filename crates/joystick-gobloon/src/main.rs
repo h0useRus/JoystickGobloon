@@ -25,6 +25,7 @@ mod substitute_view;
 mod tray;
 mod update;
 mod viewer_view;
+mod virtual_setup;
 mod vjoy_config_view;
 mod vjoy_view;
 

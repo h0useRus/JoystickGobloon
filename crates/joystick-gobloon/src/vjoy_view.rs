@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, RichText, Vec2};
 use gob_i18n::I18n;
 use gob_virtual::{
-    Backend, Capabilities, ControlKind, DeviceConfig, DeviceInfo, GamepadControl, GamepadInfo,
-    Status,
+    Backend, Capabilities, Change, ControlKind, DeviceConfig, DeviceInfo, GamepadControl,
+    GamepadInfo, Status,
 };
 
 use crate::style::{self, icon};
@@ -104,12 +104,46 @@ impl VJoyView {
         }
     }
 
-    /// `locked`: a profile is active and holds vJoy devices, so they cannot be reconfigured.
-    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, locked: bool) {
-        if self.config.poll(i18n).is_some() {
+    /// Collects finished configuration work; `Some(succeeded)` when changes finished. Call it
+    /// every frame, also while the page is not shown.
+    pub fn poll(&mut self, i18n: &I18n) -> Option<bool> {
+        let done = self.config.poll(i18n);
+        if done.is_some() {
             self.refreshed = None;
             self.test = None;
         }
+        done
+    }
+
+    /// Whether configuration changes are running.
+    pub fn busy(&self) -> bool {
+        self.config.busy()
+    }
+
+    /// The backend's capabilities, `None` without virtual devices.
+    pub fn capabilities(&self) -> Option<Capabilities> {
+        self.vjoy.as_ref().ok().map(|v| v.capabilities())
+    }
+
+    /// The stored configuration of the devices (may still be loading).
+    pub fn configs(&self) -> &[DeviceConfig] {
+        &self.config.configs
+    }
+
+    /// The last configuration result for the user (done, or why it failed).
+    pub fn config_message(&self) -> Option<&Result<String, String>> {
+        self.config.message.as_ref()
+    }
+
+    /// Applies `changes` one after another (each may ask for administrator rights).
+    pub fn apply(&mut self, changes: Vec<Change>) {
+        self.release();
+        let labelled = changes.into_iter().map(|c| (format!("{c:?}"), c)).collect();
+        self.config.run_all(labelled);
+    }
+
+    /// `locked`: a profile is active and holds vJoy devices, so they cannot be reconfigured.
+    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, locked: bool) {
         if std::mem::take(&mut self.config.cancelled) {
             self.draft = None;
         }

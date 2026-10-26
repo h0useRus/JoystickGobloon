@@ -317,6 +317,50 @@ fn modifiers_and_layers_round_trip() {
 }
 
 #[test]
+fn virtual_devices_round_trip() {
+    use gob_core::{VirtualDevices, VirtualJoystick};
+    let mut p = Profile::default();
+    // The section is left out while there is nothing in it.
+    assert!(!gob_gremlin::to_string(&p).contains("virtual-devices"));
+    p.set_virtual_devices(VirtualDevices {
+        joysticks: vec![
+            VirtualJoystick {
+                id: 1,
+                axes: (1..=8).collect(),
+                buttons: 128,
+                hats: 4,
+                discrete_hats: false,
+            },
+            VirtualJoystick {
+                id: 3,
+                axes: vec![1, 2, 6],
+                buttons: 16,
+                hats: 1,
+                discrete_hats: true,
+            },
+        ],
+        gamepads: vec![1, 2],
+    });
+    let written = gob_gremlin::to_string(&p);
+    assert!(written.contains(
+        r#"<joystick id="1" axes="X Y Z Rx Ry Rz Sl0 Sl1" buttons="128" hats="4" hat-type="continuous"/>"#
+    ));
+    assert!(
+        written.contains(
+            r#"<joystick id="3" axes="X Y Rz" buttons="16" hats="1" hat-type="discrete"/>"#
+        )
+    );
+    assert!(written.contains(r#"<gamepad id="2"/>"#));
+    assert!(written.contains(r#"<profile app="Gobloon" version="1">"#));
+    let read = assert_round_trip(&written);
+    assert_eq!(read.virtual_devices, p.virtual_devices);
+    assert!(
+        read.order
+            .ends_with(&[Section::Devices, Section::VirtualDevices])
+    );
+}
+
+#[test]
 fn format_headers() {
     let body = "<inputs/><modes><mode>Default</mode></modes>";
     let parse = |root: &str| gob_gremlin::from_str(&format!("{root}{body}</profile>"));

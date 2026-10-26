@@ -26,6 +26,6 @@ pub use logical::{
 pub use modifier::{Layer, Modifier, Selection};
 pub use profile::{
     ActionConfig, AxisDirection, Device, InputBinding, Mode, Profile, Section, VirtualButton,
-    same_device_name,
+    VirtualDevices, VirtualJoystick, same_device_name,
 };
 pub use xml::{Element, Node};
