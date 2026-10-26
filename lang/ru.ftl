@@ -588,4 +588,6 @@ pad-right-x = Правый стик X
 pad-right-y = Правый стик Y
 pad-lt = LT (левый курок)
 pad-rt = RT (правый курок)
+pad-ls-short = LS
+pad-rs-short = RS
 pad-dpad = Крестовина

@@ -1196,12 +1196,20 @@ fn input_name(i18n: &I18n, (kind, id): Key, label: Option<&str>) -> String {
         return l.to_string();
     }
     match kind {
-        Kind::Axis if (1..=8).contains(&id) => i18n.tr(&format!("vjoy-axis-{id}")),
-        Kind::Axis => i18n.trf("viewer-axis", &[("n", id.into())]),
+        Kind::Axis => axis_name(i18n, id),
         Kind::Button => i18n.trf("vjoy-button-n", &[("n", id.into())]),
         Kind::Hat => i18n.trf("vjoy-hat-n", &[("n", id.into())]),
         Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id)),
         Kind::Other => id.to_string(),
+    }
+}
+
+/// Axis name by slot, the same on every page: X Axis ... Z Rotation, Slider, Dial; Axis 9 ...
+pub fn axis_name(i18n: &I18n, slot: u32) -> String {
+    if (1..=8).contains(&slot) {
+        i18n.tr(&format!("vjoy-axis-{slot}"))
+    } else {
+        i18n.trf("viewer-axis", &[("n", slot.into())])
     }
 }
 

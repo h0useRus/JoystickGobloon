@@ -588,4 +588,6 @@ pad-right-x = 右摇杆 X
 pad-right-y = 右摇杆 Y
 pad-lt = LT（左扳机）
 pad-rt = RT（右扳机）
+pad-ls-short = LS
+pad-rs-short = RS
 pad-dpad = 方向键

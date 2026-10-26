@@ -588,4 +588,6 @@ pad-right-x = Rechter Stick X
 pad-right-y = Rechter Stick Y
 pad-lt = LT (linker Trigger)
 pad-rt = RT (rechter Trigger)
+pad-ls-short = LS
+pad-rs-short = RS
 pad-dpad = Steuerkreuz

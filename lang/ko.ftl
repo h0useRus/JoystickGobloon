@@ -588,4 +588,6 @@ pad-right-x = 오른쪽 스틱 X
 pad-right-y = 오른쪽 스틱 Y
 pad-lt = LT (왼쪽 트리거)
 pad-rt = RT (오른쪽 트리거)
+pad-ls-short = LS
+pad-rs-short = RS
 pad-dpad = 방향 패드

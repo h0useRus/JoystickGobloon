@@ -588,4 +588,6 @@ pad-right-x = Stick droit X
 pad-right-y = Stick droit Y
 pad-lt = LT (gâchette gauche)
 pad-rt = RT (gâchette droite)
+pad-ls-short = LS
+pad-rs-short = RS
 pad-dpad = Croix directionnelle

@@ -588,4 +588,6 @@ pad-right-x = Right stick X
 pad-right-y = Right stick Y
 pad-lt = LT (left trigger)
 pad-rt = RT (right trigger)
+pad-ls-short = LS
+pad-rs-short = RS
 pad-dpad = D-pad

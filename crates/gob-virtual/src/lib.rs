@@ -189,6 +189,18 @@ pub trait Backend: Send + Sync {
     }
 }
 
+/// Which inputs a virtual gamepad's controls are when the gamepad is read back as an input
+/// device (e.g. in the input viewer).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GamepadInputs {
+    /// (axis slot 1..=8, stick or trigger).
+    pub axes: Vec<(u8, GamepadControl)>,
+    /// (button number from 1, button).
+    pub buttons: Vec<(u32, GamepadControl)>,
+    /// Hat number of the d-pad.
+    pub dpad: Option<u32>,
+}
+
 /// A configured virtual gamepad; its layout is fixed (Xbox-style).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GamepadInfo {
@@ -347,6 +359,18 @@ pub fn capabilities() -> Capabilities {
     return linux::CAPABILITIES;
     #[cfg(not(any(windows, target_os = "linux")))]
     return NO_CAPABILITIES;
+}
+
+/// How the input device named `device_name` maps to gamepad controls, when it is one of this
+/// backend's virtual gamepads.
+pub fn gamepad_inputs(device_name: &str) -> Option<GamepadInputs> {
+    #[cfg(target_os = "linux")]
+    return linux::gamepad_inputs(device_name);
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = device_name;
+        None
+    }
 }
 
 static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();

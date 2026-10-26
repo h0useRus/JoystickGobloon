@@ -14,7 +14,6 @@ use gob_virtual::{
 
 use crate::style::{self, icon};
 
-const AXIS_NAMES: [&str; 8] = ["X", "Y", "Z", "Rx", "Ry", "Rz", "S1", "S2"];
 const REFRESH: Duration = Duration::from_millis(500);
 /// Hat directions for the 3x3 tester grid (hundredths of a degree), row by row.
 const HAT_GRID: [Option<u16>; 9] = [
@@ -379,7 +378,7 @@ impl VJoyView {
                 ui.add_space(6.0);
                 let held = self.test.as_ref().is_some_and(|t| t.device.is_some());
                 if let Some(test) = &mut self.test {
-                    ui.add_enabled_ui(can && held, |ui| test.show(ui, &layout));
+                    ui.add_enabled_ui(can && held, |ui| test.show(ui, i18n, &layout));
                 }
             });
     }
@@ -592,7 +591,7 @@ impl Tester {
         }
     }
 
-    fn show(&mut self, ui: &mut egui::Ui, info: &DeviceInfo) {
+    fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, info: &DeviceInfo) {
         ui.spacing_mut().slider_width = 320.0;
         egui::Grid::new("vjoy-axes")
             .num_columns(2)
@@ -600,7 +599,7 @@ impl Tester {
             .show(ui, |ui| {
                 for &slot in &info.axes {
                     let i = usize::from(slot) - 1;
-                    ui.label(RichText::new(AXIS_NAMES[i]).monospace());
+                    ui.label(crate::devices_view::axis_name(i18n, slot.into()));
                     ui.horizontal(|ui| {
                         let slider =
                             egui::Slider::new(&mut self.axes[i], -1.0..=1.0).fixed_decimals(2);

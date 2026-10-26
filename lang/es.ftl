@@ -588,4 +588,6 @@ pad-right-x = Stick derecho X
 pad-right-y = Stick derecho Y
 pad-lt = LT (gatillo izquierdo)
 pad-rt = RT (gatillo derecho)
+pad-ls-short = LS
+pad-rs-short = RS
 pad-dpad = Cruceta
