@@ -306,7 +306,7 @@
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Hiding lasts only while Joystick Gobloon runs. Close the app and every program sees the sticks again.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>There is no list of programs that still see hidden devices.</span></li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Programs that read raw HID (hidraw), Steam for example, are not covered. Turn off Steam Input for the sticks if Steam sees them twice.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Programs that read raw HID (hidraw), such as Steam or Wine and Proton, are not covered when your user may open the stick's hidraw node; such a stick gets a warning sign on its tab and in the device hiding window. Turn off hidraw (or Steam Input) for that stick in those programs, or games see it twice.</span></li>
             </ul>
           </article>
         </section>
@@ -318,7 +318,7 @@
             <p>The two stick game from the start of this page, from nothing to playing:</p>
             <ol class="numbered">
               <li><strong>Create two virtual joysticks</strong> on the Virtual joysticks page: vJoy #1 for the left stick and vJoy #2 for the right one, each with the axes and as many buttons as the stick has.</li>
-              <li><strong>Build or import the profile.</strong> Import a Joystick Gremlin profile from the toolbar, or start a new one. If it was made on another PC, use <span class="term">Map controls</span> on the Devices page to match it to your sticks.</li>
+              <li><strong>Build or import the profile.</strong> Import a Joystick Gremlin profile from the toolbar, or start a new one. If it was made on another PC, use <span class="term">Map controls</span> on the Devices page to match it to your sticks. A profile also remembers the virtual devices it uses: when one is missing here, a banner on the Devices page offers to set it up.</li>
               <li><strong>Map every input.</strong> Select an input on the Devices page and add <a href="learn.html#map-to-vjoy">Map to vJoy</a>: left stick inputs to vJoy #1, right stick inputs to vJoy #2.</li>
               <li><strong>Add the extras.</strong> A Tempo action on the mode button: a short press sends one vJoy button that the game uses to cycle modes, a long press sends another that jumps between Combat and Travel. Make a thumb button the M1 modifier and give the buttons you want doubled an M1 layer. Put a response curve before Map to vJoy on pitch and yaw.</li>
               <li><strong>Hide the real sticks</strong> in the Device hiding window and reconnect them.</li>

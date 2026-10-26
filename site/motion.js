@@ -154,12 +154,12 @@
     vjoy(stage, W, H) {
       const knobs = [];
       for (let i = 0; i < 8; i++) {
-        const row = overlay(stage, W, H, 125, 418 + i * 32, 328, 24, "ov-slider");
+        const row = overlay(stage, W, H, 148, 418 + i * 32, 328, 24, "ov-slider");
         const rail = document.createElement("i");
         rail.className = "rail";
         const knob = document.createElement("i");
         knob.className = "knob";
-        knob.style.left = `${((277 - 125) / 328) * 100}%`;
+        knob.style.left = `${((300 - 148) / 328) * 100}%`;
         row.append(rail, knob);
         knobs.push(knob);
       }
@@ -200,9 +200,9 @@
     // A live feed: the axis bars breathe and settle on their values, buttons 2 to 16 light in a chase.
     viewer(stage, W, H) {
       const colors = ["#3b8ede", "#e5484d", "#46a758", "#f0932b", "#9a9a9a", "#e8c13a", "#1fb0bf", "#8e57d4"];
-      const rest = [0.97, 0, 0, -1, -1, -1, -1, -1];
+      const rest = [0.99, 0, 0, -1, -1, -1, -1, -1];
       const fills = colors.map((c, i) => {
-        const bar = overlay(stage, W, H, 324 + i * 72, 482, 20, 100, "ov-bar");
+        const bar = overlay(stage, W, H, 328 + i * 80, 482, 20, 100, "ov-bar");
         const fill = document.createElement("i");
         fill.style.background = c;
         bar.append(fill);

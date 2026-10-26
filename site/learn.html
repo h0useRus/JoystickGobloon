@@ -226,7 +226,7 @@
           <h2 id="axes-title">Axes</h2>
           <article class="learn-action" id="response-curve">
             <h3><i class="ph ph-chart-line" aria-hidden="true"></i>Response curve</h3>
-            <p>Shapes an axis: drag the points of the curve, double click to add one, right click to remove one. Linear, cubic spline, smooth (no overshoot) and Bézier curves. A cubic spline can swing past its points, turning back or running into the end of the axis; the smooth curve stays between them. <span class="term">Symmetric</span> mirrors your edits through the center; <span class="term">Invert</span> flips the curve. The deadzones below the chart set where the axis does nothing: at both ends and around the center. Put the curve before <span class="term">Map to vJoy</span>, which then sends the shaped value.</p>
+            <p>Shapes an axis: drag the points of the curve, double click to add one, right click a point to remove it. A right click on empty space inverts the curve (a switch in the settings turns this off). Linear, cubic spline, smooth (no overshoot) and Bézier curves. A cubic spline can swing past its points, turning back or running into the end of the axis; the smooth curve stays between them. <span class="term">Symmetric</span> mirrors your edits through the center; <span class="term">Invert</span> flips the curve. The deadzones below the chart set where the axis does nothing: at both ends and around the center. Put the curve before <span class="term">Map to vJoy</span>, which then sends the shaped value.</p>
             <figure class="shot"><img src="img/actions/response-curve.png" loading="lazy" alt="Response curve: a cubic spline that is flat around the center, with its points"></figure>
           </article>
           <article class="learn-action" id="split-axis">
@@ -236,7 +236,7 @@
           </article>
           <article class="learn-action" id="merge-axis">
             <h3><i class="ph ph-arrows-merge" aria-hidden="true"></i>Merge axis</h3>
-            <p>Combines two axes into one value: average, minimum, maximum, sum, difference (for two pedals as one rudder), the one deflected most, or the one closer to the center. Bind it to both axes; the add menu offers an existing merge so both share it.</p>
+            <p>Combines two axes into one value: average, minimum, maximum, sum, difference (for two pedals as one rudder), the one deflected most, or the one closer to the center. It runs when either axis moves, so it is bound to both: picking an axis in its editor binds it there and takes it off the axis it no longer reads, and linking a new merge to another axis makes that its second axis. A merge reads two axes, so it cannot be linked to a third one.</p>
             <figure class="shot"><img src="img/actions/merge-axis.png" loading="lazy" alt="Merge axis with its two axes and the operation"></figure>
           </article>
           <article class="learn-action" id="dual-axis-deadzone">
