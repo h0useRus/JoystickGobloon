@@ -54,8 +54,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
 - plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
-- docs/ACTIONS.md  user guide to every action with a picture of its editor (docs/actions/*.png, the right panel
-  cropped from a 1102x732 window); update with a new action. No experimental actions there
+- User documentation lives only on the website (site/ on the `web` branch: learn.html = every action with a
+  picture of its editor in site/img/actions/, the right panel cropped from a 1102x732 window; screenshots in
+  site/img/). README.md is a short overview linking there; no Markdown docs besides docs/CODE_SIGNING.md.
+  No experimental actions on the site
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
 

@@ -17,177 +17,78 @@
 </p>
 
 <p align="center">
+  <a href="https://h0userus.github.io/gobloon/"><b>Website</b></a> ·
   <a href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><b>Download</b></a> ·
-  <a href="#getting-started"><b>Getting started</b></a> ·
-  <a href="docs/ACTIONS.md"><b>Documentation</b></a>
+  <a href="https://h0userus.github.io/gobloon/learn.html"><b>Documentation</b></a> ·
+  <a href="https://h0userus.github.io/gobloon/emulation.html"><b>Virtual devices and hiding</b></a>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/devices.png" width="860" alt="Bindings of a VKB Gladiator stick: a tempo action with a short press to vJoy and a long press that changes the mode">
+  <img src="https://h0userus.github.io/gobloon/img/vjoy.png" width="860" alt="vJoy page: device tabs, the device editor and the output tester">
 </p>
 
 ---
 
-Flight-sim and space-sim players with HOTAS setups usually run three tools side by side:
-[HidHide](https://github.com/nefarius/HidHide) to hide the physical sticks from games,
-[vJoy](https://github.com/jshafer817/vJoy) for virtual joysticks, and
-[Joystick Gremlin](https://github.com/WhiteMagic/JoystickGremlin) to map one to the other.
-
-**Joystick Gobloon** replaces the user interfaces of all three with a single fast, native app written in Rust.
-It talks to the HidHide and vJoy drivers directly, opens your Joystick Gremlin profiles as they are, and keeps the
-Gremlin workflow you already know.
-
-## Windows and Linux
-
-The app and its profiles are the same on both systems; what does the work underneath differs, and so do the limits.
-
-| | Windows 10 / 11 (x64) | Linux (x86_64: desktop distributions, Steam Deck desktop mode; X11 and Wayland) |
-| --- | --- | --- |
-| Package | Installer (also installs the HidHide and vJoy drivers) or portable zip; updates itself | AppImage; updates itself |
-| Virtual joysticks | **vJoy** driver: up to 16 devices, each up to 8 axes, 128 buttons, 4 hats; devices are configured in the app (one UAC prompt per change) | **uinput**, no driver: devices appear when a profile is activated; each up to 8 axes, 95 buttons, 4 hats |
-| Virtual gamepads | Not yet (needs a driver) | **Xbox-style gamepads** (up to 4) on uinput: games, Steam and Proton see an Xbox 360 controller |
-| Device hiding | **HidHide** driver: hidden for every program, also when Joystick Gobloon is closed; a list of programs that still see hidden devices | Joystick Gobloon reads hidden devices exclusively, so games get nothing from them — **only while Joystick Gobloon runs**; no program list; programs that read raw HID (`hidraw`, e.g. Steam) are not covered |
-| Physical controllers | DirectInput: all buttons (128 on VKB); Xbox controllers through XInput, also in the background: LT and RT as separate axes, Guide as button 11 | evdev: the kernel reports at most **80 buttons** per device; split bigger sticks into several virtual HID devices in the vendor's tool |
-| Access | Administrator rights only to install drivers and change vJoy devices | One-time *Grant access* on the Devices page (a udev rule, asks for your password) |
-| Keyboard keys as inputs | Yes | No: reading every keyboard would expose what you type (key and mouse **output** works) |
-| Text to speech | Windows voices (SAPI) | speech-dispatcher (`spd-say`) |
-| Tray icon | Yes | Needs AppIndicator (on GNOME an extension); on Wayland "hide to tray" minimizes |
+HOTAS players usually run three tools side by side: [HidHide](https://github.com/nefarius/HidHide) to hide the
+physical sticks from games, [vJoy](https://github.com/jshafer817/vJoy) for virtual joysticks, and
+[Joystick Gremlin](https://github.com/WhiteMagic/JoystickGremlin) to map one to the other. **Joystick Gobloon**
+replaces all three user interfaces with one fast, native app written in Rust. It talks to the drivers directly,
+imports Joystick Gremlin profiles and keeps the workflow you know.
 
 ## Features
 
-### Profiles and bindings
+- **Opens Joystick Gremlin profiles** (R14 and later) without losing anything; **Map controls** matches a profile
+  made on another PC to your devices.
+- **Every Gremlin action** — map to vJoy, response curves, tempo, double tap, chain, macros, keyboard and mouse
+  output, merge and split axis, conditions, sounds, text to speech and more — plus modes, undo / redo.
+- **Modifiers and layers**: hold M1, M2 or both and the same button or axis does something else.
+- **Virtual joysticks and gamepads** configured right in the app; profiles remember the ones they use.
+- **Device hiding** with one click on a stick's eye, so games see only the virtual devices.
+- **Input viewer and calibration**, tray icon, light and dark theme, seven languages.
 
-- **Opens Joystick Gremlin profiles** — imports Gremlin R14 profiles without losing anything; actions Joystick Gobloon
-  does not run yet are kept untouched. A profile stays in Gremlin's format until you use something only Joystick
-  Gobloon has (modifiers); then it is saved in Joystick Gobloon's own format, and the app asks first.
-- **All Gremlin R14 actions**: map to vJoy, response curves (piecewise linear, cubic spline, Bézier), modes,
-  tempo (short / long press), double tap, chain, smart toggle, macros, keyboard and mouse output, split / merge axis,
-  axis delta, dual-axis deadzone, hat as buttons, conditions, sounds, text to speech, run command, load profile and more
-  ([all actions with pictures](docs/ACTIONS.md)).
-- **Modes** with inheritance, per-mode overrides, **undo / redo**.
-- **Keyboard keys and a logical device** as inputs, bound exactly like joystick buttons and axes.
-- **Map controls** — a profile made on another PC is matched to your devices in one click.
+| | Windows 10 / 11 | Linux |
+| --- | --- | --- |
+| Package | Installer (with the drivers) or portable zip, self-updating | AppImage, self-updating |
+| Virtual devices | vJoy joysticks | uinput joysticks and Xbox-style gamepads |
+| Device hiding | HidHide, for every program | Exclusive reading while the app runs |
 
-### Modifiers
-
-- Name a few buttons as **modifiers** (M1, M2, ...): press *Add a modifier* and then the button on your stick.
-- While a modifier is held, every input that has a **layer** for it runs that layer's actions instead of its base:
-  one button can do different things with nothing, M1, M2 or M1+M2 held.
-  Only the layer of the exact combination runs: M1's layer does not run while M1+M2 is held.
-- Layers are chips above an input's actions; a dot marks the ones in use. Inputs without layers ignore modifiers.
-- An **additive** layer runs together with the base instead of replacing it, e.g. an axis that drives a second output
-  only while M1 is held.
-- A button keeps the layer it was pressed in until it is released, so letting go of the modifier first never leaves
-  anything stuck; outputs of a layer that stops go back to rest.
-- An axis layer can **keep the last value** instead: a trim axis on M1 holds its setting after M1 is released, and the
-  main axis on the base holds its position while M1 is held.
-- The modifiers light up next to the mode selector while held; a modifier's own button shows a lock and runs no actions.
-
-<p align="center">
-  <img src="docs/screenshots/modifiers.png" width="860" alt="Layers Base, M1, M2 and M1+M2 above a button's actions, with the Modifiers window: M1 and M2 on two buttons of the right stick">
-</p>
-
-### Virtual joysticks (vJoy)
-
-- Create, change and remove vJoy devices right in the app — no *Configure vJoy*, one UAC prompt per change.
-- Each device shows its axes, buttons and hats at a glance; a new device starts as a copy of the first one.
-- A built-in **output tester**: lock a device and move its axes, buttons and hats by hand.
-
-<p align="center">
-  <img src="docs/screenshots/vjoy.png" width="49%" alt="vJoy page in the dark theme: device tabs, the device editor and the output tester">
-  <img src="docs/screenshots/vjoy-light.png" width="49%" alt="The same vJoy page in the light theme">
-</p>
-
-### Device hiding (HidHide)
-
-- Hide a physical stick from every game with one click on its eye; Joystick Gobloon itself still sees it.
-- Manage which programs may see hidden devices, including HidHide's inverse mode.
-- Toggle hiding for the whole system from the toolbar or the tray icon.
-
-### Input viewer and calibration
-
-- Live graphs of every axis, button and hat — physical sticks and vJoy devices alike, in the main window or its own.
-- Axis calibration with center and end points.
-
-<p align="center">
-  <img src="docs/screenshots/viewer.png" width="66%" alt="Input viewer: axes over time, current axis values, buttons and hats of a vJoy device">
-  <img src="docs/screenshots/hidhide.png" width="32%" alt="Device hiding window: the VKB sticks are hidden, the vJoy devices are visible">
-</p>
-
-### Everyday comfort
-
-- Tray icon: click to show or hide the window, double click to activate the profile; in the tray the app uses
-  almost no CPU.
-- Start with Windows, activate the profile on start.
-- Controllers are read when they change: low latency, short button presses are never missed.
-- Light, dark or system theme.
-- English, Русский, Deutsch, Español, Français, 简体中文 and 한국어 — more languages are a text file away.
+Everything else — every action with a picture of its editor, Windows and Linux differences, the FAQ — is on the
+[website](https://h0userus.github.io/gobloon/).
 
 ## Getting started
 
-1. Download the installer from the [latest release](https://github.com/h0useRus/JoystickGobloon/releases/latest)
-   (or the portable zip). The installer also installs the signed **HidHide** and **vJoy 2.1.9.1** drivers when they
-   are missing; Windows may ask for a restart afterwards.
-2. Start Joystick Gobloon and import your Joystick Gremlin profile (toolbar → *Import*).
-3. If the profile was made on another PC, use **Map controls** on the Devices page.
-4. Hide your physical sticks (eye button in the toolbar) and press **Activate** (▶).
+**Windows 10 / 11 (x64):** download the installer from the
+[latest release](https://github.com/h0useRus/JoystickGobloon/releases/latest) (or the portable zip). It installs the
+signed **HidHide** and **vJoy 2.1.9.1** drivers when they are missing. Import your Joystick Gremlin profile, use
+**Map controls** on the Devices page if it was made on another PC, hide your sticks and press **Activate** (▶).
 
-Requirements: Windows 10 or 11 (x64).
+**Linux (x86_64):** download `JoystickGobloon-<version>-x86_64.AppImage`, `chmod +x` it and start it. Click
+**Grant access** once on the Devices page, then import your profile as above.
 
-**Linux:** download `JoystickGobloon-<version>-x86_64.AppImage`, make it executable (`chmod +x`) and start it. On the
-Devices page click **Grant access** once, then import your profile as above.
+Code signing through SignPath is being set up ([code signing policy](docs/CODE_SIGNING.md)); until then Windows
+SmartScreen may warn on the first start: *More info → Run anyway*.
 
-Code signing of releases through SignPath is being set up (see the [code signing policy](docs/CODE_SIGNING.md)).
-Until then — and for a while after, until a new release has been downloaded often enough — Windows SmartScreen may
-warn on the first start: choose *More info → Run anyway*.
-
-> **Status:** alpha. Daily-driver features are in place and used with a Star Citizen dual-VKB profile; expect rough
-> edges. See the [releases](https://github.com/h0useRus/JoystickGobloon/releases).
-
-## Documentation
-
-- [Actions](docs/ACTIONS.md) — what every action does, with a picture of its editor.
-- [Modifiers](#modifiers) — buttons that switch inputs to other layers of actions.
-- [Windows and Linux](#windows-and-linux) — what each system uses and its limits.
-- [Code signing policy](docs/CODE_SIGNING.md).
+> **Status:** alpha — daily-driver features are in place; expect rough edges.
 
 ## Building from source
 
 Rust is pinned in [`rust-toolchain.toml`](rust-toolchain.toml).
 
 ```sh
-cargo run -p joystick-gobloon                 # debug build
-cargo build -p joystick-gobloon --release     # target/release/JoystickGobloon.exe
+cargo run -p joystick-gobloon        # debug build
 cargo test --workspace
 ```
 
-| Crate | Purpose |
-| --- | --- |
-| `joystick-gobloon` | The eframe / egui application |
-| `gob-core` | Profile model: Joystick Gremlin R14 plus Joystick Gobloon's own features (modifiers and layers) |
-| `gob-gremlin` | Profile files: Gremlin R14 import, Gremlin or Joystick Gobloon format on save, lossless round trip |
-| `gob-engine` | Runs a profile: input → actions → vJoy, keyboard, mouse |
-| `gob-input` | DirectInput input (on change or polling) and the keyboard hook |
-| `gob-vjoy` | vJoy driver: output and device configuration |
-| `gob-hidhide` | HidHide driver: hiding, application list |
-| `gob-i18n` | Fluent translations |
-
-## Translations
-
-All texts live in [`lang/*.ftl`](lang) ([Fluent](https://projectfluent.org/) format). To add a language, copy
-[`lang/en.ftl`](lang/en.ftl) to `lang/<code>.ftl`, translate the values and put the `lang` folder next to the
-executable — or open a pull request to ship it with the app.
+Translations are [Fluent](https://projectfluent.org/) files in [`lang/`](lang): copy `en.ftl` to `<code>.ftl`,
+translate it and put the `lang` folder next to the executable, or open a pull request.
 
 ## Credits
 
-Joystick Gobloon stands on the shoulders of
-[HidHide](https://github.com/nefarius/HidHide) by Benjamin Höglinger-Stelzer (Nefarius),
+Built on [HidHide](https://github.com/nefarius/HidHide) by Benjamin Höglinger-Stelzer (Nefarius),
 [vJoy](https://github.com/shauleiz/vJoy) by Shaul Eizikovich (signed 2.1.9.1 build by
 [Justin Shafer](https://github.com/jshafer817/vJoy)) and
 [Joystick Gremlin](https://github.com/WhiteMagic/JoystickGremlin) by Lionel Ott.
-
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/).
+Free code signing by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 
 ## License
 
