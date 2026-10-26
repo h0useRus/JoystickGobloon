@@ -119,6 +119,8 @@ settings-poll-interval-tip = How often a controller is polled: every controller 
 settings-poll-interval-unused = Not used now: every connected controller reports its changes, so none is polled. It applies when "Read controllers on change" is off or a controller cannot report changes.
 settings-monotonic-curves = Curves only rise or fall
 settings-monotonic-curves-tip = Response curve editor: a knot or handle stops where the curve would turn back, so it crosses zero only once. Curves that already turn back are edited freely.
+settings-curve-right-click-invert = Right-click inverts curves
+settings-curve-right-click-invert-tip = Response curve editor: a right click on empty space inverts the curve. The Invert button always does.
 settings-warn-gremlin = Warn when saving changes the profile format
 settings-warn-gremlin-tip = Profiles with modifiers or layers are saved in a format Joystick Gremlin cannot open.
 gremlin-format-title = Joystick Gremlin will not open it
@@ -210,7 +212,8 @@ action-undo = Undo (Ctrl+Z)
 action-redo = Redo (Ctrl+Y)
 status-undone = Undone
 status-redone = Redone
-edit-curve-help = Drag a point or handle to move it · Click empty space to invert · Double-click to add a point · Right-click a point to remove it
+edit-curve-help = Drag a point or handle to move it · Double-click to add a point · Right-click a point to remove it
+edit-curve-help-invert = Right-click empty space to invert
 
 # vJoy mapping
 vjoy-device-n = vJoy #{ $n }

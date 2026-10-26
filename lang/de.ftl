@@ -119,6 +119,8 @@ settings-poll-interval-tip = Wie oft ein Controller abgefragt wird: alle Control
 settings-poll-interval-unused = Derzeit nicht verwendet: Jeder angeschlossene Controller meldet seine Änderungen, daher wird keiner abgefragt. Gilt, wenn „Controller bei Änderung lesen“ aus ist oder ein Controller keine Änderungen melden kann.
 settings-monotonic-curves = Kurven steigen oder fallen nur
 settings-monotonic-curves-tip = Kurveneditor: Ein Punkt oder Anfasser hält dort an, wo die Kurve umkehren würde, sodass sie die Null nur einmal kreuzt. Kurven, die bereits umkehren, lassen sich frei bearbeiten.
+settings-curve-right-click-invert = Rechtsklick invertiert Kurven
+settings-curve-right-click-invert-tip = Kurveneditor: Ein Rechtsklick auf eine freie Fläche invertiert die Kurve. Die Schaltfläche „Invertieren“ funktioniert immer.
 settings-warn-gremlin = Warnen, wenn Speichern das Profilformat ändert
 settings-warn-gremlin-tip = Profile mit Modifikatoren oder Ebenen werden in einem Format gespeichert, das Joystick Gremlin nicht öffnen kann.
 gremlin-format-title = Joystick Gremlin wird es nicht öffnen
@@ -210,7 +212,8 @@ action-undo = Rückgängig (Strg+Z)
 action-redo = Wiederholen (Strg+Y)
 status-undone = Rückgängig gemacht
 status-redone = Wiederholt
-edit-curve-help = Punkt oder Griff ziehen, um ihn zu verschieben · Klick auf freie Fläche invertiert · Doppelklick fügt einen Punkt hinzu · Rechtsklick auf einen Punkt entfernt ihn
+edit-curve-help = Punkt oder Griff ziehen, um ihn zu verschieben · Doppelklick fügt einen Punkt hinzu · Rechtsklick auf einen Punkt entfernt ihn
+edit-curve-help-invert = Rechtsklick auf freie Fläche invertiert
 
 # vJoy mapping
 vjoy-device-n = vJoy #{ $n }

@@ -74,11 +74,15 @@ impl Editor<'_> {
         });
 
         ui.horizontal_top(|ui| {
-            let help = self.i18n.tr("edit-curve-help");
+            let mut help = self.i18n.tr("edit-curve-help");
+            if self.curve_right_click_invert {
+                help = format!("{help} · {}", self.i18n.tr("edit-curve-help-invert"));
+            }
             let edit = Edit {
                 kind,
                 symmetric,
                 monotonic: self.monotonic_curves,
+                right_click_invert: self.curve_right_click_invert,
             };
             let (new, sel) = chart(ui, &id, edit, points, deadzone, size, selected, &help);
             if sel != selected {
@@ -129,6 +133,7 @@ impl Editor<'_> {
                         kind,
                         symmetric,
                         monotonic: self.monotonic_curves,
+                        right_click_invert: self.curve_right_click_invert,
                     };
                     self.set_points(&id, &edit.set(points, selected, x, y));
                 }
@@ -192,6 +197,8 @@ struct Edit {
     symmetric: bool,
     /// Keep a monotonic curve monotonic (setting).
     monotonic: bool,
+    /// A right click on empty space inverts the curve (setting).
+    right_click_invert: bool,
 }
 
 impl Edit {
@@ -227,7 +234,7 @@ fn x_of(rect: Rect, v: f64) -> f32 {
 }
 
 /// The chart. Drag a point or handle; double-click empty space adds a knot, right-click
-/// removes one, a single click on empty space inverts the curve.
+/// removes one; a right click on empty space inverts the curve if `edit.right_click_invert`.
 #[allow(clippy::too_many_arguments)]
 fn chart(
     ui: &mut egui::Ui,
@@ -240,7 +247,10 @@ fn chart(
     help: &str,
 ) -> (Option<Vec<(f64, f64)>>, usize) {
     let Edit {
-        kind, symmetric, ..
+        kind,
+        symmetric,
+        right_click_invert,
+        ..
     } = edit;
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click_and_drag());
     let response = response.on_hover_text(help);
@@ -357,45 +367,35 @@ fn chart(
     {
         selected = i;
     }
-    // A single click on empty space inverts, but only once it is clear it was not the
-    // first half of a double-click (which adds a point instead).
-    const DOUBLE_CLICK: f64 = 0.2;
-    let pending_id = ui.make_persistent_id(("curve-invert", id));
-    let now = ui.input(|i| i.time);
-    if response.double_clicked() {
-        ui.data_mut(|d| d.remove::<f64>(pending_id));
-        if let Some(pos) = response
+    // The double-click time is the system's (set on the context at startup).
+    if response.double_clicked()
+        && let Some(pos) = response
             .interact_pointer_pos()
             .filter(|_| on_point.is_none())
-        {
-            let (x, y) = to_curve(pos);
-            if x > -1.0
-                && x < 1.0
-                && let Some((p, at)) = edit.add(points, x, y)
-            {
-                return (Some(p), at);
-            }
-        }
-    } else if response.clicked() && on_point.is_none() {
-        ui.data_mut(|d| d.insert_temp(pending_id, now));
-    }
-    if let Some(clicked_at) = ui.data(|d| d.get_temp::<f64>(pending_id)) {
-        if now - clicked_at >= DOUBLE_CLICK {
-            ui.data_mut(|d| d.remove::<f64>(pending_id));
-            return (
-                Some(points.iter().map(|&(x, y)| (x, -y)).collect()),
-                selected,
-            );
-        }
-        ui.ctx()
-            .request_repaint_after(std::time::Duration::from_secs_f64(DOUBLE_CLICK));
-    }
-    if response.secondary_clicked()
-        && let Some(i) = on_point
     {
-        let p = Editable::remove(kind, points, i, symmetric);
-        if p.len() != points.len() {
-            return (Some(p), 0);
+        let (x, y) = to_curve(pos);
+        if x > -1.0
+            && x < 1.0
+            && let Some((p, at)) = edit.add(points, x, y)
+        {
+            return (Some(p), at);
+        }
+    }
+    if response.secondary_clicked() {
+        match on_point {
+            Some(i) => {
+                let p = Editable::remove(kind, points, i, symmetric);
+                if p.len() != points.len() {
+                    return (Some(p), 0);
+                }
+            }
+            None if right_click_invert => {
+                return (
+                    Some(points.iter().map(|&(x, y)| (x, -y)).collect()),
+                    selected,
+                );
+            }
+            None => {}
         }
     }
     (None, selected)

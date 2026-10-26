@@ -135,6 +135,10 @@ impl JoystickGobloonApp {
         i18n.set_language(&settings.language);
         style::install_fonts(&cc.egui_ctx);
         style::apply(&cc.egui_ctx, settings.theme);
+        // Double clicks (curve points, the hide button) follow the system's setting.
+        let double_click = crate::platform::double_click_time().as_secs_f64();
+        cc.egui_ctx
+            .options_mut(|o| o.input_options.max_double_click_delay = double_click);
 
         let logo =
             eframe::icon_data::from_png_bytes(LOGO_PNG).expect("embedded logo is a valid PNG");
@@ -1063,6 +1067,7 @@ impl JoystickGobloonApp {
             .collect();
         self.devices_view.experimental = self.settings.experimental;
         self.devices_view.monotonic_curves = self.settings.monotonic_curves;
+        self.devices_view.curve_right_click_invert = self.settings.curve_right_click_invert;
         self.devices_view.leds = if self.settings.experimental {
             self.leds.update(&devices, ui.ctx());
             self.leds.guids(&devices)

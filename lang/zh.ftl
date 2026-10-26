@@ -119,6 +119,8 @@ settings-poll-interval-tip = 控制器的轮询频率：关闭“在变化时读
 settings-poll-interval-unused = 当前未使用：所有已连接的控制器都会报告变化，因此不轮询任何控制器。关闭“在变化时读取控制器”或有控制器无法报告变化时才生效。
 settings-monotonic-curves = 曲线只升或只降
 settings-monotonic-curves-tip = 响应曲线编辑器：点或控制柄会停在曲线即将折返的位置，因此曲线只穿过零一次。已经折返的曲线可自由编辑。
+settings-curve-right-click-invert = 右键反转曲线
+settings-curve-right-click-invert-tip = 响应曲线编辑器：右键点击空白处会反转曲线。“反向”按钮始终可用。
 settings-warn-gremlin = 保存会改变配置文件格式时提醒
 settings-warn-gremlin-tip = 带有修饰键或层的配置文件会以 Joystick Gremlin 无法打开的格式保存。
 gremlin-format-title = Joystick Gremlin 将无法打开
@@ -210,7 +212,8 @@ action-undo = 撤销 (Ctrl+Z)
 action-redo = 重做 (Ctrl+Y)
 status-undone = 已撤销
 status-redone = 已重做
-edit-curve-help = 拖动点或控制柄以移动 · 点击空白处反转 · 双击添加点 · 右键点击点以移除
+edit-curve-help = 拖动点或控制柄以移动 · 双击添加点 · 右键点击点以移除
+edit-curve-help-invert = 右键点击空白处反转
 
 # vJoy mapping
 vjoy-device-n = vJoy #{ $n }

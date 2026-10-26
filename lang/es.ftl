@@ -119,6 +119,8 @@ settings-poll-interval-tip = Cada cuánto se sondea un mando: todos los mandos s
 settings-poll-interval-unused = Ahora no se usa: todos los mandos conectados informan de sus cambios, así que ninguno se sondea. Se aplica si «Leer los mandos al cambiar» está desactivado o un mando no puede informar de cambios.
 settings-monotonic-curves = Las curvas solo suben o bajan
 settings-monotonic-curves-tip = Editor de curvas de respuesta: un punto o tirador se detiene donde la curva daría la vuelta, así cruza el cero una sola vez. Las curvas que ya dan la vuelta se editan libremente.
+settings-curve-right-click-invert = El clic derecho invierte las curvas
+settings-curve-right-click-invert-tip = Editor de curvas de respuesta: un clic derecho en un espacio vacío invierte la curva. El botón Invertir funciona siempre.
 settings-warn-gremlin = Avisar si al guardar cambia el formato del perfil
 settings-warn-gremlin-tip = Los perfiles con modificadores o capas se guardan en un formato que Joystick Gremlin no puede abrir.
 gremlin-format-title = Joystick Gremlin no lo abrirá
@@ -210,7 +212,8 @@ action-undo = Deshacer (Ctrl+Z)
 action-redo = Rehacer (Ctrl+Y)
 status-undone = Deshecho
 status-redone = Rehecho
-edit-curve-help = Arrastre un punto o tirador para moverlo · Clic en un espacio vacío para invertir · Doble clic para añadir un punto · Clic derecho en un punto para quitarlo
+edit-curve-help = Arrastre un punto o tirador para moverlo · Doble clic para añadir un punto · Clic derecho en un punto para quitarlo
+edit-curve-help-invert = Clic derecho en un espacio vacío para invertir
 
 # vJoy mapping
 vjoy-device-n = vJoy #{ $n }

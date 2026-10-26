@@ -66,6 +66,8 @@ pub struct DevicesView {
     pub open_modifiers: bool,
     /// Curve edits keep curves monotonic (setting), filled by the app.
     pub monotonic_curves: bool,
+    /// A right click on empty space of a curve chart inverts it (setting), filled by the app.
+    pub curve_right_click_invert: bool,
     /// The profile's logical device with its live values, filled by the app for each frame.
     pub logical: Option<DeviceState>,
     /// Configured virtual gamepads and how many the system can have, filled by the app.
@@ -974,6 +976,7 @@ impl DevicesView {
                     leds: &self.leds,
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
+                    curve_right_click_invert: self.curve_right_click_invert,
                 };
                 for cfg in &configs {
                     editor.container(ui, &cfg.root_action, "actions", 0);
@@ -1012,6 +1015,7 @@ impl DevicesView {
                     leds: &self.leds,
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
+                    curve_right_click_invert: self.curve_right_click_invert,
                 };
                 editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));
             }

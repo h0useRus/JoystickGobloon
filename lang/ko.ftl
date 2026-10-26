@@ -119,6 +119,8 @@ settings-poll-interval-tip = 컨트롤러를 얼마나 자주 읽을지: "변경
 settings-poll-interval-unused = 지금은 사용되지 않음: 연결된 모든 컨트롤러가 변경을 알리므로 폴링하는 컨트롤러가 없습니다. "변경 시 컨트롤러 읽기"가 꺼져 있거나 변경을 알릴 수 없는 컨트롤러가 있을 때 적용됩니다.
 settings-monotonic-curves = 곡선은 증가 또는 감소만
 settings-monotonic-curves-tip = 응답 곡선 편집기: 곡선이 되돌아가려는 지점에서 점이나 핸들이 멈추므로 0을 한 번만 지납니다. 이미 되돌아가는 곡선은 자유롭게 편집됩니다.
+settings-curve-right-click-invert = 오른쪽 클릭으로 곡선 반전
+settings-curve-right-click-invert-tip = 응답 곡선 편집기: 빈 곳을 오른쪽 클릭하면 곡선이 반전됩니다. 반전 버튼은 항상 작동합니다.
 settings-warn-gremlin = 저장 시 프로필 형식이 바뀌면 경고
 settings-warn-gremlin-tip = 모디파이어나 레이어가 있는 프로필은 Joystick Gremlin이 열 수 없는 형식으로 저장됩니다.
 gremlin-format-title = Joystick Gremlin에서 열 수 없습니다
@@ -210,7 +212,8 @@ action-undo = 실행 취소 (Ctrl+Z)
 action-redo = 다시 실행 (Ctrl+Y)
 status-undone = 실행 취소됨
 status-redone = 다시 실행됨
-edit-curve-help = 점이나 핸들을 끌어 이동 · 빈 곳 클릭으로 반전 · 더블클릭으로 점 추가 · 점을 오른쪽 클릭해 제거
+edit-curve-help = 점이나 핸들을 끌어 이동 · 더블클릭으로 점 추가 · 점을 오른쪽 클릭해 제거
+edit-curve-help-invert = 빈 곳 오른쪽 클릭으로 반전
 
 # vJoy mapping
 vjoy-device-n = vJoy #{ $n }

@@ -78,7 +78,8 @@ on that tab.
 
 ### Response curve
 
-Shapes an axis: drag the points of the curve, double-click to add one, right-click to remove one. Linear, cubic
+Shapes an axis: drag the points of the curve, double-click to add one, right-click to remove one; a right click
+on empty space inverts the curve (can be turned off in the settings). Linear, cubic
 spline, smooth (no overshoot) and Bézier curves. A cubic spline can swing past its points, turning back or running
 into the end of the axis; the smooth curve stays between them. *Symmetric* mirrors your edits through the center; *Invert* flips the curve. The
 deadzones below the chart set where the axis does nothing: at both ends and around the center. Put the curve

@@ -119,6 +119,8 @@ settings-poll-interval-tip = Fréquence d’interrogation d’une manette : tout
 settings-poll-interval-unused = Inutilisé pour l’instant : chaque manette connectée signale ses changements, aucune n’est donc interrogée. S’applique si « Lire les manettes lors d’un changement » est désactivé ou si une manette ne peut pas signaler ses changements.
 settings-monotonic-curves = Les courbes ne font que monter ou descendre
 settings-monotonic-curves-tip = Éditeur de courbe de réponse : un point ou une poignée s’arrête là où la courbe repartirait en arrière, elle ne croise donc zéro qu’une fois. Les courbes qui repartent déjà en arrière s’éditent librement.
+settings-curve-right-click-invert = Le clic droit inverse les courbes
+settings-curve-right-click-invert-tip = Éditeur de courbe de réponse : un clic droit dans le vide inverse la courbe. Le bouton Inverser fonctionne toujours.
 settings-warn-gremlin = Avertir si l’enregistrement change le format du profil
 settings-warn-gremlin-tip = Les profils avec des modificateurs ou des couches sont enregistrés dans un format que Joystick Gremlin ne peut pas ouvrir.
 gremlin-format-title = Joystick Gremlin ne l’ouvrira pas
@@ -210,7 +212,8 @@ action-undo = Annuler (Ctrl+Z)
 action-redo = Rétablir (Ctrl+Y)
 status-undone = Annulé
 status-redone = Rétabli
-edit-curve-help = Faites glisser un point ou une poignée pour le déplacer · Clic dans le vide pour inverser · Double-clic pour ajouter un point · Clic droit sur un point pour le supprimer
+edit-curve-help = Faites glisser un point ou une poignée pour le déplacer · Double-clic pour ajouter un point · Clic droit sur un point pour le supprimer
+edit-curve-help-invert = Clic droit dans le vide pour inverser
 
 # vJoy mapping
 vjoy-device-n = vJoy #{ $n }

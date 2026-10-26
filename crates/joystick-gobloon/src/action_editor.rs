@@ -569,6 +569,8 @@ pub struct Editor<'a> {
     pub experimental: bool,
     /// Curve edits keep a rising (or falling) curve from turning back.
     pub monotonic_curves: bool,
+    /// A right click on empty space of the curve chart inverts the curve.
+    pub curve_right_click_invert: bool,
 }
 
 impl Editor<'_> {
