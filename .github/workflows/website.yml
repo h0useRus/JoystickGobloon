@@ -1,0 +1,42 @@
+# The website (site/ on the web branch) is published to gobloon.github.io: the files are pushed to
+# the Gobloon/gobloon.github.io repository, which serves them with GitHub Pages. Needs the
+# GOBLOON_PAGES_TOKEN secret (a fine-grained token with contents: write on that repository).
+# Builds and releases of the app never run for this branch.
+name: Website
+
+on:
+  push:
+    branches: [web]
+    paths: ["site/**", ".github/workflows/website.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: website
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Push to gobloon.github.io
+        env:
+          TOKEN: ${{ secrets.GOBLOON_PAGES_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::GOBLOON_PAGES_TOKEN is not set, nothing published."
+            exit 0
+          fi
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/Gobloon/gobloon.github.io.git" out
+          find out -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r site/. out/
+          cd out
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes."
+            exit 0
+          fi
+          git commit -m "chore: publish website from ${GITHUB_SHA::7}"
+          git push
