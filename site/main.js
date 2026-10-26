@@ -21,6 +21,13 @@
     if (e.key === "Escape") setMenu(false);
   });
 
+  // The table of contents of the Learning page is a sidebar on wide screens, folded on phones.
+  const toc = document.querySelector(".toc details");
+  if (toc && matchMedia("(min-width: 900px)").matches) toc.open = true;
+  toc?.addEventListener("click", (e) => {
+    if (e.target.closest("a") && !matchMedia("(min-width: 900px)").matches) toc.open = false;
+  });
+
   // The download buttons name the visitor's system.
   const platform = (navigator.userAgentData?.platform || navigator.platform || "").toLowerCase();
   const label = platform.includes("win")
@@ -75,9 +82,12 @@
   );
   document.querySelectorAll(".tagline .w").forEach((el) => words.observe(el));
 
-  // The navigation marks the section on screen.
+  // The navigation (and the table of contents on the Learning page) marks the section on screen.
   const links = new Map(
-    [...document.querySelectorAll(".nav-links a")].map((a) => [a.getAttribute("href").slice(1), a]),
+    [...document.querySelectorAll('.nav-links a[href^="#"], .toc a[href^="#"]:not(.toc-group)')].map((a) => [
+      a.getAttribute("href").slice(1),
+      a,
+    ]),
   );
   const current = new IntersectionObserver(
     (entries) => {
