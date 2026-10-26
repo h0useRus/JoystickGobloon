@@ -28,8 +28,7 @@ jobs:
             exit 0
           fi
           git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/h0useRus/gobloon.git" out
-          find out -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -r site/. out/
+          bash .github/scripts/publish-site.sh out "${GITHUB_SHA::7}"
           cd out
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
