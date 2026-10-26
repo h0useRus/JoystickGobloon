@@ -101,6 +101,7 @@ hidhide-confirm-hint = 双击眼睛图标可直接切换，不再询问。
 action-turn-on = 开启
 action-turn-off = 关闭
 hidhide-hint = 点击眼睛图标可对其他程序隐藏设备（闭眼）。之后重新连接设备使更改生效。
+hidhide-exposed = 读取原始设备（hidraw）的程序（如 Steam 或 Wine/Proton）仍能看到它：在此系统上隐藏无法阻止它们。请在这些程序中为此设备关闭 hidraw，否则游戏可能会看到两份输入。
 hidhide-no-devices = 没有可显示的设备。
 action-refresh = 刷新
 settings-see-hidden = 查看隐藏的设备

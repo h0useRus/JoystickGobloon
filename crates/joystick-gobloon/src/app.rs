@@ -1065,6 +1065,11 @@ impl JoystickGobloonApp {
                 Some((d.info.guid.clone(), hidden))
             })
             .collect();
+        self.devices_view.exposed = devices
+            .iter()
+            .filter(|d| self.hidhide_view.device_exposed(&d.info))
+            .map(|d| d.info.guid.clone())
+            .collect();
         self.devices_view.experimental = self.settings.experimental;
         self.devices_view.monotonic_curves = self.settings.monotonic_curves;
         self.devices_view.curve_right_click_invert = self.settings.curve_right_click_invert;

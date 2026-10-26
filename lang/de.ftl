@@ -101,6 +101,7 @@ hidhide-confirm-hint = Doppelklick auf das Auge schaltet ohne diese Frage um.
 action-turn-on = Einschalten
 action-turn-off = Ausschalten
 hidhide-hint = Klicken Sie auf das Auge, um ein Gerät vor anderen Programmen zu verbergen (geschlossenes Auge). Verbinden Sie es danach neu, damit die Änderung wirkt.
+hidhide-exposed = Für Programme, die das Gerät direkt lesen (hidraw), z. B. Steam oder Wine/Proton, weiterhin sichtbar: Das Ausblenden kann sie auf diesem System nicht sperren. Schalte hidraw für dieses Gerät in diesen Programmen aus, sonst sehen Spiele es eventuell doppelt.
 hidhide-no-devices = Keine Geräte anzuzeigen.
 action-refresh = Aktualisieren
 settings-see-hidden = Verborgene Geräte sehen

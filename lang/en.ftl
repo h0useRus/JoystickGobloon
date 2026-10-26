@@ -101,6 +101,7 @@ hidhide-confirm-hint = Double-click the eye to switch it without this question.
 action-turn-on = Turn on
 action-turn-off = Turn off
 hidhide-hint = Click the eye to hide a device from other programs (closed eye). Reconnect it afterwards for the change to take effect.
+hidhide-exposed = Still visible to programs that read the raw device (hidraw), e.g. Steam or Wine/Proton: hiding cannot block them on this system. Turn off hidraw for this device in those programs, or games may see it twice.
 hidhide-no-devices = No devices to show.
 action-refresh = Refresh
 settings-see-hidden = See hidden devices

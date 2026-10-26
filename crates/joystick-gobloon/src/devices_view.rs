@@ -52,6 +52,8 @@ pub struct DevicesView {
     /// HidHide state of connected devices (GUID -> hidden), filled by the app; devices
     /// without an entry have no eye icon.
     pub hidden: HashMap<String, bool>,
+    /// Hidden devices other programs can still read another way, filled by the app.
+    pub exposed: std::collections::HashSet<String>,
     /// Device hiding is on as a whole; while off the eyes are gray.
     pub hiding_on: bool,
     /// The eye icon was clicked: (device GUID, hide). The app applies it.
@@ -326,6 +328,7 @@ impl DevicesView {
                                 self.hiding_on,
                             );
                             let led_tip = i18n.tr("device-leds");
+                            let exposed_tip = i18n.tr("hidhide-exposed");
                             let mut icons = Vec::new();
                             if let Some(hidden) = hidden {
                                 let (glyph, color) = style::eye(ui, hidden, self.hiding_on);
@@ -333,6 +336,13 @@ impl DevicesView {
                                     glyph,
                                     color: Some(color),
                                     tip: &eye_tip,
+                                });
+                            }
+                            if self.hiding_on && self.exposed.contains(t.guid) {
+                                icons.push(style::TabIcon {
+                                    glyph: icon::WARNING,
+                                    color: Some(ui.visuals().warn_fg_color),
+                                    tip: &exposed_tip,
                                 });
                             }
                             // Shows only that light-led can drive it; clicking does nothing.

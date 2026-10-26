@@ -101,6 +101,7 @@ hidhide-confirm-hint = Haz doble clic en el ojo para cambiarlo sin esta pregunta
 action-turn-on = Activar
 action-turn-off = Desactivar
 hidhide-hint = Haga clic en el ojo para ocultar un dispositivo a otros programas (ojo cerrado). Después vuelva a conectarlo para que el cambio surta efecto.
+hidhide-exposed = Sigue siendo visible para programas que leen el dispositivo en bruto (hidraw), p. ej. Steam o Wine/Proton: en este sistema la ocultación no puede bloquearlos. Desactive hidraw para este dispositivo en esos programas o los juegos podrían verlo dos veces.
 hidhide-no-devices = No hay dispositivos que mostrar.
 action-refresh = Actualizar
 settings-see-hidden = Ver los dispositivos ocultos

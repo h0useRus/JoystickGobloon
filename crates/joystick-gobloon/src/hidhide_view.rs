@@ -82,6 +82,13 @@ impl HidHideView {
         Some(self.groups[i].hidden)
     }
 
+    /// Whether a connected device is hidden but other programs can still read it (see
+    /// `gob_hide::Device::exposed`); uses the state read by [`Self::device_hidden`].
+    pub fn device_exposed(&self, info: &gob_input::DeviceInfo) -> bool {
+        self.find_group(info)
+            .is_some_and(|i| self.groups[i].exposed)
+    }
+
     /// Hides or shows a connected device (all its collections and the USB container).
     pub fn set_device_hidden(&mut self, info: &gob_input::DeviceInfo, hide: bool) {
         if let Some(i) = self.find_group(info) {
@@ -212,6 +219,11 @@ impl HidHideView {
                             if !group.present {
                                 ui.label(RichText::new(icon::PLUGS).weak())
                                     .on_hover_text(i18n.tr("device-disconnected"));
+                            }
+                            if group.exposed && self.cloaked {
+                                let warn = ui.visuals().warn_fg_color;
+                                ui.label(RichText::new(icon::WARNING).color(warn))
+                                    .on_hover_text(i18n.tr("hidhide-exposed"));
                             }
                         });
                     }

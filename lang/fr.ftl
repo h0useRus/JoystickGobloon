@@ -101,6 +101,7 @@ hidhide-confirm-hint = Double-cliquez sur l’œil pour basculer sans cette ques
 action-turn-on = Activer
 action-turn-off = Désactiver
 hidhide-hint = Cliquez sur l’œil pour masquer un périphérique aux autres programmes (œil fermé). Reconnectez-le ensuite pour que la modification prenne effet.
+hidhide-exposed = Toujours visible pour les programmes qui lisent le périphérique brut (hidraw), p. ex. Steam ou Wine/Proton : sur ce système, le masquage ne peut pas les bloquer. Désactivez hidraw pour ce périphérique dans ces programmes, sinon les jeux risquent de le voir deux fois.
 hidhide-no-devices = Aucun périphérique à afficher.
 action-refresh = Actualiser
 settings-see-hidden = Voir les périphériques masqués
