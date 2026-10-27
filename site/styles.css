@@ -1264,6 +1264,10 @@ footer {
   }
 }
 
+.support + .support {
+  margin-top: var(--s-300);
+}
+
 .support .benefit-icon {
   margin: 0;
 }
