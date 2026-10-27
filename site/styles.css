@@ -1077,6 +1077,119 @@ footer {
   justify-content: center;
 }
 
+.lost-code {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--s-200);
+  margin-bottom: var(--s-400);
+}
+
+.lost-face {
+  width: 7.5rem;
+  height: auto;
+  overflow: visible;
+}
+
+.lost-face [class^="lost-"] {
+  transform-box: fill-box;
+}
+
+.lost-sway {
+  transform-origin: 50% 100%;
+  animation: lost-sway 4.8s ease-in-out infinite;
+}
+
+.lost-ear-l {
+  transform-origin: 100% 100%;
+  animation: lost-ear 2.4s ease-in-out infinite;
+}
+
+.lost-ear-r {
+  transform-origin: 0% 100%;
+  animation: lost-ear 2.4s ease-in-out infinite reverse;
+}
+
+.lost-eye {
+  transform-origin: 50% 50%;
+  animation: lost-blink 4.8s infinite;
+}
+
+.lost-pupil {
+  animation: lost-look 4.8s ease-in-out infinite;
+}
+
+.lost-brow {
+  animation: lost-brow 4.8s ease-in-out infinite;
+}
+
+.lost-wink {
+  animation: lost-wink 4.8s ease-in-out infinite;
+}
+
+.lost-stick {
+  transform-origin: 50% 100%;
+  animation: lost-stick 1.6s ease-in-out infinite;
+}
+
+.lost-ask {
+  transform-origin: 50% 100%;
+  animation: lost-ask 4.8s ease-in-out infinite;
+}
+
+@keyframes lost-sway {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+
+@keyframes lost-ear {
+  0%, 100% { transform: rotate(0); }
+  50% { transform: rotate(-8deg); }
+}
+
+@keyframes lost-blink {
+  0%, 44%, 50%, 100% { transform: scaleY(1); }
+  47% { transform: scaleY(0.1); }
+}
+
+@keyframes lost-look {
+  0%, 12% { transform: translate(0, 0); }
+  20%, 34% { transform: translate(-8px, -2px); }
+  56%, 70% { transform: translate(5px, -4px); }
+  80%, 100% { transform: translate(0, 0); }
+}
+
+@keyframes lost-brow {
+  0%, 52%, 82%, 100% { transform: translateY(0); }
+  60%, 74% { transform: translateY(-8px); }
+}
+
+@keyframes lost-wink {
+  0%, 16%, 40%, 100% { transform: translateY(0); }
+  22%, 34% { transform: translateY(-7px); }
+}
+
+@keyframes lost-stick {
+  0%, 100% { transform: rotate(-9deg); }
+  50% { transform: rotate(9deg); }
+}
+
+@keyframes lost-ask {
+  0%, 50% { opacity: 0; transform: translateY(10px) scale(0.6); }
+  60%, 84% { opacity: 1; transform: translateY(0) scale(1) rotate(10deg); }
+  94%, 100% { opacity: 0; transform: translateY(-8px) scale(1); }
+}
+
+@media (max-width: 480px) {
+  .lost .big {
+    font-size: 4.5rem;
+  }
+
+  .lost-face {
+    width: 5.5rem;
+  }
+}
+
 /* Scroll reveal */
 
 .reveal {
@@ -1100,6 +1213,10 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  .lost-face * {
+    animation: none !important;
   }
 
   .reveal,
