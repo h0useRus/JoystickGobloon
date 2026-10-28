@@ -110,7 +110,7 @@
     tempo(stage, W, H) {
       const dot = overlay(stage, W, H, 117, 11, 11, 11, "ov-dot");
       const short = overlay(stage, W, H, 23.5, 171, 2, 144, "ov-line");
-      const long = overlay(stage, W, H, 23.5, 345, 2, 112, "ov-line");
+      const long = overlay(stage, W, H, 23.5, 347, 2, 112, "ov-line");
       const timer = overlay(stage, W, H, 39, 115, 56, 26, "ov-fill");
       return {
         period: 6.2,
@@ -247,7 +247,7 @@
       };
     },
 
-    // A soft highlight steps through all 23 actions.
+    // A soft highlight steps through all 24 actions.
     actions(el) {
       const items = [...el.querySelectorAll("li")];
       return {

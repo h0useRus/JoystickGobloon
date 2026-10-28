@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Joystick mapping actions: curves, tempo, macros and more | Joystick Gobloon</title>
-  <meta name="description" content="Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.">
+  <meta name="description" content="Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, gamepad, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.">
   <link rel="canonical" href="https://h0userus.github.io/gobloon/learn.html">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Joystick Gobloon">
   <meta property="og:title" content="Joystick mapping actions: curves, tempo, macros and more | Joystick Gobloon">
-  <meta property="og:description" content="Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.">
+  <meta property="og:description" content="Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, gamepad, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.">
   <meta property="og:url" content="https://h0userus.github.io/gobloon/learn.html">
   <meta property="og:locale" content="en_US">
   <meta property="og:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
@@ -18,7 +18,7 @@
   <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Joystick mapping actions: curves, tempo, macros and more | Joystick Gobloon">
-  <meta name="twitter:description" content="Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.">
+  <meta name="twitter:description" content="Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, gamepad, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.">
   <meta name="twitter:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
   <meta name="author" content="Denis Ibragimov">
   <meta name="theme-color" content="#131209">
@@ -37,7 +37,7 @@
     {
       "@type": "TechArticle",
       "headline": "Every Joystick Gobloon action, explained with its editor",
-      "description": "Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.",
+      "description": "Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, gamepad, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.",
       "url": "https://h0userus.github.io/gobloon/learn.html",
       "inLanguage": "en",
       "image": "https://h0userus.github.io/gobloon/img/og.jpg",
@@ -116,7 +116,7 @@
       <div class="wrap">
         <p class="kicker">Learning</p>
         <h1 class="gradient">Every action,<br>explained with its editor</h1>
-        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 23 actions does.</p>
+        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 24 actions does.</p>
       </div>
     </header>
 
@@ -132,6 +132,7 @@
           </ul></li>
           <li><a class="toc-group" href="#output">Output</a><ul>
             <li><a href="#map-to-vjoy">Map to vJoy</a></li>
+            <li><a href="#map-to-gamepad">Map to gamepad</a></li>
             <li><a href="#map-to-keyboard">Map to keyboard</a></li>
             <li><a href="#map-to-mouse">Map to mouse</a></li>
             <li><a href="#map-to-logical-device">Map to logical device</a></li>
@@ -203,7 +204,13 @@
           <article class="learn-action" id="map-to-vjoy">
             <h3><i class="ph ph-joystick" aria-hidden="true"></i>Map to vJoy</h3>
             <p>Sends the value to a virtual joystick: an axis to an axis, a button to a button, a hat to a hat. Pick the vJoy device and its input; a button can be inverted. An axis can also be <strong>relative</strong>: then the input sets the speed at which the vJoy axis moves, and the axis stays where it is when you let go.</p>
+            <p>A new Map to vJoy starts on the vJoy device you picked last and its first output that nothing else uses yet. The grid button next to the lists shows every output of each vJoy device at once: the ones other inputs already use are dimmed, the current one is highlighted, and a click picks one.</p>
             <figure class="shot"><img src="img/actions/map-to-vjoy.png" loading="lazy" alt="Map to vJoy: vJoy device 1, button 1, not inverted, runs on press and release"></figure>
+          </article>
+          <article class="learn-action" id="map-to-gamepad">
+            <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</h3>
+            <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted.</p>
+            <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release"></figure>
           </article>
           <article class="learn-action" id="map-to-keyboard">
             <h3><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</h3>

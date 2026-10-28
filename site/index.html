@@ -71,7 +71,9 @@
         "Hide physical joysticks from games (HidHide on Windows)",
         "Create and configure vJoy virtual joysticks",
         "Virtual joysticks on Linux through uinput",
-        "Map buttons, axes and hats with 23 actions",
+        "Virtual Xbox-style gamepads on Linux",
+        "Xbox controllers through XInput on Windows",
+        "Map buttons, axes and hats with 24 actions",
         "Modes, modifiers and input layers",
         "Response curves, tempo, double tap, macros, conditions",
         "Imports Joystick Gremlin profiles",
@@ -257,7 +259,7 @@
         </figure>
 
         <ul class="proof" aria-label="At a glance">
-          <li data-k="up"><strong data-count="23">23</strong><span>actions for buttons, axes and hats</span></li>
+          <li data-k="up"><strong data-count="24">24</strong><span>actions for buttons, axes and hats</span></li>
           <li data-k="up"><strong data-count="16">16</strong><span>vJoy devices with 128 buttons each</span></li>
           <li data-k="up"><strong data-count="7">7</strong><span>languages built in</span></li>
           <li data-k="up"><strong data-count="2">2</strong><span>systems: Windows and Linux</span></li>
@@ -382,11 +384,12 @@
       <div class="wrap">
         <div class="section-head reveal">
           <p class="kicker">Actions</p>
-          <h2 id="actions-title">23 actions for every input</h2>
+          <h2 id="actions-title">24 actions for every input</h2>
           <p>Stack them on any input. They run top to bottom and pass the value on, so a response curve can shape an axis before it reaches vJoy.</p>
         </div>
         <ul class="actions anim" data-story="actions">
           <li data-k="up"><i class="ph ph-joystick" aria-hidden="true"></i>Map to vJoy</li>
+          <li data-k="up"><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</li>
           <li data-k="up"><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</li>
           <li data-k="up"><i class="ph ph-mouse" aria-hidden="true"></i>Map to mouse</li>
           <li data-k="up"><i class="ph ph-cube" aria-hidden="true"></i>Map to logical device</li>
@@ -458,8 +461,9 @@
             <tbody>
               <tr><th scope="row">Package</th><td>Installer with drivers, or portable zip. Updates itself.</td><td>AppImage. Updates itself.</td></tr>
               <tr><th scope="row">Virtual joysticks</th><td>vJoy: up to 16 devices, 8 axes, 128 buttons, 4 hats each</td><td>uinput, no driver: devices appear when a profile starts; 8 axes, 95 buttons, 4 hats each</td></tr>
+              <tr><th scope="row">Virtual gamepads</th><td>Not yet (needs a driver)</td><td>Xbox-style gamepads, up to 4: games, Steam and Proton see an Xbox 360 controller</td></tr>
               <tr><th scope="row">Device hiding</th><td>HidHide: hidden for every program, even when the app is closed</td><td>Exclusive reading while Joystick Gobloon runs; raw HID readers are not covered</td></tr>
-              <tr><th scope="row">Physical controllers</th><td>DirectInput: all buttons</td><td>evdev: up to 80 buttons per device</td></tr>
+              <tr><th scope="row">Physical controllers</th><td>DirectInput: all buttons. Xbox controllers through XInput: both triggers apart, also in the background</td><td>evdev: up to 80 buttons per device</td></tr>
               <tr><th scope="row">Keyboard keys as inputs</th><td>Yes</td><td>No, key and mouse output works</td></tr>
               <tr><th scope="row">Text to speech</th><td>Windows voices</td><td>speech dispatcher</td></tr>
             </tbody>
