@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Joystick mapping actions: curves, tempo, macros and more | Joystick Gobloon</title>
+  <meta name="description" content="Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, gamepad, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.">
+  <link rel="canonical" href="https://h0userus.github.io/gobloon/learn.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Joystick Gobloon">
+  <meta property="og:title" content="Joystick mapping actions: curves, tempo, macros and more | Joystick Gobloon">
+  <meta property="og:description" content="Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, gamepad, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.">
+  <meta property="og:url" content="https://h0userus.github.io/gobloon/learn.html">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Joystick mapping actions: curves, tempo, macros and more | Joystick Gobloon">
+  <meta name="twitter:description" content="Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, gamepad, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.">
+  <meta name="twitter:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta name="author" content="Denis Ibragimov">
+  <meta name="theme-color" content="#131209">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "Every Joystick Gobloon action, explained with its editor",
+      "description": "Every action of the Joystick Gobloon joystick mapper explained with its editor: map to vJoy, gamepad, keyboard and mouse, response curves, split and merge axis, tempo, double tap, macros, conditions, modes and modifiers.",
+      "url": "https://h0userus.github.io/gobloon/learn.html",
+      "inLanguage": "en",
+      "image": "https://h0userus.github.io/gobloon/img/og.jpg",
+      "author": {
+        "@type": "Person",
+        "name": "Denis Ibragimov",
+        "url": "https://github.com/h0useRus"
+      },
+      "about": {
+        "@id": "https://h0userus.github.io/gobloon/#app"
+      },
+      "isPartOf": {
+        "@id": "https://h0userus.github.io/gobloon/#website"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Joystick Gobloon",
+          "item": "https://h0userus.github.io/gobloon/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Learning",
+          "item": "https://h0userus.github.io/gobloon/learn.html"
+        }
+      ]
+    }
+  ]
+}
+  </script>
+  <script>document.documentElement.classList.remove("no-js")</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <nav class="nav" aria-label="Main">
+    <a class="brand" href="index.html" aria-label="Joystick Gobloon home">
+      <img src="img/icon.svg" alt="" width="24" height="24">
+      Joystick Gobloon
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html#how">How it works</a></li>
+      <li><a href="learn.html" aria-current="page">Learning</a></li>
+      <li><a href="emulation.html">Emulation</a></li>
+      <li><a href="index.html#platforms">Windows and Linux</a></li>
+      <li><a href="index.html#faq">FAQ</a></li>
+    </ul>
+    <a class="btn btn-primary btn-sm nav-cta" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
+      <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+      <span></span><span></span>
+    </button>
+  </nav>
+
+  <div class="menu" id="menu" aria-hidden="true">
+    <ul>
+      <li style="--i:0"><a href="index.html#features">Features</a></li>
+      <li style="--i:1"><a href="index.html#how">How it works</a></li>
+      <li style="--i:2"><a href="learn.html" aria-current="page">Learning</a></li>
+      <li style="--i:3"><a href="emulation.html">Emulation</a></li>
+      <li style="--i:4"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:5"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:6"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+    </ul>
+  </div>
+
+  <main id="main">
+    <header class="learn-hero">
+      <div class="wrap">
+        <p class="kicker">Learning</p>
+        <h1 class="gradient">Every action,<br>explained with its editor</h1>
+        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 24 actions does.</p>
+      </div>
+    </header>
+
+    <div class="wrap learn">
+      <aside class="toc" aria-label="On this page">
+        <details>
+          <summary>On this page<i class="ph-bold ph-caret-down" aria-hidden="true"></i></summary>
+          <ul>
+          <li><a class="toc-group" href="#basics">Basics</a><ul>
+            <li><a href="#how-actions-run">How actions run</a></li>
+            <li><a href="#modes">Modes</a></li>
+            <li><a href="#modifiers">Modifiers</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#output">Output</a><ul>
+            <li><a href="#map-to-vjoy">Map to vJoy</a></li>
+            <li><a href="#map-to-gamepad">Map to gamepad</a></li>
+            <li><a href="#map-to-keyboard">Map to keyboard</a></li>
+            <li><a href="#map-to-mouse">Map to mouse</a></li>
+            <li><a href="#map-to-logical-device">Map to logical device</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#axes">Axes</a><ul>
+            <li><a href="#response-curve">Response curve</a></li>
+            <li><a href="#split-axis">Split axis</a></li>
+            <li><a href="#merge-axis">Merge axis</a></li>
+            <li><a href="#dual-axis-deadzone">Dual axis deadzone</a></li>
+            <li><a href="#axis-delta">Axis delta</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#buttons-and-hats">Buttons and hats</a><ul>
+            <li><a href="#tempo">Tempo</a></li>
+            <li><a href="#double-tap">Double tap</a></li>
+            <li><a href="#smart-toggle">Smart toggle</a></li>
+            <li><a href="#chain">Chain</a></li>
+            <li><a href="#macro">Macro</a></li>
+            <li><a href="#hat-buttons">Hat buttons</a></li>
+            <li><a href="#condition">Condition</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#profile">Profile</a><ul>
+            <li><a href="#change-mode">Change mode</a></li>
+            <li><a href="#pause-and-resume">Pause and resume</a></li>
+            <li><a href="#load-profile">Load profile</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#other">Other</a><ul>
+            <li><a href="#play-sound">Play sound</a></li>
+            <li><a href="#text-to-speech">Text to speech</a></li>
+            <li><a href="#run-command">Run command</a></li>
+            <li><a href="#description">Description</a></li>
+          </ul></li>
+          </ul>
+        </details>
+      </aside>
+
+      <div class="learn-body">
+        <section class="learn-group" id="basics" aria-labelledby="basics-title">
+          <h2 id="basics-title">Basics</h2>
+          <article class="learn-action" id="how-actions-run">
+            <h3><i class="ph ph-list-checks" aria-hidden="true"></i>How actions run</h3>
+            <p>Select an input on the Devices page and its actions are on the right. They run from top to bottom every time the input changes, and each one can pass a changed value on to the next one: a response curve before <span class="term">Map to vJoy</span>, for example. The plus button adds an action. It can also link an existing action, so several inputs share it, or copy one.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>When it runs.</strong> Button actions have three switches: on press, on release, or both. Both follows the button, so a vJoy button is held exactly as long as yours.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Containers.</strong> Some actions hold other actions: tempo, double tap, condition, split axis and others. Their children are edited inside them.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Description.</strong> The field above the list names the input; the name also shows on the input's card.</span></li>
+            </ul>
+            <figure class="shot"><img src="img/devices.png" loading="lazy" width="1102" height="732" alt="Devices page: the inputs of a stick on the left, the actions of the selected button on the right"></figure>
+          </article>
+          <article class="learn-action" id="modes">
+            <h3><i class="ph ph-swap" aria-hidden="true"></i>Modes</h3>
+            <p>A profile can have several modes, and each mode can give an input different actions. A mode inherits everything from its parent and overrides only what you change in it. Switch modes with the <a href="#change-mode">Change mode</a> action or the mode selector in the toolbar.</p>
+          </article>
+          <article class="learn-action" id="modifiers">
+            <h3><i class="ph ph-stack" aria-hidden="true"></i>Modifiers</h3>
+            <p>Name a few buttons as <strong>modifiers</strong> (M1, M2 and so on): press <span class="term">Add a modifier</span> and then the button on your stick. While a modifier is held, every input that has a <strong>layer</strong> for it runs that layer's actions instead of its base. One button can do different things with nothing, M1, M2 or M1 plus M2 held. Only the layer of the exact combination runs: the M1 layer does not run while M1 plus M2 is held.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Layers are chips above the actions of an input; a dot marks the ones in use. Inputs without layers ignore modifiers.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>An <strong>additive</strong> layer runs together with the base instead of replacing it, for example an axis that drives a second output only while M1 is held.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>A button keeps the layer it was pressed in until it is released, so letting go of the modifier first never leaves anything stuck. Outputs of a layer that stops go back to rest.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>An axis layer can <strong>keep the last value</strong>: a trim axis on M1 holds its setting after M1 is released, and the main axis on the base holds its position while M1 is held.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Held modifiers light up next to the mode selector; the button of a modifier shows a lock and runs no actions.</span></li>
+            </ul>
+            <figure class="shot"><img src="img/modifiers.png" loading="lazy" width="1102" height="732" alt="Layers Base, M1, M2 and M1 plus M2 above the actions of a button, next to the Modifiers window"></figure>
+          </article>
+        </section>
+
+        <section class="learn-group" id="output" aria-labelledby="output-title">
+          <h2 id="output-title">Output</h2>
+          <article class="learn-action" id="map-to-vjoy">
+            <h3><i class="ph ph-joystick" aria-hidden="true"></i>Map to vJoy</h3>
+            <p>Sends the value to a virtual joystick: an axis to an axis, a button to a button, a hat to a hat. Pick the vJoy device and its input; a button can be inverted. An axis can also be <strong>relative</strong>: then the input sets the speed at which the vJoy axis moves, and the axis stays where it is when you let go.</p>
+            <p>A new Map to vJoy starts on the vJoy device you picked last and its first output that nothing else uses yet. The grid button next to the lists shows every output of each vJoy device at once: the ones other inputs already use are dimmed, the current one is highlighted, and a click picks one.</p>
+            <figure class="shot"><img src="img/actions/map-to-vjoy.png" loading="lazy" alt="Map to vJoy: vJoy device 1, button 1, not inverted, runs on press and release"></figure>
+          </article>
+          <article class="learn-action" id="map-to-gamepad">
+            <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</h3>
+            <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted.</p>
+            <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release"></figure>
+          </article>
+          <article class="learn-action" id="map-to-keyboard">
+            <h3><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</h3>
+            <p>Presses keys while the input is held: they go down in order and come up in reverse order. Click the field and press the keys to record them. If the input is let go in another mode, the keys still come up.</p>
+            <figure class="shot"><img src="img/actions/map-to-keyboard.png" loading="lazy" alt="Map to keyboard with the keys Ctrl and F"></figure>
+          </article>
+          <article class="learn-action" id="map-to-mouse">
+            <h3><i class="ph ph-mouse" aria-hidden="true"></i>Map to mouse</h3>
+            <p>A button clicks a mouse button (left, right, middle, back, forward) or turns the wheel one notch. An axis or a hat moves the cursor instead: set the direction and the speed range; the further the axis is pushed, the faster the cursor moves.</p>
+            <figure class="shot"><img src="img/actions/map-to-mouse.png" loading="lazy" alt="Map to mouse: left button"></figure>
+            <figure class="shot"><img src="img/actions/map-to-mouse-motion.png" loading="lazy" alt="Map to mouse on an axis: cursor motion with direction and speed"></figure>
+          </article>
+          <article class="learn-action" id="map-to-logical-device">
+            <h3><i class="ph ph-cube" aria-hidden="true"></i>Map to logical device</h3>
+            <p>The <strong>Logical device</strong> tab is a joystick that only exists inside the profile. Mapping inputs to it lets several physical inputs feed one logical input, whose own actions then do the rest. Logical inputs are added and renamed on that tab.</p>
+            <figure class="shot"><img src="img/actions/map-to-logical-device.png" loading="lazy" alt="Map to logical device: logical button 1"></figure>
+          </article>
+        </section>
+        <section class="learn-group" id="axes" aria-labelledby="axes-title">
+          <h2 id="axes-title">Axes</h2>
+          <article class="learn-action" id="response-curve">
+            <h3><i class="ph ph-chart-line" aria-hidden="true"></i>Response curve</h3>
+            <p>Shapes an axis: drag the points of the curve, double click to add one, right click a point to remove it. A right click on empty space inverts the curve (a switch in the settings turns this off). Linear, cubic spline, smooth (no overshoot) and Bézier curves. A cubic spline can swing past its points, turning back or running into the end of the axis; the smooth curve stays between them. <span class="term">Symmetric</span> mirrors your edits through the center; <span class="term">Invert</span> flips the curve. The deadzones below the chart set where the axis does nothing: at both ends and around the center. Put the curve before <span class="term">Map to vJoy</span>, which then sends the shaped value.</p>
+            <figure class="shot"><img src="img/actions/response-curve.png" loading="lazy" alt="Response curve: a cubic spline that is flat around the center, with its points"></figure>
+          </article>
+          <article class="learn-action" id="split-axis">
+            <h3><i class="ph ph-arrows-split" aria-hidden="true"></i>Split axis</h3>
+            <p>Splits an axis at a point (the center by default) into two halves, and gives each half its own actions; each half is stretched to the full range again. Useful for one axis driving two outputs, like two pedals on a single rudder axis.</p>
+            <figure class="shot"><img src="img/actions/split-axis.png" loading="lazy" alt="Split axis: the lower half to vJoy axis 2, the upper half to vJoy axis 3"></figure>
+          </article>
+          <article class="learn-action" id="merge-axis">
+            <h3><i class="ph ph-arrows-merge" aria-hidden="true"></i>Merge axis</h3>
+            <p>Combines two axes into one value: average, minimum, maximum, sum, difference (for two pedals as one rudder), the one deflected most, or the one closer to the center. It runs when either axis moves, so it is bound to both: picking an axis in its editor binds it there and takes it off the axis it no longer reads, and linking a new merge to another axis makes that its second axis. A merge reads two axes, so it cannot be linked to a third one.</p>
+            <figure class="shot"><img src="img/actions/merge-axis.png" loading="lazy" alt="Merge axis with its two axes and the operation"></figure>
+          </article>
+          <article class="learn-action" id="dual-axis-deadzone">
+            <h3><i class="ph ph-crosshair" aria-hidden="true"></i>Dual axis deadzone</h3>
+            <p>A round deadzone for two axes of one stick (X and Y), instead of a square one per axis: the stick has to leave a circle of the inner size before either axis moves. Each axis then goes to its own list of actions.</p>
+            <figure class="shot"><img src="img/actions/dual-axis-deadzone.png" loading="lazy" alt="Dual axis deadzone: inner and outer size, the two axes and their outputs"></figure>
+          </article>
+          <article class="learn-action" id="axis-delta">
+            <h3><i class="ph ph-trend-up" aria-hidden="true"></i>Axis delta</h3>
+            <p>Turns movement into button presses: every time the axis has moved by the threshold, it presses the actions of that direction once. Good for a rotary or a slider that should step something up and down.</p>
+            <figure class="shot"><img src="img/actions/axis-delta.png" loading="lazy" alt="Axis delta: moving up presses vJoy button 20, moving down vJoy button 21"></figure>
+          </article>
+        </section>
+        <section class="learn-group" id="buttons-and-hats" aria-labelledby="buttons-and-hats-title">
+          <h2 id="buttons-and-hats-title">Buttons and hats</h2>
+          <article class="learn-action" id="tempo">
+            <h3><i class="ph ph-timer" aria-hidden="true"></i>Tempo</h3>
+            <p>A short press and a long press do different things. Set the time that counts as long, and whether the long action starts as soon as that time has passed or when you let go.</p>
+            <figure class="shot"><img src="img/actions/tempo.png" loading="lazy" alt="Tempo: a tap presses vJoy button 2, holding changes the mode"></figure>
+          </article>
+          <article class="learn-action" id="double-tap">
+            <h3><i class="ph ph-hand-tap" aria-hidden="true"></i>Double tap</h3>
+            <p>A single press and a quick double press do different things. <span class="term">Exclusive</span> waits to see if a second press comes, so a double press runs only the double actions. <span class="term">Combined</span> runs the single actions at once and adds the double ones when the second press comes.</p>
+            <figure class="shot"><img src="img/actions/double-tap.png" loading="lazy" alt="Double tap: single press to vJoy button 3, double press to vJoy button 4"></figure>
+          </article>
+          <article class="learn-action" id="smart-toggle">
+            <h3><i class="ph ph-toggle-right" aria-hidden="true"></i>Smart toggle</h3>
+            <p>A quick press switches its actions on until the next press; holding the button longer works like a normal button and lets go with it.</p>
+            <figure class="shot"><img src="img/actions/smart-toggle.png" loading="lazy" alt="Smart toggle with vJoy button 5 inside"></figure>
+          </article>
+          <article class="learn-action" id="chain">
+            <h3><i class="ph ph-link" aria-hidden="true"></i>Chain</h3>
+            <p>Every press runs the next step: first press step 1, second press step 2, and around again. With a timeout, a pause longer than that starts again from step 1.</p>
+            <figure class="shot"><img src="img/actions/chain.png" loading="lazy" alt="Chain with three steps, each pressing a different vJoy button"></figure>
+          </article>
+          <article class="learn-action" id="macro">
+            <h3><i class="ph ph-list-numbers" aria-hidden="true"></i>Macro</h3>
+            <p>Plays a sequence of steps: keys, mouse buttons and motion, vJoy buttons, axes and hats, and pauses. It can run once, a number of times, while the button is held, or until the next press.</p>
+            <figure class="shot"><img src="img/actions/macro.png" loading="lazy" alt="Macro: Ctrl and F down, a pause, F and Ctrl up, then vJoy button 9"></figure>
+          </article>
+          <article class="learn-action" id="hat-buttons">
+            <h3><i class="ph ph-compass" aria-hidden="true"></i>Hat buttons</h3>
+            <p>Makes a hat four (or eight) buttons, one per direction, plus one for the center. Each direction gets its own actions; with four buttons, diagonals press none.</p>
+            <figure class="shot"><img src="img/actions/hat-buttons.png" loading="lazy" alt="Hat buttons: North, East, South, West and Center"></figure>
+          </article>
+          <article class="learn-action" id="condition">
+            <h3><i class="ph ph-git-branch" aria-hidden="true"></i>Condition</h3>
+            <p>Runs one list of actions when its conditions hold and another when they don't. A condition can look at a button, axis or hat of any controller, at keyboard keys, at the input itself or at what was last sent to vJoy; <span class="term">all</span> or <span class="term">any</span> of them has to hold. A button keeps the branch it was pressed in until it is released.</p>
+            <figure class="shot"><img src="img/actions/condition.png" loading="lazy" alt="Condition: if button 3 of the right stick is held, vJoy button 10, otherwise vJoy button 11"></figure>
+          </article>
+        </section>
+        <section class="learn-group" id="profile" aria-labelledby="profile-title">
+          <h2 id="profile-title">Profile</h2>
+          <article class="learn-action" id="change-mode">
+            <h3><i class="ph ph-swap" aria-hidden="true"></i>Change mode</h3>
+            <p>Switches the profile's mode: to a given mode, back to the previous one, back through all previous ones, to the next one of a cycle, or only while the button is held (<span class="term">Temporary</span>).</p>
+            <figure class="shot"><img src="img/actions/change-mode.png" loading="lazy" alt="Change mode to the Alternate mode"></figure>
+          </article>
+          <article class="learn-action" id="pause-and-resume">
+            <h3><i class="ph ph-pause" aria-hidden="true"></i>Pause and resume</h3>
+            <p>Pauses the running profile, resumes it, or toggles between the two. While paused, only inputs with this action (and <span class="term">Load profile</span>) still work.</p>
+            <figure class="shot"><img src="img/actions/pause-resume.png" loading="lazy" alt="Pause and resume: toggle"></figure>
+          </article>
+          <article class="learn-action" id="load-profile">
+            <h3><i class="ph ph-folder-open" aria-hidden="true"></i>Load profile</h3>
+            <p>Opens another profile and starts it, asking first if the current one has unsaved changes.</p>
+            <figure class="shot"><img src="img/actions/load-profile.png" loading="lazy" alt="Load profile with the path of the second profile"></figure>
+          </article>
+        </section>
+        <section class="learn-group" id="other" aria-labelledby="other-title">
+          <h2 id="other-title">Other</h2>
+          <article class="learn-action" id="play-sound">
+            <h3><i class="ph ph-speaker-high" aria-hidden="true"></i>Play sound</h3>
+            <p>Plays a sound file (wav, mp3, ogg or flac) at the set volume; the ▶ button plays it right away.</p>
+            <figure class="shot"><img src="img/actions/play-sound.png" loading="lazy" alt="Play sound: a wav file and its volume"></figure>
+          </article>
+          <article class="learn-action" id="text-to-speech">
+            <h3><i class="ph ph-chat-text" aria-hidden="true"></i>Text to speech</h3>
+            <p>Speaks a text with a voice of the system. <code>${current_mode}</code> becomes the name of the active mode. Speed, volume and pitch can be set; the new text can wait for the current one or interrupt it.</p>
+            <figure class="shot"><img src="img/actions/text-to-speech.png" loading="lazy" alt="Text to speech saying the mode name"></figure>
+          </article>
+          <article class="learn-action" id="run-command">
+            <h3><i class="ph ph-terminal-window" aria-hidden="true"></i>Run command</h3>
+            <p>Starts a program, with arguments if needed.</p>
+            <figure class="shot"><img src="img/actions/run-command.png" loading="lazy" alt="Run command: notepad.exe"></figure>
+          </article>
+          <article class="learn-action" id="description">
+            <h3><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</h3>
+            <p>A note that does nothing when the input is used: what this input is for, for you and whoever uses the profile next.</p>
+            <figure class="shot"><img src="img/actions/description.png" loading="lazy" alt="A description note above a Map to vJoy action"></figure>
+          </article>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div>
+          <a class="brand" href="index.html"><img src="img/icon.svg" alt="" width="24" height="24"> Joystick Gobloon</a>
+          <p>Built on <a href="https://github.com/nefarius/HidHide">HidHide</a> by Nefarius and <a href="https://github.com/shauleiz/vJoy">vJoy</a> by Shaul Eizikovich.</p>
+        </div>
+        <div>
+          <h3>Project</h3>
+          <ul>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/releases">Releases</a></li>
+            <li><a href="learn.html">Learning</a></li>
+            <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
+            <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>
+            <li><a href="https://www.paypal.com/paypalme/h0userus" rel="noopener">Donate with PayPal</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Legal</h3>
+          <ul>
+            <li><a href="privacy.html">Privacy</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/LICENSE">License and terms (MIT)</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/docs/CODE_SIGNING.md">Code signing policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="copyright">© 2026 Denis Ibragimov. Joystick Gobloon is released under the MIT license.</p>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

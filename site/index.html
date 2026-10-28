@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Joystick Gobloon: free joystick mapper for HOTAS, vJoy and HidHide</title>
+  <meta name="description" content="Free, open source joystick mapper for Windows and Linux. Hide your physical sticks, create virtual joysticks and map buttons and axes with modes, modifiers and response curves. Imports Joystick Gremlin profiles.">
+  <link rel="canonical" href="https://h0userus.github.io/gobloon/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Joystick Gobloon">
+  <meta property="og:title" content="Joystick Gobloon: free joystick mapper for Windows and Linux">
+  <meta property="og:description" content="Hide physical joysticks, create vJoy virtual joysticks and map every input with modes, modifiers and curves. Free and open source.">
+  <meta property="og:url" content="https://h0userus.github.io/gobloon/">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Joystick Gobloon: free joystick mapper for Windows and Linux">
+  <meta name="twitter:description" content="Hide physical joysticks, create vJoy virtual joysticks and map every input with modes, modifiers and curves. Free and open source.">
+  <meta name="twitter:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta name="author" content="Denis Ibragimov">
+  <meta name="theme-color" content="#131209">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://h0userus.github.io/gobloon/#website",
+      "url": "https://h0userus.github.io/gobloon/",
+      "name": "Joystick Gobloon",
+      "inLanguage": "en"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://h0userus.github.io/gobloon/#app",
+      "name": "Joystick Gobloon",
+      "url": "https://h0userus.github.io/gobloon/",
+      "description": "Free, open source joystick mapper for Windows and Linux. Hide your physical sticks, create virtual joysticks and map buttons and axes with modes, modifiers and response curves. Imports Joystick Gremlin profiles.",
+      "applicationCategory": "UtilitiesApplication",
+      "applicationSubCategory": "Joystick mapper",
+      "operatingSystem": "Windows 10, Windows 11, Linux",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "license": "https://opensource.org/licenses/MIT",
+      "downloadUrl": "https://github.com/h0useRus/JoystickGobloon/releases/latest",
+      "installUrl": "https://github.com/h0useRus/JoystickGobloon/releases/latest",
+      "codeRepository": "https://github.com/h0useRus/JoystickGobloon",
+      "screenshot": [
+        "https://h0userus.github.io/gobloon/img/devices.png",
+        "https://h0userus.github.io/gobloon/img/vjoy.png",
+        "https://h0userus.github.io/gobloon/img/modifiers.png",
+        "https://h0userus.github.io/gobloon/img/viewer.png"
+      ],
+      "image": "https://h0userus.github.io/gobloon/img/og.jpg",
+      "featureList": [
+        "Hide physical joysticks from games (HidHide on Windows)",
+        "Create and configure vJoy virtual joysticks",
+        "Virtual joysticks on Linux through uinput",
+        "Virtual Xbox-style gamepads on Linux",
+        "Xbox controllers through XInput on Windows",
+        "Map buttons, axes and hats with 24 actions",
+        "Modes, modifiers and input layers",
+        "Response curves, tempo, double tap, macros, conditions",
+        "Imports Joystick Gremlin profiles",
+        "Input viewer and axis calibration"
+      ],
+      "author": {
+        "@type": "Person",
+        "name": "Denis Ibragimov",
+        "url": "https://github.com/h0useRus"
+      },
+      "sameAs": [
+        "https://github.com/h0useRus/JoystickGobloon"
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://h0userus.github.io/gobloon/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is Joystick Gobloon free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. It is open source under the MIT license. There is no account, no trial and nothing to buy."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I import my Joystick Gremlin profiles?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Open one from the toolbar and it runs. Anything not supported yet is kept as it was in the file."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I still need HidHide and vJoy installed?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "You need the HidHide and vJoy drivers on Windows, and the installer adds them when they are missing. You do not need their own user interfaces."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it need administrator rights?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Only to install the drivers and when you change vJoy devices, with one UAC prompt per change. Everyday use runs as a normal user."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it run on the Steam Deck?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, in desktop mode, like on any x86_64 Linux desktop. Make the AppImage executable, start it and click Grant access on the Devices page once."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does Windows SmartScreen warn on the first start?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Code signing through SignPath is being set up, and new releases need some downloads before SmartScreen trusts them. Choose More info, then Run anyway."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is it ready for daily use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It is in alpha. The daily features are in place and used every day with a dual stick setup, but expect rough edges. Bugs reported on GitHub get fixed quickly."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I try it without installing anything?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Use the portable zip: unpack it anywhere and start it. Delete the folder and it is gone. On Linux the AppImage is a single file."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which languages does it speak?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "English, Русский, Deutsch, Español, Français, 简体中文 and 한국어. Another language is one text file: copy lang/en.ftl, translate it and put it next to the app."
+          }
+        }
+      ]
+    }
+  ]
+}
+  </script>
+  <script>
+    document.documentElement.classList.remove("no-js");
+    if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches)
+      document.documentElement.classList.add("motion");
+  </script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <nav class="nav" aria-label="Main">
+    <a class="brand" href="index.html" aria-label="Joystick Gobloon home">
+      <img src="img/icon.svg" alt="" width="24" height="24">
+      Joystick Gobloon
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="learn.html">Learning</a></li>
+      <li><a href="emulation.html">Emulation</a></li>
+      <li><a href="#platforms">Windows and Linux</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ul>
+    <a class="btn btn-primary btn-sm nav-cta" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
+      <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+      <span></span><span></span>
+    </button>
+  </nav>
+
+  <div class="menu" id="menu" aria-hidden="true">
+    <ul>
+      <li style="--i:0"><a href="#features">Features</a></li>
+      <li style="--i:1"><a href="#how">How it works</a></li>
+      <li style="--i:2"><a href="learn.html">Learning</a></li>
+      <li style="--i:3"><a href="emulation.html">Emulation</a></li>
+      <li style="--i:4"><a href="#platforms">Windows and Linux</a></li>
+      <li style="--i:5"><a href="#faq">FAQ</a></li>
+      <li style="--i:6"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+    </ul>
+  </div>
+
+  <main id="main">
+    <!-- Hero -->
+    <header class="hero anim" id="top">
+      <div class="wrap">
+        <svg class="hero-logo" data-k="pop" viewBox="0 0 256 256" width="160" height="160" role="img" aria-label="Joystick Gobloon logo, a green goblin head holding a joystick">
+          <g class="bob">
+          <g stroke="#fff" stroke-width="14" stroke-linejoin="round" fill="#fff">
+            <circle cx="128" cy="124" r="84"/>
+            <circle cx="62.1" cy="68.7" r="30"><animateTransform attributeName="transform" type="rotate" values="0 62.1 92;0 62.1 92;-8 62.1 92;5 62.1 92;0 62.1 92;0 62.1 92" keyTimes="0;0.55;0.62;0.7;0.78;1" calcMode="spline" keySplines="0 0 1 1;0.65 0 0.35 1;0.65 0 0.35 1;0.65 0 0.35 1;0 0 1 1" dur="5.6s" repeatCount="indefinite"/></circle><circle cx="193.9" cy="68.7" r="30"><animateTransform attributeName="transform" type="rotate" values="0 193.9 92;0 193.9 92;8 193.9 92;-5 193.9 92;0 193.9 92;0 193.9 92" keyTimes="0;0.55;0.62;0.7;0.78;1" calcMode="spline" keySplines="0 0 1 1;0.65 0 0.35 1;0.65 0 0.35 1;0.65 0 0.35 1;0 0 1 1" dur="5.6s" repeatCount="indefinite"/></circle>
+            <g transform="translate(12.0 -12.1) rotate(12 128 220) translate(256 0) scale(-1 1)"><path d="M80 212q0-12 12-12h72q12 0 12 12v16q0 8-8 8H88q-8 0-8-8z"/><path d="M112 178q-6-28-2-48q4-18 18-18q16 0 19 16q3 20-3 50z"><animateTransform attributeName="transform" type="rotate" values="0 128 204;0 128 204;-11 128 204;8 128 204;-4 128 204;0 128 204;0 128 204" keyTimes="0;0.3;0.45;0.6;0.72;0.82;1" calcMode="spline" keySplines="0 0 1 1;0.65 0 0.35 1;0.65 0 0.35 1;0.65 0 0.35 1;0.65 0 0.35 1;0 0 1 1" dur="4.2s" repeatCount="indefinite"/></path></g>
+          </g>
+          <g><animateTransform attributeName="transform" type="rotate" values="0 62.1 92;0 62.1 92;-8 62.1 92;5 62.1 92;0 62.1 92;0 62.1 92" keyTimes="0;0.55;0.62;0.7;0.78;1" calcMode="spline" keySplines="0 0 1 1;0.65 0 0.35 1;0.65 0 0.35 1;0.65 0 0.35 1;0 0 1 1" dur="5.6s" repeatCount="indefinite"/><circle cx="62.1" cy="68.7" r="30" fill="#9acd32"/><circle cx="62.1" cy="68.7" r="16.5" fill="#6f9a1c"/></g>
+          <g><animateTransform attributeName="transform" type="rotate" values="0 193.9 92;0 193.9 92;8 193.9 92;-5 193.9 92;0 193.9 92;0 193.9 92" keyTimes="0;0.55;0.62;0.7;0.78;1" calcMode="spline" keySplines="0 0 1 1;0.65 0 0.35 1;0.65 0 0.35 1;0.65 0 0.35 1;0 0 1 1" dur="5.6s" repeatCount="indefinite"/><circle cx="193.9" cy="68.7" r="30" fill="#9acd32"/><circle cx="193.9" cy="68.7" r="16.5" fill="#6f9a1c"/></g>
+          <circle cx="128" cy="124" r="84" fill="#9acd32"/>
+          <path d="M72 80l40 14" stroke="#3d5a0a" stroke-width="9" stroke-linecap="round"/>
+          <ellipse cx="92" cy="110" rx="14" ry="10" fill="#fff"><animate attributeName="ry" values="10;10;1;10;10" keyTimes="0;0.9;0.94;0.98;1" dur="3.8s" repeatCount="indefinite"/></ellipse>
+          <circle cx="94" cy="111" r="6" fill="#111"><animate attributeName="cx" values="94;94;99;99;89;89;94" keyTimes="0;0.2;0.28;0.45;0.53;0.7;1" calcMode="spline" keySplines="0 0 1 1;0.65 0 0.35 1;0 0 1 1;0.65 0 0.35 1;0 0 1 1;0.65 0 0.35 1" dur="7.6s" repeatCount="indefinite"/><animate attributeName="r" values="6;6;0.6;6;6" keyTimes="0;0.9;0.94;0.98;1" dur="3.8s" repeatCount="indefinite"/></circle>
+          <path d="M146 92q16-10 32 0" stroke="#3d5a0a" stroke-width="7" fill="none" stroke-linecap="round"/>
+          <path d="M70 150q58 64 116 0q-58 34-116 0z" fill="#3a1606"/>
+          <path d="M80 158l4-20 7 22z M176 158l-4-20-7 22z" fill="#fff"/>
+          <g transform="translate(12.0 -12.1) rotate(12 128 220) translate(256 0) scale(-1 1)">
+            <ellipse cx="128" cy="238" rx="54" ry="8" fill="#000" opacity=".3"/>
+            <path d="M80 212q0-12 12-12h72q12 0 12 12v16q0 8-8 8H88q-8 0-8-8z" fill="#2e3440"/>
+            <rect x="80" y="200" width="96" height="10" rx="5" fill="#4c566a"/>
+            <g><animateTransform attributeName="transform" type="rotate" values="0 128 204;0 128 204;-11 128 204;8 128 204;-4 128 204;0 128 204;0 128 204" keyTimes="0;0.3;0.45;0.6;0.72;0.82;1" calcMode="spline" keySplines="0 0 1 1;0.65 0 0.35 1;0.65 0 0.35 1;0.65 0 0.35 1;0.65 0 0.35 1;0 0 1 1" dur="4.2s" repeatCount="indefinite"/>
+              <rect x="121" y="166" width="14" height="38" rx="4" fill="#8892a6"/>
+              <path d="M112 178q-6-28-2-48q4-18 18-18q16 0 19 16q3 20-3 50z" fill="#3b4252" stroke="#0e1116" stroke-width="3"/>
+              <circle cx="128" cy="124" r="6" fill="#d8dee9"/>
+            </g>
+          </g>
+          </g>
+        </svg>
+        <p class="eyebrow" data-k="up"><span class="dot" aria-hidden="true"></span> Free, open source joystick mapper for Windows and Linux</p>
+        <h1 class="gradient" data-k="up">Your whole stick setup<br>in one app</h1>
+        <p class="sub" data-k="up">Joystick Gobloon hides your physical controllers from games, runs virtual joysticks and maps one to the other. It can import your Joystick Gremlin profiles.</p>
+        <div class="hero-actions" data-k="up">
+          <a class="btn btn-primary" id="download" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
+            <i class="ph-bold ph-download-simple" aria-hidden="true"></i>
+            Download for free
+          </a>
+        </div>
+        <p class="hero-note" data-k="up">Windows installer, portable zip and Linux AppImage. MIT license, no account.</p>
+
+        <figure class="shot" data-k="card">
+          <div class="stage" data-story="devices"><img src="img/devices.png" width="1102" height="732" fetchpriority="high" alt="Joystick Gobloon Devices page: the inputs of a flight stick on the left, the actions of the selected button on the right, a short press mapped to vJoy and a long press that changes the mode"></div>
+        </figure>
+
+        <ul class="proof" aria-label="At a glance">
+          <li data-k="up"><strong data-count="24">24</strong><span>actions for buttons, axes and hats</span></li>
+          <li data-k="up"><strong data-count="16">16</strong><span>vJoy devices with 128 buttons each</span></li>
+          <li data-k="up"><strong data-count="7">7</strong><span>languages built in</span></li>
+          <li data-k="up"><strong data-count="2">2</strong><span>systems: Windows and Linux</span></li>
+        </ul>
+      </div>
+    </header>
+
+    <!-- Problem to solution -->
+    <section aria-labelledby="problem-title">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <p class="kicker">The problem</p>
+          <h2 id="problem-title">A HOTAS setup used to need three programs open at once</h2>
+          <p>Each one has its own window, its own settings and its own way of failing. Joystick Gobloon replaces their user interfaces with one native app and talks to the same drivers directly.</p>
+        </div>
+
+        <div class="compare anim" data-story="compare">
+          <div class="card" data-k="card">
+            <h3>Before</h3>
+            <ul class="tool-list">
+              <li data-k="left"><i class="ph ph-eye-slash" aria-hidden="true"></i><div><b>HidHide</b><span>to hide physical sticks from games</span></div></li>
+              <li data-k="left"><i class="ph ph-joystick" aria-hidden="true"></i><div><b>vJoy and Configure vJoy</b><span>to create virtual joysticks</span></div></li>
+              <li data-k="left"><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>A mapping tool</b><span>to map one to the other</span></div></li>
+            </ul>
+          </div>
+          <div class="arrow" data-k="pop" aria-hidden="true"><i class="ph ph-arrow-right"></i></div>
+          <div class="card solution" data-k="card">
+            <h3>With Joystick Gobloon</h3>
+            <ul class="tool-list">
+              <li data-k="left"><i class="ph ph-eye-slash" aria-hidden="true"></i><div><b>Hide a stick</b><span>one click on its eye, in the same window</span></div></li>
+              <li data-k="left"><i class="ph ph-joystick" aria-hidden="true"></i><div><b>Edit vJoy devices</b><span>right in the app, one UAC prompt per change</span></div></li>
+              <li data-k="left"><i class="ph ph-flow-arrow" aria-hidden="true"></i><div><b>Map and run profiles</b><span>build profiles here or import your old ones</span></div></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tagline reveal -->
+    <section class="tagline" aria-label="In short">
+      <div class="wrap">
+        <p data-reveal-words>One window for your whole setup. Hide the sticks, press play, fly.</p>
+      </div>
+    </section>
+
+    <!-- Benefits -->
+    <section id="features" aria-labelledby="features-title">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <p class="kicker">Features</p>
+          <h2 id="features-title">Everything your setup needs, in one fast app</h2>
+          <p>Written in Rust, it reads controllers the moment they change and sits almost idle in the tray.</p>
+        </div>
+
+        <article class="benefit anim">
+          <div>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-file-arrow-up" aria-hidden="true"></i></div>
+            <h3 data-k="up">Keep the profile you already built</h3>
+            <p data-k="up">Import a Joystick Gremlin profile and it runs. Anything not supported yet is kept in the file, so nothing gets lost.</p>
+            <ul class="ticks">
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Modes with inheritance and per mode overrides</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Map controls matches a profile from another PC to your devices in one click</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Undo and redo for every edit</li>
+            </ul>
+          </div>
+          <figure class="shot" data-k="card"><div class="stage" data-story="tempo"><img src="img/actions/tempo.png" loading="lazy" width="597" height="535" alt="Tempo action editor: a short press and a long press, each with its own actions"></div></figure>
+        </article>
+
+        <article class="benefit flip anim">
+          <div>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-stack" aria-hidden="true"></i></div>
+            <h3 data-k="up">One button, four jobs with modifiers</h3>
+            <p data-k="up">Name a few buttons as modifiers. While M1 or M2 is held, every input with a layer for it runs that layer instead. Nothing gets stuck when you let go in the wrong order.</p>
+            <ul class="ticks">
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Layers for nothing, M1, M2 and M1 plus M2</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Additive layers that run together with the base</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Trim axes that keep their last value</li>
+            </ul>
+          </div>
+          <figure class="shot" data-k="card"><div class="stage" data-story="modifiers"><img src="img/modifiers.png" loading="lazy" width="1102" height="732" alt="Layers Base, M1, M2 and M1 plus M2 above the actions of a button, next to the Modifiers window"></div></figure>
+        </article>
+
+        <article class="benefit anim">
+          <div>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-joystick" aria-hidden="true"></i></div>
+            <h3 data-k="up">Virtual joysticks without Configure vJoy</h3>
+            <p data-k="up">Create, change and remove vJoy devices from the app. Each one shows its axes, buttons and hats at a glance, and a built in tester moves them by hand.</p>
+            <ul class="ticks">
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Up to 16 devices, 8 axes, 128 buttons and 4 hats each</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>A new device starts as a copy of the first one</li>
+            </ul>
+          </div>
+          <figure class="shot" data-k="card"><div class="stage" data-story="vjoy"><img src="img/vjoy.png" loading="lazy" width="1102" height="732" alt="vJoy page: device tabs, the device editor and the output tester"></div></figure>
+        </article>
+
+        <article class="benefit flip anim">
+          <div>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-eye-slash" aria-hidden="true"></i></div>
+            <h3 data-k="up">Games see only the virtual stick</h3>
+            <p data-k="up">Hide a physical controller with one click and stop double inputs for good. Joystick Gobloon still sees it, and you choose which other programs may too.</p>
+            <ul class="ticks">
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Switch hiding for the whole system from the toolbar or tray</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>HidHide inverse mode supported</li>
+            </ul>
+          </div>
+          <figure class="shot" data-k="card"><div class="stage" data-story="hidhide"><img src="img/hidhide.png" loading="lazy" width="722" height="452" alt="Device hiding window: two flight sticks are hidden, the vJoy devices are visible"></div></figure>
+        </article>
+
+        <article class="benefit anim">
+          <div>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-chart-line" aria-hidden="true"></i></div>
+            <h3 data-k="up">See every input move live</h3>
+            <p data-k="up">Graphs of every axis, button and hat for physical sticks and vJoy devices alike, in the main window or a window of its own. Calibrate center and end points on the spot.</p>
+          </div>
+          <figure class="shot" data-k="card"><div class="stage" data-story="viewer"><img src="img/viewer.png" loading="lazy" width="1102" height="732" alt="Input viewer: axes over time, current axis values, buttons and hats of a vJoy device"></div></figure>
+        </article>
+      </div>
+    </section>
+
+    <!-- Actions -->
+    <section aria-labelledby="actions-title">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <p class="kicker">Actions</p>
+          <h2 id="actions-title">24 actions for every input</h2>
+          <p>Stack them on any input. They run top to bottom and pass the value on, so a response curve can shape an axis before it reaches vJoy.</p>
+        </div>
+        <ul class="actions anim" data-story="actions">
+          <li data-k="up"><i class="ph ph-joystick" aria-hidden="true"></i>Map to vJoy</li>
+          <li data-k="up"><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</li>
+          <li data-k="up"><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</li>
+          <li data-k="up"><i class="ph ph-mouse" aria-hidden="true"></i>Map to mouse</li>
+          <li data-k="up"><i class="ph ph-cube" aria-hidden="true"></i>Map to logical device</li>
+          <li data-k="up"><i class="ph ph-chart-line" aria-hidden="true"></i>Response curve</li>
+          <li data-k="up"><i class="ph ph-arrows-split" aria-hidden="true"></i>Split axis</li>
+          <li data-k="up"><i class="ph ph-arrows-merge" aria-hidden="true"></i>Merge axis</li>
+          <li data-k="up"><i class="ph ph-crosshair" aria-hidden="true"></i>Dual axis deadzone</li>
+          <li data-k="up"><i class="ph ph-trend-up" aria-hidden="true"></i>Axis delta</li>
+          <li data-k="up"><i class="ph ph-timer" aria-hidden="true"></i>Tempo</li>
+          <li data-k="up"><i class="ph ph-hand-tap" aria-hidden="true"></i>Double tap</li>
+          <li data-k="up"><i class="ph ph-toggle-right" aria-hidden="true"></i>Smart toggle</li>
+          <li data-k="up"><i class="ph ph-link" aria-hidden="true"></i>Chain</li>
+          <li data-k="up"><i class="ph ph-list-numbers" aria-hidden="true"></i>Macro</li>
+          <li data-k="up"><i class="ph ph-compass" aria-hidden="true"></i>Hat buttons</li>
+          <li data-k="up"><i class="ph ph-git-branch" aria-hidden="true"></i>Condition</li>
+          <li data-k="up"><i class="ph ph-swap" aria-hidden="true"></i>Change mode</li>
+          <li data-k="up"><i class="ph ph-pause" aria-hidden="true"></i>Pause and resume</li>
+          <li data-k="up"><i class="ph ph-folder-open" aria-hidden="true"></i>Load profile</li>
+          <li data-k="up"><i class="ph ph-speaker-high" aria-hidden="true"></i>Play sound</li>
+          <li data-k="up"><i class="ph ph-chat-text" aria-hidden="true"></i>Text to speech</li>
+          <li data-k="up"><i class="ph ph-terminal-window" aria-hidden="true"></i>Run command</li>
+          <li data-k="up"><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</li>
+        </ul>
+        <p class="more reveal"><a href="learn.html">Learn every action <i class="ph-bold ph-arrow-right" aria-hidden="true"></i></a></p>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <p class="kicker">How it works</p>
+          <h2 id="how-title">From download to flying in three steps</h2>
+        </div>
+        <ol class="steps reveal">
+          <li class="card">
+            <h3>Install</h3>
+            <p>Run the installer. It adds the signed HidHide and vJoy 2.1.9.1 drivers when they are missing. On Linux, start the AppImage and click Grant access once.</p>
+          </li>
+          <li class="card">
+            <h3>Set up your profile</h3>
+            <p>Start a new profile, or import a Joystick Gremlin one from the toolbar. Made on another PC? Map controls matches it to your sticks.</p>
+          </li>
+          <li class="card">
+            <h3>Hide and activate</h3>
+            <p>Hide the physical sticks with the eye button and press play. The game now sees only your virtual joysticks.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Platforms -->
+    <section id="platforms" aria-labelledby="platforms-title">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <p class="kicker">Windows and Linux</p>
+          <h2 id="platforms-title">Same app and profiles on both systems</h2>
+          <p>What does the work underneath differs, and so do the limits. Linux runs on desktop distributions and the Steam Deck desktop mode, on X11 and Wayland.</p>
+        </div>
+        <div class="table-wrap reveal">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col"><span class="sr">Feature</span></th>
+                <th scope="col"><i class="ph ph-windows-logo" aria-hidden="true"></i>Windows 10 and 11</th>
+                <th scope="col"><i class="ph ph-linux-logo" aria-hidden="true"></i>Linux x86_64</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">Package</th><td>Installer with drivers, or portable zip. Updates itself.</td><td>AppImage. Updates itself.</td></tr>
+              <tr><th scope="row">Virtual joysticks</th><td>vJoy: up to 16 devices, 8 axes, 128 buttons, 4 hats each</td><td>uinput, no driver: devices appear when a profile starts; 8 axes, 95 buttons, 4 hats each</td></tr>
+              <tr><th scope="row">Virtual gamepads</th><td>Not yet (needs a driver)</td><td>Xbox-style gamepads, up to 4: games, Steam and Proton see an Xbox 360 controller</td></tr>
+              <tr><th scope="row">Device hiding</th><td>HidHide: hidden for every program, even when the app is closed</td><td>Exclusive reading while Joystick Gobloon runs; raw HID readers are not covered</td></tr>
+              <tr><th scope="row">Physical controllers</th><td>DirectInput: all buttons. Xbox controllers through XInput: both triggers apart, also in the background</td><td>evdev: up to 80 buttons per device</td></tr>
+              <tr><th scope="row">Keyboard keys as inputs</th><td>Yes</td><td>No, key and mouse output works</td></tr>
+              <tr><th scope="row">Text to speech</th><td>Windows voices</td><td>speech dispatcher</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" aria-labelledby="faq-title">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <p class="kicker">FAQ</p>
+          <h2 id="faq-title">Questions before you switch</h2>
+        </div>
+        <div class="faq reveal">
+          <details>
+            <summary>Is Joystick Gobloon free?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>Yes. It is open source under the MIT license. There is no account, no trial and nothing to buy.</p></div>
+          </details>
+          <details>
+            <summary>Can I import my Joystick Gremlin profiles?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>Yes. Open one from the toolbar and it runs. Anything not supported yet is kept as it was in the file.</p></div>
+          </details>
+          <details>
+            <summary>Do I still need HidHide and vJoy installed?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>You need the HidHide and vJoy drivers on Windows, and the installer adds them when they are missing. You do not need their own user interfaces.</p></div>
+          </details>
+          <details>
+            <summary>Does it need administrator rights?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>Only to install the drivers and when you change vJoy devices, with one UAC prompt per change. Everyday use runs as a normal user.</p></div>
+          </details>
+          <details>
+            <summary>Does it run on the Steam Deck?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>Yes, in desktop mode, like on any x86_64 Linux desktop. Make the AppImage executable, start it and click Grant access on the Devices page once.</p></div>
+          </details>
+          <details>
+            <summary>Why does Windows SmartScreen warn on the first start?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>Code signing through SignPath is being set up, and new releases need some downloads before SmartScreen trusts them. Choose More info, then Run anyway.</p></div>
+          </details>
+          <details>
+            <summary>Is it ready for daily use?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>It is in alpha. The daily features are in place and used every day with a dual stick setup, but expect rough edges. Bugs reported on GitHub get fixed quickly.</p></div>
+          </details>
+          <details>
+            <summary>Can I try it without installing anything?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>Use the portable zip: unpack it anywhere and start it. Delete the folder and it is gone. On Linux the AppImage is a single file.</p></div>
+          </details>
+          <details>
+            <summary>Which languages does it speak?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>English, Русский, Deutsch, Español, Français, 简体中文 and 한국어. Another language is one text file: copy <code>lang/en.ftl</code>, translate it and put it next to the app.</p></div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Support -->
+    <section class="support-section" aria-labelledby="support-title">
+      <div class="wrap">
+        <div class="support card reveal">
+          <div class="benefit-icon" data-k="pop"><i class="ph ph-heart" aria-hidden="true"></i></div>
+          <div>
+            <h2 id="support-title">Free for everyone, kept going by donations</h2>
+            <p>Joystick Gobloon has no ads, no paid tier and no tracking. If it saved you an evening of setup, a donation helps pay for the time that goes into every release.</p>
+          </div>
+          <a class="btn btn-ghost" href="https://www.paypal.com/paypalme/h0userus" rel="noopener">
+            <i class="ph-bold ph-paypal-logo" aria-hidden="true"></i> Donate with PayPal
+          </a>
+        </div>
+        <div class="support card reveal">
+          <div class="benefit-icon" data-k="pop"><i class="ph ph-chats-circle" aria-hidden="true"></i></div>
+          <div>
+            <h2>Join the community</h2>
+            <p>Ask questions, share your profiles, report bugs and hear about new releases first on the Joystick Gobloon Discord server.</p>
+          </div>
+          <a class="btn btn-ghost" href="https://discord.gg/8cd9APqwG4" rel="noopener">
+            <i class="ph-bold ph-discord-logo" aria-hidden="true"></i> Join on Discord
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section aria-labelledby="final-title">
+      <div class="wrap">
+        <div class="final reveal">
+          <h2 id="final-title" class="gradient">Bring your profile.<br>Leave the three tools behind.</h2>
+          <p>Free, open source and portable if you want it. Import a profile or build one from scratch.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
+              <i class="ph-bold ph-download-simple" aria-hidden="true"></i>
+              Download for free
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div>
+          <a class="brand" href="index.html"><img src="img/icon.svg" alt="" width="24" height="24"> Joystick Gobloon</a>
+          <p>Built on <a href="https://github.com/nefarius/HidHide">HidHide</a> by Nefarius and <a href="https://github.com/shauleiz/vJoy">vJoy</a> by Shaul Eizikovich.</p>
+        </div>
+        <div>
+          <h3>Project</h3>
+          <ul>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/releases">Releases</a></li>
+            <li><a href="learn.html">Learning</a></li>
+            <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
+            <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>
+            <li><a href="https://www.paypal.com/paypalme/h0userus" rel="noopener">Donate with PayPal</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Legal</h3>
+          <ul>
+            <li><a href="privacy.html">Privacy</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/LICENSE">License and terms (MIT)</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/docs/CODE_SIGNING.md">Code signing policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="copyright">© 2026 Denis Ibragimov. Joystick Gobloon is released under the MIT license.</p>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+  <script src="motion.js" defer></script>
+</body>
+</html>

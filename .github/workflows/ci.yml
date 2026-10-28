@@ -1,10 +1,11 @@
-# Checks every pull request and every push to a work branch (dev and main run release.yml).
+# Checks every pull request and every push to a work branch (dev and main run release.yml, web
+# holds only the website: website.yml).
 name: CI
 
 on:
   pull_request:
   push:
-    branches-ignore: [main, dev]
+    branches-ignore: [main, dev, web]
 
 concurrency:
   group: ci-${{ github.ref }}
