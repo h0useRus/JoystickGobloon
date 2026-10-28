@@ -52,6 +52,8 @@ pub struct DevicesView {
     /// HidHide state of connected devices (GUID -> hidden), filled by the app; devices
     /// without an entry have no eye icon.
     pub hidden: HashMap<String, bool>,
+    /// Hidden devices other programs can still read another way, filled by the app.
+    pub exposed: std::collections::HashSet<String>,
     /// Device hiding is on as a whole; while off the eyes are gray.
     pub hiding_on: bool,
     /// The eye icon was clicked: (device GUID, hide). The app applies it.
@@ -66,8 +68,13 @@ pub struct DevicesView {
     pub open_modifiers: bool,
     /// Curve edits keep curves monotonic (setting), filled by the app.
     pub monotonic_curves: bool,
+    /// A right click on empty space of a curve chart inverts it (setting), filled by the app.
+    pub curve_right_click_invert: bool,
     /// The profile's logical device with its live values, filled by the app for each frame.
     pub logical: Option<DeviceState>,
+    /// Configured virtual gamepads and how many the system can have, filled by the app.
+    pub gamepads: Vec<gob_virtual::GamepadInfo>,
+    pub max_gamepads: u32,
 }
 
 struct Tab<'a> {
@@ -139,7 +146,7 @@ impl DevicesView {
             let (kind, id) = key;
             if devices
                 .iter()
-                .any(|d| d.info.guid == device && d.info.is_vjoy())
+                .any(|d| d.info.guid == device && d.info.is_own())
                 || (kind == Kind::Button
                     && modifiers
                         .iter()
@@ -149,6 +156,45 @@ impl DevicesView {
             }
             self.selected = Some(device.clone());
             self.scroll_to = Some((device, key));
+        }
+    }
+
+    /// When a two-axis action's axis moves away from the shown input (which then loses the
+    /// action), the page shows the input it moved to.
+    fn follow_moved_axis(&mut self, profile: &Profile, ops: &[Op], device: &str, key: Key) {
+        if key.0 != Kind::Axis {
+            return;
+        }
+        let shown = (device.to_string(), key.1);
+        let same = |a: &gob_core::AxisInput, b: &gob_core::AxisInput| {
+            a.0.eq_ignore_ascii_case(&b.0) && a.1 == b.1
+        };
+        for op in ops {
+            let Op::TwoAxisInput {
+                action,
+                slot,
+                device,
+                axis,
+                ..
+            } = op
+            else {
+                continue;
+            };
+            let Some(axes) = profile.two_axis_inputs(action) else {
+                continue;
+            };
+            let i = usize::from(slot.clamp(&1, &2) - 1);
+            let new = (device.clone(), *axis);
+            if same(&axes[i], &shown) && !same(&axes[1 - i], &shown) && !same(&new, &shown) {
+                let key = (Kind::Axis, *axis);
+                log::info!(
+                    "two-axis action {action}: the editor follows it to {device} axis {axis}"
+                );
+                self.selected = Some(device.clone());
+                self.user_selected = true;
+                self.selected_input.insert(device.clone(), key);
+                self.scroll_to = Some((device.clone(), key));
+            }
         }
     }
 
@@ -169,7 +215,7 @@ impl DevicesView {
         let logical = self.logical.take();
         let mut tabs: Vec<Tab> = devices
             .iter()
-            .filter(|d| !d.info.is_vjoy())
+            .filter(|d| !d.info.is_own())
             .map(|d| Tab {
                 guid: &d.info.guid,
                 name: &d.info.name,
@@ -321,6 +367,7 @@ impl DevicesView {
                                 self.hiding_on,
                             );
                             let led_tip = i18n.tr("device-leds");
+                            let exposed_tip = i18n.tr("hidhide-exposed");
                             let mut icons = Vec::new();
                             if let Some(hidden) = hidden {
                                 let (glyph, color) = style::eye(ui, hidden, self.hiding_on);
@@ -328,6 +375,13 @@ impl DevicesView {
                                     glyph,
                                     color: Some(color),
                                     tip: &eye_tip,
+                                });
+                            }
+                            if self.hiding_on && self.exposed.contains(t.guid) {
+                                icons.push(style::TabIcon {
+                                    glyph: icon::WARNING,
+                                    color: Some(ui.visuals().warn_fg_color),
+                                    tip: &exposed_tip,
                                 });
                             }
                             // Shows only that light-led can drive it; clicking does nothing.
@@ -964,15 +1018,21 @@ impl DevicesView {
                     ops,
                     behavior,
                     vjoy,
+                    gamepads: &self.gamepads,
+                    max_gamepads: self.max_gamepads,
                     inputs,
                     input: Some((&b.device_id, key.1)),
+                    place: Some((&b.mode, &layer)),
                     leds: &self.leds,
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
+                    curve_right_click_invert: self.curve_right_click_invert,
                 };
+                let first_op = editor.ops.len();
                 for cfg in &configs {
                     editor.container(ui, &cfg.root_action, "actions", 0);
                 }
+                self.follow_moved_axis(&p.profile, &ops[first_op..], &b.device_id, key);
             }
             Bound::Inherited(b) if !in_layer(b).is_empty() => {
                 ui.label(
@@ -1000,11 +1060,15 @@ impl DevicesView {
                     ops,
                     behavior,
                     vjoy,
+                    gamepads: &self.gamepads,
+                    max_gamepads: self.max_gamepads,
                     inputs,
                     input: Some((&device, key.1)),
+                    place: Some((&mode, &layer)),
                     leds: &self.leds,
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
+                    curve_right_click_invert: self.curve_right_click_invert,
                 };
                 editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));
             }
@@ -1175,12 +1239,20 @@ fn input_name(i18n: &I18n, (kind, id): Key, label: Option<&str>) -> String {
         return l.to_string();
     }
     match kind {
-        Kind::Axis if (1..=8).contains(&id) => i18n.tr(&format!("vjoy-axis-{id}")),
-        Kind::Axis => i18n.trf("viewer-axis", &[("n", id.into())]),
+        Kind::Axis => axis_name(i18n, id),
         Kind::Button => i18n.trf("vjoy-button-n", &[("n", id.into())]),
         Kind::Hat => i18n.trf("vjoy-hat-n", &[("n", id.into())]),
         Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id)),
         Kind::Other => id.to_string(),
+    }
+}
+
+/// Axis name by slot, the same on every page: X Axis ... Z Rotation, Slider, Dial; Axis 9 ...
+pub fn axis_name(i18n: &I18n, slot: u32) -> String {
+    if (1..=8).contains(&slot) {
+        i18n.tr(&format!("vjoy-axis-{slot}"))
+    } else {
+        i18n.trf("viewer-axis", &[("n", slot.into())])
     }
 }
 
@@ -1211,6 +1283,13 @@ fn chip_text(i18n: &I18n, a: &Action) -> String {
             _ => "B",
         };
         return format!("{name}: vJoy #{device} {t}{input_id}");
+    }
+    if let gob_core::ActionKind::MapToGamepad {
+        gamepad, control, ..
+    } = a.kind()
+    {
+        let pad = i18n.trf("gamepad-n", &[("n", gamepad.into())]);
+        return format!("{name}: {pad} {}", i18n.tr(&format!("pad-{control}")));
     }
     if let gob_core::ActionKind::Description { text } = a.kind() {
         let text = text.trim();

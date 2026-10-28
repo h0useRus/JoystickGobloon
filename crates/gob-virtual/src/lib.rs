@@ -1,11 +1,12 @@
-//! Virtual joysticks: the common interface the engine and the GUI use, whatever provides the
-//! devices. Each platform has its own backend: vJoy on
+//! Virtual joysticks and gamepads: the common interface the engine and the GUI use, whatever
+//! provides the devices. Each platform has its own backend: vJoy on
 //! Windows (`windows.rs`, over gob-vjoy), uinput on Linux (`linux.rs`, over gob-uinput),
 //! `unsupported.rs` elsewhere.
 //! A new backend (e.g. our own Windows driver) only implements [`Backend`] and [`Device`].
 //!
 //! Device ids are 1-based like Gremlin's `vjoy-device`; axes use slots 1..=8 (X, Y, Z, Rx, Ry, Rz,
-//! Slider 0, Slider 1) like gob-input.
+//! Slider 0, Slider 1) like gob-input. Gamepads (an Xbox-style layout, where the backend has
+//! them: [`Capabilities::max_gamepads`]) have ids of their own, 1-based as well.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -95,12 +96,15 @@ pub struct Capabilities {
     pub switchable: bool,
     /// Applying a configuration change asks the user for administrator rights.
     pub needs_admin: bool,
+    /// Virtual gamepads it can create; 0 = none.
+    pub max_gamepads: u32,
 }
 
 /// No backend: nothing can be configured.
 pub const NO_CAPABILITIES: Capabilities = Capabilities {
     name: "",
     max_devices: 0,
+    max_gamepads: 0,
     max_buttons: 0,
     max_hats: 0,
     effects: &[],
@@ -144,6 +148,9 @@ pub enum Change {
     Delete(u32),
     /// Switch the whole backend on or off (only when [`Capabilities::switchable`]).
     Enable(bool),
+    /// Add gamepad `id` (only up to [`Capabilities::max_gamepads`]).
+    AddGamepad(u32),
+    DeleteGamepad(u32),
 }
 
 /// What applying a change left to do.
@@ -171,6 +178,155 @@ pub trait Backend: Send + Sync {
     /// Applies a change; may ask the user for administrator rights and waits for that.
     /// Blocking: call it off the GUI thread.
     fn apply(&self, change: &Change) -> Result<Outcome, String>;
+    /// Every configured gamepad.
+    fn gamepads(&self) -> Vec<GamepadInfo> {
+        Vec::new()
+    }
+    /// Takes gamepad `id` until the returned handle is dropped (reset and released then).
+    fn acquire_gamepad(&self, id: u32) -> Result<Box<dyn Gamepad>, Error> {
+        let _ = id;
+        Err(Error::Unsupported)
+    }
+}
+
+/// Which inputs a virtual gamepad's controls are when the gamepad is read back as an input
+/// device (e.g. in the input viewer).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GamepadInputs {
+    /// (axis slot 1..=8, stick or trigger).
+    pub axes: Vec<(u8, GamepadControl)>,
+    /// (button number from 1, button).
+    pub buttons: Vec<(u32, GamepadControl)>,
+    /// Hat number of the d-pad.
+    pub dpad: Option<u32>,
+}
+
+/// A configured virtual gamepad; its layout is fixed (Xbox-style).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GamepadInfo {
+    pub id: u32,
+    pub status: Status,
+}
+
+/// What a gamepad control takes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlKind {
+    Button,
+    /// -1.0..=1.0; Y is negative up, like the input axes.
+    Stick,
+    /// 0.0..=1.0.
+    Trigger,
+    /// A direction, like a hat.
+    Dpad,
+}
+
+/// A control of the Xbox-style gamepad. [`GamepadControl::name`] is how profiles name it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GamepadControl {
+    A,
+    B,
+    X,
+    Y,
+    Lb,
+    Rb,
+    Back,
+    Start,
+    Guide,
+    /// Pressing the left stick.
+    LeftStick,
+    RightStick,
+    DpadUp,
+    DpadDown,
+    DpadLeft,
+    DpadRight,
+    LeftX,
+    LeftY,
+    RightX,
+    RightY,
+    Lt,
+    Rt,
+    /// The whole d-pad, set from a hat.
+    Dpad,
+}
+
+impl GamepadControl {
+    pub const ALL: [Self; 22] = [
+        Self::A,
+        Self::B,
+        Self::X,
+        Self::Y,
+        Self::Lb,
+        Self::Rb,
+        Self::Back,
+        Self::Start,
+        Self::Guide,
+        Self::LeftStick,
+        Self::RightStick,
+        Self::DpadUp,
+        Self::DpadDown,
+        Self::DpadLeft,
+        Self::DpadRight,
+        Self::LeftX,
+        Self::LeftY,
+        Self::RightX,
+        Self::RightY,
+        Self::Lt,
+        Self::Rt,
+        Self::Dpad,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::A => "a",
+            Self::B => "b",
+            Self::X => "x",
+            Self::Y => "y",
+            Self::Lb => "lb",
+            Self::Rb => "rb",
+            Self::Back => "back",
+            Self::Start => "start",
+            Self::Guide => "guide",
+            Self::LeftStick => "ls",
+            Self::RightStick => "rs",
+            Self::DpadUp => "dpad-up",
+            Self::DpadDown => "dpad-down",
+            Self::DpadLeft => "dpad-left",
+            Self::DpadRight => "dpad-right",
+            Self::LeftX => "left-x",
+            Self::LeftY => "left-y",
+            Self::RightX => "right-x",
+            Self::RightY => "right-y",
+            Self::Lt => "lt",
+            Self::Rt => "rt",
+            Self::Dpad => "dpad",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        let name = name.trim();
+        Self::ALL.into_iter().find(|c| c.name() == name)
+    }
+
+    pub fn kind(self) -> ControlKind {
+        match self {
+            Self::LeftX | Self::LeftY | Self::RightX | Self::RightY => ControlKind::Stick,
+            Self::Lt | Self::Rt => ControlKind::Trigger,
+            Self::Dpad => ControlKind::Dpad,
+            _ => ControlKind::Button,
+        }
+    }
+}
+
+/// An acquired virtual gamepad. Reset and released when dropped.
+pub trait Gamepad: Send {
+    /// Presses or releases a button or one d-pad direction (other controls: `false`).
+    fn set_button(&self, control: GamepadControl, pressed: bool) -> bool;
+    /// Moves a stick axis (-1.0..=1.0) or a trigger (0.0..=1.0).
+    fn set_axis(&self, control: GamepadControl, value: f32) -> bool;
+    /// Points the d-pad: hundredths of a degree (0 = up, clockwise), `None` = released.
+    fn set_dpad(&self, direction: Option<u16>) -> bool;
+    /// Centers sticks and d-pad, releases buttons and triggers.
+    fn reset(&self) -> bool;
 }
 
 /// An acquired virtual device. Reset and released when dropped.
@@ -205,6 +361,18 @@ pub fn capabilities() -> Capabilities {
     return NO_CAPABILITIES;
 }
 
+/// How the input device named `device_name` maps to gamepad controls, when it is one of this
+/// backend's virtual gamepads.
+pub fn gamepad_inputs(device_name: &str) -> Option<GamepadInputs> {
+    #[cfg(target_os = "linux")]
+    return linux::gamepad_inputs(device_name);
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = device_name;
+        None
+    }
+}
+
 static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// The program's data folder (next to its settings), where a backend that keeps its own files
@@ -228,5 +396,24 @@ pub fn admin_entry(args: &[String]) -> Option<i32> {
     {
         let _ = args;
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gamepad_control_names() {
+        for c in GamepadControl::ALL {
+            assert_eq!(GamepadControl::parse(c.name()), Some(c));
+        }
+        assert_eq!(
+            GamepadControl::parse(" left-y "),
+            Some(GamepadControl::LeftY)
+        );
+        assert_eq!(GamepadControl::parse("z"), None);
+        assert_eq!(GamepadControl::Lt.kind(), ControlKind::Trigger);
+        assert_eq!(GamepadControl::DpadUp.kind(), ControlKind::Button);
     }
 }

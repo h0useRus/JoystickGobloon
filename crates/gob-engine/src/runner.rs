@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -11,7 +11,7 @@ use gob_core::Profile;
 use gob_input::{DeviceState, InputEvent, Timed};
 
 use crate::platform::Injector;
-use crate::{Engine, InputKey, InputKind, LogicalValues, Output, Value};
+use crate::{Engine, GamepadControl, InputKey, InputKind, LogicalValues, Output, Value};
 
 /// Upper bound on how long the loop sleeps without events.
 const IDLE: Duration = Duration::from_millis(20);
@@ -79,14 +79,28 @@ pub struct Runner {
     thread: Option<JoinHandle<()>>,
     status: Arc<Mutex<RunnerStatus>>,
     logical: Arc<Mutex<LogicalValues>>,
+    reload: Sender<Reload>,
 }
+
+/// A new engine for the running thread, with the device state to start it from; the thread
+/// answers whether it took it.
+struct Reload {
+    engine: Engine,
+    initial: Vec<DeviceState>,
+    reply: Sender<Result<(), String>>,
+}
+
+/// How long [`Runner::reload`] waits for the engine thread.
+const RELOAD_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct SystemOutput {
     devices: HashMap<u32, Box<dyn gob_virtual::Device>>,
+    gamepads: HashMap<u32, Box<dyn gob_virtual::Gamepad>>,
     /// Last values written, read back by vJoy conditions.
     written: HashMap<(u32, InputKind, u32), Value>,
     /// Outputs whose last write the driver refused; logged once until one succeeds again.
     failing: HashSet<(u32, InputKind, u32)>,
+    failing_pads: HashSet<(u32, Option<GamepadControl>)>,
     media: crate::media::Media,
     lighting: crate::lighting::Lighting,
     load_profile: Option<String>,
@@ -97,15 +111,31 @@ impl SystemOutput {
     fn wrote(&mut self, key: (u32, InputKind, u32), value: Value, ok: Option<bool>) {
         self.written.insert(key, value);
         let (device, kind, id) = key;
-        match ok {
-            Some(false) if self.failing.insert(key) => {
-                log::warn!("virtual device {device}: writing {kind:?} {id} = {value:?} failed");
-            }
-            Some(true) if self.failing.remove(&key) => {
-                log::info!("virtual device {device}: writing {kind:?} {id} works again");
-            }
-            _ => {}
-        }
+        log_refused(&mut self.failing, key, ok, || {
+            format!("virtual device {device}: writing {kind:?} {id} = {value:?}")
+        });
+    }
+
+    /// A gamepad write (`control` `None`: the d-pad as a whole), logged like [`Self::wrote`].
+    fn wrote_pad(&mut self, gamepad: u32, control: Option<GamepadControl>, ok: Option<bool>) {
+        log_refused(&mut self.failing_pads, (gamepad, control), ok, || {
+            let control = control.map_or("dpad", GamepadControl::name);
+            format!("virtual gamepad {gamepad}: writing {control}")
+        });
+    }
+}
+
+/// Logs a write the driver refused when it starts failing, and when it works again.
+fn log_refused<K: Copy + Eq + std::hash::Hash>(
+    failing: &mut HashSet<K>,
+    key: K,
+    ok: Option<bool>,
+    what: impl FnOnce() -> String,
+) {
+    match ok {
+        Some(false) if failing.insert(key) => log::warn!("{} failed", what()),
+        Some(true) if failing.remove(&key) => log::info!("{} works again", what()),
+        _ => {}
     }
 }
 
@@ -129,6 +159,27 @@ impl Output for SystemOutput {
         let ok = self.devices.get(&device).map(|d| d.set_hat(hat, direction));
         let key = (device, InputKind::Hat, u32::from(hat));
         self.wrote(key, Value::Hat(direction), ok);
+    }
+
+    fn gamepad_button(&mut self, gamepad: u32, control: GamepadControl, pressed: bool) {
+        let ok = self
+            .gamepads
+            .get(&gamepad)
+            .map(|p| p.set_button(control, pressed));
+        self.wrote_pad(gamepad, Some(control), ok);
+    }
+
+    fn gamepad_axis(&mut self, gamepad: u32, control: GamepadControl, value: f32) {
+        let ok = self
+            .gamepads
+            .get(&gamepad)
+            .map(|p| p.set_axis(control, value));
+        self.wrote_pad(gamepad, Some(control), ok);
+    }
+
+    fn gamepad_dpad(&mut self, gamepad: u32, direction: Option<u16>) {
+        let ok = self.gamepads.get(&gamepad).map(|p| p.set_dpad(direction));
+        self.wrote_pad(gamepad, None, ok);
     }
 
     fn play_sound(&mut self, file: &str, volume: u8) {
@@ -196,8 +247,10 @@ impl Runner {
         let virtual_devices = gob_virtual::load().map_err(|e| e.to_string())?;
         let mut out = SystemOutput {
             devices: HashMap::new(),
+            gamepads: HashMap::new(),
             written: HashMap::new(),
             failing: HashSet::new(),
+            failing_pads: HashSet::new(),
             media: Default::default(),
             lighting: crate::lighting::Lighting::new(
                 initial
@@ -209,32 +262,7 @@ impl Runner {
             ),
             load_profile: None,
         };
-        for id in engine.vjoy_devices() {
-            out.devices
-                .insert(id, virtual_devices.acquire(id).map_err(|e| e.to_string())?);
-        }
-
-        let now = Instant::now();
-        for d in initial.iter().filter(|d| !d.info.is_vjoy()) {
-            for (i, &b) in d.buttons.iter().enumerate() {
-                let key = InputKey::new(&d.info.guid, InputKind::Button, i as u32 + 1);
-                engine.seed(&key, Value::Button(b));
-            }
-            for (i, &h) in d.hats.iter().enumerate() {
-                let key = InputKey::new(&d.info.guid, InputKind::Hat, i as u32 + 1);
-                engine.seed(&key, Value::Hat(h));
-            }
-            for &axis in &d.info.axes {
-                let key = InputKey::new(&d.info.guid, InputKind::Axis, u32::from(axis));
-                engine.process(
-                    &key,
-                    Value::Axis(d.axes[usize::from(axis) - 1]),
-                    now,
-                    &mut out,
-                );
-            }
-        }
-
+        prepare(&mut engine, &mut out, virtual_devices.as_ref(), initial)?;
         if led_defaults.is_none() && engine.uses_lights() {
             log::info!("light-led actions ignored: experimental features are off");
         }
@@ -250,11 +278,20 @@ impl Runner {
         engine.take_logical_changed();
         let logical = Arc::new(Mutex::new(engine.logical_values()));
         let stop = Arc::new(AtomicBool::new(false));
+        let (reload, reloads) = std::sync::mpsc::channel();
         let thread = {
             let (status, logical, stop) = (status.clone(), logical.clone(), stop.clone());
+            let threads = Threads {
+                events,
+                reloads,
+                virtual_devices,
+                status,
+                logical,
+                stop,
+            };
             std::thread::Builder::new()
                 .name("gob-engine".into())
-                .spawn(move || run(engine, out, &events, &status, &logical, &stop, &on_change))
+                .spawn(move || run(engine, out, &threads, &on_change))
                 .map_err(|e| e.to_string())?
         };
         Ok(Self {
@@ -262,7 +299,31 @@ impl Runner {
             thread: Some(thread),
             status,
             logical,
+            reload,
         })
+    }
+
+    /// Replaces the running profile with `profile`, keeping the virtual devices: a game
+    /// using them does not see them go. Devices the new profile needs are acquired, the
+    /// others stay held until the runner stops. On an error the old profile keeps running.
+    pub fn reload(
+        &self,
+        profile: &Profile,
+        aliases: &HashMap<String, String>,
+        initial: &[DeviceState],
+    ) -> Result<(), String> {
+        let (reply, answer) = std::sync::mpsc::channel();
+        let request = Reload {
+            engine: Engine::new(profile, aliases),
+            initial: initial.to_vec(),
+            reply,
+        };
+        self.reload
+            .send(request)
+            .map_err(|_| "the engine has stopped".to_string())?;
+        answer
+            .recv_timeout(RELOAD_TIMEOUT)
+            .map_err(|_| "the engine did not answer".to_string())?
     }
 
     /// Profile file requested by a load-profile action, once.
@@ -299,17 +360,84 @@ impl Drop for Runner {
     }
 }
 
-fn run(
-    mut engine: Engine,
-    mut out: SystemOutput,
-    events: &Receiver<Timed>,
-    status: &Mutex<RunnerStatus>,
-    logical: &Mutex<LogicalValues>,
-    stop: &AtomicBool,
-    on_change: &dyn Fn(),
-) {
+/// Acquires the virtual devices `engine` writes to that `out` does not hold yet, then seeds
+/// the engine with `initial` and sends the axis positions through it.
+fn prepare(
+    engine: &mut Engine,
+    out: &mut SystemOutput,
+    virtual_devices: &dyn gob_virtual::Backend,
+    initial: &[DeviceState],
+) -> Result<(), String> {
+    use std::collections::hash_map::Entry;
+    for id in engine.vjoy_devices() {
+        if let Entry::Vacant(e) = out.devices.entry(id) {
+            e.insert(virtual_devices.acquire(id).map_err(|e| e.to_string())?);
+        }
+    }
+    for id in engine.gamepads() {
+        if let Entry::Vacant(e) = out.gamepads.entry(id) {
+            let pad = virtual_devices
+                .acquire_gamepad(id)
+                .map_err(|e| format!("gamepad {id}: {e}"))?;
+            e.insert(pad);
+        }
+    }
+
+    let now = Instant::now();
+    for d in initial.iter().filter(|d| !d.info.is_own()) {
+        for (i, &b) in d.buttons.iter().enumerate() {
+            let key = InputKey::new(&d.info.guid, InputKind::Button, i as u32 + 1);
+            engine.seed(&key, Value::Button(b));
+        }
+        for (i, &h) in d.hats.iter().enumerate() {
+            let key = InputKey::new(&d.info.guid, InputKind::Hat, i as u32 + 1);
+            engine.seed(&key, Value::Hat(h));
+        }
+        for &axis in &d.info.axes {
+            let key = InputKey::new(&d.info.guid, InputKind::Axis, u32::from(axis));
+            engine.process(&key, Value::Axis(d.axes[usize::from(axis) - 1]), now, out);
+        }
+    }
+    Ok(())
+}
+
+/// What the engine thread shares with the [`Runner`].
+struct Threads {
+    events: Receiver<Timed>,
+    reloads: Receiver<Reload>,
+    virtual_devices: Arc<dyn gob_virtual::Backend>,
+    status: Arc<Mutex<RunnerStatus>>,
+    logical: Arc<Mutex<LogicalValues>>,
+    stop: Arc<AtomicBool>,
+}
+
+fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &dyn Fn()) {
+    let Threads {
+        events,
+        reloads,
+        virtual_devices,
+        status,
+        logical,
+        stop,
+    } = shared;
     let mut window = LatencyWindow::new(Instant::now());
     while !stop.load(Ordering::Relaxed) {
+        for mut r in reloads.try_iter() {
+            let result = prepare(
+                &mut r.engine,
+                &mut out,
+                virtual_devices.as_ref(),
+                &r.initial,
+            );
+            if result.is_ok() {
+                engine = r.engine;
+                engine.activate(&mut out);
+                engine.take_logical_changed();
+                *logical.lock().unwrap_or_else(|e| e.into_inner()) = engine.logical_values();
+                on_change();
+            }
+            let _ = r.reply.send(result);
+        }
         let wait = engine.next_deadline().map_or(IDLE, |d| {
             d.saturating_duration_since(Instant::now()).min(IDLE)
         });

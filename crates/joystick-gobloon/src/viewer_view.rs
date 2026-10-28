@@ -115,7 +115,7 @@ impl ViewerView {
                             .or_insert_with(|| Shown::initial(&d.info.name));
                         let glyph = if d.info.guid == gob_core::LOGICAL_DEVICE_GUID {
                             icon::CPU
-                        } else if d.info.is_vjoy() {
+                        } else if d.info.is_own() {
                             icon::GAME_CONTROLLER
                         } else {
                             icon::JOYSTICK
@@ -148,18 +148,19 @@ impl ViewerView {
                 for d in devices {
                     let shown = self.shown.get(&d.info.guid).copied().unwrap_or_default();
                     let name = d.info.name.trim();
+                    let names = Names::of(i18n, &d.info);
                     if shown.history && !d.info.axes.is_empty() {
                         section(ui, &format!("{name} · {}", i18n.tr("viewer-history")));
                         let samples = self.history.get(&d.info.guid);
-                        history_graph(ui, i18n, d, samples, now);
+                        history_graph(ui, &names, d, samples, now);
                     }
                     if shown.current && !d.info.axes.is_empty() {
                         section(ui, &format!("{name} · {}", i18n.tr("viewer-current")));
-                        current_axes(ui, i18n, d);
+                        current_axes(ui, &names, d);
                     }
                     if shown.buttons && (d.info.buttons > 0 || d.info.hats > 0) {
                         section(ui, &format!("{name} · {}", i18n.tr("viewer-buttons")));
-                        buttons_and_hats(ui, d);
+                        buttons_and_hats(ui, &names, d);
                     }
                 }
             });
@@ -255,9 +256,51 @@ fn section(ui: &mut egui::Ui, title: &str) {
     ui.add_space(4.0);
 }
 
+/// Input names of one device: a virtual gamepad's controls, else the axis names of the
+/// Devices page and button numbers.
+struct Names<'a> {
+    i18n: &'a I18n,
+    pad: Option<gob_virtual::GamepadInputs>,
+}
+
+impl<'a> Names<'a> {
+    fn of(i18n: &'a I18n, info: &DeviceInfo) -> Self {
+        Self {
+            i18n,
+            pad: gob_virtual::gamepad_inputs(&info.name),
+        }
+    }
+
+    fn control(&self, c: gob_virtual::GamepadControl) -> String {
+        self.i18n.tr(&format!("pad-{}", c.name()))
+    }
+
+    fn axis(&self, slot: u8) -> String {
+        let pad = self.pad.as_ref().and_then(|p| {
+            let &(_, c) = p.axes.iter().find(|(s, _)| *s == slot)?;
+            Some(self.control(c))
+        });
+        pad.unwrap_or_else(|| crate::devices_view::axis_name(self.i18n, slot.into()))
+    }
+
+    /// (caption on the button, full name) of a gamepad button; `None` for numbered buttons.
+    fn button(&self, n: u32) -> Option<(String, String)> {
+        let &(_, c) = self.pad.as_ref()?.buttons.iter().find(|(b, _)| *b == n)?;
+        let key = format!("pad-{}-short", c.name());
+        let short = self.i18n.tr(&key);
+        let full = self.control(c);
+        Some((if short == key { full.clone() } else { short }, full))
+    }
+
+    /// Name of hat `n` when it is a gamepad's d-pad.
+    fn hat(&self, n: u32) -> Option<String> {
+        (self.pad.as_ref()?.dpad == Some(n)).then(|| self.i18n.tr("pad-dpad"))
+    }
+}
+
 fn history_graph(
     ui: &mut egui::Ui,
-    i18n: &I18n,
+    names: &Names,
     d: &DeviceState,
     samples: Option<&VecDeque<(f64, [f32; 8])>>,
     now: f64,
@@ -267,7 +310,7 @@ fn history_graph(
         for &slot in &d.info.axes {
             let color = AXIS_COLORS[usize::from(slot - 1) % 8];
             ui.label(RichText::new("■").color(color));
-            ui.label(RichText::new(i18n.trf("viewer-axis", &[("n", slot.into())])).small());
+            ui.label(RichText::new(names.axis(slot)).small());
             ui.add_space(6.0);
         }
     });
@@ -329,14 +372,14 @@ fn history_graph(
     }
 }
 
-fn current_axes(ui: &mut egui::Ui, i18n: &I18n, d: &DeviceState) {
+fn current_axes(ui: &mut egui::Ui, names: &Names, d: &DeviceState) {
     ui.horizontal(|ui| {
         for &slot in &d.info.axes {
             let value = d.axes[usize::from(slot - 1)];
             ui.vertical(|ui| {
-                ui.set_width(64.0);
+                ui.set_width(72.0);
                 ui.vertical_centered(|ui| {
-                    ui.label(RichText::new(i18n.trf("viewer-axis", &[("n", slot.into())])).small());
+                    ui.label(RichText::new(names.axis(slot)).small());
                     let (rect, _) = ui.allocate_exact_size(Vec2::new(20.0, 100.0), Sense::hover());
                     let painter = ui.painter();
                     painter.rect_filled(rect, 4, ui.visuals().extreme_bg_color);
@@ -355,7 +398,7 @@ fn current_axes(ui: &mut egui::Ui, i18n: &I18n, d: &DeviceState) {
     });
 }
 
-fn buttons_and_hats(ui: &mut egui::Ui, d: &DeviceState) {
+fn buttons_and_hats(ui: &mut egui::Ui, names: &Names, d: &DeviceState) {
     let accent = style::accent(ui);
     ui.horizontal_top(|ui| {
         // 16 per row, like Gremlin.
@@ -364,7 +407,14 @@ fn buttons_and_hats(ui: &mut egui::Ui, d: &DeviceState) {
                 ui.horizontal(|ui| {
                     for (i, &pressed) in row.1.iter().enumerate() {
                         let n = row.0 * 16 + i + 1;
-                        let (rect, _) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::hover());
+                        let (rect, r) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::hover());
+                        let caption = match names.button(n as u32) {
+                            Some((caption, full)) => {
+                                r.on_hover_text(full);
+                                caption
+                            }
+                            None => n.to_string(),
+                        };
                         let painter = ui.painter();
                         let (fill, color) = if pressed {
                             (accent, ui.visuals().extreme_bg_color)
@@ -372,11 +422,22 @@ fn buttons_and_hats(ui: &mut egui::Ui, d: &DeviceState) {
                             (ui.visuals().faint_bg_color, ui.visuals().text_color())
                         };
                         painter.rect_filled(rect, style::RADIUS, fill);
+                        // Names too wide for the button get a smaller font.
+                        let room = rect.width() - 4.0;
+                        let wide = painter
+                            .layout_no_wrap(caption.clone(), FontId::proportional(12.0), color)
+                            .size()
+                            .x;
+                        let size = if wide > room {
+                            (12.0 * room / wide).max(7.0)
+                        } else {
+                            12.0
+                        };
                         painter.text(
                             rect.center(),
                             Align2::CENTER_CENTER,
-                            n.to_string(),
-                            FontId::proportional(12.0),
+                            caption,
+                            FontId::proportional(size),
                             color,
                         );
                     }
@@ -385,14 +446,22 @@ fn buttons_and_hats(ui: &mut egui::Ui, d: &DeviceState) {
         });
         ui.add_space(16.0);
         for (n, &direction) in d.hats.iter().enumerate() {
-            hat_rose(ui, n + 1, direction, accent);
+            let r = hat_rose(ui, n + 1, direction, accent);
+            if let Some(name) = names.hat(n as u32 + 1) {
+                r.on_hover_text(name);
+            }
         }
     });
 }
 
 /// Eight direction marks around the hat number; the active one is highlighted.
-fn hat_rose(ui: &mut egui::Ui, n: usize, direction: Option<u16>, accent: Color32) {
-    let (rect, _) = ui.allocate_exact_size(Vec2::splat(80.0), Sense::hover());
+fn hat_rose(
+    ui: &mut egui::Ui,
+    n: usize,
+    direction: Option<u16>,
+    accent: Color32,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(80.0), Sense::hover());
     let painter = ui.painter();
     let idle = ui.visuals().weak_text_color();
     let c = rect.center();
@@ -417,4 +486,5 @@ fn hat_rose(ui: &mut egui::Ui, n: usize, direction: Option<u16>, accent: Color32
         FontId::proportional(14.0),
         center_color,
     );
+    response
 }

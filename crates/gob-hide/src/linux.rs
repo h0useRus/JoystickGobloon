@@ -1,8 +1,8 @@
 //! Linux backend: the input service reads hidden devices exclusively (gob-input's `exclusive`,
 //! `EVIOCGRAB`), so games get nothing from them through evdev or joydev while Joystick Gobloon
-//! runs. Programs that open the raw HID device (hidraw: Steam, SDL's HIDAPI drivers) could still
-//! see them, but by default only root may open hidraw (Steam's rules open it for gamepads). No
-//! program list: the hiding program is the only one that reads.
+//! runs. Programs that open the raw HID device (hidraw: Steam, SDL's HIDAPI drivers, Wine) still
+//! see them when the user may open its node, as udev rules of many gaming setups allow; such
+//! devices are marked `exposed`. No program list: the hiding program is the only one that reads.
 //!
 //! The switch and the hidden devices are kept in `hidden.gob` (TOML) in the data directory;
 //! hidden devices stay listed while unplugged.
@@ -115,6 +115,7 @@ fn list(attached: &[DeviceInfo], state: &State) -> Vec<Device> {
         name: name.to_string(),
         present,
         hidden: is_hidden(id),
+        exposed: false,
         parts: vec![Part {
             present,
             vid_pid: Some(vid_pid),
@@ -132,7 +133,9 @@ fn list(attached: &[DeviceInfo], state: &State) -> Vec<Device> {
                 .copied()
                 .collect::<Vec<_>>()
                 .join("\n");
-            device(&d.guid, &d.name, (d.vendor_id, d.product_id), true, detail)
+            let mut device = device(&d.guid, &d.name, (d.vendor_id, d.product_id), true, detail);
+            device.exposed = device.hidden && readable(&d.hid_path);
+            device
         })
         .collect();
     for h in &state.devices {
@@ -147,6 +150,15 @@ fn list(attached: &[DeviceInfo], state: &State) -> Vec<Device> {
         }
     }
     devices
+}
+
+/// Whether this user may read `path` (an empty path: no).
+fn readable(path: &str) -> bool {
+    let Ok(path) = std::ffi::CString::new(path) else {
+        return false;
+    };
+    // SAFETY: a valid NUL-terminated path; access() only checks permissions.
+    !path.as_bytes().is_empty() && unsafe { libc::access(path.as_ptr(), libc::R_OK) } == 0
 }
 
 /// `state` with `device` hidden or shown.
@@ -272,5 +284,34 @@ mod tests {
 
         let state = changed(state, &devices[1], false).unwrap();
         assert!(state.devices.is_empty());
+    }
+
+    #[test]
+    fn hidden_device_with_a_readable_raw_node_is_exposed() {
+        // Any file the user can read stands in for an open hidraw node.
+        let open = std::env::current_exe().unwrap().display().to_string();
+        let attached = [
+            DeviceInfo {
+                hid_path: open.clone(),
+                ..info("aaaa", "EVO L")
+            },
+            DeviceInfo {
+                hid_path: "/nonexistent/hidraw0".into(),
+                ..info("bbbb", "EVO R")
+            },
+            DeviceInfo {
+                hid_path: open,
+                ..info("cccc", "Pad")
+            },
+        ];
+        let mut state = State::default();
+        for d in &list(&attached, &state)[..2] {
+            state = changed(state, d, true).unwrap();
+        }
+        let devices = list(&attached, &state);
+        assert!(devices[0].exposed, "hidden, node open to the user");
+        assert!(!devices[1].exposed, "hidden, no node");
+        assert!(!devices[2].exposed, "not hidden");
+        assert!(!readable(""));
     }
 }

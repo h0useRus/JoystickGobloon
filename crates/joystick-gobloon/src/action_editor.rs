@@ -26,6 +26,18 @@ pub enum AddKind {
     Duplicate(String),
 }
 
+/// Adds a bound device to the profile's `<devices>` (not the logical device or the keyboard).
+fn list_device(p: &mut Profile, device: &str, name: String) {
+    let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
+        || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID);
+    if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device)) {
+        p.devices.push(gob_core::Device {
+            id: device.to_string(),
+            name,
+        });
+    }
+}
+
 fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
     match kind {
         // Id 0: the first logical input of that type, created when there is none.
@@ -97,6 +109,25 @@ pub enum Op {
         parent: String,
         group: String,
         action: AddKind,
+    },
+    /// Sets axis `slot` of a two-axis action (merge-axis, dual-axis-deadzone) and moves its
+    /// binding along: bound to the new axis, unbound from the old one (logged).
+    TwoAxisInput {
+        action: String,
+        slot: u8,
+        device: String,
+        /// Device name for the profile's device list.
+        name: String,
+        axis: u32,
+        mode: String,
+        layer: Layer,
+    },
+    /// A two-axis action is being linked to `device`'s `axis`: a new one takes it as its
+    /// second axis (logged).
+    TwoAxisAdopt {
+        action: String,
+        device: String,
+        axis: u32,
     },
     Remove {
         parent: String,
@@ -211,15 +242,7 @@ pub fn apply(p: &mut Profile, op: Op) {
             layer,
             add,
         } => {
-            // Neither the logical device nor the keyboard is listed in <devices>.
-            let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
-                || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID);
-            if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(&device)) {
-                p.devices.push(gob_core::Device {
-                    id: device.clone(),
-                    name,
-                });
-            }
+            list_device(p, &device, name);
             let root = p.bind_layer(&device, &input_type, &input_id, &mode, &layer);
             if let Some(kind) = add {
                 add_to(p, &root, "actions", &kind);
@@ -253,6 +276,29 @@ pub fn apply(p: &mut Profile, op: Op) {
             group,
             action,
         } => add_to(p, &parent, &group, &action),
+        Op::TwoAxisInput {
+            action,
+            slot,
+            device,
+            name,
+            axis,
+            mode,
+            layer,
+        } => {
+            list_device(p, &device, name);
+            for line in p.set_two_axis_input(&action, slot, &(device, axis), &mode, &layer) {
+                log::info!("{line}");
+            }
+        }
+        Op::TwoAxisAdopt {
+            action,
+            device,
+            axis,
+        } => {
+            if let Some(line) = p.two_axis_adopt(&action, &(device, axis)) {
+                log::info!("{line}");
+            }
+        }
         Op::Remove {
             parent,
             group,
@@ -377,8 +423,7 @@ pub fn py_float(v: f32) -> String {
     }
 }
 
-/// Actions that read two physical axes and are usually bound to both of them.
-const TWO_AXIS_KINDS: [&str; 2] = ["merge-axis", "dual-axis-deadzone"];
+use gob_core::TWO_AXIS_KINDS;
 
 /// Two-axis actions are told apart by their own `label` property.
 fn merge_label(a: &Action, i18n: &I18n) -> String {
@@ -418,19 +463,68 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "play-sound" => icon::SPEAKER_HIGH,
         "text-to-speech" => icon::CHAT_TEXT,
         "light-led" => icon::LIGHTBULB,
+        "map-to-gamepad" => icon::GAME_CONTROLLER,
         _ => icon::PUZZLE_PIECE,
     }
 }
 
-/// Action types offered in the "add" menu: (icon, i18n key, template).
-fn addable(behavior: InputType, mode: &str) -> Vec<(&'static str, &'static str, NewAction)> {
+/// Temp memory key of the vJoy device picked last, the default for new map-to-vjoy actions.
+const LAST_VJOY_DEVICE: &str = "vjoy-last-device";
+
+/// The vJoy output type map-to-vjoy writes for an input behaving as `behavior`.
+fn vjoy_type(behavior: InputType) -> InputType {
+    match behavior {
+        InputType::Axis | InputType::Hat => behavior,
+        _ => InputType::Button,
+    }
+}
+
+/// Output ids of type `ty` on `device` (every possible id when it is unknown).
+fn vjoy_outputs(device: Option<&gob_virtual::DeviceInfo>, ty: InputType) -> Vec<u32> {
+    match (vjoy_type(ty), device) {
+        (InputType::Axis, Some(d)) => d.axes.iter().map(|&a| u32::from(a)).collect(),
+        (InputType::Axis, None) => (1..=8).collect(),
+        (InputType::Hat, Some(d)) => (1..=d.hats().max(1)).collect(),
+        (InputType::Hat, None) => (1..=4).collect(),
+        (_, Some(d)) => (1..=d.buttons.max(1)).collect(),
+        (_, None) => (1..=128).collect(),
+    }
+}
+
+fn vjoy_output_name(i18n: &I18n, ty: InputType, n: u32) -> String {
+    match vjoy_type(ty) {
+        InputType::Axis => i18n.tr(&format!("vjoy-axis-{n}")),
+        InputType::Hat => i18n.trf("vjoy-hat-n", &[("n", n.into())]),
+        _ => i18n.trf("vjoy-button-n", &[("n", n.into())]),
+    }
+}
+
+/// Action types offered in the "add" menu: (icon, i18n key, template). `gamepads`: the
+/// system can create virtual gamepads.
+fn addable(
+    behavior: InputType,
+    mode: &str,
+    gamepads: bool,
+) -> Vec<(&'static str, &'static str, NewAction)> {
     let mut list = vec![(
         icon::GAME_CONTROLLER,
         "kind-map-to-vjoy",
+        // Device and output are filled in by the add menu.
         NewAction::MapToVjoy {
             input_type: behavior,
+            device: 1,
+            input_id: 1,
         },
     )];
+    if gamepads && behavior != InputType::Other {
+        list.push((
+            icon::GAME_CONTROLLER,
+            "kind-map-to-gamepad",
+            NewAction::MapToGamepad {
+                input_type: behavior,
+            },
+        ));
+    }
     if behavior == InputType::Axis {
         list.push((
             icon::CHART_LINE,
@@ -540,16 +634,24 @@ pub struct Editor<'a> {
     pub behavior: InputType,
     /// Configured vJoy devices (empty when vJoy is unavailable).
     pub vjoy: &'a [gob_virtual::DeviceInfo],
+    /// Configured virtual gamepads, and how many the system can have (0: none, no gamepad
+    /// actions are offered).
+    pub gamepads: &'a [gob_virtual::GamepadInfo],
+    pub max_gamepads: u32,
     /// Attached controllers, for actions that name physical inputs.
     pub inputs: &'a [gob_input::DeviceState],
     /// Input being edited (profile device id, input id), for templates that refer to it.
     pub input: Option<(&'a str, u32)>,
+    /// Mode and layer of the edited binding, where two-axis actions get bound.
+    pub place: Option<(&'a str, &'a Layer)>,
     /// GUIDs of the attached devices with LED control.
     pub leds: &'a HashSet<String>,
     /// Experimental features (light-led) are on; off, light-led cannot be added or edited.
     pub experimental: bool,
     /// Curve edits keep a rising (or falling) curve from turning back.
     pub monotonic_curves: bool,
+    /// A right click on empty space of the curve chart inverts the curve.
+    pub curve_right_click_invert: bool,
 }
 
 impl Editor<'_> {
@@ -566,7 +668,7 @@ impl Editor<'_> {
             RichText::new(icon::PLUS_CIRCLE).size(style::ICON_SIZE),
             |ui| {
                 let experimental = self.experimental;
-                let all = addable(self.behavior, mode);
+                let all = addable(self.behavior, mode, self.max_gamepads > 0);
                 let offered = all
                     .into_iter()
                     .filter(|(_, _, k)| experimental || !matches!(k, NewAction::LightLed { .. }));
@@ -577,6 +679,12 @@ impl Editor<'_> {
                     {
                         if let NewAction::LightLed { device, .. } = &mut kind {
                             *device = self.led_device_for_new();
+                        }
+                        if let NewAction::MapToVjoy {
+                            device, input_id, ..
+                        } = &mut kind
+                        {
+                            (*device, *input_id) = self.vjoy_output_for_new(ui.ctx());
                         }
                         self.ops.push(make(AddKind::New(kind)));
                         ui.close_menu();
@@ -688,6 +796,11 @@ impl Editor<'_> {
                     input_id,
                     inverted,
                 } => self.vjoy(ui, action, device, input_type, input_id, inverted),
+                ActionKind::MapToGamepad {
+                    gamepad,
+                    control,
+                    inverted,
+                } => self.gamepad(ui, action, gamepad, control, inverted),
                 ActionKind::ChangeMode { change_type, .. } => {
                     self.change_mode(ui, action, change_type)
                 }
@@ -1119,6 +1232,207 @@ impl Editor<'_> {
         }
     }
 
+    /// map-to-gamepad: the gamepad, a control that suits the input, inverted.
+    fn gamepad(
+        &mut self,
+        ui: &mut egui::Ui,
+        action: &Action,
+        gamepad: u32,
+        control: &str,
+        inverted: bool,
+    ) {
+        use gob_virtual::{ControlKind, GamepadControl};
+        let id = action.id.clone();
+        let fits = |c: &GamepadControl| match self.behavior {
+            InputType::Axis => matches!(c.kind(), ControlKind::Stick | ControlKind::Trigger),
+            InputType::Hat => c.kind() == ControlKind::Dpad,
+            _ => matches!(c.kind(), ControlKind::Button | ControlKind::Trigger),
+        };
+        let controls: Vec<GamepadControl> = GamepadControl::ALL.into_iter().filter(fits).collect();
+        let current = GamepadControl::parse(control);
+        let pad_name = |n: u32| self.i18n.trf("gamepad-n", &[("n", n.into())]);
+        let control_name = |c: GamepadControl| self.i18n.tr(&format!("pad-{}", c.name()));
+        // Configured gamepads (and the one in use); without any, every id the system can have.
+        let mut pads: Vec<u32> = if self.gamepads.is_empty() {
+            (1..=self.max_gamepads).collect()
+        } else {
+            self.gamepads.iter().map(|g| g.id).collect()
+        };
+        if !pads.contains(&gamepad) {
+            pads.push(gamepad);
+        }
+        pads.sort_unstable();
+        let mut set_pad = None;
+        let mut set_control = None;
+        ui.horizontal_wrapped(|ui| {
+            egui::ComboBox::from_id_salt(("gamepad", &id))
+                .selected_text(pad_name(gamepad))
+                .show_ui(ui, |ui| {
+                    for n in pads {
+                        if ui.selectable_label(n == gamepad, pad_name(n)).clicked() {
+                            set_pad = Some(n);
+                        }
+                    }
+                });
+            let shown = current.map_or_else(|| control.to_string(), control_name);
+            egui::ComboBox::from_id_salt(("gamepad-control", &id))
+                .selected_text(shown)
+                .height(320.0)
+                .show_ui(ui, |ui| {
+                    for &c in &controls {
+                        if ui
+                            .selectable_label(current == Some(c), control_name(c))
+                            .clicked()
+                        {
+                            set_control = Some(c);
+                        }
+                    }
+                });
+            if current.is_some_and(|c| c.kind() != ControlKind::Dpad) {
+                let mut inv = inverted;
+                if ui
+                    .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
+                    .changed()
+                {
+                    self.set(&id, "inverted", "bool", if inv { "True" } else { "False" });
+                }
+            }
+            if self.behavior == InputType::Button {
+                ui.separator();
+                self.activation(ui, action);
+            }
+        });
+        if !self.gamepads.iter().any(|g| g.id == gamepad) {
+            let text = self.i18n.trf("gamepad-missing", &[("n", gamepad.into())]);
+            ui.label(RichText::new(format!("{}  {text}", icon::WARNING)).weak());
+        }
+        if let Some(n) = set_pad {
+            self.set(&id, "gamepad-id", "int", n.to_string());
+        }
+        if let Some(c) = set_control {
+            self.set(&id, "control", "string", c.name());
+        }
+    }
+
+    /// Configured virtual devices; without them, the ids a profile may use.
+    fn vjoy_devices(&self) -> Vec<gob_virtual::DeviceInfo> {
+        if !self.vjoy.is_empty() {
+            return self.vjoy.to_vec();
+        }
+        (1..=gob_virtual::PROFILE_DEVICES)
+            .map(|n| gob_virtual::DeviceInfo {
+                id: n,
+                status: gob_virtual::Status::Unknown,
+                axes: (1..=8).collect(),
+                buttons: 128,
+                cont_hats: 4,
+                disc_hats: 0,
+            })
+            .collect()
+    }
+
+    /// vJoy outputs other actions already write to while the edited mode runs.
+    fn used_vjoy_outputs(&self) -> HashSet<(u32, InputType, u32)> {
+        let mode = self
+            .place
+            .map(|(m, _)| m)
+            .or_else(|| self.profile.modes.first().map(|m| m.name.as_str()))
+            .unwrap_or_default();
+        self.profile.used_vjoy_outputs(mode)
+    }
+
+    /// Device and output for a new map-to-vjoy: the device picked last (else the first), and
+    /// its first output of the input's type that nothing uses yet.
+    fn vjoy_output_for_new(&self, ctx: &egui::Context) -> (u32, u32) {
+        let devices = self.vjoy_devices();
+        let last: Option<u32> = ctx.data(|m| m.get_temp(egui::Id::new(LAST_VJOY_DEVICE)));
+        let Some(device) = last
+            .and_then(|l| devices.iter().find(|d| d.id == l))
+            .or(devices.first())
+        else {
+            return (1, 1);
+        };
+        let ty = vjoy_type(self.behavior);
+        let used = self.used_vjoy_outputs();
+        let outputs = vjoy_outputs(Some(device), ty);
+        let free = outputs
+            .iter()
+            .find(|&&n| !used.contains(&(device.id, ty, n)))
+            .or(outputs.first());
+        (device.id, free.copied().unwrap_or(1))
+    }
+
+    /// Quickmap button: every output of type `ty` on each device in one popup, those in use
+    /// dimmed; returns the clicked (device, output).
+    fn quickmap(
+        &self,
+        ui: &mut egui::Ui,
+        action: &str,
+        devices: &[gob_virtual::DeviceInfo],
+        ty: InputType,
+        current: (u32, u32),
+    ) -> Option<(u32, u32)> {
+        let ty = vjoy_type(ty);
+        let mut picked = None;
+        let tab_id = egui::Id::new(("vjoy-quickmap", action));
+        ui.menu_button(
+            RichText::new(icon::GRID_NINE).size(style::ICON_SIZE),
+            |ui| {
+                ui.set_width(44.0 * 10.0);
+                let used = self.used_vjoy_outputs();
+                let mut tab: u32 = ui.data(|m| m.get_temp(tab_id)).unwrap_or(current.0);
+                if !devices.iter().any(|d| d.id == tab) {
+                    tab = devices.first().map_or(1, |d| d.id);
+                }
+                ui.horizontal_wrapped(|ui| {
+                    for d in devices {
+                        let text = self.i18n.trf("vjoy-device-n", &[("n", d.id.into())]);
+                        if ui.selectable_label(d.id == tab, text).clicked() {
+                            tab = d.id;
+                        }
+                    }
+                });
+                ui.data_mut(|m| m.insert_temp(tab_id, tab));
+                ui.separator();
+                let device = devices.iter().find(|d| d.id == tab);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::Vec2::splat(4.0);
+                    for n in vjoy_outputs(device, ty) {
+                        let label = match ty {
+                            InputType::Axis => vjoy_output_name(self.i18n, ty, n),
+                            _ => n.to_string(),
+                        };
+                        let taken = used.contains(&(tab, ty, n)) && (tab, n) != current;
+                        let text = if taken {
+                            RichText::new(label).weak()
+                        } else {
+                            RichText::new(label)
+                        };
+                        let width = if ty == InputType::Axis { 84.0 } else { 40.0 };
+                        let r = ui.add_sized(
+                            [width, 26.0],
+                            egui::Button::new(text)
+                                .selected((tab, n) == current)
+                                .corner_radius(style::RADIUS),
+                        );
+                        let tip = if taken {
+                            self.i18n.tr("vjoy-quickmap-used")
+                        } else {
+                            vjoy_output_name(self.i18n, ty, n)
+                        };
+                        if r.on_hover_text(tip).clicked() {
+                            picked = Some((tab, n));
+                            ui.close_menu();
+                        }
+                    }
+                });
+            },
+        )
+        .response
+        .on_hover_text(self.i18n.tr("vjoy-quickmap"));
+        picked
+    }
+
     fn vjoy(
         &mut self,
         ui: &mut egui::Ui,
@@ -1129,40 +1443,14 @@ impl Editor<'_> {
         inverted: bool,
     ) {
         let id = action.id.clone();
-        // Configured virtual devices; without them, offer the ids a profile may use.
-        let devices: Vec<gob_virtual::DeviceInfo> = if self.vjoy.is_empty() {
-            (1..=gob_virtual::PROFILE_DEVICES)
-                .map(|n| gob_virtual::DeviceInfo {
-                    id: n,
-                    status: gob_virtual::Status::Unknown,
-                    axes: (1..=8).collect(),
-                    buttons: 128,
-                    cont_hats: 4,
-                    disc_hats: 0,
-                })
-                .collect()
-        } else {
-            self.vjoy.to_vec()
-        };
+        let devices = self.vjoy_devices();
         let ty = if input_type == InputType::Other {
             self.behavior
         } else {
             input_type
         };
-        let current = devices.iter().find(|d| d.id == device);
-        let inputs: Vec<u32> = match (ty, current) {
-            (InputType::Axis, Some(d)) => d.axes.iter().map(|&a| u32::from(a)).collect(),
-            (InputType::Axis, None) => (1..=8).collect(),
-            (InputType::Hat, Some(d)) => (1..=d.hats().max(1)).collect(),
-            (InputType::Hat, None) => (1..=4).collect(),
-            (_, Some(d)) => (1..=d.buttons.max(1)).collect(),
-            (_, None) => (1..=128).collect(),
-        };
-        let name = |n: u32| match ty {
-            InputType::Axis => self.i18n.tr(&format!("vjoy-axis-{n}")),
-            InputType::Hat => self.i18n.trf("vjoy-hat-n", &[("n", n.into())]),
-            _ => self.i18n.trf("vjoy-button-n", &[("n", n.into())]),
-        };
+        let inputs = vjoy_outputs(devices.iter().find(|d| d.id == device), ty);
+        let name = |n: u32| vjoy_output_name(self.i18n, ty, n);
         let device_name = |n: u32| self.i18n.trf("vjoy-device-n", &[("n", n.into())]);
 
         let mut set_device = None;
@@ -1190,7 +1478,15 @@ impl Editor<'_> {
                         }
                     }
                 });
+            if let Some((d, n)) = self.quickmap(ui, &id, &devices, ty, (device, input_id)) {
+                set_device = Some(d);
+                set_input = Some(n);
+            }
         });
+        if let Some(d) = set_device {
+            ui.ctx()
+                .data_mut(|m| m.insert_temp(egui::Id::new(LAST_VJOY_DEVICE), d));
+        }
         if let Some(d) = set_device {
             self.set(&id, "vjoy-device-id", "int", d.to_string());
         }
@@ -1426,12 +1722,48 @@ impl Editor<'_> {
                     .max_height(360.0)
                     .show(ui, |ui| {
                         for (name, a) in &candidates {
-                            if ui.button(name).on_hover_text(&a.kind).clicked() {
+                            let full = key == "edit-link-existing" && !self.accepts(&a.id);
+                            let r = ui
+                                .add_enabled(!full, egui::Button::new(name))
+                                .on_hover_text(&a.kind)
+                                .on_disabled_hover_text(self.i18n.tr("edit-merge-full"));
+                            if r.clicked() {
+                                if key == "edit-link-existing" {
+                                    self.adopt(&a.id);
+                                }
                                 self.ops.push(make(kind(a.id.clone())));
                                 ui.close_menu();
                             }
                         }
                     });
+            });
+        }
+    }
+
+    /// The edited axis, when it is one.
+    fn edited_axis(&self) -> Option<gob_core::AxisInput> {
+        let (device, id) = self.input?;
+        (self.behavior == InputType::Axis).then(|| (device.to_string(), id))
+    }
+
+    /// Whether action `id` may be linked to the edited input: a two-axis action only to an
+    /// axis it reads or, while new, takes as its second one.
+    fn accepts(&self, id: &str) -> bool {
+        match self.edited_axis() {
+            Some(axis) => self.profile.two_axis_accepts(id, &axis),
+            None => true,
+        }
+    }
+
+    /// Linking two-axis action `id` to the edited axis makes it its second axis while new.
+    fn adopt(&mut self, id: &str) {
+        if let Some((device, axis)) = self.edited_axis()
+            && self.profile.two_axis_inputs(id).is_some()
+        {
+            self.ops.push(Op::TwoAxisAdopt {
+                action: id.to_string(),
+                device,
+                axis,
             });
         }
     }
@@ -1476,11 +1808,14 @@ impl Editor<'_> {
                 kind_icon(&a.kind),
                 merge_label(a, self.i18n)
             );
+            let full = !self.accepts(&a.id);
             if ui
-                .button(text)
+                .add_enabled(!full, egui::Button::new(text))
                 .on_hover_text(self.i18n.tr("edit-reuse"))
+                .on_disabled_hover_text(self.i18n.tr("edit-merge-full"))
                 .clicked()
             {
+                self.adopt(&a.id);
                 self.ops.push(make(AddKind::Reuse(a.id.clone())));
                 ui.close_menu();
             }
@@ -1514,6 +1849,26 @@ impl Editor<'_> {
                 });
         });
         self.axis_pickers(ui, &id, axes);
+    }
+
+    /// Sets axis `slot` of two-axis action `id`; where the binding is known the action is
+    /// bound to the new axis and unbound from the old one.
+    fn pick_axis(&mut self, id: &str, slot: u8, device: &str, name: &str, axis: u32) {
+        match self.place {
+            Some((mode, layer)) => self.ops.push(Op::TwoAxisInput {
+                action: id.to_string(),
+                slot,
+                device: device.to_string(),
+                name: name.to_string(),
+                axis,
+                mode: mode.to_string(),
+                layer: layer.clone(),
+            }),
+            None => {
+                self.set(id, &format!("axis{slot}-guid"), "uuid", device.to_string());
+                self.set(id, &format!("axis{slot}-axis"), "int", axis.to_string());
+            }
+        }
     }
 
     /// Device and axis dropdowns for `axis1-*` / `axis2-*` (merge-axis, dual-axis-deadzone).
@@ -1746,7 +2101,7 @@ impl Editor<'_> {
             .iter()
             .map(|d| (d.id.to_ascii_lowercase(), d.name.trim().to_string()))
             .collect();
-        for d in self.inputs.iter().filter(|d| !d.info.is_vjoy()) {
+        for d in self.inputs.iter().filter(|d| !d.info.is_own()) {
             if !devices.iter().any(|(g, _)| *g == d.info.guid) {
                 devices.push((d.info.guid.clone(), d.info.name.trim().to_string()));
             }
@@ -1757,7 +2112,7 @@ impl Editor<'_> {
     /// Attached device for a profile device: same GUID, or the same name (profile from
     /// another PC).
     fn live_device(&self, guid: &str, name: &str) -> Option<&gob_input::DeviceState> {
-        self.inputs.iter().filter(|d| !d.info.is_vjoy()).find(|d| {
+        self.inputs.iter().filter(|d| !d.info.is_own()).find(|d| {
             d.info.guid.eq_ignore_ascii_case(guid)
                 || (!name.is_empty() && gob_core::same_device_name(&d.info.name, name))
         })
@@ -1905,6 +2260,7 @@ impl Editor<'_> {
         }
         for (n, (device, axis)) in axes.into_iter().enumerate() {
             let device = device.to_ascii_lowercase();
+            let slot = n as u8 + 1;
             let name = devices
                 .iter()
                 .find(|(g, _)| *g == device)
@@ -1939,14 +2295,16 @@ impl Editor<'_> {
                     .show_ui(ui, |ui| {
                         for (g, label) in &devices {
                             if ui.selectable_label(*g == device, label).clicked() {
-                                self.set(id, &format!("{prefix}-guid"), "uuid", g.clone());
-                                if g == gob_core::LOGICAL_DEVICE_GUID
-                                    && let Some((first, _)) = logical.first()
-                                    && logical.iter().all(|(s, _)| *s != axis)
-                                {
-                                    let first = first.to_string();
-                                    self.set(id, &format!("{prefix}-axis"), "int", first);
-                                }
+                                let axis = match logical.first() {
+                                    Some((first, _))
+                                        if g == gob_core::LOGICAL_DEVICE_GUID
+                                            && logical.iter().all(|(s, _)| *s != axis) =>
+                                    {
+                                        *first
+                                    }
+                                    _ => axis,
+                                };
+                                self.pick_axis(id, slot, g, label, axis);
                             }
                         }
                     });
@@ -1955,7 +2313,7 @@ impl Editor<'_> {
                     .show_ui(ui, |ui| {
                         for (s, text) in slots {
                             if ui.selectable_label(s == axis, text).clicked() {
-                                self.set(id, &format!("{prefix}-axis"), "int", s.to_string());
+                                self.pick_axis(id, slot, &device, &name, s);
                             }
                         }
                     });

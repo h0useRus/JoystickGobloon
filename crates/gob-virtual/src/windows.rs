@@ -16,6 +16,8 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     effects: &vconfig::EFFECTS,
     switchable: true,
     needs_admin: true,
+    // vJoy has no gamepads; XInput ones need a driver of their own.
+    max_gamepads: 0,
 };
 
 pub fn load() -> Result<Arc<dyn Backend>, Error> {
@@ -68,6 +70,9 @@ impl Backend for VJoy {
             Change::Set(c) => vconfigure::Change::Set(to_vjoy(c)),
             Change::Delete(id) => vconfigure::Change::Delete(*id),
             Change::Enable(on) => vconfigure::Change::Enable(*on),
+            Change::AddGamepad(_) | Change::DeleteGamepad(_) => {
+                return Err("vJoy has no gamepads".into());
+            }
         };
         match vconfigure::run_elevated(&exe, &change)? {
             vconfigure::Outcome::Done => Ok(Outcome::Done),

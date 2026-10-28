@@ -343,6 +343,7 @@ impl Device {
             buttons: codes.len(),
             hats: hat_count,
             hid_path: hidraw_path(&found.path),
+            own: node.name().starts_with(keyboard::OWN_DEVICE_PREFIX),
         };
         let state = DeviceState::new(info);
         let mut dev = Self {

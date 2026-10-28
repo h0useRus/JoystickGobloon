@@ -25,16 +25,15 @@ mod substitute_view;
 mod tray;
 mod update;
 mod viewer_view;
+mod virtual_setup;
 mod vjoy_config_view;
 mod vjoy_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
-/// Version shown to users: CI sets `JOYSTICK_GOBLOON_VERSION` for alpha builds (`0.2.0-alpha.12`),
-/// otherwise the crate version.
-pub const VERSION: &str = match option_env!("JOYSTICK_GOBLOON_VERSION") {
-    Some(v) => v,
-    None => env!("CARGO_PKG_VERSION"),
-};
+/// Version shown to users, from build.rs: what CI sets in `JOYSTICK_GOBLOON_VERSION`
+/// (`0.2.0-alpha.12`), else the latest git tag and the commits since it (`0.9.0-alpha.45+3.g728daf5`),
+/// else the crate version.
+pub const VERSION: &str = env!("JOYSTICK_GOBLOON_VERSION");
 
 /// Command-line switch for the uninstaller: take this exe off the device hiding's application list
 /// (Joystick Gobloon adds itself on start) and quit without a window.

@@ -39,6 +39,8 @@ pub struct JoystickGobloonApp {
     input: gob_input::InputService,
     devices_view: DevicesView,
     substitute: Option<SubstituteDialog>,
+    /// The Devices page banner started setting up the profile's virtual devices.
+    virtual_setup: bool,
     vjoy_view: VJoyView,
     viewer_view: crate::viewer_view::ViewerView,
     /// The input viewer is shown in its own window.
@@ -135,6 +137,10 @@ impl JoystickGobloonApp {
         i18n.set_language(&settings.language);
         style::install_fonts(&cc.egui_ctx);
         style::apply(&cc.egui_ctx, settings.theme);
+        // Double clicks (curve points, the hide button) follow the system's setting.
+        let double_click = crate::platform::double_click_time().as_secs_f64();
+        cc.egui_ctx
+            .options_mut(|o| o.input_options.max_double_click_delay = double_click);
 
         let logo =
             eframe::icon_data::from_png_bytes(LOGO_PNG).expect("embedded logo is a valid PNG");
@@ -178,6 +184,7 @@ impl JoystickGobloonApp {
             input,
             devices_view: DevicesView::default(),
             substitute: None,
+            virtual_setup: false,
             vjoy_view: VJoyView::new(),
             viewer_view: Default::default(),
             viewer_window: false,
@@ -410,6 +417,7 @@ impl JoystickGobloonApp {
 
     /// Saves, unless that makes a file Joystick Gremlin opens one it cannot: then asks first.
     fn save_checked(&mut self, path: PathBuf, after: Option<Pending>) -> bool {
+        self.store_virtual_devices();
         let ask = self.settings.warn_gremlin_format
             && self
                 .profile
@@ -421,6 +429,89 @@ impl JoystickGobloonApp {
             return false;
         }
         self.save_to(path)
+    }
+
+    /// Puts the virtual devices the profile writes to, as set up here, into the profile.
+    fn store_virtual_devices(&mut self) {
+        let devices = self.vjoy_view.device_list();
+        let Some(loaded) = &mut self.profile else {
+            return;
+        };
+        let taken = crate::virtual_setup::capture(&loaded.profile, &devices);
+        if taken != loaded.profile.virtual_devices {
+            loaded.profile.set_virtual_devices(taken);
+        }
+    }
+
+    /// Banner when the profile's virtual devices are missing here or smaller than stored, with
+    /// a button that sets them up.
+    fn virtual_devices_banner(&mut self, ui: &mut egui::Ui) {
+        let Some(p) = &self.profile else { return };
+        if p.profile.virtual_devices.is_empty() {
+            return;
+        }
+        let Some(caps) = self.vjoy_view.capabilities() else {
+            return;
+        };
+        let devices = self.vjoy_view.device_list();
+        let (_, pads) = self.vjoy_view.gamepad_list();
+        let changes = crate::virtual_setup::changes(
+            &p.profile.virtual_devices,
+            &devices,
+            self.vjoy_view.configs(),
+            &pads,
+            &caps,
+        );
+        if changes.is_empty() {
+            return;
+        }
+        let names: Vec<String> = changes
+            .iter()
+            .filter_map(|c| match c {
+                gob_virtual::Change::Set(c) => {
+                    Some(self.i18n.trf("vjoy-device-n", &[("n", c.id.into())]))
+                }
+                gob_virtual::Change::AddGamepad(id) => {
+                    Some(self.i18n.trf("gamepad-n", &[("n", (*id).into())]))
+                }
+                _ => None,
+            })
+            .collect();
+        let busy = self.vjoy_view.busy();
+        let active = self.activation.is_active();
+        let banner = egui::Frame::new()
+            .fill(ui.visuals().faint_bg_color)
+            .corner_radius(8)
+            .inner_margin(8);
+        banner.show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icon::GAME_CONTROLLER).size(style::ICON_SIZE));
+                ui.label(
+                    self.i18n
+                        .trf("virtual-banner", &[("devices", names.join(", ").into())]),
+                );
+                let text = format!("{}  {}", icon::WRENCH, self.i18n.tr("virtual-setup"));
+                let tip = self.i18n.tr(if active {
+                    "virtual-setup-active"
+                } else if caps.needs_admin {
+                    "virtual-setup-admin"
+                } else {
+                    "virtual-setup-tip"
+                });
+                let r = ui
+                    .add_enabled(!busy && !active, egui::Button::new(text))
+                    .on_hover_text(&tip)
+                    .on_disabled_hover_text(&tip);
+                if r.clicked() {
+                    self.virtual_setup = true;
+                    self.vjoy_view.apply(changes);
+                }
+                if busy {
+                    ui.spinner();
+                }
+            });
+        });
+        ui.add_space(4.0);
     }
 
     fn save_as(&mut self) -> bool {
@@ -882,6 +973,20 @@ impl JoystickGobloonApp {
         self.was_active = self.activation.is_active();
     }
 
+    /// Applies the edited profile to the running engine without releasing its virtual devices.
+    fn reload_runner(&mut self) {
+        self.sync_activation();
+        // The vJoy tester must not hold a device the profile now needs.
+        self.vjoy_view.release();
+        match self.activation.reload() {
+            Ok(()) => self.status = self.i18n.tr("status-active"),
+            Err(e) => {
+                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
+                self.error(text);
+            }
+        }
+    }
+
     /// Hands the current profile to the shared activation (for the tray menu too).
     fn sync_activation(&mut self) {
         self.activation
@@ -994,7 +1099,7 @@ impl JoystickGobloonApp {
             }
             None => {}
         }
-        let no_devices = self.input.devices().iter().all(|d| d.info.is_vjoy());
+        let no_devices = self.input.devices().iter().all(|d| d.info.is_own());
         if self.profile.is_none() && no_devices {
             empty_state(ui, icon::JOYSTICK, &self.i18n.tr("no-profile"));
             ui.vertical_centered(|ui| {
@@ -1008,7 +1113,7 @@ impl JoystickGobloonApp {
         let missing = self.profile.as_ref().map_or(0, |p| {
             missing_devices(&p.profile, &self.input.devices()).len()
         });
-        let any_physical = self.input.devices().iter().any(|d| !d.info.is_vjoy());
+        let any_physical = self.input.devices().iter().any(|d| !d.info.is_own());
         if missing > 0 && any_physical {
             let banner = egui::Frame::new()
                 .fill(ui.visuals().faint_bg_color)
@@ -1029,24 +1134,33 @@ impl JoystickGobloonApp {
             });
             ui.add_space(4.0);
         }
+        self.virtual_devices_banner(ui);
         self.devices_view.logical = self.logical_device();
         let devices = self.input.devices();
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
+        (self.devices_view.max_gamepads, self.devices_view.gamepads) =
+            self.vjoy_view.gamepad_list();
         let gaming_only = self.settings.hidhide_gaming_only;
         self.hidhide_view
             .track_inputs(devices.iter().map(|d| d.info.guid.clone()).collect());
         self.devices_view.hiding_on = self.hidhide_view.cloak(gaming_only) == Some(true);
         self.devices_view.hidden = devices
             .iter()
-            .filter(|d| !d.info.is_vjoy())
+            .filter(|d| !d.info.is_own())
             .filter_map(|d| {
                 let hidden = self.hidhide_view.device_hidden(&d.info, gaming_only)?;
                 Some((d.info.guid.clone(), hidden))
             })
             .collect();
+        self.devices_view.exposed = devices
+            .iter()
+            .filter(|d| self.hidhide_view.device_exposed(&d.info))
+            .map(|d| d.info.guid.clone())
+            .collect();
         self.devices_view.experimental = self.settings.experimental;
         self.devices_view.monotonic_curves = self.settings.monotonic_curves;
+        self.devices_view.curve_right_click_invert = self.settings.curve_right_click_invert;
         self.devices_view.leds = if self.settings.experimental {
             self.leds.update(&devices, ui.ctx());
             self.leds.guids(&devices)
@@ -1181,6 +1295,19 @@ impl eframe::App for JoystickGobloonApp {
                 "status-stopped"
             });
         }
+        if let Some(ok) = self.vjoy_view.poll(&self.i18n)
+            && std::mem::take(&mut self.virtual_setup)
+        {
+            if ok {
+                self.status = self.i18n.tr("virtual-setup-done");
+            } else if let Some(Err(e)) = self.vjoy_view.config_message() {
+                let text = e.clone();
+                self.error(text);
+            }
+        }
+        if self.vjoy_view.busy() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(300));
+        }
         if let Some(prepared) = self.updater.poll(ctx) {
             self.update = Some(prepared);
             self.request(Pending::Update, ctx);
@@ -1278,8 +1405,7 @@ impl eframe::App for JoystickGobloonApp {
                 self.edited = None;
             } else if t.elapsed() >= settle {
                 self.edited = None;
-                self.activation.stop();
-                self.toggle_runner(ctx);
+                self.reload_runner();
             } else {
                 ctx.request_repaint_after(settle - t.elapsed());
             }

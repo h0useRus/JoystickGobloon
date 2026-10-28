@@ -284,6 +284,12 @@ fn general(
             i18n.tr("settings-monotonic-curves"),
         ))
         .on_hover_text(i18n.tr("settings-monotonic-curves-tip"));
+    let curve_invert = ui
+        .add(style::switch(
+            &mut settings.curve_right_click_invert,
+            i18n.tr("settings-curve-right-click-invert"),
+        ))
+        .on_hover_text(i18n.tr("settings-curve-right-click-invert-tip"));
     let gremlin = ui
         .add(style::switch(
             &mut settings.warn_gremlin_format,
@@ -301,6 +307,7 @@ fn general(
         &focus,
         &focus_modifiers,
         &curves,
+        &curve_invert,
         &gremlin,
     ]
     .iter()

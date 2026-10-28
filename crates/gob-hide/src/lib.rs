@@ -60,6 +60,9 @@ pub struct Device {
     pub name: String,
     pub present: bool,
     pub hidden: bool,
+    /// Hidden, yet other programs can still read it another way (Linux: its raw HID node is
+    /// open to the user), so hiding cannot keep its input from them.
+    pub exposed: bool,
     pub parts: Vec<Part>,
     /// Technical details for a tooltip (HidHide: instance paths).
     pub detail: String,
@@ -190,6 +193,7 @@ mod tests {
             name: name.into(),
             present,
             hidden: false,
+            exposed: false,
             parts: parts
                 .iter()
                 .map(|&(vid_pid, product)| Part {

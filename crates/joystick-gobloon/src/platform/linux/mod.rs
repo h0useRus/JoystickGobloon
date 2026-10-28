@@ -26,6 +26,22 @@ fn config_home() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
 }
 
+/// `key` in `[section]` of an INI-style file like `kdeglobals`.
+fn ini_value<'a>(text: &'a str, section: &str, key: &str) -> Option<&'a str> {
+    let mut inside = false;
+    for line in text.lines().map(str::trim) {
+        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            inside = name == section;
+        } else if inside
+            && let Some((k, v)) = line.split_once('=')
+            && k.trim() == key
+        {
+            return Some(v.trim());
+        }
+    }
+    None
+}
+
 impl super::Desktop for Desktop {
     type InstanceEvent = instance::Event;
     type Window = window::Window;
@@ -125,8 +141,24 @@ impl super::Desktop for Desktop {
         window::shown(w)
     }
 
+    /// The desktop's setting: KDE's `kdeglobals`, else GNOME's (GTK's) through gsettings,
+    /// else 400 ms, the default of both.
     fn double_click_time() -> Duration {
-        Fallback::double_click_time()
+        let kde = || {
+            let text = std::fs::read_to_string(config_home()?.join("kdeglobals")).ok()?;
+            ini_value(&text, "KDE", "DoubleClickInterval")?.parse().ok()
+        };
+        let gnome = || {
+            let out = std::process::Command::new("gsettings")
+                .args(["get", "org.gnome.desktop.peripherals.mouse", "double-click"])
+                .output()
+                .ok()?;
+            // "400" or "uint32 400".
+            let text = String::from_utf8(out.stdout).ok()?;
+            text.split_whitespace().last()?.parse().ok()
+        };
+        let ms: u64 = kde().or_else(gnome).filter(|&ms| ms > 0).unwrap_or(400);
+        Duration::from_millis(ms)
     }
 
     fn tray_icon_size() -> u32 {
@@ -170,5 +202,18 @@ impl super::Desktop for Desktop {
 
     fn wait_for_process(pid: u32, timeout: Duration) {
         update::wait_for_process(pid, timeout);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ini_value;
+
+    #[test]
+    fn kdeglobals_double_click() {
+        let text = "[General]\nDoubleClickInterval=1\n\n[KDE]\nSingleClick=false\nDoubleClickInterval = 550\n";
+        assert_eq!(ini_value(text, "KDE", "DoubleClickInterval"), Some("550"));
+        assert_eq!(ini_value(text, "KDE", "Missing"), None);
+        assert_eq!(ini_value("", "KDE", "DoubleClickInterval"), None);
     }
 }

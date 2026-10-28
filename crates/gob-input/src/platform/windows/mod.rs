@@ -1,10 +1,14 @@
 //! Windows: controllers through DirectInput 8 (ids = DirectInput instance GUIDs, like Gremlin),
-//! keyboard keys through a low-level hook, controller numbers through WinMM.
+//! Xbox controllers through XInput under the same ids (`xinput.rs`), keyboard keys through a
+//! low-level hook, controller numbers through WinMM.
 
 mod dinput;
 pub(crate) mod keyboard;
+mod xinput;
 
 use std::cell::RefCell;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use windows::Win32::Devices::HumanInterfaceDevice::DIDEVICEINSTANCEW;
@@ -25,6 +29,10 @@ const MAX_WAIT: usize = 64;
 
 pub(crate) struct Platform {
     di: dinput::DirectInput,
+    /// `None` without xinput1_4.dll: Xbox controllers are read through DirectInput then.
+    xinput: Option<Arc<xinput::XInput>>,
+    /// XInput slots read by open controllers.
+    slots: Arc<Mutex<HashSet<u32>>>,
     /// Reused by `wait`, so waiting does not allocate.
     handles: RefCell<Vec<HANDLE>>,
     /// High resolution timer that paces the polled devices while waiting for the others'
@@ -43,7 +51,7 @@ impl Drop for Platform {
 
 impl super::Backend for Platform {
     type Found = DIDEVICEINSTANCEW;
-    type Device = dinput::Device;
+    type Device = Controller;
 
     fn new() -> Option<Self> {
         let di = dinput::DirectInput::new().ok()?;
@@ -59,6 +67,8 @@ impl super::Backend for Platform {
         .ok();
         Some(Self {
             di,
+            xinput: xinput::XInput::load().map(Arc::new),
+            slots: Arc::default(),
             handles: RefCell::default(),
             timer,
         })
@@ -75,11 +85,17 @@ impl super::Backend for Platform {
             .collect()
     }
 
-    fn open(&self, found: &DIDEVICEINSTANCEW, events: bool) -> Option<dinput::Device> {
-        self.di.open(found, events).ok()
+    fn open(&self, found: &DIDEVICEINSTANCEW, events: bool) -> Option<Controller> {
+        let di = self.di.open(found, events).ok()?;
+        let pad = self
+            .xinput
+            .as_ref()
+            .filter(|_| xinput::is_xinput_path(&di.state.info.hid_path))
+            .map(|x| xinput::Pad::new(x.clone() as _, self.slots.clone(), &di.state.info));
+        Some(Controller { di, pad })
     }
 
-    fn wait(&self, devices: &[dinput::Device], events: bool, poll: Duration) {
+    fn wait(&self, devices: &[Controller], events: bool, poll: Duration) {
         if !events {
             std::thread::sleep(poll);
             return;
@@ -93,7 +109,8 @@ impl super::Backend for Platform {
         handles.extend(
             devices
                 .iter()
-                .filter_map(dinput::Device::event)
+                .filter(|d| super::Device::signals(*d))
+                .filter_map(|d| d.di.event())
                 .take(MAX_WAIT - 1),
         );
         if handles.is_empty() {
@@ -121,28 +138,41 @@ impl super::Backend for Platform {
     }
 }
 
-impl super::Device for dinput::Device {
+/// A controller: its DirectInput device, and for an Xbox controller its XInput side, which
+/// then gives the state.
+pub(crate) struct Controller {
+    di: dinput::Device,
+    pad: Option<xinput::Pad>,
+}
+
+impl super::Device for Controller {
     fn state(&self) -> &DeviceState {
-        &self.state
+        self.pad.as_ref().map_or(&self.di.state, |p| &p.state)
     }
 
     fn previous(&self) -> &DeviceState {
-        &self.previous
+        self.pad.as_ref().map_or(&self.di.previous, |p| &p.previous)
     }
 
     fn set_calibrations(&mut self, calibrations: &Calibrations) {
-        self.use_calibrations(calibrations);
+        self.di.use_calibrations(calibrations);
+        if let Some(pad) = &mut self.pad {
+            pad.set_calibrations(calibrations);
+        }
     }
 
+    /// An Xbox controller read through XInput is polled.
     fn signals(&self) -> bool {
-        self.event().is_some()
+        self.di.event().is_some() && self.pad.as_ref().is_none_or(|p| p.slot().is_none())
     }
 
     fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool {
-        if self.event().is_some() {
-            self.read_buffered(emit)
-        } else {
-            self.poll()
+        let di = &mut self.di;
+        match &mut self.pad {
+            // DirectInput's state only while the XInput slot is not found yet.
+            Some(pad) => pad.read(|| di.poll().then(|| di.state.clone())),
+            None if di.event().is_some() => di.read_buffered(emit),
+            None => di.poll(),
         }
     }
 }

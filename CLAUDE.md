@@ -17,7 +17,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
   platform/windows/ = DirectInput8 (polls every `set_poll_interval`, 1-5 ms, or with `set_event_mode` waits for DI change events (a high resolution timer paces devices without them) and reads
   buffered buttons/hats; ids = DI instance GUIDs like Gremlin; links dinput8.lib/dxguid.lib statically (-bundle)
-  for c_dfDIJoystick2), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
+  for c_dfDIJoystick2; Xbox controllers (`IG_` in the path) are read through XInput in xinput.rs: LT=Z, RT=Rz,
+  Guide = button 11), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
   order, keyboards -> set 1 scan codes; tests/uinput.rs = virtual devices, `check.ps1 --devices`),
   platform/none.rs elsewhere; example `monitor`
   + low-level keyboard hook (platform/windows/keyboard.rs) -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
@@ -53,8 +54,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
 - plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
-- docs/ACTIONS.md  user guide to every action with a picture of its editor (docs/actions/*.png, the right panel
-  cropped from a 1102x732 window); update with a new action. No experimental actions there
+- User documentation lives only on the website (site/ on the `web` branch: learn.html = every action with a
+  picture of its editor in site/img/actions/, the right panel cropped from a 1102x732 window; screenshots in
+  site/img/). README.md is a short overview linking there; no Markdown docs besides docs/CODE_SIGNING.md.
+  No experimental actions on the site
 - tests/fixtures   sample_r14.xml (ours); local/ = personal profiles, gitignored, tested if present
 - ref/             cloned upstream sources (gitignored) - read specific files instead of web search
 
@@ -96,7 +99,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   to `main`.
 - Versions come from the commits (.github/scripts/next-version.sh): Conventional Commits since the latest
   final tag vX.Y.Z; feat -> minor, any other type -> patch, `type!:` / `BREAKING CHANGE:` -> major (minor
-  while 0.x). Never bump versions by hand; `[workspace.package] version` in Cargo.toml only names local builds.
+  while 0.x). Never bump versions by hand; local builds show the latest git tag + commits since it
+  (`0.9.0-alpha.45+3.g728daf5`, joystick-gobloon build.rs), `[workspace.package] version` only without git.
   `bash .github/scripts/next-version.sh` prints the next version.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
   pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss), a
@@ -139,6 +143,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - Profile device GUIDs come from another PC: use "Map controls" (banner on the Devices page).
 - Joystick Gobloon whitelists its own exe in HidHide on start: scratch builds land there too, unregister them afterwards.
 - vJoy reports only on change: start `monitor` BEFORE activating a profile to see vJoy output.
+- No real Xbox controller here: ViGEmBus 1.22 (signed, installed 2026-10-25) makes virtual Xbox 360 pads;
+  `cargo test -p gob-input --test vigem -- --ignored` reads one back through XInput (vigem-client, tests only).
 
 ## Commands
 - cargo build / cargo run -p joystick-gobloon
