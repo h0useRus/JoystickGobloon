@@ -35,6 +35,8 @@ fn bind_and_add_actions_survive_save() {
             "actions",
             gob_core::Action::new(&NewAction::MapToVjoy {
                 input_type: InputType::Button,
+                device: 1,
+                input_id: 1,
             }),
         )
         .unwrap();
@@ -172,6 +174,41 @@ fn mode_parents_and_removal() {
     );
     assert!(p.inputs.iter().all(|b| b.mode != "Combat"));
     assert!(!p.remove_mode("Unknown"));
+}
+
+#[test]
+fn used_vjoy_outputs_follow_mode_inheritance() {
+    let mut p = Profile::default();
+    assert!(p.add_mode("A", Some("Default")));
+    assert!(p.add_mode("B", Some("Default")));
+    let map = |p: &mut Profile, input: &str, mode: &str, input_type, input_id| {
+        let root = p.bind(DEV, "button", input, mode);
+        // Nested, so the whole action tree is searched.
+        let tempo = p
+            .add_child(&root, "actions", gob_core::Action::new(&NewAction::Tempo))
+            .unwrap();
+        p.add_child(
+            &tempo,
+            "short-actions",
+            gob_core::Action::new(&NewAction::MapToVjoy {
+                input_type,
+                device: 2,
+                input_id,
+            }),
+        )
+        .unwrap();
+    };
+    map(&mut p, "1", "A", InputType::Button, 5);
+    map(&mut p, "2", "B", InputType::Axis, 3);
+
+    let a = p.used_vjoy_outputs("A");
+    assert!(a.contains(&(2, InputType::Button, 5)));
+    assert!(
+        !a.contains(&(2, InputType::Axis, 3)),
+        "sibling modes never run together"
+    );
+    let all = p.used_vjoy_outputs("Default");
+    assert_eq!(all.len(), 2, "child modes run on top of their parent");
 }
 
 #[test]

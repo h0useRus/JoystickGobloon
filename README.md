@@ -13,6 +13,7 @@
   <a href="https://github.com/h0useRus/JoystickGobloon/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/h0useRus/JoystickGobloon/ci.yml?branch=dev&label=CI"></a>
   <img alt="Windows 10 / 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4">
   <img alt="Linux" src="https://img.shields.io/badge/Linux-AppImage-FCC624">
+  <a href="https://discord.gg/8cd9APqwG4"><img alt="Discord" src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
 
@@ -20,7 +21,8 @@
   <a href="https://h0userus.github.io/gobloon/"><b>Website</b></a> ·
   <a href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><b>Download</b></a> ·
   <a href="https://h0userus.github.io/gobloon/learn.html"><b>Documentation</b></a> ·
-  <a href="https://h0userus.github.io/gobloon/emulation.html"><b>Virtual devices and hiding</b></a>
+  <a href="https://h0userus.github.io/gobloon/emulation.html"><b>Virtual devices and hiding</b></a> ·
+  <a href="https://discord.gg/8cd9APqwG4"><b>Discord</b></a>
 </p>
 
 <p align="center">

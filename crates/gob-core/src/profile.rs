@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::action::{Action, InputType, Item};
+use crate::action::{Action, ActionKind, InputType, Item};
 use crate::modifier::{Layer, Modifier};
 use crate::xml::Element;
 
@@ -296,6 +296,58 @@ impl Profile {
     /// Action lookup table; build once when resolving many references.
     pub fn action_index(&self) -> HashMap<&str, &Action> {
         self.library.iter().map(|a| (a.id.as_str(), a)).collect()
+    }
+
+    fn mode_parent(&self, mode: &str) -> Option<&str> {
+        self.modes
+            .iter()
+            .find(|m| m.name == mode)
+            .and_then(|m| m.parent.as_deref())
+    }
+
+    /// vJoy outputs (device, type, id) that map-to-vjoy actions write to while `mode` runs:
+    /// those bound in the mode, the modes it inherits from and the modes inheriting from it.
+    pub fn used_vjoy_outputs(&self, mode: &str) -> HashSet<(u32, InputType, u32)> {
+        // Whether `m` is `target` or inherits from it (bounded, in case of a parent loop).
+        let descends = |m: &str, target: &str| {
+            let mut m = Some(m);
+            for _ in 0..=self.modes.len() {
+                match m {
+                    Some(x) if x == target => return true,
+                    Some(x) => m = self.mode_parent(x),
+                    None => return false,
+                }
+            }
+            false
+        };
+        let index = self.action_index();
+        let mut used = HashSet::new();
+        let mut seen = HashSet::new();
+        let mut stack: Vec<&str> = self
+            .inputs
+            .iter()
+            .filter(|b| descends(&b.mode, mode) || descends(mode, &b.mode))
+            .flat_map(|b| b.configs.iter().map(|c| c.root_action.as_str()))
+            .collect();
+        while let Some(id) = stack.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
+            let Some(action) = index.get(id) else {
+                continue;
+            };
+            if let ActionKind::MapToVjoy {
+                device,
+                input_type,
+                input_id,
+                ..
+            } = action.kind()
+            {
+                used.insert((device, input_type, input_id));
+            }
+            stack.extend(action.child_ids());
+        }
+        used
     }
 
     pub fn startup_mode(&self) -> Option<String> {
