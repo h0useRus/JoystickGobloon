@@ -468,6 +468,37 @@ pub fn kind_icon(kind: &str) -> &'static str {
     }
 }
 
+/// Temp memory key of the vJoy device picked last, the default for new map-to-vjoy actions.
+const LAST_VJOY_DEVICE: &str = "vjoy-last-device";
+
+/// The vJoy output type map-to-vjoy writes for an input behaving as `behavior`.
+fn vjoy_type(behavior: InputType) -> InputType {
+    match behavior {
+        InputType::Axis | InputType::Hat => behavior,
+        _ => InputType::Button,
+    }
+}
+
+/// Output ids of type `ty` on `device` (every possible id when it is unknown).
+fn vjoy_outputs(device: Option<&gob_virtual::DeviceInfo>, ty: InputType) -> Vec<u32> {
+    match (vjoy_type(ty), device) {
+        (InputType::Axis, Some(d)) => d.axes.iter().map(|&a| u32::from(a)).collect(),
+        (InputType::Axis, None) => (1..=8).collect(),
+        (InputType::Hat, Some(d)) => (1..=d.hats().max(1)).collect(),
+        (InputType::Hat, None) => (1..=4).collect(),
+        (_, Some(d)) => (1..=d.buttons.max(1)).collect(),
+        (_, None) => (1..=128).collect(),
+    }
+}
+
+fn vjoy_output_name(i18n: &I18n, ty: InputType, n: u32) -> String {
+    match vjoy_type(ty) {
+        InputType::Axis => i18n.tr(&format!("vjoy-axis-{n}")),
+        InputType::Hat => i18n.trf("vjoy-hat-n", &[("n", n.into())]),
+        _ => i18n.trf("vjoy-button-n", &[("n", n.into())]),
+    }
+}
+
 /// Action types offered in the "add" menu: (icon, i18n key, template). `gamepads`: the
 /// system can create virtual gamepads.
 fn addable(
@@ -478,8 +509,11 @@ fn addable(
     let mut list = vec![(
         icon::GAME_CONTROLLER,
         "kind-map-to-vjoy",
+        // Device and output are filled in by the add menu.
         NewAction::MapToVjoy {
             input_type: behavior,
+            device: 1,
+            input_id: 1,
         },
     )];
     if gamepads && behavior != InputType::Other {
@@ -645,6 +679,12 @@ impl Editor<'_> {
                     {
                         if let NewAction::LightLed { device, .. } = &mut kind {
                             *device = self.led_device_for_new();
+                        }
+                        if let NewAction::MapToVjoy {
+                            device, input_id, ..
+                        } = &mut kind
+                        {
+                            (*device, *input_id) = self.vjoy_output_for_new(ui.ctx());
                         }
                         self.ops.push(make(AddKind::New(kind)));
                         ui.close_menu();
@@ -1274,6 +1314,125 @@ impl Editor<'_> {
         }
     }
 
+    /// Configured virtual devices; without them, the ids a profile may use.
+    fn vjoy_devices(&self) -> Vec<gob_virtual::DeviceInfo> {
+        if !self.vjoy.is_empty() {
+            return self.vjoy.to_vec();
+        }
+        (1..=gob_virtual::PROFILE_DEVICES)
+            .map(|n| gob_virtual::DeviceInfo {
+                id: n,
+                status: gob_virtual::Status::Unknown,
+                axes: (1..=8).collect(),
+                buttons: 128,
+                cont_hats: 4,
+                disc_hats: 0,
+            })
+            .collect()
+    }
+
+    /// vJoy outputs other actions already write to while the edited mode runs.
+    fn used_vjoy_outputs(&self) -> HashSet<(u32, InputType, u32)> {
+        let mode = self
+            .place
+            .map(|(m, _)| m)
+            .or_else(|| self.profile.modes.first().map(|m| m.name.as_str()))
+            .unwrap_or_default();
+        self.profile.used_vjoy_outputs(mode)
+    }
+
+    /// Device and output for a new map-to-vjoy: the device picked last (else the first), and
+    /// its first output of the input's type that nothing uses yet.
+    fn vjoy_output_for_new(&self, ctx: &egui::Context) -> (u32, u32) {
+        let devices = self.vjoy_devices();
+        let last: Option<u32> = ctx.data(|m| m.get_temp(egui::Id::new(LAST_VJOY_DEVICE)));
+        let Some(device) = last
+            .and_then(|l| devices.iter().find(|d| d.id == l))
+            .or(devices.first())
+        else {
+            return (1, 1);
+        };
+        let ty = vjoy_type(self.behavior);
+        let used = self.used_vjoy_outputs();
+        let outputs = vjoy_outputs(Some(device), ty);
+        let free = outputs
+            .iter()
+            .find(|&&n| !used.contains(&(device.id, ty, n)))
+            .or(outputs.first());
+        (device.id, free.copied().unwrap_or(1))
+    }
+
+    /// Quickmap button: every output of type `ty` on each device in one popup, those in use
+    /// dimmed; returns the clicked (device, output).
+    fn quickmap(
+        &self,
+        ui: &mut egui::Ui,
+        action: &str,
+        devices: &[gob_virtual::DeviceInfo],
+        ty: InputType,
+        current: (u32, u32),
+    ) -> Option<(u32, u32)> {
+        let ty = vjoy_type(ty);
+        let mut picked = None;
+        let tab_id = egui::Id::new(("vjoy-quickmap", action));
+        ui.menu_button(
+            RichText::new(icon::GRID_NINE).size(style::ICON_SIZE),
+            |ui| {
+                ui.set_width(44.0 * 10.0);
+                let used = self.used_vjoy_outputs();
+                let mut tab: u32 = ui.data(|m| m.get_temp(tab_id)).unwrap_or(current.0);
+                if !devices.iter().any(|d| d.id == tab) {
+                    tab = devices.first().map_or(1, |d| d.id);
+                }
+                ui.horizontal_wrapped(|ui| {
+                    for d in devices {
+                        let text = self.i18n.trf("vjoy-device-n", &[("n", d.id.into())]);
+                        if ui.selectable_label(d.id == tab, text).clicked() {
+                            tab = d.id;
+                        }
+                    }
+                });
+                ui.data_mut(|m| m.insert_temp(tab_id, tab));
+                ui.separator();
+                let device = devices.iter().find(|d| d.id == tab);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::Vec2::splat(4.0);
+                    for n in vjoy_outputs(device, ty) {
+                        let label = match ty {
+                            InputType::Axis => vjoy_output_name(self.i18n, ty, n),
+                            _ => n.to_string(),
+                        };
+                        let taken = used.contains(&(tab, ty, n)) && (tab, n) != current;
+                        let text = if taken {
+                            RichText::new(label).weak()
+                        } else {
+                            RichText::new(label)
+                        };
+                        let width = if ty == InputType::Axis { 84.0 } else { 40.0 };
+                        let r = ui.add_sized(
+                            [width, 26.0],
+                            egui::Button::new(text)
+                                .selected((tab, n) == current)
+                                .corner_radius(style::RADIUS),
+                        );
+                        let tip = if taken {
+                            self.i18n.tr("vjoy-quickmap-used")
+                        } else {
+                            vjoy_output_name(self.i18n, ty, n)
+                        };
+                        if r.on_hover_text(tip).clicked() {
+                            picked = Some((tab, n));
+                            ui.close_menu();
+                        }
+                    }
+                });
+            },
+        )
+        .response
+        .on_hover_text(self.i18n.tr("vjoy-quickmap"));
+        picked
+    }
+
     fn vjoy(
         &mut self,
         ui: &mut egui::Ui,
@@ -1284,40 +1443,14 @@ impl Editor<'_> {
         inverted: bool,
     ) {
         let id = action.id.clone();
-        // Configured virtual devices; without them, offer the ids a profile may use.
-        let devices: Vec<gob_virtual::DeviceInfo> = if self.vjoy.is_empty() {
-            (1..=gob_virtual::PROFILE_DEVICES)
-                .map(|n| gob_virtual::DeviceInfo {
-                    id: n,
-                    status: gob_virtual::Status::Unknown,
-                    axes: (1..=8).collect(),
-                    buttons: 128,
-                    cont_hats: 4,
-                    disc_hats: 0,
-                })
-                .collect()
-        } else {
-            self.vjoy.to_vec()
-        };
+        let devices = self.vjoy_devices();
         let ty = if input_type == InputType::Other {
             self.behavior
         } else {
             input_type
         };
-        let current = devices.iter().find(|d| d.id == device);
-        let inputs: Vec<u32> = match (ty, current) {
-            (InputType::Axis, Some(d)) => d.axes.iter().map(|&a| u32::from(a)).collect(),
-            (InputType::Axis, None) => (1..=8).collect(),
-            (InputType::Hat, Some(d)) => (1..=d.hats().max(1)).collect(),
-            (InputType::Hat, None) => (1..=4).collect(),
-            (_, Some(d)) => (1..=d.buttons.max(1)).collect(),
-            (_, None) => (1..=128).collect(),
-        };
-        let name = |n: u32| match ty {
-            InputType::Axis => self.i18n.tr(&format!("vjoy-axis-{n}")),
-            InputType::Hat => self.i18n.trf("vjoy-hat-n", &[("n", n.into())]),
-            _ => self.i18n.trf("vjoy-button-n", &[("n", n.into())]),
-        };
+        let inputs = vjoy_outputs(devices.iter().find(|d| d.id == device), ty);
+        let name = |n: u32| vjoy_output_name(self.i18n, ty, n);
         let device_name = |n: u32| self.i18n.trf("vjoy-device-n", &[("n", n.into())]);
 
         let mut set_device = None;
@@ -1345,7 +1478,15 @@ impl Editor<'_> {
                         }
                     }
                 });
+            if let Some((d, n)) = self.quickmap(ui, &id, &devices, ty, (device, input_id)) {
+                set_device = Some(d);
+                set_input = Some(n);
+            }
         });
+        if let Some(d) = set_device {
+            ui.ctx()
+                .data_mut(|m| m.insert_temp(egui::Id::new(LAST_VJOY_DEVICE), d));
+        }
         if let Some(d) = set_device {
             self.set(&id, "vjoy-device-id", "int", d.to_string());
         }

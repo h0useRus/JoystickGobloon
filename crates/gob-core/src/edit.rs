@@ -12,8 +12,11 @@ use crate::profile::{ActionConfig, InputBinding, Mode, Profile};
 /// Action types the editor can create.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NewAction {
+    /// Output `input_id` of vJoy device `device`.
     MapToVjoy {
         input_type: InputType,
+        device: u32,
+        input_id: u32,
     },
     /// Gamepad 1, with a control that suits the edited input: A for a button, the left stick's
     /// X for an axis, the d-pad for a hat.
@@ -277,15 +280,19 @@ impl Action {
 
     pub fn new(kind: &NewAction) -> Self {
         match kind {
-            NewAction::MapToVjoy { input_type } => {
+            NewAction::MapToVjoy {
+                input_type,
+                device,
+                input_id,
+            } => {
                 let ty = match input_type {
                     InputType::Axis => "axis",
                     InputType::Hat => "hat",
                     _ => "button",
                 };
                 let mut items = vec![
-                    prop("int", "vjoy-device-id", "1"),
-                    prop("int", "vjoy-input-id", "1"),
+                    prop("int", "vjoy-device-id", device.to_string()),
+                    prop("int", "vjoy-input-id", input_id.to_string()),
                     prop("input_type", "vjoy-input-type", ty),
                 ];
                 if ty == "axis" {
