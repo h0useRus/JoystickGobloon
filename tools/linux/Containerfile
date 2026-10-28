@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl-dev \
         libxkbcommon-dev \
         libwayland-dev \
+        libxkbcommon-x11-0 \
+        libxcb-xkb1 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CARGO_TARGET_DIR=/target
