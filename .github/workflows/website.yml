@@ -1,12 +1,12 @@
-# The website (site/ on the web branch) is published to h0userus.github.io/gobloon: the files are pushed to
+# The website (site/) is published to h0userus.github.io/gobloon when a release reaches main, so it
+# describes the released version: the files are pushed to
 # the h0useRus/gobloon repository, which serves them with GitHub Pages. Needs the
 # GOBLOON_PAGES_TOKEN secret (a fine-grained token with contents: write on that repository).
-# Builds and releases of the app never run for this branch.
 name: Website
 
 on:
   push:
-    branches: [web]
+    branches: [main]
     paths: ["site/**", ".github/workflows/website.yml"]
   workflow_dispatch:
 
