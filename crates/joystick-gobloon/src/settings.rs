@@ -32,6 +32,9 @@ pub struct Settings {
     /// Device hiding window: only game controllers.
     pub hidhide_gaming_only: bool,
     pub last_profile: Option<PathBuf>,
+    /// Folder of the last profile opened or saved through a file dialog, where those dialogs
+    /// start (else the documents folder).
+    pub profile_dir: Option<PathBuf>,
     /// Icon in the notification area (tray).
     pub show_tray: bool,
     /// The close button hides the window to the tray instead of quitting.
@@ -229,6 +232,7 @@ impl Default for Settings {
             hidhide_hide_disconnected: true,
             hidhide_gaming_only: true,
             last_profile: None,
+            profile_dir: None,
             show_tray: true,
             close_to_tray: false,
             minimize_to_tray: false,
