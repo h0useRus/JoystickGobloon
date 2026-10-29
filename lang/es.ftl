@@ -557,6 +557,10 @@ calibration-center = Calibrar el centro
 calibration-center-tip = Deje el joystick en reposo, muévalo ligeramente alrededor del centro y vuelva a hacer clic
 calibration-extrema = Calibrar los extremos
 calibration-extrema-tip = Mueva el eje a ambos extremos y vuelva a hacer clic
+calibration-jitter = Filtro de temblor
+calibration-jitter-tip = Ignora los cambios menores que esta parte del recorrido, para ejes gastados que tiemblan. Sin retardo; los extremos y el centro siempre se alcanzan. La línea en la barra muestra lo que se envía. Guarda para aplicarlo
+calibration-debounce = Antirrebote
+calibration-debounce-tip = Botones y hats de este dispositivo: tras pulsar o soltar, se ignoran los cambios durante este tiempo, para interruptores que rebotan. El primer cambio pasa al instante
 calibration-in-window = La calibración está abierta en su propia ventana.
 
 # Device info

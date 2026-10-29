@@ -557,6 +557,10 @@ calibration-center = Calibrate center
 calibration-center-tip = Let the stick rest, wiggle it slightly around the center, then click again
 calibration-extrema = Calibrate extrema
 calibration-extrema-tip = Move the axis to both ends, then click again
+calibration-jitter = Jitter filter
+calibration-jitter-tip = Ignores changes smaller than this share of the travel, for worn axes that jitter. No delay; the ends and the center are always reached. The line on the bar shows what is sent. Save to apply
+calibration-debounce = Debounce
+calibration-debounce-tip = Buttons and hats of this device: after a press or release, further changes within this time are ignored, for switches that bounce. The first change passes at once
 calibration-in-window = The calibration is open in its own window.
 
 # Device info

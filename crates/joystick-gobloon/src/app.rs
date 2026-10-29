@@ -228,6 +228,9 @@ impl JoystickGobloonApp {
         for ((device, slot), c) in &app.calibrations {
             app.input.set_calibration(device, *slot, Some(*c));
         }
+        for (device, ms) in &app.settings.debounce {
+            app.input.set_debounce(&device.to_ascii_lowercase(), *ms);
+        }
         if let (Some(main_window), Some(instance)) = (app.main_window, instance) {
             let (restored, ctx) = (app.restored.clone(), cc.egui_ctx.clone());
             crate::platform::listen_instance(instance, move || {
@@ -641,10 +644,11 @@ impl JoystickGobloonApp {
         }
         if self.calibration_window {
             let (view, i18n, saved) = (&mut self.calibration_view, &self.i18n, &self.calibrations);
+            let debounce = &self.settings.debounce;
             let title = i18n.tr("nav-calibration");
             let mut out = crate::calibration_view::Output::default();
             let attach = detached_window(ctx, "calibration", &title, BIG_WINDOW, |ui| {
-                out = view.show(ui, i18n, &devices, saved, true);
+                out = view.show(ui, i18n, &devices, saved, debounce, true);
                 out.toggle_window
             });
             self.apply_calibration(out);
@@ -681,7 +685,16 @@ impl JoystickGobloonApp {
             self.input.set_calibration(&device, slot, Some(c));
             self.calibrations.insert((device, slot), c);
         }
-        if !self.calibrations.is_empty() {
+        if let Some((device, ms)) = out.debounce {
+            log::info!("debounce of {device}: {ms} ms");
+            self.input.set_debounce(&device, ms);
+            if ms == 0 {
+                self.settings.debounce.remove(&device);
+            } else {
+                self.settings.debounce.insert(device, ms);
+            }
+            self.settings.save();
+        } else if !self.calibrations.is_empty() {
             self.settings.save();
         }
     }
@@ -1614,6 +1627,7 @@ impl eframe::App for JoystickGobloonApp {
                         &self.i18n,
                         &devices,
                         &self.calibrations,
+                        &self.settings.debounce,
                         false,
                     );
                     if out.toggle_window {

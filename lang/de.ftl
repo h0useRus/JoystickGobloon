@@ -557,6 +557,10 @@ calibration-center = Mitte kalibrieren
 calibration-center-tip = Stick ruhen lassen, leicht um die Mitte bewegen, dann erneut klicken
 calibration-extrema = Endpunkte kalibrieren
 calibration-extrema-tip = Achse an beide Enden bewegen, dann erneut klicken
+calibration-jitter = Zitterfilter
+calibration-jitter-tip = Ignoriert Änderungen kleiner als dieser Anteil des Wegs, für abgenutzte Achsen, die zittern. Keine Verzögerung; Enden und Mitte werden immer erreicht. Der Strich auf dem Balken zeigt, was gesendet wird. Zum Anwenden speichern
+calibration-debounce = Entprellen
+calibration-debounce-tip = Tasten und Hats dieses Geräts: nach einem Drücken oder Loslassen werden weitere Änderungen in dieser Zeit ignoriert, für prellende Schalter. Die erste Änderung kommt sofort durch
 calibration-in-window = Die Kalibrierung ist in einem eigenen Fenster geöffnet.
 
 # Device info

@@ -554,6 +554,10 @@ calibration-center = 校准中心
 calibration-center-tip = 让摇杆静止，在中心附近轻微晃动，然后再次点击
 calibration-extrema = 校准极值
 calibration-extrema-tip = 将轴移到两端，然后再次点击
+calibration-jitter = 抖动过滤
+calibration-jitter-tip = 忽略小于此行程比例的变化，适用于会抖动的老化轴。无延迟；始终能到达两端和中心。条上的线显示实际发送的值。保存后生效
+calibration-debounce = 防抖
+calibration-debounce-tip = 此设备的按钮和苦力帽：按下或松开后，在此时间内的变化会被忽略，适用于会弹跳的开关。第一次变化立即生效
 calibration-in-window = 校准已在单独窗口中打开。
 
 # Device info

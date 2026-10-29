@@ -557,6 +557,10 @@ calibration-center = Calibrer le centre
 calibration-center-tip = Laissez le manche au repos, bougez-le légèrement autour du centre, puis cliquez à nouveau
 calibration-extrema = Calibrer les extrémités
 calibration-extrema-tip = Amenez l’axe aux deux extrémités, puis cliquez à nouveau
+calibration-jitter = Filtre de tremblement
+calibration-jitter-tip = Ignore les changements plus petits que cette part de la course, pour les axes usés qui tremblent. Sans délai ; les extrémités et le centre sont toujours atteints. Le trait sur la barre montre ce qui est envoyé. Enregistrez pour appliquer
+calibration-debounce = Anti-rebond
+calibration-debounce-tip = Boutons et chapeaux de ce périphérique : après un appui ou un relâchement, les changements pendant ce délai sont ignorés, pour les contacts qui rebondissent. Le premier changement passe aussitôt
 calibration-in-window = Le calibrage est ouvert dans sa propre fenêtre.
 
 # Device info

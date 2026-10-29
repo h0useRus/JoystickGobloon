@@ -35,8 +35,15 @@ pub(crate) trait Backend: Sized {
     /// of being polled.
     fn open(&self, found: &Self::Found, events: bool) -> Option<Self::Device>;
     /// Waits until a device may have changed (event mode) or `poll` passed. In event mode
-    /// `poll` paces only the devices that cannot signal a change.
-    fn wait(&self, devices: &[Self::Device], events: bool, poll: std::time::Duration);
+    /// `poll` paces only the devices that cannot signal a change. `wake`: return after that
+    /// long at the latest (a debounced input is due).
+    fn wait(
+        &self,
+        devices: &[Self::Device],
+        events: bool,
+        poll: std::time::Duration,
+        wake: Option<std::time::Duration>,
+    );
 }
 
 /// An open controller.

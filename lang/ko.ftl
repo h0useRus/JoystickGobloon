@@ -554,6 +554,10 @@ calibration-center = 중앙 보정
 calibration-center-tip = 스틱을 놓아 두고 중앙 주변에서 살짝 움직인 다음 다시 클릭하세요
 calibration-extrema = 끝점 보정
 calibration-extrema-tip = 축을 양 끝까지 움직인 다음 다시 클릭하세요
+calibration-jitter = 떨림 필터
+calibration-jitter-tip = 이동 범위의 이 비율보다 작은 변화를 무시합니다. 떨리는 낡은 축용입니다. 지연 없음, 끝과 중앙에는 항상 도달합니다. 막대의 선이 보내는 값을 보여 줍니다. 저장하면 적용됩니다
+calibration-debounce = 디바운스
+calibration-debounce-tip = 이 장치의 버튼과 햇: 누르거나 뗀 뒤 이 시간 안의 변화는 무시합니다. 튀는 스위치용입니다. 첫 변화는 바로 전달됩니다
 calibration-in-window = 보정이 별도 창에 열려 있습니다.
 
 # Device info

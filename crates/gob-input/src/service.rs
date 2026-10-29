@@ -1,11 +1,13 @@
 //! Background polling thread with a shared snapshot and an event channel.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use crate::filter::Filtered;
 use crate::{Calibration, DeviceState, InputEvent, Timed};
 
 /// Calibration per (device GUID, axis slot); axes without one use DirectInput's range.
@@ -18,6 +20,10 @@ const EVENT_BUFFER: usize = 4096;
 pub const MIN_POLL_INTERVAL: Duration = Duration::from_millis(1);
 pub const MAX_POLL_INTERVAL: Duration = Duration::from_millis(5);
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(1);
+/// Largest [`crate::Calibration::jitter`]: 5 % of the travel.
+pub const MAX_JITTER: u16 = 50;
+/// Largest debounce time of [`InputService::set_debounce`].
+pub const MAX_DEBOUNCE_MS: u16 = 100;
 
 /// Shared, read-only side of an [`InputService`]: see [`InputService::handle`].
 #[derive(Clone)]
@@ -117,7 +123,10 @@ pub struct InputService {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     calibrations: Arc<RwLock<Calibrations>>,
-    /// Bumped on every calibration change, so the polling thread copies the map only then.
+    /// Button and hat debounce time per device, in milliseconds.
+    debounce: Arc<RwLock<HashMap<String, u16>>>,
+    /// Bumped on every calibration or debounce change, so the polling thread copies the maps
+    /// only then.
     calibration_version: Arc<AtomicU64>,
     /// See [`InputService::set_event_mode`].
     event_mode: Arc<AtomicBool>,
@@ -135,6 +144,7 @@ impl InputService {
     pub fn start(on_change: impl Fn() + Send + Sync + 'static) -> Self {
         let on_change = Arc::new(on_change);
         let calibrations: Arc<RwLock<Calibrations>> = Arc::default();
+        let debounce: Arc<RwLock<HashMap<String, u16>>> = Arc::default();
         let calibration_version = Arc::new(AtomicU64::new(0));
         let event_mode = Arc::new(AtomicBool::new(false));
         let poll_interval = Arc::new(AtomicU64::new(DEFAULT_POLL_INTERVAL.as_micros() as u64));
@@ -146,6 +156,7 @@ impl InputService {
         let thread = {
             let (snapshot, stop, tx) = (snapshot.clone(), stop.clone(), broadcast.clone());
             let (on_change, cal) = (on_change.clone(), calibrations.clone());
+            let debounce = debounce.clone();
             let (version, mode) = (calibration_version.clone(), event_mode.clone());
             let (poll, polling) = (poll_interval.clone(), polling.clone());
             std::thread::Builder::new()
@@ -156,6 +167,7 @@ impl InputService {
                         stop: &stop,
                         tx: &tx,
                         calibrations: &cal,
+                        debounce: &debounce,
                         calibration_version: &version,
                         event_mode: &mode,
                         poll_interval: &poll,
@@ -184,12 +196,27 @@ impl InputService {
             stop,
             thread,
             calibrations,
+            debounce,
             calibration_version,
             event_mode,
             poll_interval,
             polling,
             _keyboard: keyboard,
         }
+    }
+
+    /// Sets the button and hat debounce time of one device (0 = off, at most
+    /// [`MAX_DEBOUNCE_MS`]): after a change, further ones within that time are ignored, then
+    /// the final state follows. Applies from the next poll.
+    pub fn set_debounce(&self, device: &str, ms: u16) {
+        let mut map = self.debounce.write().unwrap_or_else(|e| e.into_inner());
+        if ms == 0 {
+            map.remove(device);
+        } else {
+            map.insert(device.to_string(), ms.min(MAX_DEBOUNCE_MS));
+        }
+        drop(map);
+        self.calibration_version.fetch_add(1, Ordering::Release);
     }
 
     /// Sets (or with `None` removes) the calibration of one axis; applies from the next poll.
@@ -274,6 +301,7 @@ struct Shared<'a> {
     stop: &'a AtomicBool,
     tx: &'a Broadcast,
     calibrations: &'a RwLock<Calibrations>,
+    debounce: &'a RwLock<HashMap<String, u16>>,
     calibration_version: &'a AtomicU64,
     event_mode: &'a AtomicBool,
     poll_interval: &'a AtomicU64,
@@ -294,6 +322,9 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
     let mut announce = true;
     let mut events = shared.event_mode.load(Ordering::Relaxed);
     let mut cal = Calibrations::new();
+    let mut debounce: HashMap<String, u16> = HashMap::new();
+    // What every device last sent, by device id (see `filter`).
+    let mut filters: HashMap<String, Filtered> = HashMap::new();
     let mut cal_version = None;
     let mut exclusive_version = None;
     while !shared.stop.load(Ordering::Relaxed) {
@@ -310,11 +341,15 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
             let attached = platform.attached();
             let before = devices.len();
             devices.retain(|d| attached.iter().any(|(id, _)| *id == d.state().info.guid));
+            filters.retain(|id, _| devices.iter().any(|d| d.state().info.guid == *id));
             for (id, found) in &attached {
                 if !devices.iter().any(|d| d.state().info.guid == *id)
                     && let Some(mut dev) = platform.open(found, events)
                 {
                     dev.set_calibrations(&cal);
+                    let mut filter = Filtered::new(dev.state());
+                    filter.configure(&cal, debounce.get(id).copied().unwrap_or(0));
+                    filters.insert(id.clone(), filter);
                     if Platform::EXCLUSIVE {
                         dev.set_exclusive(crate::exclusive::wanted(id));
                     }
@@ -337,8 +372,12 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
                     .read()
                     .unwrap_or_else(|e| e.into_inner()),
             );
+            debounce.clone_from(&shared.debounce.read().unwrap_or_else(|e| e.into_inner()));
             for dev in &mut devices {
                 dev.set_calibrations(&cal);
+            }
+            for (id, filter) in &mut filters {
+                filter.configure(&cal, debounce.get(id).copied().unwrap_or(0));
             }
         }
 
@@ -354,15 +393,21 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
         let mut lost = false;
         for dev in &mut devices {
             let at = Instant::now();
+            let id = dev.state().info.guid.clone();
+            let filter = filters
+                .entry(id)
+                .or_insert_with(|| Filtered::new(dev.state()));
             let read = dev.read(&mut |event| {
-                tx.send(event, at);
-                changed = true;
+                if let Some(event) = filter.event(event, at) {
+                    tx.send(event, at);
+                    changed = true;
+                }
             });
             if !read {
                 lost = true;
                 continue;
             }
-            changed |= emit_changes(dev.previous(), dev.state(), tx, at);
+            changed |= filter.update(dev.state(), at, &mut |event| tx.send(event, at));
             // Raw values matter to the calibration page even when the scaled value stays.
             changed |= dev.previous().raw != dev.state().raw;
         }
@@ -377,13 +422,22 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
                     .iter()
                     .zip(&devices)
                     .all(|(s, d)| s.info.guid == d.state().info.guid);
+            // The filtered view of each device: what was sent.
+            fn shown<'a>(
+                filters: &'a HashMap<String, Filtered>,
+                d: &'a impl Device,
+            ) -> &'a DeviceState {
+                filters
+                    .get(&d.state().info.guid)
+                    .map_or(d.state(), |f| &f.out)
+            }
             if same_devices {
                 // Usual case: only values changed, update them in place without allocating.
                 for (s, d) in snapshot.iter_mut().zip(&devices) {
-                    s.copy_readings(d.state());
+                    s.copy_readings(shown(&filters, d));
                 }
             } else {
-                *snapshot = devices.iter().map(|d| d.state().clone()).collect();
+                *snapshot = devices.iter().map(|d| shown(&filters, d).clone()).collect();
             }
             drop(snapshot);
             on_change();
@@ -391,56 +445,14 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
         let polled = !events || devices.iter().any(|d| !d.signals());
         shared.polling.store(polled, Ordering::Relaxed);
         let poll = Duration::from_micros(shared.poll_interval.load(Ordering::Relaxed));
-        platform.wait(&devices, events, poll);
+        // A debounced button may owe its final state when its hold ends.
+        let wake = filters
+            .values()
+            .filter_map(Filtered::next_deadline)
+            .min()
+            .map(|d| d.saturating_duration_since(Instant::now()));
+        platform.wait(&devices, events, poll, wake);
     }
-}
-
-/// Sends one event per changed input, read at `at`; returns whether anything changed.
-fn emit_changes(old: &DeviceState, new: &DeviceState, tx: &Broadcast, at: Instant) -> bool {
-    let device = || new.info.guid.clone();
-    let mut changed = false;
-    for &id in &new.info.axes {
-        let i = usize::from(id) - 1;
-        // Ignore sensor noise below ~0.05%.
-        if (old.axes[i] - new.axes[i]).abs() > 0.0005 {
-            changed = true;
-            tx.send(
-                InputEvent::Axis {
-                    device: device(),
-                    id,
-                    value: new.axes[i],
-                },
-                at,
-            );
-        }
-    }
-    for (i, (&a, &b)) in old.buttons.iter().zip(&new.buttons).enumerate() {
-        if a != b {
-            changed = true;
-            tx.send(
-                InputEvent::Button {
-                    device: device(),
-                    id: i as u16 + 1,
-                    pressed: b,
-                },
-                at,
-            );
-        }
-    }
-    for (i, (&a, &b)) in old.hats.iter().zip(&new.hats).enumerate() {
-        if a != b {
-            changed = true;
-            tx.send(
-                InputEvent::Hat {
-                    device: device(),
-                    id: i as u8 + 1,
-                    direction: b,
-                },
-                at,
-            );
-        }
-    }
-    changed
 }
 
 #[cfg(test)]
