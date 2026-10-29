@@ -1203,6 +1203,26 @@ impl JoystickGobloonApp {
         {
             self.hidhide_view.set_device_hidden(&d.info, hide);
         }
+        match self.devices_view.keyboard_result.take() {
+            Some((allow, Ok(()))) => {
+                log::info!(
+                    "keyboard access {}",
+                    if allow { "allowed" } else { "removed" }
+                );
+                self.status = self.i18n.tr(if allow {
+                    "keyboard-access-allowed"
+                } else {
+                    "keyboard-access-removed"
+                });
+            }
+            Some((_, Err(e))) => {
+                let text = self
+                    .i18n
+                    .trf("keyboard-access-error", &[("error", e.into())]);
+                self.error(text);
+            }
+            None => {}
+        }
         if std::mem::take(&mut self.devices_view.open_modes) {
             self.show_modes = true;
         }

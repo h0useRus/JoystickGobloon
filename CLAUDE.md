@@ -43,7 +43,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   no gamepad codes or KEY_MAX, so SDL sees a joystick; example `virtual_hold` keeps one up for jstest/SDL checks),
   unsupported.rs elsewhere
 - crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`, `keys` = set 1 scan
-  codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers, installed via pkexec from the
+  codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers (keyboards: separate opt-in rule from the Keyboard tab), installed via pkexec from the
   Devices page banner); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
   made in `prepare` when a profile starts; key_pressed via EVIOCGKEY). Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
   `tools\linux\check.ps1 --devices cargo test ... -- --ignored`

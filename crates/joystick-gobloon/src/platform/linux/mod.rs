@@ -97,10 +97,29 @@ impl super::Desktop for Desktop {
         instance::listen(event, show);
     }
 
-    /// Off for now: reading every keyboard needs the `input` group (the udev rule leaves
-    /// keyboards out, any program of the user could read what is typed). Back if users ask.
+    /// Keyboards are read through evdev, which needs access the main udev rule leaves out (any
+    /// program of the user could read what is typed): the user allows it on the Keyboard tab.
     fn keyboard_bindings() -> bool {
-        false
+        true
+    }
+
+    fn keyboard_access() -> super::KeyboardAccess {
+        use gob_uinput::access;
+        if access::keyboard_rule_installed() {
+            super::KeyboardAccess::Allowed
+        } else if access::keyboards_readable() {
+            super::KeyboardAccess::Open
+        } else {
+            super::KeyboardAccess::Missing
+        }
+    }
+
+    fn set_keyboard_access(allow: bool) -> Result<(), String> {
+        if allow {
+            gob_uinput::access::install_keyboard()
+        } else {
+            gob_uinput::access::remove_keyboard()
+        }
     }
 
     fn held_keys() -> Option<Vec<Key>> {

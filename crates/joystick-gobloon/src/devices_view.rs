@@ -75,6 +75,10 @@ pub struct DevicesView {
     /// Configured virtual gamepads and how many the system can have, filled by the app.
     pub gamepads: Vec<gob_virtual::GamepadInfo>,
     pub max_gamepads: u32,
+    /// Reading the keyboards for the Keyboard tab (allowed by the user on Linux).
+    keyboard_access: crate::device_access::KeyboardAccess,
+    /// A keyboard access request finished: (allowed or taken back, result). The app reports it.
+    pub keyboard_result: Option<(bool, Result<(), String>)>,
 }
 
 struct Tab<'a> {
@@ -665,6 +669,9 @@ impl DevicesView {
     ) {
         let Some(p) = profile else { return };
         if is_keyboard(tab) {
+            if let Some(done) = self.keyboard_access.banner(ui, i18n) {
+                self.keyboard_result = Some(done);
+            }
             ui.horizontal(|ui| {
                 ui.label(RichText::new(i18n.tr("keyboard-add")).weak());
                 let field = egui::Id::new("keyboard-add-key");
@@ -682,6 +689,9 @@ impl DevicesView {
                         });
                     }
                 }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    self.keyboard_access.remove_button(ui, i18n);
+                });
             });
             if empty {
                 ui.label(RichText::new(i18n.tr("keyboard-empty")).weak());
