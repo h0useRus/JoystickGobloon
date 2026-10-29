@@ -92,6 +92,10 @@ pub(crate) trait Desktop {
     /// Gives the user that access once and for good, with administrator rights (the system
     /// asks). Blocking: call it off the GUI thread.
     fn grant_device_access() -> Result<(), String>;
+    /// Lets the program read every button of the controller with these ids where the system
+    /// passes on only some ([`gob_input::DeviceInfo::unread_buttons`]), with administrator
+    /// rights. Blocking: call it off the GUI thread.
+    fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String>;
 
     /// The copy in `exe_dir` is managed by the system's installer (it updates through a new one).
     fn installed_copy(exe_dir: &Path) -> bool;
@@ -229,6 +233,10 @@ pub(crate) fn device_access_missing() -> bool {
 
 pub(crate) fn grant_device_access() -> Result<(), String> {
     Current::grant_device_access()
+}
+
+pub(crate) fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String> {
+    Current::grant_all_buttons(vendor_id, product_id)
 }
 
 pub(crate) fn installed_copy(exe_dir: &Path) -> bool {

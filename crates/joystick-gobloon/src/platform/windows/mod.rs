@@ -160,4 +160,9 @@ impl super::Desktop for Desktop {
     fn grant_device_access() -> Result<(), String> {
         Ok(())
     }
+
+    /// DirectInput reads every button already.
+    fn grant_all_buttons(_vendor_id: u16, _product_id: u16) -> Result<(), String> {
+        Ok(())
+    }
 }

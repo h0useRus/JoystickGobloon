@@ -111,6 +111,10 @@ impl super::Desktop for Desktop {
         Err("not supported on this system".into())
     }
 
+    fn grant_all_buttons(_vendor_id: u16, _product_id: u16) -> Result<(), String> {
+        Err("not supported on this system".into())
+    }
+
     fn installed_copy(_exe_dir: &Path) -> bool {
         false
     }

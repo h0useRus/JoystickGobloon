@@ -79,6 +79,10 @@ pub struct DevicesView {
     keyboard_access: crate::device_access::KeyboardAccess,
     /// A keyboard access request finished: (allowed or taken back, result). The app reports it.
     pub keyboard_result: Option<(bool, Result<(), String>)>,
+    /// Reading every button of sticks the system passes on only some of.
+    all_buttons: crate::device_access::AllButtons,
+    /// An all buttons request finished. The app reports it.
+    pub all_buttons_result: Option<Result<(), String>>,
 }
 
 struct Tab<'a> {
@@ -666,6 +670,11 @@ impl DevicesView {
         tab: &Tab,
         empty: bool,
     ) {
+        if let Some(d) = tab.live
+            && let Some(done) = self.all_buttons.banner(ui, i18n, &d.info)
+        {
+            self.all_buttons_result = Some(done);
+        }
         let Some(p) = profile else { return };
         if is_keyboard(tab) {
             if let Some(done) = self.keyboard_access.banner(ui, i18n) {

@@ -1,6 +1,7 @@
 //! Banner offering device access the user lacks (Linux: controllers and virtual devices need a
-//! udev rule, see `platform::grant_device_access`), and keyboard access for the Keyboard tab.
-//! Nothing where the platform needs none.
+//! udev rule, see `platform::grant_device_access`), keyboard access for the Keyboard tab, and
+//! access to every button of sticks the system passes on only some of. Nothing where the
+//! platform needs none.
 
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
@@ -161,5 +162,84 @@ impl KeyboardAccess {
             ui.spinner();
             ui.ctx().request_repaint_after(Duration::from_millis(200));
         }
+    }
+}
+
+/// Device tab of a controller with buttons the system does not pass on
+/// ([`gob_input::DeviceInfo::unread_buttons`]): a banner letting the program read all of them
+/// (`platform::grant_all_buttons`).
+#[derive(Default)]
+pub struct AllButtons {
+    /// The running request and its device; the system is asking for the password.
+    job: Option<(String, Receiver<Result<(), String>>)>,
+}
+
+impl AllButtons {
+    /// The banner for `info` while it has unread buttons; returns a request that finished in this
+    /// frame. The banner goes away by itself once the device reads every button.
+    pub fn banner(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        info: &gob_input::DeviceInfo,
+    ) -> Option<Result<(), String>> {
+        let done = match &self.job {
+            Some((_, rx)) => rx.try_recv().ok(),
+            None => None,
+        };
+        if done.is_some() {
+            self.job = None;
+        }
+        if info.unread_buttons == 0 {
+            return done;
+        }
+        let running = self
+            .job
+            .as_ref()
+            .is_some_and(|(guid, _)| *guid == info.guid);
+        let shown = info.buttons;
+        let text = i18n.trf(
+            "all-buttons-banner",
+            &[
+                ("device", info.name.trim().to_string().into()),
+                ("total", (shown + info.unread_buttons).into()),
+                ("shown", shown.into()),
+            ],
+        );
+        let banner = egui::Frame::new()
+            .fill(ui.visuals().faint_bg_color)
+            .corner_radius(8)
+            .inner_margin(8);
+        banner.show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(icon::LOCK_KEY).size(style::ICON_SIZE));
+                ui.label(text);
+                let allow = format!("{}  {}", icon::SHIELD_CHECK, i18n.tr("all-buttons-allow"));
+                if ui
+                    .add_enabled(self.job.is_none(), egui::Button::new(allow))
+                    .clicked()
+                {
+                    let (tx, rx) = mpsc::channel();
+                    let ctx = ui.ctx().clone();
+                    let (vendor, product) = (info.vendor_id, info.product_id);
+                    let spawned = std::thread::Builder::new()
+                        .name("all-buttons".into())
+                        .spawn(move || {
+                            let _ = tx.send(crate::platform::grant_all_buttons(vendor, product));
+                            ctx.request_repaint();
+                        });
+                    match spawned {
+                        Ok(_) => self.job = Some((info.guid.clone(), rx)),
+                        Err(e) => log::error!("all buttons: {e}"),
+                    }
+                }
+                if running {
+                    ui.spinner();
+                    ui.ctx().request_repaint_after(Duration::from_millis(200));
+                }
+            });
+        });
+        ui.add_space(4.0);
+        done
     }
 }
