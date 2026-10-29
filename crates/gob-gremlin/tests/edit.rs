@@ -212,6 +212,92 @@ fn used_vjoy_outputs_follow_mode_inheritance() {
 }
 
 #[test]
+fn output_usage_counts_bindings_and_conflicts() {
+    let mut p = Profile::default();
+    assert!(p.add_mode("A", Some("Default")));
+    assert!(p.add_mode("B", Some("Default")));
+    let map = |p: &mut Profile, input: &str, mode: &str| {
+        let root = p.bind(DEV, "button", input, mode);
+        p.add_child(
+            &root,
+            "actions",
+            gob_core::Action::new(&NewAction::MapToVjoy {
+                input_type: InputType::Button,
+                device: 1,
+                input_id: 7,
+            }),
+        )
+        .unwrap();
+    };
+    let out = gob_core::VirtualOutput::Vjoy {
+        device: 1,
+        input_type: InputType::Button,
+        id: 7,
+    };
+    // The same input in two sibling modes: never at the same time.
+    map(&mut p, "1", "A");
+    map(&mut p, "1", "B");
+    let all = p.output_usage(None);
+    assert_eq!(all[&out].len(), 2);
+    assert!(!p.uses_conflict(&all[&out]));
+    assert_eq!(p.output_usage(Some("A"))[&out].len(), 1);
+
+    // Another input in the parent mode runs together with both.
+    map(&mut p, "2", "Default");
+    let all = p.output_usage(None);
+    assert_eq!(all[&out].len(), 3);
+    assert!(p.uses_conflict(&all[&out]));
+}
+
+#[test]
+fn duplicated_vjoy_output_moves_off_its_input() {
+    let mut p = Profile::default();
+    let root = p.bind(DEV, "button", "1", "Default");
+    let map = p
+        .add_child(
+            &root,
+            "actions",
+            gob_core::Action::new(&NewAction::MapToVjoy {
+                input_type: InputType::Button,
+                device: 1,
+                input_id: 1,
+            }),
+        )
+        .unwrap();
+    // Button 2 is taken by another input in the same mode.
+    let other = p.bind(DEV, "button", "2", "Default");
+    p.add_child(
+        &other,
+        "actions",
+        gob_core::Action::new(&NewAction::MapToVjoy {
+            input_type: InputType::Button,
+            device: 1,
+            input_id: 2,
+        }),
+    )
+    .unwrap();
+
+    let copy = p.duplicate(&map).unwrap();
+    p.add_ref(&root, "actions", &copy);
+    p.separate_outputs(&copy);
+    let out = gob_core::virtual_output(p.action(&copy).unwrap());
+    assert_eq!(
+        out,
+        Some(gob_core::VirtualOutput::Vjoy {
+            device: 1,
+            input_type: InputType::Button,
+            id: 3,
+        })
+    );
+    // The original keeps its output.
+    let orig = gob_core::virtual_output(p.action(&map).unwrap());
+    assert!(matches!(
+        orig,
+        Some(gob_core::VirtualOutput::Vjoy { id: 1, .. })
+    ));
+}
+
+#[test]
 fn hat_button_count_keeps_shared_directions() {
     let mut p = sample();
     let root = p.bind(DEV, "hat", "1", "Default");

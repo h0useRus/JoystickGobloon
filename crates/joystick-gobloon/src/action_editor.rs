@@ -6,12 +6,13 @@ use std::collections::HashSet;
 use eframe::egui::{self, RichText};
 use gob_core::{
     Action, ActionKind, InputType, Item, Layer, MergeOp, MouseAction, MouseButton, NewAction,
-    Profile, Property, child_groups,
+    Profile, Property, VirtualOutput, child_groups,
 };
 use gob_i18n::I18n;
 
 use crate::devices_view::hat_glyph;
-use crate::style::{self, icon};
+use crate::output_marks::OutputMarks;
+use crate::style::{self, OutputMark, icon};
 
 /// Builds an [`AddKind`] from an existing action id.
 type MakeAdd = fn(String) -> AddKind;
@@ -63,6 +64,7 @@ fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
         AddKind::Duplicate(id) => {
             if let Some(copy) = p.duplicate(id) {
                 p.add_ref(parent, group, &copy);
+                p.separate_outputs(&copy);
             }
         }
     }
@@ -644,6 +646,8 @@ pub struct Editor<'a> {
     pub input: Option<(&'a str, u32)>,
     /// Mode and layer of the edited binding, where two-axis actions get bound.
     pub place: Option<(&'a str, &'a Layer)>,
+    /// Root actions of the edited layer: two actions under them never write the same output.
+    pub roots: Vec<&'a str>,
     /// GUIDs of the attached devices with LED control.
     pub leds: &'a HashSet<String>,
     /// Experimental features (light-led) are on; off, light-led cannot be added or edited.
@@ -1279,15 +1283,22 @@ impl Editor<'_> {
                 .selected_text(shown)
                 .height(320.0)
                 .show_ui(ui, |ui| {
+                    let marks = self.output_marks(&id);
+                    let blocked = self.input_outputs(&id);
                     for &c in &controls {
-                        if ui
-                            .selectable_label(current == Some(c), control_name(c))
+                        let output = OutputMarks::gamepad(gamepad, c.name());
+                        let selected = current == Some(c);
+                        let off = !selected && blocked.contains(&output);
+                        let name = control_name(c);
+                        if self
+                            .output_item(ui, &marks, &output, selected, off, name)
                             .clicked()
                         {
                             set_control = Some(c);
                         }
                     }
                 });
+            self.clash_warning(ui, &id, &OutputMarks::gamepad(gamepad, control));
             if current.is_some_and(|c| c.kind() != ControlKind::Dpad) {
                 let mut inv = inverted;
                 if ui
@@ -1331,14 +1342,78 @@ impl Editor<'_> {
             .collect()
     }
 
-    /// vJoy outputs other actions already write to while the edited mode runs.
-    fn used_vjoy_outputs(&self) -> HashSet<(u32, InputType, u32)> {
-        let mode = self
-            .place
+    /// Mode of the edited binding (else the first mode).
+    fn edit_mode(&self) -> &str {
+        self.place
             .map(|(m, _)| m)
             .or_else(|| self.profile.modes.first().map(|m| m.name.as_str()))
-            .unwrap_or_default();
-        self.profile.used_vjoy_outputs(mode)
+            .unwrap_or_default()
+    }
+
+    /// vJoy outputs other actions already write to while the edited mode runs.
+    fn used_vjoy_outputs(&self) -> HashSet<(u32, InputType, u32)> {
+        self.profile.used_vjoy_outputs(self.edit_mode())
+    }
+
+    /// Outputs that actions other than `action` write to while the edited mode runs.
+    fn output_marks<'b>(&'b self, action: &'b str) -> OutputMarks<'b> {
+        OutputMarks::new(self.profile, None, Some(self.edit_mode())).skip(action)
+    }
+
+    /// Outputs that actions of the edited input other than `action` write: `action` cannot
+    /// take them.
+    fn input_outputs(&self, action: &str) -> HashSet<VirtualOutput> {
+        self.profile
+            .tree_outputs(&self.roots)
+            .into_iter()
+            .filter(|(id, _)| id != action)
+            .map(|(_, o)| o)
+            .collect()
+    }
+
+    /// Output list entry colored by its mark, with the inputs using it in the tooltip;
+    /// disabled when another action of this input writes it (`blocked`).
+    fn output_item(
+        &self,
+        ui: &mut egui::Ui,
+        marks: &OutputMarks,
+        output: &VirtualOutput,
+        selected: bool,
+        blocked: bool,
+        name: String,
+    ) -> egui::Response {
+        // Disabled entries stay gray like every disabled control.
+        let (mark, count) = if blocked {
+            (OutputMark::Free, 0)
+        } else {
+            marks.mark(output)
+        };
+        let caption = if count > 1 {
+            format!("{name}  ×{count}")
+        } else {
+            name.clone()
+        };
+        let text = match style::mark_colors(ui, mark) {
+            Some((_, ink)) => RichText::new(caption).color(ink),
+            None => RichText::new(caption),
+        };
+        ui.add_enabled(!blocked, egui::SelectableLabel::new(selected, text))
+            .on_hover_ui(|ui| {
+                ui.label(marks.tooltip(self.i18n, output, &name));
+            })
+            .on_disabled_hover_text(self.i18n.tr("output-same-input"))
+    }
+
+    /// Warning next to an action whose output another action of the same input writes too.
+    fn clash_warning(&self, ui: &mut egui::Ui, action: &str, output: &VirtualOutput) {
+        if self.input_outputs(action).contains(output) {
+            ui.label(
+                RichText::new(icon::WARNING)
+                    .size(style::ICON_SIZE)
+                    .color(ui.visuals().warn_fg_color),
+            )
+            .on_hover_text(self.i18n.tr("output-same-input-clash"));
+        }
     }
 
     /// Device and output for a new map-to-vjoy: the device picked last (else the first), and
@@ -1379,7 +1454,8 @@ impl Editor<'_> {
             RichText::new(icon::GRID_NINE).size(style::ICON_SIZE),
             |ui| {
                 ui.set_width(44.0 * 10.0);
-                let used = self.used_vjoy_outputs();
+                let marks = self.output_marks(action);
+                let blocked = self.input_outputs(action);
                 let mut tab: u32 = ui.data(|m| m.get_temp(tab_id)).unwrap_or(current.0);
                 if !devices.iter().any(|d| d.id == tab) {
                     tab = devices.first().map_or(1, |d| d.id);
@@ -1402,25 +1478,33 @@ impl Editor<'_> {
                             InputType::Axis => vjoy_output_name(self.i18n, ty, n),
                             _ => n.to_string(),
                         };
-                        let taken = used.contains(&(tab, ty, n)) && (tab, n) != current;
-                        let text = if taken {
-                            RichText::new(label).weak()
-                        } else {
-                            RichText::new(label)
-                        };
+                        let output = OutputMarks::vjoy(tab, ty, n);
                         let width = if ty == InputType::Axis { 84.0 } else { 40.0 };
-                        let r = ui.add_sized(
-                            [width, 26.0],
-                            egui::Button::new(text)
-                                .selected((tab, n) == current)
-                                .corner_radius(style::RADIUS),
-                        );
-                        let tip = if taken {
-                            self.i18n.tr("vjoy-quickmap-used")
+                        let enabled = !blocked.contains(&output) || (tab, n) == current;
+                        let (mark, count) = if enabled {
+                            marks.mark(&output)
                         } else {
-                            vjoy_output_name(self.i18n, ty, n)
+                            (OutputMark::Free, 0)
                         };
-                        if r.on_hover_text(tip).clicked() {
+                        let r = ui
+                            .add_enabled_ui(enabled, |ui| {
+                                style::output_button(
+                                    ui,
+                                    label,
+                                    egui::Vec2::new(width, 26.0),
+                                    (tab, n) == current,
+                                    mark,
+                                    count,
+                                )
+                            })
+                            .inner;
+                        let name = vjoy_output_name(self.i18n, ty, n);
+                        let r = r
+                            .on_hover_ui(|ui| {
+                                ui.label(marks.tooltip(self.i18n, &output, &name));
+                            })
+                            .on_disabled_hover_text(self.i18n.tr("output-same-input"));
+                        if r.clicked() {
                             picked = Some((tab, n));
                             ui.close_menu();
                         }
@@ -1468,12 +1552,19 @@ impl Editor<'_> {
                         }
                     }
                 });
+            let marks = self.output_marks(&id);
+            let blocked = self.input_outputs(&id);
             egui::ComboBox::from_id_salt(("vjoy-input", &id))
                 .selected_text(name(input_id))
                 .height(320.0)
                 .show_ui(ui, |ui| {
                     for &n in &inputs {
-                        if ui.selectable_label(n == input_id, name(n)).clicked() {
+                        let output = OutputMarks::vjoy(device, vjoy_type(ty), n);
+                        let off = n != input_id && blocked.contains(&output);
+                        if self
+                            .output_item(ui, &marks, &output, n == input_id, off, name(n))
+                            .clicked()
+                        {
                             set_input = Some(n);
                         }
                     }
@@ -1482,6 +1573,8 @@ impl Editor<'_> {
                 set_device = Some(d);
                 set_input = Some(n);
             }
+            let current = OutputMarks::vjoy(device, vjoy_type(ty), input_id);
+            self.clash_warning(ui, &id, &current);
         });
         if let Some(d) = set_device {
             ui.ctx()

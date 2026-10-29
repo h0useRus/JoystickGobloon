@@ -26,8 +26,9 @@ pub use logical::{
 };
 pub use modifier::{Layer, Modifier, Selection};
 pub use profile::{
-    ActionConfig, AxisDirection, Device, InputBinding, Mode, Profile, Section, VirtualButton,
-    VirtualDevices, VirtualJoystick, same_device_name,
+    ActionConfig, AxisDirection, Device, InputBinding, Mode, OutputUse, Profile, Section,
+    VirtualButton, VirtualDevices, VirtualJoystick, VirtualOutput, same_device_name,
+    virtual_output,
 };
 pub use two_axis::{AxisInput, TWO_AXIS_KINDS};
 pub use xml::{Element, Node};

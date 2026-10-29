@@ -235,7 +235,20 @@ vjoy-axis-8 = Колёсико
 vjoy-button-n = Кнопка { $n }
 vjoy-hat-n = Хатка { $n }
 vjoy-quickmap = Выбрать выход
-vjoy-quickmap-used = Уже используется другим входом
+output-profile = Профиль: { $name }
+output-free = { $output }: свободен
+output-used = { $output }: { $n ->
+    [one] назначен { $n } входу
+    [few] назначен { $n } входам
+   *[other] назначен { $n } входам
+}
+output-conflict = Его пишут входы, работающие одновременно
+output-more = …и ещё { $n }
+output-legend-used = Занят
+output-legend-conflict = Конфликт
+output-legend-tip = Показывать эти элементы (профиль не меняется)
+output-same-input = Его уже пишет другое действие этого входа
+output-same-input-clash = Другое действие этого входа пишет тот же выход: выберите другой
 vjoy-absolute = Абсолютная
 vjoy-relative = Относительная
 vjoy-speed = Скорость

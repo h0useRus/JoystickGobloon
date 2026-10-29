@@ -217,6 +217,106 @@ pub fn toolbar_toggle(
     )
 }
 
+/// How the loaded profile uses a virtual output (see `output_marks`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputMark {
+    Free,
+    Used,
+    /// Written by several inputs that run together.
+    Conflict,
+}
+
+/// Fill and ink (text and outline) of a used output: blue once, amber in a conflict. Green
+/// stays for "pressed", and blue keeps apart from it with red-green color blindness too.
+pub fn mark_colors(ui: &egui::Ui, mark: OutputMark) -> Option<(Color32, Color32)> {
+    let dark = ui.visuals().dark_mode;
+    let rgb = Color32::from_rgb;
+    match (mark, dark) {
+        (OutputMark::Free, _) => None,
+        (OutputMark::Used, true) => Some((rgb(0x1f, 0x3a, 0x5c), rgb(0x5a, 0xa9, 0xff))),
+        (OutputMark::Used, false) => Some((rgb(0xdb, 0xe9, 0xfb), rgb(0x2f, 0x6f, 0xd0))),
+        (OutputMark::Conflict, true) => Some((rgb(0x4a, 0x35, 0x10), rgb(0xf0, 0xa5, 0x30))),
+        (OutputMark::Conflict, false) => Some((rgb(0xfd, 0xf0, 0xd5), rgb(0xa0, 0x62, 0x10))),
+    }
+}
+
+/// Output button of a virtual device, colored by `mark`; `count` above 1 is drawn in its
+/// top right corner, so the mark does not rely on color alone. Selected (pressed) buttons
+/// keep the accent fill and only the outline of the mark.
+pub fn output_button(
+    ui: &mut egui::Ui,
+    label: impl Into<String>,
+    size: Vec2,
+    selected: bool,
+    mark: OutputMark,
+    count: usize,
+) -> egui::Response {
+    let colors = mark_colors(ui, mark);
+    let mut text = RichText::new(label);
+    if let (Some((_, ink)), false) = (colors, selected) {
+        text = text.color(ink);
+    }
+    let mut button = egui::Button::new(text)
+        .selected(selected)
+        .corner_radius(RADIUS);
+    if let Some((fill, ink)) = colors {
+        button = button.stroke(egui::Stroke::new(1.0_f32, ink));
+        if !selected {
+            button = button.fill(fill);
+        }
+    }
+    let r = ui.add_sized(size, button);
+    if let (Some((_, ink)), true) = (colors, count > 1) {
+        ui.painter().text(
+            r.rect.right_top() + Vec2::new(-3.0, 1.0),
+            egui::Align2::RIGHT_TOP,
+            count.to_string(),
+            egui::FontId::proportional(9.0),
+            ink,
+        );
+    }
+    r
+}
+
+/// Tick box in `color` (box, tick and caption), for legends whose entries are colors; plain
+/// on/off options use [`switch`].
+pub fn tick(ui: &mut egui::Ui, on: &mut bool, caption: &str, color: Color32) -> egui::Response {
+    let font = egui::TextStyle::Body.resolve(ui.style());
+    let galley = ui
+        .painter()
+        .layout_no_wrap(caption.to_string(), font, color);
+    let side = 14.0;
+    let gap = 6.0;
+    let size = Vec2::new(side + gap + galley.size().x, side.max(galley.size().y));
+    let (rect, mut r) = ui.allocate_exact_size(size, egui::Sense::click());
+    if r.clicked() {
+        *on = !*on;
+        r.mark_changed();
+    }
+    let boxed = egui::Rect::from_min_size(
+        egui::pos2(rect.left(), rect.center().y - side / 2.0),
+        Vec2::splat(side),
+    );
+    let painter = ui.painter();
+    let stroke = egui::Stroke::new(if r.hovered() { 2.0_f32 } else { 1.5 }, color);
+    painter.rect(
+        boxed,
+        3.0,
+        Color32::TRANSPARENT,
+        stroke,
+        egui::StrokeKind::Inside,
+    );
+    if *on {
+        painter.rect_filled(boxed.shrink(1.0), 2.0, color);
+        let p = |x: f32, y: f32| boxed.min + Vec2::new(x, y) * side;
+        let ink = egui::Stroke::new(2.0_f32, ui.visuals().panel_fill);
+        painter.line(vec![p(0.22, 0.52), p(0.42, 0.72), p(0.78, 0.3)], ink);
+    }
+    let text_pos = egui::pos2(boxed.right() + gap, rect.center().y - galley.size().y / 2.0);
+    painter.galley(text_pos, galley, color);
+    r
+}
+
 /// Red of hidden devices and the record dot.
 pub const RED: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
 

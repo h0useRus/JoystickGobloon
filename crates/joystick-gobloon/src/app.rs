@@ -1559,7 +1559,11 @@ impl eframe::App for JoystickGobloonApp {
                 }
                 Page::VJoy => {
                     let locked = self.activation.is_active();
-                    self.vjoy_view.show(ui, &self.i18n, locked);
+                    let name = self.profile.as_ref().map(|p| p.file_name());
+                    let mut marks = self.profile.as_ref().map(|p| {
+                        crate::output_marks::OutputMarks::new(&p.profile, name.as_deref(), None)
+                    });
+                    self.vjoy_view.show(ui, &self.i18n, locked, marks.as_mut());
                 }
                 Page::Viewer if self.viewer_window => {
                     empty_state(

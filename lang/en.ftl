@@ -235,7 +235,19 @@ vjoy-axis-8 = Dial
 vjoy-button-n = Button { $n }
 vjoy-hat-n = Hat { $n }
 vjoy-quickmap = Pick an output
-vjoy-quickmap-used = Already used by another input
+output-profile = Profile: { $name }
+output-free = { $output }: free
+output-used = { $output }: { $n ->
+    [one] used by 1 input
+   *[other] used by { $n } inputs
+}
+output-conflict = Inputs that run at the same time write it
+output-more = …and { $n } more
+output-legend-used = Used
+output-legend-conflict = Conflict
+output-legend-tip = Show these controls (the profile does not change)
+output-same-input = Another action of this input already writes it
+output-same-input-clash = Another action of this input writes the same output: pick a different one
 vjoy-absolute = Absolute
 vjoy-relative = Relative
 vjoy-speed = Speed

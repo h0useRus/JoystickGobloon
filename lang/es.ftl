@@ -235,7 +235,19 @@ vjoy-axis-8 = Rueda
 vjoy-button-n = Botón { $n }
 vjoy-hat-n = Cruceta { $n }
 vjoy-quickmap = Elegir una salida
-vjoy-quickmap-used = Ya la usa otra entrada
+output-profile = Perfil: { $name }
+output-free = { $output }: libre
+output-used = { $output }: { $n ->
+    [one] usada por 1 entrada
+   *[other] usada por { $n } entradas
+}
+output-conflict = La escriben entradas activas a la vez
+output-more = …y { $n } más
+output-legend-used = En uso
+output-legend-conflict = Conflicto
+output-legend-tip = Mostrar estos controles (el perfil no cambia)
+output-same-input = Otra acción de esta entrada ya la escribe
+output-same-input-clash = Otra acción de esta entrada escribe la misma salida: elige otra
 vjoy-absolute = Absoluto
 vjoy-relative = Relativo
 vjoy-speed = Velocidad

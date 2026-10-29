@@ -235,7 +235,19 @@ vjoy-axis-8 = Drehregler
 vjoy-button-n = Taste { $n }
 vjoy-hat-n = Coolie-Hat { $n }
 vjoy-quickmap = Ausgang wählen
-vjoy-quickmap-used = Wird bereits von einem anderen Eingang genutzt
+output-profile = Profil: { $name }
+output-free = { $output }: frei
+output-used = { $output }: { $n ->
+    [one] von 1 Eingang genutzt
+   *[other] von { $n } Eingängen genutzt
+}
+output-conflict = Gleichzeitig aktive Eingänge schreiben ihn
+output-more = …und { $n } weitere
+output-legend-used = Belegt
+output-legend-conflict = Konflikt
+output-legend-tip = Diese Elemente zeigen (das Profil ändert sich nicht)
+output-same-input = Eine andere Aktion dieses Eingangs schreibt ihn bereits
+output-same-input-clash = Eine andere Aktion dieses Eingangs schreibt denselben Ausgang: wähle einen anderen
 vjoy-absolute = Absolut
 vjoy-relative = Relativ
 vjoy-speed = Geschwindigkeit
