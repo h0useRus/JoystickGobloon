@@ -253,7 +253,7 @@
               <li>Repeat for the second stick. vJoy supports up to 16 devices.</li>
             </ol>
             <p>Devices cannot be changed while a profile runs: stop it first. Now and then Windows needs a restart before a changed device shows up; the app says so when it happens.</p>
-            <figure class="shot"><img src="img/vjoy.png" loading="lazy" width="1102" height="732" alt="Virtual joysticks page: vJoy 2.1.9 enabled, two devices vJoy #1 and vJoy #2 with 8 axes, 128 and 127 buttons and 4 hats, and the output tester below"></figure>
+            <figure class="shot"><img src="img/vjoy.png" loading="lazy" width="1102" height="732" alt="Virtual joysticks page: vJoy 2.1.9 enabled, two devices vJoy #1 and vJoy #2 with 8 axes, 128 and 127 buttons and 4 hats, and the output tester below with the axes the open profile uses in blue"></figure>
           </article>
 
           <article class="learn-action" id="virtual-linux">
@@ -271,6 +271,7 @@
           <article class="learn-action" id="test-output">
             <h3><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>Test the output</h3>
             <p>Below the device settings is a tester. Lock the device to take control of it, then move its axes, buttons and hats by hand. Open the game's control settings next to it: when you move an axis here, the game should react to it. The <a href="index.html#features">input viewer</a> shows the same device live while a profile runs.</p>
+            <p>The tester also shows what the open profile does with each output. <strong>Blue</strong> axes, buttons and hats are used by the profile; <strong>amber</strong> ones are written by several inputs that run at the same time, so they fight over the output, and a small number shows by how many. The rest are free. Hover one to see the profile and every device, input and mode that uses it. The <span class="term">Used</span> and <span class="term">Conflict</span> boxes above the tester hide those outputs, so only the free ones are left; the profile does not change.</p>
           </article>
         </section>
 
