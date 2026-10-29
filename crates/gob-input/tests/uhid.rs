@@ -6,19 +6,21 @@
 #![cfg(target_os = "linux")]
 
 use std::fs::{File, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gob_input::{InputEvent, InputService};
 
 const UHID_DESTROY: u32 = 1;
+const UHID_GET_REPORT: u32 = 9;
+const UHID_GET_REPORT_REPLY: u32 = 10;
 const UHID_CREATE2: u32 = 11;
 const UHID_INPUT2: u32 = 12;
 const BUS_USB: u16 = 3;
 /// `struct uhid_event` (packed): type, then the largest request, `uhid_create2_req`.
 const EVENT_SIZE: usize = 4 + 128 + 64 + 64 + 2 + 2 + 4 * 4 + 4096;
-const NAME: &str = "Test HID stick 128";
 const BUTTONS: usize = 128;
 
 /// Joystick, report 1: X and Y (16 bits each), 128 buttons, one constant byte.
@@ -35,13 +37,15 @@ const DESCRIPTOR: &[u8] = &[
     0xC0,
 ];
 
-/// A HID device made through /dev/uhid; destroyed on drop.
+/// A HID device made through /dev/uhid; destroyed on drop. It answers the kernel's
+/// GET_REPORT requests (`HIDIOCGINPUT`) with the last report it sent.
 struct Uhid {
     file: File,
+    report: Arc<Mutex<Vec<u8>>>,
 }
 
 impl Uhid {
-    fn create() -> Self {
+    fn create(name: &str) -> Self {
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -50,7 +54,7 @@ impl Uhid {
         let mut ev = vec![0u8; EVENT_SIZE];
         ev[0..4].copy_from_slice(&UHID_CREATE2.to_le_bytes());
         let req = &mut ev[4..];
-        req[..NAME.len()].copy_from_slice(NAME.as_bytes());
+        req[..name.len()].copy_from_slice(name.as_bytes());
         let at = 128 + 64 + 64;
         req[at..at + 2].copy_from_slice(&(DESCRIPTOR.len() as u16).to_le_bytes());
         req[at + 2..at + 4].copy_from_slice(&BUS_USB.to_le_bytes());
@@ -59,24 +63,59 @@ impl Uhid {
         let rd = at + 4 * 4 + 4;
         req[rd..rd + DESCRIPTOR.len()].copy_from_slice(DESCRIPTOR);
         file.write_all(&ev).expect("UHID_CREATE2");
-        Self { file }
+        let report = Arc::new(Mutex::new(report(&[])));
+        let mut reader = file.try_clone().expect("clone /dev/uhid");
+        let mut writer = file.try_clone().expect("clone /dev/uhid");
+        let current = report.clone();
+        // Ends with the test process.
+        std::thread::spawn(move || {
+            let mut ev = vec![0u8; EVENT_SIZE];
+            while reader.read(&mut ev).is_ok_and(|n| n >= 9) {
+                if ev[0..4] != UHID_GET_REPORT.to_le_bytes() {
+                    continue;
+                }
+                // `uhid_get_report_req`: id (4 bytes), report number, report type.
+                let id: [u8; 4] = ev[4..8].try_into().unwrap();
+                let data = current.lock().unwrap().clone();
+                // `uhid_get_report_reply_req`: id, err (2 bytes), size (2 bytes), data with the id byte.
+                let mut reply = vec![0u8; EVENT_SIZE];
+                reply[0..4].copy_from_slice(&UHID_GET_REPORT_REPLY.to_le_bytes());
+                reply[4..8].copy_from_slice(&id);
+                reply[10..12].copy_from_slice(&(data.len() as u16).to_le_bytes());
+                reply[12..12 + data.len()].copy_from_slice(&data);
+                let _ = writer.write_all(&reply);
+            }
+        });
+        Self { file, report }
+    }
+
+    /// Holds `pressed` buttons without sending a report: only GET_REPORT sees them.
+    fn hold(&self, pressed: &[u32]) {
+        *self.report.lock().unwrap() = report(pressed);
     }
 
     /// Sends report 1 with `pressed` buttons (1-based) down and the axes centered.
     fn press(&mut self, pressed: &[u32]) {
-        let mut report = vec![1u8, 0xFF, 0x3F, 0xFF, 0x3F];
-        let mut bits = [0u8; BUTTONS / 8];
-        for &b in pressed {
-            bits[((b - 1) / 8) as usize] |= 1 << ((b - 1) % 8);
-        }
-        report.extend_from_slice(&bits);
-        report.push(0);
+        let report = report(pressed);
+        *self.report.lock().unwrap() = report.clone();
         let mut ev = vec![0u8; EVENT_SIZE];
         ev[0..4].copy_from_slice(&UHID_INPUT2.to_le_bytes());
         ev[4..6].copy_from_slice(&(report.len() as u16).to_le_bytes());
         ev[6..6 + report.len()].copy_from_slice(&report);
         self.file.write_all(&ev).expect("UHID_INPUT2");
     }
+}
+
+/// Report 1 with `pressed` buttons (1-based) down and the axes centered.
+fn report(pressed: &[u32]) -> Vec<u8> {
+    let mut report = vec![1u8, 0xFF, 0x3F, 0xFF, 0x3F];
+    let mut bits = [0u8; BUTTONS / 8];
+    for &b in pressed {
+        bits[((b - 1) / 8) as usize] |= 1 << ((b - 1) % 8);
+    }
+    report.extend_from_slice(&bits);
+    report.push(0);
+    report
 }
 
 impl Drop for Uhid {
@@ -99,22 +138,35 @@ fn wait_for(events: &Receiver<InputEvent>, want: impl Fn(&InputEvent) -> bool) {
     panic!("event not seen in time");
 }
 
+/// The stick as the input service sees it once it is there.
+fn find_stick(input: &InputService, name: &str) -> gob_input::DeviceState {
+    let end = Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Some(d) = input.devices().iter().find(|d| d.info.name == name) {
+            return d.clone();
+        }
+        assert!(Instant::now() < end, "HID stick not found");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn pressed(d: &gob_input::DeviceState) -> Vec<usize> {
+    (0..d.buttons.len())
+        .filter(|&i| d.buttons[i])
+        .map(|i| i + 1)
+        .collect()
+}
+
 #[test]
 #[ignore = "needs /dev/uhid"]
 fn buttons_past_80_come_from_hidraw() {
-    let mut stick = Uhid::create();
+    let name = "Test HID stick 128";
+    let mut stick = Uhid::create(name);
     let input = InputService::start(|| {});
     input.set_event_mode(true);
     let events = input.subscribe();
 
-    let end = Instant::now() + Duration::from_secs(5);
-    let state = loop {
-        if let Some(d) = input.devices().iter().find(|d| d.info.name == NAME) {
-            break d.clone();
-        }
-        assert!(Instant::now() < end, "HID stick not found");
-        std::thread::sleep(Duration::from_millis(50));
-    };
+    let state = find_stick(&input, name);
     println!("{:?}", state.info);
     assert_eq!(state.info.buttons, BUTTONS, "all buttons, not evdev's 80");
     assert_eq!(state.info.unread_buttons, 0);
@@ -141,9 +193,18 @@ fn buttons_past_80_come_from_hidraw() {
         .into_iter()
         .find(|d| d.info.guid == guid)
         .unwrap();
-    let down: Vec<usize> = (0..BUTTONS)
-        .filter(|&i| d.buttons[i])
-        .map(|i| i + 1)
-        .collect();
-    assert_eq!(down, vec![3, 128]);
+    assert_eq!(pressed(&d), vec![3, 128]);
+}
+
+#[test]
+#[ignore = "needs /dev/uhid"]
+fn buttons_held_at_start_count() {
+    let name = "Test HID stick 128 held";
+    let stick = Uhid::create(name);
+    // Held before the program starts, no report sent (a toggle switch left on).
+    stick.hold(&[5, 90]);
+    let input = InputService::start(|| {});
+    let state = find_stick(&input, name);
+    assert_eq!(state.info.buttons, BUTTONS);
+    assert_eq!(pressed(&state), vec![5, 90]);
 }
