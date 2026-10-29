@@ -5,6 +5,7 @@
 //! views (see [`action::ActionKind`]) are decoded on demand from the generic property tree.
 
 pub mod action;
+pub mod automap;
 pub mod condition;
 pub mod curve;
 pub mod edit;
@@ -19,6 +20,7 @@ pub use action::{
     MacroStep, MergeOp, MouseAction, MouseButton, Property, SUPPORTED_KINDS, format_color,
     parse_color,
 };
+pub use automap::Layout as InputLayout;
 pub use condition::{Comparator, Condition, Source as ConditionSource};
 pub use edit::{NewAction, child_groups, new_uuid};
 pub use logical::{
@@ -26,8 +28,9 @@ pub use logical::{
 };
 pub use modifier::{Layer, Modifier, Selection};
 pub use profile::{
-    ActionConfig, AxisDirection, Device, InputBinding, Mode, Profile, Section, VirtualButton,
-    VirtualDevices, VirtualJoystick, same_device_name,
+    ActionConfig, AxisDirection, Device, InputBinding, Mode, OutputUse, Profile, Section,
+    VirtualButton, VirtualDevices, VirtualJoystick, VirtualOutput, same_device_name,
+    virtual_output,
 };
 pub use two_axis::{AxisInput, TWO_AXIS_KINDS};
 pub use xml::{Element, Node};

@@ -19,6 +19,8 @@ pub struct LoadedProfile {
     pub dirty: bool,
     /// The file on disk (or a new profile) still opens in Joystick Gremlin.
     pub gremlin_file: bool,
+    /// Name given to a new profile (the wizard asks for one): its file name until saved.
+    pub name: Option<String>,
     undo: Vec<Profile>,
     redo: Vec<Profile>,
     last_checkpoint: Option<Instant>,
@@ -36,6 +38,7 @@ impl LoadedProfile {
             path,
             dirty: false,
             gremlin_file,
+            name: None,
             undo: Vec::new(),
             redo: Vec::new(),
             last_checkpoint: None,
@@ -89,10 +92,14 @@ impl LoadedProfile {
     }
 
     pub fn file_name(&self) -> String {
-        self.path.as_ref().and_then(|p| p.file_name()).map_or_else(
-            || "untitled.xml".into(),
-            |n| n.to_string_lossy().into_owned(),
-        )
+        match (&self.path, &self.name) {
+            (Some(p), _) => p.file_name().map_or_else(
+                || "untitled.xml".into(),
+                |n| n.to_string_lossy().into_owned(),
+            ),
+            (None, Some(name)) => format!("{name}.xml"),
+            (None, None) => "untitled.xml".into(),
+        }
     }
 }
 

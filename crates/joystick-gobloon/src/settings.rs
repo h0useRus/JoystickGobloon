@@ -66,6 +66,9 @@ pub struct Settings {
     pub experimental: bool,
     /// Axis calibrations: device GUID -> axis slot ("1".."8") -> values.
     pub calibration: BTreeMap<String, BTreeMap<String, AxisCalibration>>,
+    /// Button and hat debounce per device GUID, in milliseconds (see
+    /// `gob_input::InputService::set_debounce`).
+    pub debounce: BTreeMap<String, u16>,
     /// Default LED colors: device GUID -> LEDs, set when a profile that changed that
     /// device's LEDs stops (VKB keeps written colors until the stick restarts).
     pub leds: BTreeMap<String, DeviceLeds>,
@@ -155,6 +158,13 @@ pub struct AxisCalibration {
     pub center_high: i32,
     pub high: i32,
     pub with_center: bool,
+    /// Jitter threshold, tenths of a percent of the travel; written only when set.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub jitter: u16,
+}
+
+fn is_zero(v: &u16) -> bool {
+    *v == 0
 }
 
 impl From<gob_input::Calibration> for AxisCalibration {
@@ -165,6 +175,7 @@ impl From<gob_input::Calibration> for AxisCalibration {
             center_high: c.center_high,
             high: c.high,
             with_center: c.with_center,
+            jitter: c.jitter,
         }
     }
 }
@@ -177,6 +188,7 @@ impl From<AxisCalibration> for gob_input::Calibration {
             center_high: c.center_high,
             high: c.high,
             with_center: c.with_center,
+            jitter: c.jitter,
         }
     }
 }
@@ -232,6 +244,7 @@ impl Default for Settings {
             curve_right_click_invert: true,
             warn_gremlin_format: true,
             calibration: BTreeMap::new(),
+            debounce: BTreeMap::new(),
             leds: BTreeMap::new(),
             experimental: false,
             multi_instance: false,

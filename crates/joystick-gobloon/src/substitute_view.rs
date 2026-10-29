@@ -129,6 +129,7 @@ impl SubstituteDialog {
         let keep = i18n.tr("subst-keep");
         let mut apply = false;
         egui::Window::new(i18n.tr("subst-title"))
+            .frame(style::window_frame(ctx))
             .open(open)
             .collapsible(false)
             .resizable(false)
@@ -168,35 +169,31 @@ impl SubstituteDialog {
                             ui.end_row();
                         }
                     });
-                ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    let unmapped = self.rows.iter().any(|r| r.target.is_none());
-                    let auto = ui
-                        .add_enabled(
-                            unmapped,
-                            egui::Button::new(format!(
-                                "{}  {}",
-                                icon::MAGIC_WAND,
-                                i18n.tr("subst-auto")
-                            )),
-                        )
-                        .on_hover_text(i18n.tr("subst-auto-tip"));
-                    if auto.clicked() {
+                let unmapped = self.rows.iter().any(|r| r.target.is_none());
+                let any = self.rows.iter().any(|r| r.target.is_some());
+                let buttons = [
+                    style::DialogButton::primary(format!(
+                        "{}  {}",
+                        icon::CHECK,
+                        i18n.tr("subst-apply")
+                    ))
+                    .enabled(any),
+                    style::DialogButton::secondary(format!(
+                        "{}  {}",
+                        icon::MAGIC_WAND,
+                        i18n.tr("subst-auto")
+                    ))
+                    .enabled(unmapped)
+                    .tip(i18n.tr("subst-auto-tip")),
+                ];
+                match style::dialog_buttons(ui, &buttons) {
+                    Some(0) => apply = true,
+                    Some(_) => {
                         let mapped = self.auto_map();
                         log::info!("map controls: auto-mapped {mapped} device(s) by name");
                     }
-                    let any = self.rows.iter().any(|r| r.target.is_some());
-                    apply = ui
-                        .add_enabled(
-                            any,
-                            egui::Button::new(format!(
-                                "{}  {}",
-                                icon::CHECK,
-                                i18n.tr("subst-apply")
-                            )),
-                        )
-                        .clicked();
-                });
+                    None => {}
+                }
             });
         if !apply {
             return None;

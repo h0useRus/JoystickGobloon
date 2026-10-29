@@ -181,9 +181,35 @@ kind-response-curve = Response curve
 kind-change-mode = Change mode
 kind-tempo = Short / long press
 kind-description = Description
+edit-rename = Click to rename
+edit-description-hint = Click to write a note
+edit-click-to-edit = Click to edit
 
 # Files and modes
 action-new = New profile
+wizard-open = New profile with the wizard: map each controller to a virtual joystick
+wizard-title = New profile wizard
+wizard-name = Profile name
+wizard-name-hint = e.g. My flight setup
+wizard-create = Create
+wizard-devices = Pick the virtual joystick each controller maps to. Every axis, button and hat gets a Map to vJoy.
+wizard-none = Not mapped
+wizard-taken = Another controller maps to this virtual joystick
+wizard-no-vjoy = No virtual joysticks yet: add them on the Virtual joysticks page first
+wizard-fewer = { $vjoy } has fewer inputs than { $device }: { $missing } will not be mapped
+wizard-axes = { $n ->
+    [one] 1 axis
+   *[other] { $n } axes
+}
+wizard-buttons = { $n ->
+    [one] 1 button
+   *[other] { $n } buttons
+}
+wizard-hats = { $n ->
+    [one] 1 hat
+   *[other] { $n } hats
+}
+status-wizard = Profile created: { $name }
 action-save-as = Save as…
 status-new = New profile
 unsaved-title = Unsaved changes
@@ -235,7 +261,19 @@ vjoy-axis-8 = Dial
 vjoy-button-n = Button { $n }
 vjoy-hat-n = Hat { $n }
 vjoy-quickmap = Pick an output
-vjoy-quickmap-used = Already used by another input
+output-profile = Profile: { $name }
+output-free = { $output }: free
+output-used = { $output }: { $n ->
+    [one] used by 1 input
+   *[other] used by { $n } inputs
+}
+output-conflict = Inputs that run at the same time write it
+output-more = …and { $n } more
+output-legend-used = Used
+output-legend-conflict = Conflict
+output-legend-tip = Show these controls (the profile does not change)
+output-same-input = Another action of this input already writes it
+output-same-input-clash = Another action of this input writes the same output: pick a different one
 vjoy-absolute = Absolute
 vjoy-relative = Relative
 vjoy-speed = Speed
@@ -545,6 +583,10 @@ calibration-center = Calibrate center
 calibration-center-tip = Let the stick rest, wiggle it slightly around the center, then click again
 calibration-extrema = Calibrate extrema
 calibration-extrema-tip = Move the axis to both ends, then click again
+calibration-jitter = Jitter filter
+calibration-jitter-tip = Ignores changes smaller than this share of the travel, for worn axes that jitter. No delay; the ends and the center are always reached. The line on the bar shows what is sent. Save to apply
+calibration-debounce = Debounce
+calibration-debounce-tip = Buttons and hats of this device: after a press or release, further changes within this time are ignored, for switches that bounce. The first change passes at once
 calibration-in-window = The calibration is open in its own window.
 
 # Device info

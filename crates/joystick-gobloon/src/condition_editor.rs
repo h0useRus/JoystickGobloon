@@ -207,7 +207,7 @@ impl Editor<'_> {
                     {
                         new_type = Some(t);
                     }
-                    ui.add(egui::DragValue::new(input).range(1..=128).prefix("#"));
+                    ui.add(style::Spin::new(input).range(1..=128).prefix("#"));
                 }
                 if let Some(t) = new_type {
                     for (_, ty, _) in inputs.iter_mut() {
@@ -223,12 +223,12 @@ impl Editor<'_> {
             } => {
                 ui.label(RichText::new(icon::GAME_CONTROLLER).size(style::ICON_SIZE))
                     .on_hover_text(self.i18n.tr("cond-vjoy"));
-                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy #"));
+                ui.add(style::Spin::new(device).range(1..=16).prefix("vJoy #"));
                 if let Some(t) = type_combo(ui, self, ("cond-type", &salt), *input_type) {
                     *input_type = t;
                     cond.comparator = Condition::default_comparator(t);
                 }
-                ui.add(egui::DragValue::new(input).range(1..=128).prefix("#"));
+                ui.add(style::Spin::new(input).range(1..=128).prefix("#"));
             }
             ConditionSource::Keyboard(keys) => {
                 ui.label(RichText::new(icon::KEYBOARD).size(style::ICON_SIZE))
@@ -316,17 +316,17 @@ fn comparator_editor(
             ui.label(RichText::new(icon::ARROWS_OUT_LINE_HORIZONTAL).size(style::ICON_SIZE))
                 .on_hover_text(editor.i18n.tr("cond-range"));
             ui.add(
-                egui::DragValue::new(lower)
+                style::Spin::new(lower)
                     .range(-1.0..=1.0)
-                    .speed(0.01)
-                    .fixed_decimals(2),
+                    .step(0.01)
+                    .decimals(2),
             );
             ui.label("…");
             ui.add(
-                egui::DragValue::new(upper)
+                style::Spin::new(upper)
                     .range(-1.0..=1.0)
-                    .speed(0.01)
-                    .fixed_decimals(2),
+                    .step(0.01)
+                    .decimals(2),
             );
             if *lower > *upper {
                 std::mem::swap(lower, upper);

@@ -1,8 +1,9 @@
 //! Device calibration (like Gremlin's): per axis low / center / high in raw DirectInput
-//! units, captured by moving the axis or typed in. Saved calibrations are applied by
-//! gob-input, so every page and the engine see calibrated values.
+//! units, captured by moving the axis or typed in. Also the filters for worn hardware: a jitter
+//! threshold per axis (saved with its calibration) and a debounce time for the device's buttons
+//! and hats. Both are applied by gob-input, so every page and the engine see the result.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Vec2};
 use gob_i18n::I18n;
@@ -12,6 +13,9 @@ use crate::style::{self, icon};
 
 const RAW_MIN: i32 = -32768;
 const RAW_MAX: i32 = 32767;
+/// What the switches start at: 1 % of the travel, 20 ms.
+const DEFAULT_JITTER: u16 = 10;
+const DEFAULT_DEBOUNCE_MS: u16 = 20;
 /// Width of the button column on the right.
 const BUTTONS: f32 = 170.0;
 
@@ -38,6 +42,8 @@ pub struct Output {
     pub toggle_window: bool,
     /// Calibrations to save and apply.
     pub save: Vec<(String, u8, Calibration)>,
+    /// A device's new debounce time (ms), applied and saved at once.
+    pub debounce: Option<(String, u16)>,
 }
 
 impl CalibrationView {
@@ -47,6 +53,7 @@ impl CalibrationView {
         i18n: &I18n,
         devices: &[DeviceState],
         saved: &Calibrations,
+        debounce: &BTreeMap<String, u16>,
         detached: bool,
     ) -> Output {
         let mut out = Output::default();
@@ -98,6 +105,27 @@ impl CalibrationView {
                         }
                     }
                 });
+            ui.separator();
+            // Buttons and hats of the whole device.
+            let saved = debounce.get(&guid).copied().unwrap_or(0);
+            let mut on = saved > 0;
+            let mut ms = if on { saved } else { DEFAULT_DEBOUNCE_MS };
+            ui.label(RichText::new(icon::WAVEFORM).size(style::ICON_SIZE))
+                .on_hover_text(i18n.tr("calibration-debounce-tip"));
+            let switched = ui
+                .add(style::switch(&mut on, i18n.tr("calibration-debounce")))
+                .on_hover_text(i18n.tr("calibration-debounce-tip"))
+                .changed();
+            let value = style::Spin::new(&mut ms)
+                .range(1..=gob_input::MAX_DEBOUNCE_MS)
+                .suffix(" ms");
+            let edited = ui
+                .add_enabled(on, value)
+                .on_hover_text(i18n.tr("calibration-debounce-tip"))
+                .changed();
+            if switched || edited {
+                out.debounce = Some((guid.clone(), if on { ms } else { 0 }));
+            }
         });
         ui.add_space(4.0);
         let Some(device) = physical.iter().find(|d| d.info.guid == guid) else {
@@ -126,12 +154,14 @@ impl CalibrationView {
                         .filter(|(k, _)| *k == key)
                         .map(|(_, c)| *c);
                     let mut action = None;
+                    let sent = device.axes[usize::from(slot) - 1];
                     axis_block(
                         ui,
                         i18n,
                         width,
                         slot,
                         raw,
+                        sent,
                         &mut cal,
                         unsaved,
                         capture,
@@ -211,6 +241,7 @@ fn axis_block(
     width: f32,
     slot: u8,
     raw: i32,
+    sent: f32,
     cal: &mut Calibration,
     unsaved: bool,
     capture: Option<Capture>,
@@ -279,9 +310,16 @@ fn axis_block(
                 *action = Some(Action::Save);
             }
         });
-        // Calibrated output | Calibrate center.
+        // Calibrated output, with what the jitter threshold lets through | Calibrate center.
         ui.horizontal(|ui| {
-            bar(ui, bar_w, (cal.apply(raw) + 1.0) / 2.0, None, accent);
+            let r = bar(ui, bar_w, (cal.apply(raw) + 1.0) / 2.0, None, accent);
+            if cal.jitter > 0 {
+                let x = r.left() + r.width() * ((sent + 1.0) / 2.0).clamp(0.0, 1.0);
+                ui.painter().line_segment(
+                    [Pos2::new(x, r.top() - 2.0), Pos2::new(x, r.bottom() + 2.0)],
+                    egui::Stroke::new(2.0_f32, ui.visuals().text_color()),
+                );
+            }
             let on = matches!(capture, Some(Capture::Center { .. }));
             let center = egui::Button::new(i18n.tr("calibration-center"))
                 .selected(on)
@@ -309,7 +347,10 @@ fn axis_block(
                 let rect = Rect::from_min_size(Pos2::new(left, row.top()), Vec2::new(w, h));
                 ui.put(
                     rect,
-                    egui::DragValue::new(v).range(RAW_MIN..=RAW_MAX).speed(16.0),
+                    style::Spin::new(v)
+                        .range(RAW_MIN..=RAW_MAX)
+                        .step(16.0)
+                        .width(w),
                 );
             }
             let on = matches!(capture, Some(Capture::Extrema { .. }));
@@ -324,11 +365,32 @@ fn axis_block(
                 *action = Some(Action::Extrema);
             }
         });
+        // Jitter threshold: 0 = off .. MAX_JITTER tenths of a percent.
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::WAVE_SINE).size(style::ICON_SIZE))
+                .on_hover_text(i18n.tr("calibration-jitter-tip"));
+            let mut on = cal.jitter > 0;
+            let tip = i18n.tr("calibration-jitter-tip");
+            if ui
+                .add(style::switch(&mut on, i18n.tr("calibration-jitter")))
+                .on_hover_text(&tip)
+                .changed()
+            {
+                cal.jitter = if on { DEFAULT_JITTER } else { 0 };
+            }
+            let mut pct = f32::from(if on { cal.jitter } else { DEFAULT_JITTER }) / 10.0;
+            let max = f32::from(gob_input::MAX_JITTER) / 10.0;
+            ui.spacing_mut().slider_width = 200.0;
+            let r = ui.add_enabled_ui(on, |ui| style::slider(ui, &mut pct, 0.1..=max, 0.1, " %"));
+            if r.inner.on_hover_text(&tip).changed() {
+                cal.jitter = (pct * 10.0).round() as u16;
+            }
+        });
     });
 }
 
 /// Horizontal bar filled to `t` (0..1); `range` marks the calibration on the raw scale.
-fn bar(ui: &mut egui::Ui, width: f32, t: f32, range: Option<&Calibration>, color: Color32) {
+fn bar(ui: &mut egui::Ui, width: f32, t: f32, range: Option<&Calibration>, color: Color32) -> Rect {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 22.0), Sense::hover());
     let painter = ui.painter();
     painter.rect_filled(rect, 4, ui.visuals().extreme_bg_color);
@@ -356,4 +418,5 @@ fn bar(ui: &mut egui::Ui, width: f32, t: f32, range: Option<&Calibration>, color
             );
         }
     }
+    rect
 }

@@ -181,9 +181,35 @@ kind-response-curve = Curva de respuesta
 kind-change-mode = Cambiar modo
 kind-tempo = Pulsación corta / larga
 kind-description = Descripción
+edit-rename = Haz clic para cambiar el nombre
+edit-description-hint = Haz clic para escribir una nota
+edit-click-to-edit = Haz clic para editar
 
 # Files and modes
 action-new = Nuevo perfil
+wizard-open = Nuevo perfil con el asistente: cada mando a un joystick virtual
+wizard-title = Asistente de nuevo perfil
+wizard-name = Nombre del perfil
+wizard-name-hint = p. ej. Mi configuración de vuelo
+wizard-create = Crear
+wizard-devices = Elige el joystick virtual de cada mando. Cada eje, botón y hat recibe un Map to vJoy.
+wizard-none = Sin asignar
+wizard-taken = Otro mando ya usa este joystick virtual
+wizard-no-vjoy = Aún no hay joysticks virtuales: añádelos primero en la página Joysticks virtuales
+wizard-fewer = { $vjoy } tiene menos entradas que { $device }: { $missing } quedan sin asignar
+wizard-axes = { $n ->
+    [one] 1 eje
+   *[other] { $n } ejes
+}
+wizard-buttons = { $n ->
+    [one] 1 botón
+   *[other] { $n } botones
+}
+wizard-hats = { $n ->
+    [one] 1 hat
+   *[other] { $n } hats
+}
+status-wizard = Perfil creado: { $name }
 action-save-as = Guardar como…
 status-new = Nuevo perfil
 unsaved-title = Cambios sin guardar
@@ -235,7 +261,19 @@ vjoy-axis-8 = Rueda
 vjoy-button-n = Botón { $n }
 vjoy-hat-n = Cruceta { $n }
 vjoy-quickmap = Elegir una salida
-vjoy-quickmap-used = Ya la usa otra entrada
+output-profile = Perfil: { $name }
+output-free = { $output }: libre
+output-used = { $output }: { $n ->
+    [one] usada por 1 entrada
+   *[other] usada por { $n } entradas
+}
+output-conflict = La escriben entradas activas a la vez
+output-more = …y { $n } más
+output-legend-used = En uso
+output-legend-conflict = Conflicto
+output-legend-tip = Mostrar estos controles (el perfil no cambia)
+output-same-input = Otra acción de esta entrada ya la escribe
+output-same-input-clash = Otra acción de esta entrada escribe la misma salida: elige otra
 vjoy-absolute = Absoluto
 vjoy-relative = Relativo
 vjoy-speed = Velocidad
@@ -545,6 +583,10 @@ calibration-center = Calibrar el centro
 calibration-center-tip = Deje el joystick en reposo, muévalo ligeramente alrededor del centro y vuelva a hacer clic
 calibration-extrema = Calibrar los extremos
 calibration-extrema-tip = Mueva el eje a ambos extremos y vuelva a hacer clic
+calibration-jitter = Filtro de temblor
+calibration-jitter-tip = Ignora los cambios menores que esta parte del recorrido, para ejes gastados que tiemblan. Sin retardo; los extremos y el centro siempre se alcanzan. La línea en la barra muestra lo que se envía. Guarda para aplicarlo
+calibration-debounce = Antirrebote
+calibration-debounce-tip = Botones y hats de este dispositivo: tras pulsar o soltar, se ignoran los cambios durante este tiempo, para interruptores que rebotan. El primer cambio pasa al instante
 calibration-in-window = La calibración está abierta en su propia ventana.
 
 # Device info

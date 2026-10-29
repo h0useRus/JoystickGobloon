@@ -1,4 +1,6 @@
-# Checks every pull request and every push to a work branch (dev and main run release.yml).
+# Checks every push to a work branch (dev and main run release.yml) and pull requests from forks.
+# A pull request from a branch of this repository shows the checks of that branch's push run, so
+# the same commit is not checked twice.
 name: CI
 
 on:
@@ -10,8 +12,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # No debug info: less to compile, link and cache. Same as release.yml.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_TERM_COLOR: always
+
 jobs:
   check:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -24,6 +32,7 @@ jobs:
       # Installs the Rust version pinned in rust-toolchain.toml.
       - name: Rust toolchain
         run: rustup toolchain install && rustup show
+      # Each branch keeps its own cache: the pushes after the first one build only what changed.
       - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --all --check
@@ -40,14 +49,16 @@ jobs:
 
   # The Linux version: the same code must build and pass there too.
   linux:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # Cached .deb packages instead of apt-get update + download on every run.
       - name: System libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev libgtk-3-dev \
-            libxdo-dev libayatana-appindicator3-dev libudev-dev libssl-dev libxkbcommon-dev libwayland-dev
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: pkg-config libasound2-dev libgtk-3-dev libxdo-dev libayatana-appindicator3-dev libudev-dev libssl-dev libxkbcommon-dev libwayland-dev
+          version: 1
       # Installs the Rust version pinned in rust-toolchain.toml.
       - name: Rust toolchain
         run: rustup toolchain install && rustup show

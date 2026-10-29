@@ -1,11 +1,13 @@
 //! Linux desktop integration: XDG folders, a socket for the single instance, XDG autostart,
-//! CJK fonts through fontconfig, the window and the tray (GTK thread), device access (the udev
+//! CJK fonts through fontconfig, light/dark from the desktop portal, the window and the tray
+//! (GTK thread), device access (the udev
 //! rule, gob-uinput's `access`), updates of the AppImage. The rest is shared with `none.rs`.
 
 mod autostart;
 mod fonts;
 mod instance;
 mod keys;
+mod theme;
 mod update;
 mod window;
 
@@ -107,6 +109,15 @@ impl super::Desktop for Desktop {
 
     fn key_name(key: Key) -> String {
         keys::name(key).unwrap_or_else(|| super::key_code(key))
+    }
+
+    fn dark_mode() -> Option<bool> {
+        theme::dark_mode()
+    }
+
+    /// winit reports no theme changes on X11: the portal's do.
+    fn watch_dark_mode(changed: Box<dyn Fn(Option<bool>) + Send>) {
+        theme::watch(changed);
     }
 
     fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Self::Window> {

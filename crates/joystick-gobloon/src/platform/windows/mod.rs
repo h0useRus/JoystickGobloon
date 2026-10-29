@@ -68,6 +68,13 @@ impl super::Desktop for Desktop {
         keys::name(key)
     }
 
+    fn dark_mode() -> Option<bool> {
+        window::dark_mode()
+    }
+
+    /// winit reports Windows' theme changes itself.
+    fn watch_dark_mode(_changed: Box<dyn Fn(Option<bool>) + Send>) {}
+
     fn main_window(cc: &eframe::CreationContext<'_>) -> Option<window::Window> {
         window::main_window(cc)
     }

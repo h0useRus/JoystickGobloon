@@ -16,6 +16,7 @@ mod logfile;
 mod macro_editor;
 mod modes_view;
 mod modifiers_view;
+mod output_marks;
 mod platform;
 mod profile_view;
 mod settings;
@@ -28,6 +29,7 @@ mod viewer_view;
 mod virtual_setup;
 mod vjoy_config_view;
 mod vjoy_view;
+mod wizard_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
 /// Version shown to users, from build.rs: what CI sets in `JOYSTICK_GOBLOON_VERSION`
