@@ -32,6 +32,20 @@ impl Filtered {
         }
     }
 
+    /// Follows a device whose layout changed while connected (Linux: all buttons became
+    /// readable); returns whether it did. New buttons and hats start released and centered.
+    pub fn follow_layout(&mut self, state: &DeviceState) -> bool {
+        if self.out.info == state.info {
+            return false;
+        }
+        self.out.info.clone_from(&state.info);
+        self.out.buttons.resize(state.buttons.len(), false);
+        self.out.hats.resize(state.hats.len(), None);
+        self.buttons_held.resize(state.buttons.len(), None);
+        self.hats_held.resize(state.hats.len(), None);
+        true
+    }
+
     /// Takes this device's jitter thresholds from `calibrations` and its debounce time.
     pub fn configure(&mut self, calibrations: &Calibrations, debounce_ms: u16) {
         for (i, j) in self.jitter.iter_mut().enumerate() {
@@ -173,6 +187,28 @@ mod tests {
         let mut sent = Vec::new();
         f.update(&s, at, &mut |e| sent.push(e));
         sent
+    }
+
+    #[test]
+    fn a_new_layout_brings_its_buttons_through() {
+        let mut f = filtered(0, 0);
+        let mut s = device();
+        assert!(!f.follow_layout(&s));
+        s.info.buttons = 3;
+        s.buttons = vec![false, false, true];
+        assert!(f.follow_layout(&s));
+        assert_eq!(f.out.info.buttons, 3);
+        let mut sent = Vec::new();
+        assert!(f.update(&s, Instant::now(), &mut |e| sent.push(e)));
+        assert_eq!(f.out.buttons, vec![false, false, true]);
+        assert!(matches!(
+            sent.as_slice(),
+            [InputEvent::Button {
+                id: 3,
+                pressed: true,
+                ..
+            }]
+        ));
     }
 
     #[test]
