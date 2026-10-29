@@ -207,6 +207,11 @@ impl super::Desktop for Desktop {
         gob_uinput::access::install()
     }
 
+    /// The stick's hidraw node: buttons past 80 come from there.
+    fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String> {
+        gob_uinput::access::install_raw(vendor_id, product_id)
+    }
+
     /// Started from an AppImage (it updates as one file).
     fn installed_copy(_exe_dir: &Path) -> bool {
         update::installed_copy()

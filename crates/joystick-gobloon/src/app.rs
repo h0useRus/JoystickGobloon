@@ -1203,6 +1203,17 @@ impl JoystickGobloonApp {
         {
             self.hidhide_view.set_device_hidden(&d.info, hide);
         }
+        match self.devices_view.all_buttons_result.take() {
+            Some(Ok(())) => {
+                log::info!("all buttons allowed");
+                self.status = self.i18n.tr("all-buttons-allowed");
+            }
+            Some(Err(e)) => {
+                let text = self.i18n.trf("all-buttons-error", &[("error", e.into())]);
+                self.error(text);
+            }
+            None => {}
+        }
         match self.devices_view.keyboard_result.take() {
             Some((allow, Ok(()))) => {
                 log::info!(

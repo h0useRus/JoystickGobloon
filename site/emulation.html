@@ -267,7 +267,7 @@
               <li>The devices appear when you activate a profile and disappear when you stop it. Games see them as <span class="term">Joystick Gobloon Joystick 1</span>, <span class="term">Joystick Gobloon Joystick 2</span> and so on.</li>
             </ol>
             <p>The same page also adds <strong>virtual gamepads</strong>, up to four, named <span class="term">Joystick Gobloon Gamepad 1</span> and so on. They have the layout of an Xbox 360 controller, so games, Steam and Proton take them for one: a game that only understands gamepads can be played with a stick through <a href="learn.html#map-to-gamepad">Map to gamepad</a>. Windows has no virtual gamepads yet.</p>
-            <p>The Linux kernel reports at most 80 buttons per physical device. A stick with more buttons can be split into several virtual HID devices in its vendor's tool.</p>
+            <p>The Linux kernel passes on at most 80 buttons of a stick. For a stick with more, its tab on the Devices page offers <span class="term">Read all buttons</span>: after your password, Joystick Gobloon reads every button from the stick's raw HID device, numbered as on Windows, so profiles match. Programs that read raw devices, such as Steam or Proton, can then read that stick too, even while it is hidden: turn off Steam Input for it.</p>
           </article>
 
           <article class="learn-action" id="test-output">

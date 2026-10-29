@@ -391,6 +391,8 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
         }
 
         let mut lost = false;
+        // A device's layout changed: the snapshot is built anew.
+        let mut relayout = false;
         for dev in &mut devices {
             let at = Instant::now();
             let id = dev.state().info.guid.clone();
@@ -407,17 +409,22 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
                 lost = true;
                 continue;
             }
+            if filter.follow_layout(dev.state()) {
+                relayout = true;
+                changed = true;
+            }
             changed |= filter.update(dev.state(), at, &mut |event| tx.send(event, at));
             // Raw values matter to the calibration page even when the scaled value stays.
             changed |= dev.previous().raw != dev.state().raw;
         }
-        if lost {
-            next_scan = Instant::now(); // rescan right away
+        if lost || relayout {
+            next_scan = Instant::now(); // rescan (and announce) right away
             announce = true;
         }
         if changed {
             let mut snapshot = shared.snapshot.write().unwrap_or_else(|e| e.into_inner());
-            let same_devices = snapshot.len() == devices.len()
+            let same_devices = !relayout
+                && snapshot.len() == devices.len()
                 && snapshot
                     .iter()
                     .zip(&devices)

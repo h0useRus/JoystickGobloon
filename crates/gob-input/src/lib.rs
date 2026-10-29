@@ -35,6 +35,10 @@ pub struct DeviceInfo {
     /// on Linux the uinput devices named "Joystick Gobloon ..." (a gamepad has a real Xbox
     /// controller's ids).
     pub own: bool,
+    /// Buttons the device has but the system does not pass on without further access (Linux:
+    /// the kernel gives evdev at most 80 buttons; the rest need read access to the raw HID
+    /// device). 0 when every button is read.
+    pub unread_buttons: usize,
 }
 
 impl DeviceInfo {
