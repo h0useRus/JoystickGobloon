@@ -7,6 +7,8 @@
 //! Keyboards are not in that rule: reading every keyboard is what keyboard bindings need, but
 //! any program of the user could then read what is typed. Users who want keyboard bindings opt
 //! in with a rule of its own ([`KEYBOARD_RULE`], [`install_keyboard`]) or the `input` group.
+//! Sticks with more than 80 buttons get read access to their raw HID node one by one
+//! ([`install_raw`]).
 
 use std::io;
 use std::path::Path;
@@ -34,6 +36,16 @@ pub const KEYBOARD_RULE: &str = "\
 SUBSYSTEM==\"input\", KERNEL==\"event*\", ENV{ID_INPUT_KEYBOARD}==\"1\", TAG+=\"uaccess\"
 ";
 
+/// Rules giving the user at the seat read access to the raw HID node (hidraw) of single sticks,
+/// one line per stick: the kernel passes at most 80 buttons on to evdev, the rest are read
+/// from there. Per stick, never every hidraw node: keyboards have one too.
+pub const RAW_RULE_PATH: &str = "/etc/udev/rules.d/70-joystick-gobloon-hidraw.rules";
+
+const RAW_RULE_HEADER: &str = "\
+# Joystick Gobloon: the user at the seat may read the raw HID device of these sticks, for their
+# buttons past 80 (allowed per stick in Joystick Gobloon).
+";
+
 /// Our own virtual devices start with this name; they are not the user's keyboards.
 const OWN_PREFIX: &str = "Joystick Gobloon";
 
@@ -41,11 +53,39 @@ const OWN_PREFIX: &str = "Joystick Gobloon";
 const INSTALL_SCRIPT: &str = "printf '%s' \"$1\" > \"$2\" \
     && udevadm control --reload-rules \
     && udevadm trigger --action=change --subsystem-match=misc --sysname-match=uinput \
-    && udevadm trigger --action=change --subsystem-match=input";
+    && udevadm trigger --action=change --subsystem-match=input \
+    && udevadm trigger --action=change --subsystem-match=hidraw";
 
 /// Deletes the rule file `$1` and has udev apply the change. Access the user already got stays
 /// until the device is connected again (udev does not take `uaccess` back on a change event).
-const REMOVE_SCRIPT: &str = "rm -f \"$1\"     && udevadm control --reload-rules     && udevadm trigger --action=change --subsystem-match=input";
+const REMOVE_SCRIPT: &str = "rm -f \"$1\" \
+    && udevadm control --reload-rules \
+    && udevadm trigger --action=change --subsystem-match=input";
+
+/// The hidraw rule line of the USB stick with these ids.
+pub fn raw_rule(vendor: u16, product: u16) -> String {
+    format!(
+        "SUBSYSTEM==\"hidraw\", ATTRS{{idVendor}}==\"{vendor:04x}\", \
+         ATTRS{{idProduct}}==\"{product:04x}\", TAG+=\"uaccess\"\n"
+    )
+}
+
+/// The hidraw rule file `current` with the stick's line added (the header first when new).
+fn with_raw_rule(current: &str, vendor: u16, product: u16) -> String {
+    let line = raw_rule(vendor, product);
+    let mut text = if current.trim().is_empty() {
+        RAW_RULE_HEADER.to_string()
+    } else {
+        current.to_string()
+    };
+    if !text.lines().any(|l| format!("{l}\n") == line) {
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str(&line);
+    }
+    text
+}
 
 /// Whether the user lacks access the rule would give: `/dev/uinput` cannot be opened for
 /// writing, or a game controller's node cannot be read. False with the rule installed (a
@@ -129,6 +169,14 @@ pub fn remove_keyboard() -> Result<(), String> {
     pkexec(&[REMOVE_SCRIPT, "sh", KEYBOARD_RULE_PATH])
 }
 
+/// Lets the user read the raw HID node of the USB stick with these ids, like [`install`]: adds
+/// its line to the hidraw rule file (others stay).
+pub fn install_raw(vendor: u16, product: u16) -> Result<(), String> {
+    let current = std::fs::read_to_string(RAW_RULE_PATH).unwrap_or_default();
+    let text = with_raw_rule(&current, vendor, product);
+    pkexec(&[INSTALL_SCRIPT, "sh", &text, RAW_RULE_PATH])
+}
+
 /// Runs `/bin/sh -c <args>` as root through pkexec.
 fn pkexec(args: &[&str]) -> Result<(), String> {
     let output = Command::new("pkexec")
@@ -158,6 +206,23 @@ mod tests {
             !RULE.contains("ID_INPUT_KEYBOARD"),
             "keyboards stay private"
         );
+    }
+
+    #[test]
+    fn raw_rules_are_per_stick_and_added_once() {
+        let line = raw_rule(0x231d, 0x0200);
+        assert_eq!(
+            line,
+            "SUBSYSTEM==\"hidraw\", ATTRS{idVendor}==\"231d\", ATTRS{idProduct}==\"0200\", \
+             TAG+=\"uaccess\"\n"
+        );
+        let one = with_raw_rule("", 0x231d, 0x0200);
+        assert!(one.starts_with('#'));
+        assert!(one.ends_with(&line));
+        assert_eq!(with_raw_rule(&one, 0x231d, 0x0200), one, "already there");
+        let two = with_raw_rule(&one, 0x231d, 0x0201);
+        assert_eq!(two.lines().filter(|l| !l.starts_with('#')).count(), 2);
+        assert_ne!(RAW_RULE_PATH, RULE_PATH);
     }
 
     #[test]
@@ -238,7 +303,7 @@ echo \"$@\" >> '{}'
         assert!(status.success());
         assert_eq!(std::fs::read_to_string(&rule).unwrap(), RULE);
         let calls = std::fs::read_to_string(&log).unwrap();
-        assert_eq!(calls.lines().count(), 3, "{calls}");
+        assert_eq!(calls.lines().count(), 4, "{calls}");
         assert!(calls.starts_with("control --reload-rules"), "{calls}");
         let _ = std::fs::remove_dir_all(&dir);
     }
