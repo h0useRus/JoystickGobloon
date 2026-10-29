@@ -60,6 +60,14 @@ impl super::Desktop for Desktop {
         true
     }
 
+    fn keyboard_access() -> super::KeyboardAccess {
+        super::KeyboardAccess::Open
+    }
+
+    fn set_keyboard_access(_allow: bool) -> Result<(), String> {
+        Ok(())
+    }
+
     fn held_keys() -> Option<Vec<Key>> {
         Some(keys::held())
     }

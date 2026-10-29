@@ -49,6 +49,14 @@ impl super::Desktop for Desktop {
         false
     }
 
+    fn keyboard_access() -> super::KeyboardAccess {
+        super::KeyboardAccess::Open
+    }
+
+    fn set_keyboard_access(_allow: bool) -> Result<(), String> {
+        Err("not supported on this system".into())
+    }
+
     fn held_keys() -> Option<Vec<Key>> {
         None
     }

@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Get started: your first joystick profile with the wizard | Joystick Gobloon</title>
+  <meta name="description" content="Set up Joystick Gobloon from scratch: what you need, why games should see virtual joysticks and not your real sticks, and how the new profile wizard maps every axis, button and hat to vJoy in one go.">
+  <link rel="canonical" href="https://h0userus.github.io/gobloon/start.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Joystick Gobloon">
+  <meta property="og:title" content="Get started: your first joystick profile with the wizard | Joystick Gobloon">
+  <meta property="og:description" content="Set up Joystick Gobloon from scratch: what you need, why games should see virtual joysticks and not your real sticks, and how the new profile wizard maps every axis, button and hat to vJoy in one go.">
+  <meta property="og:url" content="https://h0userus.github.io/gobloon/start.html">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Get started: your first joystick profile with the wizard | Joystick Gobloon">
+  <meta name="twitter:description" content="Set up Joystick Gobloon from scratch: what you need, why games should see virtual joysticks and not your real sticks, and how the new profile wizard maps every axis, button and hat to vJoy in one go.">
+  <meta name="twitter:image" content="https://h0userus.github.io/gobloon/img/og.jpg">
+  <meta name="author" content="Denis Ibragimov">
+  <meta name="theme-color" content="#131209">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "Get started with Joystick Gobloon: your first profile with the wizard",
+      "description": "Set up Joystick Gobloon from scratch: what you need, why games should see virtual joysticks and not your real sticks, and how the new profile wizard maps every axis, button and hat to vJoy in one go.",
+      "url": "https://h0userus.github.io/gobloon/start.html",
+      "inLanguage": "en",
+      "image": "https://h0userus.github.io/gobloon/img/og.jpg",
+      "author": {
+        "@type": "Person",
+        "name": "Denis Ibragimov",
+        "url": "https://github.com/h0useRus"
+      },
+      "about": {
+        "@id": "https://h0userus.github.io/gobloon/#app"
+      },
+      "isPartOf": {
+        "@id": "https://h0userus.github.io/gobloon/#website"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Joystick Gobloon",
+          "item": "https://h0userus.github.io/gobloon/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Get started",
+          "item": "https://h0userus.github.io/gobloon/start.html"
+        }
+      ]
+    }
+  ]
+}
+  </script>
+  <script>document.documentElement.classList.remove("no-js")</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <nav class="nav" aria-label="Main">
+    <a class="brand" href="index.html" aria-label="Joystick Gobloon home">
+      <img src="img/icon.svg" alt="" width="24" height="24">
+      Joystick Gobloon
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html#how">How it works</a></li>
+      <li><a href="start.html" aria-current="page">Get started</a></li>
+      <li><a href="learn.html">Learning</a></li>
+      <li><a href="emulation.html">Emulation</a></li>
+      <li><a href="index.html#platforms">Windows and Linux</a></li>
+      <li><a href="index.html#faq">FAQ</a></li>
+    </ul>
+    <a class="btn btn-primary btn-sm nav-cta" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
+      <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+      <span></span><span></span>
+    </button>
+  </nav>
+
+  <div class="menu" id="menu" aria-hidden="true">
+    <ul>
+      <li style="--i:0"><a href="index.html#features">Features</a></li>
+      <li style="--i:1"><a href="index.html#how">How it works</a></li>
+      <li style="--i:2"><a href="start.html" aria-current="page">Get started</a></li>
+      <li style="--i:3"><a href="learn.html">Learning</a></li>
+      <li style="--i:4"><a href="emulation.html">Emulation</a></li>
+      <li style="--i:5"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:6"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:7"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+    </ul>
+  </div>
+
+  <main id="main">
+    <header class="learn-hero">
+      <div class="wrap">
+        <p class="kicker">Get started</p>
+        <h1 class="gradient">Your first profile,<br>step by step</h1>
+        <p class="sub">What to have ready, why games should see virtual joysticks instead of your real sticks, and how the new profile wizard maps every axis, button and hat in one go.</p>
+      </div>
+    </header>
+
+    <div class="wrap learn">
+      <aside class="toc" aria-label="On this page">
+        <details>
+          <summary>On this page<i class="ph-bold ph-caret-down" aria-hidden="true"></i></summary>
+          <ul>
+          <li><a class="toc-group" href="#before">Before you start</a><ul>
+            <li><a href="#what-you-need">What you need</a></li>
+            <li><a href="#why-virtual">Why virtual joysticks</a></li>
+            <li><a href="#why-hide">Why hide the real sticks</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#virtual">Virtual joysticks first</a><ul>
+            <li><a href="#create-virtual">Create them</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#wizard">The new profile wizard</a><ul>
+            <li><a href="#open-wizard">Open it</a></li>
+            <li><a href="#wizard-steps">Fill it in</a></li>
+            <li><a href="#wizard-result">What it makes</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#finish">Finish the setup</a><ul>
+            <li><a href="#adjust">Make it yours</a></li>
+            <li><a href="#run">Hide, activate, bind</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#more">More</a><ul>
+            <li><a href="#other-ways">Other ways to start</a></li>
+            <li><a href="#wizard-trouble">When the wizard is stuck</a></li>
+          </ul></li>
+          </ul>
+        </details>
+      </aside>
+
+      <div class="learn-body">
+        <section class="learn-group" id="before" aria-labelledby="before-title">
+          <h2 id="before-title">Before you start</h2>
+          <article class="learn-action" id="what-you-need">
+            <h3><i class="ph ph-list-checks" aria-hidden="true"></i>What you need</h3>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Windows 10 or 11:</strong> the installer. It adds the signed vJoy and HidHide drivers when they are missing. The portable zip installs no drivers: run the installer once, or install vJoy 2.1.9.1 and HidHide yourself.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Linux:</strong> the AppImage. Make it executable, start it, and click <span class="term">Grant access</span> on the Devices page once. No driver is needed.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Your controllers plugged in.</strong> The wizard lists only the controllers attached right now.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>A Joystick Gremlin profile?</strong> You can skip the wizard and import it instead; see <a href="#other-ways">Other ways to start</a>.</span></li>
+            </ul>
+          </article>
+
+          <article class="learn-action" id="why-virtual">
+            <h3><i class="ph ph-joystick" aria-hidden="true"></i>Why virtual joysticks</h3>
+            <p>Joystick Gobloon reads your real sticks and writes to <strong>virtual joysticks</strong>, and the game binds those. Everything the profile does happens in between: response curves, modes, modifiers, macros, a long press that sends a different button than a short one.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Change what a button does in the profile, and the game's bindings stay as they are.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>A replaced or repaired stick needs no new bindings in the game: map it to the same virtual joystick.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Several sticks can feed one virtual joystick, or one stick can be split over several.</span></li>
+            </ul>
+            <p>The simplest start is one virtual joystick per real stick, which is exactly what the wizard sets up. <a href="emulation.html#how-it-works">How it works</a> shows the whole chain.</p>
+          </article>
+
+          <article class="learn-action" id="why-hide">
+            <h3><i class="ph ph-eye-slash" aria-hidden="true"></i>Why hide the real sticks</h3>
+            <p>A game sees every controller it can find. With the real stick and its virtual joystick both visible, one movement arrives twice. Worse, when you bind controls the game may take the real stick instead of the virtual one, and then your curves, modes and modifiers do nothing for that control.</p>
+            <p><strong>Hiding</strong> fixes that: games no longer see the real sticks, while Joystick Gobloon still reads them. On Windows the HidHide driver hides them for every program; on Linux Joystick Gobloon reads them exclusively while it runs. <a href="emulation.html#hiding">Hiding devices</a> explains both, and which programs can still see a hidden stick.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="virtual" aria-labelledby="virtual-title">
+          <h2 id="virtual-title">Virtual joysticks first</h2>
+          <article class="learn-action" id="create-virtual">
+            <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Create them</h3>
+            <p>The wizard maps each stick onto a virtual joystick that already exists, so create those first, on the <span class="term">Virtual joysticks</span> page in the left rail.</p>
+            <ol class="numbered">
+              <li>Add one device per stick with the <span class="term">+</span> next to the device tabs.</li>
+              <li>Give each one at least as many axes, buttons and hats as its stick has. Then the wizard can map every input; what does not fit stays unmapped.</li>
+              <li>Press <span class="term">Create</span>. On Windows, vJoy asks for administrator rights once per change; on Linux nothing is asked.</li>
+            </ol>
+            <p>A vJoy device has up to 8 axes, 128 buttons and 4 hats; on Linux it is 8 axes, 95 buttons and 4 hats. Every setting, the tester and Linux gamepads are on <a href="emulation.html#virtual">Virtual joysticks</a>.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="wizard" aria-labelledby="wizard-title">
+          <h2 id="wizard-title">The new profile wizard</h2>
+          <article class="learn-action" id="open-wizard">
+            <h3><i class="ph ph-magic-wand" aria-hidden="true"></i>Open it</h3>
+            <p>Click the wand, the first button in the top toolbar. If the open profile has unsaved changes, Joystick Gobloon asks to save them first.</p>
+            <figure class="shot"><img src="img/wizard.png" loading="lazy" width="1100" height="700" alt="New profile wizard: the profile name, then each attached stick with its axis, button and hat counts and the virtual joystick it maps to, a warning that one virtual joystick has a button less than its stick, and the Create and Cancel buttons"></figure>
+          </article>
+
+          <article class="learn-action" id="wizard-steps">
+            <h3><i class="ph ph-list-numbers" aria-hidden="true"></i>Fill it in</h3>
+            <ol class="numbered">
+              <li><strong>Name the profile</strong>, for example <span class="term">My flight setup</span>. The field has the focus when the wizard opens.</li>
+              <li><strong>Check each controller row.</strong> Every attached controller has a row with its name and the number of axes, buttons and hats it has. On the right is the virtual joystick it maps to: the wizard already picked the next free one for each controller, in order, so the first stick gets the first virtual joystick, the second stick the second, and so on.</li>
+              <li><strong>Change a pick</strong> from the list if needed. It shows each virtual joystick with its axes, buttons and hats. A virtual joystick takes only one controller: those another controller already uses are grayed out, because two controllers would fight over the same outputs.</li>
+              <li><strong>Leave a controller out</strong> with <span class="term">Not mapped</span>, for example pedals or a throttle you want to set up by hand later.</li>
+              <li><strong>Read the warnings.</strong> A warning sign shows when a virtual joystick has fewer inputs than its controller, and a line below the list says what will not be mapped, such as <span class="term">1 button</span>. Make that virtual joystick bigger on the Virtual joysticks page, or accept it and map those inputs yourself.</li>
+              <li><strong>Press Create.</strong> It is available once the profile has a name and at least one controller is mapped.</li>
+            </ol>
+          </article>
+
+          <article class="learn-action" id="wizard-result">
+            <h3><i class="ph ph-check-circle" aria-hidden="true"></i>What it makes</h3>
+            <p>A new profile with one mode, <span class="term">Default</span>, in which every input of every mapped controller has a <a href="learn.html#map-to-vjoy">Map to vJoy</a> onto its virtual joystick:</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Axes</strong> go to the same axis where the virtual joystick has it: X to X, Slider to Slider. The other axes take the virtual joystick's remaining axes in order.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Buttons and hats</strong> keep their numbers: button 5 to button 5, hat 1 to hat 1.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>What does not fit</strong> stays unbound, so nothing is lost: add it later by hand.</span></li>
+            </ul>
+            <p>The status bar says <span class="term">Profile created</span>. The profile is not saved yet: press <span class="term">Save</span> in the toolbar and pick a file.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="finish" aria-labelledby="finish-title">
+          <h2 id="finish-title">Finish the setup</h2>
+          <article class="learn-action" id="adjust">
+            <h3><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>Make it yours</h3>
+            <p>The wizard gives every input a plain one to one mapping. Shape it on the <span class="term">Devices and bindings</span> page: pick a stick's tab, select an input, and its actions show on the right.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Put a <a href="learn.html#response-curve">Response curve</a> before Map to vJoy on an axis that feels too twitchy.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Move an output with the lists of Map to vJoy, or the grid button next to them: outputs other inputs already use are marked, so you can see what is free.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Give buttons more jobs with <a href="learn.html#tempo">Tempo</a>, <a href="learn.html#double-tap">Double tap</a>, <a href="learn.html#modes">modes</a> and <a href="learn.html#modifiers">modifiers</a>.</span></li>
+            </ul>
+            <p><a href="learn.html">Learning</a> explains every action with its editor.</p>
+          </article>
+
+          <article class="learn-action" id="run">
+            <h3><i class="ph ph-play" aria-hidden="true"></i>Hide, activate, bind</h3>
+            <ol class="numbered">
+              <li><strong>Hide the real sticks</strong>: the eye button in the toolbar opens Device hiding. On Windows, reconnect each stick after hiding it. Details in <a href="emulation.html#hiding">Hiding devices</a>.</li>
+              <li><strong>Activate the profile</strong> with the play button. The virtual joysticks now follow your sticks.</li>
+              <li><strong>Bind the controls in the game</strong> by moving your real sticks. The game sees only the virtual joysticks, so every binding lands on one of them.</li>
+              <li><strong>Save the profile.</strong> Next time: start Joystick Gobloon, press play, start the game. In Settings it can start with the system and activate the profile on its own.</li>
+            </ol>
+          </article>
+        </section>
+
+        <section class="learn-group" id="more" aria-labelledby="more-title">
+          <h2 id="more-title">More</h2>
+          <article class="learn-action" id="other-ways">
+            <h3><i class="ph ph-signpost" aria-hidden="true"></i>Other ways to start</h3>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Empty profile.</strong> The page button next to the wand starts a profile with nothing mapped; add actions input by input.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Import from Joystick Gremlin.</strong> The folder button opens a Gremlin profile and it runs as it is. Anything not supported yet is kept unchanged in the file.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>A profile from another PC.</strong> The same stick has a different ID on every PC. A banner on the Devices page offers <span class="term">Map controls</span>, which matches the profile's devices to your sticks; <span class="term">Auto</span> does it by name.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Missing virtual joysticks.</strong> When a profile uses virtual devices this system lacks or has set up smaller, a banner offers <span class="term">Set up</span>: it creates what is missing and never removes anything.</span></li>
+            </ul>
+          </article>
+
+          <article class="learn-action" id="wizard-trouble">
+            <h3><i class="ph ph-first-aid-kit" aria-hidden="true"></i>When the wizard is stuck</h3>
+            <dl class="trouble">
+              <dt>A controller is not in the list</dt>
+              <dd>Plug it in; the list follows what is attached. On Linux, click <span class="term">Grant access</span> on the Devices page first. A stick you already hid is still listed as long as <span class="term">See hidden devices</span> is on in Settings.</dd>
+              <dt>It says there are no virtual joysticks yet</dt>
+              <dd>Create them on the Virtual joysticks page first (<a href="#create-virtual">Create them</a>), then open the wizard again.</dd>
+              <dt>Create stays gray</dt>
+              <dd>Type a profile name and map at least one controller to a virtual joystick.</dd>
+              <dt>A virtual joystick is grayed out in the list</dt>
+              <dd>Another controller already maps to it. Pick a different one, or set the other controller to Not mapped.</dd>
+              <dt>Some inputs will not be mapped</dt>
+              <dd>The virtual joystick is smaller than the stick. Add axes, buttons or hats to it on the Virtual joysticks page, then open the wizard again.</dd>
+            </dl>
+          </article>
+        </section>
+      </div>
+    </div>
+  </main>
+
+
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div>
+          <a class="brand" href="index.html"><img src="img/icon.svg" alt="" width="24" height="24"> Joystick Gobloon</a>
+          <p>Built on <a href="https://github.com/nefarius/HidHide">HidHide</a> by Nefarius and <a href="https://github.com/shauleiz/vJoy">vJoy</a> by Shaul Eizikovich.</p>
+        </div>
+        <div>
+          <h3>Project</h3>
+          <ul>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/releases">Releases</a></li>
+            <li><a href="start.html">Get started</a></li>
+            <li><a href="learn.html">Learning</a></li>
+            <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
+            <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>
+            <li><a href="https://www.paypal.com/paypalme/h0userus" rel="noopener">Donate with PayPal</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Legal</h3>
+          <ul>
+            <li><a href="privacy.html">Privacy</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/LICENSE">License and terms (MIT)</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/docs/CODE_SIGNING.md">Code signing policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="copyright">© 2026 Denis Ibragimov. Joystick Gobloon is released under the MIT license.</p>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

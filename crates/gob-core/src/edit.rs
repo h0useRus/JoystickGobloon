@@ -18,10 +18,12 @@ pub enum NewAction {
         device: u32,
         input_id: u32,
     },
-    /// Gamepad 1, with a control that suits the edited input: A for a button, the left stick's
-    /// X for an axis, the d-pad for a hat.
+    /// Control `control` of gamepad `gamepad`; an empty control takes one that suits the edited
+    /// input: A for a button, the left stick's X for an axis, the d-pad for a hat.
     MapToGamepad {
         input_type: InputType,
+        gamepad: u32,
+        control: String,
     },
     ResponseCurve,
     ChangeMode {
@@ -303,16 +305,21 @@ impl Action {
                 }
                 Self::build("map-to-vjoy", items, "both")
             }
-            NewAction::MapToGamepad { input_type } => {
-                let control = match input_type {
-                    InputType::Axis => "left-x",
-                    InputType::Hat => "dpad",
-                    _ => "a",
+            NewAction::MapToGamepad {
+                input_type,
+                gamepad,
+                control,
+            } => {
+                let control = match (control.as_str(), input_type) {
+                    ("", InputType::Axis) => "left-x",
+                    ("", InputType::Hat) => "dpad",
+                    ("", _) => "a",
+                    (c, _) => c,
                 };
                 Self::build(
                     "map-to-gamepad",
                     vec![
-                        prop("int", "gamepad-id", "1"),
+                        prop("int", "gamepad-id", gamepad.to_string()),
                         prop("string", "control", control),
                         prop("bool", "inverted", "False"),
                     ],

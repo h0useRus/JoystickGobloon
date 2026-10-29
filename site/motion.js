@@ -128,13 +128,13 @@
 
     // M1 is held, then M2, then both: the toolbar badges, the layer chip and the modifier rows light.
     modifiers(stage, W, H) {
-      const badge = [overlay(stage, W, H, 851, 100, 33, 24, "ov-glow"), overlay(stage, W, H, 892, 100, 34, 24, "ov-glow")];
+      const badge = [overlay(stage, W, H, 854, 100, 33, 24, "ov-glow"), overlay(stage, W, H, 895, 100, 34, 24, "ov-glow")];
       const chip = [
-        overlay(stage, W, H, 591, 227, 68, 32, "ov-glow"),
-        overlay(stage, W, H, 667, 227, 59, 32, "ov-glow"),
-        overlay(stage, W, H, 734, 227, 88, 32, "ov-glow"),
+        overlay(stage, W, H, 583, 227, 60, 32, "ov-glow"),
+        overlay(stage, W, H, 651, 227, 59, 32, "ov-glow"),
+        overlay(stage, W, H, 718, 227, 88, 32, "ov-glow"),
       ];
-      const row = [overlay(stage, W, H, 383, 357, 40, 20, "ov-glow"), overlay(stage, W, H, 383, 389, 40, 20, "ov-glow")];
+      const row = [overlay(stage, W, H, 370, 393, 40, 26, "ov-glow"), overlay(stage, W, H, 370, 425, 40, 26, "ov-glow")];
       for (const el of [...badge, ...chip, ...row]) el.style.borderRadius = "calc(var(--s) * 4px)";
       return {
         period: 7.6,

@@ -250,6 +250,37 @@ fn output_usage_counts_bindings_and_conflicts() {
 }
 
 #[test]
+fn output_usage_has_gamepad_and_logical_outputs() {
+    let mut p = Profile::default();
+    let id = p.add_logical_input(InputType::Button);
+    let root = p.bind(DEV, "button", "1", "Default");
+    for kind in [
+        NewAction::MapToGamepad {
+            input_type: InputType::Button,
+            gamepad: 2,
+            control: "rb".into(),
+        },
+        NewAction::MapToLogicalDevice {
+            input_type: InputType::Button,
+            id,
+        },
+    ] {
+        p.add_child(&root, "actions", gob_core::Action::new(&kind))
+            .unwrap();
+    }
+    let usage = p.output_usage(Some("Default"));
+    assert!(usage.contains_key(&gob_core::VirtualOutput::Gamepad {
+        gamepad: 2,
+        control: "rb".into(),
+    }));
+    assert!(usage.contains_key(&gob_core::VirtualOutput::Logical {
+        input_type: InputType::Button,
+        id,
+    }));
+    assert!(p.used_vjoy_outputs("Default").is_empty());
+}
+
+#[test]
 fn duplicated_vjoy_output_moves_off_its_input() {
     let mut p = Profile::default();
     let root = p.bind(DEV, "button", "1", "Default");
@@ -695,7 +726,11 @@ fn map_to_gamepad_round_trips() {
             .add_child(
                 &root,
                 "actions",
-                gob_core::Action::new(&NewAction::MapToGamepad { input_type }),
+                gob_core::Action::new(&NewAction::MapToGamepad {
+                    input_type,
+                    gamepad: 1,
+                    control: String::new(),
+                }),
             )
             .unwrap();
         assert_eq!(

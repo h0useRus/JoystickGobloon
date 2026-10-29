@@ -75,6 +75,10 @@ pub struct DevicesView {
     /// Configured virtual gamepads and how many the system can have, filled by the app.
     pub gamepads: Vec<gob_virtual::GamepadInfo>,
     pub max_gamepads: u32,
+    /// Reading the keyboards for the Keyboard tab (allowed by the user on Linux).
+    keyboard_access: crate::device_access::KeyboardAccess,
+    /// A keyboard access request finished: (allowed or taken back, result). The app reports it.
+    pub keyboard_result: Option<(bool, Result<(), String>)>,
 }
 
 struct Tab<'a> {
@@ -576,78 +580,77 @@ impl DevicesView {
             return;
         };
         let mut open = true;
-        egui::Window::new(format!("{}  {}", icon::INFO, tab.name))
-            .frame(style::window_frame(ctx))
+        let title = format!("{}  {}", icon::INFO, tab.name);
+        let window = egui::Window::new(&title)
             .id(egui::Id::new("device-info"))
-            .open(&mut open)
             .collapsible(false)
             .resizable(false)
             .pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(ctx.screen_rect().center())
-            .show(ctx, |ui| {
-                let none = || "—".to_string();
-                let live = tab.live.map(|d| &d.info);
-                let ids = live
-                    .map(|d| gob_input::joystick_ids(d.vendor_id, d.product_id))
-                    .unwrap_or_default();
-                let rows: [(&str, String); 7] = [
-                    ("device-info-name", tab.name.to_string()),
-                    (
-                        "device-info-axes",
-                        live.map_or_else(none, |d| d.axes.len().to_string()),
-                    ),
-                    (
-                        "device-info-buttons",
-                        live.map_or_else(none, |d| d.buttons.to_string()),
-                    ),
-                    (
-                        "device-info-hats",
-                        live.map_or_else(none, |d| d.hats.to_string()),
-                    ),
-                    (
-                        "device-info-vid",
-                        live.map_or_else(none, |d| format!("{:04X}", d.vendor_id)),
-                    ),
-                    (
-                        "device-info-pid",
-                        live.map_or_else(none, |d| format!("{:04X}", d.product_id)),
-                    ),
-                    (
-                        "device-info-joystick-id",
-                        if ids.is_empty() {
-                            none()
-                        } else {
-                            ids.iter()
-                                .map(u32::to_string)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        },
-                    ),
-                ];
-                egui::Grid::new("device-info-grid")
-                    .num_columns(2)
-                    .spacing([16.0, 6.0])
-                    .show(ui, |ui| {
-                        for (key, value) in rows {
-                            ui.label(RichText::new(i18n.tr(key)).weak());
-                            ui.label(RichText::new(value).monospace());
-                            ui.end_row();
-                        }
-                        ui.label(RichText::new(i18n.tr("device-info-guid")).weak());
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new(tab.guid).monospace());
-                            let tip = i18n.tr("device-info-copy");
-                            if style::icon_button(ui, true, icon::COPY, &tip).clicked() {
-                                ui.ctx().copy_text(tab.guid.to_string());
-                            }
-                        });
+            .default_pos(ctx.screen_rect().center());
+        style::dialog_window(ctx, window, &title, &mut open, |ui| {
+            let none = || "—".to_string();
+            let live = tab.live.map(|d| &d.info);
+            let ids = live
+                .map(|d| gob_input::joystick_ids(d.vendor_id, d.product_id))
+                .unwrap_or_default();
+            let rows: [(&str, String); 7] = [
+                ("device-info-name", tab.name.to_string()),
+                (
+                    "device-info-axes",
+                    live.map_or_else(none, |d| d.axes.len().to_string()),
+                ),
+                (
+                    "device-info-buttons",
+                    live.map_or_else(none, |d| d.buttons.to_string()),
+                ),
+                (
+                    "device-info-hats",
+                    live.map_or_else(none, |d| d.hats.to_string()),
+                ),
+                (
+                    "device-info-vid",
+                    live.map_or_else(none, |d| format!("{:04X}", d.vendor_id)),
+                ),
+                (
+                    "device-info-pid",
+                    live.map_or_else(none, |d| format!("{:04X}", d.product_id)),
+                ),
+                (
+                    "device-info-joystick-id",
+                    if ids.is_empty() {
+                        none()
+                    } else {
+                        ids.iter()
+                            .map(u32::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    },
+                ),
+            ];
+            egui::Grid::new("device-info-grid")
+                .num_columns(2)
+                .spacing([16.0, 6.0])
+                .show(ui, |ui| {
+                    for (key, value) in rows {
+                        ui.label(RichText::new(i18n.tr(key)).weak());
+                        ui.label(RichText::new(value).monospace());
                         ui.end_row();
+                    }
+                    ui.label(RichText::new(i18n.tr("device-info-guid")).weak());
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(tab.guid).monospace());
+                        let tip = i18n.tr("device-info-copy");
+                        if style::icon_button(ui, true, icon::COPY, &tip).clicked() {
+                            ui.ctx().copy_text(tab.guid.to_string());
+                        }
                     });
-                if tab.live.is_none() {
-                    ui.add_space(4.0);
-                    ui.label(RichText::new(i18n.tr("device-disconnected")).weak());
-                }
-            });
+                    ui.end_row();
+                });
+            if tab.live.is_none() {
+                ui.add_space(4.0);
+                ui.label(RichText::new(i18n.tr("device-disconnected")).weak());
+            }
+        });
         if !open {
             self.info = None;
         }
@@ -665,6 +668,9 @@ impl DevicesView {
     ) {
         let Some(p) = profile else { return };
         if is_keyboard(tab) {
+            if let Some(done) = self.keyboard_access.banner(ui, i18n) {
+                self.keyboard_result = Some(done);
+            }
             ui.horizontal(|ui| {
                 ui.label(RichText::new(i18n.tr("keyboard-add")).weak());
                 let field = egui::Id::new("keyboard-add-key");
@@ -682,6 +688,9 @@ impl DevicesView {
                         });
                     }
                 }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    self.keyboard_access.remove_button(ui, i18n);
+                });
             });
             if empty {
                 ui.label(RichText::new(i18n.tr("keyboard-empty")).weak());

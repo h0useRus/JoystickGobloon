@@ -12,7 +12,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   data dir, fonts, single instance, keys, window/tray (`Window` handle), autostart, updates; windows/ = Win32 + Inno Setup)
 - crates/gob-ui      egui widget kit, app-neutral (reusable elsewhere): tokens.rs = sizes and 4 px spacing grid,
   theme.rs = palette (the app passes its colors) + text sizes, widgets (buttons, tabs, switch, tick, Spin
-  numeric up-down + slider, text_field, dialogs: modal/window_frame/dialog_title/dialog_buttons, WinUI layout).
+  numeric up-down + slider, text_field, dialogs: modal/dialog_window (Windows-style title bar)/dialog_title/dialog_buttons, WinUI layout).
   joystick-gobloon/src/style.rs re-exports it and adds only the app's palette, fonts and own widgets
 - crates/gob-core    profile model
 - crates/gob-core    profile model grown from Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views;
@@ -43,7 +43,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   no gamepad codes or KEY_MAX, so SDL sees a joystick; example `virtual_hold` keeps one up for jstest/SDL checks),
   unsupported.rs elsewhere
 - crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`, `keys` = set 1 scan
-  codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers, installed via pkexec from the
+  codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers (keyboards: separate opt-in rule from the Keyboard tab), installed via pkexec from the
   Devices page banner); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
   made in `prepare` when a profile starts; key_pressed via EVIOCGKEY). Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
   `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
@@ -64,7 +64,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
 - plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
-  on every release: learn.html = every action with a
+  on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
+  hiding, learn.html = every action with a
   picture of its editor in site/img/actions/, the right panel cropped from a 1102x732 window; screenshots in
   site/img/). README.md is a short overview linking there; no Markdown docs besides docs/CODE_SIGNING.md.
   No experimental actions on the site

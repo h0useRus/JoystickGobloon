@@ -1,10 +1,11 @@
 //! Dialogs laid out like WinUI's: [`DIALOG_MARGIN`] around everything, a title
 //! ([`dialog_title`]) with [`SPACE_M`] below it, and the buttons ([`dialog_buttons`]) right-aligned
-//! [`SPACE_XL`] under the content, [`SPACE_S`] apart.
+//! [`SPACE_XL`] under the content, [`SPACE_S`] apart. Windows inside the main window
+//! ([`dialog_window`]) get a compact title bar like a Windows dialog instead of a title row.
 
 use egui::RichText;
 
-use crate::tokens::{DIALOG_MARGIN, ICON_SIZE, SPACE_M, SPACE_S, SPACE_XL};
+use crate::tokens::{DIALOG_MARGIN, ICON_SIZE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS};
 
 /// A modal dialog with [`DIALOG_MARGIN`] around its content.
 pub fn modal(ctx: &egui::Context, id: &str) -> egui::Modal {
@@ -12,10 +13,89 @@ pub fn modal(ctx: &egui::Context, id: &str) -> egui::Modal {
     egui::Modal::new(egui::Id::new(id)).frame(frame)
 }
 
-/// Frame of an `egui::Window` (a dialog inside the main window): [`DIALOG_MARGIN`] around
-/// its content.
-pub fn window_frame(ctx: &egui::Context) -> egui::Frame {
-    egui::Frame::window(&ctx.style()).inner_margin(DIALOG_MARGIN)
+/// Height of [`dialog_window`]'s title bar, like a Windows dialog's caption.
+pub const TITLE_BAR_HEIGHT: f32 = 32.0;
+
+/// Shows `window` (an `egui::Window` with the caller's size and position options) laid out like a
+/// Windows dialog: a compact title bar with `title` on the left and a close button on the right,
+/// then the content with [`DIALOG_MARGIN`] at the sides and bottom. Dragging the window's
+/// background moves it. The close button sets `open` to false; nothing shows while it is false.
+pub fn dialog_window<R>(
+    ctx: &egui::Context,
+    window: egui::Window<'_>,
+    title: &str,
+    open: &mut bool,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> Option<R> {
+    if !*open {
+        return None;
+    }
+    let frame = egui::Frame::window(&ctx.style()).inner_margin(0);
+    let mut close = false;
+    let shown = window.title_bar(false).frame(frame).show(ctx, |ui| {
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let color = ui.visuals().text_color();
+        let galley = ui.painter().layout_no_wrap(title.to_string(), font, color);
+        // The bar is painted after the content, across the width the window then has; an
+        // auto-sized window would grow to the whole screen if the bar filled the available width.
+        let min_width = SPACE_M + galley.size().x + SPACE_L + TITLE_BAR_HEIGHT;
+        let (bar, _) = ui.allocate_exact_size(
+            egui::vec2(min_width, TITLE_BAR_HEIGHT),
+            egui::Sense::hover(),
+        );
+        let margin = egui::Margin {
+            left: DIALOG_MARGIN,
+            right: DIALOG_MARGIN,
+            top: SPACE_XS as i8,
+            bottom: DIALOG_MARGIN,
+        };
+        let inner = egui::Frame::new()
+            .inner_margin(margin)
+            .show(ui, add_contents)
+            .inner;
+        let bar = egui::Rect::from_min_size(
+            bar.min,
+            egui::vec2(ui.min_rect().width().max(min_width), TITLE_BAR_HEIGHT),
+        );
+        let text_pos = egui::pos2(bar.left() + SPACE_M, bar.center().y - galley.size().y / 2.0);
+        ui.painter().galley(text_pos, galley, color);
+        let button = egui::Rect::from_min_max(
+            egui::pos2(bar.right() - TITLE_BAR_HEIGHT - SPACE_S, bar.top()),
+            bar.right_bottom(),
+        );
+        if close_button(ui, button).clicked() {
+            close = true;
+        }
+        inner
+    });
+    if close {
+        *open = false;
+    }
+    shown.and_then(|r| r.inner)
+}
+
+/// A title bar's close button in `rect`: a plain X that turns red on hover, like Windows.
+fn close_button(ui: &mut egui::Ui, rect: egui::Rect) -> egui::Response {
+    let r = ui.interact(rect, ui.id().with("dialog-close"), egui::Sense::click());
+    let painter = ui.painter();
+    let mut color = ui.visuals().text_color();
+    if r.hovered() {
+        // The window's top right corner (theme: 12).
+        let corner = egui::CornerRadius {
+            ne: 12,
+            ..Default::default()
+        };
+        painter.rect_filled(rect, corner, egui::Color32::from_rgb(196, 43, 28));
+        color = egui::Color32::WHITE;
+    }
+    painter.text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        crate::icon::X,
+        egui::FontId::proportional(ICON_SIZE - 2.0),
+        color,
+    );
+    r
 }
 
 /// A dialog's title row: an optional icon (in its own color, e.g. a warning) and the title as a

@@ -42,9 +42,14 @@ pub(crate) trait Desktop {
     fn claim_instance() -> Option<Self::InstanceEvent>;
     /// Calls `show` whenever a later start wakes this copy.
     fn listen_instance(event: Self::InstanceEvent, show: Box<dyn Fn() + Send>);
-    /// Keyboard keys can be bound as inputs (the Keyboard tab): the program may read every
-    /// keyboard.
+    /// Keyboard keys can be bound as inputs (the Keyboard tab); reading them may need
+    /// [`Desktop::keyboard_access`].
     fn keyboard_bindings() -> bool;
+    /// Whether the program may read the keyboards, for keyboard bindings.
+    fn keyboard_access() -> KeyboardAccess;
+    /// Allows reading the keyboards or takes it back, with administrator rights (the system
+    /// asks). Blocking: call it off the GUI thread.
+    fn set_keyboard_access(allow: bool) -> Result<(), String>;
     /// Keyboard keys held right now; `None` when the program cannot see the keyboard's state
     /// (key recording then uses the window's own key events).
     fn held_keys() -> Option<Vec<Key>>;
@@ -102,6 +107,17 @@ pub(crate) trait Desktop {
     fn wait_for_process(pid: u32, timeout: Duration);
 }
 
+/// Whether the program may read the keyboards ([`keyboard_access`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum KeyboardAccess {
+    /// It may without anything from the program (Windows, the `input` group on Linux).
+    Open,
+    /// It may because the user allowed it in the program; [`set_keyboard_access`] takes it back.
+    Allowed,
+    /// It may not; [`set_keyboard_access`] can allow it.
+    Missing,
+}
+
 /// What a later start signals to wake this copy.
 pub(crate) type InstanceEvent = <Current as Desktop>::InstanceEvent;
 /// The main window (an opaque handle).
@@ -137,6 +153,14 @@ pub(crate) fn listen_instance(event: InstanceEvent, show: impl Fn() + Send + 'st
 
 pub(crate) fn keyboard_bindings() -> bool {
     Current::keyboard_bindings()
+}
+
+pub(crate) fn keyboard_access() -> KeyboardAccess {
+    Current::keyboard_access()
+}
+
+pub(crate) fn set_keyboard_access(allow: bool) -> Result<(), String> {
+    Current::set_keyboard_access(allow)
 }
 
 pub(crate) fn held_keys() -> Option<Vec<Key>> {

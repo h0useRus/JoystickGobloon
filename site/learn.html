@@ -86,6 +86,7 @@
     <ul class="nav-links">
       <li><a href="index.html#features">Features</a></li>
       <li><a href="index.html#how">How it works</a></li>
+      <li><a href="start.html">Get started</a></li>
       <li><a href="learn.html" aria-current="page">Learning</a></li>
       <li><a href="emulation.html">Emulation</a></li>
       <li><a href="index.html#platforms">Windows and Linux</a></li>
@@ -103,11 +104,12 @@
     <ul>
       <li style="--i:0"><a href="index.html#features">Features</a></li>
       <li style="--i:1"><a href="index.html#how">How it works</a></li>
-      <li style="--i:2"><a href="learn.html" aria-current="page">Learning</a></li>
-      <li style="--i:3"><a href="emulation.html">Emulation</a></li>
-      <li style="--i:4"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:5"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:6"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:2"><a href="start.html">Get started</a></li>
+      <li style="--i:3"><a href="learn.html" aria-current="page">Learning</a></li>
+      <li style="--i:4"><a href="emulation.html">Emulation</a></li>
+      <li style="--i:5"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:6"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:7"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -185,6 +187,8 @@
           <article class="learn-action" id="modes">
             <h3><i class="ph ph-swap" aria-hidden="true"></i>Modes</h3>
             <p>A profile can have several modes, and each mode can give an input different actions. A mode inherits everything from its parent and overrides only what you change in it. Switch modes with the <a href="#change-mode">Change mode</a> action or the mode selector in the toolbar.</p>
+            <p>Modes are added, renamed and given a parent in the <span class="term">Modes</span> window: click the icon next to the mode selector. Pick the parent under <span class="term">Inherits from</span>; a mode without one starts empty.</p>
+            <figure class="shot"><img src="img/modes.png" loading="lazy" width="1102" height="732" alt="Modes window: the mode Default, and My new mode inheriting from Default, with a field for another mode"></figure>
           </article>
           <article class="learn-action" id="modifiers">
             <h3><i class="ph ph-stack" aria-hidden="true"></i>Modifiers</h3>
@@ -196,7 +200,7 @@
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>An axis layer can <strong>keep the last value</strong>: a trim axis on M1 holds its setting after M1 is released, and the main axis on the base holds its position while M1 is held.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Held modifiers light up next to the mode selector; the button of a modifier shows a lock and runs no actions.</span></li>
             </ul>
-            <figure class="shot"><img src="img/modifiers.png" loading="lazy" width="1102" height="732" alt="Layers Base, M1, M2 and M1 plus M2 above the actions of a button, next to the Modifiers window"></figure>
+            <figure class="shot"><img src="img/modifiers.png" loading="lazy" width="1102" height="732" alt="Modifiers window with M1 and M2 on a button of each stick, next to the layers Base, M1, M2 and M1 plus M2 of an axis"></figure>
           </article>
         </section>
 
@@ -210,7 +214,8 @@
           </article>
           <article class="learn-action" id="map-to-gamepad">
             <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</h3>
-            <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted. The control list marks controls in use the same way as <a href="#map-to-vjoy">Map to vJoy</a>.</p>
+            <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted.</p>
+            <p><strong>Picking the control works like <a href="#map-to-vjoy">Map to vJoy</a>.</strong> A new one starts on the gamepad you picked last and its first free control. The grid button next to the lists shows the controls of every gamepad at once, and a click picks one. Controls other inputs already use are marked the same way.</p>
             <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release"></figure>
           </article>
           <article class="learn-action" id="map-to-keyboard">
@@ -227,6 +232,7 @@
           <article class="learn-action" id="map-to-logical-device">
             <h3><i class="ph ph-cube" aria-hidden="true"></i>Map to logical device</h3>
             <p>The <strong>Logical device</strong> tab is a joystick that only exists inside the profile. Mapping inputs to it lets several physical inputs feed one logical input, whose own actions then do the rest. Logical inputs are added and renamed on that tab.</p>
+            <p><strong>Picking the input works like <a href="#map-to-vjoy">Map to vJoy</a>.</strong> A new one takes the first logical input of that type nothing uses yet, or adds one. The grid button next to the list shows every logical input of that type at once, and a click picks one. Logical inputs that other inputs already write to are marked the same way.</p>
             <figure class="shot"><img src="img/actions/map-to-logical-device.png" loading="lazy" alt="Map to logical device: logical button 1"></figure>
           </article>
         </section>
@@ -352,6 +358,7 @@
           <h3>Project</h3>
           <ul>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/releases">Releases</a></li>
+            <li><a href="start.html">Get started</a></li>
             <li><a href="learn.html">Learning</a></li>
             <li><a href="emulation.html">Emulation</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
