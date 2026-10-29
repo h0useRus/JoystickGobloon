@@ -2473,8 +2473,10 @@ dependencies = [
 name = "joystick-gobloon"
 version = "0.6.0"
 dependencies = [
+ "ashpd",
  "eframe",
  "egui-phosphor",
+ "futures-util",
  "gob-core",
  "gob-engine",
  "gob-gremlin",
@@ -2487,6 +2489,7 @@ dependencies = [
  "gtk",
  "libc",
  "log",
+ "pollster",
  "raw-window-handle",
  "rfd",
  "semver",

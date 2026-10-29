@@ -137,6 +137,7 @@ impl JoystickGobloonApp {
         i18n.set_language(&settings.language);
         style::install_fonts(&cc.egui_ctx);
         style::apply(&cc.egui_ctx, settings.theme);
+        style::follow_system_theme(&cc.egui_ctx);
         // Double clicks (curve points, the hide button) follow the system's setting.
         let double_click = crate::platform::double_click_time().as_secs_f64();
         cc.egui_ctx

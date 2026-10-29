@@ -41,7 +41,8 @@ fn add_cjk_fallbacks(fonts: &mut egui::FontDefinitions) {
 }
 
 /// Installs both palettes and picks one; [`Theme::System`] lets egui follow the
-/// Windows light/dark setting, also when it changes while the app runs.
+/// system's light/dark setting, also when it changes while the app runs (see
+/// [`follow_system_theme`]).
 pub fn apply(ctx: &egui::Context, theme: Theme) {
     ctx.set_visuals_of(egui::Theme::Light, visuals(false));
     ctx.set_visuals_of(egui::Theme::Dark, visuals(true));
@@ -76,6 +77,26 @@ pub fn apply(ctx: &egui::Context, theme: Theme) {
         Theme::Light => egui::ThemePreference::Light,
         Theme::Dark => egui::ThemePreference::Dark,
         Theme::System => egui::ThemePreference::System,
+    });
+}
+
+/// Where the window library cannot tell the system's light/dark setting (X11, for one), egui
+/// uses its fallback theme: set it from the platform's own reading, light when there is none,
+/// and keep it up to date.
+pub fn follow_system_theme(ctx: &egui::Context) {
+    fn set(ctx: &egui::Context, dark: Option<bool>) {
+        let theme = if dark == Some(true) {
+            egui::Theme::Dark
+        } else {
+            egui::Theme::Light
+        };
+        ctx.options_mut(|o| o.fallback_theme = theme);
+    }
+    set(ctx, crate::platform::dark_mode());
+    let ctx = ctx.clone();
+    crate::platform::watch_dark_mode(move |dark| {
+        set(&ctx, dark);
+        ctx.request_repaint();
     });
 }
 
