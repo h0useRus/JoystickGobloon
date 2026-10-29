@@ -15,6 +15,11 @@ use std::path::Path;
 
 /// HID usage page of buttons.
 const PAGE_BUTTON: u32 = 0x09;
+/// `HIDIOCGINPUT(len)`: `_IOC(_IOC_READ | _IOC_WRITE, 'H', 0x0A, len)`, reads an input report
+/// from the device on request (Linux 5.11).
+const fn hidiocginput(len: usize) -> u32 {
+    (3 << 30) | ((len as u32) << 16) | ((b'H' as u32) << 8) | 0x0A
+}
 /// Largest input report read in one go (with its report id).
 const MAX_REPORT: usize = 256;
 
@@ -37,9 +42,19 @@ struct Globals {
     report_id: u8,
 }
 
+/// What [`buttons`] finds in a report descriptor.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Layout {
+    pub buttons: Vec<Button>,
+    /// Input reports start with a report id byte.
+    pub has_ids: bool,
+    /// The input reports holding buttons: (report id, length in bytes without the id).
+    pub reports: Vec<(u8, usize)>,
+}
+
 /// The buttons a report descriptor declares in its input reports (variable, non-constant
-/// fields on the Button page, one bit each), and whether its reports start with a report id.
-pub fn buttons(desc: &[u8]) -> (Vec<Button>, bool) {
+/// fields on the Button page, one bit each).
+pub fn buttons(desc: &[u8]) -> Layout {
     let mut g = Globals::default();
     let mut stack: Vec<Globals> = Vec::new();
     let mut usages: Vec<u32> = Vec::new();
@@ -133,7 +148,18 @@ pub fn buttons(desc: &[u8]) -> (Vec<Button>, bool) {
             _ => {}
         }
     }
-    (found, has_ids)
+    let mut reports: Vec<(u8, usize)> = Vec::new();
+    for b in &found {
+        if !reports.iter().any(|(id, _)| *id == b.report) {
+            let bits = offsets[usize::from(b.report)];
+            reports.push((b.report, bits.div_ceil(8) as usize));
+        }
+    }
+    Layout {
+        buttons: found,
+        has_ids,
+        reports,
+    }
 }
 
 /// The report descriptor of hidraw node `hidraw` (`/dev/hidrawN`).
@@ -150,22 +176,35 @@ pub fn descriptor(hidraw: &Path) -> Option<Vec<u8>> {
 /// Buttons read from an open hidraw node.
 pub struct Raw {
     file: File,
-    buttons: Vec<Button>,
-    has_ids: bool,
+    layout: Layout,
 }
 
 impl Raw {
-    /// Opens `path` for non-blocking reads of the `buttons` (from [`buttons`]).
-    pub fn open(path: &Path, buttons: Vec<Button>, has_ids: bool) -> io::Result<Self> {
+    /// Opens `path` for non-blocking reads of the buttons in `layout`.
+    pub fn open(path: &Path, layout: Layout) -> io::Result<Self> {
         let file = OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
             .open(path)?;
-        Ok(Self {
-            file,
-            buttons,
-            has_ids,
-        })
+        Ok(Self { file, layout })
+    }
+
+    /// Asks the device for its current input reports, so buttons held when it is opened (a
+    /// toggle switch) count from the start; calls `set` like [`Self::read`]. Devices or kernels
+    /// that cannot answer leave the buttons released until their first report.
+    pub fn read_current(&self, set: &mut dyn FnMut(u16, bool)) {
+        let mut buf = [0u8; MAX_REPORT];
+        for &(id, len) in &self.layout.reports {
+            let len = (len + 1).min(MAX_REPORT);
+            buf[0] = id;
+            // SAFETY: `buf` is valid for `len` bytes; the request writes at most `len`.
+            let n = unsafe { libc::ioctl(self.fd(), hidiocginput(len) as _, buf.as_mut_ptr()) };
+            if n > 0 {
+                // The answer starts with the report id byte, also without report ids (0).
+                let data = &buf[1..(n as usize).min(len)];
+                apply_report(&self.layout.buttons, id, data, set);
+            }
+        }
     }
 
     pub fn fd(&self) -> RawFd {
@@ -195,16 +234,21 @@ impl Raw {
 
     /// One input report (with its id byte when the device uses report ids).
     fn apply(&self, report: &[u8], set: &mut dyn FnMut(u16, bool)) {
-        apply(&self.buttons, self.has_ids, report, set);
+        apply(&self.layout, report, set);
     }
 }
 
-fn apply(buttons: &[Button], has_ids: bool, report: &[u8], set: &mut dyn FnMut(u16, bool)) {
-    let (id, data) = match (has_ids, report.split_first()) {
-        (true, Some((&id, rest))) => (id, rest),
-        (true, None) => return,
-        (false, _) => (0, report),
-    };
+/// An input report as hidraw reads it: with its id byte when the device uses report ids.
+fn apply(layout: &Layout, report: &[u8], set: &mut dyn FnMut(u16, bool)) {
+    match (layout.has_ids, report.split_first()) {
+        (true, Some((&id, data))) => apply_report(&layout.buttons, id, data, set),
+        (true, None) => {}
+        (false, _) => apply_report(&layout.buttons, 0, report, set),
+    }
+}
+
+/// The data of input report `id` (after the id byte).
+fn apply_report(buttons: &[Button], id: u8, data: &[u8], set: &mut dyn FnMut(u16, bool)) {
     for b in buttons.iter().filter(|b| b.report == id) {
         let byte = (b.bit / 8) as usize;
         if let Some(&v) = data.get(byte) {
@@ -246,8 +290,11 @@ mod tests {
 
     #[test]
     fn buttons_follow_the_axes() {
-        let (buttons, has_ids) = buttons(STICK);
-        assert!(has_ids);
+        let layout = buttons(STICK);
+        assert!(layout.has_ids);
+        // Report 1: 4 bytes of axes, 16 of buttons, 1 constant.
+        assert_eq!(layout.reports, vec![(1, 21)]);
+        let buttons = layout.buttons;
         assert_eq!(buttons.len(), 128);
         assert_eq!(
             buttons[0],
@@ -263,7 +310,7 @@ mod tests {
 
     #[test]
     fn reports_set_buttons_by_usage() {
-        let (buttons, has_ids) = buttons(STICK);
+        let layout = buttons(STICK);
         // Id 1, axes (4 bytes), buttons: 1 and 81 and 128 pressed.
         let mut report = vec![1u8, 0, 0, 0, 0];
         let mut bits = [0u8; 16];
@@ -272,7 +319,7 @@ mod tests {
         }
         report.extend_from_slice(&bits);
         let mut pressed = Vec::new();
-        apply(&buttons, has_ids, &report, &mut |b, on| {
+        apply(&layout, &report, &mut |b, on| {
             if on {
                 pressed.push(b)
             }
@@ -280,7 +327,7 @@ mod tests {
         assert_eq!(pressed, vec![1, 81, 128]);
         // Another report id leaves them alone.
         let mut calls = 0;
-        apply(&buttons, has_ids, &[2, 0xFF, 0xFF], &mut |_, _| calls += 1);
+        apply(&layout, &[2, 0xFF, 0xFF], &mut |_, _| calls += 1);
         assert_eq!(calls, 0);
     }
 
@@ -296,8 +343,10 @@ mod tests {
             0x95, 0x06, // Report Count (6)
             0x81, 0x01, // Input (Constant)
         ];
-        let (buttons, has_ids) = buttons(&desc);
-        assert!(!has_ids);
+        let layout = buttons(&desc);
+        assert!(!layout.has_ids);
+        assert_eq!(layout.reports, vec![(0, 1)]);
+        let buttons = layout.buttons;
         assert_eq!(buttons.len(), 2);
         assert_eq!((buttons[0].usage, buttons[0].bit), (2, 0));
         assert_eq!((buttons[1].usage, buttons[1].bit), (1, 1));
@@ -317,9 +366,8 @@ mod tests {
             0x19, 0x01, 0x29, 0x02, // Usage 1..2
             0x75, 0x01, 0x95, 0x02, 0x81, 0x02, // two button bits
         ];
-        let (buttons, _) = buttons(&desc);
         assert_eq!(
-            buttons,
+            buttons(&desc).buttons,
             vec![
                 Button {
                     report: 0,

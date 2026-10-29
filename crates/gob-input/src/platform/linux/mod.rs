@@ -26,6 +26,11 @@ const EVENT_TIMEOUT: Duration = Duration::from_millis(20);
 /// Buttons and hats a device can have, as on Windows (DIJOYSTATE2).
 const MAX_BUTTONS: usize = 128;
 const MAX_HATS: usize = 4;
+/// The most buttons the kernel's HID driver passes on to evdev for a joystick (16
+/// `BTN_JOYSTICK` + 64 `BTN_TRIGGER_HAPPY`). Only a node with that many can have lost buttons;
+/// one with fewer may be another collection of the same HID device, whose buttons it must not
+/// take.
+const EVDEV_MAX_BUTTONS: usize = 80;
 /// A device with buttons evdev does not pass on tries to open its raw HID node this often, so
 /// access granted while it is connected takes effect without replugging.
 const RAW_RETRY: Duration = Duration::from_secs(2);
@@ -282,31 +287,32 @@ fn hidraw_path(event_node: &Path) -> String {
 /// reports and how many there are (the highest button number).
 struct RawPlan {
     path: PathBuf,
-    buttons: Vec<hid::Button>,
-    has_ids: bool,
+    layout: hid::Layout,
     count: usize,
 }
 
 impl RawPlan {
-    /// A plan when the report descriptor of `hidraw` declares more buttons than `evdev_buttons`.
+    /// A plan when evdev got the kernel's most buttons and the report descriptor of `hidraw`
+    /// declares more.
     fn new(hidraw: &str, evdev_buttons: usize) -> Option<Self> {
-        if hidraw.is_empty() {
+        if hidraw.is_empty() || evdev_buttons < EVDEV_MAX_BUTTONS {
             return None;
         }
         let path = PathBuf::from(hidraw);
-        let (mut buttons, has_ids) = hid::buttons(&hid::descriptor(&path)?);
-        buttons.retain(|b| usize::from(b.usage) <= MAX_BUTTONS);
-        let count = buttons.iter().map(|b| usize::from(b.usage)).max()?;
+        let mut layout = hid::buttons(&hid::descriptor(&path)?);
+        layout
+            .buttons
+            .retain(|b| usize::from(b.usage) <= MAX_BUTTONS);
+        let count = layout.buttons.iter().map(|b| usize::from(b.usage)).max()?;
         (count > evdev_buttons).then_some(Self {
             path,
-            buttons,
-            has_ids,
+            layout,
             count,
         })
     }
 
     fn open(&self) -> io::Result<hid::Raw> {
-        hid::Raw::open(&self.path, self.buttons.clone(), self.has_ids)
+        hid::Raw::open(&self.path, self.layout.clone())
     }
 }
 
@@ -440,6 +446,7 @@ impl Device {
             raw_pending,
         };
         dev.sync();
+        dev.sync_raw();
         dev.previous.copy_readings(&dev.state);
         Ok(dev)
     }
@@ -481,6 +488,19 @@ impl Device {
         }
     }
 
+    /// The buttons held right now, from the raw HID node (at open, no events).
+    fn sync_raw(&mut self) {
+        let Some(raw) = &self.raw else {
+            return;
+        };
+        let buttons = &mut self.state.buttons;
+        raw.read_current(&mut |b, pressed| {
+            if let Some(v) = buttons.get_mut(usize::from(b) - 1) {
+                *v = pressed;
+            }
+        });
+    }
+
     /// Opens the raw HID node once access is there, and from then on reads every button from it.
     fn retry_raw(&mut self) {
         let Some((plan, at)) = &mut self.raw_pending else {
@@ -508,6 +528,8 @@ impl Device {
             s.info.unread_buttons = 0;
             s.buttons.resize(count, false);
         }
+        // The input filter sends what changed against its own view.
+        self.sync_raw();
     }
 
     fn set_axis(&mut self, axis: AxisMap, value: i32) {
