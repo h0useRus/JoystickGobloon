@@ -181,9 +181,38 @@ kind-response-curve = Кривая отклика
 kind-change-mode = Смена режима
 kind-tempo = Короткое / долгое нажатие
 kind-description = Описание
+edit-rename = Нажмите, чтобы переименовать
+edit-description-hint = Нажмите, чтобы написать заметку
+edit-click-to-edit = Нажмите, чтобы изменить
 
 # Files and modes
 action-new = Новый профиль
+wizard-open = Новый профиль с мастером: каждый контроллер на свой виртуальный джойстик
+wizard-title = Мастер нового профиля
+wizard-name = Имя профиля
+wizard-name-hint = например, Мой полёт
+wizard-create = Создать
+wizard-devices = Выберите виртуальный джойстик для каждого контроллера. Каждая ось, кнопка и шляпка получит Map to vJoy.
+wizard-none = Не назначен
+wizard-taken = На этот виртуальный джойстик уже назначен другой контроллер
+wizard-no-vjoy = Виртуальных джойстиков пока нет: сначала добавьте их на странице «Виртуальные джойстики»
+wizard-fewer = У { $vjoy } меньше входов, чем у { $device }: не назначены { $missing }
+wizard-axes = { $n ->
+    [one] { $n } ось
+    [few] { $n } оси
+   *[other] { $n } осей
+}
+wizard-buttons = { $n ->
+    [one] { $n } кнопка
+    [few] { $n } кнопки
+   *[other] { $n } кнопок
+}
+wizard-hats = { $n ->
+    [one] { $n } шляпка
+    [few] { $n } шляпки
+   *[other] { $n } шляпок
+}
+status-wizard = Профиль создан: { $name }
 action-save-as = Сохранить как…
 status-new = Новый профиль
 unsaved-title = Несохранённые изменения
@@ -235,7 +264,20 @@ vjoy-axis-8 = Колёсико
 vjoy-button-n = Кнопка { $n }
 vjoy-hat-n = Хатка { $n }
 vjoy-quickmap = Выбрать выход
-vjoy-quickmap-used = Уже используется другим входом
+output-profile = Профиль: { $name }
+output-free = { $output }: свободен
+output-used = { $output }: { $n ->
+    [one] назначен { $n } входу
+    [few] назначен { $n } входам
+   *[other] назначен { $n } входам
+}
+output-conflict = Его пишут входы, работающие одновременно
+output-more = …и ещё { $n }
+output-legend-used = Занят
+output-legend-conflict = Конфликт
+output-legend-tip = Показывать эти элементы (профиль не меняется)
+output-same-input = Его уже пишет другое действие этого входа
+output-same-input-clash = Другое действие этого входа пишет тот же выход: выберите другой
 vjoy-absolute = Абсолютная
 vjoy-relative = Относительная
 vjoy-speed = Скорость
@@ -545,6 +587,10 @@ calibration-center = Калибровать центр
 calibration-center-tip = Отпустите ручку, слегка покачайте её у центра, затем нажмите ещё раз
 calibration-extrema = Калибровать края
 calibration-extrema-tip = Доведите ось до обоих краёв, затем нажмите ещё раз
+calibration-jitter = Фильтр дрожания
+calibration-jitter-tip = Игнорирует изменения меньше этой доли хода — для изношенных осей, которые дрожат. Без задержки; края и центр достигаются всегда. Черта на полосе показывает, что отправляется. Сохраните, чтобы применить
+calibration-debounce = Антидребезг
+calibration-debounce-tip = Кнопки и шляпки этого устройства: после нажатия или отпускания следующие изменения в течение этого времени игнорируются — для дребезжащих контактов. Первое изменение проходит сразу
 calibration-in-window = Калибровка открыта в отдельном окне.
 
 # Device info

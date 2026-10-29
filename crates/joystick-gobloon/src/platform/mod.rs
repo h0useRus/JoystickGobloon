@@ -50,6 +50,12 @@ pub(crate) trait Desktop {
     fn held_keys() -> Option<Vec<Key>>;
     /// A key's name in the current keyboard layout, e.g. "Right Ctrl".
     fn key_name(key: Key) -> String;
+    /// The system's light/dark setting: `Some(true)` dark, `Some(false)` light, `None` when it
+    /// cannot be read. Used where the window library cannot tell it.
+    fn dark_mode() -> Option<bool>;
+    /// Calls `changed` with the new setting whenever the system's light/dark setting changes and
+    /// the window library does not report it itself; may call it from another thread.
+    fn watch_dark_mode(changed: Box<dyn Fn(Option<bool>) + Send>);
 
     /// The main window; `None` where the platform cannot address it (the app then hides and
     /// shows it through eframe only).
@@ -139,6 +145,14 @@ pub(crate) fn held_keys() -> Option<Vec<Key>> {
 
 pub(crate) fn key_name(key: Key) -> String {
     Current::key_name(key)
+}
+
+pub(crate) fn dark_mode() -> Option<bool> {
+    Current::dark_mode()
+}
+
+pub(crate) fn watch_dark_mode(changed: impl Fn(Option<bool>) + Send + 'static) {
+    Current::watch_dark_mode(Box::new(changed));
 }
 
 pub(crate) fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Window> {

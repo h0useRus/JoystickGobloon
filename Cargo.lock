@@ -2006,6 +2006,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gob-ui"
+version = "0.6.0"
+dependencies = [
+ "egui",
+ "egui-phosphor",
+]
+
+[[package]]
 name = "gob-uinput"
 version = "0.6.0"
 dependencies = [
@@ -2473,8 +2481,9 @@ dependencies = [
 name = "joystick-gobloon"
 version = "0.6.0"
 dependencies = [
+ "ashpd",
  "eframe",
- "egui-phosphor",
+ "futures-util",
  "gob-core",
  "gob-engine",
  "gob-gremlin",
@@ -2482,11 +2491,13 @@ dependencies = [
  "gob-i18n",
  "gob-input",
  "gob-lighting",
+ "gob-ui",
  "gob-uinput",
  "gob-virtual",
  "gtk",
  "libc",
  "log",
+ "pollster",
  "raw-window-handle",
  "rfd",
  "semver",

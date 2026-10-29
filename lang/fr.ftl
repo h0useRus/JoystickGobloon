@@ -181,9 +181,35 @@ kind-response-curve = Courbe de réponse
 kind-change-mode = Changer de mode
 kind-tempo = Appui court / long
 kind-description = Description
+edit-rename = Cliquez pour renommer
+edit-description-hint = Cliquez pour écrire une note
+edit-click-to-edit = Cliquez pour modifier
 
 # Files and modes
 action-new = Nouveau profil
+wizard-open = Nouveau profil avec l’assistant : chaque manette vers un joystick virtuel
+wizard-title = Assistant de nouveau profil
+wizard-name = Nom du profil
+wizard-name-hint = p. ex. Mon simulateur de vol
+wizard-create = Créer
+wizard-devices = Choisissez le joystick virtuel de chaque manette. Chaque axe, bouton et chapeau reçoit un Map to vJoy.
+wizard-none = Non associé
+wizard-taken = Une autre manette utilise déjà ce joystick virtuel
+wizard-no-vjoy = Pas encore de joysticks virtuels : ajoutez-les d’abord sur la page Joysticks virtuels
+wizard-fewer = { $vjoy } a moins d’entrées que { $device } : { $missing } restent non associés
+wizard-axes = { $n ->
+    [one] 1 axe
+   *[other] { $n } axes
+}
+wizard-buttons = { $n ->
+    [one] 1 bouton
+   *[other] { $n } boutons
+}
+wizard-hats = { $n ->
+    [one] 1 chapeau
+   *[other] { $n } chapeaux
+}
+status-wizard = Profil créé : { $name }
 action-save-as = Enregistrer sous…
 status-new = Nouveau profil
 unsaved-title = Modifications non enregistrées
@@ -235,7 +261,19 @@ vjoy-axis-8 = Molette
 vjoy-button-n = Bouton { $n }
 vjoy-hat-n = Chapeau { $n }
 vjoy-quickmap = Choisir une sortie
-vjoy-quickmap-used = Déjà utilisée par une autre entrée
+output-profile = Profil : { $name }
+output-free = { $output } : libre
+output-used = { $output } : { $n ->
+    [one] utilisée par 1 entrée
+   *[other] utilisée par { $n } entrées
+}
+output-conflict = Des entrées actives en même temps l’écrivent
+output-more = …et { $n } de plus
+output-legend-used = Utilisée
+output-legend-conflict = Conflit
+output-legend-tip = Afficher ces contrôles (le profil ne change pas)
+output-same-input = Une autre action de cette entrée l’écrit déjà
+output-same-input-clash = Une autre action de cette entrée écrit la même sortie : choisissez-en une autre
 vjoy-absolute = Absolu
 vjoy-relative = Relatif
 vjoy-speed = Vitesse
@@ -545,6 +583,10 @@ calibration-center = Calibrer le centre
 calibration-center-tip = Laissez le manche au repos, bougez-le légèrement autour du centre, puis cliquez à nouveau
 calibration-extrema = Calibrer les extrémités
 calibration-extrema-tip = Amenez l’axe aux deux extrémités, puis cliquez à nouveau
+calibration-jitter = Filtre de tremblement
+calibration-jitter-tip = Ignore les changements plus petits que cette part de la course, pour les axes usés qui tremblent. Sans délai ; les extrémités et le centre sont toujours atteints. Le trait sur la barre montre ce qui est envoyé. Enregistrez pour appliquer
+calibration-debounce = Anti-rebond
+calibration-debounce-tip = Boutons et chapeaux de ce périphérique : après un appui ou un relâchement, les changements pendant ce délai sont ignorés, pour les contacts qui rebondissent. Le premier changement passe aussitôt
 calibration-in-window = Le calibrage est ouvert dans sa propre fenêtre.
 
 # Device info

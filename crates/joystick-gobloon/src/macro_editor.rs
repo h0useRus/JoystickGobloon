@@ -99,7 +99,7 @@ impl Editor<'_> {
                     }
                 });
             if let Some(mut n) = count {
-                ui.add(egui::DragValue::new(&mut n).range(1..=1000).suffix(" ×"))
+                ui.add(style::Spin::new(&mut n).range(1..=1000).suffix(" ×"))
                     .on_hover_text(self.i18n.tr("macro-repeat-count-tip"));
                 if Some(n) != count {
                     self.set(id, "repeat-count", "int", n.to_string());
@@ -109,9 +109,9 @@ impl Editor<'_> {
                 ui.label(RichText::new(icon::TIMER).size(style::ICON_SIZE))
                     .on_hover_text(self.i18n.tr("macro-repeat-delay"));
                 let mut v = d as f32;
-                let drag = egui::DragValue::new(&mut v)
+                let drag = style::Spin::new(&mut v)
                     .range(0.0..=60.0)
-                    .speed(0.01)
+                    .step(0.01)
                     .suffix(" s");
                 if ui.add(drag).changed() {
                     self.set(id, "repeat-delay", "float", py_float(v));
@@ -126,9 +126,9 @@ impl Editor<'_> {
                 let mut v = *d as f32;
                 if ui
                     .add(
-                        egui::DragValue::new(&mut v)
+                        style::Spin::new(&mut v)
                             .range(0.0..=600.0)
-                            .speed(0.01)
+                            .step(0.01)
                             .suffix(" s"),
                     )
                     .changed()
@@ -167,16 +167,16 @@ impl Editor<'_> {
                 }
             }
             MacroStep::MouseMotion { dx, dy } => {
-                ui.add(egui::DragValue::new(dx).range(-2000..=2000).prefix("dx "));
-                ui.add(egui::DragValue::new(dy).range(-2000..=2000).prefix("dy "));
+                ui.add(style::Spin::new(dx).range(-2000..=2000).prefix("dx "));
+                ui.add(style::Spin::new(dy).range(-2000..=2000).prefix("dy "));
             }
             MacroStep::VjoyButton {
                 device,
                 id: button,
                 pressed,
             } => {
-                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy #"));
-                ui.add(egui::DragValue::new(button).range(1..=128).prefix("#"));
+                ui.add(style::Spin::new(device).range(1..=16).prefix("vJoy #"));
+                ui.add(style::Spin::new(button).range(1..=128).prefix("#"));
                 press_toggle(ui, self, pressed);
             }
             MacroStep::VjoyAxis {
@@ -185,7 +185,7 @@ impl Editor<'_> {
                 value,
                 relative,
             } => {
-                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy #"));
+                ui.add(style::Spin::new(device).range(1..=16).prefix("vJoy #"));
                 egui::ComboBox::from_id_salt(("macro-axis", id, index))
                     .selected_text(self.i18n.tr(&format!("vjoy-axis-{axis}")))
                     .show_ui(ui, |ui| {
@@ -196,10 +196,10 @@ impl Editor<'_> {
                 let mut v = *value as f32;
                 if ui
                     .add(
-                        egui::DragValue::new(&mut v)
+                        style::Spin::new(&mut v)
                             .range(-1.0..=1.0)
-                            .speed(0.01)
-                            .fixed_decimals(2),
+                            .step(0.01)
+                            .decimals(2),
                     )
                     .changed()
                 {
@@ -212,8 +212,8 @@ impl Editor<'_> {
                 id: hat,
                 direction,
             } => {
-                ui.add(egui::DragValue::new(device).range(1..=16).prefix("vJoy #"));
-                ui.add(egui::DragValue::new(hat).range(1..=4).prefix("#"));
+                ui.add(style::Spin::new(device).range(1..=16).prefix("vJoy #"));
+                ui.add(style::Spin::new(hat).range(1..=4).prefix("#"));
                 for d in DIRECTIONS {
                     let tip = self.i18n.tr(hat_key(d));
                     if style::icon_toggle(ui, *direction == d, hat_glyph(d), &tip).clicked() {

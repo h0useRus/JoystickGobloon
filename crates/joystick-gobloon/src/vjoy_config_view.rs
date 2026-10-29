@@ -207,12 +207,12 @@ impl VJoyConfig {
                 ui.end_row();
 
                 ui.label(i18n.tr("vjoy-buttons"));
-                style::stepper(ui, &mut edit.buttons, 0..=caps.max_buttons);
+                ui.add(style::Spin::new(&mut edit.buttons).range(0..=caps.max_buttons));
                 ui.end_row();
 
                 ui.label(i18n.tr("vjoy-hats"));
                 ui.horizontal(|ui| {
-                    style::stepper(ui, &mut edit.hats, 0..=caps.max_hats);
+                    ui.add(style::Spin::new(&mut edit.hats).range(0..=caps.max_hats));
                     ui.add_enabled_ui(edit.hats > 0, |ui| {
                         ui.radio_value(
                             &mut edit.discrete_hats,
@@ -320,26 +320,19 @@ impl VJoyConfig {
             return;
         };
         let mut choice = None;
-        egui::Modal::new(egui::Id::new("vjoy-remove")).show(ctx, |ui| {
-            ui.set_width(360.0);
-            ui.heading(i18n.trf("vjoy-remove-title", &[("n", id.into())]));
+        style::modal(ctx, "vjoy-remove").show(ctx, |ui| {
+            ui.set_width(420.0);
+            let title = i18n.trf("vjoy-remove-title", &[("n", id.into())]);
+            style::dialog_title(ui, Some((icon::TRASH, None)), &title);
             ui.label(i18n.tr("vjoy-remove-text"));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if ui
-                    .button(format!(
-                        "{}  {}",
-                        icon::TRASH,
-                        i18n.tr("vjoy-config-remove")
-                    ))
-                    .clicked()
-                {
-                    choice = Some(true);
-                }
-                if ui.button(i18n.tr("cancel")).clicked() {
-                    choice = Some(false);
-                }
-            });
+            let remove = format!("{}  {}", icon::TRASH, i18n.tr("vjoy-config-remove"));
+            let buttons = [
+                style::DialogButton::primary(remove),
+                style::DialogButton::secondary(i18n.tr("cancel")),
+            ];
+            if let Some(i) = style::dialog_buttons(ui, &buttons) {
+                choice = Some(i == 0);
+            }
         });
         if let Some(remove) = choice {
             self.confirm_remove = None;

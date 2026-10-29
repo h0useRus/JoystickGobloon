@@ -43,10 +43,14 @@ imports Joystick Gremlin profiles and keeps the workflow you know.
   made on another PC to your devices.
 - **Every Gremlin action** — map to vJoy, response curves, tempo, double tap, chain, macros, keyboard and mouse
   output, merge and split axis, conditions, sounds, text to speech and more — plus modes, undo / redo.
+- **New profile wizard**: name the profile, pick the virtual joystick each stick maps to, and every axis, button
+  and hat is mapped at once.
 - **Modifiers and layers**: hold M1, M2 or both and the same button or axis does something else.
-- **Virtual joysticks and gamepads** configured right in the app; profiles remember the ones they use.
+- **Virtual joysticks and gamepads** configured right in the app; profiles remember the ones they use, and the
+  tester shows which outputs the profile uses and where two inputs fight over one.
 - **Device hiding** with one click on a stick's eye, so games see only the virtual devices.
-- **Input viewer and calibration**, tray icon, light and dark theme, seven languages.
+- **Input viewer and calibration**, with a jitter filter for worn axes and debounce for bouncing buttons; tray
+  icon, light and dark theme that follow the system, seven languages.
 
 | | Windows 10 / 11 | Linux |
 | --- | --- | --- |
@@ -61,11 +65,12 @@ Everything else — every action with a picture of its editor, Windows and Linux
 
 **Windows 10 / 11 (x64):** download the installer from the
 [latest release](https://github.com/h0useRus/JoystickGobloon/releases/latest) (or the portable zip). It installs the
-signed **HidHide** and **vJoy 2.1.9.1** drivers when they are missing. Import your Joystick Gremlin profile, use
-**Map controls** on the Devices page if it was made on another PC, hide your sticks and press **Activate** (▶).
+signed **HidHide** and **vJoy 2.1.9.1** drivers when they are missing. Import your Joystick Gremlin profile (use
+**Map controls** on the Devices page if it was made on another PC) or start one with the **wizard** (the wand
+button), hide your sticks and press **Activate** (▶).
 
 **Linux (x86_64):** download `JoystickGobloon-<version>-x86_64.AppImage`, `chmod +x` it and start it. Click
-**Grant access** once on the Devices page, then import your profile as above.
+**Grant access** once on the Devices page, then import your profile or use the wizard as above.
 
 Code signing through SignPath is being set up ([code signing policy](docs/CODE_SIGNING.md)); until then Windows
 SmartScreen may warn on the first start: *More info → Run anyway*.

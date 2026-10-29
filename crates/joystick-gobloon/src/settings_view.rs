@@ -244,12 +244,15 @@ fn general(
         gob_input::MAX_POLL_INTERVAL.as_millis() as u8,
     );
     let poll = ui
-        .add_enabled(
-            polls_devices,
-            egui::Slider::new(&mut settings.poll_interval_ms, min..=max)
-                .suffix(" ms")
-                .text(i18n.tr("settings-poll-interval")),
-        )
+        .add_enabled_ui(polls_devices, |ui| {
+            ui.horizontal(|ui| {
+                let r = style::slider(ui, &mut settings.poll_interval_ms, min..=max, 1.0, " ms");
+                ui.label(i18n.tr("settings-poll-interval"));
+                r
+            })
+            .inner
+        })
+        .inner
         .on_hover_text(i18n.tr("settings-poll-interval-tip"))
         .on_disabled_hover_text(i18n.tr("settings-poll-interval-unused"));
     // Only where hiding has a program list to put Joystick Gobloon on.

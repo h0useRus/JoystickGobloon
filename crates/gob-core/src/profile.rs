@@ -4,6 +4,50 @@ use crate::action::{Action, ActionKind, InputType, Item};
 use crate::modifier::{Layer, Modifier};
 use crate::xml::Element;
 
+/// A virtual device output an action writes to.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VirtualOutput {
+    Vjoy {
+        device: u32,
+        input_type: InputType,
+        id: u32,
+    },
+    /// `control` is a map-to-gamepad control name (`a`, `left-x`, `dpad`, ...).
+    Gamepad { gamepad: u32, control: String },
+}
+
+/// The virtual output `action` writes, if it is map-to-vjoy or map-to-gamepad.
+pub fn virtual_output(action: &Action) -> Option<VirtualOutput> {
+    match action.kind() {
+        ActionKind::MapToVjoy {
+            device,
+            input_type,
+            input_id,
+            ..
+        } => Some(VirtualOutput::Vjoy {
+            device,
+            input_type,
+            id: input_id,
+        }),
+        ActionKind::MapToGamepad {
+            gamepad, control, ..
+        } => Some(VirtualOutput::Gamepad {
+            gamepad,
+            control: control.to_string(),
+        }),
+        _ => None,
+    }
+}
+
+/// One binding writing a [`VirtualOutput`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutputUse {
+    /// Index into [`Profile::inputs`].
+    pub binding: usize,
+    /// The action that writes it.
+    pub action: String,
+}
+
 /// A physical input bound to one or more action sequences in one mode.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InputBinding {
@@ -305,30 +349,67 @@ impl Profile {
             .and_then(|m| m.parent.as_deref())
     }
 
+    /// Whether `m` is `target` or inherits from it (bounded, in case of a parent loop).
+    fn descends(&self, m: &str, target: &str) -> bool {
+        let mut m = Some(m);
+        for _ in 0..=self.modes.len() {
+            match m {
+                Some(x) if x == target => return true,
+                Some(x) => m = self.mode_parent(x),
+                None => return false,
+            }
+        }
+        false
+    }
+
+    /// Whether modes `a` and `b` can run together: one is the other or inherits from it.
+    pub fn modes_overlap(&self, a: &str, b: &str) -> bool {
+        self.descends(a, b) || self.descends(b, a)
+    }
+
     /// vJoy outputs (device, type, id) that map-to-vjoy actions write to while `mode` runs:
     /// those bound in the mode, the modes it inherits from and the modes inheriting from it.
     pub fn used_vjoy_outputs(&self, mode: &str) -> HashSet<(u32, InputType, u32)> {
-        // Whether `m` is `target` or inherits from it (bounded, in case of a parent loop).
-        let descends = |m: &str, target: &str| {
-            let mut m = Some(m);
-            for _ in 0..=self.modes.len() {
-                match m {
-                    Some(x) if x == target => return true,
-                    Some(x) => m = self.mode_parent(x),
-                    None => return false,
+        self.output_usage(Some(mode))
+            .into_keys()
+            .filter_map(|o| match o {
+                VirtualOutput::Vjoy {
+                    device,
+                    input_type,
+                    id,
+                } => Some((device, input_type, id)),
+                VirtualOutput::Gamepad { .. } => None,
+            })
+            .collect()
+    }
+
+    /// Virtual outputs that map-to-vjoy and map-to-gamepad actions write to, each with the
+    /// bindings writing it (one entry per binding). `mode` limits them to the bindings that can
+    /// run together with it ([`Self::modes_overlap`]); `None` takes every mode.
+    pub fn output_usage(&self, mode: Option<&str>) -> HashMap<VirtualOutput, Vec<OutputUse>> {
+        let mut usage: HashMap<VirtualOutput, Vec<OutputUse>> = HashMap::new();
+        for (binding, b) in self.inputs.iter().enumerate() {
+            if mode.is_some_and(|m| !self.modes_overlap(&b.mode, m)) {
+                continue;
+            }
+            let roots: Vec<&str> = b.configs.iter().map(|c| c.root_action.as_str()).collect();
+            for (action, output) in self.tree_outputs(&roots) {
+                let uses = usage.entry(output).or_default();
+                if uses.last().is_none_or(|u| u.binding != binding) {
+                    uses.push(OutputUse { binding, action });
                 }
             }
-            false
-        };
+        }
+        usage
+    }
+
+    /// Outputs written in the action trees under `roots`, with the action writing each (an
+    /// action reached twice counts once).
+    pub fn tree_outputs(&self, roots: &[&str]) -> Vec<(String, VirtualOutput)> {
         let index = self.action_index();
-        let mut used = HashSet::new();
+        let mut outputs = Vec::new();
         let mut seen = HashSet::new();
-        let mut stack: Vec<&str> = self
-            .inputs
-            .iter()
-            .filter(|b| descends(&b.mode, mode) || descends(mode, &b.mode))
-            .flat_map(|b| b.configs.iter().map(|c| c.root_action.as_str()))
-            .collect();
+        let mut stack: Vec<&str> = roots.to_vec();
         while let Some(id) = stack.pop() {
             if !seen.insert(id) {
                 continue;
@@ -336,18 +417,86 @@ impl Profile {
             let Some(action) = index.get(id) else {
                 continue;
             };
-            if let ActionKind::MapToVjoy {
-                device,
-                input_type,
-                input_id,
-                ..
-            } = action.kind()
-            {
-                used.insert((device, input_type, input_id));
+            if let Some(output) = virtual_output(action) {
+                outputs.push((id.to_string(), output));
             }
             stack.extend(action.child_ids());
         }
-        used
+        outputs
+    }
+
+    /// After `moved` (a copy) was added to a binding: its map-to-vjoy actions that write an
+    /// output another action of the same action tree already writes move to the first output of
+    /// that type nothing in the tree writes, preferring one no input uses in the binding's modes.
+    pub fn separate_outputs(&mut self, moved: &str) {
+        let Some((root, mode)) = self.inputs.iter().find_map(|b| {
+            b.configs
+                .iter()
+                .find(|c| self.reaches(&c.root_action, moved))
+                .map(|c| (c.root_action.clone(), b.mode.clone()))
+        }) else {
+            return;
+        };
+        let mine: Vec<(String, VirtualOutput)> = self.tree_outputs(&[moved]);
+        let ids: HashSet<&str> = mine.iter().map(|(id, _)| id.as_str()).collect();
+        let mut taken: HashSet<VirtualOutput> = self
+            .tree_outputs(&[&root])
+            .into_iter()
+            .filter(|(id, _)| !ids.contains(id.as_str()))
+            .map(|(_, o)| o)
+            .collect();
+        let busy: HashSet<VirtualOutput> = self.output_usage(Some(&mode)).into_keys().collect();
+        let mut changes = Vec::new();
+        for (id, output) in mine {
+            let VirtualOutput::Vjoy {
+                device, input_type, ..
+            } = output
+            else {
+                continue;
+            };
+            if !taken.contains(&output) {
+                taken.insert(output);
+                continue;
+            }
+            let max = match input_type {
+                InputType::Axis => 8,
+                InputType::Hat => 4,
+                _ => 128,
+            };
+            let at = |n| VirtualOutput::Vjoy {
+                device,
+                input_type,
+                id: n,
+            };
+            let free = (1..=max)
+                .find(|&n| !taken.contains(&at(n)) && !busy.contains(&at(n)))
+                .or_else(|| (1..=max).find(|&n| !taken.contains(&at(n))));
+            if let Some(n) = free {
+                taken.insert(at(n));
+                changes.push((id, n));
+            }
+        }
+        for (id, n) in changes {
+            if let Some(a) = self.action_mut(&id) {
+                a.set("vjoy-input-id", "int", n.to_string());
+            }
+        }
+    }
+
+    /// Whether two of `uses` (from [`Self::output_usage`]) are different physical inputs in modes
+    /// that run together, so they fight over the output.
+    pub fn uses_conflict(&self, uses: &[OutputUse]) -> bool {
+        let bindings: Vec<&InputBinding> = uses
+            .iter()
+            .filter_map(|u| self.inputs.get(u.binding))
+            .collect();
+        bindings.iter().enumerate().any(|(i, a)| {
+            bindings[i + 1..].iter().any(|b| {
+                (&a.device_id, &a.input_type, &a.input_id)
+                    != (&b.device_id, &b.input_type, &b.input_id)
+                    && self.modes_overlap(&a.mode, &b.mode)
+            })
+        })
     }
 
     pub fn startup_mode(&self) -> Option<String> {

@@ -12,7 +12,8 @@ use gob_virtual::{
     GamepadInfo, Status,
 };
 
-use crate::style::{self, icon};
+use crate::output_marks::OutputMarks;
+use crate::style::{self, OutputMark, icon};
 
 const REFRESH: Duration = Duration::from_millis(500);
 /// Hat directions for the 3x3 tester grid (hundredths of a degree), row by row.
@@ -46,6 +47,8 @@ pub struct VJoyView {
     pad: Option<u32>,
     /// Output tester of the selected gamepad, like `test`.
     pad_test: Option<PadTester>,
+    /// Legend ticks: used and conflicting outputs are colored.
+    shown: [bool; 2],
 }
 
 struct PadTester {
@@ -90,6 +93,7 @@ impl VJoyView {
             gamepads: Vec::new(),
             pad: None,
             pad_test: None,
+            shown: [true; 2],
         }
     }
 
@@ -142,7 +146,18 @@ impl VJoyView {
     }
 
     /// `locked`: a profile is active and holds vJoy devices, so they cannot be reconfigured.
-    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, locked: bool) {
+    /// `marks`: outputs the loaded profile uses, colored on the testers.
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        locked: bool,
+        mut marks: Option<&mut OutputMarks>,
+    ) {
+        if let Some(m) = marks.as_deref_mut() {
+            m.set_shown(self.shown);
+        }
+        let marks = marks.as_deref();
         if std::mem::take(&mut self.config.cancelled) {
             self.draft = None;
         }
@@ -227,7 +242,7 @@ impl VJoyView {
                 }
                 ui.separator();
             }
-            self.gamepads_section(ui, i18n, &vjoy, caps.max_gamepads, locked);
+            self.gamepads_section(ui, i18n, &vjoy, caps.max_gamepads, locked, marks);
             return;
         }
         if !self.devices.iter().any(|d| d.id == self.selected) && draft_id != Some(self.selected) {
@@ -297,7 +312,7 @@ impl VJoyView {
             self.add(id);
         }
         ui.separator();
-        if self.gamepads_section(ui, i18n, &vjoy, caps.max_gamepads, locked) {
+        if self.gamepads_section(ui, i18n, &vjoy, caps.max_gamepads, locked, marks) {
             return;
         }
 
@@ -372,13 +387,14 @@ impl VJoyView {
                     };
                     ui.label(RichText::new(i18n.tr(hint)).weak());
                 });
+                legend(ui, i18n, marks, &mut self.shown);
                 if let Some(e) = &self.error {
                     ui.colored_label(ui.visuals().warn_fg_color, e);
                 }
                 ui.add_space(6.0);
                 let held = self.test.as_ref().is_some_and(|t| t.device.is_some());
                 if let Some(test) = &mut self.test {
-                    ui.add_enabled_ui(can && held, |ui| test.show(ui, i18n, &layout));
+                    ui.add_enabled_ui(can && held, |ui| test.show(ui, i18n, &layout, marks));
                 }
             });
     }
@@ -418,6 +434,7 @@ impl VJoyView {
         vjoy: &Arc<dyn Backend>,
         max: u32,
         locked: bool,
+        marks: Option<&OutputMarks>,
     ) -> bool {
         if max == 0 {
             return false;
@@ -427,7 +444,7 @@ impl VJoyView {
         let Some(id) = self.pad else {
             return false;
         };
-        self.gamepad_page(ui, i18n, vjoy, id, locked);
+        self.gamepad_page(ui, i18n, vjoy, id, locked, marks);
         true
     }
 
@@ -489,6 +506,7 @@ impl VJoyView {
         vjoy: &Arc<dyn Backend>,
         id: u32,
         locked: bool,
+        marks: Option<&OutputMarks>,
     ) {
         if self.pad_test.as_ref().is_none_or(|t| t.id != id) {
             self.release();
@@ -538,13 +556,14 @@ impl VJoyView {
                 }
             });
         });
+        legend(ui, i18n, marks, &mut self.shown);
         if let Some(e) = &self.error {
             ui.colored_label(ui.visuals().warn_fg_color, e);
         }
         ui.add_space(6.0);
         let held = self.pad_test.as_ref().is_some_and(|t| t.device.is_some());
         if let Some(test) = &mut self.pad_test {
-            ui.add_enabled_ui(can && held, |ui| test.show(ui, i18n));
+            ui.add_enabled_ui(can && held, |ui| test.show(ui, i18n, marks));
         }
     }
 
@@ -591,19 +610,31 @@ impl Tester {
         }
     }
 
-    fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, info: &DeviceInfo) {
+    fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        info: &DeviceInfo,
+        marks: Option<&OutputMarks>,
+    ) {
+        use gob_core::InputType;
+        let mark = |ty, n: u32| OutputMarks::vjoy(info.id, ty, n);
         ui.spacing_mut().slider_width = 320.0;
         egui::Grid::new("vjoy-axes")
             .num_columns(2)
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
                 for &slot in &info.axes {
+                    let output = mark(InputType::Axis, slot.into());
+                    if !visible(marks, &output) {
+                        continue;
+                    }
                     let i = usize::from(slot) - 1;
-                    ui.label(crate::devices_view::axis_name(i18n, slot.into()));
+                    let name = crate::devices_view::axis_name(i18n, slot.into());
+                    output_label(ui, i18n, marks, &output, &name);
                     ui.horizontal(|ui| {
-                        let slider =
-                            egui::Slider::new(&mut self.axes[i], -1.0..=1.0).fixed_decimals(2);
-                        let changed = ui.add(slider).changed();
+                        let changed =
+                            style::slider(ui, &mut self.axes[i], -1.0..=1.0, 0.01, "").changed();
                         let center = style::icon_button(ui, true, icon::CROSSHAIR, "0").clicked();
                         if center {
                             self.axes[i] = 0.0;
@@ -623,12 +654,17 @@ impl Tester {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = Vec2::splat(4.0);
             for (i, state) in self.buttons.iter_mut().enumerate() {
-                let r = ui.add_sized(
-                    [40.0, 26.0],
-                    egui::Button::new((i + 1).to_string())
-                        .selected(*state)
-                        .corner_radius(style::RADIUS),
-                );
+                let n = i as u32 + 1;
+                let output = mark(InputType::Button, n);
+                if !visible(marks, &output) {
+                    continue;
+                }
+                let (m, count) = marks.map_or((OutputMark::Free, 0), |m| m.mark(&output));
+                let size = Vec2::new(40.0, 26.0);
+                let r = style::output_button(ui, n.to_string(), size, *state, m, count);
+                let r = hover(r, i18n, marks, &output, || {
+                    i18n.trf("vjoy-button-n", &[("n", n.into())])
+                });
                 let down = r.is_pointer_button_down_on();
                 if down != *state {
                     *state = down;
@@ -642,19 +678,30 @@ impl Tester {
 
         ui.horizontal(|ui| {
             for (h, state) in self.hats.iter_mut().enumerate() {
+                let output = mark(InputType::Hat, h as u32 + 1);
+                if !visible(marks, &output) {
+                    continue;
+                }
+                let (m, _) = marks.map_or((OutputMark::Free, 0), |m| m.mark(&output));
+                let title = || i18n.trf("vjoy-hat-n", &[("n", (h + 1).into())]);
                 ui.vertical(|ui| {
+                    // The 3x3 grid's width, so the centered caption stays under it.
+                    ui.set_max_width(3.0 * 26.0 + 2.0 * 2.0);
                     let mut wanted = None;
                     egui::Grid::new(("hat", h))
                         .spacing([2.0, 2.0])
                         .show(ui, |ui| {
                             for (cell, dir) in HAT_GRID.iter().enumerate() {
                                 let glyph = crate::devices_view::hat_glyph(*dir);
-                                let r = ui.add_sized(
-                                    [26.0, 26.0],
-                                    egui::Button::new(glyph)
-                                        .selected(*state == *dir && dir.is_some())
-                                        .corner_radius(style::RADIUS),
+                                let r = style::output_button(
+                                    ui,
+                                    glyph,
+                                    Vec2::splat(26.0),
+                                    *state == *dir && dir.is_some(),
+                                    m,
+                                    0,
                                 );
+                                let r = hover(r, i18n, marks, &output, title);
                                 if dir.is_some() && r.is_pointer_button_down_on() {
                                     wanted = *dir;
                                 }
@@ -669,7 +716,9 @@ impl Tester {
                             d.set_hat(h as u8 + 1, wanted);
                         }
                     }
-                    ui.vertical_centered(|ui| ui.label(RichText::new(format!("{}", h + 1)).weak()));
+                    ui.vertical_centered(|ui| {
+                        output_label(ui, i18n, marks, &output, &format!("{}", h + 1));
+                    });
                 });
                 ui.add_space(12.0);
             }
@@ -699,22 +748,28 @@ impl PadTester {
         }
     }
 
-    fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
+    fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, marks: Option<&OutputMarks>) {
+        let id = self.id;
+        let mark = |c: GamepadControl| OutputMarks::gamepad(id, c.name());
+        let name = |c: GamepadControl| i18n.tr(&format!("pad-{}", c.name()));
         ui.spacing_mut().slider_width = 320.0;
         egui::Grid::new("pad-axes")
             .num_columns(2)
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
                 for (control, value) in &mut self.axes {
-                    ui.label(i18n.tr(&format!("pad-{}", control.name())));
+                    let output = mark(*control);
+                    if !visible(marks, &output) {
+                        continue;
+                    }
+                    output_label(ui, i18n, marks, &output, &name(*control));
                     let range = if control.kind() == ControlKind::Trigger {
                         0.0..=1.0
                     } else {
                         -1.0..=1.0
                     };
                     ui.horizontal(|ui| {
-                        let slider = egui::Slider::new(value, range).fixed_decimals(2);
-                        let changed = ui.add(slider).changed();
+                        let changed = style::slider(ui, value, range, 0.01, "").changed();
                         let rest = style::icon_button(ui, true, icon::CROSSHAIR, "0").clicked();
                         if rest {
                             *value = 0.0;
@@ -734,12 +789,21 @@ impl PadTester {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = Vec2::splat(4.0);
             for (control, state) in &mut self.buttons {
-                let r = ui.add(
-                    egui::Button::new(i18n.tr(&format!("pad-{}", control.name())))
-                        .selected(*state)
-                        .min_size(Vec2::new(40.0, 26.0))
-                        .corner_radius(style::RADIUS),
-                );
+                let output = mark(*control);
+                if !visible(marks, &output) {
+                    continue;
+                }
+                let (m, count) = marks.map_or((OutputMark::Free, 0), |m| m.mark(&output));
+                let label = name(*control);
+                let font = egui::TextStyle::Button.resolve(ui.style());
+                let width = ui.fonts(|f| {
+                    f.layout_no_wrap(label.clone(), font, egui::Color32::WHITE)
+                        .size()
+                        .x
+                });
+                let size = Vec2::new((width + 16.0).max(40.0), 26.0);
+                let r = style::output_button(ui, label, size, *state, m, count);
+                let r = hover(r, i18n, marks, &output, || name(*control));
                 let down = r.is_pointer_button_down_on();
                 if down != *state {
                     *state = down;
@@ -753,17 +817,25 @@ impl PadTester {
 
         ui.vertical(|ui| {
             let mut wanted = None;
+            let output = mark(GamepadControl::Dpad);
+            if !visible(marks, &output) {
+                return;
+            }
+            let (m, _) = marks.map_or((OutputMark::Free, 0), |m| m.mark(&output));
             egui::Grid::new("pad-dpad")
                 .spacing([2.0, 2.0])
                 .show(ui, |ui| {
                     for (cell, dir) in HAT_GRID.iter().enumerate() {
                         let glyph = crate::devices_view::hat_glyph(*dir);
-                        let r = ui.add_sized(
-                            [26.0, 26.0],
-                            egui::Button::new(glyph)
-                                .selected(self.dpad == *dir && dir.is_some())
-                                .corner_radius(style::RADIUS),
+                        let r = style::output_button(
+                            ui,
+                            glyph,
+                            Vec2::splat(26.0),
+                            self.dpad == *dir && dir.is_some(),
+                            m,
+                            0,
                         );
+                        let r = hover(r, i18n, marks, &output, || name(GamepadControl::Dpad));
                         if dir.is_some() && r.is_pointer_button_down_on() {
                             wanted = *dir;
                         }
@@ -778,7 +850,7 @@ impl PadTester {
                     d.set_dpad(wanted);
                 }
             }
-            ui.label(RichText::new(i18n.tr("pad-dpad")).weak());
+            output_label(ui, i18n, marks, &output, &name(GamepadControl::Dpad));
         });
     }
 }
@@ -825,4 +897,76 @@ fn status_key(status: Status) -> &'static str {
         Status::Busy => "vjoy-busy",
         Status::Missing | Status::Unknown => "vjoy-unknown",
     }
+}
+
+/// Whether the tester shows `output`: the legend ticks hide used or conflicting ones.
+fn visible(marks: Option<&OutputMarks>, output: &gob_core::VirtualOutput) -> bool {
+    marks.is_none_or(|m| m.visible(output))
+}
+
+/// Tooltip of a tester output, shown whether or not the tester is held.
+fn hover(
+    r: egui::Response,
+    i18n: &I18n,
+    marks: Option<&OutputMarks>,
+    output: &gob_core::VirtualOutput,
+    title: impl Fn() -> String,
+) -> egui::Response {
+    let Some(marks) = marks else {
+        return r;
+    };
+    let tip = |ui: &mut egui::Ui| {
+        ui.label(marks.tooltip(i18n, output, &title()));
+    };
+    r.on_hover_ui(tip).on_disabled_hover_ui(tip)
+}
+
+/// Caption of an axis, hat or d-pad in the color of its mark, with the tooltip.
+fn output_label(
+    ui: &mut egui::Ui,
+    i18n: &I18n,
+    marks: Option<&OutputMarks>,
+    output: &gob_core::VirtualOutput,
+    text: &str,
+) {
+    let (mark, count) = marks.map_or((OutputMark::Free, 0), |m| m.mark(output));
+    let caption = if count > 1 {
+        format!("{text}  ×{count}")
+    } else {
+        text.to_string()
+    };
+    let rich = match style::mark_colors(ui, mark) {
+        Some((_, ink)) => RichText::new(caption).color(ink),
+        None => RichText::new(caption),
+    };
+    let r = ui.add(egui::Label::new(rich).sense(egui::Sense::hover()));
+    hover(r, i18n, marks, output, || text.to_string());
+}
+
+/// What the tester colors mean, and for which profile; a tick per mark turns its color on
+/// and off.
+fn legend(ui: &mut egui::Ui, i18n: &I18n, marks: Option<&OutputMarks>, shown: &mut [bool; 2]) {
+    let Some(marks) = marks else {
+        return;
+    };
+    ui.horizontal(|ui| {
+        if let Some(name) = marks.name() {
+            ui.label(
+                RichText::new(i18n.trf("output-profile", &[("name", name.to_string().into())]))
+                    .weak(),
+            );
+        }
+        for (i, (mark, key)) in [
+            (OutputMark::Used, "output-legend-used"),
+            (OutputMark::Conflict, "output-legend-conflict"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if let Some((_, ink)) = style::mark_colors(ui, mark) {
+                style::tick(ui, &mut shown[i], &i18n.tr(key), ink)
+                    .on_hover_text(i18n.tr("output-legend-tip"));
+            }
+        }
+    });
 }

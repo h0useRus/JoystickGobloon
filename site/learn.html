@@ -177,7 +177,8 @@
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>When it runs.</strong> Button actions have three switches: on press, on release, or both. Both follows the button, so a vJoy button is held exactly as long as yours.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Containers.</strong> Some actions hold other actions: tempo, double tap, condition, split axis and others. Their children are edited inside them.</span></li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Description.</strong> The field above the list names the input; the name also shows on the input's card.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Names.</strong> The name above the list names the input; it also shows on the input's card. It, the title of every action and description notes read as text: click one to edit it, then press Enter or click elsewhere.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Numbers.</strong> Type a value, click the arrows, or turn the mouse wheel over the field; Shift moves it ten steps at a time.</span></li>
             </ul>
             <figure class="shot"><img src="img/devices.png" loading="lazy" width="1102" height="732" alt="Devices page: the inputs of a stick on the left, the actions of the selected button on the right"></figure>
           </article>
@@ -204,12 +205,12 @@
           <article class="learn-action" id="map-to-vjoy">
             <h3><i class="ph ph-joystick" aria-hidden="true"></i>Map to vJoy</h3>
             <p>Sends the value to a virtual joystick: an axis to an axis, a button to a button, a hat to a hat. Pick the vJoy device and its input; a button can be inverted. An axis can also be <strong>relative</strong>: then the input sets the speed at which the vJoy axis moves, and the axis stays where it is when you let go.</p>
-            <p>A new Map to vJoy starts on the vJoy device you picked last and its first output that nothing else uses yet. The grid button next to the lists shows every output of each vJoy device at once: the ones other inputs already use are dimmed, the current one is highlighted, and a click picks one.</p>
+            <p>A new Map to vJoy starts on the vJoy device you picked last and its first output that nothing else uses yet. The grid button next to the lists shows every output of each vJoy device at once, and a click picks one. There and in the output list, outputs other inputs already use are <strong>blue</strong>, outputs that several inputs running at the same time write are <strong>amber</strong>, and a tooltip names the inputs. Outputs that another action of the same input already writes are grayed out: two actions of one input never write the same output. If a profile already has that, a warning sign shows next to the action. A copied Map to vJoy moves to a free output by itself.</p>
             <figure class="shot"><img src="img/actions/map-to-vjoy.png" loading="lazy" alt="Map to vJoy: vJoy device 1, button 1, not inverted, runs on press and release"></figure>
           </article>
           <article class="learn-action" id="map-to-gamepad">
             <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</h3>
-            <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted.</p>
+            <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted. The control list marks controls in use the same way as <a href="#map-to-vjoy">Map to vJoy</a>.</p>
             <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release"></figure>
           </article>
           <article class="learn-action" id="map-to-keyboard">
@@ -332,7 +333,7 @@
           </article>
           <article class="learn-action" id="description">
             <h3><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</h3>
-            <p>A note that does nothing when the input is used: what this input is for, for you and whoever uses the profile next.</p>
+            <p>A note that does nothing when the input is used: what this input is for, for you and whoever uses the profile next. It reads as text; click it to edit it.</p>
             <figure class="shot"><img src="img/actions/description.png" loading="lazy" alt="A description note above a Map to vJoy action"></figure>
           </article>
         </section>

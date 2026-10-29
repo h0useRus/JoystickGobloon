@@ -115,9 +115,10 @@ impl super::Backend for Platform {
         }
     }
 
-    fn wait(&self, devices: &[Device], events: bool, poll: Duration) {
+    fn wait(&self, devices: &[Device], events: bool, poll: Duration, wake: Option<Duration>) {
+        let at_most = |d: Duration| wake.map_or(d, |w| w.min(d));
         if !events || devices.is_empty() {
-            std::thread::sleep(if events { EVENT_TIMEOUT } else { poll });
+            std::thread::sleep(at_most(if events { EVENT_TIMEOUT } else { poll }));
             return;
         }
         let mut fds = self.fds.borrow_mut();
@@ -127,7 +128,8 @@ impl super::Backend for Platform {
             events: libc::POLLIN,
             revents: 0,
         }));
-        evdev::wait_readable(&mut fds, EVENT_TIMEOUT.as_millis() as i32);
+        let timeout = at_most(EVENT_TIMEOUT).as_micros().div_ceil(1000) as i32;
+        evdev::wait_readable(&mut fds, timeout);
     }
 }
 

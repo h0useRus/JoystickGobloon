@@ -196,7 +196,7 @@ pub fn led_widgets(
             });
     }
     let mut id = led.id;
-    if ui.add(egui::DragValue::new(&mut id)).changed() {
+    if ui.add(crate::style::Spin::new(&mut id)).changed() {
         // A typed number is a whole LED.
         (led.id, led.element) = (id, 0);
     }

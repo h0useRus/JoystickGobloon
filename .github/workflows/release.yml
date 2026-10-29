@@ -1,7 +1,7 @@
 # main: release v<version>, dev: pre-release v<version>-alpha.<run number>. The version comes
 # from the Conventional Commits since the last release (.github/scripts/next-version.sh).
 # Both build the app, the Windows installer and portable zip and the Linux AppImage, after the
-# same checks as CI.
+# same checks as CI. The Linux and Windows builds run side by side; `publish` waits for both.
 name: Release
 
 on:
@@ -15,6 +15,11 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  # Like ci.yml: no debug info in the checks' builds (less to compile and cache).
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_TERM_COLOR: always
+
 jobs:
   # Linux: the AppImage (tools/linux/appimage.sh). Ubuntu 22.04: its older glibc keeps the
   # AppImage running on newer systems too (Steam Deck included).
@@ -24,10 +29,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # Cached .deb packages instead of apt-get update + download on every run.
       - name: System libraries
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev libgtk-3-dev             libxdo-dev libayatana-appindicator3-dev libudev-dev libssl-dev libxkbcommon-dev libwayland-dev libxkbcommon-x11-0 libxcb-xkb1
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: pkg-config libasound2-dev libgtk-3-dev libxdo-dev libayatana-appindicator3-dev libudev-dev libssl-dev libxkbcommon-dev libwayland-dev libxkbcommon-x11-0 libxcb-xkb1
+          version: 1
+      # Packages restored from the cache skip the install scripts: refresh the library list, which
+      # appimage.sh reads (ldconfig -p) to find the libraries it bundles.
+      - name: Library cache
+        run: sudo ldconfig
       # Installs the Rust version pinned in rust-toolchain.toml.
       - name: Rust toolchain
         run: rustup toolchain install && rustup show
@@ -64,9 +75,12 @@ jobs:
           path: target/appimage/JoystickGobloon-${{ steps.version.outputs.version }}-x86_64.AppImage
           if-no-files-found: error
 
-  release:
-    needs: appimage
+  # Windows: the app, the installer and the portable zip, at the same time as the AppImage.
+  windows:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     env:
       # Code signing through SignPath (docs/CODE_SIGNING.md): final releases only, and only
       # when the secret is set; alpha builds and forks stay unsigned.
@@ -209,24 +223,44 @@ jobs:
           Copy-Item LICENSE $dir
           Compress-Archive -Path $dir -DestinationPath "target\JoystickGobloon-${{ steps.version.outputs.version }}-portable.zip" -Force
 
-      - name: Linux AppImage
-        uses: actions/download-artifact@v8
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: |
+            target/installer/JoystickGobloon-${{ steps.version.outputs.version }}-setup.exe
+            target/JoystickGobloon-${{ steps.version.outputs.version }}-portable.zip
+          if-no-files-found: error
+
+  # The release with every file, once both builds are done.
+  publish:
+    needs: [appimage, windows]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.windows.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      # Only these two: on main the unsigned installer kept for signing has the same name.
+      - uses: actions/download-artifact@v8
         with:
           name: appimage
-          path: target/appimage
+          path: target/release-files
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows
+          path: target/release-files
 
       - name: Publish
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Joystick Gobloon ${{ steps.version.outputs.version }}
+          tag_name: v${{ env.VERSION }}
+          name: Joystick Gobloon ${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
-          prerelease: ${{ steps.version.outputs.prerelease }}
+          prerelease: ${{ needs.windows.outputs.prerelease }}
           generate_release_notes: true
           files: |
-            target/installer/JoystickGobloon-${{ steps.version.outputs.version }}-setup.exe
-            target/JoystickGobloon-${{ steps.version.outputs.version }}-portable.zip
-            target/appimage/JoystickGobloon-${{ steps.version.outputs.version }}-x86_64.AppImage
+            target/release-files/JoystickGobloon-${{ env.VERSION }}-setup.exe
+            target/release-files/JoystickGobloon-${{ env.VERSION }}-portable.zip
+            target/release-files/JoystickGobloon-${{ env.VERSION }}-x86_64.AppImage
 
       # Discord: final releases to DISCORD_WEBHOOK, alpha builds to DISCORD_WEBHOOK_ALPHA
       # (each only when that secret is set). A failed post never fails the release.
@@ -237,5 +271,5 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_WEBHOOK_ALPHA: ${{ secrets.DISCORD_WEBHOOK_ALPHA }}
         run: |
-          $pre = "${{ steps.version.outputs.prerelease }}" -eq "true"
-          .github/scripts/discord-announce.ps1 -Version "${{ steps.version.outputs.version }}" -Repo "${{ github.repository }}" -Sha "${{ github.sha }}" -Prerelease:$pre
+          $pre = "${{ needs.windows.outputs.prerelease }}" -eq "true"
+          .github/scripts/discord-announce.ps1 -Version "${{ env.VERSION }}" -Repo "${{ github.repository }}" -Sha "${{ github.sha }}" -Prerelease:$pre

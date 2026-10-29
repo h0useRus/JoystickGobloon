@@ -64,6 +64,7 @@ impl ModesWindow {
         let (h, gap) = (style.spacing.interact_size.y, style.spacing.item_spacing.x);
         let min_width = MIN_FIELD_WIDTH * 2.0 + h + gap * 2.0;
         egui::Window::new(i18n.tr("modes-title"))
+            .frame(style::window_frame(ctx))
             .open(open)
             .collapsible(false)
             .resizable([true, false])
@@ -89,7 +90,7 @@ impl ModesWindow {
                             .names
                             .entry(mode.name.clone())
                             .or_insert_with(|| mode.name.clone());
-                        let r = ui.add_sized([name_w, h], egui::TextEdit::singleline(text));
+                        let r = ui.add_sized([name_w, h], style::text_field(text));
                         let name_x = r.rect.left() + TEXT_INSET;
                         if r.lost_focus() && *text != mode.name {
                             ops.push(ModeOp::Rename {
@@ -148,8 +149,8 @@ impl ModesWindow {
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     // Spans both columns; the add button sits in the delete column.
-                    let edit = egui::TextEdit::singleline(&mut self.new_name)
-                        .hint_text(i18n.tr("modes-new"));
+                    let edit =
+                        style::text_field(&mut self.new_name).hint_text(i18n.tr("modes-new"));
                     let r = ui.add_sized([name_w + gap + parent_w, h], edit);
                     let valid = !self.new_name.trim().is_empty()
                         && !names.iter().any(|n| n == self.new_name.trim());

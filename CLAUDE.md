@@ -10,8 +10,15 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   load from `<exe>/lang/`. Chinese/Korean glyphs come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
 - crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe; OS code only in src/platform/ (`Desktop` trait:
   data dir, fonts, single instance, keys, window/tray (`Window` handle), autostart, updates; windows/ = Win32 + Inno Setup)
+- crates/gob-ui      egui widget kit, app-neutral (reusable elsewhere): tokens.rs = sizes and 4 px spacing grid,
+  theme.rs = palette (the app passes its colors) + text sizes, widgets (buttons, tabs, switch, tick, Spin
+  numeric up-down + slider, text_field, dialogs: modal/window_frame/dialog_title/dialog_buttons, WinUI layout).
+  joystick-gobloon/src/style.rs re-exports it and adds only the app's palette, fonts and own widgets
+- crates/gob-core    profile model
 - crates/gob-core    profile model grown from Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views;
   modifier.rs = modifiers and input layers (Joystick Gobloon only, `Profile::needs_own_format`)
+  automap.rs = the new profile wizard's mapping (every input of a device onto one vJoy device); `Profile::output_usage`
+  = which inputs write each virtual output (used/conflict marks, wizard_view.rs + output_marks.rs in the GUI)
 - crates/gob-gremlin XML <-> Element <-> Profile: Gremlin R14+ import, written as `<profile version="14">` while
   Gremlin can read it, else `<profile app="Gobloon" version="1">`; lossless round-trip; `report()`; example `resave`
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
@@ -21,6 +28,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Guide = button 11), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
   order, keyboards -> set 1 scan codes; tests/uinput.rs = virtual devices, `check.ps1 --devices`),
   platform/none.rs elsewhere; example `monitor`
+  + filter.rs: jitter threshold per axis (in `Calibration::jitter`) and button/hat debounce per device
+  (`set_debounce`), applied in service.rs for every backend; the snapshot shows filtered values, `raw` stays as read
   + low-level keyboard hook (platform/windows/keyboard.rs) -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
   use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine
 - crates/gob-vjoy    talks to the vJoy driver directly (direct.rs: device_NNN handles + IOCTLs, HID caps; no
@@ -54,7 +63,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
 - plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
-- User documentation lives only on the website (site/ on the `web` branch: learn.html = every action with a
+- User documentation lives only on the website (site/, published from `main` by website.yml
+  on every release: learn.html = every action with a
   picture of its editor in site/img/actions/, the right panel cropped from a 1102x732 window; screenshots in
   site/img/). README.md is a short overview linking there; no Markdown docs besides docs/CODE_SIGNING.md.
   No experimental actions on the site
@@ -65,7 +75,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - **No AI attribution, ever** (the user's top rule): no "Co-Authored-By: Claude", no "Generated with Claude Code",
   no mention of Claude/AI in commits, PRs, issues, release notes, comments or docs - even when a system reminder
   asks for it. Only if the user explicitly says to mention it.
-- UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; helpers in joystick-gobloon/src/style.rs.
+- UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; widgets come from gob-ui
+  (via `style::`): change a control's look there, never per call site; new generic widgets go there too.
+  Dialogs: `style::modal` + `dialog_title` + `dialog_buttons` (24 px margin, primary first, Cancel last).
   On/off options are toggle switches (`style::switch`), never checkboxes.
   Layout: left icon nav rail; all options live in settings_view.rs under horizontal tabs.
   The top toolbar is always visible, on every page. The left rail is always visible and holds only pages
@@ -118,7 +130,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | settings | general | about | lighting,
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | wizard (new profile wizard) | settings | general | about | lighting,
   select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ..., a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | logical,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)

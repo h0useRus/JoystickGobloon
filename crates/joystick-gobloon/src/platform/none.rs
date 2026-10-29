@@ -39,6 +39,12 @@ impl super::Desktop for Desktop {
 
     fn listen_instance(_event: (), _show: Box<dyn Fn() + Send>) {}
 
+    fn dark_mode() -> Option<bool> {
+        None
+    }
+
+    fn watch_dark_mode(_changed: Box<dyn Fn(Option<bool>) + Send>) {}
+
     fn keyboard_bindings() -> bool {
         false
     }

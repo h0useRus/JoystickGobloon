@@ -125,6 +125,7 @@ impl ModifiersWindow {
             }
         }
         egui::Window::new(i18n.tr("modifiers-edit"))
+            .frame(style::window_frame(ctx))
             .open(open)
             .collapsible(false)
             .resizable(false)
@@ -144,7 +145,7 @@ impl ModifiersWindow {
                                 .names
                                 .entry(m.name.clone())
                                 .or_insert_with(|| m.name.clone());
-                            let r = ui.add(egui::TextEdit::singleline(text).desired_width(80.0));
+                            let r = ui.add(style::text_field(text).desired_width(80.0));
                             if r.lost_focus() && *text != m.name {
                                 ops.push(ModifierOp::Rename {
                                     old: m.name.clone(),

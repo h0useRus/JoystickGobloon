@@ -5,12 +5,13 @@
 //! controller, keeps a shared snapshot for the GUI and emits change events for the engine.
 
 pub mod exclusive;
+mod filter;
 mod platform;
 mod service;
 
 pub use service::{
-    Calibrations, DEFAULT_POLL_INTERVAL, InputHandle, InputService, MAX_POLL_INTERVAL,
-    MIN_POLL_INTERVAL,
+    Calibrations, DEFAULT_POLL_INTERVAL, InputHandle, InputService, MAX_DEBOUNCE_MS, MAX_JITTER,
+    MAX_POLL_INTERVAL, MIN_POLL_INTERVAL,
 };
 
 /// Number of DirectInput axis slots: X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1.
@@ -53,6 +54,9 @@ pub struct Calibration {
     pub high: i32,
     /// Centered axis (stick); `false` for sliders and throttles, which use low..high only.
     pub with_center: bool,
+    /// Jitter threshold in tenths of a percent of the axis travel: smaller changes are
+    /// ignored, for worn potentiometers (0 = off, at most [`MAX_JITTER`]).
+    pub jitter: u16,
 }
 
 impl Default for Calibration {
@@ -64,11 +68,17 @@ impl Default for Calibration {
             center_high: 0,
             high: 32767,
             with_center: true,
+            jitter: 0,
         }
     }
 }
 
 impl Calibration {
+    /// [`Self::jitter`] in the -1..1 units of calibrated values.
+    pub fn jitter_step(&self) -> f32 {
+        f32::from(self.jitter.min(MAX_JITTER)) / 1000.0 * 2.0
+    }
+
     /// Raw value -> -1..1 (Gremlin's with_center_calibration / no_center_calibration).
     pub fn apply(&self, raw: i32) -> f32 {
         let v = f64::from(raw.clamp(self.low.min(self.high), self.high.max(self.low)));
@@ -191,6 +201,7 @@ mod tests {
             center_high: 1000,
             high: 30000,
             with_center: true,
+            jitter: 0,
         };
         assert_eq!(c.apply(0), 0.0);
         assert_eq!(c.apply(500), 0.0, "inside the center band");

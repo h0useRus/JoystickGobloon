@@ -95,13 +95,14 @@ impl super::Backend for Platform {
         Some(Controller { di, pad })
     }
 
-    fn wait(&self, devices: &[Controller], events: bool, poll: Duration) {
+    fn wait(&self, devices: &[Controller], events: bool, poll: Duration, wake: Option<Duration>) {
+        let at_most = |d: Duration| wake.map_or(d, |w| w.min(d));
         if !events {
-            std::thread::sleep(poll);
+            std::thread::sleep(at_most(poll));
             return;
         }
         if devices.is_empty() {
-            std::thread::sleep(EVENT_TIMEOUT);
+            std::thread::sleep(at_most(EVENT_TIMEOUT));
             return;
         }
         let mut handles = self.handles.borrow_mut();
@@ -114,21 +115,27 @@ impl super::Backend for Platform {
                 .take(MAX_WAIT - 1),
         );
         if handles.is_empty() {
-            std::thread::sleep(poll);
+            std::thread::sleep(at_most(poll));
             return;
         }
         let mut timeout = EVENT_TIMEOUT.as_millis() as u32;
-        if handles.len() < devices.len() {
-            // Some devices refused a change signal: wake for the signals and, every `poll`,
-            // for those devices. The timer is precise; a wait timeout is not (~15 ms steps).
-            let due = -((poll.as_nanos() / 100) as i64);
+        // Some devices refused a change signal: wake for the signals and, every `poll`, for
+        // those devices; and when a debounced input is due. The timer is precise; a wait
+        // timeout is not (~15 ms steps).
+        let paced = (handles.len() < devices.len()).then_some(poll);
+        let due = match (paced, wake) {
+            (Some(p), Some(w)) => Some(p.min(w)),
+            (p, w) => p.or(w),
+        };
+        if let Some(due) = due {
+            let due_100ns = -((due.as_nanos() / 100).max(1) as i64);
             // SAFETY: our own timer, relative due time in 100 ns units, no completion routine.
-            let armed = self
-                .timer
-                .filter(|&t| unsafe { SetWaitableTimer(t, &due, 0, None, None, false) }.is_ok());
+            let armed = self.timer.filter(|&t| {
+                unsafe { SetWaitableTimer(t, &due_100ns, 0, None, None, false) }.is_ok()
+            });
             match armed {
                 Some(timer) => handles.push(timer),
-                None => timeout = (poll.as_millis() as u32).max(1),
+                None => timeout = (due.as_millis() as u32).max(1),
             }
         }
         // SAFETY: the handles belong to `devices` (open during the wait) and to `self`.

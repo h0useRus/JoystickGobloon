@@ -127,6 +127,27 @@ pub(super) fn small_icon_size() -> u32 {
     unsafe { GetSystemMetrics(SM_CXSMICON) }.max(0) as u32
 }
 
+/// The apps' light/dark setting (`AppsUseLightTheme`: 0 = dark); `None` when it is not set.
+pub(super) fn dark_mode() -> Option<bool> {
+    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
+    use windows::core::w;
+    let mut light = 0u32;
+    let mut size = std::mem::size_of::<u32>() as u32;
+    // SAFETY: reads one DWORD into a local of that size.
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            w!("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
+            w!("AppsUseLightTheme"),
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&raw mut light).cast()),
+            Some(&raw mut size),
+        )
+    };
+    status.is_ok().then_some(light == 0)
+}
+
 const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const RUN_VALUE: &str = "JoystickGobloon";
 
