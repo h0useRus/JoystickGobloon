@@ -26,7 +26,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   buffered buttons/hats; ids = DI instance GUIDs like Gremlin; links dinput8.lib/dxguid.lib statically (-bundle)
   for c_dfDIJoystick2; Xbox controllers (`IG_` in the path) are read through XInput in xinput.rs: LT=Z, RT=Rz,
   Guide = button 11), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
-  order, keyboards -> set 1 scan codes; tests/uinput.rs = virtual devices, `check.ps1 --devices`),
+  order, keyboards -> set 1 scan codes; hid.rs = buttons past evdev's 80 from hidraw (report descriptor,
+  usage = button number; per-stick udev rule, `unread_buttons` until allowed); tests/uinput.rs = virtual
+  devices, tests/uhid.rs = 128-button HID stick (needs the uhid module, not in WSL2), `check.ps1 --devices`),
   platform/none.rs elsewhere; example `monitor`
   + filter.rs: jitter threshold per axis (in `Calibration::jitter`) and button/hat debounce per device
   (`set_debounce`), applied in service.rs for every backend; the snapshot shows filtered values, `raw` stays as read
