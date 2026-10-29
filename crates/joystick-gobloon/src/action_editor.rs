@@ -1569,16 +1569,14 @@ impl Editor<'_> {
                         } else {
                             (OutputMark::Free, 0)
                         };
+                        // Allocated at its size, not in a scope: a scope never wraps the row.
+                        let size = egui::Vec2::new(cell.width, 26.0);
                         let r = ui
-                            .add_enabled_ui(enabled, |ui| {
-                                style::output_button(
-                                    ui,
-                                    cell.label,
-                                    egui::Vec2::new(cell.width, 26.0),
-                                    selected,
-                                    mark,
-                                    count,
-                                )
+                            .allocate_ui(size, |ui| {
+                                if !enabled {
+                                    ui.disable();
+                                }
+                                style::output_button(ui, cell.label, size, selected, mark, count)
                             })
                             .inner;
                         let r = r
