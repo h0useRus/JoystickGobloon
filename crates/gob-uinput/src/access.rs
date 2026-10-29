@@ -8,7 +8,8 @@
 //! any program of the user could then read what is typed. Users who want keyboard bindings opt
 //! in with a rule of its own ([`KEYBOARD_RULE`], [`install_keyboard`]) or the `input` group.
 //! Sticks with more than 80 buttons get read access to their raw HID node one by one
-//! ([`install_raw`]).
+//! ([`install_raw`]). Hidden sticks get their raw HID node closed to the user again
+//! ([`set_hidden_sticks`]).
 
 use std::io;
 use std::path::Path;
@@ -46,6 +47,17 @@ const RAW_RULE_HEADER: &str = "\
 # buttons past 80 (allowed per stick in Joystick Gobloon).
 ";
 
+/// Rules closing the raw HID node (hidraw) of hidden sticks to the user, one line per stick:
+/// hiding through evdev does not keep programs that read hidraw (Steam, SDL's HIDAPI, Wine) away.
+/// After the rules giving access (`70-`, also [`RAW_RULE_PATH`]: hiding wins), before systemd
+/// applies `uaccess` (73-seat-late.rules).
+pub const HIDDEN_RULE_PATH: &str = "/etc/udev/rules.d/72-joystick-gobloon-hidden.rules";
+
+const HIDDEN_RULE_HEADER: &str = "\
+# Joystick Gobloon: only root may open the raw HID device of these sticks while they are hidden
+# (hidden in Joystick Gobloon).
+";
+
 /// Our own virtual devices start with this name; they are not the user's keyboards.
 const OWN_PREFIX: &str = "Joystick Gobloon";
 
@@ -60,7 +72,8 @@ const INSTALL_SCRIPT: &str = "printf '%s' \"$1\" > \"$2\" \
 /// until the device is connected again (udev does not take `uaccess` back on a change event).
 const REMOVE_SCRIPT: &str = "rm -f \"$1\" \
     && udevadm control --reload-rules \
-    && udevadm trigger --action=change --subsystem-match=input";
+    && udevadm trigger --action=change --subsystem-match=input \
+    && udevadm trigger --action=change --subsystem-match=hidraw";
 
 /// The hidraw rule line of the USB stick with these ids.
 pub fn raw_rule(vendor: u16, product: u16) -> String {
@@ -68,6 +81,72 @@ pub fn raw_rule(vendor: u16, product: u16) -> String {
         "SUBSYSTEM==\"hidraw\", ATTRS{{idVendor}}==\"{vendor:04x}\", \
          ATTRS{{idProduct}}==\"{product:04x}\", TAG+=\"uaccess\"\n"
     )
+}
+
+/// The hidden-stick rule line of the USB stick with these ids: no `uaccess`, root only (the mode
+/// also masks access lists given before).
+pub fn hidden_rule(vendor: u16, product: u16) -> String {
+    format!(
+        "SUBSYSTEM==\"hidraw\", ATTRS{{idVendor}}==\"{vendor:04x}\", \
+         ATTRS{{idProduct}}==\"{product:04x}\", TAG-=\"uaccess\", OWNER=\"root\", \
+         GROUP=\"root\", MODE=\"0600\"\n"
+    )
+}
+
+/// The hidden-stick rule file for these sticks; empty for none.
+fn hidden_rules(sticks: &[(u16, u16)]) -> String {
+    if sticks.is_empty() {
+        return String::new();
+    }
+    let mut text = HIDDEN_RULE_HEADER.to_string();
+    for &(vendor, product) in sticks {
+        text.push_str(&hidden_rule(vendor, product));
+    }
+    text
+}
+
+/// The (vendor, product) ids of the sticks in a rule file's lines.
+fn rule_sticks(text: &str) -> Vec<(u16, u16)> {
+    let id = |line: &str, attr: &str| {
+        let key = format!("ATTRS{{{attr}}}==\"");
+        let start = line.find(&key)? + key.len();
+        u16::from_str_radix(line.get(start..start + 4)?, 16).ok()
+    };
+    text.lines()
+        .filter(|l| !l.trim_start().starts_with('#'))
+        .filter_map(|l| Some((id(l, "idVendor")?, id(l, "idProduct")?)))
+        .collect()
+}
+
+/// The sticks whose raw HID node the hidden-stick rule closes now.
+pub fn hidden_sticks() -> Vec<(u16, u16)> {
+    rule_sticks(&std::fs::read_to_string(HIDDEN_RULE_PATH).unwrap_or_default())
+}
+
+/// Closes the raw HID node of exactly these sticks (the hidden-stick rule; none: removed) with
+/// administrator rights like [`install`]; nothing to do when the rule says so already. Returns
+/// whether it changed. Sticks shown again get their access back from the other rules at once.
+/// Blocking until the user answered: call it off the GUI thread.
+pub fn set_hidden_sticks(sticks: &[(u16, u16)]) -> Result<bool, String> {
+    let mut sticks = sticks.to_vec();
+    sticks.sort_unstable();
+    sticks.dedup();
+    let mut now = hidden_sticks();
+    now.sort_unstable();
+    if now == sticks {
+        return Ok(false);
+    }
+    if sticks.is_empty() {
+        pkexec(&[REMOVE_SCRIPT, "sh", HIDDEN_RULE_PATH])?;
+    } else {
+        pkexec(&[
+            INSTALL_SCRIPT,
+            "sh",
+            &hidden_rules(&sticks),
+            HIDDEN_RULE_PATH,
+        ])?;
+    }
+    Ok(true)
 }
 
 /// The hidraw rule file `current` with the stick's line added (the header first when new).
@@ -223,6 +302,26 @@ mod tests {
         let two = with_raw_rule(&one, 0x231d, 0x0201);
         assert_eq!(two.lines().filter(|l| !l.starts_with('#')).count(), 2);
         assert_ne!(RAW_RULE_PATH, RULE_PATH);
+    }
+
+    #[test]
+    fn hidden_rules_close_hidraw_per_stick() {
+        assert_eq!(hidden_rules(&[]), "");
+        let text = hidden_rules(&[(0x044f, 0xb687), (0x231d, 0x0200)]);
+        assert!(text.starts_with('#'));
+        let lines: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines.iter().all(|l| l.starts_with("SUBSYSTEM==\"hidraw\"")
+            && l.contains("TAG-=\"uaccess\"")
+            && l.contains("MODE=\"0600\"")));
+        assert_eq!(rule_sticks(&text), [(0x044f, 0xb687), (0x231d, 0x0200)]);
+        assert_eq!(rule_sticks(&raw_rule(0x231d, 0x0201)), [(0x231d, 0x0201)]);
+        assert!(rule_sticks("# ATTRS{idVendor}==\"1234\"").is_empty());
+        // After every rule that gives access, before systemd applies it.
+        let name = |p: &str| p.rsplit('/').next().unwrap().to_string();
+        assert!(name(HIDDEN_RULE_PATH) > name(RAW_RULE_PATH));
+        assert!(name(HIDDEN_RULE_PATH) > name(RULE_PATH));
+        assert!(name(HIDDEN_RULE_PATH).as_str() < "73-seat-late.rules");
     }
 
     #[test]

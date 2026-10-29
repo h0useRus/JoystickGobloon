@@ -98,6 +98,12 @@ pub trait Backend: Send + Sync {
         }
         self.set_app(exe, true).map(|()| true)
     }
+
+    /// Whether the state changed since the last call without a call here (a step finished in
+    /// the background, e.g. after the administrator password): read it again.
+    fn take_changed(&self) -> bool {
+        false
+    }
 }
 
 /// This platform's backend.
