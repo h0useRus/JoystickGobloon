@@ -309,7 +309,10 @@ fn axis_block(
                 let rect = Rect::from_min_size(Pos2::new(left, row.top()), Vec2::new(w, h));
                 ui.put(
                     rect,
-                    egui::DragValue::new(v).range(RAW_MIN..=RAW_MAX).speed(16.0),
+                    style::Spin::new(v)
+                        .range(RAW_MIN..=RAW_MAX)
+                        .step(16.0)
+                        .width(w),
                 );
             }
             let on = matches!(capture, Some(Capture::Extrema { .. }));

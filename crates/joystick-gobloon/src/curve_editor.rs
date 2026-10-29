@@ -114,17 +114,17 @@ impl Editor<'_> {
                         ui.label(RichText::new(self.i18n.tr(what)).weak());
                         ui.end_row();
                         ui.label("X");
-                        let drag = egui::DragValue::new(&mut x)
+                        let drag = style::Spin::new(&mut x)
                             .range(-1.0..=1.0)
-                            .speed(0.005)
-                            .fixed_decimals(4);
+                            .step(0.005)
+                            .decimals(4);
                         changed |= ui.add_enabled(!is_end && !locked, drag).changed();
                         ui.end_row();
                         ui.label("Y");
-                        let drag = egui::DragValue::new(&mut y)
+                        let drag = style::Spin::new(&mut y)
                             .range(-1.0..=1.0)
-                            .speed(0.005)
-                            .fixed_decimals(4);
+                            .step(0.005)
+                            .decimals(4);
                         changed |= ui.add_enabled(!locked, drag).changed();
                         ui.end_row();
                     });
@@ -146,12 +146,7 @@ impl Editor<'_> {
         ui.horizontal(|ui| {
             let slider = ((size - 140.0) / 2.0).max(60.0);
             let field = |ui: &mut egui::Ui, v: &mut f32, range: std::ops::RangeInclusive<f32>| {
-                ui.add(
-                    egui::DragValue::new(v)
-                        .range(range)
-                        .speed(0.005)
-                        .fixed_decimals(4),
-                );
+                ui.add(style::Spin::new(v).range(range).step(0.005).decimals(4));
             };
             field(ui, &mut low, -1.0..=center_low);
             range_slider(ui, slider, &mut low, &mut center_low, -1.0, 0.0);

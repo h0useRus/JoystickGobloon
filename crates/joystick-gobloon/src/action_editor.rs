@@ -828,9 +828,9 @@ impl Editor<'_> {
                         ui.label(RichText::new(icon::CLOCK_COUNTDOWN).size(style::ICON_SIZE))
                             .on_hover_text(self.i18n.tr("edit-chain-timeout"));
                         let mut t = timeout;
-                        let drag = egui::DragValue::new(&mut t)
+                        let drag = style::Spin::new(&mut t)
                             .range(0.0..=60.0)
-                            .speed(0.05)
+                            .step(0.05)
                             .suffix(" s");
                         if ui.add(drag).changed() {
                             self.set(&action.id, "timeout", "float", py_float(t as f32));
@@ -927,7 +927,7 @@ impl Editor<'_> {
                         ui.label(RichText::new(icon::SPEAKER_HIGH).size(style::ICON_SIZE))
                             .on_hover_text(self.i18n.tr("edit-volume"));
                         let mut v = volume;
-                        if ui.add(egui::Slider::new(&mut v, 0..=100)).changed() {
+                        if style::slider(ui, &mut v, 0..=100, 1.0, "").changed() {
                             self.set(&action.id, "volume", "int", v.to_string());
                         }
                         ui.separator();
@@ -994,10 +994,10 @@ impl Editor<'_> {
                             ui.label(RichText::new(glyph).size(style::ICON_SIZE))
                                 .on_hover_text(self.i18n.tr(key));
                             let mut v = value as f32;
-                            let drag = egui::DragValue::new(&mut v)
+                            let drag = style::Spin::new(&mut v)
                                 .range(0.0..=1.0)
-                                .speed(0.005)
-                                .fixed_decimals(3);
+                                .step(0.005)
+                                .decimals(3);
                             if ui.add(drag).changed() {
                                 self.set(&id, name, "float", py_float(v));
                             }
@@ -1034,10 +1034,10 @@ impl Editor<'_> {
                         ui.label(RichText::new(icon::RULER).size(style::ICON_SIZE))
                             .on_hover_text(self.i18n.tr("edit-delta-threshold"));
                         let mut t = threshold as f32;
-                        let drag = egui::DragValue::new(&mut t)
+                        let drag = style::Spin::new(&mut t)
                             .range(0.0001..=2.0)
-                            .speed(0.005)
-                            .fixed_decimals(3);
+                            .step(0.005)
+                            .decimals(3);
                         if ui.add(drag).changed() {
                             self.set(&action.id, "threshold", "float", py_float(t));
                         }
@@ -1091,10 +1091,10 @@ impl Editor<'_> {
                     ui.horizontal(|ui| {
                         ui.label(self.i18n.tr("edit-split"));
                         let mut v = split as f32;
-                        let drag = egui::DragValue::new(&mut v)
+                        let drag = style::Spin::new(&mut v)
                             .range(-1.0..=1.0)
-                            .speed(0.005)
-                            .fixed_decimals(3);
+                            .step(0.005)
+                            .decimals(3);
                         if ui.add(drag).changed() {
                             self.set(&action.id, "split-value", "float", py_float(v));
                         }
@@ -1602,10 +1602,10 @@ impl Editor<'_> {
                         .and_then(|s| s.trim().parse().ok())
                         .unwrap_or(1.0);
                     ui.label(RichText::new(self.i18n.tr("vjoy-speed")).weak());
-                    let drag = egui::DragValue::new(&mut speed)
+                    let drag = style::Spin::new(&mut speed)
                         .range(0.1..=50.0)
-                        .speed(0.05)
-                        .fixed_decimals(2);
+                        .step(0.05)
+                        .decimals(2);
                     if ui.add(drag).changed() {
                         self.set(&id, "axis-scaling", "float", py_float(speed));
                     }
@@ -1705,7 +1705,7 @@ impl Editor<'_> {
                         ui.horizontal(|ui| {
                             let mut d = direction.round() as i32;
                             if ui
-                                .add(egui::DragValue::new(&mut d).range(0..=359).suffix("°"))
+                                .add(style::Spin::new(&mut d).range(0..=359).suffix("°"))
                                 .changed()
                             {
                                 self.set(&id, "direction", "int", d.to_string());
@@ -1733,9 +1733,9 @@ impl Editor<'_> {
                             let mut v = value.round() as i32;
                             if ui
                                 .add(
-                                    egui::DragValue::new(&mut v)
+                                    style::Spin::new(&mut v)
                                         .range(0..=10_000)
-                                        .speed(5)
+                                        .step(5)
                                         .suffix(" px/s"),
                                 )
                                 .changed()
@@ -1749,9 +1749,9 @@ impl Editor<'_> {
                             let mut t = time_to_max_speed;
                             if ui
                                 .add(
-                                    egui::DragValue::new(&mut t)
+                                    style::Spin::new(&mut t)
                                         .range(0.0..=10.0)
-                                        .speed(0.01)
+                                        .step(0.01)
                                         .suffix(" s"),
                                 )
                                 .changed()
@@ -1771,9 +1771,9 @@ impl Editor<'_> {
             let mut v = value as f32;
             if ui
                 .add(
-                    egui::DragValue::new(&mut v)
+                    style::Spin::new(&mut v)
                         .range(0.05..=10.0)
-                        .speed(0.01)
+                        .step(0.01)
                         .suffix(" s"),
                 )
                 .changed()
@@ -2020,10 +2020,10 @@ impl Editor<'_> {
                     }
                     if let Some(speed) = relative {
                         let mut v = speed as f32;
-                        let drag = egui::DragValue::new(&mut v)
+                        let drag = style::Spin::new(&mut v)
                             .range(0.1..=50.0)
-                            .speed(0.05)
-                            .fixed_decimals(2);
+                            .step(0.05)
+                            .decimals(2);
                         if ui
                             .add(drag)
                             .on_hover_text(self.i18n.tr("vjoy-speed"))
@@ -2163,10 +2163,7 @@ impl Editor<'_> {
                 ui.label(RichText::new(glyph).size(style::ICON_SIZE))
                     .on_hover_text(self.i18n.tr(key));
                 let mut v = value as f32;
-                let drag = egui::DragValue::new(&mut v)
-                    .range(range)
-                    .speed(0.01)
-                    .fixed_decimals(2);
+                let drag = style::Spin::new(&mut v).range(range).step(0.01).decimals(2);
                 if ui.add(drag).changed() {
                     self.set(&id, name, "float", py_float(v));
                 }
@@ -2514,9 +2511,9 @@ impl Editor<'_> {
             ui.label(RichText::new(icon::TIMER).size(style::ICON_SIZE))
                 .on_hover_text(self.i18n.tr("edit-tap-threshold"));
             let mut t = threshold;
-            let drag = egui::DragValue::new(&mut t)
+            let drag = style::Spin::new(&mut t)
                 .range(0.05..=10.0)
-                .speed(0.01)
+                .step(0.01)
                 .suffix(" s");
             if ui.add(drag).changed() {
                 self.set(&id, "threshold", "float", py_float(t as f32));
@@ -2563,9 +2560,9 @@ impl Editor<'_> {
             let mut t = threshold;
             if ui
                 .add(
-                    egui::DragValue::new(&mut t)
+                    style::Spin::new(&mut t)
                         .range(0.05..=10.0)
-                        .speed(0.01)
+                        .step(0.01)
                         .suffix(" s"),
                 )
                 .changed()

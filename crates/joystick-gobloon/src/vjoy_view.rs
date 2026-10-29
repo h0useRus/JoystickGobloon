@@ -633,9 +633,8 @@ impl Tester {
                     let name = crate::devices_view::axis_name(i18n, slot.into());
                     output_label(ui, i18n, marks, &output, &name);
                     ui.horizontal(|ui| {
-                        let slider =
-                            egui::Slider::new(&mut self.axes[i], -1.0..=1.0).fixed_decimals(2);
-                        let changed = ui.add(slider).changed();
+                        let changed =
+                            style::slider(ui, &mut self.axes[i], -1.0..=1.0, 0.01, "").changed();
                         let center = style::icon_button(ui, true, icon::CROSSHAIR, "0").clicked();
                         if center {
                             self.axes[i] = 0.0;
@@ -770,8 +769,7 @@ impl PadTester {
                         -1.0..=1.0
                     };
                     ui.horizontal(|ui| {
-                        let slider = egui::Slider::new(value, range).fixed_decimals(2);
-                        let changed = ui.add(slider).changed();
+                        let changed = style::slider(ui, value, range, 0.01, "").changed();
                         let rest = style::icon_button(ui, true, icon::CROSSHAIR, "0").clicked();
                         if rest {
                             *value = 0.0;

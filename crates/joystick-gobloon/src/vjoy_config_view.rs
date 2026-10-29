@@ -207,12 +207,12 @@ impl VJoyConfig {
                 ui.end_row();
 
                 ui.label(i18n.tr("vjoy-buttons"));
-                style::stepper(ui, &mut edit.buttons, 0..=caps.max_buttons);
+                ui.add(style::Spin::new(&mut edit.buttons).range(0..=caps.max_buttons));
                 ui.end_row();
 
                 ui.label(i18n.tr("vjoy-hats"));
                 ui.horizontal(|ui| {
-                    style::stepper(ui, &mut edit.hats, 0..=caps.max_hats);
+                    ui.add(style::Spin::new(&mut edit.hats).range(0..=caps.max_hats));
                     ui.add_enabled_ui(edit.hats > 0, |ui| {
                         ui.radio_value(
                             &mut edit.discrete_hats,
