@@ -64,7 +64,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
 - plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
-  on every release: learn.html = every action with a
+  on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
+  hiding, learn.html = every action with a
   picture of its editor in site/img/actions/, the right panel cropped from a 1102x732 window; screenshots in
   site/img/). README.md is a short overview linking there; no Markdown docs besides docs/CODE_SIGNING.md.
   No experimental actions on the site
