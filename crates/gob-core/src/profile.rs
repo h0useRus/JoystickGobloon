@@ -14,9 +14,12 @@ pub enum VirtualOutput {
     },
     /// `control` is a map-to-gamepad control name (`a`, `left-x`, `dpad`, ...).
     Gamepad { gamepad: u32, control: String },
+    /// Input `id` of that type on the profile's logical device.
+    Logical { input_type: InputType, id: u32 },
 }
 
-/// The virtual output `action` writes, if it is map-to-vjoy or map-to-gamepad.
+/// The virtual output `action` writes, if it is map-to-vjoy, map-to-gamepad or
+/// map-to-logical-device.
 pub fn virtual_output(action: &Action) -> Option<VirtualOutput> {
     match action.kind() {
         ActionKind::MapToVjoy {
@@ -35,6 +38,9 @@ pub fn virtual_output(action: &Action) -> Option<VirtualOutput> {
             gamepad,
             control: control.to_string(),
         }),
+        ActionKind::MapToLogicalDevice { input_type, id, .. } => {
+            Some(VirtualOutput::Logical { input_type, id })
+        }
         _ => None,
     }
 }
@@ -378,12 +384,12 @@ impl Profile {
                     input_type,
                     id,
                 } => Some((device, input_type, id)),
-                VirtualOutput::Gamepad { .. } => None,
+                _ => None,
             })
             .collect()
     }
 
-    /// Virtual outputs that map-to-vjoy and map-to-gamepad actions write to, each with the
+    /// Virtual outputs that map-to-vjoy, map-to-gamepad and map-to-logical-device actions write to, each with the
     /// bindings writing it (one entry per binding). `mode` limits them to the bindings that can
     /// run together with it ([`Self::modes_overlap`]); `None` takes every mode.
     pub fn output_usage(&self, mode: Option<&str>) -> HashMap<VirtualOutput, Vec<OutputUse>> {
