@@ -12,7 +12,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   data dir, fonts, single instance, keys, window/tray (`Window` handle), autostart, updates; windows/ = Win32 + Inno Setup)
 - crates/gob-ui      egui widget kit, app-neutral (reusable elsewhere): tokens.rs = sizes and 4 px spacing grid,
   theme.rs = palette (the app passes its colors) + text sizes, widgets (buttons, tabs, switch, tick, Spin
-  numeric up-down + slider, text_field, dialogs: modal/window_frame/dialog_title/dialog_buttons, WinUI layout).
+  numeric up-down + slider, text_field, dialogs: modal/dialog_window (Windows-style title bar)/dialog_title/dialog_buttons, WinUI layout).
   joystick-gobloon/src/style.rs re-exports it and adds only the app's palette, fonts and own widgets
 - crates/gob-core    profile model
 - crates/gob-core    profile model grown from Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views;

@@ -124,79 +124,73 @@ impl ModifiersWindow {
                 self.capture = None;
             }
         }
-        egui::Window::new(i18n.tr("modifiers-edit"))
-            .frame(style::window_frame(ctx))
-            .open(open)
+        let title = i18n.tr("modifiers-edit");
+        let window = egui::Window::new(&title)
             .collapsible(false)
             .resizable(false)
             .pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(ctx.screen_rect().center())
-            .show(ctx, |ui| {
-                if profile.modifiers.is_empty() {
-                    ui.label(RichText::new(i18n.tr("modifiers-none")).weak());
-                    ui.add_space(6.0);
-                }
-                egui::Grid::new("modifiers")
-                    .num_columns(3)
-                    .spacing([8.0, 6.0])
-                    .show(ui, |ui| {
-                        for m in &profile.modifiers {
-                            let text = self
-                                .names
-                                .entry(m.name.clone())
-                                .or_insert_with(|| m.name.clone());
-                            let r = ui.add(style::text_field(text).desired_width(80.0));
-                            if r.lost_focus() && *text != m.name {
-                                ops.push(ModifierOp::Rename {
-                                    old: m.name.clone(),
-                                    new: text.clone(),
-                                });
-                                self.names.clear();
-                            }
-                            let waiting = self.capture == Some(Capture::Reassign(m.name.clone()));
-                            let caption = if waiting {
-                                i18n.tr("modifiers-press")
-                            } else {
-                                button_name(i18n, profile, devices, m)
-                            };
-                            let button =
-                                egui::Button::new(format!("{}  {caption}", icon::RADIO_BUTTON))
-                                    .selected(waiting);
-                            if ui
-                                .add(button)
-                                .on_hover_text(i18n.tr("modifiers-assign"))
-                                .clicked()
-                            {
-                                self.start(
-                                    devices,
-                                    (!waiting).then(|| Capture::Reassign(m.name.clone())),
-                                );
-                            }
-                            if style::icon_button(
-                                ui,
-                                true,
-                                icon::TRASH,
-                                &i18n.tr("modifiers-remove"),
-                            )
-                            .clicked()
-                            {
-                                ops.push(ModifierOp::Remove(m.name.clone()));
-                                self.names.clear();
-                            }
-                            ui.end_row();
+            .default_pos(ctx.screen_rect().center());
+        style::dialog_window(ctx, window, &title, open, |ui| {
+            if profile.modifiers.is_empty() {
+                ui.label(RichText::new(i18n.tr("modifiers-none")).weak());
+                ui.add_space(6.0);
+            }
+            egui::Grid::new("modifiers")
+                .num_columns(3)
+                .spacing([8.0, 6.0])
+                .show(ui, |ui| {
+                    for m in &profile.modifiers {
+                        let text = self
+                            .names
+                            .entry(m.name.clone())
+                            .or_insert_with(|| m.name.clone());
+                        let r = ui.add(style::text_field(text).desired_width(80.0));
+                        if r.lost_focus() && *text != m.name {
+                            ops.push(ModifierOp::Rename {
+                                old: m.name.clone(),
+                                new: text.clone(),
+                            });
+                            self.names.clear();
                         }
-                    });
-                ui.add_space(4.0);
-                let waiting = self.capture == Some(Capture::New);
-                let text = if waiting {
-                    format!("{}  {}", icon::X, i18n.tr("modifiers-press"))
-                } else {
-                    format!("{}  {}", icon::PLUS, i18n.tr("modifiers-add"))
-                };
-                if ui.add(egui::Button::new(text).selected(waiting)).clicked() {
-                    self.start(devices, (!waiting).then_some(Capture::New));
-                }
-            });
+                        let waiting = self.capture == Some(Capture::Reassign(m.name.clone()));
+                        let caption = if waiting {
+                            i18n.tr("modifiers-press")
+                        } else {
+                            button_name(i18n, profile, devices, m)
+                        };
+                        let button =
+                            egui::Button::new(format!("{}  {caption}", icon::RADIO_BUTTON))
+                                .selected(waiting);
+                        if ui
+                            .add(button)
+                            .on_hover_text(i18n.tr("modifiers-assign"))
+                            .clicked()
+                        {
+                            self.start(
+                                devices,
+                                (!waiting).then(|| Capture::Reassign(m.name.clone())),
+                            );
+                        }
+                        if style::icon_button(ui, true, icon::TRASH, &i18n.tr("modifiers-remove"))
+                            .clicked()
+                        {
+                            ops.push(ModifierOp::Remove(m.name.clone()));
+                            self.names.clear();
+                        }
+                        ui.end_row();
+                    }
+                });
+            ui.add_space(4.0);
+            let waiting = self.capture == Some(Capture::New);
+            let text = if waiting {
+                format!("{}  {}", icon::X, i18n.tr("modifiers-press"))
+            } else {
+                format!("{}  {}", icon::PLUS, i18n.tr("modifiers-add"))
+            };
+            if ui.add(egui::Button::new(text).selected(waiting)).clicked() {
+                self.start(devices, (!waiting).then_some(Capture::New));
+            }
+        });
         if !*open {
             self.capture = None;
         }
