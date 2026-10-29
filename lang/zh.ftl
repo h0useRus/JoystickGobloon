@@ -181,9 +181,26 @@ kind-response-curve = 响应曲线
 kind-change-mode = 切换模式
 kind-tempo = 短按 / 长按
 kind-description = 描述
+edit-rename = 点击重命名
+edit-description-hint = 点击写备注
+edit-click-to-edit = 点击编辑
 
 # Files and modes
 action-new = 新建配置文件
+wizard-open = 用向导新建配置文件：每个控制器映射到一个虚拟摇杆
+wizard-title = 新建配置文件向导
+wizard-name = 配置文件名称
+wizard-name-hint = 例如：我的飞行设置
+wizard-create = 创建
+wizard-devices = 为每个控制器选择要映射的虚拟摇杆。每个轴、按钮和苦力帽都会得到一个 Map to vJoy。
+wizard-none = 不映射
+wizard-taken = 已有其他控制器映射到此虚拟摇杆
+wizard-no-vjoy = 还没有虚拟摇杆：请先在“虚拟摇杆”页面添加
+wizard-fewer = { $vjoy } 的输入比 { $device } 少：{ $missing } 未映射
+wizard-axes = { $n } 个轴
+wizard-buttons = { $n } 个按钮
+wizard-hats = { $n } 个苦力帽
+status-wizard = 已创建配置文件：{ $name }
 action-save-as = 另存为…
 status-new = 新配置文件
 unsaved-title = 未保存的更改

@@ -22,7 +22,9 @@ gob-hidhide = { path = "crates/gob-hidhide" }
 gob-hide = { path = "crates/gob-hide" }
 gob-engine = { path = "crates/gob-engine" }
 gob-lighting = { path = "crates/gob-lighting" }
+gob-ui = { path = "crates/gob-ui" }
 eframe = "0.31"
+egui = "0.31"
 fluent-bundle = "0.15"
 unic-langid = "0.9"
 serde = { version = "1", features = ["derive"] }

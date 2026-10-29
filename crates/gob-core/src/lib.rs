@@ -5,6 +5,7 @@
 //! views (see [`action::ActionKind`]) are decoded on demand from the generic property tree.
 
 pub mod action;
+pub mod automap;
 pub mod condition;
 pub mod curve;
 pub mod edit;
@@ -19,6 +20,7 @@ pub use action::{
     MacroStep, MergeOp, MouseAction, MouseButton, Property, SUPPORTED_KINDS, format_color,
     parse_color,
 };
+pub use automap::Layout as InputLayout;
 pub use condition::{Comparator, Condition, Source as ConditionSource};
 pub use edit::{NewAction, child_groups, new_uuid};
 pub use logical::{

@@ -577,6 +577,7 @@ impl DevicesView {
         };
         let mut open = true;
         egui::Window::new(format!("{}  {}", icon::INFO, tab.name))
+            .frame(style::window_frame(ctx))
             .id(egui::Id::new("device-info"))
             .open(&mut open)
             .collapsible(false)
@@ -889,7 +890,7 @@ impl DevicesView {
                     let mut edited: String = ui
                         .data(|d| d.get_temp(buf_id))
                         .unwrap_or_else(|| text.to_string());
-                    let r = ui.add_sized([200.0, 22.0], egui::TextEdit::singleline(&mut edited));
+                    let r = ui.add_sized([200.0, 28.0], style::text_field(&mut edited));
                     if r.lost_focus() {
                         ui.data_mut(|d| d.remove::<String>(buf_id));
                         if edited.trim() != text {
@@ -943,28 +944,10 @@ impl DevicesView {
             Bound::Own(b) if !in_layer(b).is_empty() => {
                 let configs = in_layer(b);
                 let root = configs.first().map(|c| c.root_action.clone());
-                ui.horizontal(|ui| {
-                    // The binding's description: the root action's label, like Gremlin.
-                    if let Some(root_id) = &root
-                        && let Some(a) = p.profile.action(root_id)
-                    {
-                        let mut text = a
-                            .label()
-                            .filter(|l| *l != "None")
-                            .unwrap_or_default()
-                            .to_string();
-                        let edit = egui::TextEdit::singleline(&mut text)
-                            .hint_text(i18n.tr("edit-binding-description"))
-                            .desired_width((ui.available_width() - 40.0).max(120.0));
-                        if ui.add(edit).changed() {
-                            ops.push(Op::Set {
-                                action: root_id.clone(),
-                                name: "action-label".into(),
-                                ty: "string".into(),
-                                value: text,
-                            });
-                        }
-                    }
+                // Unbind on the right; the binding's description fills the rest of the row.
+                let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y + 4.0);
+                let layout = egui::Layout::right_to_left(egui::Align::Center);
+                ui.allocate_ui_with_layout(row, layout, |ui| {
                     if style::icon_button(ui, true, icon::TRASH, &i18n.tr("edit-unbind")).clicked()
                     {
                         ops.push(Op::Unbind {
@@ -974,6 +957,27 @@ impl DevicesView {
                             mode: b.mode.clone(),
                             layer: layer.clone(),
                         });
+                    }
+                    // The binding's description: the root action's label, like Gremlin.
+                    if let Some(root_id) = &root
+                        && let Some(a) = p.profile.action(root_id)
+                    {
+                        let mut text = a
+                            .label()
+                            .filter(|l| *l != "None")
+                            .unwrap_or_default()
+                            .to_string();
+                        let edit = style::EditableText::new(&mut text, ("binding-label", root_id))
+                            .hint(i18n.tr("edit-binding-description"))
+                            .panel();
+                        if ui.add(edit).on_hover_text(i18n.tr("edit-rename")).changed() {
+                            ops.push(Op::Set {
+                                action: root_id.clone(),
+                                name: "action-label".into(),
+                                ty: "string".into(),
+                                value: text,
+                            });
+                        }
                     }
                 });
                 if !layer.is_base() {

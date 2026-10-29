@@ -181,9 +181,35 @@ kind-response-curve = Courbe de réponse
 kind-change-mode = Changer de mode
 kind-tempo = Appui court / long
 kind-description = Description
+edit-rename = Cliquez pour renommer
+edit-description-hint = Cliquez pour écrire une note
+edit-click-to-edit = Cliquez pour modifier
 
 # Files and modes
 action-new = Nouveau profil
+wizard-open = Nouveau profil avec l’assistant : chaque manette vers un joystick virtuel
+wizard-title = Assistant de nouveau profil
+wizard-name = Nom du profil
+wizard-name-hint = p. ex. Mon simulateur de vol
+wizard-create = Créer
+wizard-devices = Choisissez le joystick virtuel de chaque manette. Chaque axe, bouton et chapeau reçoit un Map to vJoy.
+wizard-none = Non associé
+wizard-taken = Une autre manette utilise déjà ce joystick virtuel
+wizard-no-vjoy = Pas encore de joysticks virtuels : ajoutez-les d’abord sur la page Joysticks virtuels
+wizard-fewer = { $vjoy } a moins d’entrées que { $device } : { $missing } restent non associés
+wizard-axes = { $n ->
+    [one] 1 axe
+   *[other] { $n } axes
+}
+wizard-buttons = { $n ->
+    [one] 1 bouton
+   *[other] { $n } boutons
+}
+wizard-hats = { $n ->
+    [one] 1 chapeau
+   *[other] { $n } chapeaux
+}
+status-wizard = Profil créé : { $name }
 action-save-as = Enregistrer sous…
 status-new = Nouveau profil
 unsaved-title = Modifications non enregistrées

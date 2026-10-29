@@ -236,22 +236,20 @@ impl AppsView {
             return;
         };
         let mut choice = None;
-        egui::Modal::new(egui::Id::new("apps-remove")).show(ctx, |ui| {
+        style::modal(ctx, "apps-remove").show(ctx, |ui| {
             ui.set_width(420.0);
-            ui.heading(i18n.tr("apps-missing"));
+            style::dialog_title(ui, Some((icon::TRASH, None)), &i18n.tr("apps-missing"));
             ui.label(path.display().to_string());
-            ui.add_space(4.0);
+            ui.add_space(style::SPACE_XS);
             ui.label(i18n.tr("apps-missing-text"));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let remove = format!("{}  {}", icon::TRASH, i18n.tr("apps-remove"));
-                if ui.button(remove).clicked() {
-                    choice = Some(true);
-                }
-                if ui.button(i18n.tr("cancel")).clicked() {
-                    choice = Some(false);
-                }
-            });
+            let remove = format!("{}  {}", icon::TRASH, i18n.tr("apps-remove"));
+            let buttons = [
+                style::DialogButton::primary(remove),
+                style::DialogButton::secondary(i18n.tr("cancel")),
+            ];
+            if let Some(i) = style::dialog_buttons(ui, &buttons) {
+                choice = Some(i == 0);
+            }
         });
         if let Some(remove) = choice {
             self.confirm_remove = None;

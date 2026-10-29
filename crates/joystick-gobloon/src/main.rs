@@ -29,6 +29,7 @@ mod viewer_view;
 mod virtual_setup;
 mod vjoy_config_view;
 mod vjoy_view;
+mod wizard_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
 /// Version shown to users, from build.rs: what CI sets in `JOYSTICK_GOBLOON_VERSION`

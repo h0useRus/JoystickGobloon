@@ -39,6 +39,7 @@ pub struct JoystickGobloonApp {
     input: gob_input::InputService,
     devices_view: DevicesView,
     substitute: Option<SubstituteDialog>,
+    wizard: Option<crate::wizard_view::Wizard>,
     /// The Devices page banner started setting up the profile's virtual devices.
     virtual_setup: bool,
     vjoy_view: VJoyView,
@@ -119,6 +120,8 @@ enum Pending {
     /// A load-profile action asked for this file; it is activated after loading.
     Load(PathBuf),
     New,
+    /// A new profile through the wizard (`wizard_view`).
+    Wizard,
     Open,
 }
 
@@ -185,6 +188,7 @@ impl JoystickGobloonApp {
             input,
             devices_view: DevicesView::default(),
             substitute: None,
+            wizard: None,
             virtual_setup: false,
             vjoy_view: VJoyView::new(),
             viewer_view: Default::default(),
@@ -249,6 +253,7 @@ impl JoystickGobloonApp {
             Ok("vjoy") => app.page = Page::VJoy,
             Ok("viewer") => app.page = Page::Viewer,
             Ok("calibration") => app.page = Page::Calibration,
+            Ok("wizard") => app.wizard = Some(crate::wizard_view::Wizard::new()),
             Ok("viewer-window") => {
                 app.page = Page::Viewer;
                 app.viewer_window = true;
@@ -576,6 +581,34 @@ impl JoystickGobloonApp {
         self.status = self.i18n.tr("status-new");
     }
 
+    /// A new profile with every controller automapped onto the virtual joystick the wizard
+    /// chose for it.
+    fn create_from_wizard(&mut self, plan: crate::wizard_view::Plan) {
+        self.new_profile();
+        let Some(loaded) = &mut self.profile else {
+            return;
+        };
+        for m in &plan.maps {
+            loaded
+                .profile
+                .automap(&m.device, &m.device_name, &m.from, m.vjoy, &m.to, "Default");
+            let missing = m.from.missing_in(&m.to);
+            log::info!(
+                "wizard: {} -> vJoy {}, unmapped: {} axes, {} buttons, {} hats",
+                m.device,
+                m.vjoy,
+                missing.axes.len(),
+                missing.buttons,
+                missing.hats
+            );
+        }
+        loaded.name = Some(plan.name.clone());
+        loaded.refresh();
+        self.status = self
+            .i18n
+            .trf("status-wizard", &[("name", plan.name.into())]);
+    }
+
     /// Runs `action`, first asking to save unsaved changes.
     /// Close or minimize to tray. Without a window handle (not Windows) the window is hidden.
     fn hide_to_tray(&self, ctx: &egui::Context) {
@@ -586,7 +619,12 @@ impl JoystickGobloonApp {
     }
 
     fn request(&mut self, action: Pending, ctx: &egui::Context) {
-        if self.profile.as_ref().is_some_and(|p| p.dirty) {
+        // An empty profile has nothing worth keeping: no question for it.
+        if self
+            .profile
+            .as_ref()
+            .is_some_and(|p| p.dirty && !p.profile.inputs.is_empty())
+        {
             self.pending = Some(action);
         } else {
             self.perform(action, ctx);
@@ -617,6 +655,7 @@ impl JoystickGobloonApp {
                 }
             }
             Pending::New => self.new_profile(),
+            Pending::Wizard => self.wizard = Some(crate::wizard_view::Wizard::new()),
             Pending::Open => self.import_dialog(),
             Pending::Load(path) => {
                 self.open_profile(path, true);
@@ -705,36 +744,29 @@ impl JoystickGobloonApp {
             return;
         };
         let mut close = false;
-        egui::Modal::new(egui::Id::new("alert")).show(ctx, |ui| {
+        style::modal(ctx, "alert").show(ctx, |ui| {
             ui.set_width(420.0);
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(icon::WARNING)
-                        .size(style::ICON_SIZE)
-                        .color(ui.visuals().warn_fg_color),
-                );
-                ui.heading(&alert.title);
-            });
-            ui.add_space(4.0);
+            let warn = ui.visuals().warn_fg_color;
+            style::dialog_title(ui, Some((icon::WARNING, Some(warn))), &alert.title);
             for line in &alert.lines {
                 ui.label(line);
             }
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if ui.button(self.i18n.tr("ok")).clicked() {
-                    close = true;
-                }
-                if let Some(path) = crate::logfile::path() {
-                    let text = format!("{}  {}", icon::FILE_TEXT, self.i18n.tr("alert-open-log"));
-                    if ui
-                        .button(text)
-                        .on_hover_text(path.display().to_string())
-                        .clicked()
-                    {
-                        crate::platform::open_text_file(&path);
+            let log = crate::logfile::path();
+            let mut buttons = Vec::new();
+            if log.is_some() {
+                let text = format!("{}  {}", icon::FILE_TEXT, self.i18n.tr("alert-open-log"));
+                buttons.push(style::DialogButton::secondary(text));
+            }
+            buttons.push(style::DialogButton::primary(self.i18n.tr("ok")));
+            match style::dialog_buttons(ui, &buttons) {
+                Some(i) if i + 1 == buttons.len() => close = true,
+                Some(_) => {
+                    if let Some(path) = &log {
+                        crate::platform::open_text_file(path);
                     }
                 }
-            });
+                None => {}
+            }
         });
         if close {
             self.alerts.remove(0);
@@ -751,36 +783,28 @@ impl JoystickGobloonApp {
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_default();
         let mut choice = None;
-        egui::Modal::new(egui::Id::new("gremlin-format")).show(ctx, |ui| {
+        style::modal(ctx, "gremlin-format").show(ctx, |ui| {
             ui.set_width(420.0);
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(icon::WARNING)
-                        .size(style::ICON_SIZE)
-                        .color(ui.visuals().warn_fg_color),
-                );
-                ui.heading(self.i18n.tr("gremlin-format-title"));
-            });
-            ui.add_space(4.0);
+            let warn = ui.visuals().warn_fg_color;
+            let title = self.i18n.tr("gremlin-format-title");
+            style::dialog_title(ui, Some((icon::WARNING, Some(warn))), &title);
             ui.label(
                 self.i18n
                     .trf("gremlin-format-text", &[("file", file.into())]),
             );
-            ui.add_space(8.0);
+            ui.add_space(style::SPACE_M);
             ui.add(style::switch(
                 &mut self.gremlin_dont_ask,
                 self.i18n.tr("gremlin-format-dont-ask"),
             ));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let save = format!("{}  {}", icon::FLOPPY_DISK, self.i18n.tr("action-save"));
-                if ui.button(save).clicked() {
-                    choice = Some(true);
-                }
-                if ui.button(self.i18n.tr("cancel")).clicked() {
-                    choice = Some(false);
-                }
-            });
+            let save = format!("{}  {}", icon::FLOPPY_DISK, self.i18n.tr("action-save"));
+            let buttons = [
+                style::DialogButton::primary(save),
+                style::DialogButton::secondary(self.i18n.tr("cancel")),
+            ];
+            if let Some(i) = style::dialog_buttons(ui, &buttons) {
+                choice = Some(i == 0);
+            }
         });
         let Some(save) = choice else { return };
         let Some((path, after)) = self.gremlin_warning.take() else {
@@ -819,15 +843,11 @@ impl JoystickGobloonApp {
             )
         };
         let mut choice = None;
-        let modal = egui::Modal::new(egui::Id::new("cloak-confirm")).show(ctx, |ui| {
+        let modal = style::modal(ctx, "cloak-confirm").show(ctx, |ui| {
             ui.set_width(380.0);
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(glyph).size(style::ICON_SIZE));
-                ui.heading(self.i18n.tr(title));
-            });
-            ui.add_space(4.0);
+            style::dialog_title(ui, Some((glyph, None)), &self.i18n.tr(title));
             ui.label(self.i18n.tr(text));
-            ui.add_space(8.0);
+            ui.add_space(style::SPACE_M);
             egui::Frame::group(ui.style()).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
@@ -835,18 +855,13 @@ impl JoystickGobloonApp {
                     ui.label(RichText::new(self.i18n.tr("hidhide-confirm-hint")).weak());
                 });
             });
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if ui
-                    .button(format!("{glyph}  {}", self.i18n.tr(action)))
-                    .clicked()
-                {
-                    choice = Some(true);
-                }
-                if ui.button(self.i18n.tr("cancel")).clicked() {
-                    choice = Some(false);
-                }
-            });
+            let buttons = [
+                style::DialogButton::primary(format!("{glyph}  {}", self.i18n.tr(action))),
+                style::DialogButton::secondary(self.i18n.tr("cancel")),
+            ];
+            if let Some(i) = style::dialog_buttons(ui, &buttons) {
+                choice = Some(i == 0);
+            }
         });
         if modal.should_close() {
             choice.get_or_insert(false);
@@ -870,29 +885,18 @@ impl JoystickGobloonApp {
             .map(|p| p.file_name())
             .unwrap_or_default();
         let mut choice = None;
-        egui::Modal::new(egui::Id::new("unsaved")).show(ctx, |ui| {
-            ui.set_width(360.0);
-            ui.heading(self.i18n.tr("unsaved-title"));
+        style::modal(ctx, "unsaved").show(ctx, |ui| {
+            ui.set_width(420.0);
+            let title = self.i18n.tr("unsaved-title");
+            style::dialog_title(ui, Some((icon::FLOPPY_DISK, None)), &title);
             ui.label(self.i18n.trf("unsaved-text", &[("file", file.into())]));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                if ui
-                    .button(format!(
-                        "{}  {}",
-                        icon::FLOPPY_DISK,
-                        self.i18n.tr("unsaved-save")
-                    ))
-                    .clicked()
-                {
-                    choice = Some(0);
-                }
-                if ui.button(self.i18n.tr("unsaved-discard")).clicked() {
-                    choice = Some(1);
-                }
-                if ui.button(self.i18n.tr("cancel")).clicked() {
-                    choice = Some(2);
-                }
-            });
+            let save = format!("{}  {}", icon::FLOPPY_DISK, self.i18n.tr("unsaved-save"));
+            let buttons = [
+                style::DialogButton::primary(save),
+                style::DialogButton::secondary(self.i18n.tr("unsaved-discard")),
+                style::DialogButton::secondary(self.i18n.tr("cancel")),
+            ];
+            choice = style::dialog_buttons(ui, &buttons);
         });
         match choice {
             Some(0) => {
@@ -1012,6 +1016,11 @@ impl JoystickGobloonApp {
         let loaded = self.profile.is_some();
         let row = Vec2::new(ui.available_width(), 44.0);
         ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
+            if style::toolbar_button(ui, true, icon::MAGIC_WAND, &self.i18n.tr("wizard-open"))
+                .clicked()
+            {
+                self.request(Pending::Wizard, ui.ctx());
+            }
             if style::toolbar_button(ui, true, icon::FILE_PLUS, &self.i18n.tr("action-new"))
                 .clicked()
             {
@@ -1660,6 +1669,23 @@ impl eframe::App for JoystickGobloonApp {
                     }
                 }
             });
+
+        if self.wizard.is_some() {
+            let devices = self.input.devices();
+            let vjoy = self.vjoy_view.device_list();
+            let mut open = true;
+            let plan = self
+                .wizard
+                .as_mut()
+                .and_then(|w| w.show(ctx, &self.i18n, &devices, &vjoy, &mut open));
+            if let Some(plan) = plan {
+                self.create_from_wizard(plan);
+                open = false;
+            }
+            if !open {
+                self.wizard = None;
+            }
+        }
 
         if let Some(dialog) = &mut self.substitute {
             let mut open = true;

@@ -181,9 +181,26 @@ kind-response-curve = 응답 곡선
 kind-change-mode = 모드 전환
 kind-tempo = 짧게 / 길게 누르기
 kind-description = 설명
+edit-rename = 클릭하여 이름 바꾸기
+edit-description-hint = 클릭하여 메모 쓰기
+edit-click-to-edit = 클릭하여 편집
 
 # Files and modes
 action-new = 새 프로필
+wizard-open = 마법사로 새 프로필: 컨트롤러마다 가상 조이스틱 하나
+wizard-title = 새 프로필 마법사
+wizard-name = 프로필 이름
+wizard-name-hint = 예: 내 비행 설정
+wizard-create = 만들기
+wizard-devices = 컨트롤러마다 매핑할 가상 조이스틱을 고르세요. 모든 축, 버튼, 햇에 Map to vJoy가 만들어집니다.
+wizard-none = 매핑 안 함
+wizard-taken = 다른 컨트롤러가 이미 이 가상 조이스틱을 씁니다
+wizard-no-vjoy = 아직 가상 조이스틱이 없습니다: 먼저 가상 조이스틱 페이지에서 추가하세요
+wizard-fewer = { $vjoy }의 입력이 { $device }보다 적습니다: { $missing } 매핑 안 됨
+wizard-axes = 축 { $n }개
+wizard-buttons = 버튼 { $n }개
+wizard-hats = 햇 { $n }개
+status-wizard = 프로필을 만들었습니다: { $name }
 action-save-as = 다른 이름으로 저장…
 status-new = 새 프로필
 unsaved-title = 저장하지 않은 변경 내용

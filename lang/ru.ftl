@@ -181,9 +181,38 @@ kind-response-curve = Кривая отклика
 kind-change-mode = Смена режима
 kind-tempo = Короткое / долгое нажатие
 kind-description = Описание
+edit-rename = Нажмите, чтобы переименовать
+edit-description-hint = Нажмите, чтобы написать заметку
+edit-click-to-edit = Нажмите, чтобы изменить
 
 # Files and modes
 action-new = Новый профиль
+wizard-open = Новый профиль с мастером: каждый контроллер на свой виртуальный джойстик
+wizard-title = Мастер нового профиля
+wizard-name = Имя профиля
+wizard-name-hint = например, Мой полёт
+wizard-create = Создать
+wizard-devices = Выберите виртуальный джойстик для каждого контроллера. Каждая ось, кнопка и шляпка получит Map to vJoy.
+wizard-none = Не назначен
+wizard-taken = На этот виртуальный джойстик уже назначен другой контроллер
+wizard-no-vjoy = Виртуальных джойстиков пока нет: сначала добавьте их на странице «Виртуальные джойстики»
+wizard-fewer = У { $vjoy } меньше входов, чем у { $device }: не назначены { $missing }
+wizard-axes = { $n ->
+    [one] { $n } ось
+    [few] { $n } оси
+   *[other] { $n } осей
+}
+wizard-buttons = { $n ->
+    [one] { $n } кнопка
+    [few] { $n } кнопки
+   *[other] { $n } кнопок
+}
+wizard-hats = { $n ->
+    [one] { $n } шляпка
+    [few] { $n } шляпки
+   *[other] { $n } шляпок
+}
+status-wizard = Профиль создан: { $name }
 action-save-as = Сохранить как…
 status-new = Новый профиль
 unsaved-title = Несохранённые изменения

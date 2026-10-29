@@ -744,17 +744,7 @@ impl Editor<'_> {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(kind_icon(&action.kind)).size(style::ICON_SIZE))
                     .on_hover_text(&action.kind);
-                let mut label = action
-                    .label()
-                    .filter(|l| *l != "None")
-                    .unwrap_or_default()
-                    .to_string();
-                let edit = egui::TextEdit::singleline(&mut label)
-                    .hint_text(&action.kind)
-                    .desired_width(260.0);
-                if ui.add(edit).changed() {
-                    self.set(id, "action-label", "string", label);
-                }
+                // The buttons first, from the right; the title takes the width left of them.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let (p, g) = (parent.to_string(), group.to_string());
                     if style::icon_button(ui, true, icon::TRASH, &self.i18n.tr("edit-remove"))
@@ -790,6 +780,21 @@ impl Editor<'_> {
                             from: index,
                             to: index - 1,
                         });
+                    }
+                    let mut label = action
+                        .label()
+                        .filter(|l| *l != "None")
+                        .unwrap_or_default()
+                        .to_string();
+                    let title = style::EditableText::new(&mut label, ("action-label", id))
+                        .hint(&action.kind)
+                        .strong();
+                    if ui
+                        .add(title)
+                        .on_hover_text(self.i18n.tr("edit-rename"))
+                        .changed()
+                    {
+                        self.set(id, "action-label", "string", label);
                     }
                 });
             });
@@ -976,7 +981,7 @@ impl Editor<'_> {
                     ui.horizontal(|ui| {
                         ui.label(self.i18n.tr("edit-merge-name"));
                         let mut label = action.str("label").unwrap_or_default().to_string();
-                        let edit = egui::TextEdit::singleline(&mut label).desired_width(180.0);
+                        let edit = style::text_field(&mut label).desired_width(180.0);
                         if ui.add(edit).changed() {
                             self.set(&id, "label", "string", label);
                         }
@@ -1139,7 +1144,7 @@ impl Editor<'_> {
                             ui.horizontal(|ui| {
                                 let mut exe = executable.to_string();
                                 if ui
-                                    .add(egui::TextEdit::singleline(&mut exe).desired_width(320.0))
+                                    .add(style::text_field(&mut exe).desired_width(320.0))
                                     .changed()
                                 {
                                     self.set(&action.id, "executable", "string", exe);
@@ -1165,7 +1170,7 @@ impl Editor<'_> {
                             ui.label(self.i18n.tr("run-arguments"));
                             let mut args = arguments.to_string();
                             if ui
-                                .add(egui::TextEdit::singleline(&mut args).desired_width(320.0))
+                                .add(style::text_field(&mut args).desired_width(320.0))
                                 .changed()
                             {
                                 self.set(&action.id, "arguments", "string", args);
@@ -1176,12 +1181,13 @@ impl Editor<'_> {
                 }
                 ActionKind::Description { text } => {
                     let mut text = text.to_string();
+                    let note = style::EditableText::new(&mut text, ("description", id))
+                        .multiline()
+                        .panel()
+                        .hint(self.i18n.tr("edit-description-hint"));
                     if ui
-                        .add(
-                            egui::TextEdit::multiline(&mut text)
-                                .desired_rows(2)
-                                .desired_width(f32::INFINITY),
-                        )
+                        .add(note)
+                        .on_hover_text(self.i18n.tr("edit-click-to-edit"))
                         .changed()
                     {
                         self.set(id, "description", "string", text);
@@ -1926,7 +1932,7 @@ impl Editor<'_> {
         ui.horizontal(|ui| {
             ui.label(self.i18n.tr("edit-merge-name"));
             let mut label = action.str("label").unwrap_or_default().to_string();
-            let edit = egui::TextEdit::singleline(&mut label).desired_width(180.0);
+            let edit = style::text_field(&mut label).desired_width(180.0);
             if ui.add(edit).changed() {
                 self.set(&id, "label", "string", label);
             }
@@ -2051,7 +2057,7 @@ impl Editor<'_> {
     ) {
         ui.horizontal(|ui| {
             let mut path = value.to_string();
-            let edit = egui::TextEdit::singleline(&mut path).desired_width(380.0);
+            let edit = style::text_field(&mut path).desired_width(380.0);
             if ui.add(edit).changed() {
                 self.set(id, name, "string", path);
             }
@@ -2129,7 +2135,7 @@ impl Editor<'_> {
                 });
         });
         let mut t = text.to_string();
-        let edit = egui::TextEdit::multiline(&mut t)
+        let edit = style::text_area(&mut t)
             .desired_rows(2)
             .desired_width(f32::INFINITY)
             .hint_text(self.i18n.tr("edit-tts-hint"));

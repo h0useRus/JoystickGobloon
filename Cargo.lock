@@ -2006,6 +2006,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gob-ui"
+version = "0.6.0"
+dependencies = [
+ "egui",
+ "egui-phosphor",
+]
+
+[[package]]
 name = "gob-uinput"
 version = "0.6.0"
 dependencies = [
@@ -2475,7 +2483,6 @@ version = "0.6.0"
 dependencies = [
  "ashpd",
  "eframe",
- "egui-phosphor",
  "futures-util",
  "gob-core",
  "gob-engine",
@@ -2484,6 +2491,7 @@ dependencies = [
  "gob-i18n",
  "gob-input",
  "gob-lighting",
+ "gob-ui",
  "gob-uinput",
  "gob-virtual",
  "gtk",

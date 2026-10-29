@@ -181,9 +181,35 @@ kind-response-curve = Response curve
 kind-change-mode = Change mode
 kind-tempo = Short / long press
 kind-description = Description
+edit-rename = Click to rename
+edit-description-hint = Click to write a note
+edit-click-to-edit = Click to edit
 
 # Files and modes
 action-new = New profile
+wizard-open = New profile with the wizard: map each controller to a virtual joystick
+wizard-title = New profile wizard
+wizard-name = Profile name
+wizard-name-hint = e.g. My flight setup
+wizard-create = Create
+wizard-devices = Pick the virtual joystick each controller maps to. Every axis, button and hat gets a Map to vJoy.
+wizard-none = Not mapped
+wizard-taken = Another controller maps to this virtual joystick
+wizard-no-vjoy = No virtual joysticks yet: add them on the Virtual joysticks page first
+wizard-fewer = { $vjoy } has fewer inputs than { $device }: { $missing } will not be mapped
+wizard-axes = { $n ->
+    [one] 1 axis
+   *[other] { $n } axes
+}
+wizard-buttons = { $n ->
+    [one] 1 button
+   *[other] { $n } buttons
+}
+wizard-hats = { $n ->
+    [one] 1 hat
+   *[other] { $n } hats
+}
+status-wizard = Profile created: { $name }
 action-save-as = Save as…
 status-new = New profile
 unsaved-title = Unsaved changes
