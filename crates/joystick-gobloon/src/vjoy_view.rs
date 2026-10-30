@@ -442,7 +442,7 @@ impl VJoyView {
         // Right to left: the gamepad's button first.
         if max_pads > 0 {
             let free = (1..=max_pads).find(|id| !self.gamepads.iter().any(|g| g.id == *id));
-            let text = format!("{}  {}", icon::PLUS, i18n.tr("gamepad-add"));
+            let text = i18n.tr("gamepad-add");
             let r = ui.add_enabled(idle && free.is_some(), egui::Button::new(text));
             let r = if free.is_none() {
                 r.on_disabled_hover_text(i18n.trf("gamepad-add-max", &[("n", max_pads.into())]))
@@ -457,7 +457,7 @@ impl VJoyView {
         }
         let used: Vec<u32> = self.devices.iter().map(|d| d.id).collect();
         let free = self.config.free_id(&used);
-        let text = format!("{}  {}", icon::PLUS, i18n.tr("vjoy-add"));
+        let text = i18n.tr("vjoy-add");
         let can = idle && free.is_some() && self.draft.is_none();
         let r = ui.add_enabled(can, egui::Button::new(text));
         let r = if free.is_none() {
