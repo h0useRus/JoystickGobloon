@@ -86,7 +86,7 @@ vjoy-missing = vJoy is not installed or could not be loaded.
 vjoy-no-access = No permission to create vJoy devices.
 vjoy-enabled = Driver enabled
 vjoy-disabled = Driver disabled
-vjoy-no-devices = No vJoy devices configured yet.
+vjoy-no-devices = No virtual sticks or gamepads yet: add one with the buttons above.
 vjoy-axes = Axes
 vjoy-buttons = Buttons
 vjoy-hats = Hats
@@ -527,7 +527,7 @@ viewer-buttons = Buttons and hats
 viewer-axis = Axis { $n }
 
 # vJoy configuration
-vjoy-add = Add a vJoy device
+vjoy-add = Add a virtual stick
 vjoy-add-max = vJoy supports at most 16 devices.
 vjoy-new-device = New vJoy #{ $n }: not created yet
 vjoy-enable = Enable the vJoy driver
@@ -562,7 +562,7 @@ vjoy-config-admin = Windows asks for administrator rights to change vJoy
 vjoy-config-locked = Stop the profile to change vJoy devices.
 vjoy-config-reading = Reading the vJoy configuration...
 vjoy-config-label = configure vJoy #{ $n }
-vjoy-config-done = vJoy configuration changed.
+vjoy-config-done = Virtual devices changed.
 vjoy-config-error = Could not change the vJoy configuration: { $error }
 vjoy-config-reboot = vJoy configuration changed. Restart Windows for it to take effect.
 vjoy-remove-title = Remove vJoy #{ $n }?

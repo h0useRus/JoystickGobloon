@@ -86,7 +86,7 @@ vjoy-missing = vJoy ist nicht installiert oder konnte nicht geladen werden.
 vjoy-no-access = Keine Berechtigung, vJoy-Geräte zu erstellen.
 vjoy-enabled = Treiber aktiviert
 vjoy-disabled = Treiber deaktiviert
-vjoy-no-devices = Noch keine vJoy-Geräte eingerichtet.
+vjoy-no-devices = Noch keine virtuellen Sticks oder Gamepads: Füge oben eins hinzu.
 vjoy-axes = Achsen
 vjoy-buttons = Tasten
 vjoy-hats = Coolie-Hats
@@ -527,7 +527,7 @@ viewer-buttons = Tasten und Coolie-Hats
 viewer-axis = Achse { $n }
 
 # vJoy configuration
-vjoy-add = vJoy-Gerät hinzufügen
+vjoy-add = Virtuellen Stick hinzufügen
 vjoy-add-max = vJoy unterstützt höchstens 16 Geräte.
 vjoy-new-device = Neues vJoy #{ $n }: noch nicht erstellt
 vjoy-enable = vJoy-Treiber aktivieren
@@ -562,7 +562,7 @@ vjoy-config-admin = Windows fragt nach Administratorrechten, um vJoy zu ändern
 vjoy-config-locked = Stoppen Sie das Profil, um vJoy-Geräte zu ändern.
 vjoy-config-reading = vJoy-Konfiguration wird gelesen...
 vjoy-config-label = vJoy #{ $n } einrichten
-vjoy-config-done = vJoy-Konfiguration geändert.
+vjoy-config-done = Virtuelle Geräte geändert.
 vjoy-config-error = Die vJoy-Konfiguration konnte nicht geändert werden: { $error }
 vjoy-config-reboot = vJoy-Konfiguration geändert. Starten Sie Windows neu, damit sie wirksam wird.
 vjoy-remove-title = vJoy #{ $n } entfernen?

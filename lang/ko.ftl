@@ -86,7 +86,7 @@ vjoy-missing = vJoy가 설치되지 않았거나 불러올 수 없습니다.
 vjoy-no-access = vJoy 장치를 만들 권한이 없습니다.
 vjoy-enabled = 드라이버 사용
 vjoy-disabled = 드라이버 사용 안 함
-vjoy-no-devices = 아직 구성된 vJoy 장치가 없습니다.
+vjoy-no-devices = 아직 가상 스틱이나 게임패드가 없습니다. 위의 버튼으로 추가하세요.
 vjoy-axes = 축
 vjoy-buttons = 버튼
 vjoy-hats = 햇 스위치
@@ -515,7 +515,7 @@ viewer-buttons = 버튼과 햇 스위치
 viewer-axis = 축 { $n }
 
 # vJoy configuration
-vjoy-add = vJoy 장치 추가
+vjoy-add = 가상 스틱 추가
 vjoy-add-max = vJoy는 최대 16개의 장치를 지원합니다.
 vjoy-new-device = 새 vJoy #{ $n }: 아직 만들지 않음
 vjoy-enable = vJoy 드라이버 사용
@@ -550,7 +550,7 @@ vjoy-config-admin = vJoy를 변경하려면 Windows에서 관리자 권한을 �
 vjoy-config-locked = vJoy 장치를 변경하려면 프로필을 중지하세요.
 vjoy-config-reading = vJoy 구성을 읽는 중...
 vjoy-config-label = vJoy #{ $n } 구성
-vjoy-config-done = vJoy 구성이 변경되었습니다.
+vjoy-config-done = 가상 장치가 변경되었습니다.
 vjoy-config-error = vJoy 구성을 변경할 수 없습니다: { $error }
 vjoy-config-reboot = vJoy 구성이 변경되었습니다. 적용하려면 Windows를 다시 시작하세요.
 vjoy-remove-title = vJoy #{ $n }을(를) 제거할까요?

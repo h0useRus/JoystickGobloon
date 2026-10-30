@@ -86,7 +86,7 @@ vjoy-missing = 未安装 vJoy 或无法加载。
 vjoy-no-access = 没有创建 vJoy 设备的权限。
 vjoy-enabled = 驱动已启用
 vjoy-disabled = 驱动已禁用
-vjoy-no-devices = 尚未配置 vJoy 设备。
+vjoy-no-devices = 还没有虚拟摇杆或手柄：用上方的按钮添加。
 vjoy-axes = 轴
 vjoy-buttons = 按钮
 vjoy-hats = 苦力帽
@@ -515,7 +515,7 @@ viewer-buttons = 按钮和苦力帽
 viewer-axis = 轴 { $n }
 
 # vJoy configuration
-vjoy-add = 添加 vJoy 设备
+vjoy-add = 添加虚拟摇杆
 vjoy-add-max = vJoy 最多支持 16 个设备。
 vjoy-new-device = 新 vJoy #{ $n }：尚未创建
 vjoy-enable = 启用 vJoy 驱动
@@ -550,7 +550,7 @@ vjoy-config-admin = 更改 vJoy 时 Windows 会请求管理员权限
 vjoy-config-locked = 停止配置文件后才能更改 vJoy 设备。
 vjoy-config-reading = 正在读取 vJoy 配置...
 vjoy-config-label = 配置 vJoy #{ $n }
-vjoy-config-done = vJoy 配置已更改。
+vjoy-config-done = 虚拟设备已更改。
 vjoy-config-error = 无法更改 vJoy 配置：{ $error }
 vjoy-config-reboot = vJoy 配置已更改。重启 Windows 后生效。
 vjoy-remove-title = 移除 vJoy #{ $n }？

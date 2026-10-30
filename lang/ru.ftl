@@ -90,7 +90,7 @@ vjoy-missing = vJoy не установлен или не загружается
 vjoy-no-access = Нет прав на создание устройств vJoy.
 vjoy-enabled = Драйвер включён
 vjoy-disabled = Драйвер выключен
-vjoy-no-devices = Устройства vJoy ещё не настроены.
+vjoy-no-devices = Виртуальных стиков и геймпадов пока нет: добавьте их кнопками выше.
 vjoy-axes = Оси
 vjoy-buttons = Кнопки
 vjoy-hats = Хатки
@@ -535,7 +535,7 @@ viewer-buttons = Кнопки и хатки
 viewer-axis = Ось { $n }
 
 # vJoy configuration
-vjoy-add = Добавить устройство vJoy
+vjoy-add = Добавить виртуальный стик
 vjoy-add-max = vJoy поддерживает не больше 16 устройств.
 vjoy-new-device = Новый vJoy #{ $n }: ещё не создан
 vjoy-enable = Включить драйвер vJoy
@@ -570,7 +570,7 @@ vjoy-config-admin = Для изменения vJoy Windows запросит пр
 vjoy-config-locked = Остановите профиль, чтобы менять устройства vJoy.
 vjoy-config-reading = Читаю конфигурацию vJoy...
 vjoy-config-label = настройка vJoy #{ $n }
-vjoy-config-done = Конфигурация vJoy изменена.
+vjoy-config-done = Виртуальные устройства изменены.
 vjoy-config-error = Не удалось изменить конфигурацию vJoy: { $error }
 vjoy-config-reboot = Конфигурация vJoy изменена. Перезагрузите Windows, чтобы она вступила в силу.
 vjoy-remove-title = Удалить vJoy #{ $n }?
