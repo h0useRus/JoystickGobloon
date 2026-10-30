@@ -21,7 +21,7 @@ fn program() -> Result<PathBuf, String> {
 /// One argument of an `Exec` line, quoted as the desktop entry spec wants: `"`, `` ` ``, `$`
 /// and `\` get a backslash inside the quotes, then backslashes are doubled once more (string
 /// escaping comes first) and `%` becomes `%%` (field codes).
-fn exec_arg(arg: &str) -> String {
+pub(super) fn exec_arg(arg: &str) -> String {
     let mut quoted = String::from("\"");
     for c in arg.chars() {
         match c {

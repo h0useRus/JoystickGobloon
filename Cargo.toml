@@ -23,6 +23,7 @@ gob-hide = { path = "crates/gob-hide" }
 gob-engine = { path = "crates/gob-engine" }
 gob-lighting = { path = "crates/gob-lighting" }
 gob-ui = { path = "crates/gob-ui" }
+gob-system = { path = "crates/gob-system" }
 eframe = "0.31"
 egui = "0.31"
 fluent-bundle = "0.15"

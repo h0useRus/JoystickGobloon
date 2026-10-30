@@ -236,6 +236,10 @@ pub struct VirtualJoystick {
     pub hats: u32,
     /// 4-direction hats instead of continuous ones.
     pub discrete_hats: bool,
+    /// The name games see; `None` = the system's default name.
+    pub name: Option<String>,
+    /// USB product id games see; `None` = the system's default for the id.
+    pub product: Option<u16>,
 }
 
 /// Top-level profile sections, in the order they appear in the file.
@@ -407,6 +411,25 @@ impl Profile {
             }
         }
         usage
+    }
+
+    /// Name of the controller whose inputs write the most outputs of virtual joystick
+    /// `device` (e.g. to suggest a name for it); ties go to the controller listed first.
+    pub fn main_source(&self, device: u32) -> Option<&str> {
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for (output, uses) in self.output_usage(None) {
+            if !matches!(output, VirtualOutput::Vjoy { device: d, .. } if d == device) {
+                continue;
+            }
+            for u in uses {
+                *counts.entry(&self.inputs[u.binding].device_id).or_default() += 1;
+            }
+        }
+        let rank = |id: &str| self.devices.iter().position(|d| d.id == id);
+        let best = counts
+            .into_iter()
+            .max_by(|a, b| a.1.cmp(&b.1).then(rank(b.0).cmp(&rank(a.0))))?;
+        self.device_name(best.0).filter(|n| !n.is_empty())
     }
 
     /// Outputs written in the action trees under `roots`, with the action writing each (an

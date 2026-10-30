@@ -7,6 +7,7 @@ mod autostart;
 mod fonts;
 mod instance;
 mod keys;
+mod menu;
 mod theme;
 mod update;
 mod window;
@@ -164,7 +165,9 @@ impl super::Desktop for Desktop {
         theme::watch(changed);
     }
 
+    /// Also puts the program in the application menu (its icon in the dock).
     fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Self::Window> {
+        menu::integrate();
         window::main_window(cc)
     }
 
@@ -224,8 +227,16 @@ impl super::Desktop for Desktop {
         autostart::set(enabled, arg)
     }
 
+    /// With SystemGobloon running only controllers need access (it gives it too); virtual
+    /// devices come from the service.
     fn device_access_missing() -> bool {
-        gob_uinput::access::missing()
+        // SystemGobloon gives the seat's user the controllers itself (its runtime rule), and the
+        // nodes of hidden sticks are closed on purpose: nothing to grant while it runs.
+        if gob_system::Client::connect().is_ok() {
+            false
+        } else {
+            gob_uinput::access::missing()
+        }
     }
 
     fn grant_device_access() -> Result<(), String> {
@@ -235,6 +246,44 @@ impl super::Desktop for Desktop {
     /// The stick's hidraw node: buttons past 80 come from there.
     fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String> {
         gob_uinput::access::install_raw(vendor_id, product_id)
+    }
+
+    /// SystemGobloon, the systemd service shipped next to the program (in the AppImage too).
+    fn system_part(version: &str) -> super::SystemPart {
+        use super::SystemPart;
+        use gob_system::install::{self, Status};
+        let bundled = install::bundled_binary().is_some();
+        match install::status(version) {
+            Status::Unsupported => SystemPart::Unavailable,
+            Status::NotInstalled if bundled => SystemPart::NotInstalled,
+            Status::NotInstalled => SystemPart::Unavailable,
+            Status::Stopped => SystemPart::Stopped,
+            Status::Running { version: v } if v != version && bundled => {
+                SystemPart::Outdated { version: v }
+            }
+            Status::Running { version } => SystemPart::Current { version },
+        }
+    }
+
+    fn install_system_part() -> Result<(), String> {
+        let binary = gob_system::install::bundled_binary()
+            .ok_or("System Gobloon is not next to the program")?;
+        gob_system::install::install(&binary)
+    }
+
+    /// The rules the program's own hiding and devices need without the service are written in
+    /// the same step: one password.
+    fn remove_system_part() -> Result<(), String> {
+        use gob_uinput::access;
+        let hidden = access::hidden_rules(&gob_hide::closed_sticks());
+        let mut files = Vec::new();
+        if !std::path::Path::new(access::RULE_PATH).exists() {
+            files.push((access::RULE_PATH, access::RULE));
+        }
+        if !hidden.is_empty() {
+            files.push((access::HIDDEN_RULE_PATH, hidden.as_str()));
+        }
+        gob_system::install::remove(&files)
     }
 
     /// Started from an AppImage (it updates as one file).

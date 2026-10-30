@@ -141,6 +141,11 @@
             <li><a href="#applications">Programs that see hidden devices</a></li>
             <li><a href="#hide-linux">On Linux</a></li>
           </ul></li>
+          <li><a class="toc-group" href="#system-gobloon">System Gobloon</a><ul>
+            <li><a href="#system-gobloon-what">What it is</a></li>
+            <li><a href="#system-gobloon-linux">On Linux</a></li>
+            <li><a href="#system-gobloon-windows">On Windows</a></li>
+          </ul></li>
           <li><a class="toc-group" href="#setup">Putting it together</a><ul>
             <li><a href="#walkthrough">Step by step</a></li>
             <li><a href="#troubleshooting">When something is off</a></li>
@@ -249,7 +254,7 @@
             <p>On Windows the virtual joysticks come from the <strong>vJoy</strong> driver. The Joystick Gobloon installer adds the signed vJoy 2.1.9.1 driver if it is missing. You never need the separate Configure vJoy tool: devices are made right in the app.</p>
             <ol class="numbered">
               <li>Open the <span class="term">Virtual joysticks</span> page in the left rail (the gamepad icon).</li>
-              <li>Press <span class="term">+</span> next to the device tabs to add a device. A new device starts as a copy of the first one.</li>
+              <li>Press <span class="term">Add a virtual stick</span> at the top right of the page to add a stick; where gamepads are available, <span class="term">Add a virtual gamepad</span> next to it adds one. Sticks and gamepads share one row of tabs. A new stick starts as a copy of the first one.</li>
               <li>Switch on the axes the game should see, set the number of <span class="term">Buttons</span> (up to 128) and <span class="term">Hats</span> (up to 4, either <span class="term">Continuous</span> or <span class="term">4 directions</span>).</li>
               <li>Press <span class="term">Create</span>, or <span class="term">Apply</span> for an existing device. Windows asks for administrator rights once per change.</li>
               <li>Repeat for the second stick. vJoy supports up to 16 devices.</li>
@@ -262,12 +267,15 @@
             <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
             <p>Linux needs no driver: the virtual joysticks are made by the kernel's uinput module. They use the same <span class="term">Virtual joysticks</span> page and the same profiles.</p>
             <ol class="numbered">
-              <li>On the Devices page, click <span class="term">Grant access</span> once. It installs a rule that lets your user read controllers and create virtual devices, and asks for your password.</li>
-              <li>Add and set up devices on the <span class="term">Virtual joysticks</span> page as on Windows, with up to 8 axes, 95 buttons and 4 hats each. No administrator prompt is needed.</li>
-              <li>The devices appear when you activate a profile and disappear when you stop it. Games see them as <span class="term">Joystick Gobloon Joystick 1</span>, <span class="term">Joystick Gobloon Joystick 2</span> and so on.</li>
+              <li>On the Devices page, click <span class="term">Install</span> on the System Gobloon banner and enter your password once. System Gobloon is a small system service that comes with Joystick Gobloon: it keeps the virtual devices and hides sticks for every program, the way vJoy and HidHide do on Windows. You can also do it later under Settings, <span class="term">General</span>.</li>
+              <li>Add and set up devices on the <span class="term">Virtual joysticks</span> page as on Windows, with up to 8 axes, 95 buttons and 4 hats each. No password is needed for that.</li>
+              <li>The devices are there all the time, as vJoy's are: start a game before or after Joystick Gobloon, stop and start profiles, and the game keeps them. With nothing writing to them they rest centered. Games see them as <span class="term">JoyGob 1</span>, <span class="term">JoyGob 2</span> and so on.</li>
             </ol>
-            <p>The same page also adds <strong>virtual gamepads</strong>, up to four, named <span class="term">Joystick Gobloon Gamepad 1</span> and so on. They have the layout of an Xbox 360 controller, so games, Steam and Proton take them for one: a game that only understands gamepads can be played with a stick through <a href="learn.html#map-to-gamepad">Map to gamepad</a>. Windows has no virtual gamepads yet.</p>
-            <p>The Linux kernel passes on at most 80 buttons of a stick. For a stick with more, its tab on the Devices page offers <span class="term">Read all buttons</span>: after your password, Joystick Gobloon reads every button from the stick's raw HID device, numbered as on Windows, so profiles match. Programs that read raw devices, such as Steam or Proton, can then read that stick too, even while it is hidden: turn off Steam Input for it.</p>
+            <p>Without System Gobloon, click <span class="term">Grant access</span> on the Devices page instead (also once, with your password): the devices then appear only while a profile is active and disappear when you stop it.</p>
+            <p>Unlike vJoy devices, each Linux joystick is a product of its own for games, so a game does not mix them up when their order changes. In the device editor, <span class="term">Name</span> sets the name games show; the <i class="ph ph-magic-wand" aria-hidden="true"></i> button suggests one: <span class="term">Gobloon</span> and the name of the stick the profile maps onto the device, or <span class="term">Gobloon Stick 1</span>, <span class="term">Gobloon Throttle 1</span> or <span class="term">Gobloon Panel 1</span> by its layout. <span class="term">Product ID</span> is normally picked from the device number; enter the ID of an earlier setup to keep a game's bindings. A game sees a renamed device as a new one.</p>
+            <p>The same page also adds <strong>virtual gamepads</strong>, up to four, named <span class="term">GameGob 1</span> and so on. They have the layout of an Xbox 360 controller, so games, Steam and Proton take them for one: a game that only understands gamepads can be played with a stick through <a href="learn.html#map-to-gamepad">Map to gamepad</a>. Windows has no virtual gamepads yet.</p>
+            <p>The Linux kernel passes on at most 80 buttons of a stick. With System Gobloon installed, Joystick Gobloon reads the rest by itself. Without it, the tab of a stick with more buttons on the Devices page offers <span class="term">Read all buttons</span>: after your password, Joystick Gobloon reads every button from the stick's raw HID device, numbered as on Windows, so profiles match. Programs that read raw devices, such as Steam or Proton, can then read that stick too, even while it is hidden: turn off Steam Input for it.</p>
+            <figure class="shot"><img src="img/linux-virtual.png" loading="lazy" width="1102" height="736" alt="Virtual joysticks page on Linux: System Gobloon runs, the buttons Add a virtual stick and Add a virtual gamepad at the top right, one row of tabs with three named virtual sticks and two gamepads, and the tester of Gamepad 1 below"></figure>
           </article>
 
           <article class="learn-action" id="test-output">
@@ -306,13 +314,46 @@
 
           <article class="learn-action" id="hide-linux">
             <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
-            <p>Linux has no HidHide. Instead Joystick Gobloon reads a hidden stick <strong>exclusively</strong>: while the app runs, no other program gets input from it, games included. Hide sticks with the same eye buttons.</p>
+            <p>Linux has no HidHide; System Gobloon does its work. Hide sticks with the same eye buttons. With System Gobloon installed (see <a href="#virtual-linux">virtual joysticks on Linux</a>):</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>A hidden stick is closed to every program, games, Steam and Wine or Proton included, through all its device nodes, raw HID too. It stays hidden while Joystick Gobloon is closed and after you plug it in again or restart the computer.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Only Joystick Gobloon still reads it. There is no list of other programs that still see hidden devices.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Removing System Gobloon (Settings, <span class="term">General</span>) shows the sticks again; Joystick Gobloon keeps the list of hidden sticks and goes on hiding them its own way.</span></li>
+            </ul>
+            <p>Without System Gobloon, Joystick Gobloon reads a hidden stick <strong>exclusively</strong>: while the app runs, no other program gets input from it, games included.</p>
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Hiding lasts only while Joystick Gobloon runs. Close the app and every program sees the sticks again.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>There is no list of programs that still see hidden devices.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Programs that read raw HID (hidraw), such as Steam or Wine and Proton, can open a stick's hidraw node when your system allows it. Then hiding the stick asks for the administrator password once and closes that node too, until you show the stick again (this part stays while the app is closed). Restart programs that had the stick open already.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Without the password the stick gets a warning sign on its tab and in the device hiding window. Show and hide it again to be asked again, or turn off hidraw (or Steam Input) for that stick in those programs, or games see it twice.</span></li>
             </ul>
+          </article>
+        </section>
+
+        <section class="learn-group" id="system-gobloon" aria-labelledby="system-gobloon-title">
+          <h2 id="system-gobloon-title">System Gobloon</h2>
+          <article class="learn-action" id="system-gobloon-what">
+            <h3><i class="ph ph-shield-check" aria-hidden="true"></i>What it is</h3>
+            <p><strong>System Gobloon</strong> is the system part of Joystick Gobloon. Some of the work needs administrator rights: making virtual devices that stay while games run, and hiding real sticks from every program. System Gobloon does that work, so Joystick Gobloon itself runs as a normal program and never asks for your password again after it is installed.</p>
+            <p>It comes with Joystick Gobloon and has the same version. When the two differ after an update, the banner on the Devices page offers <span class="term">Update</span>. Settings, <span class="term">General</span> shows its state and can install, update or remove it.</p>
+          </article>
+
+          <article class="learn-action" id="system-gobloon-linux">
+            <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
+            <p>On Linux System Gobloon is a small system service. Click <span class="term">Install</span> on the banner on the Devices page and enter your password once; nothing else asks for it. It starts with the computer, before you log in.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Virtual devices.</strong> It makes the virtual joysticks and gamepads and keeps them all the time, centered while nothing writes to them. Joystick Gobloon borrows them while a profile runs; if the app closes or crashes, the devices stay and rest centered. Keyboard and mouse output of profiles goes through it too.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Hiding.</strong> A hidden stick is closed to every program, through all its device nodes, raw HID too, even while Joystick Gobloon is closed. Only Joystick Gobloon still reads it, and gets every button of sticks with more than 80.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Only you.</strong> It serves only the user at the computer's screen; other users and remote logins get nothing from it.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Safe to stop.</strong> When it stops, crashes or is removed, hidden sticks are visible again. Removing it keeps your list of hidden sticks and your virtual devices; Joystick Gobloon then goes on without it as described above.</span></li>
+            </ul>
+            <p>For the curious: the service is <code>system-gobloon.service</code>, its program and state live in <code>/var/lib/system-gobloon</code>, and <code>journalctl -u system-gobloon</code> shows what it did.</p>
+            <figure class="shot"><img src="img/linux-system-gobloon.png" loading="lazy" width="1102" height="825" alt="Settings, General: the System Gobloon section at the bottom says which version runs, with a Remove button"></figure>
+          </article>
+
+          <article class="learn-action" id="system-gobloon-windows">
+            <h3><i class="ph ph-windows-logo" aria-hidden="true"></i>On Windows</h3>
+            <p>On Windows, vJoy and HidHide do this work today. System Gobloon for Windows will be one driver in their place, with what Linux already has: each virtual stick with a name and product of its own, so games never mix them up. Windows loads only drivers signed through Microsoft, and that needs an extended validation certificate and a hardware developer account, paid every year. We are raising the money for that; if you would like System Gobloon on Windows, a <a href="https://www.paypal.com/paypalme/h0userus" rel="noopener">donation</a> brings it closer. Until then Joystick Gobloon keeps using vJoy and HidHide.</p>
           </article>
         </section>
 
@@ -324,8 +365,8 @@
             <ol class="numbered">
               <li><strong>Create two virtual joysticks</strong> on the Virtual joysticks page: vJoy #1 for the left stick and vJoy #2 for the right one, each with the axes and as many buttons as the stick has.</li>
               <li><strong>Build or import the profile.</strong> Import a Joystick Gremlin profile from the toolbar, or start a new one. If it was made on another PC, use <span class="term">Map controls</span> on the Devices page to match it to your sticks. A profile also remembers the virtual devices it uses: when one is missing here, a banner on the Devices page offers to set it up.</li>
-              <li><strong>Map every input.</strong> The quickest way is the wizard, the wand button at the start of the toolbar: name the profile and pick the virtual joystick each stick maps to, here the left stick to vJoy #1 and the right one to vJoy #2. It adds a <a href="learn.html#map-to-vjoy">Map to vJoy</a> for every axis, button and hat, axes on the same axis where the virtual joystick has it. It warns when a virtual joystick has fewer inputs than its stick; those inputs stay unmapped. <a href="start.html#wizard">Get started</a> walks through the wizard in detail. Or map inputs one by one: select an input on the Devices page and add Map to vJoy.</li>
-              <li><strong>Add the extras.</strong> A Tempo action on the mode button: a short press sends one vJoy button that the game uses to cycle modes, a long press sends another that jumps between Combat and Travel. Make a thumb button the M1 modifier and give the buttons you want doubled an M1 layer. Put a response curve before Map to vJoy on pitch and yaw.</li>
+              <li><strong>Map every input.</strong> The quickest way is the wizard, the wand button at the start of the toolbar: name the profile and pick the virtual joystick each stick maps to, here the left stick to vJoy #1 and the right one to vJoy #2. It adds a <a href="learn.html#map-to-vjoy">Map to Virtual Stick</a> for every axis, button and hat, axes on the same axis where the virtual joystick has it. It warns when a virtual joystick has fewer inputs than its stick; those inputs stay unmapped. <a href="start.html#wizard">Get started</a> walks through the wizard in detail. Or map inputs one by one: select an input on the Devices page and add Map to Virtual Stick.</li>
+              <li><strong>Add the extras.</strong> A Tempo action on the mode button: a short press sends one vJoy button that the game uses to cycle modes, a long press sends another that jumps between Combat and Travel. Make a thumb button the M1 modifier and give the buttons you want doubled an M1 layer. Put a response curve before Map to Virtual Stick on pitch and yaw.</li>
               <li><strong>Hide the real sticks</strong> in the Device hiding window and reconnect them.</li>
               <li><strong>Activate the profile</strong> with the play button. The virtual joysticks now follow your sticks.</li>
               <li><strong>Bind the controls in the game</strong> by moving your real sticks: the game only sees vJoy #1 and vJoy #2, so every binding lands on a virtual joystick. Save the profile.</li>
@@ -339,7 +380,7 @@
               <dt>The game sees every input twice</dt>
               <dd>A real stick is still visible to it. Hide the stick, reconnect it, and make sure the game is not on the Applications list.</dd>
               <dt>The game sees nothing at all</dt>
-              <dd>Check that the profile is active (the play button) and that the input uses Map to vJoy. The tester on the Virtual joysticks page shows whether the device itself reaches the game.</dd>
+              <dd>Check that the profile is active (the play button) and that the input uses Map to Virtual Stick. The tester on the Virtual joysticks page shows whether the device itself reaches the game.</dd>
               <dt>Joystick Gobloon does not see a hidden stick</dt>
               <dd>Keep <span class="term">See hidden devices</span> on in Settings, so the app stays on the list of programs that see hidden devices.</dd>
               <dt>A changed vJoy device does not show up</dt>

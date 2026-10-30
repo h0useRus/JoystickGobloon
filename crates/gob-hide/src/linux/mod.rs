@@ -8,6 +8,9 @@
 //!
 //! The switch and the hidden devices are kept in `hidden.gob` (TOML) in the data directory;
 //! hidden devices stay listed while unplugged.
+//!
+//! With SystemGobloon running, `service.rs` is used instead: the service closes hidden devices
+//! to every program and keeps the state; this program still grabs them.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,9 +21,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Backend, Capabilities, Device, Error, Part};
 
+pub(crate) mod service;
+
 pub const CAPABILITIES: Capabilities = Capabilities {
     name: "Linux evdev",
     app_list: false,
+    hides_everywhere: false,
 };
 const STATE_FILE: &str = "hidden.gob";
 
@@ -28,7 +34,12 @@ pub fn load() -> Result<Arc<dyn Backend>, Error> {
     if !gob_input::exclusive::supported() {
         return Err(Error::Unsupported);
     }
+    if let Some(service) = service::Service::connect() {
+        return Ok(Arc::new(service));
+    }
     let hide = Grab;
+    // The service may have been removed since: nodes open as usual again.
+    gob_input::set_opener(None);
     // The stored state applies from the start, also before the window is opened.
     apply(&read_state()?);
     Ok(Arc::new(hide))
@@ -89,6 +100,24 @@ fn read_state() -> Result<State, Error> {
         }
         _ => Ok(State::default()),
     }
+}
+
+/// The sticks (vendor, product) whose raw HID node local hiding keeps closed: every hidden stick
+/// while hiding is on.
+pub fn closed_sticks_wanted() -> Vec<(u16, u16)> {
+    let Ok(state) = read_state() else {
+        return Vec::new();
+    };
+    let mut sticks: Vec<(u16, u16)> = state
+        .devices
+        .iter()
+        .filter(|_| state.enabled)
+        .map(|h| (h.vendor, h.product))
+        .filter(|&ids| ids != (0, 0))
+        .collect();
+    sticks.sort_unstable();
+    sticks.dedup();
+    sticks
 }
 
 fn write_state(state: &State) -> Result<(), Error> {

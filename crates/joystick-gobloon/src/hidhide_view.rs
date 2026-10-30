@@ -194,6 +194,9 @@ impl HidHideView {
                             }
                         });
                         ui.label(RichText::new(i18n.tr("hidhide-hint")).weak());
+                        if !caps.hides_everywhere {
+                            ui.label(RichText::new(i18n.tr("hidhide-while-running")).weak());
+                        }
                     });
                 });
             });

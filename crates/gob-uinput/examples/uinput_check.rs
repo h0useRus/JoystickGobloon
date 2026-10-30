@@ -15,10 +15,14 @@ fn main() {
         max: 32767,
     }];
     let spec = if gamepad {
-        gamepad::spec("Joystick Gobloon uinput check gamepad")
+        gamepad::spec(
+            "Joystick Gobloon uinput check gamepad",
+            "joystick-gobloon/check",
+        )
     } else {
         Spec {
             name: "Joystick Gobloon uinput check",
+            phys: "joystick-gobloon/check",
             bus: codes::BUS_VIRTUAL,
             keys: &[codes::BTN_JOYSTICK],
             axes: &axes,

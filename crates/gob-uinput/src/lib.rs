@@ -9,17 +9,21 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd};
 use std::path::{Path, PathBuf};
 
 pub mod access;
 pub mod codes;
 pub mod gamepad;
 pub mod keys;
+pub mod output;
 
 const UINPUT: &str = "/dev/uinput";
 /// `UINPUT_MAX_NAME_SIZE`.
-const MAX_NAME: usize = 80;
+pub const MAX_NAME: usize = 80;
+/// Start of the `phys` of every device Joystick Gobloon makes (gob-virtual, gob-engine and
+/// SystemGobloon): gob-input knows its own output by it, whatever the device is named.
+pub const OWN_PHYS: &str = "joystick-gobloon/";
 
 /// `ioctl` request numbers: `_IOC(dir, 'U', nr, size)` in the generic layout (x86, ARM).
 mod request {
@@ -38,6 +42,7 @@ mod request {
     pub const SET_KEYBIT: u32 = ioc(WRITE, 101, INT);
     pub const SET_RELBIT: u32 = ioc(WRITE, 102, INT);
     pub const SET_ABSBIT: u32 = ioc(WRITE, 103, INT);
+    pub const SET_PHYS: u32 = ioc(WRITE, 108, size_of::<*const libc::c_char>());
     pub const fn get_sysname(len: usize) -> u32 {
         ioc(READ, 44, len)
     }
@@ -71,6 +76,8 @@ pub struct Axis {
 pub struct Spec<'a> {
     /// Device name; longer than 79 bytes is cut.
     pub name: &'a str,
+    /// Where the device is "plugged in" (`phys`), empty for none; ours start with [`OWN_PHYS`].
+    pub phys: &'a str,
     /// `BUS_*` (e.g. [`codes::BUS_VIRTUAL`]).
     pub bus: u16,
     pub vendor: u16,
@@ -159,6 +166,12 @@ impl VirtualDevice {
         let name = truncate(spec.name, MAX_NAME - 1);
         setup.name[..name.len()].copy_from_slice(name.as_bytes());
         ioctl_ptr(&file, request::DEV_SETUP, &setup)?;
+        if !spec.phys.is_empty() {
+            let phys = std::ffi::CString::new(spec.phys)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+            // SAFETY: UI_SET_PHYS takes a zero-terminated string, copied before it returns.
+            check(unsafe { libc::ioctl(file.as_raw_fd(), request::SET_PHYS as _, phys.as_ptr()) })?;
+        }
         // SAFETY: UI_DEV_CREATE has no argument.
         check(unsafe { libc::ioctl(file.as_raw_fd(), request::DEV_CREATE as _) })?;
         Ok(Self { file })
@@ -166,24 +179,7 @@ impl VirtualDevice {
 
     /// Sends events as one report (`SYN_REPORT` is added): (type, code, value).
     pub fn emit(&self, events: &[(u16, u16, i32)]) -> io::Result<()> {
-        let mut bytes = Vec::with_capacity((events.len() + 1) * size_of::<libc::input_event>());
-        for &(type_, code, value) in events
-            .iter()
-            .chain(&[(codes::EV_SYN, codes::SYN_REPORT, 0)])
-        {
-            // SAFETY: `input_event` is plain data; all zeroes is a valid value (the kernel
-            // sets the time).
-            let mut e: libc::input_event = unsafe { std::mem::zeroed() };
-            (e.type_, e.code, e.value) = (type_, code, value);
-            // SAFETY: viewing a plain struct as its bytes.
-            bytes.extend_from_slice(unsafe {
-                std::slice::from_raw_parts(
-                    std::ptr::from_ref(&e).cast::<u8>(),
-                    size_of::<libc::input_event>(),
-                )
-            });
-        }
-        (&self.file).write_all(&bytes)
+        write_events(&self.file, events)
     }
 
     /// The device's sysfs directory, e.g. `/sys/devices/virtual/input/input42`.
@@ -224,9 +220,57 @@ impl Drop for VirtualDevice {
     }
 }
 
-/// Names of every input device on the system (`/sys/class/input/input*/name`), e.g. to find
+/// The uinput descriptor, to hand to another process (SystemGobloon): what it writes, the device
+/// reports; the device lives as long as this [`VirtualDevice`].
+impl AsFd for VirtualDevice {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.file.as_fd()
+    }
+}
+
+/// Writes events to a device another process created and keeps (SystemGobloon hands out its
+/// uinput descriptor); dropping it leaves the device as it is.
+#[derive(Debug)]
+pub struct Emitter {
+    file: File,
+}
+
+impl Emitter {
+    pub fn new(fd: OwnedFd) -> Self {
+        Self { file: fd.into() }
+    }
+
+    /// Sends events as one report, like [`VirtualDevice::emit`].
+    pub fn emit(&self, events: &[(u16, u16, i32)]) -> io::Result<()> {
+        write_events(&self.file, events)
+    }
+}
+
+/// Writes events and a `SYN_REPORT` as one write: (type, code, value).
+fn write_events(mut file: &File, events: &[(u16, u16, i32)]) -> io::Result<()> {
+    let mut bytes = Vec::with_capacity((events.len() + 1) * size_of::<libc::input_event>());
+    for &(type_, code, value) in events
+        .iter()
+        .chain(&[(codes::EV_SYN, codes::SYN_REPORT, 0)])
+    {
+        // SAFETY: `input_event` is plain data; all zeroes is a valid value (the kernel sets the
+        // time).
+        let mut e: libc::input_event = unsafe { std::mem::zeroed() };
+        (e.type_, e.code, e.value) = (type_, code, value);
+        // SAFETY: viewing a plain struct as its bytes.
+        bytes.extend_from_slice(unsafe {
+            std::slice::from_raw_parts(
+                std::ptr::from_ref(&e).cast::<u8>(),
+                size_of::<libc::input_event>(),
+            )
+        });
+    }
+    file.write_all(&bytes)
+}
+
+/// `phys` of every input device on the system (`/sys/class/input/input*/phys`), e.g. to find
 /// devices another program created.
-pub fn device_names() -> Vec<String> {
+pub fn device_phys() -> Vec<String> {
     let Ok(dir) = std::fs::read_dir("/sys/class/input") else {
         return Vec::new();
     };
@@ -236,7 +280,7 @@ pub fn device_names() -> Vec<String> {
                 .to_str()
                 .is_some_and(|n| n.starts_with("input"))
         })
-        .filter_map(|e| std::fs::read_to_string(e.path().join("name")).ok())
+        .filter_map(|e| std::fs::read_to_string(e.path().join("phys")).ok())
         .map(|n| n.trim_end().to_string())
         .collect()
 }
@@ -264,6 +308,7 @@ mod tests {
         assert_eq!(request::SET_EVBIT, 0x4004_5564);
         assert_eq!(request::SET_ABSBIT, 0x4004_5567);
         assert_eq!(request::get_sysname(64), 0x8040_552c);
+        assert_eq!(request::SET_PHYS, 0x4008_556c);
     }
 
     #[test]

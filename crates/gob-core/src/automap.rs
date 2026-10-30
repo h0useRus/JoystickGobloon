@@ -142,6 +142,8 @@ mod tests {
         assert!(!usage.contains_key(&vjoy(InputType::Button, 33)));
         assert!(usage.contains_key(&vjoy(InputType::Hat, 2)));
         assert!(usage.values().all(|u| u.len() == 1), "one input per output");
+        assert_eq!(p.main_source(2), Some("Stick"));
+        assert_eq!(p.main_source(1), None, "nothing writes to device 1");
 
         let missing = from.missing_in(&to);
         assert_eq!(

@@ -35,8 +35,13 @@ type Key = (Kind, u32);
 #[derive(Default)]
 pub struct DevicesView {
     selected: Option<String>,
+    /// The virtual devices' names, for the chips of their mappings.
+    vjoy_names: HashMap<u32, String>,
     /// The user picked the tab; otherwise a connected device is preferred.
     user_selected: bool,
+    /// The tab left because its device went away (e.g. while SystemGobloon restarts) and the
+    /// one shown instead: back to it when the device returns, unless another tab was picked.
+    left: Option<(String, String)>,
     mode: Option<String>,
     scroll_to: Option<(String, Key)>,
     /// Axis value when it last counted as moved (per device and axis).
@@ -83,6 +88,9 @@ pub struct DevicesView {
     all_buttons: crate::device_access::AllButtons,
     /// An all buttons request finished. The app reports it.
     pub all_buttons_result: Option<Result<(), String>>,
+    /// The system part is offered above (it reads every button too): no banner of our own, so
+    /// the first start asks for the password once. Set by the app.
+    pub system_part_offered: bool,
 }
 
 struct Tab<'a> {
@@ -220,6 +228,10 @@ impl DevicesView {
         ops: &mut Vec<Op>,
         vjoy: &[gob_virtual::DeviceInfo],
     ) {
+        self.vjoy_names = vjoy
+            .iter()
+            .map(|v| (v.id, crate::vjoy_view::device_name(i18n, v)))
+            .collect();
         let logical = self.logical.take();
         let mut tabs: Vec<Tab> = devices
             .iter()
@@ -309,9 +321,22 @@ impl DevicesView {
                 && !t.logical
                 && !is_keyboard(t)
         });
+        if let Some((was, instead)) = &self.left
+            && self.selected.as_ref() == Some(instead)
+        {
+            if tabs.iter().any(|t| t.guid == was && t.live.is_some()) {
+                self.selected = self.left.take().map(|(was, _)| was);
+            }
+        } else {
+            self.left = None;
+        }
         if !valid || (!self.user_selected && on_ghost) {
             let first = tabs.iter().find(|t| t.live.is_some()).or(tabs.first());
-            self.selected = first.map(|t| t.guid.to_string());
+            let instead = first.map(|t| t.guid.to_string());
+            if let (Some(was), Some(instead)) = (self.selected.take(), instead.clone()) {
+                self.left = Some((was, instead));
+            }
+            self.selected = instead;
         }
         if let Some(p) = profile {
             let modes = &p.profile.modes;
@@ -671,6 +696,7 @@ impl DevicesView {
         empty: bool,
     ) {
         if let Some(d) = tab.live
+            && !self.system_part_offered
             && let Some(done) = self.all_buttons.banner(ui, i18n, &d.info)
         {
             self.all_buttons_result = Some(done);
@@ -837,7 +863,7 @@ impl DevicesView {
                             ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
                             for a in children {
                                 let glyph = crate::action_editor::kind_icon(&a.kind);
-                                chip(ui, glyph, &chip_text(i18n, a), inherited);
+                                chip(ui, glyph, &chip_text(i18n, a, &self.vjoy_names), inherited);
                             }
                         });
                     }
@@ -1289,8 +1315,8 @@ fn description(root: &Action) -> Option<String> {
 }
 
 /// The chip's tooltip: the action's name, plus the target of a vJoy mapping
-/// (e.g. "Map to vJoy: vJoy 1 A2") or the text of a description.
-fn chip_text(i18n: &I18n, a: &Action) -> String {
+/// (e.g. "Map to Virtual Stick: JoyGob 1 A2") or the text of a description.
+fn chip_text(i18n: &I18n, a: &Action, vjoy_names: &HashMap<u32, String>) -> String {
     let key = format!("kind-{}", a.kind);
     let name = i18n.tr(&key);
     let name = if name == key { a.kind.clone() } else { name };
@@ -1306,7 +1332,11 @@ fn chip_text(i18n: &I18n, a: &Action) -> String {
             InputType::Hat => "H",
             _ => "B",
         };
-        return format!("{name}: vJoy #{device} {t}{input_id}");
+        let device = vjoy_names
+            .get(&device)
+            .cloned()
+            .unwrap_or_else(|| i18n.trf("vjoy-device-n", &[("n", device.into())]));
+        return format!("{name}: {device} {t}{input_id}");
     }
     if let gob_core::ActionKind::MapToGamepad {
         gamepad, control, ..

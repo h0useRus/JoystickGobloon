@@ -422,13 +422,20 @@ pub fn py_float(v: f32) -> String {
 
 use gob_core::TWO_AXIS_KINDS;
 
+/// The action kind's name for the user ("Map to Virtual Stick"), else its id in the profile.
+fn kind_name(i18n: &I18n, kind: &str) -> String {
+    let key = format!("kind-{kind}");
+    let name = i18n.tr(&key);
+    if name == key { kind.to_string() } else { name }
+}
+
 /// Two-axis actions are told apart by their own `label` property.
 fn merge_label(a: &Action, i18n: &I18n) -> String {
     match a.str("label").map(str::trim).filter(|l| !l.is_empty()) {
         Some(l) => l.to_string(),
         None => format!(
             "{} {}",
-            i18n.tr(&format!("kind-{}", a.kind)),
+            kind_name(i18n, &a.kind),
             &a.id[..a.id.len().min(8)]
         ),
     }
@@ -760,8 +767,9 @@ impl Editor<'_> {
             .inner_margin(8);
         frame.show(ui, |ui| {
             ui.horizontal(|ui| {
+                let kind = kind_name(self.i18n, &action.kind);
                 ui.label(RichText::new(kind_icon(&action.kind)).size(style::ICON_SIZE))
-                    .on_hover_text(&action.kind);
+                    .on_hover_text(&kind);
                 // The buttons first, from the right; the title takes the width left of them.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let (p, g) = (parent.to_string(), group.to_string());
@@ -805,7 +813,7 @@ impl Editor<'_> {
                         .unwrap_or_default()
                         .to_string();
                     let title = style::EditableText::new(&mut label, ("action-label", id))
-                        .hint(&action.kind)
+                        .hint(&kind)
                         .strong();
                     if ui
                         .add(title)
@@ -1398,6 +1406,7 @@ impl Editor<'_> {
                 buttons: 128,
                 cont_hats: 4,
                 disc_hats: 0,
+                name: None,
             })
             .collect()
     }
@@ -1615,7 +1624,10 @@ impl Editor<'_> {
         };
         let inputs = vjoy_outputs(devices.iter().find(|d| d.id == device), ty);
         let name = |n: u32| vjoy_output_name(self.i18n, ty, n);
-        let device_name = |n: u32| self.i18n.trf("vjoy-device-n", &[("n", n.into())]);
+        let device_name = |n: u32| match devices.iter().find(|d| d.id == n) {
+            Some(d) => crate::vjoy_view::device_name(self.i18n, d),
+            None => self.i18n.trf("vjoy-device-n", &[("n", n.into())]),
+        };
 
         let mut set_device = None;
         let mut set_input = None;
@@ -1922,7 +1934,7 @@ impl Editor<'_> {
                             let full = key == "edit-link-existing" && !self.accepts(&a.id);
                             let r = ui
                                 .add_enabled(!full, egui::Button::new(name))
-                                .on_hover_text(&a.kind)
+                                .on_hover_text(kind_name(self.i18n, &a.kind))
                                 .on_disabled_hover_text(self.i18n.tr("edit-merge-full"));
                             if r.clicked() {
                                 if key == "edit-link-existing" {

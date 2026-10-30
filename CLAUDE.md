@@ -39,7 +39,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   gob-input. Config = HID descriptors in HKLM\...\services\vjoy\Parameters\DeviceNN (descriptor.rs, vJoy 2.1.9
   layout), changed by `JoystickGobloon.exe --vjoy-config <vJoyConfig-style args>` run elevated (configure.rs).
   Examples `vjoy_info [--sweep <id>]` (read-only), `vjoy_config <args>` (UAC, changes the user's vJoy)
-- crates/gob-virtual virtual joysticks, the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
+- crates/gob-virtual virtual joysticks (linux/service.rs: through SystemGobloon when it runs, devices kept by the service,
+  `Emitter` writes to the lent uinput fd, virtual.gob moved there once), the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
   + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
   made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`; 95 buttons with joystick codes only,
   no gamepad codes or KEY_MAX, so SDL sees a joystick; example `virtual_hold` keeps one up for jstest/SDL checks),
@@ -51,7 +52,20 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
   capabilities incl. `app_list`), `find_device` (input device -> hideable device); windows.rs = HidHide via
-  gob-hidhide, linux.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob
+  gob-hidhide, linux/mod.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob;
+  linux/service.rs = the same through SystemGobloon when it runs (`hides_everywhere`, nodes via gob-input's
+  `set_opener`, hidden.gob moved to the service once)
+- crates/gob-system  SystemGobloon protocol shared by the Linux service and the future Windows driver
+  (protocol.rs: `no_std` fixed little-endian records with pinned offsets, request `Code`s, `caps` bits) + client;
+  platform/linux.rs = Unix socket `/run/system-gobloon.sock`, descriptors in SCM_RIGHTS (`send`/`recv` shared)
+- crates/system-gobloon  Linux root service, binary `SystemGobloon [--socket <path>]` (plans/LINUX_SERVICE_PLAN.md):
+  server.rs (thread per client), seat.rs (root or the active seat's uid), journal.rs (stderr with `<N>` priorities);
+  hide.rs = state in /var/lib/system-gobloon/hidden.toml, runtime rule /run/udev/rules.d/72-system-gobloon-hidden.rules
+  (USB vendor/product/serial, root only), nodes closed directly + inotify watchdog, `--cleanup` = unit's ExecStopPost;
+  gob-input `controller_nodes()` (Linux) lists each controller's event/js/hidraw nodes and USB serial for it;
+  virtuals.rs = joysticks/gamepads of /var/lib/system-gobloon/virtual.toml made at start and kept (gob-virtual's
+  `uinput` module makes them), lent per connection (uinput fd), centered on release or disconnect;
+  tests/hello.rs runs it on a temp socket without root
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.
@@ -89,10 +103,11 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   their window is a normal app window, or modal when it affects how the program works.
 - All user-visible strings go through i18n keys; add every key to all lang/*.ftl (en, ru, de, es, fr, ko, zh;
   gob-i18n's test checks it). Product names (Joystick Gobloon, vJoy, HidHide, Joystick Gremlin) stay untranslated.
-- The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words);
+- The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words); its system
+  part is "System Gobloon" there too (two words), `SystemGobloon` only in code, binary, unit and paths;
   Never "JoyGob"/"joygob" (it was only a chat nickname): not in code, identifiers, crate or file names, comments
   or docs. Code uses `joystick-gobloon` (crate), `JoystickGobloon` (types, exe and file names), `JOYSTICK_GOBLOON_`
-  (env vars).
+  (env vars). Exception: default names of virtual devices are "JoyGob N" (joysticks) and "GameGob N" (gamepads).
 - Profiles are Joystick Gobloon's own format (since 2026-10-23): human-readable XML, changed freely for what
   Joystick Gobloon needs; no workarounds to stay readable by Gremlin. Gremlin profiles must still import
   (unknown actions kept as raw XML); export to Gremlin may come later.

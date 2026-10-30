@@ -1,10 +1,9 @@
 //! Thin wrapper over the evdev character devices (`/dev/input/event*`): the ioctls that
 //! describe a device and non-blocking reads of its events.
 
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io;
 use std::os::fd::{AsRawFd, RawFd};
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 pub const EV_SYN: u16 = 0x00;
@@ -61,12 +60,18 @@ pub struct Node {
 }
 
 impl Node {
-    /// Opens the device for non-blocking reads.
+    /// Opens the device for non-blocking reads; a hidden device's node through the opener.
     pub fn open(path: &Path) -> io::Result<Self> {
-        let file = OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
-            .open(path)?;
+        let file = super::open_node(path)?;
+        Ok(Self {
+            file,
+            path: path.to_owned(),
+        })
+    }
+
+    /// Like [`Node::open`], but never asks the opener: for nodes that are never hidden.
+    pub fn open_direct(path: &Path) -> io::Result<Self> {
+        let file = super::open_direct(path)?;
         Ok(Self {
             file,
             path: path.to_owned(),

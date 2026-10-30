@@ -209,8 +209,16 @@ impl VJoyView {
             if self.config.busy() {
                 ui.spinner();
             }
+            if self.config.available() {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    self.add_buttons(ui, i18n, caps.max_gamepads, locked);
+                });
+            }
         });
         self.config.message(ui);
+        if !caps.persistent {
+            ui.label(RichText::new(i18n.tr("vjoy-not-persistent")).weak());
+        }
         ui.separator();
 
         // A created draft becomes a normal tab once the driver lists it.
@@ -219,100 +227,27 @@ impl VJoyView {
         {
             self.draft = None;
         }
-        let used: Vec<u32> = self.devices.iter().map(|d| d.id).collect();
-        let free = self.config.free_id(&used);
         let draft_id = self.draft.as_ref().map(|d| d.id);
-        if self.devices.is_empty() && draft_id.is_none() {
-            if self.pad.is_none() {
+        if self
+            .pad
+            .is_some_and(|id| !self.gamepads.iter().any(|g| g.id == id))
+        {
+            self.pad = None;
+        }
+        if self.devices.is_empty() && draft_id.is_none() && self.pad.is_none() {
+            if self.gamepads.is_empty() {
                 crate::app::empty_state(ui, icon::GAME_CONTROLLER, &i18n.tr("vjoy-no-devices"));
-                if let (true, Some(id)) = (self.config.available(), free) {
-                    ui.vertical_centered(|ui| {
-                        let text = format!("{}  {}", icon::PLUS, i18n.tr("vjoy-add"));
-                        if ui.add_enabled(!locked, egui::Button::new(text)).clicked() {
-                            self.add(id);
-                        }
-                    });
-                }
-                ui.separator();
-            } else if let (true, Some(id)) = (self.config.available(), free) {
-                // A gamepad is shown: the device row keeps its "+" so a device can be added.
-                let can = !locked && !self.config.busy();
-                if style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add")).clicked() {
-                    self.add(id);
-                }
-                ui.separator();
+                return;
             }
-            self.gamepads_section(ui, i18n, &vjoy, caps.max_gamepads, locked, marks);
-            return;
+            self.pad = self.gamepads.first().map(|g| g.id);
         }
         if !self.devices.iter().any(|d| d.id == self.selected) && draft_id != Some(self.selected) {
             self.selected = self.devices.first().map_or(self.selected, |d| d.id);
         }
-        // Tabs: the devices, then the draft (laid out as its editor says).
-        let mut tabs: Vec<(DeviceInfo, &str, String)> = self
-            .devices
-            .iter()
-            .map(|d| {
-                (
-                    d.clone(),
-                    status_glyph(d.status),
-                    i18n.tr(status_key(d.status)),
-                )
-            })
-            .collect();
-        if let Some(d) = &self.draft {
-            let info = draft_info(d, &caps);
-            let tip = i18n.trf("vjoy-new-device", &[("n", d.id.into())]);
-            tabs.push((info, icon::PENCIL_SIMPLE, tip));
-        }
-        let mut clicked = None;
-        let mut add = false;
-        ui.horizontal_wrapped(|ui| {
-            for (d, glyph, status) in &tabs {
-                let caption = format!(
-                    "{}    {} {}   {} {}   {} {}    {glyph}",
-                    i18n.trf("vjoy-device-n", &[("n", d.id.into())]),
-                    icon::ARROWS_OUT_LINE_HORIZONTAL,
-                    d.axes.len(),
-                    icon::RADIO_BUTTON,
-                    d.buttons,
-                    icon::ARROWS_OUT_CARDINAL,
-                    d.hats()
-                );
-                let tip = format!(
-                    "{status}\n{}: {}, {}: {}, {}: {}",
-                    i18n.tr("vjoy-axes"),
-                    d.axes.len(),
-                    i18n.tr("vjoy-buttons"),
-                    d.buttons,
-                    i18n.tr("vjoy-hats"),
-                    d.hats()
-                );
-                let selected = d.id == self.selected && self.pad.is_none();
-                let r =
-                    style::tab(ui, selected, icon::GAME_CONTROLLER, &caption).on_hover_text(tip);
-                if r.clicked() && !selected {
-                    clicked = Some(d.id);
-                }
-            }
-            if self.config.available() {
-                let can = free.is_some() && self.draft.is_none() && !locked && !self.config.busy();
-                let r = style::icon_button(ui, can, icon::PLUS, &i18n.tr("vjoy-add"));
-                add = if free.is_none() {
-                    r.on_disabled_hover_text(i18n.tr("vjoy-add-max")).clicked()
-                } else {
-                    r.clicked()
-                };
-            }
-        });
-        if let Some(id) = clicked {
-            self.select(id);
-        }
-        if let (true, Some(id)) = (add, free) {
-            self.add(id);
-        }
+        self.tabs(ui, i18n, &caps);
         ui.separator();
-        if self.gamepads_section(ui, i18n, &vjoy, caps.max_gamepads, locked, marks) {
+        if let Some(id) = self.pad {
+            self.gamepad_page(ui, i18n, &vjoy, id, locked, marks);
             return;
         }
 
@@ -339,7 +274,8 @@ impl VJoyView {
             .auto_shrink(false)
             .show(ui, |ui| {
                 if self.config.available() {
-                    self.config.editor(ui, i18n, info.id, new, locked);
+                    let source = marks.and_then(|m| m.profile().main_source(info.id));
+                    self.config.editor(ui, i18n, info.id, new, locked, source);
                     ui.separator();
                 }
                 // The tester shows the editor's layout at once; unapplied changes cannot be
@@ -425,40 +361,54 @@ impl VJoyView {
         }
     }
 
-    /// The gamepad row (when the backend has gamepads) and the selected gamepad's page; true
-    /// when that page is shown instead of a device's.
-    fn gamepads_section(
-        &mut self,
-        ui: &mut egui::Ui,
-        i18n: &I18n,
-        vjoy: &Arc<dyn Backend>,
-        max: u32,
-        locked: bool,
-        marks: Option<&OutputMarks>,
-    ) -> bool {
-        if max == 0 {
-            return false;
+    /// One row of tabs: the virtual sticks, the draft of a new one, then the gamepads.
+    fn tabs(&mut self, ui: &mut egui::Ui, i18n: &I18n, caps: &Capabilities) {
+        let mut tabs: Vec<(DeviceInfo, &str, String)> = self
+            .devices
+            .iter()
+            .map(|d| {
+                (
+                    d.clone(),
+                    status_glyph(d.status),
+                    i18n.tr(status_key(d.status)),
+                )
+            })
+            .collect();
+        if let Some(d) = &self.draft {
+            let info = draft_info(d, caps);
+            let tip = i18n.trf("vjoy-new-device", &[("n", d.id.into())]);
+            tabs.push((info, icon::PENCIL_SIMPLE, tip));
         }
-        self.gamepad_tabs(ui, i18n, max, locked);
-        ui.separator();
-        let Some(id) = self.pad else {
-            return false;
-        };
-        self.gamepad_page(ui, i18n, vjoy, id, locked, marks);
-        true
-    }
-
-    /// The gamepad row: a tab per gamepad, then "+".
-    fn gamepad_tabs(&mut self, ui: &mut egui::Ui, i18n: &I18n, max: u32, locked: bool) {
-        if self
-            .pad
-            .is_some_and(|id| !self.gamepads.iter().any(|g| g.id == id))
-        {
-            self.pad = None;
-        }
-        let free = (1..=max).find(|id| !self.gamepads.iter().any(|g| g.id == *id));
         let mut clicked = None;
+        let mut clicked_pad = None;
         ui.horizontal_wrapped(|ui| {
+            for (d, glyph, status) in &tabs {
+                let caption = format!(
+                    "{}    {} {}   {} {}   {} {}    {glyph}",
+                    device_name(i18n, d),
+                    icon::ARROWS_OUT_LINE_HORIZONTAL,
+                    d.axes.len(),
+                    icon::RADIO_BUTTON,
+                    d.buttons,
+                    icon::ARROWS_OUT_CARDINAL,
+                    d.hats()
+                );
+                let tip = format!(
+                    "{status}
+{}: {}, {}: {}, {}: {}",
+                    i18n.tr("vjoy-axes"),
+                    d.axes.len(),
+                    i18n.tr("vjoy-buttons"),
+                    d.buttons,
+                    i18n.tr("vjoy-hats"),
+                    d.hats()
+                );
+                let selected = d.id == self.selected && self.pad.is_none();
+                let r = style::tab(ui, selected, icon::JOYSTICK, &caption).on_hover_text(tip);
+                if r.clicked() && !selected {
+                    clicked = Some(d.id);
+                }
+            }
             for g in &self.gamepads {
                 let caption = format!(
                     "{}    {}",
@@ -466,36 +416,64 @@ impl VJoyView {
                     status_glyph(g.status)
                 );
                 let tip = format!(
-                    "{}\n{}",
+                    "{}
+{}",
                     i18n.tr(status_key(g.status)),
                     i18n.tr("gamepad-tip")
                 );
                 let r = style::tab(ui, self.pad == Some(g.id), icon::GAME_CONTROLLER, &caption)
                     .on_hover_text(tip);
                 if r.clicked() && self.pad != Some(g.id) {
-                    clicked = Some(g.id);
-                }
-            }
-            if self.config.available() {
-                let can = free.is_some() && !locked && !self.config.busy();
-                let r = style::icon_button(ui, can, icon::PLUS, &i18n.tr("gamepad-add"));
-                let r = if free.is_none() {
-                    r.on_disabled_hover_text(i18n.trf("gamepad-add-max", &[("n", max.into())]))
-                } else {
-                    r
-                };
-                if let (true, Some(id)) = (r.clicked(), free) {
-                    self.config.gamepad(true, id, i18n);
-                    self.refreshed = None;
-                    clicked = Some(id);
+                    clicked_pad = Some(g.id);
                 }
             }
         });
         if let Some(id) = clicked {
-            self.release();
-            self.error = None;
-            self.pad = Some(id);
+            self.select(id);
         }
+        if let Some(id) = clicked_pad {
+            self.select_pad(id);
+        }
+    }
+
+    /// "Add a virtual stick" and, where the backend has gamepads, "Add a virtual gamepad".
+    fn add_buttons(&mut self, ui: &mut egui::Ui, i18n: &I18n, max_pads: u32, locked: bool) {
+        let idle = !locked && !self.config.busy();
+        // Right to left: the gamepad's button first.
+        if max_pads > 0 {
+            let free = (1..=max_pads).find(|id| !self.gamepads.iter().any(|g| g.id == *id));
+            let text = i18n.tr("gamepad-add");
+            let r = ui.add_enabled(idle && free.is_some(), egui::Button::new(text));
+            let r = if free.is_none() {
+                r.on_disabled_hover_text(i18n.trf("gamepad-add-max", &[("n", max_pads.into())]))
+            } else {
+                r
+            };
+            if let (true, Some(id)) = (r.clicked(), free) {
+                self.config.gamepad(true, id, i18n);
+                self.refreshed = None;
+                self.select_pad(id);
+            }
+        }
+        let used: Vec<u32> = self.devices.iter().map(|d| d.id).collect();
+        let free = self.config.free_id(&used);
+        let text = i18n.tr("vjoy-add");
+        let can = idle && free.is_some() && self.draft.is_none();
+        let r = ui.add_enabled(can, egui::Button::new(text));
+        let r = if free.is_none() {
+            r.on_disabled_hover_text(i18n.tr("vjoy-add-max"))
+        } else {
+            r
+        };
+        if let (true, Some(id)) = (r.clicked(), free) {
+            self.add(id);
+        }
+    }
+
+    fn select_pad(&mut self, id: u32) {
+        self.release();
+        self.error = None;
+        self.pad = Some(id);
     }
 
     /// The selected gamepad: delete, the lock button and its output tester.
@@ -864,6 +842,7 @@ fn draft_info(c: &DeviceConfig, caps: &Capabilities) -> DeviceInfo {
         buttons: 0,
         cont_hats: 0,
         disc_hats: 0,
+        name: None,
     };
     preview(&base, c, caps)
 }
@@ -876,7 +855,21 @@ fn preview(info: &DeviceInfo, c: &DeviceConfig, caps: &Capabilities) -> DeviceIn
         buttons: c.buttons.min(caps.max_buttons),
         cont_hats: if c.discrete_hats { 0 } else { hats },
         disc_hats: if c.discrete_hats { hats } else { 0 },
+        name: caps.custom_names.then(|| {
+            c.name
+                .clone()
+                .unwrap_or_else(|| DeviceConfig::default_name(c.id))
+        }),
         ..info.clone()
+    }
+}
+
+/// How the program names a virtual device: its own name where devices have one, else
+/// "vJoy #N".
+pub fn device_name(i18n: &I18n, d: &DeviceInfo) -> String {
+    match &d.name {
+        Some(name) => name.clone(),
+        None => i18n.trf("vjoy-device-n", &[("n", d.id.into())]),
     }
 }
 

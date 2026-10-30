@@ -12,8 +12,10 @@ mod hid;
 pub(crate) mod keyboard;
 
 use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use evdev::{ABS_CNT, Bits, Caps, EV_ABS, EV_KEY, EV_SYN, KEY_CNT, Node, SYN_DROPPED, SYN_REPORT};
@@ -165,9 +167,12 @@ fn is_joystick(caps: &Caps) -> bool {
 }
 
 /// What identifies a device across restarts: its serial number, or where it is plugged in, and
-/// its name (one USB device can have several input nodes, each with its own name).
+/// its name (one USB device can have several input nodes, each with its own name). Our own
+/// virtual devices by their place alone: they keep their id when renamed.
 fn identity(uniq: &str, phys: &str, name: &str) -> String {
-    if uniq.is_empty() {
+    if phys.starts_with(gob_uinput::OWN_PHYS) {
+        format!("phys:{phys}")
+    } else if uniq.is_empty() {
         format!("phys:{phys}\n{name}")
     } else {
         format!("uniq:{uniq}\n{name}")
@@ -245,11 +250,53 @@ fn scale_axis(value: i32, min: i32, max: i32) -> i32 {
     (v * 65535 / (i64::from(max) - i64::from(min)) - 32768) as i32
 }
 
+/// Opens controller nodes closed to this user (see [`set_opener`]).
+pub type Opener = Box<dyn Fn(&Path) -> io::Result<std::os::fd::OwnedFd> + Send + Sync>;
+
+static OPENER: std::sync::RwLock<Option<Opener>> = std::sync::RwLock::new(None);
+
+/// Sets where nodes closed to this user come from: SystemGobloon hands out the nodes of hidden
+/// controllers and raw HID nodes (gob-hide sets it when the service runs). `None`: such nodes
+/// stay closed.
+pub fn set_opener(opener: Option<Opener>) {
+    *OPENER.write().unwrap_or_else(|e| e.into_inner()) = opener;
+}
+
+/// Opens a device node for non-blocking reads; one closed to this user through the opener.
+fn open_node(path: &Path) -> io::Result<std::fs::File> {
+    let denied = match open_direct(path) {
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => e,
+        other => return other,
+    };
+    let opener = OPENER.read().unwrap_or_else(|e| e.into_inner());
+    match opener.as_ref().map(|open| open(path)) {
+        Some(Ok(fd)) => Ok(fd.into()),
+        // Not hidden (the service refuses) or no service: the system's answer stands.
+        _ => Err(denied),
+    }
+}
+
+/// Opens a device node for non-blocking reads as this user.
+fn open_direct(path: &Path) -> io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(path)
+}
+
 /// The USB device's product string (e.g. "VKBsim Gladiator EVO R"), the name Windows shows. The
 /// evdev name has the manufacturer in front ("VKB-Sim (C) Alex Oz 2023  VKBsim ..."), which
 /// would keep "Map controls" from matching profiles made on Windows. `None` for devices that
 /// are not on USB (e.g. Bluetooth): their evdev name is used.
 fn usb_product(event_node: &Path) -> Option<String> {
+    let product = std::fs::read_to_string(usb_device(event_node)?.join("product")).ok()?;
+    let product = product.trim();
+    (!product.is_empty()).then(|| product.to_string())
+}
+
+/// The USB device's folder in sysfs behind an event node; `None` off USB.
+fn usb_device(event_node: &Path) -> Option<PathBuf> {
     let name = event_node.file_name()?;
     // eventN/device = the input device, its device = the HID device, two levels up = USB.
     let hid = Path::new("/sys/class/input")
@@ -257,9 +304,71 @@ fn usb_product(event_node: &Path) -> Option<String> {
         .join("device/device")
         .canonicalize()
         .ok()?;
-    let product = std::fs::read_to_string(hid.parent()?.parent()?.join("product")).ok()?;
-    let product = product.trim();
-    (!product.is_empty()).then(|| product.to_string())
+    let usb = hid.parent()?.parent()?;
+    usb.join("idVendor").exists().then(|| usb.to_path_buf())
+}
+
+/// A controller's device nodes, for SystemGobloon (root) to close them to others while hidden.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Nodes {
+    /// Id as in [`crate::DeviceInfo::guid`].
+    pub guid: String,
+    pub name: String,
+    pub vendor: u16,
+    pub product: u16,
+    /// On USB: the USB device's serial number (udev `ATTRS{serial}`), empty without one.
+    pub usb_serial: Option<String>,
+    /// The event node, its joydev node and the HID device's hidraw node, as far as present.
+    pub paths: Vec<PathBuf>,
+}
+
+/// The attached controllers (not our own virtual devices) and their nodes. Needs read access to
+/// the event nodes: root.
+pub fn controller_nodes() -> Vec<Nodes> {
+    use super::Backend;
+    let Some(platform) = Platform::new() else {
+        return Vec::new();
+    };
+    platform
+        .attached()
+        .into_iter()
+        .filter_map(|(guid, found)| {
+            let node = Node::open(&found.path).ok()?;
+            if keyboard::is_own(&node) {
+                return None;
+            }
+            let [_, vendor, product, _] = node.id();
+            let usb = usb_device(&found.path);
+            let usb_serial = usb.map(|dir| {
+                std::fs::read_to_string(dir.join("serial"))
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default()
+            });
+            let mut paths = vec![found.path.clone()];
+            let input = Path::new("/sys/class/input")
+                .join(found.path.file_name()?)
+                .join("device");
+            let joydev = std::fs::read_dir(input).into_iter().flatten().flatten();
+            paths.extend(joydev.filter_map(|e| {
+                let n = e.file_name();
+                n.to_str()?
+                    .starts_with("js")
+                    .then(|| Path::new("/dev/input").join(&n))
+            }));
+            let hidraw = hidraw_path(&found.path);
+            if !hidraw.is_empty() {
+                paths.push(hidraw.into());
+            }
+            Some(Nodes {
+                guid,
+                name: node.name(),
+                vendor,
+                product,
+                usb_serial,
+                paths,
+            })
+        })
+        .collect()
 }
 
 /// The `hidraw` node of the HID device behind an event node (for gob-lighting), if any.
@@ -362,6 +471,14 @@ pub(crate) struct Device {
     raw_pending: Option<(RawPlan, Instant)>,
 }
 
+/// Whether opening the raw HID node `path` went otherwise than last time: devices are opened
+/// on every scan (and for device lists), the log tells only what changed.
+fn raw_changed(path: &str, opened: bool) -> bool {
+    static LAST: Mutex<BTreeMap<String, bool>> = Mutex::new(BTreeMap::new());
+    let mut last = LAST.lock().unwrap_or_else(PoisonError::into_inner);
+    last.insert(path.to_string(), opened) != Some(opened)
+}
+
 impl Device {
     fn open(found: &Found, events: bool) -> io::Result<Self> {
         let node = Node::open(&found.path)?;
@@ -393,20 +510,24 @@ impl Device {
         let (raw, raw_pending) = match RawPlan::new(&hid_path, codes.len()) {
             Some(plan) => match plan.open() {
                 Ok(raw) => {
-                    log::info!(
-                        "{}: {} buttons read from {hid_path}",
-                        found.path.display(),
-                        plan.count
-                    );
+                    if raw_changed(&hid_path, true) {
+                        log::info!(
+                            "{}: {} buttons read from {hid_path}",
+                            found.path.display(),
+                            plan.count
+                        );
+                    }
                     (Some((raw, plan.count)), None)
                 }
                 Err(e) => {
-                    log::info!(
-                        "{}: buttons {}-{} need read access to {hid_path}: {e}",
-                        found.path.display(),
-                        codes.len() + 1,
-                        plan.count
-                    );
+                    if raw_changed(&hid_path, false) {
+                        log::info!(
+                            "{}: buttons {}-{} need read access to {hid_path}: {e}",
+                            found.path.display(),
+                            codes.len() + 1,
+                            plan.count
+                        );
+                    }
                     (None, Some((plan, Instant::now() + RAW_RETRY)))
                 }
             },
@@ -425,7 +546,7 @@ impl Device {
             buttons: raw.as_ref().map_or(codes.len(), |(_, n)| *n),
             hats: hat_count,
             hid_path,
-            own: node.name().starts_with(keyboard::OWN_DEVICE_PREFIX),
+            own: keyboard::is_own(&node),
             unread_buttons: raw_pending
                 .as_ref()
                 .map_or(0, |(p, _)| p.count - codes.len()),
@@ -515,11 +636,13 @@ impl Device {
             return;
         };
         let count = plan.count;
-        log::info!(
-            "{}: {count} buttons read from {}",
-            self.state.info.name,
-            plan.path.display()
-        );
+        if raw_changed(&plan.path.to_string_lossy(), true) {
+            log::info!(
+                "{}: {count} buttons read from {}",
+                self.state.info.name,
+                plan.path.display()
+            );
+        }
         self.raw_pending = None;
         self.raw = Some(raw);
         self.buttons.fill(u8::MAX);
@@ -831,5 +954,10 @@ mod tests {
         assert_ne!(a, b);
         let serial = identity("ABC123", "anywhere", "VKB");
         assert_eq!(serial, identity("ABC123", "elsewhere", "VKB"));
+        assert_eq!(
+            identity("", "joystick-gobloon/joystick-2", "JoyGob 2"),
+            identity("", "joystick-gobloon/joystick-2", "Gobloon Throttle"),
+            "our devices keep their id when renamed"
+        );
     }
 }

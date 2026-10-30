@@ -180,4 +180,17 @@ impl super::Desktop for Desktop {
     fn grant_all_buttons(_vendor_id: u16, _product_id: u16) -> Result<(), String> {
         Ok(())
     }
+
+    /// HidHide and vJoy do its work until our own driver comes.
+    fn system_part(_version: &str) -> super::SystemPart {
+        super::SystemPart::Unavailable
+    }
+
+    fn install_system_part() -> Result<(), String> {
+        Err("not supported on Windows yet".into())
+    }
+
+    fn remove_system_part() -> Result<(), String> {
+        Err("not supported on Windows yet".into())
+    }
 }
