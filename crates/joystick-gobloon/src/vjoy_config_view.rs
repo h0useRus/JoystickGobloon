@@ -164,6 +164,9 @@ impl VJoyConfig {
             .cloned()
             .unwrap_or_else(|| DeviceConfig::new(id, &caps));
         c.id = id;
+        // The layout is copied; the name and product id would clash with the first device's.
+        c.name = None;
+        c.product = None;
         c
     }
 
