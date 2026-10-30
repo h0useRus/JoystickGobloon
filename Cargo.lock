@@ -2008,6 +2008,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gob-system"
+version = "0.6.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "gob-ui"
 version = "0.6.0"
 dependencies = [
@@ -4427,6 +4434,15 @@ dependencies = [
  "pkg-config",
  "toml 0.8.2",
  "version-compare",
+]
+
+[[package]]
+name = "system-gobloon"
+version = "0.6.0"
+dependencies = [
+ "gob-system",
+ "libc",
+ "log",
 ]
 
 [[package]]

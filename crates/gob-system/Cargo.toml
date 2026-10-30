@@ -1,0 +1,14 @@
+[package]
+name = "gob-system"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SystemGobloon protocol (shared by the Linux service and the Windows driver) and its client"
+
+[features]
+default = ["std"]
+# The client and its transport; without it only the protocol types (no_std, for a kernel driver).
+std = []
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true

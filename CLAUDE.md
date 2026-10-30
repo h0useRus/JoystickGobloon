@@ -52,6 +52,12 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
   capabilities incl. `app_list`), `find_device` (input device -> hideable device); windows.rs = HidHide via
   gob-hidhide, linux.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob
+- crates/gob-system  SystemGobloon protocol shared by the Linux service and the future Windows driver
+  (protocol.rs: `no_std` fixed little-endian records with pinned offsets, request `Code`s, `caps` bits) + client;
+  platform/linux.rs = Unix socket `/run/system-gobloon.sock`, descriptors in SCM_RIGHTS (`send`/`recv` shared)
+- crates/system-gobloon  Linux root service, binary `SystemGobloon [--socket <path>]` (plans/LINUX_SERVICE_PLAN.md):
+  server.rs (thread per client), seat.rs (root or the active seat's uid), journal.rs (stderr with `<N>` priorities);
+  tests/hello.rs runs it on a temp socket without root
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.
