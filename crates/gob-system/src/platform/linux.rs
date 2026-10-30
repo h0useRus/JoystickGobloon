@@ -9,9 +9,9 @@ use std::path::Path;
 use std::{fmt, mem, ptr};
 
 use crate::protocol::{
-    ApplyVirtual, Code, ErrorCode, ErrorReply, Gamepad, Header, Hello, HelloReply, Hidden,
-    Joystick, OpenHidden, Record, SetHidden, SetHideEnabled, Text, VirtualRef, hidden_records,
-    virtual_records,
+    ApplyVirtual, Code, DeviceKind, ErrorCode, ErrorReply, Gamepad, Header, Hello, HelloReply,
+    Hidden, Joystick, OpenHidden, Record, SetHidden, SetHideEnabled, Text, VirtualRef,
+    hidden_records, virtual_records,
 };
 
 /// Where the service listens.
@@ -277,27 +277,22 @@ impl Client {
     }
 
     /// Takes a virtual device: events written to the descriptor are the device's.
-    pub fn acquire(&mut self, gamepad: bool, id: u32) -> Result<OwnedFd, Error> {
-        let code = if gamepad {
-            Code::AcquireGamepad
-        } else {
-            Code::AcquireJoystick
-        };
+    pub fn acquire(&mut self, kind: DeviceKind, id: u32) -> Result<OwnedFd, Error> {
         let mut payload = vec![0; VirtualRef::SIZE];
-        virtual_ref(gamepad, id).write(&mut payload);
-        let (_, fd) = self.call(code, &payload)?;
+        virtual_ref(kind, id).write(&mut payload);
+        let (_, fd) = self.call(Code::Acquire, &payload)?;
         fd.ok_or(Error::Protocol("no descriptor"))
     }
 
     /// Gives a virtual device back; the service centers it.
-    pub fn release(&mut self, gamepad: bool, id: u32) -> Result<(), Error> {
-        self.call_empty(Code::Release, &virtual_ref(gamepad, id))
+    pub fn release(&mut self, kind: DeviceKind, id: u32) -> Result<(), Error> {
+        self.call_empty(Code::Release, &virtual_ref(kind, id))
     }
 }
 
-fn virtual_ref(gamepad: bool, id: u32) -> VirtualRef {
+fn virtual_ref(kind: DeviceKind, id: u32) -> VirtualRef {
     VirtualRef {
-        gamepad: gamepad.into(),
+        kind: kind as u8,
         reserved: [0; 3],
         id,
     }

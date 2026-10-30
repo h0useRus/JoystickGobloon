@@ -1,29 +1,40 @@
 //! Keyboard and mouse output through uinput: a virtual keyboard and a virtual mouse that the
-//! desktop (X11 or Wayland) and games read like real ones. Their names start with
-//! "Joystick Gobloon", so gob-input does not read our own keys back as input.
+//! desktop (X11 or Wayland) and games read like real ones. With SystemGobloon running they are
+//! the service's, lent to this program (no access to /dev/uinput needed); otherwise made here.
+//! Their `phys` marks them as ours, so gob-input does not read our own keys back as input.
 
+use std::io;
 use std::sync::Mutex;
 
 use gob_core::MouseButton;
-use gob_uinput::{Spec, VirtualDevice, codes, keys};
-
-const KEYBOARD_NAME: &str = "Joystick Gobloon Keyboard";
-const MOUSE_NAME: &str = "Joystick Gobloon Mouse";
-const MOUSE_BUTTONS: [u16; 5] = [
-    codes::BTN_LEFT,
-    codes::BTN_RIGHT,
-    codes::BTN_MIDDLE,
-    codes::BTN_SIDE,
-    codes::BTN_EXTRA,
-];
+use gob_system::Client;
+use gob_system::protocol::{DeviceKind, caps};
+use gob_uinput::{Emitter, VirtualDevice, codes, keys, output};
 
 pub(crate) struct Injector;
+
+/// Where a device's events go.
+enum Sink {
+    Own(VirtualDevice),
+    Lent(Emitter),
+}
+
+impl Sink {
+    fn emit(&self, events: &[(u16, u16, i32)]) -> io::Result<()> {
+        match self {
+            Sink::Own(dev) => dev.emit(events),
+            Sink::Lent(emitter) => emitter.emit(events),
+        }
+    }
+}
 
 /// The devices, made on first use and kept for the rest of the program.
 #[derive(Default)]
 struct Devices {
-    keyboard: Option<VirtualDevice>,
-    mouse: Option<VirtualDevice>,
+    keyboard: Option<Sink>,
+    mouse: Option<Sink>,
+    /// The connection the lent devices belong to: closing it gives them back.
+    service: Option<Client>,
     /// Creating them failed (e.g. no access to /dev/uinput): logged, and not tried again until
     /// the next profile start.
     failed: bool,
@@ -31,36 +42,44 @@ struct Devices {
 
 static DEVICES: Mutex<Option<Devices>> = Mutex::new(None);
 
+/// Reported to the service's log.
+const CLIENT_VERSION: &str = match option_env!("JOYSTICK_GOBLOON_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
+/// The keyboard and mouse SystemGobloon keeps, when it runs and has them free.
+fn lent() -> Option<(Client, Sink, Sink)> {
+    let mut client = Client::connect().ok()?;
+    let hello = client.hello(CLIENT_VERSION).ok()?;
+    if hello.capabilities & caps::KEYBOARD_MOUSE == 0 {
+        return None;
+    }
+    let mut take = |kind| match client.acquire(kind, 0) {
+        Ok(fd) => Some(Sink::Lent(Emitter::new(fd))),
+        Err(e) => {
+            log::warn!("SystemGobloon {kind:?}: {e}");
+            None
+        }
+    };
+    let (keyboard, mouse) = (take(DeviceKind::Keyboard)?, take(DeviceKind::Mouse)?);
+    Some((client, keyboard, mouse))
+}
+
 impl Devices {
     fn create(&mut self) {
         if self.failed || (self.keyboard.is_some() && self.mouse.is_some()) {
             return;
         }
-        let keys: Vec<u16> = keys::all_codes().collect();
-        let keyboard = Spec {
-            name: KEYBOARD_NAME,
-            phys: "joystick-gobloon/keyboard",
-            bus: codes::BUS_VIRTUAL,
-            keys: &keys,
-            ..Spec::default()
-        };
-        let mouse = Spec {
-            name: MOUSE_NAME,
-            phys: "joystick-gobloon/mouse",
-            bus: codes::BUS_VIRTUAL,
-            keys: &MOUSE_BUTTONS,
-            rel: &[
-                codes::REL_X,
-                codes::REL_Y,
-                codes::REL_WHEEL,
-                codes::REL_HWHEEL,
-            ],
-            ..Spec::default()
-        };
-        let created =
-            VirtualDevice::create(&keyboard).and_then(|k| Ok((k, VirtualDevice::create(&mouse)?)));
+        if let Some((client, keyboard, mouse)) = lent() {
+            log::info!("keyboard and mouse output through SystemGobloon");
+            (self.keyboard, self.mouse) = (Some(keyboard), Some(mouse));
+            self.service = Some(client);
+            return;
+        }
+        let created = output::keyboard().and_then(|k| Ok((k, output::mouse()?)));
         match created {
-            Ok((k, m)) => (self.keyboard, self.mouse) = (Some(k), Some(m)),
+            Ok((k, m)) => (self.keyboard, self.mouse) = (Some(Sink::Own(k)), Some(Sink::Own(m))),
             Err(e) => {
                 self.failed = true;
                 log::warn!("keyboard and mouse output is off: /dev/uinput: {e}");
@@ -205,8 +224,8 @@ mod tests {
     fn keys_and_mouse_reach_the_devices() {
         let out = Injector;
         out.prepare();
-        let mut keyboard = open_node(KEYBOARD_NAME);
-        let mut mouse = open_node(MOUSE_NAME);
+        let mut keyboard = open_node(output::KEYBOARD_NAME);
+        let mut mouse = open_node(output::MOUSE_NAME);
 
         out.key(0x1d, true, true); // right Ctrl
         assert!(

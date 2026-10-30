@@ -25,13 +25,12 @@ pub enum Code {
     OpenHidden = 0x0103,
     VirtualState = 0x0200,
     ApplyVirtual = 0x0201,
-    AcquireJoystick = 0x0202,
-    AcquireGamepad = 0x0203,
+    Acquire = 0x0202,
     Release = 0x0204,
 }
 
 impl Code {
-    pub const ALL: [Code; 11] = [
+    pub const ALL: [Code; 10] = [
         Code::Hello,
         Code::Error,
         Code::HideState,
@@ -40,8 +39,7 @@ impl Code {
         Code::OpenHidden,
         Code::VirtualState,
         Code::ApplyVirtual,
-        Code::AcquireJoystick,
-        Code::AcquireGamepad,
+        Code::Acquire,
         Code::Release,
     ];
 
@@ -96,6 +94,33 @@ pub mod caps {
     pub const VIRTUAL_JOYSTICKS: u32 = 1 << 3;
     /// Virtual gamepads kept by the service.
     pub const VIRTUAL_GAMEPADS: u32 = 1 << 4;
+    /// The virtual keyboard and mouse of keyboard and mouse output, kept by the service.
+    pub const KEYBOARD_MOUSE: u32 = 1 << 5;
+}
+
+/// What kind of device a [`VirtualRef`] names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+pub enum DeviceKind {
+    Joystick = 0,
+    Gamepad = 1,
+    /// The keyboard of keyboard output; there is one (id 0).
+    Keyboard = 2,
+    /// The mouse of mouse output; there is one (id 0).
+    Mouse = 3,
+}
+
+impl DeviceKind {
+    pub fn from_u8(v: u8) -> Option<DeviceKind> {
+        [
+            DeviceKind::Joystick,
+            DeviceKind::Gamepad,
+            DeviceKind::Keyboard,
+            DeviceKind::Mouse,
+        ]
+        .into_iter()
+        .find(|k| *k as u8 == v)
+    }
 }
 
 /// A fixed-size record of the protocol.
@@ -699,14 +724,14 @@ impl Record for ApplyVirtual {
     }
 }
 
-/// [`Code::AcquireJoystick`], [`Code::AcquireGamepad`] and [`Code::Release`] request: a device.
-/// Acquiring replies empty with the device's descriptor (Linux: its uinput descriptor; write
-/// events to it); [`ErrorCode::Busy`] when another connection has it. Releasing centers it.
-/// Bytes: 0 gamepad (1: a gamepad, for `Release`), 1 reserved (3), 4 id.
+/// [`Code::Acquire`] and [`Code::Release`] request: a device. Acquiring replies empty with the
+/// device's descriptor (Linux: its uinput descriptor; write events to it); [`ErrorCode::Busy`]
+/// when another connection has it. Releasing centers it (keys and buttons: released).
+/// Bytes: 0 kind ([`DeviceKind`]), 1 reserved (3), 4 id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct VirtualRef {
-    pub gamepad: u8,
+    pub kind: u8,
     pub reserved: [u8; 3],
     pub id: u32,
 }
@@ -715,14 +740,14 @@ impl Record for VirtualRef {
     const SIZE: usize = 8;
 
     fn write(&self, out: &mut [u8]) {
-        out[0] = self.gamepad;
+        out[0] = self.kind;
         out[1..4].copy_from_slice(&self.reserved);
         put_u32(out, 4, self.id);
     }
 
     fn read(b: &[u8]) -> Option<Self> {
         (b.len() >= Self::SIZE).then(|| VirtualRef {
-            gamepad: b[0],
+            kind: b[0],
             reserved: [b[1], b[2], b[3]],
             id: get_u32(b, 4),
         })
@@ -906,8 +931,10 @@ mod tests {
         assert_eq!(&b[..5], &[1, 0, 0, 0, 2]);
         assert_eq!(ApplyVirtual::read(&b), Some(a));
         assert_eq!(ChangeKind::from_u8(9), None);
+        assert_eq!(DeviceKind::from_u8(3), Some(DeviceKind::Mouse));
+        assert_eq!(DeviceKind::from_u8(4), None);
         let r = VirtualRef {
-            gamepad: 1,
+            kind: DeviceKind::Gamepad as u8,
             reserved: [0; 3],
             id: 4,
         };

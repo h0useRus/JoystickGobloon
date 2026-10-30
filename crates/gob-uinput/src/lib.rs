@@ -16,6 +16,7 @@ pub mod access;
 pub mod codes;
 pub mod gamepad;
 pub mod keys;
+pub mod output;
 
 const UINPUT: &str = "/dev/uinput";
 /// `UINPUT_MAX_NAME_SIZE`.

@@ -1945,6 +1945,7 @@ dependencies = [
  "gob-gremlin",
  "gob-input",
  "gob-lighting",
+ "gob-system",
  "gob-uinput",
  "gob-virtual",
  "libc",

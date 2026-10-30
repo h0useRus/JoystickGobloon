@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 
 use gob_input::Nodes;
 use gob_system::protocol::{
-    Code, ErrorCode, Hidden, PROTOCOL, Record, SetHidden, SetHideEnabled, Text, caps,
+    Code, DeviceKind, ErrorCode, Hidden, PROTOCOL, Record, SetHidden, SetHideEnabled, Text, caps,
     hidden_records,
 };
 use gob_system::{Client, Error};
@@ -80,6 +80,14 @@ impl Factory for Fake {
 
     fn gamepad(&self, id: u32) -> io::Result<Box<dyn Held>> {
         self.device(format!("gamepad {id}"))
+    }
+
+    fn keyboard(&self) -> io::Result<Box<dyn Held>> {
+        self.device("keyboard".into())
+    }
+
+    fn mouse(&self) -> io::Result<Box<dyn Held>> {
+        self.device("mouse".into())
     }
 }
 
@@ -273,10 +281,13 @@ fn virtual_devices_are_kept_and_lent() {
     let layout = std::fs::read_to_string(s.dir.join("state/virtual.toml")).unwrap();
     assert!(layout.contains("[[gamepad]]"), "{layout}");
 
-    let fd = a.acquire(true, 2).unwrap();
+    let fd = a.acquire(DeviceKind::Gamepad, 2).unwrap();
     drop(fd);
     assert!(
-        matches!(b.acquire(true, 2), Err(Error::Service(ErrorCode::Busy))),
+        matches!(
+            b.acquire(DeviceKind::Gamepad, 2),
+            Err(Error::Service(ErrorCode::Busy))
+        ),
         "a has it"
     );
     let (_, gamepads) = b.virtual_state().unwrap();
@@ -296,7 +307,7 @@ fn virtual_devices_are_kept_and_lent() {
     drop(a);
     let free = (0..100).any(|_| {
         std::thread::sleep(std::time::Duration::from_millis(10));
-        b.acquire(true, 2).is_ok()
+        b.acquire(DeviceKind::Gamepad, 2).is_ok()
     });
     assert!(free);
     let centered = format!(
@@ -304,13 +315,41 @@ fn virtual_devices_are_kept_and_lent() {
         gob_virtual::uinput::gamepad_reset().len()
     );
     assert_eq!(s.fake.log.lock().unwrap()[0], centered);
-    b.release(true, 2).unwrap();
+    b.release(DeviceKind::Gamepad, 2).unwrap();
     b.apply_virtual(pad(ChangeKind::DeleteGamepad, 2)).unwrap();
     assert!(b.virtual_state().unwrap().1.is_empty());
     assert!(matches!(
-        b.acquire(true, 2),
+        b.acquire(DeviceKind::Gamepad, 2),
         Err(Error::Service(ErrorCode::NotFound))
     ));
+}
+
+#[test]
+fn keyboard_and_mouse_are_made_once_and_released() {
+    let s = start("keyboard", true);
+    let mut a = Client::connect_to(&s.socket).unwrap();
+    let mut b = Client::connect_to(&s.socket).unwrap();
+    s.fake.log.lock().unwrap().clear();
+    a.acquire(DeviceKind::Keyboard, 0).unwrap();
+    a.acquire(DeviceKind::Mouse, 0).unwrap();
+    assert!(matches!(
+        b.acquire(DeviceKind::Keyboard, 0),
+        Err(Error::Service(ErrorCode::Busy))
+    ));
+    drop(a);
+    let free = (0..100).any(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        b.acquire(DeviceKind::Keyboard, 0).is_ok()
+    });
+    assert!(free, "free again when a went away");
+    let log = s.fake.log.lock().unwrap().clone();
+    assert_eq!(log[..2], ["make keyboard", "make mouse"], "{log:?}");
+    let up = format!(
+        "keyboard {} events",
+        gob_uinput::output::keyboard_release().len()
+    );
+    assert!(log.contains(&up), "keys released: {log:?}");
+    assert_eq!(log.iter().filter(|l| l.starts_with("make")).count(), 2);
 }
 
 #[test]

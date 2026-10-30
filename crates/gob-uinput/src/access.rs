@@ -58,9 +58,6 @@ const HIDDEN_RULE_HEADER: &str = "\
 # (hidden in Joystick Gobloon).
 ";
 
-/// Our own virtual devices start with this name; they are not the user's keyboards.
-const OWN_PREFIX: &str = "Joystick Gobloon";
-
 /// Writes the rule (`$1`), then has udev apply it to the devices that exist already.
 const INSTALL_SCRIPT: &str = "printf '%s' \"$1\" > \"$2\" \
     && udevadm control --reload-rules \
@@ -225,8 +222,9 @@ pub fn keyboards_readable() -> bool {
         })
         .filter(|e| udev_flag(&e.path(), "E:ID_INPUT_KEYBOARD=1"))
         .filter(|e| {
-            let name = std::fs::read_to_string(e.path().join("device/name")).unwrap_or_default();
-            !name.starts_with(OWN_PREFIX)
+            // Our own virtual keyboard is not one of the user's.
+            let phys = std::fs::read_to_string(e.path().join("device/phys")).unwrap_or_default();
+            !phys.starts_with(crate::OWN_PHYS)
         })
         .any(|e| std::fs::File::open(Path::new("/dev/input").join(e.file_name())).is_ok())
 }

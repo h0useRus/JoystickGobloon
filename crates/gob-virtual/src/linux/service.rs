@@ -9,7 +9,9 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use gob_system::protocol::{ApplyVirtual, ChangeKind, ErrorCode, Joystick, Owner, Text, caps};
+use gob_system::protocol::{
+    ApplyVirtual, ChangeKind, DeviceKind, ErrorCode, Joystick, Owner, Text, caps,
+};
 use gob_system::{Client, Error as ServiceError};
 use gob_uinput::Emitter;
 
@@ -261,9 +263,9 @@ impl Service {
 
     /// Takes a device from the service; `release` gives it back when the handle is dropped.
     fn lend(&self, slot: Slot) -> Result<(Emitter, super::Release), Error> {
-        let (gamepad, id) = match slot {
-            Slot::Joystick(id) => (false, id),
-            Slot::Gamepad(id) => (true, id),
+        let (kind, id) = match slot {
+            Slot::Joystick(id) => (DeviceKind::Joystick, id),
+            Slot::Gamepad(id) => (DeviceKind::Gamepad, id),
         };
         if !owned(|o| o.insert(slot)) {
             return Err(Error::Unavailable {
@@ -271,7 +273,7 @@ impl Service {
                 status: Status::Own,
             });
         }
-        let fd = match call(&self.client, |c| c.acquire(gamepad, id)) {
+        let fd = match call(&self.client, |c| c.acquire(kind, id)) {
             Ok(fd) => fd,
             Err(e) => {
                 owned(|o| o.remove(&slot));
@@ -280,7 +282,7 @@ impl Service {
         };
         let client = self.client.clone();
         let release = Box::new(move || {
-            if let Err(e) = call(&client, |c| c.release(gamepad, id)) {
+            if let Err(e) = call(&client, |c| c.release(kind, id)) {
                 log::warn!("giving {} back: {e}", slot.name());
             }
         });

@@ -20,6 +20,7 @@ windows = { workspace = true, features = [
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+gob-system.workspace = true
 gob-uinput.workspace = true
 libc.workspace = true
 

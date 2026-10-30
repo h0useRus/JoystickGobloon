@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, PoisonError};
 
 use gob_system::protocol::{
-    self, ApplyVirtual, Code, ErrorCode, ErrorReply, Hello, HelloReply, Hidden, OpenHidden,
-    PROTOCOL, Record, SetHidden, SetHideEnabled, Text, VirtualRef, caps,
+    self, ApplyVirtual, Code, DeviceKind, ErrorCode, ErrorReply, Hello, HelloReply, Hidden,
+    OpenHidden, PROTOCOL, Record, SetHidden, SetHideEnabled, Text, VirtualRef, caps,
 };
 use gob_system::{Frame, recv, send};
 
@@ -151,15 +151,16 @@ fn answer(
             .unwrap_or_else(PoisonError::into_inner)
     };
     let reply = match Code::from_u16(frame.code) {
-        Some(code @ (Code::AcquireJoystick | Code::AcquireGamepad)) => {
+        Some(Code::Acquire) => {
             let r: VirtualRef = read(frame)?;
-            let gamepad = code == Code::AcquireGamepad;
-            let fd = virtuals().acquire(conn, gamepad, r.id)?;
+            let kind = DeviceKind::from_u8(r.kind).ok_or(ErrorCode::BadRequest)?;
+            let fd = virtuals().acquire(conn, kind, r.id)?;
             return Ok((Vec::new(), Some(fd)));
         }
         Some(Code::Release) => {
             let r: VirtualRef = read(frame)?;
-            virtuals().release(conn, r.gamepad != 0, r.id);
+            let kind = DeviceKind::from_u8(r.kind).ok_or(ErrorCode::BadRequest)?;
+            virtuals().release(conn, kind, r.id);
             Vec::new()
         }
         Some(Code::VirtualState) => {
@@ -208,7 +209,8 @@ fn payload(uid: u32, frame: &Frame, service: &Service) -> Result<Vec<u8>, ErrorC
                 reserved: 0,
                 capabilities: caps::HIDE_EVERYWHERE
                     | caps::VIRTUAL_JOYSTICKS
-                    | caps::VIRTUAL_GAMEPADS,
+                    | caps::VIRTUAL_GAMEPADS
+                    | caps::KEYBOARD_MOUSE,
                 service_version: Text::new(crate::VERSION),
             }))
         }

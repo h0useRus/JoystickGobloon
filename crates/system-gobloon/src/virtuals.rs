@@ -3,13 +3,17 @@
 //! like vJoy's devices on Windows. A client acquires one and gets its uinput descriptor, writes
 //! events itself; when it releases the device or its connection ends, the device is centered.
 //! Layouts are gob-virtual's (`gob_virtual::uinput`), the file has `virtual.gob`'s format.
+//! The keyboard and mouse of keyboard and mouse output are made when first acquired and kept
+//! too; released, their keys and buttons go up.
 
 use std::collections::BTreeMap;
 use std::io;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::path::{Path, PathBuf};
 
-use gob_system::protocol::{ApplyVirtual, ChangeKind, ErrorCode, Gamepad, Joystick, Owner};
+use gob_system::protocol::{
+    ApplyVirtual, ChangeKind, DeviceKind, ErrorCode, Gamepad, Joystick, Owner,
+};
 use gob_uinput::VirtualDevice;
 use gob_virtual::uinput::{self, Layout};
 use gob_virtual::{Change, DeviceConfig};
@@ -40,6 +44,8 @@ impl Held for VirtualDevice {
 pub trait Factory: Send {
     fn joystick(&self, config: &DeviceConfig) -> io::Result<Box<dyn Held>>;
     fn gamepad(&self, id: u32) -> io::Result<Box<dyn Held>>;
+    fn keyboard(&self) -> io::Result<Box<dyn Held>>;
+    fn mouse(&self) -> io::Result<Box<dyn Held>>;
 }
 
 /// uinput, as gob-virtual makes the devices.
@@ -53,6 +59,14 @@ impl Factory for Uinput {
     fn gamepad(&self, id: u32) -> io::Result<Box<dyn Held>> {
         Ok(Box::new(uinput::create_gamepad(id)?))
     }
+
+    fn keyboard(&self) -> io::Result<Box<dyn Held>> {
+        Ok(Box::new(gob_uinput::output::keyboard()?))
+    }
+
+    fn mouse(&self) -> io::Result<Box<dyn Held>> {
+        Ok(Box::new(gob_uinput::output::mouse()?))
+    }
 }
 
 struct Kept {
@@ -65,8 +79,8 @@ pub struct Virtuals {
     layout: Layout,
     path: PathBuf,
     factory: Box<dyn Factory>,
-    joysticks: BTreeMap<u32, Kept>,
-    gamepads: BTreeMap<u32, Kept>,
+    /// By kind and id (keyboard and mouse: id 0).
+    devices: BTreeMap<(DeviceKind, u32), Kept>,
 }
 
 fn owner(kept: Option<&Kept>, conn: Conn) -> Owner {
@@ -98,8 +112,7 @@ impl Virtuals {
             layout,
             path,
             factory,
-            joysticks: BTreeMap::new(),
-            gamepads: BTreeMap::new(),
+            devices: BTreeMap::new(),
         };
         let configs = virtuals.layout.devices.clone();
         configs.iter().for_each(|c| virtuals.make_joystick(c));
@@ -112,7 +125,8 @@ impl Virtuals {
         match self.factory.joystick(config) {
             Ok(held) => {
                 log::info!("joystick {} made", config.id);
-                self.joysticks.insert(config.id, Kept { held, owner: None });
+                let kept = Kept { held, owner: None };
+                self.devices.insert((DeviceKind::Joystick, config.id), kept);
             }
             Err(e) => log::error!("joystick {}: {e}", config.id),
         }
@@ -122,7 +136,8 @@ impl Virtuals {
         match self.factory.gamepad(id) {
             Ok(held) => {
                 log::info!("gamepad {id} made");
-                self.gamepads.insert(id, Kept { held, owner: None });
+                let kept = Kept { held, owner: None };
+                self.devices.insert((DeviceKind::Gamepad, id), kept);
             }
             Err(e) => log::error!("gamepad {id}: {e}"),
         }
@@ -134,7 +149,10 @@ impl Virtuals {
             .layout
             .devices
             .iter()
-            .map(|c| uinput::joystick_record(c, owner(self.joysticks.get(&c.id), conn)))
+            .map(|c| {
+                let kept = self.devices.get(&(DeviceKind::Joystick, c.id));
+                uinput::joystick_record(c, owner(kept, conn))
+            })
             .collect();
         let gamepads = self
             .layout
@@ -142,7 +160,7 @@ impl Virtuals {
             .iter()
             .map(|&id| Gamepad {
                 id,
-                owner: owner(self.gamepads.get(&id), conn) as u8,
+                owner: owner(self.devices.get(&(DeviceKind::Gamepad, id)), conn) as u8,
                 reserved: [0; 3],
             })
             .collect();
@@ -153,21 +171,20 @@ impl Virtuals {
     pub fn apply(&mut self, record: &ApplyVirtual) -> Result<(), ErrorCode> {
         let id = record.joystick.id;
         let kind = ChangeKind::from_u8(record.kind).ok_or(ErrorCode::BadRequest)?;
-        let (change, gamepad) = match kind {
+        let (change, device) = match kind {
             ChangeKind::SetJoystick => (
                 Change::Set(uinput::joystick_config(&record.joystick)),
-                false,
+                DeviceKind::Joystick,
             ),
-            ChangeKind::DeleteJoystick => (Change::Delete(id), false),
-            ChangeKind::AddGamepad => (Change::AddGamepad(id), true),
-            ChangeKind::DeleteGamepad => (Change::DeleteGamepad(id), true),
+            ChangeKind::DeleteJoystick => (Change::Delete(id), DeviceKind::Joystick),
+            ChangeKind::AddGamepad => (Change::AddGamepad(id), DeviceKind::Gamepad),
+            ChangeKind::DeleteGamepad => (Change::DeleteGamepad(id), DeviceKind::Gamepad),
         };
-        let kept = if gamepad {
-            self.gamepads.get(&id)
-        } else {
-            self.joysticks.get(&id)
-        };
-        if kept.is_some_and(|k| k.owner.is_some()) {
+        if self
+            .devices
+            .get(&(device, id))
+            .is_some_and(|k| k.owner.is_some())
+        {
             return Err(ErrorCode::Busy);
         }
         let layout = uinput::changed(self.layout.clone(), &change).map_err(|e| {
@@ -189,20 +206,20 @@ impl Virtuals {
         // uinput devices cannot change their layout: made again.
         match change {
             Change::Set(c) => {
-                self.joysticks.remove(&c.id);
+                self.devices.remove(&(DeviceKind::Joystick, c.id));
                 self.make_joystick(&c);
             }
             Change::Delete(id) => {
-                self.joysticks.remove(&id);
+                self.devices.remove(&(DeviceKind::Joystick, id));
                 log::info!("joystick {id} removed");
             }
             Change::AddGamepad(id) => {
-                if !self.gamepads.contains_key(&id) {
+                if !self.devices.contains_key(&(DeviceKind::Gamepad, id)) {
                     self.make_gamepad(id);
                 }
             }
             Change::DeleteGamepad(id) => {
-                self.gamepads.remove(&id);
+                self.devices.remove(&(DeviceKind::Gamepad, id));
                 log::info!("gamepad {id} removed");
             }
             Change::Enable(_) => {}
@@ -211,14 +228,26 @@ impl Virtuals {
     }
 
     /// Gives `conn` a device: its descriptor. [`ErrorCode::Busy`] when another connection has
-    /// it, [`ErrorCode::NotFound`] when there is no such device.
-    pub fn acquire(&mut self, conn: Conn, gamepad: bool, id: u32) -> Result<OwnedFd, ErrorCode> {
-        let kept = if gamepad {
-            self.gamepads.get_mut(&id)
-        } else {
-            self.joysticks.get_mut(&id)
+    /// it, [`ErrorCode::NotFound`] when there is no such device. The keyboard and mouse are
+    /// made the first time.
+    pub fn acquire(&mut self, conn: Conn, kind: DeviceKind, id: u32) -> Result<OwnedFd, ErrorCode> {
+        let key = (kind, own_id(kind, id));
+        if !self.devices.contains_key(&key)
+            && matches!(kind, DeviceKind::Keyboard | DeviceKind::Mouse)
+        {
+            let made = if kind == DeviceKind::Keyboard {
+                self.factory.keyboard()
+            } else {
+                self.factory.mouse()
+            };
+            let held = made.map_err(|e| {
+                log::error!("{kind:?}: {e}");
+                ErrorCode::Failed
+            })?;
+            log::info!("{kind:?} made");
+            self.devices.insert(key, Kept { held, owner: None });
         }
-        .ok_or(ErrorCode::NotFound)?;
+        let kept = self.devices.get_mut(&key).ok_or(ErrorCode::NotFound)?;
         if kept.owner.is_some_and(|c| c != conn) {
             return Err(ErrorCode::Busy);
         }
@@ -231,51 +260,48 @@ impl Virtuals {
     }
 
     /// Takes a device back from `conn` and centers it (nothing when `conn` does not have it).
-    pub fn release(&mut self, conn: Conn, gamepad: bool, id: u32) {
-        let reset = if gamepad {
-            uinput::gamepad_reset()
-        } else {
-            match self.layout.devices.iter().find(|c| c.id == id) {
+    pub fn release(&mut self, conn: Conn, kind: DeviceKind, id: u32) {
+        let id = own_id(kind, id);
+        let reset = match kind {
+            DeviceKind::Gamepad => uinput::gamepad_reset(),
+            DeviceKind::Keyboard => gob_uinput::output::keyboard_release(),
+            DeviceKind::Mouse => gob_uinput::output::mouse_release(),
+            DeviceKind::Joystick => match self.layout.devices.iter().find(|c| c.id == id) {
                 Some(c) => uinput::joystick_reset(c),
                 None => return,
-            }
+            },
         };
-        let devices = if gamepad {
-            &mut self.gamepads
-        } else {
-            &mut self.joysticks
-        };
-        if let Some(kept) = devices.get_mut(&id).filter(|k| k.owner == Some(conn)) {
+        if let Some(kept) = self
+            .devices
+            .get_mut(&(kind, id))
+            .filter(|k| k.owner == Some(conn))
+        {
             kept.owner = None;
             if let Err(e) = kept.held.emit(&reset) {
-                log::warn!("centering {id}: {e}");
+                log::warn!("releasing {kind:?} {id}: {e}");
             }
         }
     }
 
     /// Everything `conn` has, released (its connection ended).
     pub fn release_all(&mut self, conn: Conn) {
-        let joysticks: Vec<u32> = self.owned_by(false, conn);
-        let gamepads: Vec<u32> = self.owned_by(true, conn);
-        joysticks
-            .into_iter()
-            .for_each(|id| self.release(conn, false, id));
-        gamepads
-            .into_iter()
-            .for_each(|id| self.release(conn, true, id));
-    }
-
-    fn owned_by(&self, gamepad: bool, conn: Conn) -> Vec<u32> {
-        let devices = if gamepad {
-            &self.gamepads
-        } else {
-            &self.joysticks
-        };
-        devices
+        let owned: Vec<(DeviceKind, u32)> = self
+            .devices
             .iter()
             .filter(|(_, k)| k.owner == Some(conn))
-            .map(|(&id, _)| id)
-            .collect()
+            .map(|(&key, _)| key)
+            .collect();
+        for (kind, id) in owned {
+            self.release(conn, kind, id);
+        }
+    }
+}
+
+/// The keyboard and the mouse are one each: id 0.
+fn own_id(kind: DeviceKind, id: u32) -> u32 {
+    match kind {
+        DeviceKind::Keyboard | DeviceKind::Mouse => 0,
+        DeviceKind::Joystick | DeviceKind::Gamepad => id,
     }
 }
 
