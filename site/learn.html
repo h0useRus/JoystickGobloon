@@ -133,7 +133,7 @@
             <li><a href="#modifiers">Modifiers</a></li>
           </ul></li>
           <li><a class="toc-group" href="#output">Output</a><ul>
-            <li><a href="#map-to-vjoy">Map to vJoy</a></li>
+            <li><a href="#map-to-vjoy">Map to Virtual Stick</a></li>
             <li><a href="#map-to-gamepad">Map to gamepad</a></li>
             <li><a href="#map-to-keyboard">Map to keyboard</a></li>
             <li><a href="#map-to-mouse">Map to mouse</a></li>
@@ -175,7 +175,7 @@
           <h2 id="basics-title">Basics</h2>
           <article class="learn-action" id="how-actions-run">
             <h3><i class="ph ph-list-checks" aria-hidden="true"></i>How actions run</h3>
-            <p>Select an input on the Devices page and its actions are on the right. They run from top to bottom every time the input changes, and each one can pass a changed value on to the next one: a response curve before <span class="term">Map to vJoy</span>, for example. The plus button adds an action. It can also link an existing action, so several inputs share it, or copy one.</p>
+            <p>Select an input on the Devices page and its actions are on the right. They run from top to bottom every time the input changes, and each one can pass a changed value on to the next one: a response curve before <span class="term">Map to Virtual Stick</span>, for example. The plus button adds an action. It can also link an existing action, so several inputs share it, or copy one.</p>
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>When it runs.</strong> Button actions have three switches: on press, on release, or both. Both follows the button, so a vJoy button is held exactly as long as yours.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Containers.</strong> Some actions hold other actions: tempo, double tap, condition, split axis and others. Their children are edited inside them.</span></li>
@@ -207,15 +207,15 @@
         <section class="learn-group" id="output" aria-labelledby="output-title">
           <h2 id="output-title">Output</h2>
           <article class="learn-action" id="map-to-vjoy">
-            <h3><i class="ph ph-joystick" aria-hidden="true"></i>Map to vJoy</h3>
+            <h3><i class="ph ph-joystick" aria-hidden="true"></i>Map to Virtual Stick</h3>
             <p>Sends the value to a virtual joystick: an axis to an axis, a button to a button, a hat to a hat. Pick the vJoy device and its input; a button can be inverted. An axis can also be <strong>relative</strong>: then the input sets the speed at which the vJoy axis moves, and the axis stays where it is when you let go.</p>
-            <p>A new Map to vJoy starts on the vJoy device you picked last and its first output that nothing else uses yet. The grid button next to the lists shows every output of each vJoy device at once, and a click picks one. There and in the output list, outputs other inputs already use are <strong>blue</strong>, outputs that several inputs running at the same time write are <strong>amber</strong>, and a tooltip names the inputs. Outputs that another action of the same input already writes are grayed out: two actions of one input never write the same output. If a profile already has that, a warning sign shows next to the action. A copied Map to vJoy moves to a free output by itself.</p>
-            <figure class="shot"><img src="img/actions/map-to-vjoy.png" loading="lazy" alt="Map to vJoy: vJoy device 1, button 1, not inverted, runs on press and release"></figure>
+            <p>A new Map to Virtual Stick starts on the vJoy device you picked last and its first output that nothing else uses yet. The grid button next to the lists shows every output of each vJoy device at once, and a click picks one. There and in the output list, outputs other inputs already use are <strong>blue</strong>, outputs that several inputs running at the same time write are <strong>amber</strong>, and a tooltip names the inputs. Outputs that another action of the same input already writes are grayed out: two actions of one input never write the same output. If a profile already has that, a warning sign shows next to the action. A copied Map to Virtual Stick moves to a free output by itself.</p>
+            <figure class="shot"><img src="img/actions/map-to-vjoy.png" loading="lazy" alt="Map to Virtual Stick: vJoy device 1, button 1, not inverted, runs on press and release"></figure>
           </article>
           <article class="learn-action" id="map-to-gamepad">
             <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</h3>
             <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted.</p>
-            <p><strong>Picking the control works like <a href="#map-to-vjoy">Map to vJoy</a>.</strong> A new one starts on the gamepad you picked last and its first free control. The grid button next to the lists shows the controls of every gamepad at once, and a click picks one. Controls other inputs already use are marked the same way.</p>
+            <p><strong>Picking the control works like <a href="#map-to-vjoy">Map to Virtual Stick</a>.</strong> A new one starts on the gamepad you picked last and its first free control. The grid button next to the lists shows the controls of every gamepad at once, and a click picks one. Controls other inputs already use are marked the same way.</p>
             <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release"></figure>
           </article>
           <article class="learn-action" id="map-to-keyboard">
@@ -232,7 +232,7 @@
           <article class="learn-action" id="map-to-logical-device">
             <h3><i class="ph ph-cube" aria-hidden="true"></i>Map to logical device</h3>
             <p>The <strong>Logical device</strong> tab is a joystick that only exists inside the profile. Mapping inputs to it lets several physical inputs feed one logical input, whose own actions then do the rest. Logical inputs are added and renamed on that tab.</p>
-            <p><strong>Picking the input works like <a href="#map-to-vjoy">Map to vJoy</a>.</strong> A new one takes the first logical input of that type nothing uses yet, or adds one. The grid button next to the list shows every logical input of that type at once, and a click picks one. Logical inputs that other inputs already write to are marked the same way.</p>
+            <p><strong>Picking the input works like <a href="#map-to-vjoy">Map to Virtual Stick</a>.</strong> A new one takes the first logical input of that type nothing uses yet, or adds one. The grid button next to the list shows every logical input of that type at once, and a click picks one. Logical inputs that other inputs already write to are marked the same way.</p>
             <figure class="shot"><img src="img/actions/map-to-logical-device.png" loading="lazy" alt="Map to logical device: logical button 1"></figure>
           </article>
         </section>
@@ -240,7 +240,7 @@
           <h2 id="axes-title">Axes</h2>
           <article class="learn-action" id="response-curve">
             <h3><i class="ph ph-chart-line" aria-hidden="true"></i>Response curve</h3>
-            <p>Shapes an axis: drag the points of the curve, double click to add one, right click a point to remove it. A right click on empty space inverts the curve (a switch in the settings turns this off). Linear, cubic spline, smooth (no overshoot) and Bézier curves. A cubic spline can swing past its points, turning back or running into the end of the axis; the smooth curve stays between them. <span class="term">Symmetric</span> mirrors your edits through the center; <span class="term">Invert</span> flips the curve. The deadzones below the chart set where the axis does nothing: at both ends and around the center. Put the curve before <span class="term">Map to vJoy</span>, which then sends the shaped value.</p>
+            <p>Shapes an axis: drag the points of the curve, double click to add one, right click a point to remove it. A right click on empty space inverts the curve (a switch in the settings turns this off). Linear, cubic spline, smooth (no overshoot) and Bézier curves. A cubic spline can swing past its points, turning back or running into the end of the axis; the smooth curve stays between them. <span class="term">Symmetric</span> mirrors your edits through the center; <span class="term">Invert</span> flips the curve. The deadzones below the chart set where the axis does nothing: at both ends and around the center. Put the curve before <span class="term">Map to Virtual Stick</span>, which then sends the shaped value.</p>
             <figure class="shot"><img src="img/actions/response-curve.png" loading="lazy" alt="Response curve: a cubic spline that is flat around the center, with its points"></figure>
           </article>
           <article class="learn-action" id="split-axis">
@@ -340,7 +340,7 @@
           <article class="learn-action" id="description">
             <h3><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</h3>
             <p>A note that does nothing when the input is used: what this input is for, for you and whoever uses the profile next. It reads as text; click it to edit it.</p>
-            <figure class="shot"><img src="img/actions/description.png" loading="lazy" alt="A description note above a Map to vJoy action"></figure>
+            <figure class="shot"><img src="img/actions/description.png" loading="lazy" alt="A description note above a Map to Virtual Stick action"></figure>
           </article>
         </section>
       </div>
