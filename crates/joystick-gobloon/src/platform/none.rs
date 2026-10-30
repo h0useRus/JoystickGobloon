@@ -16,6 +16,10 @@ impl super::Desktop for Desktop {
         None
     }
 
+    fn documents_dir() -> Option<PathBuf> {
+        std::env::var_os("HOME").map(PathBuf::from)
+    }
+
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
         Vec::new()
     }

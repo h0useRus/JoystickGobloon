@@ -310,7 +310,8 @@
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Hiding lasts only while Joystick Gobloon runs. Close the app and every program sees the sticks again.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>There is no list of programs that still see hidden devices.</span></li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Programs that read raw HID (hidraw), such as Steam or Wine and Proton, are not covered when your user may open the stick's hidraw node; such a stick gets a warning sign on its tab and in the device hiding window. Turn off hidraw (or Steam Input) for that stick in those programs, or games see it twice.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Programs that read raw HID (hidraw), such as Steam or Wine and Proton, can open a stick's hidraw node when your system allows it. Then hiding the stick asks for the administrator password once and closes that node too, until you show the stick again (this part stays while the app is closed). Restart programs that had the stick open already.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Without the password the stick gets a warning sign on its tab and in the device hiding window. Show and hide it again to be asked again, or turn off hidraw (or Steam Input) for that stick in those programs, or games see it twice.</span></li>
             </ul>
           </article>
         </section>

@@ -30,6 +30,8 @@ pub(crate) trait Desktop {
 
     /// Folder for settings, the app list and the log when the program has no portable one.
     fn default_data_dir() -> Option<PathBuf>;
+    /// The user's documents folder, where the profile file dialogs start the first time.
+    fn documents_dir() -> Option<PathBuf>;
     /// Font files with Chinese and Korean glyphs: (egui font name, file).
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)>;
     /// Opens a text file (the log) in the system's editor.
@@ -129,6 +131,10 @@ pub(crate) type Window = <Current as Desktop>::Window;
 
 pub(crate) fn default_data_dir() -> Option<PathBuf> {
     Current::default_data_dir()
+}
+
+pub(crate) fn documents_dir() -> Option<PathBuf> {
+    Current::documents_dir()
 }
 
 pub(crate) fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {

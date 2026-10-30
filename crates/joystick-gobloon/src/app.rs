@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Align, Layout, RichText, Vec2};
 use gob_i18n::I18n;
@@ -401,11 +401,30 @@ impl JoystickGobloonApp {
         }
     }
 
+    /// File dialog for profiles, starting in `dir`, else where the last one was opened or
+    /// saved, else in the documents folder.
+    fn profile_dialog(&self, dir: Option<&Path>) -> rfd::FileDialog {
+        let dialog =
+            rfd::FileDialog::new().add_filter(self.i18n.tr("file-filter-gremlin"), &["xml"]);
+        let dir = dir
+            .map(Path::to_path_buf)
+            .or_else(|| self.settings.profile_dir.clone().filter(|d| d.is_dir()))
+            .or_else(crate::platform::documents_dir);
+        match dir {
+            Some(dir) => dialog.set_directory(dir),
+            None => dialog,
+        }
+    }
+
+    /// Remembers the folder of a profile picked in a file dialog.
+    fn remember_profile_dir(&mut self, path: &Path) {
+        self.settings.profile_dir = path.parent().map(Path::to_path_buf);
+        self.settings.save();
+    }
+
     fn import_dialog(&mut self) {
-        let picked = rfd::FileDialog::new()
-            .add_filter(self.i18n.tr("file-filter-gremlin"), &["xml"])
-            .pick_file();
-        if let Some(path) = picked {
+        if let Some(path) = self.profile_dialog(None).pick_file() {
+            self.remember_profile_dir(&path);
             self.open_profile(path, true);
         }
     }
@@ -531,14 +550,13 @@ impl JoystickGobloonApp {
         let Some(loaded) = &self.profile else {
             return false;
         };
-        let mut dialog = rfd::FileDialog::new()
-            .add_filter(self.i18n.tr("file-filter-gremlin"), &["xml"])
-            .set_file_name(loaded.file_name());
-        if let Some(dir) = loaded.path.as_ref().and_then(|p| p.parent()) {
-            dialog = dialog.set_directory(dir);
-        }
+        let dir = loaded.path.as_ref().and_then(|p| p.parent());
+        let dialog = self.profile_dialog(dir).set_file_name(loaded.file_name());
         match dialog.save_file() {
-            Some(path) => self.save_checked(path, after),
+            Some(path) => {
+                self.remember_profile_dir(&path);
+                self.save_checked(path, after)
+            }
             None => false,
         }
     }

@@ -28,6 +28,22 @@ fn config_home() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
 }
 
+/// `key` in `user-dirs.dirs` (`XDG_DOCUMENTS_DIR="$HOME/Documents"`), `$HOME` replaced.
+fn user_dir(text: &str, key: &str, home: &Path) -> Option<PathBuf> {
+    let value = text
+        .lines()
+        .filter_map(|l| l.trim().split_once('='))
+        .find(|(k, _)| k.trim() == key)?
+        .1
+        .trim()
+        .trim_matches('"');
+    match value.strip_prefix("$HOME") {
+        Some(rest) => Some(home.join(rest.trim_start_matches('/'))),
+        None if value.starts_with('/') => Some(PathBuf::from(value)),
+        None => None,
+    }
+}
+
 /// `key` in `[section]` of an INI-style file like `kdeglobals`.
 fn ini_value<'a>(text: &'a str, section: &str, key: &str) -> Option<&'a str> {
     let mut inside = false;
@@ -51,6 +67,15 @@ impl super::Desktop for Desktop {
     /// `$XDG_CONFIG_HOME/JoystickGobloon`, where gob-virtual and gob-hide look without one too.
     fn default_data_dir() -> Option<PathBuf> {
         Some(config_home()?.join("JoystickGobloon"))
+    }
+
+    /// `XDG_DOCUMENTS_DIR` from `user-dirs.dirs` when it exists, else the home folder.
+    fn documents_dir() -> Option<PathBuf> {
+        let home = PathBuf::from(std::env::var_os("HOME")?);
+        let text =
+            std::fs::read_to_string(config_home()?.join("user-dirs.dirs")).unwrap_or_default();
+        let documents = user_dir(&text, "XDG_DOCUMENTS_DIR", &home).filter(|d| d.is_dir());
+        Some(documents.unwrap_or(home))
     }
 
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
@@ -242,7 +267,9 @@ impl super::Desktop for Desktop {
 
 #[cfg(test)]
 mod tests {
-    use super::ini_value;
+    use std::path::{Path, PathBuf};
+
+    use super::{ini_value, user_dir};
 
     #[test]
     fn kdeglobals_double_click() {
@@ -250,5 +277,20 @@ mod tests {
         assert_eq!(ini_value(text, "KDE", "DoubleClickInterval"), Some("550"));
         assert_eq!(ini_value(text, "KDE", "Missing"), None);
         assert_eq!(ini_value("", "KDE", "DoubleClickInterval"), None);
+    }
+
+    #[test]
+    fn user_dirs_documents() {
+        let home = Path::new("/home/h0use");
+        let text =
+            "# comment\nXDG_DESKTOP_DIR=\"$HOME/Desktop\"\nXDG_DOCUMENTS_DIR=\"$HOME/Dokumente\"\n";
+        let key = "XDG_DOCUMENTS_DIR";
+        assert_eq!(user_dir(text, key, home), Some(home.join("Dokumente")));
+        let absolute = "XDG_DOCUMENTS_DIR=\"/data/docs\"";
+        assert_eq!(
+            user_dir(absolute, key, home),
+            Some(PathBuf::from("/data/docs"))
+        );
+        assert_eq!(user_dir("", key, home), None);
     }
 }
