@@ -339,7 +339,8 @@ impl VJoyView {
             .auto_shrink(false)
             .show(ui, |ui| {
                 if self.config.available() {
-                    self.config.editor(ui, i18n, info.id, new, locked);
+                    let source = marks.and_then(|m| m.profile().main_source(info.id));
+                    self.config.editor(ui, i18n, info.id, new, locked, source);
                     ui.separator();
                 }
                 // The tester shows the editor's layout at once; unapplied changes cannot be

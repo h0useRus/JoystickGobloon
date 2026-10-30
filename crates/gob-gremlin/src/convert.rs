@@ -173,7 +173,8 @@ pub fn profile_to_element(p: &Profile) -> Element {
 }
 
 /// `<virtual-devices>`: `<joystick id="1" axes="X Y Rz" buttons="32" hats="1"
-/// hat-type="continuous"/>` and `<gamepad id="1"/>`; unknown axis names are skipped.
+/// hat-type="continuous" name="Throttle" pid="0xBE01"/>` (name and pid only when set) and
+/// `<gamepad id="1"/>`; unknown axis names are skipped.
 fn virtual_from(section: &Element) -> VirtualDevices {
     let number = |e: &Element, name: &str| e.attr(name).and_then(|v| v.trim().parse().ok());
     VirtualDevices {
@@ -193,6 +194,16 @@ fn virtual_from(section: &Element) -> VirtualDevices {
                     buttons: number(j, "buttons").unwrap_or(0),
                     hats: number(j, "hats").unwrap_or(0),
                     discrete_hats: j.attr("hat-type") == Some("discrete"),
+                    name: j
+                        .attr("name")
+                        .map(str::trim)
+                        .filter(|n| !n.is_empty())
+                        .map(str::to_string),
+                    product: j.attr("pid").and_then(|p| {
+                        let p = p.trim();
+                        let hex = p.strip_prefix("0x").or_else(|| p.strip_prefix("0X"))?;
+                        u16::from_str_radix(hex, 16).ok()
+                    }),
                 })
             })
             .collect(),
@@ -209,7 +220,7 @@ fn virtual_to(v: &VirtualDevices) -> Element {
             .iter()
             .filter_map(|&s| AXIS_NAMES.get(usize::from(s).checked_sub(1)?).copied())
             .collect();
-        Element::new("joystick")
+        let mut el = Element::new("joystick")
             .with_attr("id", j.id.to_string())
             .with_attr("axes", axes.join(" "))
             .with_attr("buttons", j.buttons.to_string())
@@ -221,7 +232,14 @@ fn virtual_to(v: &VirtualDevices) -> Element {
                 } else {
                     "continuous"
                 },
-            )
+            );
+        if let Some(name) = &j.name {
+            el = el.with_attr("name", name.clone());
+        }
+        if let Some(pid) = j.product {
+            el = el.with_attr("pid", format!("0x{pid:04X}"));
+        }
+        el
     });
     let gamepads = v
         .gamepads

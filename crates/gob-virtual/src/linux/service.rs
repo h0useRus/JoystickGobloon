@@ -9,7 +9,7 @@
 
 use std::sync::{Arc, Mutex, PoisonError};
 
-use gob_system::protocol::{ApplyVirtual, ChangeKind, ErrorCode, Joystick, Owner, caps};
+use gob_system::protocol::{ApplyVirtual, ChangeKind, ErrorCode, Joystick, Owner, Text, caps};
 use gob_system::{Client, Error as ServiceError};
 use gob_uinput::Emitter;
 
@@ -52,7 +52,8 @@ pub fn joystick_record(c: &DeviceConfig, owner: Owner) -> Joystick {
             0
         },
         owner: owner as u8,
-        reserved: [0; 2],
+        product: c.product.unwrap_or(0),
+        name: Text::new(c.name.as_deref().unwrap_or_default()),
     }
 }
 
@@ -69,6 +70,10 @@ pub fn joystick_config(j: &Joystick) -> DeviceConfig {
         hats: u32::from(j.hats).min(DIRECT.max_hats),
         discrete_hats: j.flags & Joystick::DISCRETE_HATS != 0,
         effects: Vec::new(),
+        name: Some(j.name.as_str())
+            .filter(|n| crate::name_allowed(n))
+            .map(str::to_string),
+        product: Some(j.product).filter(|&p| crate::product_allowed(p)),
     }
 }
 
@@ -80,7 +85,8 @@ fn change_record(change: &Change) -> Option<ApplyVirtual> {
         hats: 0,
         flags: 0,
         owner: 0,
-        reserved: [0; 2],
+        product: 0,
+        name: Text::new(""),
     };
     let (kind, joystick) = match change {
         Change::Set(c) => (ChangeKind::SetJoystick, joystick_record(c, Owner::Free)),
@@ -385,7 +391,10 @@ mod tests {
         c.buttons = 32;
         c.hats = 2;
         c.discrete_hats = true;
+        c.name = Some("Gobloon Throttle".into());
+        c.product = Some(0xBE20);
         let j = joystick_record(&c, Owner::You);
+        assert_eq!((j.name.as_str(), j.product), ("Gobloon Throttle", 0xBE20));
         assert_eq!(j.axes, 0b1010_0011);
         assert_eq!(j.owner, Owner::You as u8);
         assert_eq!(joystick_config(&j), c);

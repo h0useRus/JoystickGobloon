@@ -7,21 +7,30 @@ use std::collections::HashMap;
 use gob_core::{Profile, VirtualDevices, VirtualJoystick};
 use gob_virtual::{Capabilities, Change, DeviceConfig, DeviceInfo, GamepadInfo};
 
-/// What `profile` stores when saved: the joysticks it writes to with their layout here (as
-/// stored before when this system lacks one), and the gamepads it writes to.
-pub fn capture(profile: &Profile, devices: &[DeviceInfo]) -> VirtualDevices {
+/// What `profile` stores when saved: the joysticks it writes to with their layout, name and
+/// product id here (as stored before when this system lacks one), and the gamepads it writes to.
+pub fn capture(
+    profile: &Profile,
+    devices: &[DeviceInfo],
+    configs: &[DeviceConfig],
+) -> VirtualDevices {
     let engine = gob_engine::Engine::new(profile, &HashMap::new());
     let joysticks = engine
         .vjoy_devices()
         .into_iter()
         .filter_map(|id| match devices.iter().find(|d| d.id == id) {
-            Some(d) => Some(VirtualJoystick {
-                id,
-                axes: d.axes.clone(),
-                buttons: d.buttons,
-                hats: d.hats(),
-                discrete_hats: d.disc_hats > 0,
-            }),
+            Some(d) => {
+                let config = configs.iter().find(|c| c.id == id);
+                Some(VirtualJoystick {
+                    id,
+                    axes: d.axes.clone(),
+                    buttons: d.buttons,
+                    hats: d.hats(),
+                    discrete_hats: d.disc_hats > 0,
+                    name: config.and_then(|c| c.name.clone()),
+                    product: config.and_then(|c| c.product),
+                })
+            }
             None => profile
                 .virtual_devices
                 .joysticks
@@ -36,9 +45,10 @@ pub fn capture(profile: &Profile, devices: &[DeviceInfo]) -> VirtualDevices {
     }
 }
 
-/// The changes that give this system what `stored` needs: missing devices are created,
-/// smaller ones get the missing axes, buttons and hats. `configs` keep the rest of an
-/// existing device's setup (force feedback).
+/// The changes that give this system what `stored` needs: missing devices are created (with
+/// the stored name and product id where the system has them), smaller ones get the missing
+/// axes, buttons and hats. `configs` keep the rest of an existing device's setup (force
+/// feedback, name).
 pub fn changes(
     stored: &VirtualDevices,
     devices: &[DeviceInfo],
@@ -69,6 +79,13 @@ pub fn changes(
                 axes: [false; gob_virtual::AXIS_SLOTS],
                 buttons: 0,
                 hats: 0,
+                name: j
+                    .name
+                    .clone()
+                    .filter(|n| caps.custom_names && gob_virtual::name_allowed(n)),
+                product: j
+                    .product
+                    .filter(|&p| caps.custom_names && gob_virtual::product_allowed(p)),
                 ..DeviceConfig::new(j.id, caps)
             },
         };
@@ -144,6 +161,8 @@ mod tests {
             buttons,
             hats,
             discrete_hats: false,
+            name: None,
+            product: None,
         }
     }
 
@@ -178,6 +197,7 @@ mod tests {
             panic!("{changes:?}")
         };
         assert_eq!((three.id, three.buttons, three.hats), (3, 4, 0));
+        assert_eq!(three.name, None, "no custom names on this system");
         assert_eq!(three.axes.iter().filter(|a| **a).count(), 1);
         assert_eq!(changes[2], Change::AddGamepad(2));
 
@@ -196,17 +216,27 @@ mod tests {
     #[test]
     fn capture_takes_the_used_devices() {
         // Nothing writes to a device: nothing to store.
-        assert!(capture(&Profile::default(), &[info(1, &[1], 8, 0)]).is_empty());
+        assert!(capture(&Profile::default(), &[info(1, &[1], 8, 0)], &[]).is_empty());
 
         // The sample maps to vJoy device 1; device 2 is not used.
         let sample = include_str!("../../../tests/fixtures/sample_r14.xml");
         let mut profile = gob_gremlin::from_str(sample).unwrap();
         let devices = [info(1, &[1, 2], 32, 1), info(2, &[1], 8, 0)];
-        let taken = capture(&profile, &devices);
+        let taken = capture(&profile, &devices, &[]);
         assert_eq!(taken.joysticks, vec![joystick(1, &[1, 2], 32, 1)]);
+
+        // The name and product id come from the configuration.
+        let config = DeviceConfig {
+            name: Some("Gobloon Stick".into()),
+            product: Some(0xBE30),
+            ..DeviceConfig::new(1, &caps())
+        };
+        let named = capture(&profile, &devices, &[config]);
+        assert_eq!(named.joysticks[0].name.as_deref(), Some("Gobloon Stick"));
+        assert_eq!(named.joysticks[0].product, Some(0xBE30));
 
         // Saved again where device 1 is missing: the stored layout stays.
         profile.set_virtual_devices(taken.clone());
-        assert_eq!(capture(&profile, &devices[1..]), taken);
+        assert_eq!(capture(&profile, &devices[1..], &[]), taken);
     }
 }

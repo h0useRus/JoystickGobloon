@@ -499,7 +499,8 @@ impl Owner {
 
 /// A virtual joystick's layout (and, in replies, who has it). Bytes: 0 id, 4 buttons, 6 axes
 /// (bit n = axis slot n + 1: X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1), 7 hats, 8 flags (bit 0:
-/// 4-direction hats), 9 owner ([`Owner`]), 10 reserved (2).
+/// 4-direction hats), 9 owner ([`Owner`]), 10 product id (0: by the id), 12 name (80, empty:
+/// the default name).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct Joystick {
@@ -509,7 +510,8 @@ pub struct Joystick {
     pub hats: u8,
     pub flags: u8,
     pub owner: u8,
-    pub reserved: [u8; 2],
+    pub product: u16,
+    pub name: Text<80>,
 }
 
 impl Joystick {
@@ -517,7 +519,7 @@ impl Joystick {
 }
 
 impl Record for Joystick {
-    const SIZE: usize = 12;
+    const SIZE: usize = 92;
 
     fn write(&self, out: &mut [u8]) {
         put_u32(out, 0, self.id);
@@ -526,7 +528,8 @@ impl Record for Joystick {
         out[7] = self.hats;
         out[8] = self.flags;
         out[9] = self.owner;
-        out[10..12].copy_from_slice(&self.reserved);
+        put_u16(out, 10, self.product);
+        self.name.put(out, 12);
     }
 
     fn read(b: &[u8]) -> Option<Self> {
@@ -537,7 +540,8 @@ impl Record for Joystick {
             hats: b[7],
             flags: b[8],
             owner: b[9],
-            reserved: [b[10], b[11]],
+            product: get_u16(b, 10),
+            name: Text::get(b, 12),
         })
     }
 }
@@ -846,10 +850,30 @@ mod tests {
             hats: 4,
             flags: Joystick::DISCRETE_HATS,
             owner: Owner::You as u8,
-            reserved: [0; 2],
+            product: 0xBE02,
+            name: Text::new("Gobloon Stick"),
         };
-        let b: [u8; 12] = bytes(&j);
-        assert_eq!(b, [2, 0, 0, 0, 95, 0, 0b1100_0011, 4, 1, 1, 0, 0]);
+        let b: [u8; 92] = bytes(&j);
+        assert_eq!(
+            &b[..14],
+            [
+                2,
+                0,
+                0,
+                0,
+                95,
+                0,
+                0b1100_0011,
+                4,
+                1,
+                1,
+                0x02,
+                0xBE,
+                b'G',
+                b'o'
+            ]
+        );
+        assert_eq!(b[91], 0);
         assert_eq!(Joystick::read(&b), Some(j));
         let g = Gamepad {
             id: 3,
@@ -859,7 +883,7 @@ mod tests {
         let b: [u8; 8] = bytes(&g);
         assert_eq!(b, [3, 0, 0, 0, 2, 0, 0, 0]);
 
-        let mut out = [0; 8 + 2 * 12 + 8];
+        let mut out = [0; 8 + 2 * 92 + 8];
         assert_eq!(
             write_virtual_state(&[j, j], &[g], &mut out),
             Some(out.len())
@@ -878,7 +902,7 @@ mod tests {
             reserved: [0; 3],
             joystick: j,
         };
-        let b: [u8; 16] = bytes(&a);
+        let b: [u8; 96] = bytes(&a);
         assert_eq!(&b[..5], &[1, 0, 0, 0, 2]);
         assert_eq!(ApplyVirtual::read(&b), Some(a));
         assert_eq!(ChangeKind::from_u8(9), None);

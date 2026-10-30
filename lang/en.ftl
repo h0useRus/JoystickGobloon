@@ -536,6 +536,13 @@ vjoy-hat-continuous = Continuous
 vjoy-hat-discrete = 4 directions
 vjoy-ffb = Force feedback
 vjoy-ffb-enable = Enabled
+vjoy-name = Name
+vjoy-name-suggest = Suggest a name: the controller the profile maps onto this device, or its layout
+vjoy-name-invalid = Up to 79 characters, no spaces at the ends, different from the other devices' names.
+vjoy-name-renamed = Games see a renamed device as a new one: their bindings to it may need setting again.
+vjoy-product = Product ID
+vjoy-product-tip = Games tell devices apart by it. Empty = picked by the device number; enter the ID of an old setup to keep a game's bindings.
+vjoy-product-invalid = A hex number from BE01 to BEFF (except BEAD), not used by another device.
 vjoy-ffb-const = Constant
 vjoy-ffb-ramp = Ramp
 vjoy-ffb-sq = Square

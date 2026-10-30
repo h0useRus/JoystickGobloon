@@ -524,6 +524,13 @@ vjoy-hat-continuous = 连续
 vjoy-hat-discrete = 4 方向
 vjoy-ffb = 力反馈
 vjoy-ffb-enable = 已启用
+vjoy-name = 名称
+vjoy-name-suggest = 建议名称：根据配置文件映射到此设备的控制器，或根据其布局
+vjoy-name-invalid = 最多 79 个字符，首尾不能有空格，且不能与其他设备重名。
+vjoy-name-renamed = 重命名后的设备在游戏中会被视为新设备：可能需要重新设置游戏中的绑定。
+vjoy-product = 产品 ID
+vjoy-product-tip = 游戏通过它区分设备。留空 = 按设备编号选择；输入旧安装的 ID 可保留游戏中的绑定。
+vjoy-product-invalid = 从 BE01 到 BEFF 的十六进制数（BEAD 除外），且未被其他设备使用。
 vjoy-ffb-const = 恒定
 vjoy-ffb-ramp = 斜坡
 vjoy-ffb-sq = 方波

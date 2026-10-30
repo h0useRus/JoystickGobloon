@@ -44,6 +44,10 @@ impl<'a> OutputMarks<'a> {
         self.name
     }
 
+    pub fn profile(&self) -> &'a Profile {
+        self.profile
+    }
+
     pub fn skip(mut self, action: &'a str) -> Self {
         self.skip = Some(action);
         self

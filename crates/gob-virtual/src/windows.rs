@@ -18,6 +18,8 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     needs_admin: true,
     // vJoy has no gamepads; XInput ones need a driver of their own.
     max_gamepads: 0,
+    // One name and product id for every vJoy device, set by its driver.
+    custom_names: false,
 };
 
 pub fn load() -> Result<Arc<dyn Backend>, Error> {
@@ -141,6 +143,8 @@ fn from_vjoy(c: vconfig::DeviceConfig) -> DeviceConfig {
         hats: c.hats,
         discrete_hats: c.discrete_hats,
         effects: c.effects.to_vec(),
+        name: None,
+        product: None,
     }
 }
 

@@ -2,8 +2,10 @@
 //! profile runs or the tester holds it); nothing to install or enable. The layout of each
 //! device is kept in `virtual.gob` (TOML) in the data directory.
 //!
-//! Devices look like vJoy's (vendor 0x1234, product 0xBEAD, so gob-input knows them as our
-//! output) and are named "Joystick Gobloon Joystick N". Axes use the codes gob-input reads
+//! Devices have vJoy's vendor 0x1234 and each its own product id from [`crate::PRODUCTS`] (games
+//! keep bindings by the SDL GUID, made from them), are named "Joystick Gobloon Joystick N" or
+//! as set, and sit at `phys` "joystick-gobloon/joystick-N", by which gob-input knows them as our
+//! output and keeps their ids when they are renamed. Axes use the codes gob-input reads
 //! back into the same slots (X..Rz, throttle and rudder as the sliders). Buttons use joystick
 //! codes only, never gamepad ones (SDL2/3 would map the device as a gamepad, #31) nor `KEY_MAX`
 //! (SDL does not count it, #32): 1-16 `BTN_JOYSTICK`..., 17-79 `BTN_TRIGGER_HAPPY1-63`,
@@ -11,7 +13,7 @@
 //!
 //! Gamepads ("Joystick Gobloon Gamepad N", `[[gamepad]]` in `virtual.gob`) have gob-uinput's
 //! fixed Xbox 360 layout and ids, so SDL, Steam and Proton take them for an Xbox controller;
-//! gob-input knows them as ours by the name.
+//! gob-input knows them as ours by their `phys` "joystick-gobloon/gamepad-N".
 //!
 //! With SystemGobloon running, `service.rs` is used instead: the service keeps the devices (and
 //! their layouts) all the time and lends this program their uinput descriptors. It makes them
@@ -42,11 +44,9 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     needs_admin: false,
     // As many as XInput games handle.
     max_gamepads: 4,
+    custom_names: true,
 };
-const NAME_PREFIX: &str = "Joystick Gobloon Joystick ";
 const GAMEPAD_PREFIX: &str = "Joystick Gobloon Gamepad ";
-const VENDOR: u16 = 0x1234;
-const PRODUCT: u16 = 0xBEAD;
 const CONFIG_FILE: &str = "virtual.gob";
 /// Event codes of axis slots 1..=8.
 const AXIS_CODES: [u16; AXIS_SLOTS] = [
@@ -83,7 +83,7 @@ enum Slot {
 impl Slot {
     fn name(self) -> String {
         match self {
-            Self::Joystick(id) => format!("{NAME_PREFIX}{id}"),
+            Self::Joystick(id) => DeviceConfig::default_name(id),
             Self::Gamepad(id) => format!("{GAMEPAD_PREFIX}{id}"),
         }
     }
@@ -91,6 +91,14 @@ impl Slot {
     fn id(self) -> u32 {
         match self {
             Self::Joystick(id) | Self::Gamepad(id) => id,
+        }
+    }
+
+    /// Where the device is "plugged in"; unlike the name it never changes.
+    fn phys(self) -> String {
+        match self {
+            Self::Joystick(id) => format!("{}joystick-{id}", gob_uinput::OWN_PHYS),
+            Self::Gamepad(id) => format!("{}gamepad-{id}", gob_uinput::OWN_PHYS),
         }
     }
 }
@@ -161,6 +169,10 @@ struct StoredDevice {
     hats: u32,
     #[serde(default)]
     discrete_hats: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    product: Option<u16>,
 }
 
 impl From<&DeviceConfig> for StoredDevice {
@@ -173,6 +185,8 @@ impl From<&DeviceConfig> for StoredDevice {
             buttons: c.buttons,
             hats: c.hats,
             discrete_hats: c.discrete_hats,
+            name: c.name.clone(),
+            product: c.product,
         }
     }
 }
@@ -195,6 +209,8 @@ impl From<&StoredDevice> for DeviceConfig {
             hats: s.hats.min(CAPABILITIES.max_hats),
             discrete_hats: s.discrete_hats,
             effects: Vec::new(),
+            name: s.name.clone().filter(|n| crate::name_allowed(n)),
+            product: s.product.filter(|&p| crate::product_allowed(p)),
         }
     }
 }
@@ -296,7 +312,7 @@ fn status(slot: Slot, configured: bool) -> Status {
         Status::Own
     } else if !configured {
         Status::Missing
-    } else if gob_uinput::device_names().contains(&slot.name()) {
+    } else if gob_uinput::device_phys().contains(&slot.phys()) {
         // Another program (e.g. a second copy of ours) has it.
         Status::Busy
     } else {
@@ -408,7 +424,7 @@ impl Backend for Uinput {
 
 /// Marks a configured device as ours, unless this process or another program has it.
 fn take(slot: Slot) -> Result<Slot, Error> {
-    if gob_uinput::device_names().contains(&slot.name()) || !owned(|o| o.insert(slot)) {
+    if gob_uinput::device_phys().contains(&slot.phys()) || !owned(|o| o.insert(slot)) {
         return Err(Error::Unavailable {
             id: slot.id(),
             status: status(slot, true),
@@ -483,12 +499,14 @@ pub fn create_joystick(config: &DeviceConfig) -> io::Result<VirtualDevice> {
         }))
         .collect();
     let keys: Vec<u16> = (1..=config.buttons).filter_map(button_code).collect();
-    let name = Slot::Joystick(config.id).name();
+    let slot = Slot::Joystick(config.id);
+    let name = config.name.clone().unwrap_or_else(|| slot.name());
     let spec = Spec {
         name: &name,
+        phys: &slot.phys(),
         bus: codes::BUS_VIRTUAL,
-        vendor: VENDOR,
-        product: PRODUCT,
+        vendor: crate::VENDOR,
+        product: config.product_id(),
         version: config.id as u16,
         keys: &keys,
         axes: &axes,
@@ -499,7 +517,8 @@ pub fn create_joystick(config: &DeviceConfig) -> io::Result<VirtualDevice> {
 
 /// Makes gamepad `id`.
 pub fn create_gamepad(id: u32) -> io::Result<VirtualDevice> {
-    VirtualDevice::create(&gamepad::spec(&Slot::Gamepad(id).name()))
+    let slot = Slot::Gamepad(id);
+    VirtualDevice::create(&gamepad::spec(&slot.name(), &slot.phys()))
 }
 
 /// The events that center a joystick's axes and hats and release its buttons.
@@ -885,10 +904,17 @@ mod tests {
         let mut c = DeviceConfig::new(3, &CAPABILITIES);
         c.axes[2] = false;
         c.discrete_hats = true;
+        c.name = Some("Gobloon Throttle".into());
+        c.product = Some(0xBE42);
         let layout = changed(default, &Change::Set(c.clone())).unwrap();
         let layout = changed(layout, &Change::AddGamepad(2)).unwrap();
         let text = to_text(&layout).unwrap();
         assert!(text.contains("[[device]]"), "{text}");
+        assert!(text.contains("name = \"Gobloon Throttle\""), "{text}");
+        assert!(
+            !text.contains("name = \"Joystick"),
+            "default names are not stored"
+        );
         assert!(text.contains("[[gamepad]]\nid = 2"), "{text}");
         assert_eq!(parse(Some(&text)).unwrap(), layout);
         let layout = changed(layout, &Change::Delete(1)).unwrap();
@@ -901,6 +927,22 @@ mod tests {
         let layout = changed(layout, &Change::DeleteGamepad(2)).unwrap();
         assert!(layout.gamepads.is_empty());
         assert!(!to_text(&layout).unwrap().contains("gamepad"));
+        let bad = parse(Some(
+            "[[device]]
+id = 1
+axes = []
+buttons = 1
+hats = 0
+name = \"\"
+product = 48813
+",
+        ))
+        .unwrap();
+        assert_eq!(
+            (&bad.devices[0].name, bad.devices[0].product),
+            (&None, None),
+            "an empty name and vJoy's product id are dropped"
+        );
         let empty = parse(Some("")).unwrap();
         assert!(
             empty.devices.is_empty() && empty.gamepads.is_empty(),

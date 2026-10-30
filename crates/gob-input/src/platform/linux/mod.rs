@@ -165,9 +165,12 @@ fn is_joystick(caps: &Caps) -> bool {
 }
 
 /// What identifies a device across restarts: its serial number, or where it is plugged in, and
-/// its name (one USB device can have several input nodes, each with its own name).
+/// its name (one USB device can have several input nodes, each with its own name). Our own
+/// virtual devices by their place alone: they keep their id when renamed.
 fn identity(uniq: &str, phys: &str, name: &str) -> String {
-    if uniq.is_empty() {
+    if phys.starts_with(gob_uinput::OWN_PHYS) {
+        format!("phys:{phys}")
+    } else if uniq.is_empty() {
         format!("phys:{phys}\n{name}")
     } else {
         format!("uniq:{uniq}\n{name}")
@@ -324,8 +327,7 @@ pub fn controller_nodes() -> Vec<Nodes> {
         .into_iter()
         .filter_map(|(guid, found)| {
             let node = Node::open(&found.path).ok()?;
-            let name = node.name();
-            if name.starts_with(keyboard::OWN_DEVICE_PREFIX) {
+            if keyboard::is_own(&node) {
                 return None;
             }
             let [_, vendor, product, _] = node.id();
@@ -352,7 +354,7 @@ pub fn controller_nodes() -> Vec<Nodes> {
             }
             Some(Nodes {
                 guid,
-                name,
+                name: node.name(),
                 vendor,
                 product,
                 usb_serial,
@@ -525,7 +527,7 @@ impl Device {
             buttons: raw.as_ref().map_or(codes.len(), |(_, n)| *n),
             hats: hat_count,
             hid_path,
-            own: node.name().starts_with(keyboard::OWN_DEVICE_PREFIX),
+            own: keyboard::is_own(&node),
             unread_buttons: raw_pending
                 .as_ref()
                 .map_or(0, |(p, _)| p.count - codes.len()),
@@ -931,5 +933,14 @@ mod tests {
         assert_ne!(a, b);
         let serial = identity("ABC123", "anywhere", "VKB");
         assert_eq!(serial, identity("ABC123", "elsewhere", "VKB"));
+        assert_eq!(
+            identity(
+                "",
+                "joystick-gobloon/joystick-2",
+                "Joystick Gobloon Joystick 2"
+            ),
+            identity("", "joystick-gobloon/joystick-2", "Gobloon Throttle"),
+            "our devices keep their id when renamed"
+        );
     }
 }

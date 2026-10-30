@@ -40,11 +40,12 @@ pub const AXES: [Axis; 8] = [
     axis(ABS_HAT0Y, -1, 1),
 ];
 
-/// A gamepad named `name` (keep the "Joystick Gobloon" prefix: gob-input skips its own devices
-/// by it, since the ids are a real controller's).
-pub fn spec(name: &str) -> Spec<'_> {
+/// A gamepad named `name` at `phys`; with the ids of a real controller, gob-input tells it from
+/// one only by a `phys` starting with [`crate::OWN_PHYS`].
+pub fn spec<'a>(name: &'a str, phys: &'a str) -> Spec<'a> {
     Spec {
         name,
+        phys,
         bus: BUS_USB,
         vendor: VENDOR,
         product: PRODUCT,

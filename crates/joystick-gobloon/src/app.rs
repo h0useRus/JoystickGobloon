@@ -465,7 +465,8 @@ impl JoystickGobloonApp {
         let Some(loaded) = &mut self.profile else {
             return;
         };
-        let taken = crate::virtual_setup::capture(&loaded.profile, &devices);
+        let configs = self.vjoy_view.configs();
+        let taken = crate::virtual_setup::capture(&loaded.profile, &devices, configs);
         if taken != loaded.profile.virtual_devices {
             loaded.profile.set_virtual_devices(taken);
         }

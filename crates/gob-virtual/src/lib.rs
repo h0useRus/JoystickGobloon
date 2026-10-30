@@ -109,6 +109,9 @@ pub struct Capabilities {
     pub needs_admin: bool,
     /// Virtual gamepads it can create; 0 = none.
     pub max_gamepads: u32,
+    /// Each joystick can have its own name and product id ([`DeviceConfig::name`],
+    /// [`DeviceConfig::product`]); vJoy names them all alike.
+    pub custom_names: bool,
 }
 
 /// No backend: nothing can be configured.
@@ -121,7 +124,32 @@ pub const NO_CAPABILITIES: Capabilities = Capabilities {
     effects: &[],
     switchable: false,
     needs_admin: false,
+    custom_names: false,
 };
+
+/// Vendor id of our virtual joysticks (vJoy's too).
+pub const VENDOR: u16 = 0x1234;
+/// Product ids our virtual joysticks can have: each its own, so games (which keep bindings by
+/// the DirectInput product GUID or the SDL GUID, both made from vendor and product) tell them
+/// apart. vJoy's single id [`VJOY_PRODUCT`] lies inside but is never given out.
+pub const PRODUCTS: std::ops::RangeInclusive<u16> = 0xBE01..=0xBEFF;
+pub const VJOY_PRODUCT: u16 = 0xBEAD;
+/// Longest name in bytes (uinput keeps 79).
+pub const MAX_NAME: usize = 79;
+
+/// Whether `product` may be set by hand.
+pub fn product_allowed(product: u16) -> bool {
+    PRODUCTS.contains(&product) && product != VJOY_PRODUCT
+}
+
+/// Whether `name` may be a device name: not empty, at most [`MAX_NAME`] bytes, no control
+/// characters, no space around it.
+pub fn name_allowed(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_NAME
+        && name.trim() == name
+        && !name.chars().any(char::is_control)
+}
 
 /// One device's configuration, as the configuration page edits it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,6 +162,12 @@ pub struct DeviceConfig {
     pub discrete_hats: bool,
     /// One flag per [`Capabilities::effects`] entry.
     pub effects: Vec<bool>,
+    /// The name games see; `None` = the backend's ("Joystick Gobloon Joystick N"). Only where
+    /// [`Capabilities::custom_names`].
+    pub name: Option<String>,
+    /// Product id; `None` = [`DeviceConfig::default_product`]. Only where
+    /// [`Capabilities::custom_names`].
+    pub product: Option<u16>,
 }
 
 impl DeviceConfig {
@@ -147,8 +181,65 @@ impl DeviceConfig {
             hats: capabilities.max_hats,
             discrete_hats: false,
             effects: vec![false; capabilities.effects.len()],
+            name: None,
+            product: None,
         }
     }
+
+    /// The product id device `id` gets unless one is set: fixed by its number, so it stays
+    /// when the layout changes.
+    pub fn default_product(id: u32) -> u16 {
+        let p = 0xBE00 + id.min(0xFF) as u16;
+        if p == VJOY_PRODUCT { 0xBEFF } else { p }
+    }
+
+    pub fn product_id(&self) -> u16 {
+        self.product.unwrap_or(Self::default_product(self.id))
+    }
+
+    /// The name device `id` has unless one is set.
+    pub fn default_name(id: u32) -> String {
+        format!("Joystick Gobloon Joystick {id}")
+    }
+}
+
+/// What a device name is suggested from: the controller that maps the most onto it, or else
+/// its layout.
+pub fn suggested_name(config: &DeviceConfig, source: Option<&str>, taken: &[&str]) -> String {
+    let base = match source.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(device) => format!("Gobloon {device}"),
+        None => {
+            let axes = |slots: &[usize]| slots.iter().filter(|&&i| config.axes[i]).count();
+            let kind = if axes(&[0, 1]) == 2 {
+                "Stick"
+            } else if axes(&[2, 6, 7]) > 0 {
+                "Throttle"
+            } else if config.buttons > 0 || config.hats > 0 {
+                "Panel"
+            } else {
+                "Stick"
+            };
+            format!("Gobloon {kind}")
+        }
+    };
+    let base = cut(&base, MAX_NAME - 3);
+    let free = |name: &str| !taken.iter().any(|t| t.eq_ignore_ascii_case(name));
+    if source.is_some() && free(base) {
+        return base.to_string();
+    }
+    (1..)
+        .map(|n| format!("{base} {n}"))
+        .find(|name| free(name))
+        .unwrap_or_default()
+}
+
+/// `s` cut to at most `max` bytes at a character boundary, without trailing space.
+fn cut(s: &str, max: usize) -> &str {
+    let mut end = s.len().min(max);
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s[..end].trim_end()
 }
 
 /// One configuration change.
@@ -426,5 +517,58 @@ mod tests {
         assert_eq!(GamepadControl::parse("z"), None);
         assert_eq!(GamepadControl::Lt.kind(), ControlKind::Trigger);
         assert_eq!(GamepadControl::DpadUp.kind(), ControlKind::Button);
+    }
+
+    #[test]
+    fn products_and_names() {
+        assert_eq!(DeviceConfig::default_product(1), 0xBE01);
+        assert_eq!(DeviceConfig::default_product(16), 0xBE10);
+        assert_ne!(DeviceConfig::default_product(0xAD), VJOY_PRODUCT);
+        let mut c = DeviceConfig::new(2, &NO_CAPABILITIES);
+        assert_eq!(c.product_id(), 0xBE02);
+        c.product = Some(0xBE42);
+        assert_eq!(c.product_id(), 0xBE42);
+        assert!(product_allowed(0xBE01) && product_allowed(0xBEFF));
+        assert!(!product_allowed(0xBEAD) && !product_allowed(0xBE00));
+        assert!(name_allowed("Gobloon Throttle"));
+        assert!(!name_allowed("") && !name_allowed(" x") && !name_allowed("a	b"));
+        assert!(!name_allowed(&"x".repeat(MAX_NAME + 1)));
+    }
+
+    #[test]
+    fn suggested_names() {
+        let caps = Capabilities {
+            max_buttons: 32,
+            max_hats: 1,
+            ..NO_CAPABILITIES
+        };
+        let stick = DeviceConfig::new(1, &caps);
+        assert_eq!(
+            suggested_name(&stick, Some("VKB Gladiator EVO L "), &[]),
+            "Gobloon VKB Gladiator EVO L"
+        );
+        assert_eq!(
+            suggested_name(
+                &stick,
+                Some("VKB Gladiator EVO L"),
+                &["gobloon vkb gladiator evo l"]
+            ),
+            "Gobloon VKB Gladiator EVO L 1",
+            "taken by another device"
+        );
+        assert_eq!(suggested_name(&stick, None, &[]), "Gobloon Stick 1");
+        assert_eq!(
+            suggested_name(&stick, None, &["Gobloon Stick 1"]),
+            "Gobloon Stick 2"
+        );
+        let mut throttle = stick.clone();
+        throttle.axes = [false, false, true, false, false, false, true, false];
+        assert_eq!(suggested_name(&throttle, None, &[]), "Gobloon Throttle 1");
+        let mut panel = stick.clone();
+        panel.axes = [false; AXIS_SLOTS];
+        assert_eq!(suggested_name(&panel, None, &[]), "Gobloon Panel 1");
+        let long = "ж".repeat(60);
+        let name = suggested_name(&stick, Some(&long), &[]);
+        assert!(name.len() <= MAX_NAME && name_allowed(&name), "{name}");
     }
 }

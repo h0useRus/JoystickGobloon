@@ -107,16 +107,25 @@ impl Virtual {
             (ABS_HAT0X, -1, 1),
             (ABS_HAT0Y, -1, 1),
         ];
-        Self::create(NAME, [0x03, 0x231d, 0x0200, 1], &[], buttons, &axes)
+        Self::create(NAME, "", [0x03, 0x231d, 0x0200, 1], &[], buttons, &axes)
     }
 
     /// A keyboard with key repeat and the first 127 key codes.
-    fn keyboard(name: &str) -> Self {
-        Self::create(name, [0x03, 0x1234, 0x5678, 1], &[EV_REP], 1..128, &[])
+    fn keyboard(name: &str, phys: &str) -> Self {
+        Self::create(
+            name,
+            phys,
+            [0x03, 0x1234, 0x5678, 1],
+            &[EV_REP],
+            1..128,
+            &[],
+        )
     }
 
+    /// `phys`: where the device says it is plugged in, empty for nowhere.
     fn create(
         name: &str,
+        phys: &str,
         id: [u16; 4],
         events: &[u16],
         keys: impl Iterator<Item = u16>,
@@ -151,6 +160,18 @@ impl Virtual {
         };
         setup.name[..name.len()].copy_from_slice(name.as_bytes());
         ioctl_ptr(&file, 3, &setup);
+        if !phys.is_empty() {
+            let phys = std::ffi::CString::new(phys).unwrap();
+            // SAFETY: UI_SET_PHYS takes a zero-terminated string.
+            let r = unsafe {
+                libc::ioctl(
+                    file.as_raw_fd(),
+                    uinput_request(108, size_of::<*const libc::c_char>()) as _,
+                    phys.as_ptr(),
+                )
+            };
+            assert!(r >= 0, "UI_SET_PHYS: {}", std::io::Error::last_os_error());
+        }
         // SAFETY: UI_DEV_CREATE has no argument.
         let r = unsafe { libc::ioctl(file.as_raw_fd(), uinput_request(1, 0) as _) };
         assert!(r >= 0, "UI_DEV_CREATE: {}", std::io::Error::last_os_error());
@@ -274,19 +295,29 @@ fn virtual_stick_reads_back() {
     assert!(!input.devices().iter().any(|d| d.info.name == NAME));
 }
 
-/// Our own Xbox-style gamepad has a real controller's ids (045e:028e): its name tells it is our
-/// output, while the same ids under another name are a controller.
+/// Our own Xbox-style gamepad has a real controller's ids (045e:028e): its `phys` tells it is
+/// our output, whatever its name, while the same ids elsewhere are a controller.
 #[test]
 #[ignore = "needs /dev/uinput"]
-fn own_gamepad_is_output_by_name() {
+fn own_gamepad_is_output_by_phys() {
     let _serial = serial();
-    let pad = |name| {
+    let pad = |name, phys| {
         let buttons = [0x130, 0x131, 0x133, 0x134].into_iter();
         let axes = [(ABS_X, -32768, 32767), (ABS_Y, -32768, 32767)];
-        Virtual::create(name, [0x03, 0x045e, 0x028e, 0x0114], &[], buttons, &axes)
+        Virtual::create(
+            name,
+            phys,
+            [0x03, 0x045e, 0x028e, 0x0114],
+            &[],
+            buttons,
+            &axes,
+        )
     };
-    let (own, other) = ("Joystick Gobloon Test Gamepad", "Test Xbox 360 pad");
-    let _devices = (pad(own), pad(other));
+    let (own, other) = ("Test Renamed Gamepad", "Test Xbox 360 pad");
+    let _devices = (
+        pad(own, "joystick-gobloon/gamepad-9"),
+        pad(other, "usb-0000:00:14.0-9/input0"),
+    );
     let input = InputService::start(|| {});
     let end = Instant::now() + Duration::from_secs(5);
     let found = loop {
@@ -298,7 +329,7 @@ fn own_gamepad_is_output_by_name() {
         assert!(Instant::now() < end, "gamepads not found");
         std::thread::sleep(Duration::from_millis(50));
     };
-    assert!(found.0.info.is_own(), "ours by its name");
+    assert!(found.0.info.is_own(), "ours by its phys");
     assert!(!found.1.info.is_own(), "a controller with the same ids");
 }
 
@@ -306,9 +337,9 @@ fn own_gamepad_is_output_by_name() {
 #[ignore = "needs /dev/uinput"]
 fn keyboard_keys_as_scan_codes() {
     let _serial = serial();
-    let mut keyboard = Virtual::keyboard("Test Keyboard");
+    let mut keyboard = Virtual::keyboard("Test Keyboard", "");
     // Our own output device (gob-engine's keyboard on uinput): its keys are not input.
-    let mut own = Virtual::keyboard("Joystick Gobloon Keyboard");
+    let mut own = Virtual::keyboard("Test Own Keyboard", "joystick-gobloon/keyboard");
     let input = InputService::start(|| {});
     let events = input.subscribe();
     // The keyboard thread looks for keyboards right away; give it the first scan.
@@ -374,6 +405,7 @@ fn exclusive_hides_from_other_readers() {
     const GRAB_NAME: &str = "Test Grab Stick";
     let mut stick = Virtual::create(
         GRAB_NAME,
+        "",
         [0x03, 0x1111, 0x2222, 1],
         &[],
         BTN_TRIGGER..BTN_TRIGGER + 4,

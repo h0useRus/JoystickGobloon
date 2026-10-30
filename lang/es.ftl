@@ -536,6 +536,13 @@ vjoy-hat-continuous = Continua
 vjoy-hat-discrete = 4 direcciones
 vjoy-ffb = Force feedback
 vjoy-ffb-enable = Activado
+vjoy-name = Nombre
+vjoy-name-suggest = Sugerir un nombre: según el mando que el perfil asigna a este dispositivo, o según su distribución
+vjoy-name-invalid = Hasta 79 caracteres, sin espacios al principio ni al final, distinto de los nombres de los demás dispositivos.
+vjoy-name-renamed = Los juegos ven un dispositivo renombrado como uno nuevo: puede que haya que volver a asignar sus controles.
+vjoy-product = ID de producto
+vjoy-product-tip = Los juegos distinguen los dispositivos por él. Vacío = se elige según el número del dispositivo; introduzca el ID de una instalación anterior para conservar las asignaciones de un juego.
+vjoy-product-invalid = Un número hexadecimal de BE01 a BEFF (excepto BEAD) que no use otro dispositivo.
 vjoy-ffb-const = Constante
 vjoy-ffb-ramp = Rampa
 vjoy-ffb-sq = Cuadrada

@@ -39,12 +39,14 @@ impl Devices {
         let keys: Vec<u16> = keys::all_codes().collect();
         let keyboard = Spec {
             name: KEYBOARD_NAME,
+            phys: "joystick-gobloon/keyboard",
             bus: codes::BUS_VIRTUAL,
             keys: &keys,
             ..Spec::default()
         };
         let mouse = Spec {
             name: MOUSE_NAME,
+            phys: "joystick-gobloon/mouse",
             bus: codes::BUS_VIRTUAL,
             keys: &MOUSE_BUTTONS,
             rel: &[
