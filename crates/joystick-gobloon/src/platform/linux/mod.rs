@@ -7,6 +7,7 @@ mod autostart;
 mod fonts;
 mod instance;
 mod keys;
+mod menu;
 mod theme;
 mod update;
 mod window;
@@ -164,7 +165,9 @@ impl super::Desktop for Desktop {
         theme::watch(changed);
     }
 
+    /// Also puts the program in the application menu (its icon in the dock).
     fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Self::Window> {
+        menu::integrate();
         window::main_window(cc)
     }
 

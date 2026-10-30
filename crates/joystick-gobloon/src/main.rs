@@ -33,6 +33,8 @@ mod vjoy_view;
 mod wizard_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
+/// The window's app id (Wayland) and class (X11); on Linux also the menu entry's name.
+pub const APP_ID: &str = "joystick-gobloon";
 /// Version shown to users, from build.rs: what CI sets in `JOYSTICK_GOBLOON_VERSION`
 /// (`0.2.0-alpha.12`), else the latest git tag and the commits since it (`0.9.0-alpha.45+3.g728daf5`),
 /// else the crate version.
@@ -80,6 +82,7 @@ fn main() -> eframe::Result {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_visible(!to_tray)
             .with_title(APP_NAME)
+            .with_app_id(APP_ID)
             .with_inner_size([1100.0, 700.0])
             .with_min_inner_size([640.0, 400.0])
             .with_icon(
