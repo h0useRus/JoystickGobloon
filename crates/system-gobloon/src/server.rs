@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use gob_system::protocol::{
     self, ApplyVirtual, Code, DeviceKind, ErrorCode, ErrorReply, Hello, HelloReply, Hidden,
@@ -69,6 +69,9 @@ fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
     }
     Ok(cred.uid)
 }
+
+/// The last client logged as connected.
+static LAST_CLIENT: Mutex<String> = Mutex::new(String::new());
 
 /// Numbers the connections, to know who has a virtual device.
 static NEXT_CONN: AtomicU64 = AtomicU64::new(1);
@@ -201,10 +204,16 @@ fn payload(uid: u32, frame: &Frame, service: &Service) -> Result<Vec<u8>, ErrorC
     match Code::from_u16(frame.code) {
         Some(Code::Hello) => {
             let hello: Hello = read(frame)?;
-            log::info!(
-                "uid {uid}: Joystick Gobloon {} connected",
+            // The program asks for the version every few seconds: logged when it changes.
+            let client = format!(
+                "uid {uid}: Joystick Gobloon {}",
                 hello.client_version.as_str()
             );
+            let mut last = LAST_CLIENT.lock().unwrap_or_else(PoisonError::into_inner);
+            if *last != client {
+                log::info!("{client} connected");
+                *last = client;
+            }
             Ok(record(&HelloReply {
                 protocol: PROTOCOL,
                 reserved: 0,
