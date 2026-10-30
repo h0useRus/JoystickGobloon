@@ -102,6 +102,24 @@ fn read_state() -> Result<State, Error> {
     }
 }
 
+/// The sticks (vendor, product) whose raw HID node local hiding keeps closed: every hidden stick
+/// while hiding is on.
+pub fn closed_sticks_wanted() -> Vec<(u16, u16)> {
+    let Ok(state) = read_state() else {
+        return Vec::new();
+    };
+    let mut sticks: Vec<(u16, u16)> = state
+        .devices
+        .iter()
+        .filter(|_| state.enabled)
+        .map(|h| (h.vendor, h.product))
+        .filter(|&ids| ids != (0, 0))
+        .collect();
+    sticks.sort_unstable();
+    sticks.dedup();
+    sticks
+}
+
 fn write_state(state: &State) -> Result<(), Error> {
     let path = state_path().ok_or_else(|| Error::Failed("no folder for the state".into()))?;
     let text = toml::to_string_pretty(state).map_err(|e| Error::Failed(e.to_string()))?;

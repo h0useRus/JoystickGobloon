@@ -91,7 +91,7 @@ pub fn hidden_rule(vendor: u16, product: u16) -> String {
 }
 
 /// The hidden-stick rule file for these sticks; empty for none.
-fn hidden_rules(sticks: &[(u16, u16)]) -> String {
+pub fn hidden_rules(sticks: &[(u16, u16)]) -> String {
     if sticks.is_empty() {
         return String::new();
     }

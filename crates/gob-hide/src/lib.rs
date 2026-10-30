@@ -141,6 +141,13 @@ pub fn keep_locally() -> Result<(), String> {
     Ok(())
 }
 
+/// Linux: the USB sticks (vendor, product) whose raw HID node hiding without the service keeps
+/// closed (a udev rule written as root), from this program's own hidden devices.
+#[cfg(target_os = "linux")]
+pub fn closed_sticks() -> Vec<(u16, u16)> {
+    linux::closed_sticks_wanted()
+}
+
 static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// The program's data folder (next to its settings), where a backend that keeps its own files

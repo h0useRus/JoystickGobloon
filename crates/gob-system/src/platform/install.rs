@@ -43,14 +43,19 @@ systemctl enable system-gobloon.service
 systemctl restart system-gobloon.service";
 
 /// Stops and disables the service (its `--cleanup` shows hidden devices again), deletes the unit
-/// and the binary. The state (hidden devices, layouts) stays for a later install.
+/// and the binary, writes the files the program needs without it (pairs of text `$1` and path
+/// `$2`, e.g. udev rules) and has udev apply them. The state (hidden devices, layouts) stays for
+/// a later install.
 const REMOVE_SCRIPT: &str = "systemctl disable --now system-gobloon.service
 rm -f /etc/systemd/system/system-gobloon.service
 systemctl daemon-reload
 rm -rf /var/lib/system-gobloon/bin
 rm -f /run/udev/rules.d/70-system-gobloon-access.rules
+while [ $# -ge 2 ]; do printf '%s' \"$1\" > \"$2\"; shift 2; done
 udevadm control --reload
+udevadm trigger --action=change --subsystem-match=misc --sysname-match=uinput
 udevadm trigger --action=change --subsystem-match=input
+udevadm trigger --action=change --subsystem-match=hidraw
 true";
 
 /// What the system has of the service.
@@ -111,9 +116,14 @@ pub fn install(binary: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Stops and removes the service, like [`install`].
-pub fn remove() -> Result<(), String> {
-    pkexec(&[REMOVE_SCRIPT, "sh"])
+/// Stops and removes the service, like [`install`]. `files` (path, text) are written in the same
+/// step, so the system asks for the password once.
+pub fn remove(files: &[(&str, &str)]) -> Result<(), String> {
+    let mut args = vec![REMOVE_SCRIPT, "sh"];
+    for (path, text) in files {
+        args.extend([*text, *path]);
+    }
+    pkexec(&args)
 }
 
 /// A new folder only this user may open.

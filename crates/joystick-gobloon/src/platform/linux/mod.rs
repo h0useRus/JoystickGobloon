@@ -268,8 +268,19 @@ impl super::Desktop for Desktop {
         gob_system::install::install(&binary)
     }
 
+    /// The rules the program's own hiding and devices need without the service are written in
+    /// the same step: one password.
     fn remove_system_part() -> Result<(), String> {
-        gob_system::install::remove()
+        use gob_uinput::access;
+        let hidden = access::hidden_rules(&gob_hide::closed_sticks());
+        let mut files = Vec::new();
+        if !std::path::Path::new(access::RULE_PATH).exists() {
+            files.push((access::RULE_PATH, access::RULE));
+        }
+        if !hidden.is_empty() {
+            files.push((access::HIDDEN_RULE_PATH, hidden.as_str()));
+        }
+        gob_system::install::remove(&files)
     }
 
     /// Started from an AppImage (it updates as one file).
