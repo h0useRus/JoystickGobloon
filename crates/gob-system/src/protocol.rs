@@ -299,6 +299,160 @@ impl Record for ErrorReply {
     }
 }
 
+/// A hidden device. Bytes: 0 id (40, gob-input's device id), 40 name (96), 136 vendor,
+/// 138 product, 140 present (1: attached now), 141 reserved (3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct Hidden {
+    pub id: Text<40>,
+    pub name: Text<96>,
+    pub vendor: u16,
+    pub product: u16,
+    pub present: u8,
+    pub reserved: [u8; 3],
+}
+
+impl Record for Hidden {
+    const SIZE: usize = 144;
+
+    fn write(&self, out: &mut [u8]) {
+        self.id.put(out, 0);
+        self.name.put(out, 40);
+        put_u16(out, 136, self.vendor);
+        put_u16(out, 138, self.product);
+        out[140] = self.present;
+        out[141..144].copy_from_slice(&self.reserved);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        (b.len() >= Self::SIZE).then(|| Hidden {
+            id: Text::get(b, 0),
+            name: Text::get(b, 40),
+            vendor: get_u16(b, 136),
+            product: get_u16(b, 138),
+            present: b[140],
+            reserved: [b[141], b[142], b[143]],
+        })
+    }
+}
+
+/// Reply to [`Code::HideState`]: this record, then `count` [`Hidden`] records. Bytes: 0 enabled
+/// (1: hiding is on), 1 reserved (3), 4 count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct HideState {
+    pub enabled: u8,
+    pub reserved: [u8; 3],
+    pub count: u32,
+}
+
+impl Record for HideState {
+    const SIZE: usize = 8;
+
+    fn write(&self, out: &mut [u8]) {
+        out[0] = self.enabled;
+        out[1..4].copy_from_slice(&self.reserved);
+        put_u32(out, 4, self.count);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        (b.len() >= Self::SIZE).then(|| HideState {
+            enabled: b[0],
+            reserved: [b[1], b[2], b[3]],
+            count: get_u32(b, 4),
+        })
+    }
+}
+
+/// [`Code::SetHideEnabled`] request (empty reply). Bytes: 0 enabled, 1 reserved (3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct SetHideEnabled {
+    pub enabled: u8,
+    pub reserved: [u8; 3],
+}
+
+impl Record for SetHideEnabled {
+    const SIZE: usize = 4;
+
+    fn write(&self, out: &mut [u8]) {
+        out[0] = self.enabled;
+        out[1..4].copy_from_slice(&self.reserved);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        (b.len() >= Self::SIZE).then(|| SetHideEnabled {
+            enabled: b[0],
+            reserved: [b[1], b[2], b[3]],
+        })
+    }
+}
+
+/// [`Code::SetHidden`] request (empty reply): hides (`hidden` 1) or shows a device. Bytes:
+/// 0 hidden, 1 reserved (3), 4 device ([`Hidden`], its `present` ignored).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct SetHidden {
+    pub hidden: u8,
+    pub reserved: [u8; 3],
+    pub device: Hidden,
+}
+
+impl Record for SetHidden {
+    const SIZE: usize = 4 + Hidden::SIZE;
+
+    fn write(&self, out: &mut [u8]) {
+        out[0] = self.hidden;
+        out[1..4].copy_from_slice(&self.reserved);
+        self.device.write(&mut out[4..]);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        if b.len() < Self::SIZE {
+            return None;
+        }
+        Some(SetHidden {
+            hidden: b[0],
+            reserved: [b[1], b[2], b[3]],
+            device: Hidden::read(&b[4..])?,
+        })
+    }
+}
+
+/// A [`HideState`] and its [`Hidden`] records as one payload; `None` when the records do not fit.
+pub fn write_hide_state(enabled: bool, hidden: &[Hidden], out: &mut [u8]) -> Option<usize> {
+    let len = HideState::SIZE + hidden.len() * Hidden::SIZE;
+    if out.len() < len {
+        return None;
+    }
+    HideState {
+        enabled: enabled.into(),
+        reserved: [0; 3],
+        count: hidden.len() as u32,
+    }
+    .write(out);
+    for (i, h) in hidden.iter().enumerate() {
+        h.write(&mut out[HideState::SIZE + i * Hidden::SIZE..]);
+    }
+    Some(len)
+}
+
+/// The [`Hidden`] records of a [`HideState`] payload, in order.
+pub fn hidden_records(payload: &[u8]) -> Option<(HideState, impl Iterator<Item = Hidden> + '_)> {
+    let state = HideState::read(payload)?;
+    let records = &payload[HideState::SIZE..];
+    if records.len() < state.count as usize * Hidden::SIZE {
+        return None;
+    }
+    let all = records
+        .as_chunks::<{ Hidden::SIZE }>()
+        .0
+        .iter()
+        .take(state.count as usize)
+        .filter_map(|r| Hidden::read(r));
+    Some((state, all))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -356,6 +510,49 @@ mod tests {
             ErrorReply::read(&[9, 0, 0, 0]).unwrap().code,
             ErrorCode::Failed
         );
+    }
+
+    #[test]
+    fn hiding_layout() {
+        let h = Hidden {
+            id: Text::new("1f4b044f-0003-0000-0011-223344556677"),
+            name: Text::new("T.16000M"),
+            vendor: 0x044f,
+            product: 0xb10a,
+            present: 1,
+            reserved: [0; 3],
+        };
+        let b: [u8; 144] = bytes(&h);
+        assert_eq!(&b[..4], b"1f4b");
+        assert_eq!(&b[40..48], b"T.16000M");
+        assert_eq!(&b[136..141], &[0x4f, 0x04, 0x0a, 0xb1, 1]);
+        assert_eq!(Hidden::read(&b), Some(h));
+
+        let set = SetHidden {
+            hidden: 1,
+            reserved: [0; 3],
+            device: h,
+        };
+        let b: [u8; 148] = bytes(&set);
+        assert_eq!(&b[..5], &[1, 0, 0, 0, b'1']);
+        assert_eq!(SetHidden::read(&b), Some(set));
+        let b: [u8; 4] = bytes(&SetHideEnabled {
+            enabled: 1,
+            reserved: [0; 3],
+        });
+        assert_eq!(b, [1, 0, 0, 0]);
+
+        let mut out = [0; 8 + 2 * 144];
+        assert_eq!(write_hide_state(true, &[h, h], &mut out), Some(out.len()));
+        assert_eq!(&out[..8], &[1, 0, 0, 0, 2, 0, 0, 0]);
+        let (state, records) = hidden_records(&out).unwrap();
+        assert_eq!(state.enabled, 1);
+        assert_eq!(records.collect::<Vec<_>>(), [h, h]);
+        assert!(
+            hidden_records(&out[..8 + 144]).is_none(),
+            "one record missing"
+        );
+        assert_eq!(write_hide_state(true, &[h, h, h], &mut out), None);
     }
 
     #[test]

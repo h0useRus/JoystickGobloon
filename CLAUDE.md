@@ -57,6 +57,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   platform/linux.rs = Unix socket `/run/system-gobloon.sock`, descriptors in SCM_RIGHTS (`send`/`recv` shared)
 - crates/system-gobloon  Linux root service, binary `SystemGobloon [--socket <path>]` (plans/LINUX_SERVICE_PLAN.md):
   server.rs (thread per client), seat.rs (root or the active seat's uid), journal.rs (stderr with `<N>` priorities);
+  hide.rs = state in /var/lib/system-gobloon/hidden.toml, runtime rule /run/udev/rules.d/72-system-gobloon-hidden.rules
+  (USB vendor/product/serial, root only), nodes closed directly + inotify watchdog, `--cleanup` = unit's ExecStopPost;
+  gob-input `controller_nodes()` (Linux) lists each controller's event/js/hidraw nodes and USB serial for it;
   tests/hello.rs runs it on a temp socket without root
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in

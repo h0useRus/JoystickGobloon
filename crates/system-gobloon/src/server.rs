@@ -5,12 +5,15 @@ use std::os::fd::AsRawFd;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError};
 
 use gob_system::protocol::{
-    Code, ErrorCode, ErrorReply, Hello, HelloReply, PROTOCOL, Record, Text,
+    self, Code, ErrorCode, ErrorReply, Hello, HelloReply, Hidden, PROTOCOL, Record, SetHidden,
+    SetHideEnabled, Text, caps,
 };
 use gob_system::{Frame, recv, send};
+
+use crate::Service;
 
 /// Decides whether a user id may use the service ([`crate::seat::allowed`] in the service).
 pub type Policy = Arc<dyn Fn(u32) -> bool + Send + Sync>;
@@ -28,12 +31,13 @@ pub fn bind(path: &Path) -> io::Result<UnixListener> {
 }
 
 /// Serves clients until the listener fails.
-pub fn serve(listener: UnixListener, policy: Policy) -> io::Result<()> {
+pub fn serve(listener: UnixListener, policy: Policy, service: Arc<Service>) -> io::Result<()> {
     for stream in listener.incoming() {
         let stream = stream?;
         let policy = policy.clone();
+        let service = service.clone();
         std::thread::spawn(move || {
-            if let Err(e) = client(&stream, &policy) {
+            if let Err(e) = client(&stream, &policy, &service) {
                 log::warn!("client: {e}");
             }
         });
@@ -65,7 +69,7 @@ fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
     Ok(cred.uid)
 }
 
-fn client(stream: &UnixStream, policy: &Policy) -> io::Result<()> {
+fn client(stream: &UnixStream, policy: &Policy, service: &Service) -> io::Result<()> {
     let uid = peer_uid(stream)?;
     while let Some(frame) = recv(stream)? {
         // Checked per request: the active user changes when users switch.
@@ -73,40 +77,83 @@ fn client(stream: &UnixStream, policy: &Policy) -> io::Result<()> {
             log::warn!("uid {uid} may not use the service");
             return error(stream, ErrorCode::Denied);
         }
-        answer(stream, uid, &frame)?;
+        let reply = if frame.protocol == PROTOCOL {
+            answer(uid, &frame, service)
+        } else {
+            Err(ErrorCode::Protocol)
+        };
+        match reply {
+            Ok(payload) => send(
+                stream,
+                Code::from_u16(frame.code).unwrap_or(Code::Error),
+                &payload,
+                None,
+            )?,
+            Err(code) => error(stream, code)?,
+        }
     }
     Ok(())
 }
 
 fn error(stream: &UnixStream, code: ErrorCode) -> io::Result<()> {
-    let mut payload = [0; ErrorReply::SIZE];
-    ErrorReply { code }.write(&mut payload);
-    send(stream, Code::Error, &payload, None)
+    send(stream, Code::Error, &record(&ErrorReply { code }), None)
 }
 
-fn answer(stream: &UnixStream, uid: u32, frame: &Frame) -> io::Result<()> {
-    if frame.protocol != PROTOCOL {
-        return error(stream, ErrorCode::Protocol);
-    }
+fn record<R: Record>(r: &R) -> Vec<u8> {
+    let mut payload = vec![0; R::SIZE];
+    r.write(&mut payload);
+    payload
+}
+
+fn read<R: Record>(frame: &Frame) -> Result<R, ErrorCode> {
+    R::read(&frame.payload).ok_or(ErrorCode::BadRequest)
+}
+
+/// A failed system change: logged here, the client only learns that it failed.
+fn failed(what: &str, e: io::Error) -> ErrorCode {
+    log::error!("{what}: {e}");
+    ErrorCode::Failed
+}
+
+/// The reply payload of one request.
+fn answer(uid: u32, frame: &Frame, service: &Service) -> Result<Vec<u8>, ErrorCode> {
+    let hide = || service.hide.lock().unwrap_or_else(PoisonError::into_inner);
     match Code::from_u16(frame.code) {
         Some(Code::Hello) => {
-            let Some(hello) = Hello::read(&frame.payload) else {
-                return error(stream, ErrorCode::BadRequest);
-            };
+            let hello: Hello = read(frame)?;
             log::info!(
                 "uid {uid}: Joystick Gobloon {} connected",
                 hello.client_version.as_str()
             );
-            let reply = HelloReply {
+            Ok(record(&HelloReply {
                 protocol: PROTOCOL,
                 reserved: 0,
-                capabilities: 0,
+                capabilities: caps::HIDE_EVERYWHERE,
                 service_version: Text::new(crate::VERSION),
-            };
-            let mut payload = [0; HelloReply::SIZE];
-            reply.write(&mut payload);
-            send(stream, Code::Hello, &payload, None)
+            }))
         }
-        _ => error(stream, ErrorCode::Unsupported),
+        Some(Code::HideState) => {
+            let hide = hide();
+            let hidden: Vec<Hidden> = hide.hidden();
+            let mut payload = vec![0; protocol::HideState::SIZE + hidden.len() * Hidden::SIZE];
+            protocol::write_hide_state(hide.enabled(), &hidden, &mut payload)
+                .ok_or(ErrorCode::Failed)?;
+            Ok(payload)
+        }
+        Some(Code::SetHideEnabled) => {
+            let set: SetHideEnabled = read(frame)?;
+            hide()
+                .set_enabled(set.enabled != 0)
+                .map_err(|e| failed("switching hiding", e))?;
+            Ok(Vec::new())
+        }
+        Some(Code::SetHidden) => {
+            let set: SetHidden = read(frame)?;
+            hide()
+                .set_hidden(&set.device, set.hidden != 0)
+                .map_err(|e| failed("hiding", e))?;
+            Ok(Vec::new())
+        }
+        _ => Err(ErrorCode::Unsupported),
     }
 }

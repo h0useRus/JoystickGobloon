@@ -10,6 +10,9 @@ name = "SystemGobloon"
 path = "src/main.rs"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+gob-input.workspace = true
 gob-system.workspace = true
 libc.workspace = true
 log.workspace = true
+serde.workspace = true
+toml.workspace = true

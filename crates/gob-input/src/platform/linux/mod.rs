@@ -250,6 +250,13 @@ fn scale_axis(value: i32, min: i32, max: i32) -> i32 {
 /// would keep "Map controls" from matching profiles made on Windows. `None` for devices that
 /// are not on USB (e.g. Bluetooth): their evdev name is used.
 fn usb_product(event_node: &Path) -> Option<String> {
+    let product = std::fs::read_to_string(usb_device(event_node)?.join("product")).ok()?;
+    let product = product.trim();
+    (!product.is_empty()).then(|| product.to_string())
+}
+
+/// The USB device's folder in sysfs behind an event node; `None` off USB.
+fn usb_device(event_node: &Path) -> Option<PathBuf> {
     let name = event_node.file_name()?;
     // eventN/device = the input device, its device = the HID device, two levels up = USB.
     let hid = Path::new("/sys/class/input")
@@ -257,9 +264,72 @@ fn usb_product(event_node: &Path) -> Option<String> {
         .join("device/device")
         .canonicalize()
         .ok()?;
-    let product = std::fs::read_to_string(hid.parent()?.parent()?.join("product")).ok()?;
-    let product = product.trim();
-    (!product.is_empty()).then(|| product.to_string())
+    let usb = hid.parent()?.parent()?;
+    usb.join("idVendor").exists().then(|| usb.to_path_buf())
+}
+
+/// A controller's device nodes, for SystemGobloon (root) to close them to others while hidden.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Nodes {
+    /// Id as in [`crate::DeviceInfo::guid`].
+    pub guid: String,
+    pub name: String,
+    pub vendor: u16,
+    pub product: u16,
+    /// On USB: the USB device's serial number (udev `ATTRS{serial}`), empty without one.
+    pub usb_serial: Option<String>,
+    /// The event node, its joydev node and the HID device's hidraw node, as far as present.
+    pub paths: Vec<PathBuf>,
+}
+
+/// The attached controllers (not our own virtual devices) and their nodes. Needs read access to
+/// the event nodes: root.
+pub fn controller_nodes() -> Vec<Nodes> {
+    use super::Backend;
+    let Some(platform) = Platform::new() else {
+        return Vec::new();
+    };
+    platform
+        .attached()
+        .into_iter()
+        .filter_map(|(guid, found)| {
+            let node = Node::open(&found.path).ok()?;
+            let name = node.name();
+            if name.starts_with(keyboard::OWN_DEVICE_PREFIX) {
+                return None;
+            }
+            let [_, vendor, product, _] = node.id();
+            let usb = usb_device(&found.path);
+            let usb_serial = usb.map(|dir| {
+                std::fs::read_to_string(dir.join("serial"))
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default()
+            });
+            let mut paths = vec![found.path.clone()];
+            let input = Path::new("/sys/class/input")
+                .join(found.path.file_name()?)
+                .join("device");
+            let joydev = std::fs::read_dir(input).into_iter().flatten().flatten();
+            paths.extend(joydev.filter_map(|e| {
+                let n = e.file_name();
+                n.to_str()?
+                    .starts_with("js")
+                    .then(|| Path::new("/dev/input").join(&n))
+            }));
+            let hidraw = hidraw_path(&found.path);
+            if !hidraw.is_empty() {
+                paths.push(hidraw.into());
+            }
+            Some(Nodes {
+                guid,
+                name,
+                vendor,
+                product,
+                usb_serial,
+                paths,
+            })
+        })
+        .collect()
 }
 
 /// The `hidraw` node of the HID device behind an event node (for gob-lighting), if any.

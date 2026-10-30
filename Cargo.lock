@@ -4440,9 +4440,12 @@ dependencies = [
 name = "system-gobloon"
 version = "0.6.0"
 dependencies = [
+ "gob-input",
  "gob-system",
  "libc",
  "log",
+ "serde",
+ "toml 0.8.2",
 ]
 
 [[package]]
