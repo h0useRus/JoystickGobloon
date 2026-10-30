@@ -41,7 +41,9 @@ impl SystemPartView {
         }
     }
 
-    fn state(&mut self) -> &SystemPart {
+    fn state(&mut self, ctx: &egui::Context) -> &SystemPart {
+        // Nothing else may repaint while it is shown (no input moves).
+        ctx.request_repaint_after(RECHECK);
         if self.job.is_none() && self.checked.elapsed() > RECHECK {
             self.state = crate::platform::system_part(crate::VERSION);
             self.checked = Instant::now();
@@ -115,7 +117,7 @@ impl SystemPartView {
     /// Devices page: offers the system part while it is not running in this program's version;
     /// whether it is shown.
     pub fn banner(&mut self, ui: &mut egui::Ui, i18n: &I18n) -> bool {
-        let text = match self.state().clone() {
+        let text = match self.state(ui.ctx()).clone() {
             SystemPart::NotInstalled => i18n.tr("system-banner-install"),
             SystemPart::Stopped => i18n.tr("system-banner-stopped"),
             SystemPart::Outdated { version } => {
@@ -149,7 +151,7 @@ impl SystemPartView {
 
     /// Settings section: what runs, and the buttons to install, update or remove it.
     pub fn section(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
-        let status = match self.state().clone() {
+        let status = match self.state(ui.ctx()).clone() {
             SystemPart::Unavailable => return,
             SystemPart::NotInstalled => i18n.tr("system-status-missing"),
             SystemPart::Stopped => i18n.tr("system-status-stopped"),
