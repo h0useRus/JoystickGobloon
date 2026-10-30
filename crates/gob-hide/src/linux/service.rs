@@ -15,7 +15,7 @@ use super::{State, apply, list, read_state, state_path};
 use crate::{Backend, Capabilities, Device, Error};
 
 pub const CAPABILITIES: Capabilities = Capabilities {
-    name: "SystemGobloon",
+    name: "System Gobloon",
     app_list: false,
     hides_everywhere: true,
 };

@@ -22,7 +22,7 @@ use crate::{
 };
 
 pub const CAPABILITIES: Capabilities = Capabilities {
-    name: "SystemGobloon",
+    name: "System Gobloon",
     persistent: true,
     ..DIRECT
 };
