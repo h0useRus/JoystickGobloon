@@ -18,7 +18,7 @@ pub const BIN_NAME: &str = "SystemGobloon";
 /// The systemd unit. Stopping or a crash runs `--cleanup`: hidden devices become visible again.
 pub const UNIT: &str = "\
 [Unit]
-Description=SystemGobloon: device hiding and virtual devices for Joystick Gobloon
+Description=System Gobloon: device hiding and virtual devices for Joystick Gobloon
 After=systemd-udevd.service
 
 [Service]
