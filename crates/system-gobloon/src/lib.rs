@@ -1,7 +1,8 @@
 //! SystemGobloon for Linux: a root service (systemd unit `system-gobloon.service`) that does what
 //! the HidHide and vJoy drivers do on Windows. It listens on `gob_system::SOCKET_PATH` and speaks
 //! the gob-system protocol; only root and the user of an active seat may use it (`seat.rs`).
-//! Hiding: `hide.rs`. No GUI code: Joystick Gobloon talks to it through gob-system's client.
+//! Hiding: `hide.rs`; virtual devices: `virtuals.rs`. No GUI code: Joystick Gobloon talks to it
+//! through gob-system's client.
 #![cfg(target_os = "linux")]
 
 use std::sync::{Arc, Mutex};
@@ -10,6 +11,7 @@ pub mod hide;
 pub mod journal;
 pub mod seat;
 pub mod server;
+pub mod virtuals;
 
 /// The version reported in `Hello`: the release's, else the crate's.
 pub const VERSION: &str = match option_env!("JOYSTICK_GOBLOON_VERSION") {
@@ -17,7 +19,7 @@ pub const VERSION: &str = match option_env!("JOYSTICK_GOBLOON_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
-/// The service's state (`hidden.toml`, later `virtual.toml`).
+/// The service's state (`hidden.toml`, `virtual.toml`).
 pub const STATE_DIR: &str = "/var/lib/system-gobloon";
 
 /// The systemd unit (`/etc/systemd/system/system-gobloon.service`). Stopping or a crash runs
@@ -39,12 +41,14 @@ WantedBy=multi-user.target
 /// What the requests work on, shared by the client threads.
 pub struct Service {
     pub hide: Arc<Mutex<hide::Hide>>,
+    pub virtuals: Mutex<virtuals::Virtuals>,
 }
 
 impl Service {
-    pub fn new(hide: hide::Hide) -> Arc<Service> {
+    pub fn new(hide: hide::Hide, virtuals: virtuals::Virtuals) -> Arc<Service> {
         Arc::new(Service {
             hide: Arc::new(Mutex::new(hide)),
+            virtuals: Mutex::new(virtuals),
         })
     }
 }

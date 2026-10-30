@@ -2034,6 +2034,7 @@ dependencies = [
 name = "gob-virtual"
 version = "0.6.0"
 dependencies = [
+ "gob-system",
  "gob-uinput",
  "gob-vjoy",
  "libc",
@@ -4443,6 +4444,8 @@ version = "0.6.0"
 dependencies = [
  "gob-input",
  "gob-system",
+ "gob-uinput",
+ "gob-virtual",
  "libc",
  "log",
  "serde",

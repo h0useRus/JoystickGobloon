@@ -6,7 +6,7 @@ fn main() {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
-    use system_gobloon::{Service, hide, journal, seat, server};
+    use system_gobloon::{Service, hide, journal, seat, server, virtuals};
 
     journal::init();
     let rule = Path::new(hide::RULE_PATH);
@@ -55,7 +55,11 @@ fn main() {
     if let Err(e) = hide.apply() {
         log::error!("hiding: {e}");
     }
-    let service = Service::new(hide);
+    let virtuals = virtuals::Virtuals::load(
+        Path::new(system_gobloon::STATE_DIR),
+        Box::new(virtuals::Uinput),
+    );
+    let service = Service::new(hide, virtuals);
     if let Err(e) = hide::watch(service.hide.clone()) {
         log::error!("watching device nodes: {e}");
     }

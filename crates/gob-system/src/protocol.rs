@@ -92,7 +92,7 @@ pub mod caps {
     pub const SESSION_HIDE: u32 = 1 << 1;
     /// Hidden devices are closed to every other program, raw HID included.
     pub const HIDE_EVERYWHERE: u32 = 1 << 2;
-    /// Virtual joysticks kept by the service.
+    /// Virtual joysticks kept by the service (layouts set without administrator rights).
     pub const VIRTUAL_JOYSTICKS: u32 = 1 << 3;
     /// Virtual gamepads kept by the service.
     pub const VIRTUAL_GAMEPADS: u32 = 1 << 4;
@@ -476,6 +476,255 @@ pub fn hidden_records(payload: &[u8]) -> Option<(HideState, impl Iterator<Item =
     Some((state, all))
 }
 
+/// Who has a virtual device, as the service sees the asking connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Owner {
+    Free = 0,
+    /// This connection.
+    You = 1,
+    /// Another connection.
+    Other = 2,
+}
+
+impl Owner {
+    pub fn from_u8(v: u8) -> Owner {
+        match v {
+            1 => Owner::You,
+            2 => Owner::Other,
+            _ => Owner::Free,
+        }
+    }
+}
+
+/// A virtual joystick's layout (and, in replies, who has it). Bytes: 0 id, 4 buttons, 6 axes
+/// (bit n = axis slot n + 1: X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1), 7 hats, 8 flags (bit 0:
+/// 4-direction hats), 9 owner ([`Owner`]), 10 reserved (2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct Joystick {
+    pub id: u32,
+    pub buttons: u16,
+    pub axes: u8,
+    pub hats: u8,
+    pub flags: u8,
+    pub owner: u8,
+    pub reserved: [u8; 2],
+}
+
+impl Joystick {
+    pub const DISCRETE_HATS: u8 = 1;
+}
+
+impl Record for Joystick {
+    const SIZE: usize = 12;
+
+    fn write(&self, out: &mut [u8]) {
+        put_u32(out, 0, self.id);
+        put_u16(out, 4, self.buttons);
+        out[6] = self.axes;
+        out[7] = self.hats;
+        out[8] = self.flags;
+        out[9] = self.owner;
+        out[10..12].copy_from_slice(&self.reserved);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        (b.len() >= Self::SIZE).then(|| Joystick {
+            id: get_u32(b, 0),
+            buttons: get_u16(b, 4),
+            axes: b[6],
+            hats: b[7],
+            flags: b[8],
+            owner: b[9],
+            reserved: [b[10], b[11]],
+        })
+    }
+}
+
+/// A virtual gamepad (fixed Xbox 360 layout). Bytes: 0 id, 4 owner ([`Owner`]), 5 reserved (3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct Gamepad {
+    pub id: u32,
+    pub owner: u8,
+    pub reserved: [u8; 3],
+}
+
+impl Record for Gamepad {
+    const SIZE: usize = 8;
+
+    fn write(&self, out: &mut [u8]) {
+        put_u32(out, 0, self.id);
+        out[4] = self.owner;
+        out[5..8].copy_from_slice(&self.reserved);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        (b.len() >= Self::SIZE).then(|| Gamepad {
+            id: get_u32(b, 0),
+            owner: b[4],
+            reserved: [b[5], b[6], b[7]],
+        })
+    }
+}
+
+/// Reply to [`Code::VirtualState`]: this record, `joysticks` [`Joystick`] records, then
+/// `gamepads` [`Gamepad`] records. Bytes: 0 joysticks, 4 gamepads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct VirtualState {
+    pub joysticks: u32,
+    pub gamepads: u32,
+}
+
+impl Record for VirtualState {
+    const SIZE: usize = 8;
+
+    fn write(&self, out: &mut [u8]) {
+        put_u32(out, 0, self.joysticks);
+        put_u32(out, 4, self.gamepads);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        (b.len() >= Self::SIZE).then(|| VirtualState {
+            joysticks: get_u32(b, 0),
+            gamepads: get_u32(b, 4),
+        })
+    }
+}
+
+/// The payload of a [`VirtualState`] reply; `None` when `out` is too small.
+pub fn write_virtual_state(
+    joysticks: &[Joystick],
+    gamepads: &[Gamepad],
+    out: &mut [u8],
+) -> Option<usize> {
+    let len =
+        VirtualState::SIZE + joysticks.len() * Joystick::SIZE + gamepads.len() * Gamepad::SIZE;
+    if out.len() < len {
+        return None;
+    }
+    VirtualState {
+        joysticks: joysticks.len() as u32,
+        gamepads: gamepads.len() as u32,
+    }
+    .write(out);
+    let mut at = VirtualState::SIZE;
+    for j in joysticks {
+        j.write(&mut out[at..]);
+        at += Joystick::SIZE;
+    }
+    for g in gamepads {
+        g.write(&mut out[at..]);
+        at += Gamepad::SIZE;
+    }
+    Some(len)
+}
+
+/// The records of a [`VirtualState`] reply, joysticks and gamepads in order.
+pub fn virtual_records(
+    payload: &[u8],
+) -> Option<(
+    impl Iterator<Item = Joystick> + '_,
+    impl Iterator<Item = Gamepad> + '_,
+)> {
+    let state = VirtualState::read(payload)?;
+    let (j, g) = (state.joysticks as usize, state.gamepads as usize);
+    let joysticks = payload.get(VirtualState::SIZE..VirtualState::SIZE + j * Joystick::SIZE)?;
+    let rest = VirtualState::SIZE + j * Joystick::SIZE;
+    let gamepads = payload.get(rest..rest + g * Gamepad::SIZE)?;
+    Some((
+        joysticks.chunks(Joystick::SIZE).filter_map(Joystick::read),
+        gamepads.chunks(Gamepad::SIZE).filter_map(Gamepad::read),
+    ))
+}
+
+/// What an [`ApplyVirtual`] does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ChangeKind {
+    /// Create or replace joystick `joystick.id` with that layout.
+    SetJoystick = 1,
+    DeleteJoystick = 2,
+    AddGamepad = 3,
+    DeleteGamepad = 4,
+}
+
+impl ChangeKind {
+    pub fn from_u8(v: u8) -> Option<ChangeKind> {
+        Some(match v {
+            1 => ChangeKind::SetJoystick,
+            2 => ChangeKind::DeleteJoystick,
+            3 => ChangeKind::AddGamepad,
+            4 => ChangeKind::DeleteGamepad,
+            _ => return None,
+        })
+    }
+}
+
+/// [`Code::ApplyVirtual`] request (empty reply; [`ErrorCode::Busy`] while someone has the
+/// device). Bytes: 0 kind ([`ChangeKind`]), 1 reserved (3), 4 joystick (the layout for
+/// `SetJoystick`; only its id for the others, gamepads included).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct ApplyVirtual {
+    pub kind: u8,
+    pub reserved: [u8; 3],
+    pub joystick: Joystick,
+}
+
+impl Record for ApplyVirtual {
+    const SIZE: usize = 4 + Joystick::SIZE;
+
+    fn write(&self, out: &mut [u8]) {
+        out[0] = self.kind;
+        out[1..4].copy_from_slice(&self.reserved);
+        self.joystick.write(&mut out[4..]);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        if b.len() < Self::SIZE {
+            return None;
+        }
+        Some(ApplyVirtual {
+            kind: b[0],
+            reserved: [b[1], b[2], b[3]],
+            joystick: Joystick::read(&b[4..])?,
+        })
+    }
+}
+
+/// [`Code::AcquireJoystick`], [`Code::AcquireGamepad`] and [`Code::Release`] request: a device.
+/// Acquiring replies empty with the device's descriptor (Linux: its uinput descriptor; write
+/// events to it); [`ErrorCode::Busy`] when another connection has it. Releasing centers it.
+/// Bytes: 0 gamepad (1: a gamepad, for `Release`), 1 reserved (3), 4 id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct VirtualRef {
+    pub gamepad: u8,
+    pub reserved: [u8; 3],
+    pub id: u32,
+}
+
+impl Record for VirtualRef {
+    const SIZE: usize = 8;
+
+    fn write(&self, out: &mut [u8]) {
+        out[0] = self.gamepad;
+        out[1..4].copy_from_slice(&self.reserved);
+        put_u32(out, 4, self.id);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        (b.len() >= Self::SIZE).then(|| VirtualRef {
+            gamepad: b[0],
+            reserved: [b[1], b[2], b[3]],
+            id: get_u32(b, 4),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -586,6 +835,61 @@ mod tests {
         let b: [u8; 64] = bytes(&r);
         assert_eq!(&b[..13], b"/dev/hidraw3\0");
         assert_eq!(OpenHidden::read(&b), Some(r));
+    }
+
+    #[test]
+    fn virtual_layout() {
+        let j = Joystick {
+            id: 2,
+            buttons: 95,
+            axes: 0b1100_0011,
+            hats: 4,
+            flags: Joystick::DISCRETE_HATS,
+            owner: Owner::You as u8,
+            reserved: [0; 2],
+        };
+        let b: [u8; 12] = bytes(&j);
+        assert_eq!(b, [2, 0, 0, 0, 95, 0, 0b1100_0011, 4, 1, 1, 0, 0]);
+        assert_eq!(Joystick::read(&b), Some(j));
+        let g = Gamepad {
+            id: 3,
+            owner: Owner::Other as u8,
+            reserved: [0; 3],
+        };
+        let b: [u8; 8] = bytes(&g);
+        assert_eq!(b, [3, 0, 0, 0, 2, 0, 0, 0]);
+
+        let mut out = [0; 8 + 2 * 12 + 8];
+        assert_eq!(
+            write_virtual_state(&[j, j], &[g], &mut out),
+            Some(out.len())
+        );
+        assert_eq!(&out[..8], &[2, 0, 0, 0, 1, 0, 0, 0]);
+        let (js, gs) = virtual_records(&out).unwrap();
+        assert_eq!(js.collect::<Vec<_>>(), [j, j]);
+        assert_eq!(gs.collect::<Vec<_>>(), [g]);
+        assert!(
+            virtual_records(&out[..out.len() - 1]).is_none(),
+            "gamepad cut off"
+        );
+
+        let a = ApplyVirtual {
+            kind: ChangeKind::SetJoystick as u8,
+            reserved: [0; 3],
+            joystick: j,
+        };
+        let b: [u8; 16] = bytes(&a);
+        assert_eq!(&b[..5], &[1, 0, 0, 0, 2]);
+        assert_eq!(ApplyVirtual::read(&b), Some(a));
+        assert_eq!(ChangeKind::from_u8(9), None);
+        let r = VirtualRef {
+            gamepad: 1,
+            reserved: [0; 3],
+            id: 4,
+        };
+        let b: [u8; 8] = bytes(&r);
+        assert_eq!(b, [1, 0, 0, 0, 4, 0, 0, 0]);
+        assert_eq!(Owner::from_u8(7), Owner::Free);
     }
 
     #[test]

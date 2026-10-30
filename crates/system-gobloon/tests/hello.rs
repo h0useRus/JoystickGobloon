@@ -3,7 +3,7 @@
 #![cfg(target_os = "linux")]
 
 use std::io;
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -14,6 +14,7 @@ use gob_system::protocol::{
 };
 use gob_system::{Client, Error};
 use system_gobloon::hide::{Hide, System};
+use system_gobloon::virtuals::{Factory, Held, Virtuals};
 use system_gobloon::{Service, server};
 
 /// One attached stick; records what the service did.
@@ -53,6 +54,46 @@ impl System for Fake {
     }
 }
 
+/// A kept device: a file stands in for its descriptor, events go to the log.
+struct FakeDevice {
+    name: String,
+    file: std::fs::File,
+    log: Arc<Mutex<Vec<String>>>,
+}
+
+impl Held for FakeDevice {
+    fn emit(&self, events: &[(u16, u16, i32)]) -> io::Result<()> {
+        let line = format!("{} {} events", self.name, events.len());
+        self.log.lock().unwrap().push(line);
+        Ok(())
+    }
+
+    fn fd(&self) -> BorrowedFd<'_> {
+        self.file.as_fd()
+    }
+}
+
+impl Factory for Fake {
+    fn joystick(&self, config: &gob_virtual::DeviceConfig) -> io::Result<Box<dyn Held>> {
+        self.device(format!("joystick {}", config.id))
+    }
+
+    fn gamepad(&self, id: u32) -> io::Result<Box<dyn Held>> {
+        self.device(format!("gamepad {id}"))
+    }
+}
+
+impl Fake {
+    fn device(&self, name: String) -> io::Result<Box<dyn Held>> {
+        self.log.lock().unwrap().push(format!("make {name}"));
+        Ok(Box::new(FakeDevice {
+            name,
+            file: std::fs::File::open(std::env::current_exe()?)?,
+            log: self.log.clone(),
+        }))
+    }
+}
+
 struct Started {
     socket: PathBuf,
     dir: PathBuf,
@@ -75,8 +116,9 @@ fn start(name: &str, allow: bool) -> Started {
         &dir.join("rules/72.rules"),
         Box::new(fake.clone()),
     );
+    let virtuals = Virtuals::load(&dir.join("state"), Box::new(fake.clone()));
     let listener = server::bind(&socket).unwrap();
-    let service = Service::new(hide);
+    let service = Service::new(hide, virtuals);
     std::thread::spawn(move || server::serve(listener, Arc::new(move |_| allow), service));
     Started { socket, dir, fake }
 }
@@ -95,9 +137,9 @@ fn hello_and_unsupported_requests() {
     assert_eq!(hello.protocol, PROTOCOL);
     assert_eq!(hello.service_version.as_str(), system_gobloon::VERSION);
     assert_ne!(hello.capabilities & caps::HIDE_EVERYWHERE, 0);
-    // Not there yet; the connection stays usable.
+    // Not a request; the connection stays usable.
     assert!(matches!(
-        client.call(Code::VirtualState, &[]),
+        client.call(Code::Error, &[]),
         Err(Error::Service(ErrorCode::Unsupported))
     ));
     assert!(client.hello("test").is_ok());
@@ -113,6 +155,7 @@ fn hello_and_unsupported_requests() {
 #[test]
 fn hiding_writes_state_and_rule() {
     let s = start("hide", true);
+    s.fake.log.lock().unwrap().clear();
     let mut client = Client::connect_to(&s.socket).unwrap();
     let stick = Hidden {
         id: Text::new("AAAA"),
@@ -202,6 +245,72 @@ fn hidden_nodes_are_handed_over() {
     assert!(client.open_hidden(Path::new("/dev/hidraw3")).is_ok());
     let (on, hidden) = client.hide_state().unwrap();
     assert!(on && hidden.len() == 1);
+}
+
+#[test]
+fn virtual_devices_are_kept_and_lent() {
+    use gob_system::protocol::{ApplyVirtual, ChangeKind, Owner};
+
+    let s = start("virtual", true);
+    // No layout file: one joystick, as without the service.
+    assert_eq!(*s.fake.log.lock().unwrap(), ["make joystick 1"]);
+    let mut a = Client::connect_to(&s.socket).unwrap();
+    let mut b = Client::connect_to(&s.socket).unwrap();
+    let (joysticks, gamepads) = a.virtual_state().unwrap();
+    assert_eq!(joysticks.len(), 1);
+    assert_eq!(joysticks[0].buttons, 95);
+    assert!(gamepads.is_empty());
+
+    let pad = |kind: ChangeKind, id| ApplyVirtual {
+        kind: kind as u8,
+        reserved: [0; 3],
+        joystick: gob_virtual::uinput::joystick_record(
+            &gob_virtual::DeviceConfig::new(id, &gob_virtual::capabilities()),
+            Owner::Free,
+        ),
+    };
+    a.apply_virtual(pad(ChangeKind::AddGamepad, 2)).unwrap();
+    let layout = std::fs::read_to_string(s.dir.join("state/virtual.toml")).unwrap();
+    assert!(layout.contains("[[gamepad]]"), "{layout}");
+
+    let fd = a.acquire(true, 2).unwrap();
+    drop(fd);
+    assert!(
+        matches!(b.acquire(true, 2), Err(Error::Service(ErrorCode::Busy))),
+        "a has it"
+    );
+    let (_, gamepads) = b.virtual_state().unwrap();
+    assert_eq!(gamepads[0].owner, Owner::Other as u8);
+    let (_, gamepads) = a.virtual_state().unwrap();
+    assert_eq!(gamepads[0].owner, Owner::You as u8);
+    assert!(
+        matches!(
+            b.apply_virtual(pad(ChangeKind::DeleteGamepad, 2)),
+            Err(Error::Service(ErrorCode::Busy))
+        ),
+        "in use: no change"
+    );
+
+    // a goes away: the gamepad is centered and free for b.
+    s.fake.log.lock().unwrap().clear();
+    drop(a);
+    let free = (0..100).any(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        b.acquire(true, 2).is_ok()
+    });
+    assert!(free);
+    let centered = format!(
+        "gamepad 2 {} events",
+        gob_virtual::uinput::gamepad_reset().len()
+    );
+    assert_eq!(s.fake.log.lock().unwrap()[0], centered);
+    b.release(true, 2).unwrap();
+    b.apply_virtual(pad(ChangeKind::DeleteGamepad, 2)).unwrap();
+    assert!(b.virtual_state().unwrap().1.is_empty());
+    assert!(matches!(
+        b.acquire(true, 2),
+        Err(Error::Service(ErrorCode::NotFound))
+    ));
 }
 
 #[test]

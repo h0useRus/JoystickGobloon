@@ -9,8 +9,9 @@ use std::path::Path;
 use std::{fmt, mem, ptr};
 
 use crate::protocol::{
-    Code, ErrorCode, ErrorReply, Header, Hello, HelloReply, Hidden, OpenHidden, Record, SetHidden,
-    SetHideEnabled, Text, hidden_records,
+    ApplyVirtual, Code, ErrorCode, ErrorReply, Gamepad, Header, Hello, HelloReply, Hidden,
+    Joystick, OpenHidden, Record, SetHidden, SetHideEnabled, Text, VirtualRef, hidden_records,
+    virtual_records,
 };
 
 /// Where the service listens.
@@ -260,6 +261,45 @@ impl Client {
         request.write(&mut payload);
         let (_, fd) = self.call(Code::OpenHidden, &payload)?;
         fd.ok_or(Error::Protocol("no descriptor"))
+    }
+
+    /// The service's virtual joysticks and gamepads, with who has them.
+    pub fn virtual_state(&mut self) -> Result<(Vec<Joystick>, Vec<Gamepad>), Error> {
+        let (reply, _) = self.call(Code::VirtualState, &[])?;
+        let (joysticks, gamepads) =
+            virtual_records(&reply).ok_or(Error::Protocol("short state"))?;
+        Ok((joysticks.collect(), gamepads.collect()))
+    }
+
+    /// Creates, replaces or deletes a virtual device.
+    pub fn apply_virtual(&mut self, change: ApplyVirtual) -> Result<(), Error> {
+        self.call_empty(Code::ApplyVirtual, &change)
+    }
+
+    /// Takes a virtual device: events written to the descriptor are the device's.
+    pub fn acquire(&mut self, gamepad: bool, id: u32) -> Result<OwnedFd, Error> {
+        let code = if gamepad {
+            Code::AcquireGamepad
+        } else {
+            Code::AcquireJoystick
+        };
+        let mut payload = vec![0; VirtualRef::SIZE];
+        virtual_ref(gamepad, id).write(&mut payload);
+        let (_, fd) = self.call(code, &payload)?;
+        fd.ok_or(Error::Protocol("no descriptor"))
+    }
+
+    /// Gives a virtual device back; the service centers it.
+    pub fn release(&mut self, gamepad: bool, id: u32) -> Result<(), Error> {
+        self.call_empty(Code::Release, &virtual_ref(gamepad, id))
+    }
+}
+
+fn virtual_ref(gamepad: bool, id: u32) -> VirtualRef {
+    VirtualRef {
+        gamepad: gamepad.into(),
+        reserved: [0; 3],
+        id,
     }
 }
 

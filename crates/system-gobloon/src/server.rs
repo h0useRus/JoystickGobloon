@@ -5,11 +5,12 @@ use std::os::fd::{AsFd, AsRawFd, OwnedFd};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, PoisonError};
 
 use gob_system::protocol::{
-    self, Code, ErrorCode, ErrorReply, Hello, HelloReply, Hidden, OpenHidden, PROTOCOL, Record,
-    SetHidden, SetHideEnabled, Text, caps,
+    self, ApplyVirtual, Code, ErrorCode, ErrorReply, Hello, HelloReply, Hidden, OpenHidden,
+    PROTOCOL, Record, SetHidden, SetHideEnabled, Text, VirtualRef, caps,
 };
 use gob_system::{Frame, recv, send};
 
@@ -69,8 +70,29 @@ fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
     Ok(cred.uid)
 }
 
+/// Numbers the connections, to know who has a virtual device.
+static NEXT_CONN: AtomicU64 = AtomicU64::new(1);
+
 fn client(stream: &UnixStream, policy: &Policy, service: &Service) -> io::Result<()> {
     let uid = peer_uid(stream)?;
+    let conn = NEXT_CONN.fetch_add(1, Ordering::Relaxed);
+    let result = requests(stream, uid, conn, policy, service);
+    // Gone (closed, crashed, refused): its virtual devices are centered and free again.
+    service
+        .virtuals
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .release_all(conn);
+    result
+}
+
+fn requests(
+    stream: &UnixStream,
+    uid: u32,
+    conn: u64,
+    policy: &Policy,
+    service: &Service,
+) -> io::Result<()> {
     while let Some(frame) = recv(stream)? {
         // Checked per request: the active user changes when users switch.
         if !policy(uid) {
@@ -78,7 +100,7 @@ fn client(stream: &UnixStream, policy: &Policy, service: &Service) -> io::Result
             return error(stream, ErrorCode::Denied);
         }
         let reply = if frame.protocol == PROTOCOL {
-            answer(uid, &frame, service)
+            answer(uid, conn, &frame, service)
         } else {
             Err(ErrorCode::Protocol)
         };
@@ -118,10 +140,43 @@ fn failed(what: &str, e: io::Error) -> ErrorCode {
 /// The reply payload of one request and the descriptor that goes with it.
 fn answer(
     uid: u32,
+    conn: u64,
     frame: &Frame,
     service: &Service,
 ) -> Result<(Vec<u8>, Option<OwnedFd>), ErrorCode> {
+    let virtuals = || {
+        service
+            .virtuals
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    };
     let reply = match Code::from_u16(frame.code) {
+        Some(code @ (Code::AcquireJoystick | Code::AcquireGamepad)) => {
+            let r: VirtualRef = read(frame)?;
+            let gamepad = code == Code::AcquireGamepad;
+            let fd = virtuals().acquire(conn, gamepad, r.id)?;
+            return Ok((Vec::new(), Some(fd)));
+        }
+        Some(Code::Release) => {
+            let r: VirtualRef = read(frame)?;
+            virtuals().release(conn, r.gamepad != 0, r.id);
+            Vec::new()
+        }
+        Some(Code::VirtualState) => {
+            let (joysticks, gamepads) = virtuals().state(conn);
+            let len = protocol::VirtualState::SIZE
+                + joysticks.len() * protocol::Joystick::SIZE
+                + gamepads.len() * protocol::Gamepad::SIZE;
+            let mut payload = vec![0; len];
+            protocol::write_virtual_state(&joysticks, &gamepads, &mut payload)
+                .ok_or(ErrorCode::Failed)?;
+            payload
+        }
+        Some(Code::ApplyVirtual) => {
+            let change: ApplyVirtual = read(frame)?;
+            virtuals().apply(&change)?;
+            Vec::new()
+        }
         Some(Code::OpenHidden) => {
             let open: OpenHidden = read(frame)?;
             let path = std::path::Path::new(open.path.as_str());
@@ -151,7 +206,9 @@ fn payload(uid: u32, frame: &Frame, service: &Service) -> Result<Vec<u8>, ErrorC
             Ok(record(&HelloReply {
                 protocol: PROTOCOL,
                 reserved: 0,
-                capabilities: caps::HIDE_EVERYWHERE,
+                capabilities: caps::HIDE_EVERYWHERE
+                    | caps::VIRTUAL_JOYSTICKS
+                    | caps::VIRTUAL_GAMEPADS,
                 service_version: Text::new(crate::VERSION),
             }))
         }

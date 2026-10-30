@@ -14,6 +14,17 @@ use std::sync::{Arc, OnceLock};
 
 #[cfg(target_os = "linux")]
 mod linux;
+
+/// Linux: the uinput devices as this crate makes them, for SystemGobloon, which keeps them (same
+/// names, ids, layouts and `virtual.gob` format) and lends them to the program.
+#[cfg(target_os = "linux")]
+pub mod uinput {
+    pub use crate::linux::service::{joystick_config, joystick_record};
+    pub use crate::linux::{
+        Layout, changed, create_gamepad, create_joystick, gamepad_reset, joystick_reset, parse,
+        to_text,
+    };
+}
 #[cfg(not(any(windows, target_os = "linux")))]
 mod unsupported;
 #[cfg(windows)]

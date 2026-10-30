@@ -12,6 +12,10 @@
 //! Gamepads ("Joystick Gobloon Gamepad N", `[[gamepad]]` in `virtual.gob`) have gob-uinput's
 //! fixed Xbox 360 layout and ids, so SDL, Steam and Proton take them for an Xbox controller;
 //! gob-input knows them as ours by the name.
+//!
+//! With SystemGobloon running, `service.rs` is used instead: the service keeps the devices (and
+//! their layouts) all the time and lends this program their uinput descriptors. It makes them
+//! with the same code ([`crate::uinput`]).
 
 use std::cell::Cell;
 use std::collections::HashSet;
@@ -99,7 +103,12 @@ fn owned<R>(f: impl FnOnce(&mut HashSet<Slot>) -> R) -> R {
     f(guard.get_or_insert_default())
 }
 
+pub(crate) mod service;
+
 pub fn load() -> Result<Arc<dyn Backend>, Error> {
+    if let Some(service) = service::Service::connect() {
+        return Ok(Arc::new(service));
+    }
     gob_uinput::available().map_err(|e| access_error(&e))?;
     Ok(Arc::new(Uinput))
 }
@@ -138,9 +147,9 @@ struct StoredGamepad {
 
 /// Every configured device: joysticks with their layouts, gamepad ids.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Layout {
-    devices: Vec<DeviceConfig>,
-    gamepads: Vec<u32>,
+pub struct Layout {
+    pub devices: Vec<DeviceConfig>,
+    pub gamepads: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,7 +200,7 @@ impl From<&StoredDevice> for DeviceConfig {
 }
 
 /// The text of `virtual.gob` -> configurations; without a file, one default joystick.
-fn parse(text: Option<&str>) -> Result<Layout, String> {
+pub fn parse(text: Option<&str>) -> Result<Layout, String> {
     let Some(text) = text else {
         return Ok(Layout {
             devices: vec![DeviceConfig::new(1, &CAPABILITIES)],
@@ -230,7 +239,7 @@ fn read_configs() -> Result<Layout, String> {
 }
 
 /// Configurations with the change applied.
-fn changed(mut layout: Layout, change: &Change) -> Result<Layout, String> {
+pub fn changed(mut layout: Layout, change: &Change) -> Result<Layout, String> {
     let configs = &mut layout.devices;
     match change {
         Change::Set(c) => {
@@ -257,7 +266,7 @@ fn changed(mut layout: Layout, change: &Change) -> Result<Layout, String> {
     Ok(layout)
 }
 
-fn to_text(layout: &Layout) -> Result<String, String> {
+pub fn to_text(layout: &Layout) -> Result<String, String> {
     let stored = Stored {
         devices: layout.devices.iter().map(StoredDevice::from).collect(),
         gamepads: layout
@@ -438,46 +447,128 @@ fn axis_value(value: f32) -> i32 {
     AXIS_MIN + (t * f64::from(AXIS_MAX - AXIS_MIN)).round() as i32
 }
 
+/// Where a device's events go: its own uinput device, or one SystemGobloon keeps and lends.
+enum Sink {
+    Own(VirtualDevice),
+    Lent(gob_uinput::Emitter),
+}
+
+impl Sink {
+    fn emit(&self, events: &[(u16, u16, i32)]) -> io::Result<()> {
+        match self {
+            Sink::Own(dev) => dev.emit(events),
+            Sink::Lent(emitter) => emitter.emit(events),
+        }
+    }
+}
+
+/// Runs when a lent device is dropped: gives it back to the service.
+type Release = Box<dyn FnOnce() + Send>;
+
+/// Makes joystick `config.id` with that layout.
+pub fn create_joystick(config: &DeviceConfig) -> io::Result<VirtualDevice> {
+    let axes: Vec<Axis> = AXIS_CODES
+        .iter()
+        .zip(config.axes)
+        .filter(|(_, on)| *on)
+        .map(|(&code, _)| Axis {
+            code,
+            min: AXIS_MIN,
+            max: AXIS_MAX,
+        })
+        .chain((0..config.hats as u16 * 2).map(|i| Axis {
+            code: codes::ABS_HAT0X + i,
+            min: -1,
+            max: 1,
+        }))
+        .collect();
+    let keys: Vec<u16> = (1..=config.buttons).filter_map(button_code).collect();
+    let name = Slot::Joystick(config.id).name();
+    let spec = Spec {
+        name: &name,
+        bus: codes::BUS_VIRTUAL,
+        vendor: VENDOR,
+        product: PRODUCT,
+        version: config.id as u16,
+        keys: &keys,
+        axes: &axes,
+        rel: &[],
+    };
+    VirtualDevice::create(&spec)
+}
+
+/// Makes gamepad `id`.
+pub fn create_gamepad(id: u32) -> io::Result<VirtualDevice> {
+    VirtualDevice::create(&gamepad::spec(&Slot::Gamepad(id).name()))
+}
+
+/// The events that center a joystick's axes and hats and release its buttons.
+pub fn joystick_reset(config: &DeviceConfig) -> Vec<(u16, u16, i32)> {
+    let mut events: Vec<(u16, u16, i32)> = AXIS_CODES
+        .iter()
+        .zip(config.axes)
+        .filter(|(_, on)| *on)
+        .map(|(&code, _)| (codes::EV_ABS, code, axis_value(0.0)))
+        .collect();
+    events.extend(
+        (1..=config.buttons)
+            .filter_map(button_code)
+            .map(|code| (codes::EV_KEY, code, 0)),
+    );
+    for n in 0..config.hats as u16 {
+        events.push((codes::EV_ABS, codes::ABS_HAT0X + n * 2, 0));
+        events.push((codes::EV_ABS, codes::ABS_HAT0Y + n * 2, 0));
+    }
+    events
+}
+
+/// The events that center a gamepad's sticks and d-pad and release its buttons and triggers.
+pub fn gamepad_reset() -> Vec<(u16, u16, i32)> {
+    let mut events: Vec<(u16, u16, i32)> = gamepad::BUTTONS
+        .iter()
+        .map(|&code| (codes::EV_KEY, code, 0))
+        .collect();
+    for c in GamepadControl::ALL {
+        let value = match c.kind() {
+            ControlKind::Stick => gamepad::stick(0.0),
+            ControlKind::Trigger => 0,
+            _ => continue,
+        };
+        events.extend(pad_code(c).map(|code| (codes::EV_ABS, code, value)));
+    }
+    events.extend([
+        (codes::EV_ABS, codes::ABS_HAT0X, 0),
+        (codes::EV_ABS, codes::ABS_HAT0Y, 0),
+    ]);
+    events
+}
+
 struct Device {
-    dev: VirtualDevice,
+    sink: Sink,
     config: DeviceConfig,
+    release: Option<Release>,
 }
 
 impl Device {
     fn create(config: DeviceConfig) -> io::Result<Self> {
-        let axes: Vec<Axis> = AXIS_CODES
-            .iter()
-            .zip(config.axes)
-            .filter(|(_, on)| *on)
-            .map(|(&code, _)| Axis {
-                code,
-                min: AXIS_MIN,
-                max: AXIS_MAX,
-            })
-            .chain((0..config.hats as u16 * 2).map(|i| Axis {
-                code: codes::ABS_HAT0X + i,
-                min: -1,
-                max: 1,
-            }))
-            .collect();
-        let keys: Vec<u16> = (1..=config.buttons).filter_map(button_code).collect();
-        let name = Slot::Joystick(config.id).name();
-        let spec = Spec {
-            name: &name,
-            bus: codes::BUS_VIRTUAL,
-            vendor: VENDOR,
-            product: PRODUCT,
-            version: config.id as u16,
-            keys: &keys,
-            axes: &axes,
-            rel: &[],
-        };
-        let dev = VirtualDevice::create(&spec)?;
-        Ok(Self { dev, config })
+        Ok(Self {
+            sink: Sink::Own(create_joystick(&config)?),
+            config,
+            release: None,
+        })
+    }
+
+    /// A device SystemGobloon keeps: events go to its descriptor, `release` gives it back.
+    fn lent(config: DeviceConfig, emitter: gob_uinput::Emitter, release: Release) -> Self {
+        Self {
+            sink: Sink::Lent(emitter),
+            config,
+            release: Some(release),
+        }
     }
 
     fn emit(&self, events: &[(u16, u16, i32)]) -> bool {
-        match self.dev.emit(events) {
+        match self.sink.emit(events) {
             Ok(()) => true,
             Err(e) => {
                 log::warn!("{}: {e}", Slot::Joystick(self.config.id).name());
@@ -517,27 +608,17 @@ impl crate::Device for Device {
     }
 
     fn reset(&self) -> bool {
-        let mut events: Vec<(u16, u16, i32)> = AXIS_CODES
-            .iter()
-            .zip(self.config.axes)
-            .filter(|(_, on)| *on)
-            .map(|(&code, _)| (codes::EV_ABS, code, axis_value(0.0)))
-            .collect();
-        events.extend(
-            (1..=self.config.buttons)
-                .filter_map(button_code)
-                .map(|code| (codes::EV_KEY, code, 0)),
-        );
-        for n in 1..=self.config.hats {
-            events.extend(self.hat_events(n, None));
-        }
-        self.emit(&events)
+        self.emit(&joystick_reset(&self.config))
     }
 }
 
 impl Drop for Device {
     fn drop(&mut self) {
-        // The kernel removes the device with `dev`; games see it unplugged.
+        // Own: the kernel removes the device with it, games see it unplugged. Lent: the service
+        // keeps it and centers it.
+        if let Some(release) = self.release.take() {
+            release();
+        }
         owned(|o| o.remove(&Slot::Joystick(self.config.id)));
     }
 }
@@ -620,24 +701,34 @@ fn dpad_bits((x, y): (i32, i32)) -> u8 {
 
 struct Pad {
     id: u32,
-    dev: VirtualDevice,
+    sink: Sink,
     /// D-pad directions held.
     dpad: Cell<u8>,
+    release: Option<Release>,
 }
 
 impl Pad {
     fn create(id: u32) -> io::Result<Self> {
-        let name = Slot::Gamepad(id).name();
-        let dev = VirtualDevice::create(&gamepad::spec(&name))?;
         Ok(Self {
             id,
-            dev,
+            sink: Sink::Own(create_gamepad(id)?),
             dpad: Cell::new(0),
+            release: None,
         })
     }
 
+    /// A gamepad SystemGobloon keeps, like [`Device::lent`].
+    fn lent(id: u32, emitter: gob_uinput::Emitter, release: Release) -> Self {
+        Self {
+            id,
+            sink: Sink::Lent(emitter),
+            dpad: Cell::new(0),
+            release: Some(release),
+        }
+    }
+
     fn emit(&self, events: &[(u16, u16, i32)]) -> bool {
-        match self.dev.emit(events) {
+        match self.sink.emit(events) {
             Ok(()) => true,
             Err(e) => {
                 log::warn!("{}: {e}", Slot::Gamepad(self.id).name());
@@ -687,30 +778,17 @@ impl crate::Gamepad for Pad {
     }
 
     fn reset(&self) -> bool {
-        let mut events: Vec<(u16, u16, i32)> = gamepad::BUTTONS
-            .iter()
-            .map(|&code| (codes::EV_KEY, code, 0))
-            .collect();
-        for c in GamepadControl::ALL {
-            let value = match c.kind() {
-                ControlKind::Stick => gamepad::stick(0.0),
-                ControlKind::Trigger => 0,
-                _ => continue,
-            };
-            events.extend(pad_code(c).map(|code| (codes::EV_ABS, code, value)));
-        }
         self.dpad.set(0);
-        events.extend([
-            (codes::EV_ABS, codes::ABS_HAT0X, 0),
-            (codes::EV_ABS, codes::ABS_HAT0Y, 0),
-        ]);
-        self.emit(&events)
+        self.emit(&gamepad_reset())
     }
 }
 
 impl Drop for Pad {
     fn drop(&mut self) {
-        // The kernel removes the device with `dev`; games see it unplugged.
+        // As for [`Device`].
+        if let Some(release) = self.release.take() {
+            release();
+        }
         owned(|o| o.remove(&Slot::Gamepad(self.id)));
     }
 }

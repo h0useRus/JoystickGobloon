@@ -39,7 +39,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   gob-input. Config = HID descriptors in HKLM\...\services\vjoy\Parameters\DeviceNN (descriptor.rs, vJoy 2.1.9
   layout), changed by `JoystickGobloon.exe --vjoy-config <vJoyConfig-style args>` run elevated (configure.rs).
   Examples `vjoy_info [--sweep <id>]` (read-only), `vjoy_config <args>` (UAC, changes the user's vJoy)
-- crates/gob-virtual virtual joysticks, the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
+- crates/gob-virtual virtual joysticks (linux/service.rs: through SystemGobloon when it runs, devices kept by the service,
+  `Emitter` writes to the lent uinput fd, virtual.gob moved there once), the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
   + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
   made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`; 95 buttons with joystick codes only,
   no gamepad codes or KEY_MAX, so SDL sees a joystick; example `virtual_hold` keeps one up for jstest/SDL checks),
@@ -62,6 +63,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   hide.rs = state in /var/lib/system-gobloon/hidden.toml, runtime rule /run/udev/rules.d/72-system-gobloon-hidden.rules
   (USB vendor/product/serial, root only), nodes closed directly + inotify watchdog, `--cleanup` = unit's ExecStopPost;
   gob-input `controller_nodes()` (Linux) lists each controller's event/js/hidraw nodes and USB serial for it;
+  virtuals.rs = joysticks/gamepads of /var/lib/system-gobloon/virtual.toml made at start and kept (gob-virtual's
+  `uinput` module makes them), lent per connection (uinput fd), centered on release or disconnect;
   tests/hello.rs runs it on a temp socket without root
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in

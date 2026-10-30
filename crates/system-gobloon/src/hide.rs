@@ -196,8 +196,10 @@ impl Hide {
         let text = rules(&self.state);
         if text.is_empty() {
             match std::fs::remove_file(&self.rule_path) {
-                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
-                _ => {}
+                // No rule before, none now: nothing for udev to do.
+                Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+                Err(e) => return Err(e),
+                Ok(()) => {}
             }
         } else {
             if let Some(dir) = self.rule_path.parent() {
