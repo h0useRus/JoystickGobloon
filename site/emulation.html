@@ -262,11 +262,11 @@
             <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
             <p>Linux needs no driver: the virtual joysticks are made by the kernel's uinput module. They use the same <span class="term">Virtual joysticks</span> page and the same profiles.</p>
             <ol class="numbered">
-              <li>On the Devices page, click <span class="term">Install</span> on the SystemGobloon banner and enter your password once. SystemGobloon is a small system service that comes with Joystick Gobloon: it keeps the virtual devices and hides sticks for every program, the way vJoy and HidHide do on Windows. You can also do it later under Settings, <span class="term">General</span>.</li>
+              <li>On the Devices page, click <span class="term">Install</span> on the System Gobloon banner and enter your password once. System Gobloon is a small system service that comes with Joystick Gobloon: it keeps the virtual devices and hides sticks for every program, the way vJoy and HidHide do on Windows. You can also do it later under Settings, <span class="term">General</span>.</li>
               <li>Add and set up devices on the <span class="term">Virtual joysticks</span> page as on Windows, with up to 8 axes, 95 buttons and 4 hats each. No password is needed for that.</li>
               <li>The devices are there all the time, as vJoy's are: start a game before or after Joystick Gobloon, stop and start profiles, and the game keeps them. With nothing writing to them they rest centered. Games see them as <span class="term">JoyGob 1</span>, <span class="term">JoyGob 2</span> and so on.</li>
             </ol>
-            <p>Without SystemGobloon, click <span class="term">Grant access</span> on the Devices page instead (also once, with your password): the devices then appear only while a profile is active and disappear when you stop it.</p>
+            <p>Without System Gobloon, click <span class="term">Grant access</span> on the Devices page instead (also once, with your password): the devices then appear only while a profile is active and disappear when you stop it.</p>
             <p>Unlike vJoy devices, each Linux joystick is a product of its own for games, so a game does not mix them up when their order changes. In the device editor, <span class="term">Name</span> sets the name games show; the <i class="ph ph-magic-wand" aria-hidden="true"></i> button suggests one: <span class="term">Gobloon</span> and the name of the stick the profile maps onto the device, or <span class="term">Gobloon Stick 1</span>, <span class="term">Gobloon Throttle 1</span> or <span class="term">Gobloon Panel 1</span> by its layout. <span class="term">Product ID</span> is normally picked from the device number; enter the ID of an earlier setup to keep a game's bindings. A game sees a renamed device as a new one.</p>
             <p>The same page also adds <strong>virtual gamepads</strong>, up to four, named <span class="term">GameGob 1</span> and so on. They have the layout of an Xbox 360 controller, so games, Steam and Proton take them for one: a game that only understands gamepads can be played with a stick through <a href="learn.html#map-to-gamepad">Map to gamepad</a>. Windows has no virtual gamepads yet.</p>
             <p>The Linux kernel passes on at most 80 buttons of a stick. For a stick with more, its tab on the Devices page offers <span class="term">Read all buttons</span>: after your password, Joystick Gobloon reads every button from the stick's raw HID device, numbered as on Windows, so profiles match. Programs that read raw devices, such as Steam or Proton, can then read that stick too, even while it is hidden: turn off Steam Input for it.</p>
@@ -308,13 +308,13 @@
 
           <article class="learn-action" id="hide-linux">
             <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
-            <p>Linux has no HidHide; SystemGobloon does its work. Hide sticks with the same eye buttons. With SystemGobloon installed (see <a href="#virtual-linux">virtual joysticks on Linux</a>):</p>
+            <p>Linux has no HidHide; System Gobloon does its work. Hide sticks with the same eye buttons. With System Gobloon installed (see <a href="#virtual-linux">virtual joysticks on Linux</a>):</p>
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>A hidden stick is closed to every program, games, Steam and Wine or Proton included, through all its device nodes, raw HID too. It stays hidden while Joystick Gobloon is closed and after you plug it in again or restart the computer.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Only Joystick Gobloon still reads it. There is no list of other programs that still see hidden devices.</span></li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Removing SystemGobloon (Settings, <span class="term">General</span>) shows the sticks again; Joystick Gobloon keeps the list of hidden sticks and goes on hiding them its own way.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Removing System Gobloon (Settings, <span class="term">General</span>) shows the sticks again; Joystick Gobloon keeps the list of hidden sticks and goes on hiding them its own way.</span></li>
             </ul>
-            <p>Without SystemGobloon, Joystick Gobloon reads a hidden stick <strong>exclusively</strong>: while the app runs, no other program gets input from it, games included.</p>
+            <p>Without System Gobloon, Joystick Gobloon reads a hidden stick <strong>exclusively</strong>: while the app runs, no other program gets input from it, games included.</p>
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Hiding lasts only while Joystick Gobloon runs. Close the app and every program sees the sticks again.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>There is no list of programs that still see hidden devices.</span></li>
