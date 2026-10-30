@@ -35,6 +35,33 @@ fn failed(e: ServiceError) -> Error {
     Error::Failed(e.to_string())
 }
 
+fn local_state(enabled: bool, hidden: &[Hidden]) -> State {
+    let devices = hidden
+        .iter()
+        .map(|h| super::Hidden {
+            id: h.id.as_str().to_string(),
+            name: h.name.as_str().to_string(),
+            vendor: h.vendor,
+            product: h.product,
+        })
+        .collect();
+    State { enabled, devices }
+}
+
+/// The service's hidden devices written to `hidden.gob` (it is about to be removed); without a
+/// running service, nothing.
+pub fn keep_locally() -> Result<(), String> {
+    let Ok(mut client) = Client::connect() else {
+        return Ok(());
+    };
+    let (enabled, hidden) = client.hide_state().map_err(|e| e.to_string())?;
+    super::write_state(&local_state(enabled, &hidden)).map_err(|e| e.to_string())?;
+    if let Some(path) = state_path() {
+        let _ = std::fs::remove_file(path.with_extension("gob.migrated"));
+    }
+    Ok(())
+}
+
 impl Service {
     /// The service, when it runs and hides; also sets gob-input's opener and the grabs.
     pub fn connect() -> Option<Service> {
@@ -88,16 +115,7 @@ impl Service {
     /// The service's state in the form of `hidden.gob`.
     fn state(&self) -> Result<State, Error> {
         let (enabled, hidden) = self.call(Client::hide_state)?;
-        let devices = hidden
-            .iter()
-            .map(|h| super::Hidden {
-                id: h.id.as_str().to_string(),
-                name: h.name.as_str().to_string(),
-                vendor: h.vendor,
-                product: h.product,
-            })
-            .collect();
-        Ok(State { enabled, devices })
+        Ok(local_state(enabled, &hidden))
     }
 
     /// Moves the devices hidden in `hidden.gob` to the service (when it hides nothing yet).

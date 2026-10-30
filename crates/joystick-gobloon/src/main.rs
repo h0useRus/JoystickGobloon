@@ -23,6 +23,7 @@ mod settings;
 mod settings_view;
 mod style;
 mod substitute_view;
+mod system_part_view;
 mod tray;
 mod update;
 mod viewer_view;

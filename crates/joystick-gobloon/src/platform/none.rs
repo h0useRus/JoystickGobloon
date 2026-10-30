@@ -119,6 +119,18 @@ impl super::Desktop for Desktop {
         Err("not supported on this system".into())
     }
 
+    fn system_part(_version: &str) -> super::SystemPart {
+        super::SystemPart::Unavailable
+    }
+
+    fn install_system_part() -> Result<(), String> {
+        Err("not supported on this system".into())
+    }
+
+    fn remove_system_part() -> Result<(), String> {
+        Err("not supported on this system".into())
+    }
+
     fn installed_copy(_exe_dir: &Path) -> bool {
         false
     }

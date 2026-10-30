@@ -10,8 +10,13 @@ pub mod protocol;
 
 #[cfg(all(feature = "std", target_os = "linux"))]
 mod platform {
+    pub mod install;
     pub mod linux;
 }
+
+/// Installing, updating and removing the service (Linux).
+#[cfg(all(feature = "std", target_os = "linux"))]
+pub use platform::install;
 
 #[cfg(all(feature = "std", target_os = "linux"))]
 pub use platform::linux::{Client, Error, Frame, SOCKET_PATH, recv, send};

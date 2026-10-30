@@ -57,6 +57,7 @@ pub struct JoystickGobloonApp {
     apps_view: AppsView,
     /// Banner for device access the user still has to grant (Linux).
     device_access: crate::device_access::DeviceAccess,
+    system_part: crate::system_part_view::SystemPartView,
     /// Running profile, if activated.
     /// New releases from GitHub (About page, check on start).
     updater: crate::update::Updater,
@@ -200,6 +201,7 @@ impl JoystickGobloonApp {
             hidhide_window: false,
             apps_view: AppsView::new(),
             device_access: crate::device_access::DeviceAccess::new(),
+            system_part: crate::system_part_view::SystemPartView::new(),
             activation,
             was_active: false,
             edited: None,
@@ -1126,7 +1128,34 @@ impl JoystickGobloonApp {
         )
     }
 
+    /// After the system part was installed or removed, the pages find their backends again
+    /// (the service's, or their own).
+    fn poll_system_part(&mut self) {
+        use crate::system_part_view::Job;
+        let Some((job, result)) = self.system_part.poll() else {
+            return;
+        };
+        match result {
+            Ok(()) => {
+                let key = match job {
+                    Job::Install => "system-installed",
+                    Job::Remove => "system-removed",
+                };
+                self.status = self.i18n.tr(key);
+                self.vjoy_view.release();
+                self.vjoy_view = VJoyView::new();
+                self.hidhide_view = HidHideView::new();
+                self.device_access = crate::device_access::DeviceAccess::new();
+            }
+            Err(e) => {
+                let text = self.i18n.trf("system-error", &[("error", e.into())]);
+                self.error(text);
+            }
+        }
+    }
+
     fn devices_page(&mut self, ui: &mut egui::Ui) {
+        self.system_part.banner(ui, &self.i18n);
         match self.device_access.show(ui, &self.i18n) {
             Some(Ok(())) => {
                 log::info!("device access granted");
@@ -1622,6 +1651,7 @@ impl eframe::App for JoystickGobloonApp {
         if self.page != Page::VJoy {
             self.vjoy_view.release();
         }
+        self.poll_system_part();
         let frame = egui::Frame::central_panel(&ctx.style()).inner_margin(16);
         egui::CentralPanel::default()
             .frame(frame)
@@ -1709,9 +1739,10 @@ impl eframe::App for JoystickGobloonApp {
                         &mut self.settings_tab,
                         &self.logo,
                         &mut self.updater,
-                        &settings_view::Attached {
+                        settings_view::Attached {
                             led_devices: &led_devices,
                             polls_devices: self.input.polls_devices(),
+                            system_part: &mut self.system_part,
                         },
                     );
                     if let Some(change) = change {

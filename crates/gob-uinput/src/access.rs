@@ -171,11 +171,11 @@ pub fn missing() -> bool {
         return false;
     }
     let uinput = crate::available().is_err();
-    uinput || controllers_unreadable()
+    uinput || controllers_missing()
 }
 
-/// Some game controller's event node exists but is not readable.
-fn controllers_unreadable() -> bool {
+/// Some game controller's event node exists but cannot be read.
+pub fn controllers_missing() -> bool {
     let Ok(dir) = std::fs::read_dir("/sys/class/input") else {
         return false;
     };

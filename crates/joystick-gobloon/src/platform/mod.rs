@@ -98,6 +98,14 @@ pub(crate) trait Desktop {
     /// passes on only some ([`gob_input::DeviceInfo::unread_buttons`]), with administrator
     /// rights. Blocking: call it off the GUI thread.
     fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String>;
+    /// The system part (SystemGobloon: hiding from every program, virtual devices that stay)
+    /// as it is here, compared with this program's `version`.
+    fn system_part(version: &str) -> SystemPart;
+    /// Installs, updates or starts it with administrator rights (the system asks) and waits
+    /// until it answers. Blocking: call it off the GUI thread.
+    fn install_system_part() -> Result<(), String>;
+    /// Removes it like [`Desktop::install_system_part`].
+    fn remove_system_part() -> Result<(), String>;
 
     /// The copy in `exe_dir` is managed by the system's installer (it updates through a new one).
     fn installed_copy(exe_dir: &Path) -> bool;
@@ -122,6 +130,24 @@ pub(crate) enum KeyboardAccess {
     Allowed,
     /// It may not; [`set_keyboard_access`] can allow it.
     Missing,
+}
+
+/// The system part ([`system_part`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) enum SystemPart {
+    /// Not on this system, or not shipped with this copy.
+    Unavailable,
+    NotInstalled,
+    /// Installed but not answering.
+    Stopped,
+    /// Another version than the program's runs.
+    Outdated {
+        version: String,
+    },
+    Current {
+        version: String,
+    },
 }
 
 /// What a later start signals to wake this copy.
@@ -243,6 +269,18 @@ pub(crate) fn grant_device_access() -> Result<(), String> {
 
 pub(crate) fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String> {
     Current::grant_all_buttons(vendor_id, product_id)
+}
+
+pub(crate) fn system_part(version: &str) -> SystemPart {
+    Current::system_part(version)
+}
+
+pub(crate) fn install_system_part() -> Result<(), String> {
+    Current::install_system_part()
+}
+
+pub(crate) fn remove_system_part() -> Result<(), String> {
+    Current::remove_system_part()
 }
 
 pub(crate) fn installed_copy(exe_dir: &Path) -> bool {

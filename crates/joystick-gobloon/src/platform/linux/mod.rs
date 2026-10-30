@@ -224,8 +224,14 @@ impl super::Desktop for Desktop {
         autostart::set(enabled, arg)
     }
 
+    /// With SystemGobloon running only controllers need access (it gives it too); virtual
+    /// devices come from the service.
     fn device_access_missing() -> bool {
-        gob_uinput::access::missing()
+        if gob_system::Client::connect().is_ok() {
+            gob_uinput::access::controllers_missing()
+        } else {
+            gob_uinput::access::missing()
+        }
     }
 
     fn grant_device_access() -> Result<(), String> {
@@ -235,6 +241,33 @@ impl super::Desktop for Desktop {
     /// The stick's hidraw node: buttons past 80 come from there.
     fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String> {
         gob_uinput::access::install_raw(vendor_id, product_id)
+    }
+
+    /// SystemGobloon, the systemd service shipped next to the program (in the AppImage too).
+    fn system_part(version: &str) -> super::SystemPart {
+        use super::SystemPart;
+        use gob_system::install::{self, Status};
+        let bundled = install::bundled_binary().is_some();
+        match install::status(version) {
+            Status::Unsupported => SystemPart::Unavailable,
+            Status::NotInstalled if bundled => SystemPart::NotInstalled,
+            Status::NotInstalled => SystemPart::Unavailable,
+            Status::Stopped => SystemPart::Stopped,
+            Status::Running { version: v } if v != version && bundled => {
+                SystemPart::Outdated { version: v }
+            }
+            Status::Running { version } => SystemPart::Current { version },
+        }
+    }
+
+    fn install_system_part() -> Result<(), String> {
+        let binary = gob_system::install::bundled_binary()
+            .ok_or("SystemGobloon is not next to the program")?;
+        gob_system::install::install(&binary)
+    }
+
+    fn remove_system_part() -> Result<(), String> {
+        gob_system::install::remove()
     }
 
     /// Started from an AppImage (it updates as one file).

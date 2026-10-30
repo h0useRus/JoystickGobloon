@@ -132,6 +132,15 @@ pub fn capabilities() -> Capabilities {
     };
 }
 
+/// Before a system service that keeps the hidden devices is removed: copies them into this
+/// program's own files, so hiding goes on without it. Nothing to do elsewhere.
+pub fn keep_locally() -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    return linux::service::keep_locally();
+    #[cfg(not(target_os = "linux"))]
+    Ok(())
+}
+
 static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// The program's data folder (next to its settings), where a backend that keeps its own files

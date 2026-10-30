@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Backend, Capabilities, Device, Error, Part};
 
-mod service;
+pub(crate) mod service;
 
 pub const CAPABILITIES: Capabilities = Capabilities {
     name: "Linux evdev",
@@ -38,6 +38,8 @@ pub fn load() -> Result<Arc<dyn Backend>, Error> {
         return Ok(Arc::new(service));
     }
     let hide = Grab;
+    // The service may have been removed since: nodes open as usual again.
+    gob_input::set_opener(None);
     // The stored state applies from the start, also before the window is opened.
     apply(&read_state()?);
     Ok(Arc::new(hide))

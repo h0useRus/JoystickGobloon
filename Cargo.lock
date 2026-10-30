@@ -2503,6 +2503,7 @@ dependencies = [
  "gob-i18n",
  "gob-input",
  "gob-lighting",
+ "gob-system",
  "gob-ui",
  "gob-uinput",
  "gob-virtual",

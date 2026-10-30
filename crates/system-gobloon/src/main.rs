@@ -46,6 +46,16 @@ fn main() {
         socket.display()
     );
 
+    match system_gobloon::write_access_rule(Path::new(system_gobloon::ACCESS_RULE_PATH)) {
+        Ok(true) => {
+            use system_gobloon::hide::System;
+            if let Err(e) = hide::Udev.trigger() {
+                log::error!("controller access: {e}");
+            }
+        }
+        Ok(false) => {}
+        Err(e) => log::error!("{}: {e}", system_gobloon::ACCESS_RULE_PATH),
+    }
     let mut hide = hide::Hide::load(
         Path::new(system_gobloon::STATE_DIR),
         rule,

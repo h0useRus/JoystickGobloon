@@ -64,7 +64,7 @@ jobs:
       - name: Build
         env:
           JOYSTICK_GOBLOON_VERSION: ${{ steps.version.outputs.version }}
-        run: cargo build --release -p joystick-gobloon
+        run: cargo build --release -p joystick-gobloon -p system-gobloon
 
       - name: AppImage
         run: sh tools/linux/appimage.sh "${{ steps.version.outputs.version }}" target/appimage target/release/JoystickGobloon

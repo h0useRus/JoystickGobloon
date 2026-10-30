@@ -4,7 +4,8 @@
 #   podman run --rm -v "${PWD}:/src:ro" -v joystick-gobloon-target:/target ... joystick-gobloon-linux
 #     sh /src/tools/linux/appimage.sh <version> /target/appimage /target/release/JoystickGobloon
 #
-# The AppImage carries the program, its extra languages and the desktop entry; GTK, the
+# The AppImage carries the program, SystemGobloon next to it (the program installs it as a
+# service from there), its extra languages and the desktop entry; GTK, the
 # AppIndicator and the X11/Wayland libraries come from the system (every desktop has them),
 # except BUNDLED: the window library loads them at run time, and systems with GTK may not
 # have them (the AppImage catalog's test machine does not).
@@ -14,6 +15,7 @@ set -eu
 VERSION=$1
 OUT=$2
 BIN=${3:-target/release/JoystickGobloon}
+SERVICE=$(dirname "$BIN")/SystemGobloon
 SRC=$(cd "$(dirname "$0")/../.." && pwd)
 
 TOOL_URL=https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
@@ -41,6 +43,7 @@ rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin/lang" "$APPDIR/usr/lib" "$APPDIR/usr/share/applications" \
     "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 install -m 755 "$BIN" "$APPDIR/usr/bin/JoystickGobloon"
+install -m 755 "$SERVICE" "$APPDIR/usr/bin/SystemGobloon"
 for lib in $BUNDLED; do
     path=$(/sbin/ldconfig -p | awk -v l="$lib" '$1 == l && /x86-64/ { print $NF; exit }')
     [ -n "$path" ] || { echo "$lib not found: install it on the build system" >&2; exit 1; }

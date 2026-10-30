@@ -79,6 +79,27 @@ pub fn joystick_config(j: &Joystick) -> DeviceConfig {
     }
 }
 
+/// The service's layouts written to `virtual.gob` (it is about to be removed); without a
+/// running service, nothing.
+pub fn keep_locally() -> Result<(), String> {
+    let Ok(mut client) = Client::connect() else {
+        return Ok(());
+    };
+    let (joysticks, gamepads) = client.virtual_state().map_err(|e| e.to_string())?;
+    let layout = super::Layout {
+        devices: joysticks.iter().map(joystick_config).collect(),
+        gamepads: gamepads.iter().map(|g| g.id).collect(),
+    };
+    let path = config_path().ok_or("no folder for the configuration")?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, super::to_text(&layout)?)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let _ = std::fs::remove_file(path.with_extension("gob.migrated"));
+    Ok(())
+}
+
 fn change_record(change: &Change) -> Option<ApplyVirtual> {
     let id_only = |id: u32| Joystick {
         id,
