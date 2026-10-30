@@ -244,7 +244,8 @@ impl Virtuals {
                 log::error!("{kind:?}: {e}");
                 ErrorCode::Failed
             })?;
-            log::info!("{kind:?} made");
+            // For the keyboard and mouse actions of the profile that runs.
+            log::info!("{kind:?} made (for keyboard and mouse actions)");
             self.devices.insert(key, Kept { held, owner: None });
         }
         let kept = self.devices.get_mut(&key).ok_or(ErrorCode::NotFound)?;

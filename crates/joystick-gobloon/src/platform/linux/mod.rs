@@ -268,11 +268,14 @@ impl super::Desktop for Desktop {
     fn install_system_part() -> Result<(), String> {
         let binary = gob_system::install::bundled_binary()
             .ok_or("System Gobloon is not next to the program")?;
-        gob_system::install::install(&binary)
+        // The service closes hidden sticks' raw HID nodes itself: the program's own rule for
+        // that would keep them closed after the service shows them again.
+        gob_system::install::install(&binary, &[gob_uinput::access::HIDDEN_RULE_PATH])
     }
 
     /// The rules the program's own hiding and devices need without the service are written in
-    /// the same step: one password.
+    /// the same step: one password. No hidden stick: the hidden-stick rule is deleted (one left
+    /// from before the service would keep a shown stick closed).
     fn remove_system_part() -> Result<(), String> {
         use gob_uinput::access;
         let hidden = access::hidden_rules(&gob_hide::closed_sticks());
@@ -280,7 +283,7 @@ impl super::Desktop for Desktop {
         if !std::path::Path::new(access::RULE_PATH).exists() {
             files.push((access::RULE_PATH, access::RULE));
         }
-        if !hidden.is_empty() {
+        if !hidden.is_empty() || std::path::Path::new(access::HIDDEN_RULE_PATH).exists() {
             files.push((access::HIDDEN_RULE_PATH, hidden.as_str()));
         }
         gob_system::install::remove(&files)

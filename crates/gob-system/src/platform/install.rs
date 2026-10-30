@@ -31,27 +31,39 @@ WantedBy=multi-user.target
 ";
 
 /// Copies the binary (`$1`), labels it a program for SELinux where there is one, writes the
-/// unit (`$2`), enables the service and (re)starts it.
+/// unit (`$2`), deletes the files the program needed without the service (the rest of the
+/// arguments, e.g. udev rules it replaces) and has udev apply that, enables the service and
+/// (re)starts it.
 const INSTALL_SCRIPT: &str = "set -e
 install -D -m 0755 \"$1\" /var/lib/system-gobloon/bin/SystemGobloon
 if command -v chcon >/dev/null 2>&1; then
     chcon -t bin_t /var/lib/system-gobloon/bin/SystemGobloon 2>/dev/null || true
 fi
 printf '%s' \"$2\" > /etc/systemd/system/system-gobloon.service
+shift 2
+if [ $# -gt 0 ]; then
+    rm -f \"$@\"
+    udevadm control --reload
+    udevadm trigger --action=change --subsystem-match=input
+    udevadm trigger --action=change --subsystem-match=hidraw
+fi
 systemctl daemon-reload
 systemctl enable system-gobloon.service
 systemctl restart system-gobloon.service";
 
 /// Stops and disables the service (its `--cleanup` shows hidden devices again), deletes the unit
 /// and the binary, writes the files the program needs without it (pairs of text `$1` and path
-/// `$2`, e.g. udev rules) and has udev apply them. The state (hidden devices, layouts) stays for
+/// `$2`, e.g. udev rules; an empty text deletes the file) and has udev apply them. The state (hidden devices, layouts) stays for
 /// a later install.
 const REMOVE_SCRIPT: &str = "systemctl disable --now system-gobloon.service
 rm -f /etc/systemd/system/system-gobloon.service
 systemctl daemon-reload
 rm -rf /var/lib/system-gobloon/bin
 rm -f /run/udev/rules.d/70-system-gobloon-access.rules
-while [ $# -ge 2 ]; do printf '%s' \"$1\" > \"$2\"; shift 2; done
+while [ $# -ge 2 ]; do
+    if [ -n \"$1\" ]; then printf '%s' \"$1\" > \"$2\"; else rm -f \"$2\"; fi
+    shift 2
+done
 udevadm control --reload
 udevadm trigger --action=change --subsystem-match=misc --sysname-match=uinput
 udevadm trigger --action=change --subsystem-match=input
@@ -95,15 +107,21 @@ pub fn bundled_binary() -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
-/// Installs or updates the service from `binary` and waits until it answers. Blocking until the
-/// user answered the password dialog: call it off the GUI thread.
-pub fn install(binary: &Path) -> Result<(), String> {
+/// Installs or updates the service from `binary` and waits until it answers; `obsolete` files
+/// (what the program needed without the service) are deleted in the same step. Blocking until
+/// the user answered the password dialog: call it off the GUI thread.
+pub fn install(binary: &Path, obsolete: &[&str]) -> Result<(), String> {
     // Root cannot read the AppImage's FUSE mount: a copy in the temporary folder can be read.
     let dir = private_dir().map_err(|e| format!("temporary folder: {e}"))?;
     let copy = dir.join(BIN_NAME);
     let result = std::fs::copy(binary, &copy)
         .map_err(|e| format!("{}: {e}", binary.display()))
-        .and_then(|_| pkexec(&[INSTALL_SCRIPT, "sh", &copy.to_string_lossy(), UNIT]));
+        .and_then(|_| {
+            let copy = copy.to_string_lossy();
+            let mut args = vec![INSTALL_SCRIPT, "sh", &copy, UNIT];
+            args.extend(obsolete);
+            pkexec(&args)
+        });
     let _ = std::fs::remove_dir_all(&dir);
     result?;
     let end = Instant::now() + Duration::from_secs(10);
@@ -116,8 +134,8 @@ pub fn install(binary: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Stops and removes the service, like [`install`]. `files` (path, text) are written in the same
-/// step, so the system asks for the password once.
+/// Stops and removes the service, like [`install`]. `files` (path, text; empty: deleted) are
+/// written in the same step, so the system asks for the password once.
 pub fn remove(files: &[(&str, &str)]) -> Result<(), String> {
     let mut args = vec![REMOVE_SCRIPT, "sh"];
     for (path, text) in files {
