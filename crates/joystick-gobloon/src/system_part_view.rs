@@ -163,7 +163,7 @@ impl SystemPartView {
             }
         };
         ui.add_space(18.0);
-        ui.label(RichText::new(format!("{}  SystemGobloon", icon::SHIELD_CHECK)).strong());
+        ui.label(RichText::new(format!("{}  System Gobloon", icon::SHIELD_CHECK)).strong());
         ui.add_space(4.0);
         ui.label(RichText::new(i18n.tr("system-about")).weak());
         ui.add_space(4.0);

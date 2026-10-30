@@ -103,7 +103,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   their window is a normal app window, or modal when it affects how the program works.
 - All user-visible strings go through i18n keys; add every key to all lang/*.ftl (en, ru, de, es, fr, ko, zh;
   gob-i18n's test checks it). Product names (Joystick Gobloon, vJoy, HidHide, Joystick Gremlin) stay untranslated.
-- The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words);
+- The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words); its system
+  part is "System Gobloon" there too (two words), `SystemGobloon` only in code, binary, unit and paths;
   Never "JoyGob"/"joygob" (it was only a chat nickname): not in code, identifiers, crate or file names, comments
   or docs. Code uses `joystick-gobloon` (crate), `JoystickGobloon` (types, exe and file names), `JOYSTICK_GOBLOON_`
   (env vars). Exception: default names of virtual devices are "JoyGob N" (joysticks) and "GameGob N" (gamepads).

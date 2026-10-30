@@ -264,7 +264,7 @@ impl super::Desktop for Desktop {
 
     fn install_system_part() -> Result<(), String> {
         let binary = gob_system::install::bundled_binary()
-            .ok_or("SystemGobloon is not next to the program")?;
+            .ok_or("System Gobloon is not next to the program")?;
         gob_system::install::install(&binary)
     }
 
