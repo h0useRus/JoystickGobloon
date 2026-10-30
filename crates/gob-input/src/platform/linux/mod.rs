@@ -12,8 +12,10 @@ mod hid;
 pub(crate) mod keyboard;
 
 use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use evdev::{ABS_CNT, Bits, Caps, EV_ABS, EV_KEY, EV_SYN, KEY_CNT, Node, SYN_DROPPED, SYN_REPORT};
@@ -469,6 +471,14 @@ pub(crate) struct Device {
     raw_pending: Option<(RawPlan, Instant)>,
 }
 
+/// Whether opening the raw HID node `path` went otherwise than last time: devices are opened
+/// on every scan (and for device lists), the log tells only what changed.
+fn raw_changed(path: &str, opened: bool) -> bool {
+    static LAST: Mutex<BTreeMap<String, bool>> = Mutex::new(BTreeMap::new());
+    let mut last = LAST.lock().unwrap_or_else(PoisonError::into_inner);
+    last.insert(path.to_string(), opened) != Some(opened)
+}
+
 impl Device {
     fn open(found: &Found, events: bool) -> io::Result<Self> {
         let node = Node::open(&found.path)?;
@@ -500,20 +510,24 @@ impl Device {
         let (raw, raw_pending) = match RawPlan::new(&hid_path, codes.len()) {
             Some(plan) => match plan.open() {
                 Ok(raw) => {
-                    log::info!(
-                        "{}: {} buttons read from {hid_path}",
-                        found.path.display(),
-                        plan.count
-                    );
+                    if raw_changed(&hid_path, true) {
+                        log::info!(
+                            "{}: {} buttons read from {hid_path}",
+                            found.path.display(),
+                            plan.count
+                        );
+                    }
                     (Some((raw, plan.count)), None)
                 }
                 Err(e) => {
-                    log::info!(
-                        "{}: buttons {}-{} need read access to {hid_path}: {e}",
-                        found.path.display(),
-                        codes.len() + 1,
-                        plan.count
-                    );
+                    if raw_changed(&hid_path, false) {
+                        log::info!(
+                            "{}: buttons {}-{} need read access to {hid_path}: {e}",
+                            found.path.display(),
+                            codes.len() + 1,
+                            plan.count
+                        );
+                    }
                     (None, Some((plan, Instant::now() + RAW_RETRY)))
                 }
             },
@@ -622,11 +636,13 @@ impl Device {
             return;
         };
         let count = plan.count;
-        log::info!(
-            "{}: {count} buttons read from {}",
-            self.state.info.name,
-            plan.path.display()
-        );
+        if raw_changed(&plan.path.to_string_lossy(), true) {
+            log::info!(
+                "{}: {count} buttons read from {}",
+                self.state.info.name,
+                plan.path.display()
+            );
+        }
         self.raw_pending = None;
         self.raw = Some(raw);
         self.buttons.fill(u8::MAX);
