@@ -141,6 +141,11 @@
             <li><a href="#applications">Programs that see hidden devices</a></li>
             <li><a href="#hide-linux">On Linux</a></li>
           </ul></li>
+          <li><a class="toc-group" href="#system-gobloon">System Gobloon</a><ul>
+            <li><a href="#system-gobloon-what">What it is</a></li>
+            <li><a href="#system-gobloon-linux">On Linux</a></li>
+            <li><a href="#system-gobloon-windows">On Windows</a></li>
+          </ul></li>
           <li><a class="toc-group" href="#setup">Putting it together</a><ul>
             <li><a href="#walkthrough">Step by step</a></li>
             <li><a href="#troubleshooting">When something is off</a></li>
@@ -321,6 +326,32 @@
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Programs that read raw HID (hidraw), such as Steam or Wine and Proton, can open a stick's hidraw node when your system allows it. Then hiding the stick asks for the administrator password once and closes that node too, until you show the stick again (this part stays while the app is closed). Restart programs that had the stick open already.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Without the password the stick gets a warning sign on its tab and in the device hiding window. Show and hide it again to be asked again, or turn off hidraw (or Steam Input) for that stick in those programs, or games see it twice.</span></li>
             </ul>
+          </article>
+        </section>
+
+        <section class="learn-group" id="system-gobloon" aria-labelledby="system-gobloon-title">
+          <h2 id="system-gobloon-title">System Gobloon</h2>
+          <article class="learn-action" id="system-gobloon-what">
+            <h3><i class="ph ph-shield-check" aria-hidden="true"></i>What it is</h3>
+            <p><strong>System Gobloon</strong> is the system part of Joystick Gobloon. Some of the work needs administrator rights: making virtual devices that stay while games run, and hiding real sticks from every program. System Gobloon does that work, so Joystick Gobloon itself runs as a normal program and never asks for your password again after it is installed.</p>
+            <p>It comes with Joystick Gobloon and has the same version. When the two differ after an update, the banner on the Devices page offers <span class="term">Update</span>. Settings, <span class="term">General</span> shows its state and can install, update or remove it.</p>
+          </article>
+
+          <article class="learn-action" id="system-gobloon-linux">
+            <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
+            <p>On Linux System Gobloon is a small system service. Click <span class="term">Install</span> on the banner on the Devices page and enter your password once; nothing else asks for it. It starts with the computer, before you log in.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Virtual devices.</strong> It makes the virtual joysticks and gamepads and keeps them all the time, centered while nothing writes to them. Joystick Gobloon borrows them while a profile runs; if the app closes or crashes, the devices stay and rest centered. Keyboard and mouse output of profiles goes through it too.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Hiding.</strong> A hidden stick is closed to every program, through all its device nodes, raw HID too, even while Joystick Gobloon is closed. Only Joystick Gobloon still reads it, and gets every button of sticks with more than 80.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Only you.</strong> It serves only the user at the computer's screen; other users and remote logins get nothing from it.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Safe to stop.</strong> When it stops, crashes or is removed, hidden sticks are visible again. Removing it keeps your list of hidden sticks and your virtual devices; Joystick Gobloon then goes on without it as described above.</span></li>
+            </ul>
+            <p>For the curious: the service is <code>system-gobloon.service</code>, its program and state live in <code>/var/lib/system-gobloon</code>, and <code>journalctl -u system-gobloon</code> shows what it did.</p>
+          </article>
+
+          <article class="learn-action" id="system-gobloon-windows">
+            <h3><i class="ph ph-windows-logo" aria-hidden="true"></i>On Windows</h3>
+            <p>On Windows, vJoy and HidHide do this work today. System Gobloon for Windows will be one driver in their place, with what Linux already has: each virtual stick with a name and product of its own, so games never mix them up. Windows loads only drivers signed through Microsoft, and that needs an extended validation certificate and a hardware developer account, paid every year. We are raising the money for that; if you would like System Gobloon on Windows, a <a href="https://www.paypal.com/paypalme/h0userus" rel="noopener">donation</a> brings it closer. Until then Joystick Gobloon keeps using vJoy and HidHide.</p>
           </article>
         </section>
 

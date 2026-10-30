@@ -56,7 +56,7 @@ imports Joystick Gremlin profiles and keeps the workflow you know.
 | --- | --- | --- |
 | Package | Installer (with the drivers) or portable zip, self-updating | AppImage, self-updating |
 | Virtual devices | vJoy joysticks | uinput joysticks and Xbox-style gamepads |
-| Device hiding | HidHide, for every program | Exclusive reading while the app runs |
+| Device hiding | HidHide, for every program | System Gobloon, for every program (or exclusive reading while the app runs) |
 
 Everything else — every action with a picture of its editor, Windows and Linux differences, the FAQ — is on the
 [website](https://h0userus.github.io/gobloon/).
@@ -69,8 +69,9 @@ signed **HidHide** and **vJoy 2.1.9.1** drivers when they are missing. Import yo
 **Map controls** on the Devices page if it was made on another PC) or start one with the **wizard** (the wand
 button), hide your sticks and press **Activate** (▶).
 
-**Linux (x86_64):** download `JoystickGobloon-<version>-x86_64.AppImage`, `chmod +x` it and start it. Click
-**Grant access** once on the Devices page, then import your profile or use the wizard as above.
+**Linux (x86_64):** download `JoystickGobloon-<version>-x86_64.AppImage`, make it executable (Properties →
+Executable as Program, or `chmod +x`) and start it. Click **Install** on the System Gobloon banner and enter your
+password once, then import your profile or use the wizard as above.
 
 Code signing through SignPath is being set up ([code signing policy](docs/CODE_SIGNING.md)); until then Windows
 SmartScreen may warn on the first start: *More info → Run anyway*.
