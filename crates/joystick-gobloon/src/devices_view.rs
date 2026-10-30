@@ -37,6 +37,9 @@ pub struct DevicesView {
     selected: Option<String>,
     /// The user picked the tab; otherwise a connected device is preferred.
     user_selected: bool,
+    /// The tab left because its device went away (e.g. while SystemGobloon restarts) and the
+    /// one shown instead: back to it when the device returns, unless another tab was picked.
+    left: Option<(String, String)>,
     mode: Option<String>,
     scroll_to: Option<(String, Key)>,
     /// Axis value when it last counted as moved (per device and axis).
@@ -312,9 +315,22 @@ impl DevicesView {
                 && !t.logical
                 && !is_keyboard(t)
         });
+        if let Some((was, instead)) = &self.left
+            && self.selected.as_ref() == Some(instead)
+        {
+            if tabs.iter().any(|t| t.guid == was && t.live.is_some()) {
+                self.selected = self.left.take().map(|(was, _)| was);
+            }
+        } else {
+            self.left = None;
+        }
         if !valid || (!self.user_selected && on_ghost) {
             let first = tabs.iter().find(|t| t.live.is_some()).or(tabs.first());
-            self.selected = first.map(|t| t.guid.to_string());
+            let instead = first.map(|t| t.guid.to_string());
+            if let (Some(was), Some(instead)) = (self.selected.take(), instead.clone()) {
+                self.left = Some((was, instead));
+            }
+            self.selected = instead;
         }
         if let Some(p) = profile {
             let modes = &p.profile.modes;
