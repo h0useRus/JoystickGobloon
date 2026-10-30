@@ -227,8 +227,10 @@ impl super::Desktop for Desktop {
     /// With SystemGobloon running only controllers need access (it gives it too); virtual
     /// devices come from the service.
     fn device_access_missing() -> bool {
+        // SystemGobloon gives the seat's user the controllers itself (its runtime rule), and the
+        // nodes of hidden sticks are closed on purpose: nothing to grant while it runs.
         if gob_system::Client::connect().is_ok() {
-            gob_uinput::access::controllers_missing()
+            false
         } else {
             gob_uinput::access::missing()
         }
