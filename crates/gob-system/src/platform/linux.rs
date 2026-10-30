@@ -3,7 +3,7 @@
 //! service too.
 
 use std::io::{self, Read, Write};
-use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::{fmt, mem, ptr};
@@ -181,6 +181,17 @@ impl Client {
         })
     }
 
+    /// The service at the other end is gone (stopped or restarted).
+    pub fn gone(&self) -> bool {
+        hung_up(self.stream.as_raw_fd())
+    }
+
+    /// Tells later, even after this connection is closed or replaced, whether the service it
+    /// talked to is gone: see [`Watch`].
+    pub fn watch(&self) -> io::Result<Watch> {
+        Ok(Watch(self.stream.as_fd().try_clone_to_owned()?))
+    }
+
     /// Sends a request and returns the reply's payload and descriptor; an error reply becomes
     /// [`Error::Service`].
     pub fn call(
@@ -290,6 +301,30 @@ impl Client {
     }
 }
 
+/// Watches the service a descriptor came from. A lent virtual device lives as long as any
+/// process holds its descriptor, so when the service stops or restarts the borrower keeps a
+/// copy of the device alive next to the new service's own: drop the descriptor once
+/// [`Watch::gone`] says so, and take the device again.
+pub struct Watch(OwnedFd);
+
+impl Watch {
+    pub fn gone(&self) -> bool {
+        hung_up(self.0.as_raw_fd())
+    }
+}
+
+/// The other end of the stream socket closed (asked without waiting).
+fn hung_up(fd: RawFd) -> bool {
+    let mut p = libc::pollfd {
+        fd,
+        events: libc::POLLRDHUP,
+        revents: 0,
+    };
+    // SAFETY: one valid pollfd; a zero timeout only asks.
+    let n = unsafe { libc::poll(&mut p, 1, 0) };
+    n > 0 && p.revents & (libc::POLLHUP | libc::POLLRDHUP | libc::POLLERR) != 0
+}
+
 fn virtual_ref(kind: DeviceKind, id: u32) -> VirtualRef {
     VirtualRef {
         kind: kind as u8,
@@ -302,7 +337,19 @@ fn virtual_ref(kind: DeviceKind, id: u32) -> VirtualRef {
 mod tests {
     use super::*;
     use std::io::Seek;
-    use std::os::fd::AsFd;
+
+    #[test]
+    fn watch_sees_the_service_go() {
+        let (client, service) = UnixStream::pair().unwrap();
+        let client = Client { stream: client };
+        let watch = client.watch().unwrap();
+        assert!(!client.gone() && !watch.gone());
+        // The connection is replaced on this side: the service is still there.
+        drop(client);
+        assert!(!watch.gone());
+        drop(service);
+        assert!(watch.gone());
+    }
 
     #[test]
     fn frames_carry_payload_and_descriptor() {

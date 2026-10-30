@@ -68,6 +68,12 @@ fn lent() -> Option<(Client, Sink, Sink)> {
 
 impl Devices {
     fn create(&mut self) {
+        // The service stopped or restarted: the lent descriptors would keep copies of its
+        // devices alive next to the new service's own.
+        if self.service.as_ref().is_some_and(Client::gone) {
+            log::info!("SystemGobloon stopped: keyboard and mouse given up");
+            (self.keyboard, self.mouse, self.service) = (None, None, None);
+        }
         if self.failed || (self.keyboard.is_some() && self.mouse.is_some()) {
             return;
         }

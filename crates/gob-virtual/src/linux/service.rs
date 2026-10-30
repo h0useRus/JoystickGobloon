@@ -284,7 +284,7 @@ impl Service {
     }
 
     /// Takes a device from the service; `release` gives it back when the handle is dropped.
-    fn lend(&self, slot: Slot) -> Result<(Emitter, super::Release), Error> {
+    fn lend(&self, slot: Slot) -> Result<(super::Lent, super::Release), Error> {
         let (kind, id) = match slot {
             Slot::Joystick(id) => (DeviceKind::Joystick, id),
             Slot::Gamepad(id) => (DeviceKind::Gamepad, id),
@@ -295,8 +295,14 @@ impl Service {
                 status: Status::Own,
             });
         }
-        let fd = match call(&self.client, |c| c.acquire(kind, id)) {
-            Ok(fd) => fd,
+        let client = self.client.clone();
+        let take = Box::new(move || {
+            call(&client, |c| {
+                Ok((Emitter::new(c.acquire(kind, id)?), c.watch()?))
+            })
+        });
+        let lent = match super::Lent::new(slot.name(), take) {
+            Ok(lent) => lent,
             Err(e) => {
                 owned(|o| o.remove(&slot));
                 return Err(unavailable(id, &e));
@@ -308,7 +314,7 @@ impl Service {
                 log::warn!("giving {} back: {e}", slot.name());
             }
         });
-        Ok((Emitter::new(fd), release))
+        Ok((lent, release))
     }
 }
 
@@ -363,8 +369,8 @@ impl Backend for Service {
                 id,
                 status: Status::Missing,
             })?;
-        let (emitter, release) = self.lend(Slot::Joystick(id))?;
-        Ok(Box::new(Device::lent(config, emitter, release)))
+        let (lent, release) = self.lend(Slot::Joystick(id))?;
+        Ok(Box::new(Device::lent(config, lent, release)))
     }
 
     fn read_config(&self) -> Result<Vec<DeviceConfig>, String> {
@@ -399,8 +405,8 @@ impl Backend for Service {
     }
 
     fn acquire_gamepad(&self, id: u32) -> Result<Box<dyn crate::Gamepad>, Error> {
-        let (emitter, release) = self.lend(Slot::Gamepad(id))?;
-        Ok(Box::new(Pad::lent(id, emitter, release)))
+        let (lent, release) = self.lend(Slot::Gamepad(id))?;
+        Ok(Box::new(Pad::lent(id, lent, release)))
     }
 }
 

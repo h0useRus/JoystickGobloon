@@ -19,4 +19,4 @@ mod platform {
 pub use platform::install;
 
 #[cfg(all(feature = "std", target_os = "linux"))]
-pub use platform::linux::{Client, Error, Frame, SOCKET_PATH, recv, send};
+pub use platform::linux::{Client, Error, Frame, SOCKET_PATH, Watch, recv, send};

@@ -19,13 +19,15 @@
 //! their layouts) all the time and lends this program their uinput descriptors. It makes them
 //! with the same code ([`crate::uinput`]).
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
-use gob_uinput::{Axis, Spec, VirtualDevice, codes, gamepad};
+use gob_system::Watch;
+use gob_uinput::{Axis, Emitter, Spec, VirtualDevice, codes, gamepad};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -468,14 +470,72 @@ fn axis_value(value: f32) -> i32 {
 /// Where a device's events go: its own uinput device, or one SystemGobloon keeps and lends.
 enum Sink {
     Own(VirtualDevice),
-    Lent(gob_uinput::Emitter),
+    Lent(RefCell<Lent>),
 }
 
 impl Sink {
     fn emit(&self, events: &[(u16, u16, i32)]) -> io::Result<()> {
         match self {
             Sink::Own(dev) => dev.emit(events),
-            Sink::Lent(emitter) => emitter.emit(events),
+            Sink::Lent(lent) => lent.borrow_mut().emit(events),
+        }
+    }
+}
+
+/// Takes a device from the service: its descriptor, and a watch on the service that lent it.
+type Take = Box<dyn Fn() -> Result<(Emitter, Watch), gob_system::Error> + Send>;
+
+/// How often a lent device asks whether the service that lent it still runs.
+const SERVICE_CHECK: Duration = Duration::from_millis(250);
+
+/// A device SystemGobloon keeps and lends. When the service stops or restarts, the old
+/// descriptor is dropped (it would keep a copy of the device alive next to the new service's
+/// own) and the device is taken again; events in between are lost.
+struct Lent {
+    name: String,
+    emitter: Option<(Emitter, Watch)>,
+    take: Take,
+    checked: Instant,
+    /// Taking it again failed since it was given up: logged once.
+    warned: bool,
+}
+
+impl Lent {
+    fn new(name: String, take: Take) -> Result<Self, gob_system::Error> {
+        Ok(Self {
+            name,
+            emitter: Some(take()?),
+            take,
+            checked: Instant::now(),
+            warned: false,
+        })
+    }
+
+    fn emit(&mut self, events: &[(u16, u16, i32)]) -> io::Result<()> {
+        if self.checked.elapsed() >= SERVICE_CHECK {
+            self.checked = Instant::now();
+            if self.emitter.as_ref().is_some_and(|(_, watch)| watch.gone()) {
+                log::info!("{}: SystemGobloon stopped, device given up", self.name);
+                self.emitter = None;
+            }
+            if self.emitter.is_none() {
+                match (self.take)() {
+                    Ok(taken) => {
+                        log::info!("{}: taken again from SystemGobloon", self.name);
+                        self.emitter = Some(taken);
+                        self.warned = false;
+                    }
+                    Err(e) if !self.warned => {
+                        log::warn!("{}: taking it again: {e}", self.name);
+                        self.warned = true;
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+        match &self.emitter {
+            Some((emitter, _)) => emitter.emit(events),
+            None => Ok(()),
         }
     }
 }
@@ -580,9 +640,9 @@ impl Device {
     }
 
     /// A device SystemGobloon keeps: events go to its descriptor, `release` gives it back.
-    fn lent(config: DeviceConfig, emitter: gob_uinput::Emitter, release: Release) -> Self {
+    fn lent(config: DeviceConfig, lent: Lent, release: Release) -> Self {
         Self {
-            sink: Sink::Lent(emitter),
+            sink: Sink::Lent(RefCell::new(lent)),
             config,
             release: Some(release),
         }
@@ -739,10 +799,10 @@ impl Pad {
     }
 
     /// A gamepad SystemGobloon keeps, like [`Device::lent`].
-    fn lent(id: u32, emitter: gob_uinput::Emitter, release: Release) -> Self {
+    fn lent(id: u32, lent: Lent, release: Release) -> Self {
         Self {
             id,
-            sink: Sink::Lent(emitter),
+            sink: Sink::Lent(RefCell::new(lent)),
             dpad: Cell::new(0),
             release: Some(release),
         }
