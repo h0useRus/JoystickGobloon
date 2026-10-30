@@ -23,6 +23,7 @@ use crate::{
 
 pub const CAPABILITIES: Capabilities = Capabilities {
     name: "SystemGobloon",
+    persistent: true,
     ..DIRECT
 };
 

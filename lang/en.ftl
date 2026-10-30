@@ -673,3 +673,5 @@ system-remove-text = Hidden sticks are then hidden only while Joystick Gobloon r
 system-installed = SystemGobloon is installed.
 system-removed = SystemGobloon is removed.
 system-error = SystemGobloon: { $error }
+vjoy-not-persistent = These devices exist only while a profile is active or a test holds them. SystemGobloon (General settings) keeps them all the time.
+hidhide-while-running = Devices are hidden only while Joystick Gobloon runs. SystemGobloon (General settings) hides them from every program, all the time.

@@ -681,3 +681,5 @@ system-remove-text = Тогда скрытые стики скрыты, толь
 system-installed = SystemGobloon установлена.
 system-removed = SystemGobloon удалена.
 system-error = SystemGobloon: { $error }
+vjoy-not-persistent = Эти устройства есть, только пока активен профиль или их держит проверка. SystemGobloon (настройки, «Общие») держит их всё время.
+hidhide-while-running = Устройства скрыты, только пока работает Joystick Gobloon. SystemGobloon (настройки, «Общие») скрывает их от всех программ всё время.

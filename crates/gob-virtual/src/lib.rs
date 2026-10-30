@@ -112,6 +112,9 @@ pub struct Capabilities {
     /// Each joystick can have its own name and product id ([`DeviceConfig::name`],
     /// [`DeviceConfig::product`]); vJoy names them all alike.
     pub custom_names: bool,
+    /// Devices exist all the time, not only while acquired (a profile runs or a test holds
+    /// them): games see them from their start.
+    pub persistent: bool,
 }
 
 /// No backend: nothing can be configured.
@@ -125,6 +128,7 @@ pub const NO_CAPABILITIES: Capabilities = Capabilities {
     switchable: false,
     needs_admin: false,
     custom_names: false,
+    persistent: false,
 };
 
 /// Vendor id of our virtual joysticks (vJoy's too).

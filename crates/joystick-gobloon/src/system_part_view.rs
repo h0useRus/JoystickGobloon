@@ -112,18 +112,19 @@ impl SystemPartView {
         }
     }
 
-    /// Devices page: offers the system part while it is not running in this program's version.
-    pub fn banner(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
+    /// Devices page: offers the system part while it is not running in this program's version;
+    /// whether it is shown.
+    pub fn banner(&mut self, ui: &mut egui::Ui, i18n: &I18n) -> bool {
         let text = match self.state().clone() {
             SystemPart::NotInstalled => i18n.tr("system-banner-install"),
             SystemPart::Stopped => i18n.tr("system-banner-stopped"),
             SystemPart::Outdated { version } => {
                 i18n.trf("system-banner-update", &[("version", version.into())])
             }
-            SystemPart::Unavailable | SystemPart::Current { .. } => return,
+            SystemPart::Unavailable | SystemPart::Current { .. } => return false,
         };
         if self.dismissed {
-            return;
+            return false;
         }
         let banner = egui::Frame::new()
             .fill(ui.visuals().faint_bg_color)
@@ -143,6 +144,7 @@ impl SystemPartView {
             });
         });
         ui.add_space(4.0);
+        true
     }
 
     /// Settings section: what runs, and the buttons to install, update or remove it.

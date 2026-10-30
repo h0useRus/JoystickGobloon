@@ -661,3 +661,5 @@ system-remove-text = 그러면 숨긴 스틱은 Joystick Gobloon이 실행 중�
 system-installed = SystemGobloon이 설치되었습니다.
 system-removed = SystemGobloon이 제거되었습니다.
 system-error = SystemGobloon: { $error }
+vjoy-not-persistent = 이 장치는 프로필이 활성이거나 테스트가 잡고 있을 때만 존재합니다. SystemGobloon(설정, 일반)은 항상 유지합니다.
+hidhide-while-running = 장치는 Joystick Gobloon이 실행 중일 때만 숨겨집니다. SystemGobloon(설정, 일반)은 항상 모든 프로그램에서 숨깁니다.

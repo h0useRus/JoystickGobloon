@@ -1155,8 +1155,14 @@ impl JoystickGobloonApp {
     }
 
     fn devices_page(&mut self, ui: &mut egui::Ui) {
-        self.system_part.banner(ui, &self.i18n);
-        match self.device_access.show(ui, &self.i18n) {
+        // Installing the system part gives the access too: one offer at a time.
+        let offered = self.system_part.banner(ui, &self.i18n);
+        let access = if offered {
+            None
+        } else {
+            self.device_access.show(ui, &self.i18n)
+        };
+        match access {
             Some(Ok(())) => {
                 log::info!("device access granted");
                 self.status = self.i18n.tr("access-granted");

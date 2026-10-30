@@ -661,3 +661,5 @@ system-remove-text = 之后隐藏的摇杆仅在 Joystick Gobloon 运行时隐�
 system-installed = SystemGobloon 已安装。
 system-removed = SystemGobloon 已移除。
 system-error = SystemGobloon：{ $error }
+vjoy-not-persistent = 这些设备仅在配置文件激活或测试占用时存在。SystemGobloon（设置，常规）会一直保留它们。
+hidhide-while-running = 设备仅在 Joystick Gobloon 运行时隐藏。SystemGobloon（设置，常规）会始终对所有程序隐藏它们。

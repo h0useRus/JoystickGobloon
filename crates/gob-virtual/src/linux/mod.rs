@@ -45,6 +45,8 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     // As many as XInput games handle.
     max_gamepads: 4,
     custom_names: true,
+    // Made on acquire, gone on release (SystemGobloon keeps them: `service.rs`).
+    persistent: false,
 };
 const GAMEPAD_PREFIX: &str = "GameGob ";
 const CONFIG_FILE: &str = "virtual.gob";

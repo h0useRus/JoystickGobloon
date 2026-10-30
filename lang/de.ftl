@@ -673,3 +673,5 @@ system-remove-text = Ausgeblendete Sticks sind dann nur ausgeblendet, solange Jo
 system-installed = SystemGobloon ist installiert.
 system-removed = SystemGobloon ist entfernt.
 system-error = SystemGobloon: { $error }
+vjoy-not-persistent = Diese Geräte gibt es nur, solange ein Profil aktiv ist oder ein Test sie hält. SystemGobloon (Einstellungen, Allgemein) hält sie ständig bereit.
+hidhide-while-running = Geräte sind nur ausgeblendet, solange Joystick Gobloon läuft. SystemGobloon (Einstellungen, Allgemein) blendet sie ständig für alle Programme aus.

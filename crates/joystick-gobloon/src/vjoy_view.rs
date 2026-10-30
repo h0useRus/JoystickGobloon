@@ -211,6 +211,9 @@ impl VJoyView {
             }
         });
         self.config.message(ui);
+        if !caps.persistent {
+            ui.label(RichText::new(i18n.tr("vjoy-not-persistent")).weak());
+        }
         ui.separator();
 
         // A created draft becomes a normal tab once the driver lists it.

@@ -20,6 +20,7 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     max_gamepads: 0,
     // One name and product id for every vJoy device, set by its driver.
     custom_names: false,
+    persistent: true,
 };
 
 pub fn load() -> Result<Arc<dyn Backend>, Error> {
