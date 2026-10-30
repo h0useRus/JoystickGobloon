@@ -60,9 +60,18 @@ pub struct Node {
 }
 
 impl Node {
-    /// Opens the device for non-blocking reads.
+    /// Opens the device for non-blocking reads; a hidden device's node through the opener.
     pub fn open(path: &Path) -> io::Result<Self> {
         let file = super::open_node(path)?;
+        Ok(Self {
+            file,
+            path: path.to_owned(),
+        })
+    }
+
+    /// Like [`Node::open`], but never asks the opener: for nodes that are never hidden.
+    pub fn open_direct(path: &Path) -> io::Result<Self> {
+        let file = super::open_direct(path)?;
         Ok(Self {
             file,
             path: path.to_owned(),

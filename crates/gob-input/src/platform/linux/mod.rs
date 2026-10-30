@@ -261,12 +261,7 @@ pub fn set_opener(opener: Option<Opener>) {
 
 /// Opens a device node for non-blocking reads; one closed to this user through the opener.
 fn open_node(path: &Path) -> io::Result<std::fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    let denied = match std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
-        .open(path)
-    {
+    let denied = match open_direct(path) {
         Err(e) if e.kind() == io::ErrorKind::PermissionDenied => e,
         other => return other,
     };
@@ -276,6 +271,15 @@ fn open_node(path: &Path) -> io::Result<std::fs::File> {
         // Not hidden (the service refuses) or no service: the system's answer stands.
         _ => Err(denied),
     }
+}
+
+/// Opens a device node for non-blocking reads as this user.
+fn open_direct(path: &Path) -> io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(path)
 }
 
 /// The USB device's product string (e.g. "VKBsim Gladiator EVO R"), the name Windows shows. The

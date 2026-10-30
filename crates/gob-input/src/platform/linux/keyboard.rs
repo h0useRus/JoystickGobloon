@@ -77,7 +77,8 @@ fn run(sink: &KeySink, stop: &AtomicBool) {
                 super::evdev::event_nodes()
                     .into_iter()
                     .filter(|p| !open.contains(p))
-                    .filter_map(|p| Node::open(&p).ok())
+                    // Keyboards are never hidden: no need to ask SystemGobloon for a node.
+                    .filter_map(|p| Node::open_direct(&p).ok())
                     .filter(is_keyboard),
             );
         }
