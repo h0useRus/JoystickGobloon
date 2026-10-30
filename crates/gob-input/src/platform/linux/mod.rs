@@ -934,11 +934,7 @@ mod tests {
         let serial = identity("ABC123", "anywhere", "VKB");
         assert_eq!(serial, identity("ABC123", "elsewhere", "VKB"));
         assert_eq!(
-            identity(
-                "",
-                "joystick-gobloon/joystick-2",
-                "Joystick Gobloon Joystick 2"
-            ),
+            identity("", "joystick-gobloon/joystick-2", "JoyGob 2"),
             identity("", "joystick-gobloon/joystick-2", "Gobloon Throttle"),
             "our devices keep their id when renamed"
         );

@@ -3,7 +3,7 @@
 //! device is kept in `virtual.gob` (TOML) in the data directory.
 //!
 //! Devices have vJoy's vendor 0x1234 and each its own product id from [`crate::PRODUCTS`] (games
-//! keep bindings by the SDL GUID, made from them), are named "Joystick Gobloon Joystick N" or
+//! keep bindings by the SDL GUID, made from them), are named "JoyGob N" or
 //! as set, and sit at `phys` "joystick-gobloon/joystick-N", by which gob-input knows them as our
 //! output and keeps their ids when they are renamed. Axes use the codes gob-input reads
 //! back into the same slots (X..Rz, throttle and rudder as the sliders). Buttons use joystick
@@ -11,7 +11,7 @@
 //! (SDL does not count it, #32): 1-16 `BTN_JOYSTICK`..., 17-79 `BTN_TRIGGER_HAPPY1-63`,
 //! 80-95 `BTN_0`..., the order in which SDL, joydev and gob-input count them.
 //!
-//! Gamepads ("Joystick Gobloon Gamepad N", `[[gamepad]]` in `virtual.gob`) have gob-uinput's
+//! Gamepads ("GameGob N", `[[gamepad]]` in `virtual.gob`) have gob-uinput's
 //! fixed Xbox 360 layout and ids, so SDL, Steam and Proton take them for an Xbox controller;
 //! gob-input knows them as ours by their `phys` "joystick-gobloon/gamepad-N".
 //!
@@ -46,7 +46,7 @@ pub const CAPABILITIES: Capabilities = Capabilities {
     max_gamepads: 4,
     custom_names: true,
 };
-const GAMEPAD_PREFIX: &str = "Joystick Gobloon Gamepad ";
+const GAMEPAD_PREFIX: &str = "GameGob ";
 const CONFIG_FILE: &str = "virtual.gob";
 /// Event codes of axis slots 1..=8.
 const AXIS_CODES: [u16; AXIS_SLOTS] = [
@@ -819,9 +819,9 @@ mod tests {
     #[test]
     fn gamepad_read_back_as_input_device() {
         use GamepadControl as C;
-        assert_eq!(gamepad_inputs("Joystick Gobloon Joystick 1"), None);
+        assert_eq!(gamepad_inputs("JoyGob 1"), None);
         assert_eq!(gamepad_inputs("Some Pad"), None);
-        let pad = gamepad_inputs("Joystick Gobloon Gamepad 2").unwrap();
+        let pad = gamepad_inputs("GameGob 2").unwrap();
         assert_eq!(
             pad.axes,
             [

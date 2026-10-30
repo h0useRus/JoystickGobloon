@@ -162,7 +162,7 @@ pub struct DeviceConfig {
     pub discrete_hats: bool,
     /// One flag per [`Capabilities::effects`] entry.
     pub effects: Vec<bool>,
-    /// The name games see; `None` = the backend's ("Joystick Gobloon Joystick N"). Only where
+    /// The name games see; `None` = the backend's ("JoyGob N"). Only where
     /// [`Capabilities::custom_names`].
     pub name: Option<String>,
     /// Product id; `None` = [`DeviceConfig::default_product`]. Only where
@@ -199,7 +199,7 @@ impl DeviceConfig {
 
     /// The name device `id` has unless one is set.
     pub fn default_name(id: u32) -> String {
-        format!("Joystick Gobloon Joystick {id}")
+        format!("JoyGob {id}")
     }
 }
 
