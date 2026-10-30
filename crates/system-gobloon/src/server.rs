@@ -186,7 +186,8 @@ fn answer(
                 io::ErrorKind::NotFound => ErrorCode::NotFound,
                 _ => failed(&path.to_string_lossy(), e),
             })?;
-            log::info!("uid {uid}: {} handed over", path.display());
+            // Asked again on every device scan of the client: not for the journal.
+            log::debug!("uid {uid}: {} handed over", path.display());
             return Ok((Vec::new(), Some(fd)));
         }
         _ => payload(uid, frame, service)?,

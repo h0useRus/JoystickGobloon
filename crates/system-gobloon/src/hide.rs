@@ -86,6 +86,10 @@ pub struct Hide {
     state_path: PathBuf,
     rule_path: PathBuf,
     system: Box<dyn System>,
+    /// The attached controllers as the last look found them ([`Hide::look`]). A look opens and
+    /// closes every input node, and closing one waits for the kernel (milliseconds each): it is
+    /// done when nodes come or go, not for every request.
+    attached: Vec<Nodes>,
 }
 
 impl Hide {
@@ -103,11 +107,13 @@ impl Hide {
                 State::default()
             }
         };
+        let attached = system.controllers();
         Hide {
             state,
             state_path,
             rule_path: rule_path.to_path_buf(),
             system,
+            attached,
         }
     }
 
@@ -117,7 +123,7 @@ impl Hide {
 
     /// The hidden devices, `present` when attached.
     pub fn hidden(&self) -> Vec<Hidden> {
-        let attached = self.system.controllers();
+        let attached = &self.attached;
         self.state
             .devices
             .iter()
@@ -154,11 +160,10 @@ impl Hide {
             .iter()
             .find(|d| d.id.eq_ignore_ascii_case(id));
         let serial = self
-            .system
-            .controllers()
-            .into_iter()
+            .attached
+            .iter()
             .find(|n| n.guid.eq_ignore_ascii_case(id))
-            .and_then(|n| n.usb_serial)
+            .and_then(|n| n.usb_serial.clone())
             .filter(|s| !s.is_empty())
             .or_else(|| known.and_then(|d| d.serial.clone()));
         self.state
@@ -212,13 +217,15 @@ impl Hide {
         Ok(())
     }
 
-    /// Closes the nodes of attached hidden devices that are open to others; returns how many.
-    pub fn enforce(&self) -> usize {
+    /// Looks again which controllers are attached, then closes the nodes of hidden ones that
+    /// are open to others; returns how many.
+    pub fn enforce(&mut self) -> usize {
+        self.look();
         if !self.state.enabled || self.state.devices.is_empty() {
             return 0;
         }
         let mut closed = 0;
-        for nodes in self.system.controllers() {
+        for nodes in &self.attached {
             if !self.is_hidden(&nodes.guid) {
                 continue;
             }
@@ -240,9 +247,8 @@ impl Hide {
     /// (the service hands out nothing else).
     pub fn open_hidden(&self, path: &Path) -> io::Result<OwnedFd> {
         let ours = self
-            .system
-            .controllers()
-            .into_iter()
+            .attached
+            .iter()
             .filter(|n| self.is_hidden(&n.guid))
             .any(|n| n.paths.iter().any(|p| p == path));
         if !ours {
@@ -252,6 +258,10 @@ impl Hide {
             ));
         }
         self.system.open(path)
+    }
+
+    fn look(&mut self) {
+        self.attached = self.system.controllers();
     }
 
     fn is_hidden(&self, id: &str) -> bool {
@@ -362,16 +372,27 @@ impl System for Udev {
             std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
             changed = true;
         }
+        // Only an access list that is there is removed: removing none succeeds on /dev too and
+        // touches the node, which the watch would see as a change and close it again, forever.
         let c_path = std::ffi::CString::new(path.as_os_str().as_bytes())?;
-        // SAFETY: valid NUL-terminated strings; removexattr only reads them.
-        let r = unsafe { libc::removexattr(c_path.as_ptr(), c"system.posix_acl_access".as_ptr()) };
-        if r == 0 {
-            changed = true;
-        } else {
+        let acl = c"system.posix_acl_access";
+        // SAFETY: valid NUL-terminated strings; a null buffer of size 0 asks only for the size.
+        let size =
+            unsafe { libc::getxattr(c_path.as_ptr(), acl.as_ptr(), std::ptr::null_mut(), 0) };
+        if size < 0 {
             let e = io::Error::last_os_error();
             if e.raw_os_error() != Some(libc::ENODATA) {
                 return Err(e);
             }
+        } else {
+            // SAFETY: as above; removexattr only reads the strings.
+            if unsafe { libc::removexattr(c_path.as_ptr(), acl.as_ptr()) } != 0 {
+                let e = io::Error::last_os_error();
+                if e.raw_os_error() != Some(libc::ENODATA) {
+                    return Err(e);
+                }
+            }
+            changed = true;
         }
         Ok(changed)
     }
@@ -386,9 +407,9 @@ fn udevadm(args: &[&str]) -> io::Result<()> {
     }
 }
 
-/// Watches `/dev` and `/dev/input` (inotify: nodes made, owner or mode changed) and closes hidden
-/// devices' nodes again when someone opened them: another rule, `setfacl`, a replugged device
-/// off USB. Runs until the process ends.
+/// Watches `/dev` and `/dev/input` (inotify: nodes made or gone, owner or mode changed), looks
+/// again which controllers are attached and closes hidden devices' nodes again when someone
+/// opened them: another rule, `setfacl`, a replugged device off USB. Runs until the process ends.
 pub fn watch(hide: Arc<Mutex<Hide>>) -> io::Result<()> {
     // SAFETY: plain syscalls on a descriptor we own; the buffer outlives every read.
     let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC) };
@@ -396,7 +417,7 @@ pub fn watch(hide: Arc<Mutex<Hide>>) -> io::Result<()> {
         return Err(io::Error::last_os_error());
     }
     for dir in [c"/dev", c"/dev/input"] {
-        let mask = libc::IN_ATTRIB | libc::IN_CREATE;
+        let mask = libc::IN_ATTRIB | libc::IN_CREATE | libc::IN_DELETE;
         if unsafe { libc::inotify_add_watch(fd, dir.as_ptr(), mask) } < 0 {
             log::warn!("watching {dir:?}: {}", io::Error::last_os_error());
         }
