@@ -133,6 +133,7 @@ fn info(d: gob_vjoy::DeviceInfo) -> DeviceInfo {
         buttons: d.buttons,
         cont_hats: d.cont_hats,
         disc_hats: d.disc_hats,
+        name: None,
     }
 }
 

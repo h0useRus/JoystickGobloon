@@ -274,7 +274,7 @@ impl VJoyView {
             for (d, glyph, status) in &tabs {
                 let caption = format!(
                     "{}    {} {}   {} {}   {} {}    {glyph}",
-                    i18n.trf("vjoy-device-n", &[("n", d.id.into())]),
+                    device_name(i18n, d),
                     icon::ARROWS_OUT_LINE_HORIZONTAL,
                     d.axes.len(),
                     icon::RADIO_BUTTON,
@@ -868,6 +868,7 @@ fn draft_info(c: &DeviceConfig, caps: &Capabilities) -> DeviceInfo {
         buttons: 0,
         cont_hats: 0,
         disc_hats: 0,
+        name: None,
     };
     preview(&base, c, caps)
 }
@@ -880,7 +881,21 @@ fn preview(info: &DeviceInfo, c: &DeviceConfig, caps: &Capabilities) -> DeviceIn
         buttons: c.buttons.min(caps.max_buttons),
         cont_hats: if c.discrete_hats { 0 } else { hats },
         disc_hats: if c.discrete_hats { hats } else { 0 },
+        name: caps.custom_names.then(|| {
+            c.name
+                .clone()
+                .unwrap_or_else(|| DeviceConfig::default_name(c.id))
+        }),
         ..info.clone()
+    }
+}
+
+/// How the program names a virtual device: its own name where devices have one, else
+/// "vJoy #N".
+pub fn device_name(i18n: &I18n, d: &DeviceInfo) -> String {
+    match &d.name {
+        Some(name) => name.clone(),
+        None => i18n.trf("vjoy-device-n", &[("n", d.id.into())]),
     }
 }
 

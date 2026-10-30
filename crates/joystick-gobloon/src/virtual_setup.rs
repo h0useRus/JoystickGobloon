@@ -151,6 +151,7 @@ mod tests {
             buttons,
             cont_hats: hats,
             disc_hats: 0,
+            name: None,
         }
     }
 

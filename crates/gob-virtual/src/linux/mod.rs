@@ -308,6 +308,11 @@ fn info(c: &DeviceConfig) -> DeviceInfo {
         buttons: c.buttons,
         cont_hats: if c.discrete_hats { 0 } else { c.hats },
         disc_hats: if c.discrete_hats { c.hats } else { 0 },
+        name: Some(
+            c.name
+                .clone()
+                .unwrap_or_else(|| DeviceConfig::default_name(c.id)),
+        ),
     }
 }
 

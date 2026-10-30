@@ -499,9 +499,11 @@ impl JoystickGobloonApp {
         let names: Vec<String> = changes
             .iter()
             .filter_map(|c| match c {
-                gob_virtual::Change::Set(c) => {
-                    Some(self.i18n.trf("vjoy-device-n", &[("n", c.id.into())]))
-                }
+                gob_virtual::Change::Set(c) => Some(match &c.name {
+                    Some(name) if caps.custom_names => name.clone(),
+                    _ if caps.custom_names => gob_virtual::DeviceConfig::default_name(c.id),
+                    _ => self.i18n.trf("vjoy-device-n", &[("n", c.id.into())]),
+                }),
                 gob_virtual::Change::AddGamepad(id) => {
                     Some(self.i18n.trf("gamepad-n", &[("n", (*id).into())]))
                 }

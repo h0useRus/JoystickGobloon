@@ -57,6 +57,9 @@ pub struct DeviceInfo {
     pub buttons: u32,
     pub cont_hats: u32,
     pub disc_hats: u32,
+    /// The name games see, where each device has its own ([`Capabilities::custom_names`]);
+    /// `None` where they are all alike (vJoy).
+    pub name: Option<String>,
 }
 
 impl DeviceInfo {
