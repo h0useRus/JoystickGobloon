@@ -11,7 +11,7 @@ mod service;
 
 /// Linux: device nodes of the controllers, for SystemGobloon.
 #[cfg(target_os = "linux")]
-pub use platform::{Nodes, controller_nodes};
+pub use platform::{Nodes, Opener, controller_nodes, set_opener};
 pub use service::{
     Calibrations, DEFAULT_POLL_INTERVAL, InputHandle, InputService, MAX_DEBOUNCE_MS, MAX_JITTER,
     MAX_POLL_INTERVAL, MIN_POLL_INTERVAL,

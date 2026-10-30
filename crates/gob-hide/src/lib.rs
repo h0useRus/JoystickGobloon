@@ -44,6 +44,8 @@ pub struct Capabilities {
     /// Programs can be listed to see hidden devices (or, inverted, not to): the Applications
     /// page and "whitelist Joystick Gobloon itself".
     pub app_list: bool,
+    /// Hidden devices are closed to every other program (no `Device::exposed` warnings).
+    pub hides_everywhere: bool,
 }
 
 /// One part of a [`Device`] (HidHide: a HID collection), to match input devices.
@@ -126,6 +128,7 @@ pub fn capabilities() -> Capabilities {
     return Capabilities {
         name: "",
         app_list: false,
+        hides_everywhere: false,
     };
 }
 

@@ -8,6 +8,9 @@
 //!
 //! The switch and the hidden devices are kept in `hidden.gob` (TOML) in the data directory;
 //! hidden devices stay listed while unplugged.
+//!
+//! With SystemGobloon running, `service.rs` is used instead: the service closes hidden devices
+//! to every program and keeps the state; this program still grabs them.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,15 +21,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Backend, Capabilities, Device, Error, Part};
 
+mod service;
+
 pub const CAPABILITIES: Capabilities = Capabilities {
     name: "Linux evdev",
     app_list: false,
+    hides_everywhere: false,
 };
 const STATE_FILE: &str = "hidden.gob";
 
 pub fn load() -> Result<Arc<dyn Backend>, Error> {
     if !gob_input::exclusive::supported() {
         return Err(Error::Unsupported);
+    }
+    if let Some(service) = service::Service::connect() {
+        return Ok(Arc::new(service));
     }
     let hide = Grab;
     // The stored state applies from the start, also before the window is opened.

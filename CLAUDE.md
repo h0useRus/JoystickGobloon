@@ -51,7 +51,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
   capabilities incl. `app_list`), `find_device` (input device -> hideable device); windows.rs = HidHide via
-  gob-hidhide, linux.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob
+  gob-hidhide, linux/mod.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob;
+  linux/service.rs = the same through SystemGobloon when it runs (`hides_everywhere`, nodes via gob-input's
+  `set_opener`, hidden.gob moved to the service once)
 - crates/gob-system  SystemGobloon protocol shared by the Linux service and the future Windows driver
   (protocol.rs: `no_std` fixed little-endian records with pinned offsets, request `Code`s, `caps` bits) + client;
   platform/linux.rs = Unix socket `/run/system-gobloon.sock`, descriptors in SCM_RIGHTS (`send`/`recv` shared)

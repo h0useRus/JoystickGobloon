@@ -15,6 +15,7 @@
 //! restarted.
 
 use std::io;
+use std::os::fd::OwnedFd;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
@@ -75,6 +76,8 @@ pub trait System: Send {
     fn trigger(&self) -> io::Result<()>;
     /// Makes a node root's alone; returns whether it was open to others.
     fn close(&self, path: &Path) -> io::Result<bool>;
+    /// Opens a node for non-blocking reads.
+    fn open(&self, path: &Path) -> io::Result<OwnedFd>;
 }
 
 /// The service's hiding state.
@@ -231,6 +234,24 @@ impl Hide {
         closed
     }
 
+    /// Opens a node of an attached hidden device for the client; `NotFound` for any other path
+    /// (the service hands out nothing else).
+    pub fn open_hidden(&self, path: &Path) -> io::Result<OwnedFd> {
+        let ours = self
+            .system
+            .controllers()
+            .into_iter()
+            .filter(|n| self.is_hidden(&n.guid))
+            .any(|n| n.paths.iter().any(|p| p == path));
+        if !ours {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "not a hidden device",
+            ));
+        }
+        self.system.open(path)
+    }
+
     fn is_hidden(&self, id: &str) -> bool {
         self.state
             .devices
@@ -314,6 +335,15 @@ impl System for Udev {
             "--subsystem-match=hidraw",
         ])?;
         udevadm(&["settle", "--timeout=5"])
+    }
+
+    fn open(&self, path: &Path) -> io::Result<OwnedFd> {
+        use std::os::unix::fs::OpenOptionsExt;
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+            .open(path)?;
+        Ok(file.into())
     }
 
     fn close(&self, path: &Path) -> io::Result<bool> {

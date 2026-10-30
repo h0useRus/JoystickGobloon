@@ -419,6 +419,29 @@ impl Record for SetHidden {
     }
 }
 
+/// [`Code::OpenHidden`] request: a node of an attached hidden device, which this user may no
+/// longer open (Linux: `/dev/input/eventN`, `/dev/input/jsN`, `/dev/hidrawN`). The reply is empty
+/// with the open descriptor (read-only, non-blocking) next to it. Bytes: 0 path (64).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct OpenHidden {
+    pub path: Text<64>,
+}
+
+impl Record for OpenHidden {
+    const SIZE: usize = 64;
+
+    fn write(&self, out: &mut [u8]) {
+        self.path.put(out, 0);
+    }
+
+    fn read(b: &[u8]) -> Option<Self> {
+        (b.len() >= Self::SIZE).then(|| OpenHidden {
+            path: Text::get(b, 0),
+        })
+    }
+}
+
 /// A [`HideState`] and its [`Hidden`] records as one payload; `None` when the records do not fit.
 pub fn write_hide_state(enabled: bool, hidden: &[Hidden], out: &mut [u8]) -> Option<usize> {
     let len = HideState::SIZE + hidden.len() * Hidden::SIZE;
@@ -553,6 +576,16 @@ mod tests {
             "one record missing"
         );
         assert_eq!(write_hide_state(true, &[h, h, h], &mut out), None);
+    }
+
+    #[test]
+    fn open_hidden_layout() {
+        let r = OpenHidden {
+            path: Text::new("/dev/hidraw3"),
+        };
+        let b: [u8; 64] = bytes(&r);
+        assert_eq!(&b[..13], b"/dev/hidraw3\0");
+        assert_eq!(OpenHidden::read(&b), Some(r));
     }
 
     #[test]

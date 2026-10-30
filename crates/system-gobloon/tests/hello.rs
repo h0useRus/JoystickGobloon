@@ -3,6 +3,7 @@
 #![cfg(target_os = "linux")]
 
 use std::io;
+use std::os::fd::OwnedFd;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -44,6 +45,11 @@ impl System for Fake {
             .unwrap()
             .push(format!("close {}", path.display()));
         Ok(true)
+    }
+
+    /// Any readable file stands in for the node.
+    fn open(&self, _path: &Path) -> io::Result<OwnedFd> {
+        Ok(std::fs::File::open(std::env::current_exe()?)?.into())
     }
 }
 
@@ -166,6 +172,36 @@ fn hiding_writes_state_and_rule() {
         client.call(Code::SetHidden, &[0; 3]),
         Err(Error::Service(ErrorCode::BadRequest))
     ));
+}
+
+#[test]
+fn hidden_nodes_are_handed_over() {
+    let s = start("open", true);
+    let mut client = Client::connect_to(&s.socket).unwrap();
+    let node = Path::new("/dev/input/event4");
+    let not_found =
+        |r: Result<OwnedFd, Error>| matches!(r, Err(Error::Service(ErrorCode::NotFound)));
+    assert!(not_found(client.open_hidden(node)), "not hidden");
+    let stick = Hidden {
+        id: Text::new("aaaa"),
+        name: Text::new("Stick"),
+        vendor: 0x044f,
+        product: 0xb10a,
+        present: 0,
+        reserved: [0; 3],
+    };
+    client.set_hidden(stick, true).unwrap();
+    let mut file = std::fs::File::from(client.open_hidden(node).unwrap());
+    let mut first = [0u8; 4];
+    io::Read::read_exact(&mut file, &mut first).unwrap();
+    assert_eq!(&first, b"\x7fELF", "the file the fake opened");
+    assert!(
+        not_found(client.open_hidden(Path::new("/etc/shadow"))),
+        "nothing else"
+    );
+    assert!(client.open_hidden(Path::new("/dev/hidraw3")).is_ok());
+    let (on, hidden) = client.hide_state().unwrap();
+    assert!(on && hidden.len() == 1);
 }
 
 #[test]

@@ -245,6 +245,36 @@ fn scale_axis(value: i32, min: i32, max: i32) -> i32 {
     (v * 65535 / (i64::from(max) - i64::from(min)) - 32768) as i32
 }
 
+/// Opens hidden devices' nodes for this user (see [`set_opener`]).
+pub type Opener = Box<dyn Fn(&Path) -> io::Result<std::os::fd::OwnedFd> + Send + Sync>;
+
+static OPENER: std::sync::RwLock<Option<Opener>> = std::sync::RwLock::new(None);
+
+/// Sets where nodes closed to this user come from: SystemGobloon hands out the nodes of hidden
+/// devices (gob-hide sets it when the service runs). `None`: such nodes stay closed.
+pub fn set_opener(opener: Option<Opener>) {
+    *OPENER.write().unwrap_or_else(|e| e.into_inner()) = opener;
+}
+
+/// Opens a device node for non-blocking reads; one closed to this user through the opener.
+fn open_node(path: &Path) -> io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let denied = match std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(path)
+    {
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => e,
+        other => return other,
+    };
+    let opener = OPENER.read().unwrap_or_else(|e| e.into_inner());
+    match opener.as_ref().map(|open| open(path)) {
+        Some(Ok(fd)) => Ok(fd.into()),
+        // Not hidden (the service refuses) or no service: the system's answer stands.
+        _ => Err(denied),
+    }
+}
+
 /// The USB device's product string (e.g. "VKBsim Gladiator EVO R"), the name Windows shows. The
 /// evdev name has the manufacturer in front ("VKB-Sim (C) Alex Oz 2023  VKBsim ..."), which
 /// would keep "Map controls" from matching profiles made on Windows. `None` for devices that

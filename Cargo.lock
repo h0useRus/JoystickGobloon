@@ -1967,6 +1967,7 @@ version = "0.6.0"
 dependencies = [
  "gob-hidhide",
  "gob-input",
+ "gob-system",
  "gob-uinput",
  "libc",
  "log",

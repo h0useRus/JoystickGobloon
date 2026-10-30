@@ -8,7 +8,10 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::{fmt, mem, ptr};
 
-use crate::protocol::{Code, ErrorCode, ErrorReply, Header, Hello, HelloReply, Record};
+use crate::protocol::{
+    Code, ErrorCode, ErrorReply, Header, Hello, HelloReply, Hidden, OpenHidden, Record, SetHidden,
+    SetHideEnabled, Text, hidden_records,
+};
 
 /// Where the service listens.
 pub const SOCKET_PATH: &str = "/run/system-gobloon.sock";
@@ -211,6 +214,52 @@ impl Client {
     /// Protocol version and capabilities of the service; `client_version` goes to its log.
     pub fn hello(&mut self, client_version: &str) -> Result<HelloReply, Error> {
         self.call_record(Code::Hello, &Hello::new(client_version))
+    }
+
+    /// Sends a record, expects an empty reply.
+    fn call_empty<Q: Record>(&mut self, code: Code, request: &Q) -> Result<(), Error> {
+        let mut payload = vec![0; Q::SIZE];
+        request.write(&mut payload);
+        self.call(code, &payload).map(|_| ())
+    }
+
+    /// Whether hiding is on, and the hidden devices.
+    pub fn hide_state(&mut self) -> Result<(bool, Vec<Hidden>), Error> {
+        let (reply, _) = self.call(Code::HideState, &[])?;
+        let (state, records) = hidden_records(&reply).ok_or(Error::Protocol("short state"))?;
+        Ok((state.enabled != 0, records.collect()))
+    }
+
+    pub fn set_hide_enabled(&mut self, on: bool) -> Result<(), Error> {
+        let request = SetHideEnabled {
+            enabled: on.into(),
+            reserved: [0; 3],
+        };
+        self.call_empty(Code::SetHideEnabled, &request)
+    }
+
+    pub fn set_hidden(&mut self, device: Hidden, hidden: bool) -> Result<(), Error> {
+        let request = SetHidden {
+            hidden: hidden.into(),
+            reserved: [0; 3],
+            device,
+        };
+        self.call_empty(Code::SetHidden, &request)
+    }
+
+    /// Opens a node of an attached hidden device, which this user cannot open itself.
+    pub fn open_hidden(&mut self, path: &Path) -> Result<OwnedFd, Error> {
+        let path = path.to_str().ok_or(Error::Protocol("path not UTF-8"))?;
+        if path.len() > 64 {
+            return Err(Error::Protocol("path too long"));
+        }
+        let request = OpenHidden {
+            path: Text::new(path),
+        };
+        let mut payload = vec![0; OpenHidden::SIZE];
+        request.write(&mut payload);
+        let (_, fd) = self.call(Code::OpenHidden, &payload)?;
+        fd.ok_or(Error::Protocol("no descriptor"))
     }
 }
 

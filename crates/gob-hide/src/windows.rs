@@ -12,6 +12,7 @@ pub const DOWNLOAD_URL: &str = "https://github.com/nefarius/HidHide/releases";
 pub const CAPABILITIES: Capabilities = Capabilities {
     name: "HidHide",
     app_list: true,
+    hides_everywhere: true,
 };
 
 pub fn load() -> Result<Arc<dyn Backend>, Error> {

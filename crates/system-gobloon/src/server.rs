@@ -1,15 +1,15 @@
 //! The socket: one thread per client, requests answered in order.
 
 use std::io;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsFd, AsRawFd, OwnedFd};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::sync::{Arc, PoisonError};
 
 use gob_system::protocol::{
-    self, Code, ErrorCode, ErrorReply, Hello, HelloReply, Hidden, PROTOCOL, Record, SetHidden,
-    SetHideEnabled, Text, caps,
+    self, Code, ErrorCode, ErrorReply, Hello, HelloReply, Hidden, OpenHidden, PROTOCOL, Record,
+    SetHidden, SetHideEnabled, Text, caps,
 };
 use gob_system::{Frame, recv, send};
 
@@ -83,11 +83,11 @@ fn client(stream: &UnixStream, policy: &Policy, service: &Service) -> io::Result
             Err(ErrorCode::Protocol)
         };
         match reply {
-            Ok(payload) => send(
+            Ok((payload, fd)) => send(
                 stream,
                 Code::from_u16(frame.code).unwrap_or(Code::Error),
                 &payload,
-                None,
+                fd.as_ref().map(AsFd::as_fd),
             )?,
             Err(code) => error(stream, code)?,
         }
@@ -115,8 +115,31 @@ fn failed(what: &str, e: io::Error) -> ErrorCode {
     ErrorCode::Failed
 }
 
-/// The reply payload of one request.
-fn answer(uid: u32, frame: &Frame, service: &Service) -> Result<Vec<u8>, ErrorCode> {
+/// The reply payload of one request and the descriptor that goes with it.
+fn answer(
+    uid: u32,
+    frame: &Frame,
+    service: &Service,
+) -> Result<(Vec<u8>, Option<OwnedFd>), ErrorCode> {
+    let reply = match Code::from_u16(frame.code) {
+        Some(Code::OpenHidden) => {
+            let open: OpenHidden = read(frame)?;
+            let path = std::path::Path::new(open.path.as_str());
+            let hide = service.hide.lock().unwrap_or_else(PoisonError::into_inner);
+            let fd = hide.open_hidden(path).map_err(|e| match e.kind() {
+                io::ErrorKind::NotFound => ErrorCode::NotFound,
+                _ => failed(&path.to_string_lossy(), e),
+            })?;
+            log::info!("uid {uid}: {} handed over", path.display());
+            return Ok((Vec::new(), Some(fd)));
+        }
+        _ => payload(uid, frame, service)?,
+    };
+    Ok((reply, None))
+}
+
+/// The reply payload of a request without a descriptor.
+fn payload(uid: u32, frame: &Frame, service: &Service) -> Result<Vec<u8>, ErrorCode> {
     let hide = || service.hide.lock().unwrap_or_else(PoisonError::into_inner);
     match Code::from_u16(frame.code) {
         Some(Code::Hello) => {

@@ -7,10 +7,9 @@
 //! the reports. Buttons are numbered by their HID usage like on Windows, so profiles count them
 //! the same way: usage 1 is button 1.
 
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io;
 use std::os::fd::{AsRawFd, RawFd};
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 /// HID usage page of buttons.
@@ -182,10 +181,7 @@ pub struct Raw {
 impl Raw {
     /// Opens `path` for non-blocking reads of the buttons in `layout`.
     pub fn open(path: &Path, layout: Layout) -> io::Result<Self> {
-        let file = OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
-            .open(path)?;
+        let file = super::open_node(path)?;
         Ok(Self { file, layout })
     }
 
