@@ -275,6 +275,7 @@
             <p>Unlike vJoy devices, each Linux joystick is a product of its own for games, so a game does not mix them up when their order changes. In the device editor, <span class="term">Name</span> sets the name games show; the <i class="ph ph-magic-wand" aria-hidden="true"></i> button suggests one: <span class="term">Gobloon</span> and the name of the stick the profile maps onto the device, or <span class="term">Gobloon Stick 1</span>, <span class="term">Gobloon Throttle 1</span> or <span class="term">Gobloon Panel 1</span> by its layout. <span class="term">Product ID</span> is normally picked from the device number; enter the ID of an earlier setup to keep a game's bindings. A game sees a renamed device as a new one.</p>
             <p>The same page also adds <strong>virtual gamepads</strong>, up to four, named <span class="term">GameGob 1</span> and so on. They have the layout of an Xbox 360 controller, so games, Steam and Proton take them for one: a game that only understands gamepads can be played with a stick through <a href="learn.html#map-to-gamepad">Map to gamepad</a>. Windows has no virtual gamepads yet.</p>
             <p>The Linux kernel passes on at most 80 buttons of a stick. With System Gobloon installed, Joystick Gobloon reads the rest by itself. Without it, the tab of a stick with more buttons on the Devices page offers <span class="term">Read all buttons</span>: after your password, Joystick Gobloon reads every button from the stick's raw HID device, numbered as on Windows, so profiles match. Programs that read raw devices, such as Steam or Proton, can then read that stick too, even while it is hidden: turn off Steam Input for it.</p>
+            <figure class="shot"><img src="img/linux-virtual.png" loading="lazy" width="1102" height="736" alt="Virtual joysticks page on Linux: System Gobloon runs, the buttons Add a virtual stick and Add a virtual gamepad at the top right, one row of tabs with three named virtual sticks and two gamepads, and the tester of Gamepad 1 below"></figure>
           </article>
 
           <article class="learn-action" id="test-output">
@@ -347,6 +348,7 @@
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Safe to stop.</strong> When it stops, crashes or is removed, hidden sticks are visible again. Removing it keeps your list of hidden sticks and your virtual devices; Joystick Gobloon then goes on without it as described above.</span></li>
             </ul>
             <p>For the curious: the service is <code>system-gobloon.service</code>, its program and state live in <code>/var/lib/system-gobloon</code>, and <code>journalctl -u system-gobloon</code> shows what it did.</p>
+            <figure class="shot"><img src="img/linux-system-gobloon.png" loading="lazy" width="1102" height="825" alt="Settings, General: the System Gobloon section at the bottom says which version runs, with a Remove button"></figure>
           </article>
 
           <article class="learn-action" id="system-gobloon-windows">
