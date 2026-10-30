@@ -162,8 +162,8 @@ fn record(id: &str, name: &str, vendor: u16, product: u16) -> Hidden {
     }
 }
 
-/// gob-input's opener: nodes of hidden devices from the service, on a connection of its own (the
-/// input thread asks while the GUI may be using the other one).
+/// gob-input's opener: nodes of hidden controllers and raw HID nodes from the service, on a
+/// connection of its own (the input thread asks while the GUI may be using the other one).
 fn opener() -> gob_input::Opener {
     let client: Mutex<Option<Client>> = Mutex::new(None);
     Box::new(move |path| {
@@ -178,7 +178,7 @@ fn opener() -> gob_input::Opener {
         let Some(c) = client.as_mut() else {
             return Err(std::io::ErrorKind::NotConnected.into());
         };
-        c.open_hidden(path).map_err(|e| {
+        c.open_node(path).map_err(|e| {
             if matches!(e, ServiceError::Io(_)) {
                 *client = None;
             }

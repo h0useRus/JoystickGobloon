@@ -83,6 +83,9 @@ pub struct DevicesView {
     all_buttons: crate::device_access::AllButtons,
     /// An all buttons request finished. The app reports it.
     pub all_buttons_result: Option<Result<(), String>>,
+    /// The system part is offered above (it reads every button too): no banner of our own, so
+    /// the first start asks for the password once. Set by the app.
+    pub system_part_offered: bool,
 }
 
 struct Tab<'a> {
@@ -671,6 +674,7 @@ impl DevicesView {
         empty: bool,
     ) {
         if let Some(d) = tab.live
+            && !self.system_part_offered
             && let Some(done) = self.all_buttons.banner(ui, i18n, &d.info)
         {
             self.all_buttons_result = Some(done);

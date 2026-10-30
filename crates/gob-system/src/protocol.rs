@@ -22,7 +22,7 @@ pub enum Code {
     HideState = 0x0100,
     SetHideEnabled = 0x0101,
     SetHidden = 0x0102,
-    OpenHidden = 0x0103,
+    OpenNode = 0x0103,
     VirtualState = 0x0200,
     ApplyVirtual = 0x0201,
     Acquire = 0x0202,
@@ -36,7 +36,7 @@ impl Code {
         Code::HideState,
         Code::SetHideEnabled,
         Code::SetHidden,
-        Code::OpenHidden,
+        Code::OpenNode,
         Code::VirtualState,
         Code::ApplyVirtual,
         Code::Acquire,
@@ -444,16 +444,17 @@ impl Record for SetHidden {
     }
 }
 
-/// [`Code::OpenHidden`] request: a node of an attached hidden device, which this user may no
-/// longer open (Linux: `/dev/input/eventN`, `/dev/input/jsN`, `/dev/hidrawN`). The reply is empty
-/// with the open descriptor (read-only, non-blocking) next to it. Bytes: 0 path (64).
+/// [`Code::OpenNode`] request: a node of an attached controller which this user may not open,
+/// hidden or its raw HID node (Linux: `/dev/input/eventN`, `/dev/input/jsN`, `/dev/hidrawN`).
+/// Any other path is refused (`NotFound`). The reply is empty with the open descriptor
+/// (read-only, non-blocking) next to it. Bytes: 0 path (64).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
-pub struct OpenHidden {
+pub struct OpenNode {
     pub path: Text<64>,
 }
 
-impl Record for OpenHidden {
+impl Record for OpenNode {
     const SIZE: usize = 64;
 
     fn write(&self, out: &mut [u8]) {
@@ -461,7 +462,7 @@ impl Record for OpenHidden {
     }
 
     fn read(b: &[u8]) -> Option<Self> {
-        (b.len() >= Self::SIZE).then(|| OpenHidden {
+        (b.len() >= Self::SIZE).then(|| OpenNode {
             path: Text::get(b, 0),
         })
     }
@@ -857,13 +858,13 @@ mod tests {
     }
 
     #[test]
-    fn open_hidden_layout() {
-        let r = OpenHidden {
+    fn open_node_layout() {
+        let r = OpenNode {
             path: Text::new("/dev/hidraw3"),
         };
         let b: [u8; 64] = bytes(&r);
         assert_eq!(&b[..13], b"/dev/hidraw3\0");
-        assert_eq!(OpenHidden::read(&b), Some(r));
+        assert_eq!(OpenNode::read(&b), Some(r));
     }
 
     #[test]

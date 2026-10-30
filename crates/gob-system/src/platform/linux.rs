@@ -10,7 +10,7 @@ use std::{fmt, mem, ptr};
 
 use crate::protocol::{
     ApplyVirtual, Code, DeviceKind, ErrorCode, ErrorReply, Gamepad, Header, Hello, HelloReply,
-    Hidden, Joystick, OpenHidden, Record, SetHidden, SetHideEnabled, Text, VirtualRef,
+    Hidden, Joystick, OpenNode, Record, SetHidden, SetHideEnabled, Text, VirtualRef,
     hidden_records, virtual_records,
 };
 
@@ -259,18 +259,19 @@ impl Client {
         self.call_empty(Code::SetHidden, &request)
     }
 
-    /// Opens a node of an attached hidden device, which this user cannot open itself.
-    pub fn open_hidden(&mut self, path: &Path) -> Result<OwnedFd, Error> {
+    /// Opens a node of an attached controller which this user cannot open itself: hidden, or
+    /// its raw HID node.
+    pub fn open_node(&mut self, path: &Path) -> Result<OwnedFd, Error> {
         let path = path.to_str().ok_or(Error::Protocol("path not UTF-8"))?;
         if path.len() > 64 {
             return Err(Error::Protocol("path too long"));
         }
-        let request = OpenHidden {
+        let request = OpenNode {
             path: Text::new(path),
         };
-        let mut payload = vec![0; OpenHidden::SIZE];
+        let mut payload = vec![0; OpenNode::SIZE];
         request.write(&mut payload);
-        let (_, fd) = self.call(Code::OpenHidden, &payload)?;
+        let (_, fd) = self.call(Code::OpenNode, &payload)?;
         fd.ok_or(Error::Protocol("no descriptor"))
     }
 
@@ -356,11 +357,11 @@ mod tests {
         let (a, b) = UnixStream::pair().unwrap();
         let mut file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
         file.seek(io::SeekFrom::Start(1)).unwrap();
-        send(&a, Code::OpenHidden, b"payload", Some(file.as_fd())).unwrap();
+        send(&a, Code::OpenNode, b"payload", Some(file.as_fd())).unwrap();
         send(&a, Code::Hello, &[], None).unwrap();
 
         let frame = recv(&b).unwrap().unwrap();
-        assert_eq!(frame.code, Code::OpenHidden as u16);
+        assert_eq!(frame.code, Code::OpenNode as u16);
         assert_eq!(frame.payload, b"payload");
         // The same open file: it shares the offset.
         let mut got = std::fs::File::from(frame.fd.expect("descriptor"));

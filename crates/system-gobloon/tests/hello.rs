@@ -226,13 +226,14 @@ fn hiding_writes_state_and_rule() {
 }
 
 #[test]
-fn hidden_nodes_are_handed_over() {
+fn controller_nodes_are_handed_over() {
     let s = start("open", true);
     let mut client = Client::connect_to(&s.socket).unwrap();
     let node = Path::new("/dev/input/event4");
     let not_found =
         |r: Result<OwnedFd, Error>| matches!(r, Err(Error::Service(ErrorCode::NotFound)));
-    assert!(not_found(client.open_hidden(node)), "not hidden");
+    // Any node of a controller, hidden or not (raw HID for buttons past 80).
+    assert!(client.open_node(node).is_ok(), "not hidden");
     let stick = Hidden {
         id: Text::new("aaaa"),
         name: Text::new("Stick"),
@@ -242,15 +243,15 @@ fn hidden_nodes_are_handed_over() {
         reserved: [0; 3],
     };
     client.set_hidden(stick, true).unwrap();
-    let mut file = std::fs::File::from(client.open_hidden(node).unwrap());
+    let mut file = std::fs::File::from(client.open_node(node).unwrap());
     let mut first = [0u8; 4];
     io::Read::read_exact(&mut file, &mut first).unwrap();
     assert_eq!(&first, b"\x7fELF", "the file the fake opened");
     assert!(
-        not_found(client.open_hidden(Path::new("/etc/shadow"))),
+        not_found(client.open_node(Path::new("/etc/shadow"))),
         "nothing else"
     );
-    assert!(client.open_hidden(Path::new("/dev/hidraw3")).is_ok());
+    assert!(client.open_node(Path::new("/dev/hidraw3")).is_ok());
     let (on, hidden) = client.hide_state().unwrap();
     assert!(on && hidden.len() == 1);
 }

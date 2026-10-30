@@ -10,7 +10,7 @@ use std::sync::{Arc, PoisonError};
 
 use gob_system::protocol::{
     self, ApplyVirtual, Code, DeviceKind, ErrorCode, ErrorReply, Hello, HelloReply, Hidden,
-    OpenHidden, PROTOCOL, Record, SetHidden, SetHideEnabled, Text, VirtualRef, caps,
+    OpenNode, PROTOCOL, Record, SetHidden, SetHideEnabled, Text, VirtualRef, caps,
 };
 use gob_system::{Frame, recv, send};
 
@@ -178,11 +178,11 @@ fn answer(
             virtuals().apply(&change)?;
             Vec::new()
         }
-        Some(Code::OpenHidden) => {
-            let open: OpenHidden = read(frame)?;
+        Some(Code::OpenNode) => {
+            let open: OpenNode = read(frame)?;
             let path = std::path::Path::new(open.path.as_str());
             let hide = service.hide.lock().unwrap_or_else(PoisonError::into_inner);
-            let fd = hide.open_hidden(path).map_err(|e| match e.kind() {
+            let fd = hide.open_node(path).map_err(|e| match e.kind() {
                 io::ErrorKind::NotFound => ErrorCode::NotFound,
                 _ => failed(&path.to_string_lossy(), e),
             })?;

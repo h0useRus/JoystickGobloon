@@ -243,19 +243,16 @@ impl Hide {
         closed
     }
 
-    /// Opens a node of an attached hidden device for the client; `NotFound` for any other path
-    /// (the service hands out nothing else).
-    pub fn open_hidden(&self, path: &Path) -> io::Result<OwnedFd> {
+    /// Opens a node of an attached controller for the client: those of hidden ones, and raw HID
+    /// nodes the user may not read (buttons past evdev's 80). `NotFound` for any other path (the
+    /// service hands out nothing else).
+    pub fn open_node(&self, path: &Path) -> io::Result<OwnedFd> {
         let ours = self
             .attached
             .iter()
-            .filter(|n| self.is_hidden(&n.guid))
             .any(|n| n.paths.iter().any(|p| p == path));
         if !ours {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "not a hidden device",
-            ));
+            return Err(io::Error::new(io::ErrorKind::NotFound, "not a controller"));
         }
         self.system.open(path)
     }

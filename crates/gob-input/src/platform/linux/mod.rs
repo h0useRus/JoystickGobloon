@@ -248,13 +248,14 @@ fn scale_axis(value: i32, min: i32, max: i32) -> i32 {
     (v * 65535 / (i64::from(max) - i64::from(min)) - 32768) as i32
 }
 
-/// Opens hidden devices' nodes for this user (see [`set_opener`]).
+/// Opens controller nodes closed to this user (see [`set_opener`]).
 pub type Opener = Box<dyn Fn(&Path) -> io::Result<std::os::fd::OwnedFd> + Send + Sync>;
 
 static OPENER: std::sync::RwLock<Option<Opener>> = std::sync::RwLock::new(None);
 
 /// Sets where nodes closed to this user come from: SystemGobloon hands out the nodes of hidden
-/// devices (gob-hide sets it when the service runs). `None`: such nodes stay closed.
+/// controllers and raw HID nodes (gob-hide sets it when the service runs). `None`: such nodes
+/// stay closed.
 pub fn set_opener(opener: Option<Opener>) {
     *OPENER.write().unwrap_or_else(|e| e.into_inner()) = opener;
 }

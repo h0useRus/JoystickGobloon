@@ -1244,6 +1244,7 @@ impl JoystickGobloonApp {
         } else {
             Default::default()
         };
+        self.devices_view.system_part_offered = offered;
         self.devices_view.show(
             ui,
             &self.i18n,
