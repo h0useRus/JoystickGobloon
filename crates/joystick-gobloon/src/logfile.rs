@@ -12,7 +12,7 @@ struct FileLog(Mutex<File>);
 
 impl Log for FileLog {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        // Our crates in detail, libraries (eframe, winit, wgpu...) only when something is wrong.
+        // Our crates in detail, libraries (eframe, winit, glow...) only when something is wrong.
         let target = metadata.target();
         let ours = target.starts_with("gob_") || target.starts_with("JoystickGobloon");
         metadata.level() <= if ours { Level::Debug } else { Level::Warn }
