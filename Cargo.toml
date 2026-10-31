@@ -9,7 +9,7 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-gob-i18n = { path = "crates/gob-i18n" }
+gob-i18n = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.1.0" }
 gob-core = { path = "crates/gob-core" }
 gob-gremlin = { path = "crates/gob-gremlin" }
 quick-xml = "0.42"
@@ -22,16 +22,12 @@ gob-hidhide = { path = "crates/gob-hidhide" }
 gob-hide = { path = "crates/gob-hide" }
 gob-engine = { path = "crates/gob-engine" }
 gob-lighting = { path = "crates/gob-lighting" }
-gob-ui = { path = "crates/gob-ui" }
+gob-ui = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.1.0" }
 gob-system = { path = "crates/gob-system" }
 eframe = "0.37"
-egui = "0.37"
-fluent-bundle = "0.16"
-unic-langid = "0.9"
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 rfd = "0.17"
-egui-phosphor = "0.14"
 log = "0.4"
 libc = "0.2"
 # Tests only: virtual Xbox 360 controllers through the ViGEmBus driver.
