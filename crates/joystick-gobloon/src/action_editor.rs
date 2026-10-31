@@ -422,7 +422,7 @@ pub fn py_float(v: f32) -> String {
 
 use gob_core::TWO_AXIS_KINDS;
 
-/// The action kind's name for the user ("Map to Virtual Stick"), else its id in the profile.
+/// The action kind's name for the user ("Map to virtual stick"), else its id in the profile.
 fn kind_name(i18n: &I18n, kind: &str) -> String {
     let key = format!("kind-{kind}");
     let name = i18n.tr(&key);

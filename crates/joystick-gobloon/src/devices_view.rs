@@ -1315,7 +1315,7 @@ fn description(root: &Action) -> Option<String> {
 }
 
 /// The chip's tooltip: the action's name, plus the target of a vJoy mapping
-/// (e.g. "Map to Virtual Stick: JoyGob 1 A2") or the text of a description.
+/// (e.g. "Map to virtual stick: JoyGob 1 A2") or the text of a description.
 fn chip_text(i18n: &I18n, a: &Action, vjoy_names: &HashMap<u32, String>) -> String {
     let key = format!("kind-{}", a.kind);
     let name = i18n.tr(&key);
