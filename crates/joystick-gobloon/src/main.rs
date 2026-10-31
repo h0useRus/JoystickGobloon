@@ -40,6 +40,17 @@ pub const APP_ID: &str = "joystick-gobloon";
 /// else the crate version.
 pub const VERSION: &str = env!("JOYSTICK_GOBLOON_VERSION");
 
+/// The built-in UI languages; more `lang/*.ftl` load from the exe's folder.
+pub const LANGUAGES: &[(&str, &str)] = &[
+    ("en", include_str!("../../../lang/en.ftl")),
+    ("ru", include_str!("../../../lang/ru.ftl")),
+    ("de", include_str!("../../../lang/de.ftl")),
+    ("es", include_str!("../../../lang/es.ftl")),
+    ("fr", include_str!("../../../lang/fr.ftl")),
+    ("ko", include_str!("../../../lang/ko.ftl")),
+    ("zh", include_str!("../../../lang/zh.ftl")),
+];
+
 /// Command-line switch for the uninstaller: take this exe off the device hiding's application list
 /// (Joystick Gobloon adds itself on start) and quit without a window.
 const HIDHIDE_UNREGISTER: &str = "--hidhide-unregister";
@@ -98,4 +109,20 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| Ok(Box::new(app::JoystickGobloonApp::new(cc, instance)))),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn every_language_has_every_english_key() {
+        assert_eq!(gob_i18n::check_complete(super::LANGUAGES), Ok(()));
+    }
+
+    #[test]
+    fn languages_load() {
+        let mut i18n = gob_i18n::I18n::new(super::LANGUAGES, None);
+        i18n.set_language("ru");
+        assert_eq!(i18n.tr("nav-settings"), "Настройки");
+        assert_eq!(i18n.languages().len(), super::LANGUAGES.len());
+    }
 }

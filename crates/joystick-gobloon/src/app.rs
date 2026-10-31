@@ -137,7 +137,7 @@ impl JoystickGobloonApp {
         let lang_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.join("lang")));
-        let mut i18n = I18n::new(lang_dir.as_deref());
+        let mut i18n = I18n::new(crate::LANGUAGES, lang_dir.as_deref());
         i18n.set_language(&settings.language);
         style::install_fonts(&cc.egui_ctx);
         style::apply(&cc.egui_ctx, settings.theme);

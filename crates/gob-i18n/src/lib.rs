@@ -1,5 +1,5 @@
-//! Fluent-based localization. English is embedded and always used as fallback.
-//! Extra or overriding languages are loaded from `<exe dir>/lang/<code>.ftl`.
+//! Fluent-based localization. The app embeds its languages and passes them in; English is always
+//! the fallback. Extra or overriding languages are loaded from a folder of `<code>.ftl` files.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -11,16 +11,6 @@ pub use fluent_bundle::{FluentArgs, FluentValue};
 
 pub const DEFAULT_LANG: &str = "en";
 
-const EMBEDDED: &[(&str, &str)] = &[
-    ("en", include_str!("../../../lang/en.ftl")),
-    ("ru", include_str!("../../../lang/ru.ftl")),
-    ("de", include_str!("../../../lang/de.ftl")),
-    ("es", include_str!("../../../lang/es.ftl")),
-    ("fr", include_str!("../../../lang/fr.ftl")),
-    ("ko", include_str!("../../../lang/ko.ftl")),
-    ("zh", include_str!("../../../lang/zh.ftl")),
-];
-
 type Bundle = FluentBundle<FluentResource>;
 
 pub struct I18n {
@@ -31,9 +21,10 @@ pub struct I18n {
 }
 
 impl I18n {
-    /// Loads embedded languages, then any `*.ftl` from `lang_dir` (overrides embedded ones).
-    pub fn new(lang_dir: Option<&Path>) -> Self {
-        let mut sources: BTreeMap<String, String> = EMBEDDED
+    /// `embedded`: the app's built-in languages as `(code, Fluent source)`, English among them;
+    /// then any `*.ftl` from `lang_dir` (overrides embedded ones).
+    pub fn new(embedded: &[(&str, &str)], lang_dir: Option<&Path>) -> Self {
+        let mut sources: BTreeMap<String, String> = embedded
             .iter()
             .map(|(c, s)| (c.to_string(), s.to_string()))
             .collect();
@@ -51,7 +42,8 @@ impl I18n {
                 }
             }
         }
-        let fallback = build_bundle(DEFAULT_LANG, &sources[DEFAULT_LANG]);
+        let english = sources.get(DEFAULT_LANG).map_or("", String::as_str);
+        let fallback = build_bundle(DEFAULT_LANG, english);
         Self {
             sources,
             fallback,
@@ -112,6 +104,38 @@ impl I18n {
     }
 }
 
+/// Checks that every language in `sources` (`(code, Fluent source)`) has every key of English;
+/// the error lists each missing key as `<code>: <key>`. For an app's test of its own languages.
+pub fn check_complete(sources: &[(&str, &str)]) -> Result<(), String> {
+    let Some((_, en)) = sources.iter().find(|(code, _)| *code == DEFAULT_LANG) else {
+        return Err(format!("no `{DEFAULT_LANG}` source"));
+    };
+    let en = keys(en);
+    let missing: Vec<String> = sources
+        .iter()
+        .filter(|(code, _)| *code != DEFAULT_LANG)
+        .flat_map(|(code, src)| {
+            let other = keys(src);
+            en.iter()
+                .filter(move |k| !other.contains(k))
+                .map(move |k| format!("{code}: {k}"))
+        })
+        .collect();
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("missing keys:\n{}", missing.join("\n")))
+    }
+}
+
+/// Message ids defined in a Fluent source.
+fn keys(src: &str) -> Vec<&str> {
+    src.lines()
+        .filter_map(|l| l.split_once(" = ").map(|(k, _)| k.trim()))
+        .filter(|k| !k.is_empty() && !k.starts_with('#'))
+        .collect()
+}
+
 fn build_bundle(code: &str, src: &str) -> Bundle {
     let lang: LanguageIdentifier = code.parse().unwrap_or_default();
     let mut bundle = FluentBundle::new(vec![lang]);
@@ -136,32 +160,34 @@ fn format_in(bundle: &Bundle, key: &str, args: Option<&FluentArgs>) -> Option<St
 mod tests {
     use super::*;
 
-    fn keys(src: &str) -> Vec<&str> {
-        src.lines()
-            .filter_map(|l| l.split_once(" = ").map(|(k, _)| k.trim()))
-            .filter(|k| !k.is_empty() && !k.starts_with('#'))
-            .collect()
-    }
-
-    #[test]
-    fn all_embedded_languages_have_every_english_key() {
-        let en = keys(EMBEDDED[0].1);
-        for (code, src) in &EMBEDDED[1..] {
-            let other = keys(src);
-            for k in &en {
-                assert!(other.contains(k), "{code}.ftl is missing key `{k}`");
-            }
-        }
-    }
+    const EN: &str = "language-name = English\ngreeting = Hello\nbye = Bye\n";
+    const RU: &str = "language-name = Русский\ngreeting = Привет\n";
 
     #[test]
     fn falls_back_to_english() {
-        let mut i = I18n::new(None);
+        let mut i = I18n::new(&[("en", EN), ("ru", RU)], None);
         i.set_language("ru");
-        assert_eq!(i.tr("nav-settings"), "Настройки");
+        assert_eq!(i.language(), "ru");
+        assert_eq!(i.tr("greeting"), "Привет");
+        assert_eq!(i.tr("bye"), "Bye", "missing in ru");
         i.set_language("xx");
         assert_eq!(i.language(), "en");
-        assert_eq!(i.tr("nav-settings"), "Settings");
+        assert_eq!(i.tr("greeting"), "Hello");
         assert_eq!(i.tr("no-such-key"), "no-such-key");
+        assert_eq!(
+            i.languages(),
+            [
+                ("en".to_string(), "English".to_string()),
+                ("ru".to_string(), "Русский".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn check_complete_names_missing_keys() {
+        assert_eq!(check_complete(&[("en", EN), ("ru", EN)]), Ok(()));
+        let err = check_complete(&[("en", EN), ("ru", RU)]).unwrap_err();
+        assert!(err.contains("ru: bye"), "{err}");
+        assert!(check_complete(&[("ru", RU)]).is_err(), "no English");
     }
 }

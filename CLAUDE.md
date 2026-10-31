@@ -6,8 +6,8 @@ no macOS): plans/LINUX_PLAN.md. Plans and roadmaps live in plans/, never in git.
 branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
-- crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default) + de, es, fr, ko, ru, zh embedded; more `lang/*.ftl`
-  load from `<exe>/lang/`. Chinese/Korean glyphs come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
+- crates/gob-i18n  Fluent i18n, app-neutral: the app passes its embedded languages (`joystick-gobloon` main.rs `LANGUAGES`:
+  `lang/en.ftl` (default) + de, es, fr, ko, ru, zh) to `I18n::new`; more `lang/*.ftl` load from `<exe>/lang/`. Chinese/Korean glyphs come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
 - crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe; OS code only in src/platform/ (`Desktop` trait:
   data dir, fonts, single instance, keys, window/tray (`Window` handle), autostart, updates; windows/ = Win32 + Inno Setup)
 - crates/gob-ui      egui widget kit, app-neutral (reusable elsewhere): tokens.rs = sizes and 4 px spacing grid,
@@ -103,7 +103,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   in their own window (e.g. HidHide device hiding) get a button in the top toolbar only, never in the rail;
   their window is a normal app window, or modal when it affects how the program works.
 - All user-visible strings go through i18n keys; add every key to all lang/*.ftl (en, ru, de, es, fr, ko, zh;
-  gob-i18n's test checks it). Product names (Joystick Gobloon, vJoy, HidHide, Joystick Gremlin) stay untranslated.
+  the app's test calls `gob_i18n::check_complete`). Product names (Joystick Gobloon, vJoy, HidHide, Joystick Gremlin) stay untranslated.
 - The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words); its system
   part is "System Gobloon" there too (two words), `SystemGobloon` only in code, binary, unit and paths;
   Never "JoyGob"/"joygob" (it was only a chat nickname): not in code, identifiers, crate or file names, comments
