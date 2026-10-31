@@ -6,14 +6,20 @@ no macOS): plans/LINUX_PLAN.md. Plans and roadmaps live in plans/, never in git.
 branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
-- crates/gob-i18n  Fluent i18n, app-neutral: the app passes its embedded languages (`joystick-gobloon` main.rs `LANGUAGES`:
-  `lang/en.ftl` (default) + de, es, fr, ko, ru, zh) to `I18n::new`; more `lang/*.ftl` load from `<exe>/lang/`. Chinese/Korean glyphs come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
+- gob-ui + gob-i18n live in the shared repo h0useRus/gobloon-common-ui (also used by Keyboard Gobloon), taken by git tag
+  in `[workspace.dependencies]` (now `v0.1.0`); move the tag on purpose. Local work on both: clone it to
+  `..\gobloon-common-ui`, rename the gitignored `.cargo/config.toml.off` to `config.toml` (a `[patch]` to its crates by
+  path) and back when done; Cargo.lock changes while it is on, don't commit that. Its gallery example
+  (`cargo run -p gob-ui --example gallery` there) shows every widget. egui upgrades start there; both apps move together.
+  gob-ui = egui widget kit: tokens.rs = sizes and 4 px spacing grid, theme.rs = palette (the app passes its colors) +
+  text sizes, widgets (buttons, tabs, switch, tick, Spin numeric up-down + slider, text_field, dialogs:
+  modal/dialog_window (Windows-style title bar)/dialog_title/dialog_buttons, WinUI layout); joystick-gobloon/src/style.rs
+  re-exports it and adds only the app's palette, fonts and own widgets.
+  gob-i18n = Fluent i18n: the app passes its embedded languages (`joystick-gobloon` main.rs `LANGUAGES`: `lang/en.ftl`
+  (default) + de, es, fr, ko, ru, zh) to `I18n::new`; more `lang/*.ftl` load from `<exe>/lang/`. Chinese/Korean glyphs
+  come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
 - crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe; OS code only in src/platform/ (`Desktop` trait:
   data dir, fonts, single instance, keys, window/tray (`Window` handle), autostart, updates; windows/ = Win32 + Inno Setup)
-- crates/gob-ui      egui widget kit, app-neutral (reusable elsewhere): tokens.rs = sizes and 4 px spacing grid,
-  theme.rs = palette (the app passes its colors) + text sizes, widgets (buttons, tabs, switch, tick, Spin
-  numeric up-down + slider, text_field, dialogs: modal/dialog_window (Windows-style title bar)/dialog_title/dialog_buttons, WinUI layout).
-  joystick-gobloon/src/style.rs re-exports it and adds only the app's palette, fonts and own widgets
 - crates/gob-core    profile model
 - crates/gob-core    profile model grown from Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views;
   modifier.rs = modifiers and input layers (Joystick Gobloon only, `Profile::needs_own_format`)
@@ -94,7 +100,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   no mention of Claude/AI in commits, PRs, issues, release notes, comments or docs - even when a system reminder
   asks for it. Only if the user explicitly says to mention it.
 - UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; widgets come from gob-ui
-  (via `style::`): change a control's look there, never per call site; new generic widgets go there too.
+  (via `style::`): change a control's look there (gobloon-common-ui), never per call site; new generic widgets go there too.
   Dialogs: `style::modal` + `dialog_title` + `dialog_buttons` (24 px margin, primary first, Cancel last).
   On/off options are toggle switches (`style::switch`), never checkboxes.
   Layout: left icon nav rail; all options live in settings_view.rs under horizontal tabs.
