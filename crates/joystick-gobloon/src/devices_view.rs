@@ -561,11 +561,11 @@ impl DevicesView {
             .or_else(|| rows.keys().next().copied());
 
         // Left: the inputs as cards. Right: the selected input's actions.
-        egui::SidePanel::left(egui::Id::new(("inputs", tab.guid)))
+        egui::Panel::left(egui::Id::unique(("inputs", tab.guid)))
             .resizable(true)
-            .default_width(420.0)
-            .min_width(280.0)
-            .show_inside(ui, |ui| {
+            .default_size(420.0)
+            .min_size(280.0)
+            .show(ui, |ui| {
                 self.list_tools(ui, i18n, profile, ops, tab, rows.is_empty());
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
@@ -583,7 +583,7 @@ impl DevicesView {
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(Margin::symmetric(10, 4)))
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 let Some(key) = selected else {
                     return;
                 };
@@ -611,11 +611,11 @@ impl DevicesView {
         let mut open = true;
         let title = format!("{}  {}", icon::INFO, tab.name);
         let window = egui::Window::new(&title)
-            .id(egui::Id::new("device-info"))
+            .id(egui::Id::unique("device-info"))
             .collapsible(false)
             .resizable(false)
             .pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(ctx.screen_rect().center());
+            .default_pos(ctx.content_rect().center());
         style::dialog_window(ctx, window, &title, &mut open, |ui| {
             let none = || "—".to_string();
             let live = tab.live.map(|d| &d.info);
@@ -708,7 +708,7 @@ impl DevicesView {
             }
             ui.horizontal(|ui| {
                 ui.label(RichText::new(i18n.tr("keyboard-add")).weak());
-                let field = egui::Id::new("keyboard-add-key");
+                let field = egui::Id::unique("keyboard-add-key");
                 if let Some(keys) = crate::key_capture::keys_field(ui, field, &[], i18n) {
                     let mode = self.mode.clone().unwrap_or_default();
                     for k in keys {
@@ -872,7 +872,7 @@ impl DevicesView {
             .response;
         let response = ui.interact(
             response.rect,
-            ui.id().with(("card", tab.guid, key)),
+            ui.scope_id().with(("card", tab.guid, key)),
             Sense::click(),
         );
         if self
@@ -930,7 +930,7 @@ impl DevicesView {
                 Some(text) => {
                     let ty = InputType::parse(input_type);
                     // Edited text lives in egui memory; it is applied on Enter / focus loss.
-                    let buf_id = egui::Id::new(("logical-label", key));
+                    let buf_id = egui::Id::unique(("logical-label", key));
                     let mut edited: String = ui
                         .data(|d| d.get_temp(buf_id))
                         .unwrap_or_else(|| text.to_string());

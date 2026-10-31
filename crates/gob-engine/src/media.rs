@@ -89,30 +89,24 @@ impl Audio {
 }
 
 fn audio_thread(rx: std::sync::mpsc::Receiver<(String, u8)>) {
-    let (_stream, handle) = match rodio::OutputStream::try_default() {
+    let mut device = match rodio::DeviceSinkBuilder::open_default_sink() {
         Ok(s) => s,
         Err(e) => {
             log::error!("no audio output: {e}");
             return;
         }
     };
-    let sink = match rodio::Sink::try_new(&handle) {
-        Ok(s) => s,
-        Err(e) => {
-            log::error!("audio sink: {e}");
-            return;
-        }
-    };
+    // Closing on exit is no news; rodio would print it to stderr.
+    device.log_on_drop(false);
+    let player = rodio::Player::connect_new(device.mixer());
     for (file, volume) in rx {
         let decoded = std::fs::File::open(&file)
             .map_err(|e| e.to_string())
-            .and_then(|f| {
-                rodio::Decoder::new(std::io::BufReader::new(f)).map_err(|e| e.to_string())
-            });
+            .and_then(|f| rodio::Decoder::try_from(f).map_err(|e| e.to_string()));
         match decoded {
             Ok(source) => {
                 use rodio::Source;
-                sink.append(source.amplify(f32::from(volume) / 100.0));
+                player.append(source.amplify(f32::from(volume) / 100.0));
             }
             Err(e) => log::error!("play-sound {file}: {e}"),
         }

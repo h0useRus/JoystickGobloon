@@ -25,7 +25,18 @@ pub struct Palettes {
 
 /// Phosphor's regular icons into `fonts` (after egui's own, before any fallbacks).
 pub fn add_icon_font(fonts: &mut egui::FontDefinitions) {
-    egui_phosphor::add_to_fonts(fonts, egui_phosphor::Variant::Regular);
+    // Not egui_phosphor::add_to_fonts: the crate is built against an older egui.
+    let name = "phosphor";
+    fonts.font_data.insert(
+        name.into(),
+        std::sync::Arc::new(egui::FontData::from_static(
+            egui_phosphor::Variant::Regular.font_bytes(),
+        )),
+    );
+    if let Some(keys) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+        // Second, so it does not shadow the text font.
+        keys.insert(keys.len().min(1), name.into());
+    }
 }
 
 /// Installs both palettes, the text sizes and spacing, and picks the theme (`System` follows

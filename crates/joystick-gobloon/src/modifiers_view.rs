@@ -129,7 +129,7 @@ impl ModifiersWindow {
             .collapsible(false)
             .resizable(false)
             .pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(ctx.screen_rect().center());
+            .default_pos(ctx.content_rect().center());
         style::dialog_window(ctx, window, &title, open, |ui| {
             if profile.modifiers.is_empty() {
                 ui.label(RichText::new(i18n.tr("modifiers-none")).weak());

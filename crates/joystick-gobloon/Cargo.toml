@@ -37,8 +37,8 @@ libc.workspace = true
 # The tray icon's thread (platform/linux/window.rs); the version tray-icon uses.
 gtk = "0.18"
 # Light/dark from the desktop portal (platform/linux/theme.rs); the versions and features rfd uses.
-ashpd = { version = "0.11", default-features = false, features = ["async-std"] }
-pollster = "0.4"
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "settings"] }
+pollster = "1"
 futures-util = { version = "0.3", default-features = false }
 
 [target.'cfg(windows)'.dependencies]

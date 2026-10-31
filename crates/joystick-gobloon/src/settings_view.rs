@@ -524,7 +524,7 @@ fn about(
                 .iter()
                 .map(|(g, k, _)| {
                     let text = format!("{g}  {}", i18n.tr(k));
-                    ui.fonts(|f| {
+                    ui.fonts_mut(|f| {
                         f.layout_no_wrap(text, egui::TextStyle::Body.resolve(ui.style()), accent)
                             .size()
                             .x

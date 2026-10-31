@@ -169,7 +169,7 @@ pub fn adapt(led: &mut LedValue, vkb: bool) {
 pub fn led_widgets(
     ui: &mut egui::Ui,
     i18n: &I18n,
-    salt: impl Hash + Copy,
+    salt: impl Hash + Copy + std::fmt::Debug,
     vkb: bool,
     led: &mut LedValue,
 ) -> bool {

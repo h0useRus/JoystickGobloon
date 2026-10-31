@@ -774,7 +774,7 @@ impl PadTester {
                 let (m, count) = marks.map_or((OutputMark::Free, 0), |m| m.mark(&output));
                 let label = name(*control);
                 let font = egui::TextStyle::Button.resolve(ui.style());
-                let width = ui.fonts(|f| {
+                let width = ui.fonts_mut(|f| {
                     f.layout_no_wrap(label.clone(), font, egui::Color32::WHITE)
                         .size()
                         .x

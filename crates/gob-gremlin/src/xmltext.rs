@@ -28,17 +28,17 @@ pub fn parse(text: &str) -> Result<Element, Error> {
                 }
                 attach(&mut stack, &mut root, el);
             }
-            Event::Text(t) => {
-                if let Some(top) = stack.last_mut() {
-                    top.children
-                        .push(Node::Text(t.unescape().map_err(|e| xml(&e))?.into_owned()));
-                }
-            }
-            Event::CData(c) => {
-                if let Some(top) = stack.last_mut() {
-                    top.children
-                        .push(Node::Text(String::from_utf8_lossy(&c).into_owned()));
-                }
+            Event::Text(t) => push_text(&mut stack, &t.xml10_content()),
+            Event::CData(c) => push_text(&mut stack, &c.xml10_content()),
+            // Entities come apart from the text around them: `&amp;` or `&#38;`.
+            Event::GeneralRef(r) => {
+                let mut buf = [0; 4];
+                let text = match r.resolve_char_ref().map_err(|e| xml(&e))? {
+                    Some(c) => &*c.encode_utf8(&mut buf),
+                    None => quick_xml::escape::resolve_predefined_entity(&r)
+                        .ok_or_else(|| xml(&format!("unknown entity &{};", &*r)))?,
+                };
+                push_text(&mut stack, text);
             }
             Event::Eof => break,
             _ => {}
@@ -48,15 +48,26 @@ pub fn parse(text: &str) -> Result<Element, Error> {
 }
 
 fn start(e: &BytesStart) -> Result<Element, quick_xml::Error> {
-    let mut el = Element::new(String::from_utf8_lossy(e.name().as_ref()));
+    let mut el = Element::new(e.name().as_ref());
     for attr in e.attributes() {
         let attr = attr.map_err(quick_xml::Error::from)?;
         el.attrs.push((
-            String::from_utf8_lossy(attr.key.as_ref()).into_owned(),
-            attr.unescape_value()?.into_owned(),
+            attr.key.as_ref().to_owned(),
+            quick_xml::escape::unescape(&attr.value)?.into_owned(),
         ));
     }
     Ok(el)
+}
+
+/// Text, CDATA and entities next to each other make one text node.
+fn push_text(stack: &mut [Element], text: &str) {
+    let Some(top) = stack.last_mut() else {
+        return;
+    };
+    match top.children.last_mut() {
+        Some(Node::Text(t)) => t.push_str(text),
+        _ => top.children.push(Node::Text(text.to_owned())),
+    }
 }
 
 fn attach(stack: &mut [Element], root: &mut Option<Element>, el: Element) {
@@ -98,5 +109,19 @@ fn write_element(out: &mut String, el: &Element, depth: usize) {
             write_element(out, child, depth + 1);
         }
         out.push_str(&format!("{indent}</{}>\n", el.name));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn entities_and_cdata_join_the_text() {
+        let el = parse(r#"<a x="1 &amp; 2">b &lt; c &#65;<![CDATA[<d>]]></a>"#).unwrap();
+        assert_eq!(el.attr("x"), Some("1 & 2"));
+        assert_eq!(el.text(), "b < c A<d>");
+        assert_eq!(el.children.len(), 1);
+        assert!(parse("<a>&nope;</a>").is_err());
     }
 }

@@ -24,10 +24,10 @@ pub struct EditableText<'a> {
 
 impl<'a> EditableText<'a> {
     /// `id_salt` keeps the editing state apart from other editable texts.
-    pub fn new(text: &'a mut String, id_salt: impl Hash) -> Self {
+    pub fn new(text: &'a mut String, id_salt: impl Hash + std::fmt::Debug) -> Self {
         Self {
             text,
-            id: egui::Id::new(("editable-text", id_salt)),
+            id: egui::Id::unique(("editable-text", id_salt)),
             hint: None,
             multiline: false,
             panel: false,
@@ -111,7 +111,7 @@ impl egui::Widget for EditableText<'_> {
         };
         let galley = egui::WidgetText::from(egui::RichText::new(shown.clone()).color(color))
             .into_galley(ui, Some(wrap), inner, egui::TextStyle::Body);
-        let row = ui.fonts(|f| f.row_height(&egui::TextStyle::Body.resolve(ui.style())));
+        let row = ui.fonts_mut(|f| f.row_height(&egui::TextStyle::Body.resolve(ui.style())));
         let height = galley.size().y.max(row) + TEXT_MARGIN.sum().y;
         let (rect, response) =
             ui.allocate_exact_size(Vec2::new(width, height), egui::Sense::click());

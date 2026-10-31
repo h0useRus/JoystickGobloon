@@ -60,7 +60,7 @@ impl ModesWindow {
     ) -> Vec<ModeOp> {
         let mut ops = Vec::new();
         let names: Vec<String> = profile.modes.iter().map(|m| m.name.clone()).collect();
-        let style = ctx.style();
+        let style = ctx.global_style();
         let (h, gap) = (style.spacing.interact_size.y, style.spacing.item_spacing.x);
         let min_width = MIN_FIELD_WIDTH * 2.0 + h + gap * 2.0;
         let title = i18n.tr("modes-title");
@@ -70,7 +70,7 @@ impl ModesWindow {
             .min_width(min_width)
             .default_width(min_width)
             .pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(ctx.screen_rect().center());
+            .default_pos(ctx.content_rect().center());
         style::dialog_window(ctx, window, &title, open, |ui| {
             // Invisible grid: two equal columns (name, parent) share the window width,
             // the delete button keeps its size. Not egui's Grid: it limits text fields to
