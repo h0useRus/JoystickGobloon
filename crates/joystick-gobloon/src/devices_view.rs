@@ -35,8 +35,13 @@ type Key = (Kind, u32);
 #[derive(Default)]
 pub struct DevicesView {
     selected: Option<String>,
+    /// The virtual devices' names, for the chips of their mappings.
+    vjoy_names: HashMap<u32, String>,
     /// The user picked the tab; otherwise a connected device is preferred.
     user_selected: bool,
+    /// The tab left because its device went away (e.g. while SystemGobloon restarts) and the
+    /// one shown instead: back to it when the device returns, unless another tab was picked.
+    left: Option<(String, String)>,
     mode: Option<String>,
     scroll_to: Option<(String, Key)>,
     /// Axis value when it last counted as moved (per device and axis).
@@ -75,6 +80,17 @@ pub struct DevicesView {
     /// Configured virtual gamepads and how many the system can have, filled by the app.
     pub gamepads: Vec<gob_virtual::GamepadInfo>,
     pub max_gamepads: u32,
+    /// Reading the keyboards for the Keyboard tab (allowed by the user on Linux).
+    keyboard_access: crate::device_access::KeyboardAccess,
+    /// A keyboard access request finished: (allowed or taken back, result). The app reports it.
+    pub keyboard_result: Option<(bool, Result<(), String>)>,
+    /// Reading every button of sticks the system passes on only some of.
+    all_buttons: crate::device_access::AllButtons,
+    /// An all buttons request finished. The app reports it.
+    pub all_buttons_result: Option<Result<(), String>>,
+    /// The system part is offered above (it reads every button too): no banner of our own, so
+    /// the first start asks for the password once. Set by the app.
+    pub system_part_offered: bool,
 }
 
 struct Tab<'a> {
@@ -212,6 +228,10 @@ impl DevicesView {
         ops: &mut Vec<Op>,
         vjoy: &[gob_virtual::DeviceInfo],
     ) {
+        self.vjoy_names = vjoy
+            .iter()
+            .map(|v| (v.id, crate::vjoy_view::device_name(i18n, v)))
+            .collect();
         let logical = self.logical.take();
         let mut tabs: Vec<Tab> = devices
             .iter()
@@ -301,9 +321,22 @@ impl DevicesView {
                 && !t.logical
                 && !is_keyboard(t)
         });
+        if let Some((was, instead)) = &self.left
+            && self.selected.as_ref() == Some(instead)
+        {
+            if tabs.iter().any(|t| t.guid == was && t.live.is_some()) {
+                self.selected = self.left.take().map(|(was, _)| was);
+            }
+        } else {
+            self.left = None;
+        }
         if !valid || (!self.user_selected && on_ghost) {
             let first = tabs.iter().find(|t| t.live.is_some()).or(tabs.first());
-            self.selected = first.map(|t| t.guid.to_string());
+            let instead = first.map(|t| t.guid.to_string());
+            if let (Some(was), Some(instead)) = (self.selected.take(), instead.clone()) {
+                self.left = Some((was, instead));
+            }
+            self.selected = instead;
         }
         if let Some(p) = profile {
             let modes = &p.profile.modes;
@@ -528,11 +561,11 @@ impl DevicesView {
             .or_else(|| rows.keys().next().copied());
 
         // Left: the inputs as cards. Right: the selected input's actions.
-        egui::SidePanel::left(egui::Id::new(("inputs", tab.guid)))
+        egui::Panel::left(egui::Id::unique(("inputs", tab.guid)))
             .resizable(true)
-            .default_width(420.0)
-            .min_width(280.0)
-            .show_inside(ui, |ui| {
+            .default_size(420.0)
+            .min_size(280.0)
+            .show(ui, |ui| {
                 self.list_tools(ui, i18n, profile, ops, tab, rows.is_empty());
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
@@ -550,7 +583,7 @@ impl DevicesView {
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(Margin::symmetric(10, 4)))
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 let Some(key) = selected else {
                     return;
                 };
@@ -576,78 +609,77 @@ impl DevicesView {
             return;
         };
         let mut open = true;
-        egui::Window::new(format!("{}  {}", icon::INFO, tab.name))
-            .frame(style::window_frame(ctx))
-            .id(egui::Id::new("device-info"))
-            .open(&mut open)
+        let title = format!("{}  {}", icon::INFO, tab.name);
+        let window = egui::Window::new(&title)
+            .id(egui::Id::unique("device-info"))
             .collapsible(false)
             .resizable(false)
             .pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(ctx.screen_rect().center())
-            .show(ctx, |ui| {
-                let none = || "—".to_string();
-                let live = tab.live.map(|d| &d.info);
-                let ids = live
-                    .map(|d| gob_input::joystick_ids(d.vendor_id, d.product_id))
-                    .unwrap_or_default();
-                let rows: [(&str, String); 7] = [
-                    ("device-info-name", tab.name.to_string()),
-                    (
-                        "device-info-axes",
-                        live.map_or_else(none, |d| d.axes.len().to_string()),
-                    ),
-                    (
-                        "device-info-buttons",
-                        live.map_or_else(none, |d| d.buttons.to_string()),
-                    ),
-                    (
-                        "device-info-hats",
-                        live.map_or_else(none, |d| d.hats.to_string()),
-                    ),
-                    (
-                        "device-info-vid",
-                        live.map_or_else(none, |d| format!("{:04X}", d.vendor_id)),
-                    ),
-                    (
-                        "device-info-pid",
-                        live.map_or_else(none, |d| format!("{:04X}", d.product_id)),
-                    ),
-                    (
-                        "device-info-joystick-id",
-                        if ids.is_empty() {
-                            none()
-                        } else {
-                            ids.iter()
-                                .map(u32::to_string)
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        },
-                    ),
-                ];
-                egui::Grid::new("device-info-grid")
-                    .num_columns(2)
-                    .spacing([16.0, 6.0])
-                    .show(ui, |ui| {
-                        for (key, value) in rows {
-                            ui.label(RichText::new(i18n.tr(key)).weak());
-                            ui.label(RichText::new(value).monospace());
-                            ui.end_row();
-                        }
-                        ui.label(RichText::new(i18n.tr("device-info-guid")).weak());
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new(tab.guid).monospace());
-                            let tip = i18n.tr("device-info-copy");
-                            if style::icon_button(ui, true, icon::COPY, &tip).clicked() {
-                                ui.ctx().copy_text(tab.guid.to_string());
-                            }
-                        });
+            .default_pos(ctx.content_rect().center());
+        style::dialog_window(ctx, window, &title, &mut open, |ui| {
+            let none = || "—".to_string();
+            let live = tab.live.map(|d| &d.info);
+            let ids = live
+                .map(|d| gob_input::joystick_ids(d.vendor_id, d.product_id))
+                .unwrap_or_default();
+            let rows: [(&str, String); 7] = [
+                ("device-info-name", tab.name.to_string()),
+                (
+                    "device-info-axes",
+                    live.map_or_else(none, |d| d.axes.len().to_string()),
+                ),
+                (
+                    "device-info-buttons",
+                    live.map_or_else(none, |d| d.buttons.to_string()),
+                ),
+                (
+                    "device-info-hats",
+                    live.map_or_else(none, |d| d.hats.to_string()),
+                ),
+                (
+                    "device-info-vid",
+                    live.map_or_else(none, |d| format!("{:04X}", d.vendor_id)),
+                ),
+                (
+                    "device-info-pid",
+                    live.map_or_else(none, |d| format!("{:04X}", d.product_id)),
+                ),
+                (
+                    "device-info-joystick-id",
+                    if ids.is_empty() {
+                        none()
+                    } else {
+                        ids.iter()
+                            .map(u32::to_string)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    },
+                ),
+            ];
+            egui::Grid::new("device-info-grid")
+                .num_columns(2)
+                .spacing([16.0, 6.0])
+                .show(ui, |ui| {
+                    for (key, value) in rows {
+                        ui.label(RichText::new(i18n.tr(key)).weak());
+                        ui.label(RichText::new(value).monospace());
                         ui.end_row();
+                    }
+                    ui.label(RichText::new(i18n.tr("device-info-guid")).weak());
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(tab.guid).monospace());
+                        let tip = i18n.tr("device-info-copy");
+                        if style::icon_button(ui, true, icon::COPY, &tip).clicked() {
+                            ui.ctx().copy_text(tab.guid.to_string());
+                        }
                     });
-                if tab.live.is_none() {
-                    ui.add_space(4.0);
-                    ui.label(RichText::new(i18n.tr("device-disconnected")).weak());
-                }
-            });
+                    ui.end_row();
+                });
+            if tab.live.is_none() {
+                ui.add_space(4.0);
+                ui.label(RichText::new(i18n.tr("device-disconnected")).weak());
+            }
+        });
         if !open {
             self.info = None;
         }
@@ -663,11 +695,20 @@ impl DevicesView {
         tab: &Tab,
         empty: bool,
     ) {
+        if let Some(d) = tab.live
+            && !self.system_part_offered
+            && let Some(done) = self.all_buttons.banner(ui, i18n, &d.info)
+        {
+            self.all_buttons_result = Some(done);
+        }
         let Some(p) = profile else { return };
         if is_keyboard(tab) {
+            if let Some(done) = self.keyboard_access.banner(ui, i18n) {
+                self.keyboard_result = Some(done);
+            }
             ui.horizontal(|ui| {
                 ui.label(RichText::new(i18n.tr("keyboard-add")).weak());
-                let field = egui::Id::new("keyboard-add-key");
+                let field = egui::Id::unique("keyboard-add-key");
                 if let Some(keys) = crate::key_capture::keys_field(ui, field, &[], i18n) {
                     let mode = self.mode.clone().unwrap_or_default();
                     for k in keys {
@@ -682,6 +723,9 @@ impl DevicesView {
                         });
                     }
                 }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    self.keyboard_access.remove_button(ui, i18n);
+                });
             });
             if empty {
                 ui.label(RichText::new(i18n.tr("keyboard-empty")).weak());
@@ -819,7 +863,7 @@ impl DevicesView {
                             ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
                             for a in children {
                                 let glyph = crate::action_editor::kind_icon(&a.kind);
-                                chip(ui, glyph, &chip_text(i18n, a), inherited);
+                                chip(ui, glyph, &chip_text(i18n, a, &self.vjoy_names), inherited);
                             }
                         });
                     }
@@ -828,7 +872,7 @@ impl DevicesView {
             .response;
         let response = ui.interact(
             response.rect,
-            ui.id().with(("card", tab.guid, key)),
+            ui.scope_id().with(("card", tab.guid, key)),
             Sense::click(),
         );
         if self
@@ -886,7 +930,7 @@ impl DevicesView {
                 Some(text) => {
                     let ty = InputType::parse(input_type);
                     // Edited text lives in egui memory; it is applied on Enter / focus loss.
-                    let buf_id = egui::Id::new(("logical-label", key));
+                    let buf_id = egui::Id::unique(("logical-label", key));
                     let mut edited: String = ui
                         .data(|d| d.get_temp(buf_id))
                         .unwrap_or_else(|| text.to_string());
@@ -1271,8 +1315,8 @@ fn description(root: &Action) -> Option<String> {
 }
 
 /// The chip's tooltip: the action's name, plus the target of a vJoy mapping
-/// (e.g. "Map to vJoy: vJoy 1 A2") or the text of a description.
-fn chip_text(i18n: &I18n, a: &Action) -> String {
+/// (e.g. "Map to virtual stick: JoyGob 1 A2") or the text of a description.
+fn chip_text(i18n: &I18n, a: &Action, vjoy_names: &HashMap<u32, String>) -> String {
     let key = format!("kind-{}", a.kind);
     let name = i18n.tr(&key);
     let name = if name == key { a.kind.clone() } else { name };
@@ -1288,7 +1332,11 @@ fn chip_text(i18n: &I18n, a: &Action) -> String {
             InputType::Hat => "H",
             _ => "B",
         };
-        return format!("{name}: vJoy #{device} {t}{input_id}");
+        let device = vjoy_names
+            .get(&device)
+            .cloned()
+            .unwrap_or_else(|| i18n.trf("vjoy-device-n", &[("n", device.into())]));
+        return format!("{name}: {device} {t}{input_id}");
     }
     if let gob_core::ActionKind::MapToGamepad {
         gamepad, control, ..

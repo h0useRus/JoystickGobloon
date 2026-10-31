@@ -1,13 +1,14 @@
 # The website (site/) is published to h0userus.github.io/gobloon when a release reaches main, so it
-# describes the released version: the files are pushed to
-# the h0useRus/gobloon repository, which serves them with GitHub Pages. Needs the
-# GOBLOON_PAGES_TOKEN secret (a fine-grained token with contents: write on that repository).
+# describes the released version: the files are pushed to the h0useRus/gobloon repository, which
+# serves them with GitHub Pages. The push uses a deploy key of that repository (write access to it
+# alone): its private half is the GOBLOON_DEPLOY_KEY secret here. Without the secret the run fails,
+# so a release never leaves the old site online unnoticed.
 name: Website
 
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/website.yml"]
+    paths: ["site/**", ".github/workflows/website.yml", ".github/scripts/publish-site.sh"]
   workflow_dispatch:
 
 concurrency:
@@ -19,15 +20,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # publish-site.sh dates the sitemap entries by the pages' last commits.
+          fetch-depth: 0
       - name: Push to h0useRus/gobloon
         env:
-          TOKEN: ${{ secrets.GOBLOON_PAGES_TOKEN }}
+          DEPLOY_KEY: ${{ secrets.GOBLOON_DEPLOY_KEY }}
         run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::warning::GOBLOON_PAGES_TOKEN is not set, nothing published."
-            exit 0
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::error::The GOBLOON_DEPLOY_KEY secret is not set: the website was not published."
+            exit 1
           fi
-          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/h0useRus/gobloon.git" out
+          key="$RUNNER_TEMP/gobloon_deploy"
+          printf '%s\n' "$DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone --depth 1 git@github.com:h0useRus/gobloon.git out
           bash .github/scripts/publish-site.sh out "${GITHUB_SHA::7}"
           cd out
           git config user.name "github-actions[bot]"

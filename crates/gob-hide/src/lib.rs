@@ -44,6 +44,8 @@ pub struct Capabilities {
     /// Programs can be listed to see hidden devices (or, inverted, not to): the Applications
     /// page and "whitelist Joystick Gobloon itself".
     pub app_list: bool,
+    /// Hidden devices are closed to every other program (no `Device::exposed` warnings).
+    pub hides_everywhere: bool,
 }
 
 /// One part of a [`Device`] (HidHide: a HID collection), to match input devices.
@@ -98,6 +100,12 @@ pub trait Backend: Send + Sync {
         }
         self.set_app(exe, true).map(|()| true)
     }
+
+    /// Whether the state changed since the last call without a call here (a step finished in
+    /// the background, e.g. after the administrator password): read it again.
+    fn take_changed(&self) -> bool {
+        false
+    }
 }
 
 /// This platform's backend.
@@ -120,7 +128,24 @@ pub fn capabilities() -> Capabilities {
     return Capabilities {
         name: "",
         app_list: false,
+        hides_everywhere: false,
     };
+}
+
+/// Before a system service that keeps the hidden devices is removed: copies them into this
+/// program's own files, so hiding goes on without it. Nothing to do elsewhere.
+pub fn keep_locally() -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    return linux::service::keep_locally();
+    #[cfg(not(target_os = "linux"))]
+    Ok(())
+}
+
+/// Linux: the USB sticks (vendor, product) whose raw HID node hiding without the service keeps
+/// closed (a udev rule written as root), from this program's own hidden devices.
+#[cfg(target_os = "linux")]
+pub fn closed_sticks() -> Vec<(u16, u16)> {
+    linux::closed_sticks_wanted()
 }
 
 static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();

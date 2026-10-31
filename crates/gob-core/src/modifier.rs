@@ -59,9 +59,6 @@ impl Modifier {
 pub struct Layer(Vec<String>);
 
 impl Layer {
-    /// The base layer, usable in constants.
-    pub const EMPTY: Layer = Layer(Vec::new());
-
     pub fn new<S: Into<String>>(names: impl IntoIterator<Item = S>) -> Self {
         let mut names: Vec<String> = names
             .into_iter()

@@ -10,7 +10,7 @@ gob-input.workspace = true
 gob-virtual.workspace = true
 gob-lighting.workspace = true
 log.workspace = true
-rodio = { version = "0.19", default-features = false, features = ["symphonia-wav", "symphonia-mp3", "symphonia-vorbis", "symphonia-flac"] }
+rodio = { version = "0.23", default-features = false, features = ["playback", "symphonia-wav", "symphonia-mp3", "symphonia-vorbis", "symphonia-flac"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = [
@@ -20,6 +20,7 @@ windows = { workspace = true, features = [
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+gob-system.workspace = true
 gob-uinput.workspace = true
 libc.workspace = true
 

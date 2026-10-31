@@ -1,0 +1,20 @@
+[package]
+name = "system-gobloon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SystemGobloon for Linux: the root service that hides devices and keeps virtual ones"
+
+[[bin]]
+name = "SystemGobloon"
+path = "src/main.rs"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gob-input.workspace = true
+gob-system.workspace = true
+gob-uinput.workspace = true
+gob-virtual.workspace = true
+libc.workspace = true
+log.workspace = true
+serde.workspace = true
+toml.workspace = true

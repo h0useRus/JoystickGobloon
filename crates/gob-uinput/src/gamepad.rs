@@ -40,11 +40,12 @@ pub const AXES: [Axis; 8] = [
     axis(ABS_HAT0Y, -1, 1),
 ];
 
-/// A gamepad named `name` (keep the "Joystick Gobloon" prefix: gob-input skips its own devices
-/// by it, since the ids are a real controller's).
-pub fn spec(name: &str) -> Spec<'_> {
+/// A gamepad named `name` at `phys`; with the ids of a real controller, gob-input tells it from
+/// one only by a `phys` starting with [`crate::OWN_PHYS`].
+pub fn spec<'a>(name: &'a str, phys: &'a str) -> Spec<'a> {
     Spec {
         name,
+        phys,
         bus: BUS_USB,
         vendor: VENDOR,
         product: PRODUCT,
@@ -99,6 +100,15 @@ mod tests {
         assert_eq!(trigger(0.0), 0);
         assert_eq!(trigger(1.0), 255);
         assert_eq!(trigger(-0.5), 0, "clamped");
+    }
+
+    #[test]
+    fn new_gamepad_rests_released_and_centered() {
+        let rest = |code| AXES.iter().find(|a| a.code == code).map(|a| a.rest());
+        assert_eq!(rest(ABS_Z), Some(0), "LT released");
+        assert_eq!(rest(ABS_RZ), Some(0), "RT released");
+        assert_eq!(rest(ABS_X), Some(0));
+        assert_eq!(rest(ABS_HAT0Y), Some(0));
     }
 
     #[test]

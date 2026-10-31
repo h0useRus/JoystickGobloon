@@ -140,7 +140,7 @@ impl Editor<'_> {
                         first_logical.0,
                     ),
                     (
-                        icon::GAME_CONTROLLER,
+                        icon::JOYSTICK,
                         "cond-vjoy",
                         ConditionSource::Vjoy {
                             device: 1,
@@ -159,7 +159,7 @@ impl Editor<'_> {
                             source,
                             comparator: Condition::default_comparator(ty),
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                 }
             },
@@ -221,7 +221,7 @@ impl Editor<'_> {
                 input_type,
                 id: input,
             } => {
-                ui.label(RichText::new(icon::GAME_CONTROLLER).size(style::ICON_SIZE))
+                ui.label(RichText::new(icon::JOYSTICK).size(style::ICON_SIZE))
                     .on_hover_text(self.i18n.tr("cond-vjoy"));
                 ui.add(style::Spin::new(device).range(1..=16).prefix("vJoy #"));
                 if let Some(t) = type_combo(ui, self, ("cond-type", &salt), *input_type) {
@@ -233,7 +233,7 @@ impl Editor<'_> {
             ConditionSource::Keyboard(keys) => {
                 ui.label(RichText::new(icon::KEYBOARD).size(style::ICON_SIZE))
                     .on_hover_text(self.i18n.tr("cond-keyboard"));
-                let field = egui::Id::new(("cond-keys", &salt));
+                let field = egui::Id::unique(("cond-keys", &salt));
                 if let Some(new) = crate::key_capture::keys_field(ui, field, keys, self.i18n) {
                     *keys = new;
                 }
@@ -280,7 +280,7 @@ impl Editor<'_> {
 fn type_combo(
     ui: &mut egui::Ui,
     editor: &Editor<'_>,
-    salt: impl std::hash::Hash,
+    salt: impl std::hash::Hash + std::fmt::Debug,
     current: InputType,
 ) -> Option<InputType> {
     let mut picked = None;

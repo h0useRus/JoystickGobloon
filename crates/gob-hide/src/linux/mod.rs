@@ -1,23 +1,32 @@
 //! Linux backend: the input service reads hidden devices exclusively (gob-input's `exclusive`,
 //! `EVIOCGRAB`), so games get nothing from them through evdev or joydev while Joystick Gobloon
 //! runs. Programs that open the raw HID device (hidraw: Steam, SDL's HIDAPI drivers, Wine) still
-//! see them when the user may open its node, as udev rules of many gaming setups allow; such
+//! see them when the user may open its node, as udev rules of many gaming setups allow: then a
+//! udev rule closes the node of hidden sticks again (gob-uinput's `set_hidden_sticks`, with the
+//! administrator password, in the background). Until it does, or when that was refused, such
 //! devices are marked `exposed`. No program list: the hiding program is the only one that reads.
 //!
 //! The switch and the hidden devices are kept in `hidden.gob` (TOML) in the data directory;
 //! hidden devices stay listed while unplugged.
+//!
+//! With SystemGobloon running, `service.rs` is used instead: the service closes hidden devices
+//! to every program and keeps the state; this program still grabs them.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use gob_input::DeviceInfo;
 use serde::{Deserialize, Serialize};
 
 use crate::{Backend, Capabilities, Device, Error, Part};
 
+pub(crate) mod service;
+
 pub const CAPABILITIES: Capabilities = Capabilities {
     name: "Linux evdev",
     app_list: false,
+    hides_everywhere: false,
 };
 const STATE_FILE: &str = "hidden.gob";
 
@@ -25,7 +34,12 @@ pub fn load() -> Result<Arc<dyn Backend>, Error> {
     if !gob_input::exclusive::supported() {
         return Err(Error::Unsupported);
     }
+    if let Some(service) = service::Service::connect() {
+        return Ok(Arc::new(service));
+    }
     let hide = Grab;
+    // The service may have been removed since: nodes open as usual again.
+    gob_input::set_opener(None);
     // The stored state applies from the start, also before the window is opened.
     apply(&read_state()?);
     Ok(Arc::new(hide))
@@ -86,6 +100,24 @@ fn read_state() -> Result<State, Error> {
         }
         _ => Ok(State::default()),
     }
+}
+
+/// The sticks (vendor, product) whose raw HID node local hiding keeps closed: every hidden stick
+/// while hiding is on.
+pub fn closed_sticks_wanted() -> Vec<(u16, u16)> {
+    let Ok(state) = read_state() else {
+        return Vec::new();
+    };
+    let mut sticks: Vec<(u16, u16)> = state
+        .devices
+        .iter()
+        .filter(|_| state.enabled)
+        .map(|h| (h.vendor, h.product))
+        .filter(|&ids| ids != (0, 0))
+        .collect();
+    sticks.sort_unstable();
+    sticks.dedup();
+    sticks
 }
 
 fn write_state(state: &State) -> Result<(), Error> {
@@ -161,6 +193,58 @@ fn readable(path: &str) -> bool {
     !path.as_bytes().is_empty() && unsafe { libc::access(path.as_ptr(), libc::R_OK) } == 0
 }
 
+/// The sticks whose raw HID node stays closed: hidden ones (while hiding is on) the user may
+/// open now, or closed already.
+fn closed_sticks(state: &State, attached: &[DeviceInfo], closed: &[(u16, u16)]) -> Vec<(u16, u16)> {
+    if !state.enabled {
+        return Vec::new();
+    }
+    let open = |h: &Hidden| {
+        attached
+            .iter()
+            .any(|d| d.guid.eq_ignore_ascii_case(&h.id) && readable(&d.hid_path))
+    };
+    let mut sticks: Vec<(u16, u16)> = state
+        .devices
+        .iter()
+        .filter(|h| (h.vendor, h.product) != (0, 0))
+        .filter(|h| closed.contains(&(h.vendor, h.product)) || open(h))
+        .map(|h| (h.vendor, h.product))
+        .collect();
+    sticks.sort_unstable();
+    sticks.dedup();
+    sticks
+}
+
+/// The sticks last asked for in [`close_raw_nodes`].
+static ASKED: Mutex<Option<Vec<(u16, u16)>>> = Mutex::new(None);
+/// The rule changed in the background (see `Backend::take_changed`).
+static CHANGED: AtomicBool = AtomicBool::new(false);
+
+/// Makes the hidden-stick rule match the state, in the background: the system may ask for the
+/// password. `again`: also when the same sticks were asked for before (and refused); else a
+/// refusal is not asked again until the user changes something.
+fn close_raw_nodes(again: bool) {
+    std::thread::spawn(move || {
+        let mut asked = ASKED.lock().unwrap_or_else(PoisonError::into_inner);
+        let Ok(state) = read_state() else { return };
+        let closed = gob_uinput::access::hidden_sticks();
+        let sticks = closed_sticks(&state, &gob_input::exclusive::devices(), &closed);
+        if !again && asked.as_ref() == Some(&sticks) {
+            return;
+        }
+        *asked = Some(sticks.clone());
+        match gob_uinput::access::set_hidden_sticks(&sticks) {
+            Ok(true) => {
+                log::info!("raw HID nodes closed for {sticks:04x?}");
+                CHANGED.store(true, Ordering::Relaxed);
+            }
+            Ok(false) => {}
+            Err(e) => log::warn!("closing the raw HID nodes of hidden sticks: {e}"),
+        }
+    });
+}
+
 /// `state` with `device` hidden or shown.
 fn changed(mut state: State, device: &Device, hidden: bool) -> Result<State, Error> {
     let id = device
@@ -209,19 +293,31 @@ impl Backend for Grab {
         };
         write_state(&state)?;
         apply(&state);
+        close_raw_nodes(true);
         Ok(())
     }
 
     /// Every device here is a game controller, so `gaming_only` changes nothing.
+    /// A hidden stick the user may open the raw node of (plugged in, or hidden before this
+    /// closed it) gets it closed.
     fn devices(&self, _gaming_only: bool) -> Result<Vec<Device>, Error> {
-        Ok(list(&gob_input::exclusive::devices(), &read_state()?))
+        let devices = list(&gob_input::exclusive::devices(), &read_state()?);
+        if devices.iter().any(|d| d.exposed) {
+            close_raw_nodes(false);
+        }
+        Ok(devices)
     }
 
     fn set_hidden(&self, device: &Device, hidden: bool) -> Result<(), Error> {
         let state = changed(read_state()?, device, hidden)?;
         write_state(&state)?;
         apply(&state);
+        close_raw_nodes(true);
         Ok(())
+    }
+
+    fn take_changed(&self) -> bool {
+        CHANGED.swap(false, Ordering::Relaxed)
     }
 
     fn apps(&self) -> Result<Vec<PathBuf>, Error> {
@@ -313,5 +409,44 @@ mod tests {
         assert!(!devices[1].exposed, "hidden, no node");
         assert!(!devices[2].exposed, "not hidden");
         assert!(!readable(""));
+    }
+
+    #[test]
+    fn raw_nodes_closed_for_open_or_closed_hidden_sticks() {
+        let open = std::env::current_exe().unwrap().display().to_string();
+        let stick = |guid: &str, product, hid_path: &str| DeviceInfo {
+            hid_path: hid_path.into(),
+            product_id: product,
+            ..info(guid, "Stick")
+        };
+        let attached = [
+            stick("aaaa", 1, &open),
+            stick("bbbb", 2, "/nonexistent/hidraw0"),
+            stick("cccc", 3, &open),
+        ];
+        let mut state = State::default();
+        for d in &list(&attached, &state)[..2] {
+            state = changed(state, d, true).unwrap();
+        }
+        assert_eq!(
+            closed_sticks(&state, &attached, &[]),
+            [(0x231d, 1)],
+            "hidden and open"
+        );
+        assert_eq!(
+            closed_sticks(&state, &attached, &[(0x231d, 2), (0x231d, 3)]),
+            [(0x231d, 1), (0x231d, 2)],
+            "closed stays closed while hidden; shown opens again"
+        );
+        assert_eq!(
+            closed_sticks(&state, &[], &[(0x231d, 1)]),
+            [(0x231d, 1)],
+            "unplugged"
+        );
+        state.enabled = false;
+        assert!(
+            closed_sticks(&state, &attached, &[(0x231d, 1)]).is_empty(),
+            "hiding off"
+        );
     }
 }

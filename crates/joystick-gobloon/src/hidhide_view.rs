@@ -117,6 +117,14 @@ impl HidHideView {
             self.inputs = ids;
             self.loaded = false;
         }
+        self.poll_changed();
+    }
+
+    /// Reads the state again when next needed if the backend changed it in the background.
+    fn poll_changed(&mut self) {
+        if self.hh.as_ref().is_ok_and(|hh| hh.take_changed()) {
+            self.loaded = false;
+        }
     }
 
     /// Device hiding was changed elsewhere (tray menu): read it again when next needed.
@@ -136,14 +144,15 @@ impl HidHideView {
                 return false;
             }
         };
+        self.poll_changed();
         if !self.loaded || self.gaming_only != settings.hidhide_gaming_only {
             self.refresh(settings.hidhide_gaming_only);
         }
 
         let mut changed = false;
-        egui::TopBottomPanel::bottom("hidhide-options")
+        egui::Panel::bottom("hidhide-options")
             .show_separator_line(false)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 ui.add_space(6.0);
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
@@ -185,6 +194,9 @@ impl HidHideView {
                             }
                         });
                         ui.label(RichText::new(i18n.tr("hidhide-hint")).weak());
+                        if !caps.hides_everywhere {
+                            ui.label(RichText::new(i18n.tr("hidhide-while-running")).weak());
+                        }
                     });
                 });
             });

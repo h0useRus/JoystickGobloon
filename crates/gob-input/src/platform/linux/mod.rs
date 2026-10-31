@@ -8,12 +8,15 @@
 //! axes as sliders), buttons follow SDL's order, so games and profiles count them the same way.
 
 mod evdev;
+mod hid;
 pub(crate) mod keyboard;
 
 use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use evdev::{ABS_CNT, Bits, Caps, EV_ABS, EV_KEY, EV_SYN, KEY_CNT, Node, SYN_DROPPED, SYN_REPORT};
 
@@ -25,6 +28,14 @@ const EVENT_TIMEOUT: Duration = Duration::from_millis(20);
 /// Buttons and hats a device can have, as on Windows (DIJOYSTATE2).
 const MAX_BUTTONS: usize = 128;
 const MAX_HATS: usize = 4;
+/// The most buttons the kernel's HID driver passes on to evdev for a joystick (16
+/// `BTN_JOYSTICK` + 64 `BTN_TRIGGER_HAPPY`). Only a node with that many can have lost buttons;
+/// one with fewer may be another collection of the same HID device, whose buttons it must not
+/// take.
+const EVDEV_MAX_BUTTONS: usize = 80;
+/// A device with buttons evdev does not pass on tries to open its raw HID node this often, so
+/// access granted while it is connected takes effect without replugging.
+const RAW_RETRY: Duration = Duration::from_secs(2);
 
 const BTN_MOUSE: usize = 0x110;
 const BTN_JOYSTICK: usize = 0x120;
@@ -123,11 +134,18 @@ impl super::Backend for Platform {
         }
         let mut fds = self.fds.borrow_mut();
         fds.clear();
-        fds.extend(devices.iter().map(|d| libc::pollfd {
-            fd: d.node.fd(),
-            events: libc::POLLIN,
-            revents: 0,
-        }));
+        let fds_of = |d: &Device| [Some(d.node.fd()), d.raw.as_ref().map(hid::Raw::fd)];
+        fds.extend(
+            devices
+                .iter()
+                .flat_map(fds_of)
+                .flatten()
+                .map(|fd| libc::pollfd {
+                    fd,
+                    events: libc::POLLIN,
+                    revents: 0,
+                }),
+        );
         let timeout = at_most(EVENT_TIMEOUT).as_micros().div_ceil(1000) as i32;
         evdev::wait_readable(&mut fds, timeout);
     }
@@ -149,9 +167,12 @@ fn is_joystick(caps: &Caps) -> bool {
 }
 
 /// What identifies a device across restarts: its serial number, or where it is plugged in, and
-/// its name (one USB device can have several input nodes, each with its own name).
+/// its name (one USB device can have several input nodes, each with its own name). Our own
+/// virtual devices by their place alone: they keep their id when renamed.
 fn identity(uniq: &str, phys: &str, name: &str) -> String {
-    if uniq.is_empty() {
+    if phys.starts_with(gob_uinput::OWN_PHYS) {
+        format!("phys:{phys}")
+    } else if uniq.is_empty() {
         format!("phys:{phys}\n{name}")
     } else {
         format!("uniq:{uniq}\n{name}")
@@ -229,11 +250,53 @@ fn scale_axis(value: i32, min: i32, max: i32) -> i32 {
     (v * 65535 / (i64::from(max) - i64::from(min)) - 32768) as i32
 }
 
+/// Opens controller nodes closed to this user (see [`set_opener`]).
+pub type Opener = Box<dyn Fn(&Path) -> io::Result<std::os::fd::OwnedFd> + Send + Sync>;
+
+static OPENER: std::sync::RwLock<Option<Opener>> = std::sync::RwLock::new(None);
+
+/// Sets where nodes closed to this user come from: SystemGobloon hands out the nodes of hidden
+/// controllers and raw HID nodes (gob-hide sets it when the service runs). `None`: such nodes
+/// stay closed.
+pub fn set_opener(opener: Option<Opener>) {
+    *OPENER.write().unwrap_or_else(|e| e.into_inner()) = opener;
+}
+
+/// Opens a device node for non-blocking reads; one closed to this user through the opener.
+fn open_node(path: &Path) -> io::Result<std::fs::File> {
+    let denied = match open_direct(path) {
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => e,
+        other => return other,
+    };
+    let opener = OPENER.read().unwrap_or_else(|e| e.into_inner());
+    match opener.as_ref().map(|open| open(path)) {
+        Some(Ok(fd)) => Ok(fd.into()),
+        // Not hidden (the service refuses) or no service: the system's answer stands.
+        _ => Err(denied),
+    }
+}
+
+/// Opens a device node for non-blocking reads as this user.
+fn open_direct(path: &Path) -> io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(path)
+}
+
 /// The USB device's product string (e.g. "VKBsim Gladiator EVO R"), the name Windows shows. The
 /// evdev name has the manufacturer in front ("VKB-Sim (C) Alex Oz 2023  VKBsim ..."), which
 /// would keep "Map controls" from matching profiles made on Windows. `None` for devices that
 /// are not on USB (e.g. Bluetooth): their evdev name is used.
 fn usb_product(event_node: &Path) -> Option<String> {
+    let product = std::fs::read_to_string(usb_device(event_node)?.join("product")).ok()?;
+    let product = product.trim();
+    (!product.is_empty()).then(|| product.to_string())
+}
+
+/// The USB device's folder in sysfs behind an event node; `None` off USB.
+fn usb_device(event_node: &Path) -> Option<PathBuf> {
     let name = event_node.file_name()?;
     // eventN/device = the input device, its device = the HID device, two levels up = USB.
     let hid = Path::new("/sys/class/input")
@@ -241,9 +304,71 @@ fn usb_product(event_node: &Path) -> Option<String> {
         .join("device/device")
         .canonicalize()
         .ok()?;
-    let product = std::fs::read_to_string(hid.parent()?.parent()?.join("product")).ok()?;
-    let product = product.trim();
-    (!product.is_empty()).then(|| product.to_string())
+    let usb = hid.parent()?.parent()?;
+    usb.join("idVendor").exists().then(|| usb.to_path_buf())
+}
+
+/// A controller's device nodes, for SystemGobloon (root) to close them to others while hidden.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Nodes {
+    /// Id as in [`crate::DeviceInfo::guid`].
+    pub guid: String,
+    pub name: String,
+    pub vendor: u16,
+    pub product: u16,
+    /// On USB: the USB device's serial number (udev `ATTRS{serial}`), empty without one.
+    pub usb_serial: Option<String>,
+    /// The event node, its joydev node and the HID device's hidraw node, as far as present.
+    pub paths: Vec<PathBuf>,
+}
+
+/// The attached controllers (not our own virtual devices) and their nodes. Needs read access to
+/// the event nodes: root.
+pub fn controller_nodes() -> Vec<Nodes> {
+    use super::Backend;
+    let Some(platform) = Platform::new() else {
+        return Vec::new();
+    };
+    platform
+        .attached()
+        .into_iter()
+        .filter_map(|(guid, found)| {
+            let node = Node::open(&found.path).ok()?;
+            if keyboard::is_own(&node) {
+                return None;
+            }
+            let [_, vendor, product, _] = node.id();
+            let usb = usb_device(&found.path);
+            let usb_serial = usb.map(|dir| {
+                std::fs::read_to_string(dir.join("serial"))
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default()
+            });
+            let mut paths = vec![found.path.clone()];
+            let input = Path::new("/sys/class/input")
+                .join(found.path.file_name()?)
+                .join("device");
+            let joydev = std::fs::read_dir(input).into_iter().flatten().flatten();
+            paths.extend(joydev.filter_map(|e| {
+                let n = e.file_name();
+                n.to_str()?
+                    .starts_with("js")
+                    .then(|| Path::new("/dev/input").join(&n))
+            }));
+            let hidraw = hidraw_path(&found.path);
+            if !hidraw.is_empty() {
+                paths.push(hidraw.into());
+            }
+            Some(Nodes {
+                guid,
+                name: node.name(),
+                vendor,
+                product,
+                usb_serial,
+                paths,
+            })
+        })
+        .collect()
 }
 
 /// The `hidraw` node of the HID device behind an event node (for gob-lighting), if any.
@@ -265,6 +390,39 @@ fn hidraw_path(event_node: &Path) -> String {
                 .then(|| format!("/dev/{}", n.to_string_lossy()))
         })
         .unwrap_or_default()
+}
+
+/// Buttons to read from the raw HID node because evdev has fewer: where they sit in the input
+/// reports and how many there are (the highest button number).
+struct RawPlan {
+    path: PathBuf,
+    layout: hid::Layout,
+    count: usize,
+}
+
+impl RawPlan {
+    /// A plan when evdev got the kernel's most buttons and the report descriptor of `hidraw`
+    /// declares more.
+    fn new(hidraw: &str, evdev_buttons: usize) -> Option<Self> {
+        if hidraw.is_empty() || evdev_buttons < EVDEV_MAX_BUTTONS {
+            return None;
+        }
+        let path = PathBuf::from(hidraw);
+        let mut layout = hid::buttons(&hid::descriptor(&path)?);
+        layout
+            .buttons
+            .retain(|b| usize::from(b.usage) <= MAX_BUTTONS);
+        let count = layout.buttons.iter().map(|b| usize::from(b.usage)).max()?;
+        (count > evdev_buttons).then_some(Self {
+            path,
+            layout,
+            count,
+        })
+    }
+
+    fn open(&self) -> io::Result<hid::Raw> {
+        hid::Raw::open(&self.path, self.layout.clone())
+    }
 }
 
 /// How one axis event code maps to the state.
@@ -307,6 +465,18 @@ pub(crate) struct Device {
     dropped: bool,
     /// Grabbed (`EVIOCGRAB`): only this process gets its events.
     grabbed: bool,
+    /// Buttons come from the raw HID node (the device has more than evdev passes on).
+    raw: Option<hid::Raw>,
+    /// The raw HID node could not be opened yet (no access): tried again every [`RAW_RETRY`].
+    raw_pending: Option<(RawPlan, Instant)>,
+}
+
+/// Whether opening the raw HID node `path` went otherwise than last time: devices are opened
+/// on every scan (and for device lists), the log tells only what changed.
+fn raw_changed(path: &str, opened: bool) -> bool {
+    static LAST: Mutex<BTreeMap<String, bool>> = Mutex::new(BTreeMap::new());
+    let mut last = LAST.lock().unwrap_or_else(PoisonError::into_inner);
+    last.insert(path.to_string(), opened) != Some(opened)
 }
 
 impl Device {
@@ -336,16 +506,50 @@ impl Device {
         let [_, vendor_id, product_id, _] = node.id();
         let mut slots: Vec<u8> = axes.iter().flatten().map(|a| a.slot as u8 + 1).collect();
         slots.sort_unstable();
+        let hid_path = hidraw_path(&found.path);
+        let (raw, raw_pending) = match RawPlan::new(&hid_path, codes.len()) {
+            Some(plan) => match plan.open() {
+                Ok(raw) => {
+                    if raw_changed(&hid_path, true) {
+                        log::info!(
+                            "{}: {} buttons read from {hid_path}",
+                            found.path.display(),
+                            plan.count
+                        );
+                    }
+                    (Some((raw, plan.count)), None)
+                }
+                Err(e) => {
+                    if raw_changed(&hid_path, false) {
+                        log::info!(
+                            "{}: buttons {}-{} need read access to {hid_path}: {e}",
+                            found.path.display(),
+                            codes.len() + 1,
+                            plan.count
+                        );
+                    }
+                    (None, Some((plan, Instant::now() + RAW_RETRY)))
+                }
+            },
+            None => (None, None),
+        };
+        if raw.is_some() {
+            // Every button comes from the raw reports; evdev's key events are ignored.
+            buttons.fill(u8::MAX);
+        }
         let info = DeviceInfo {
             guid: found.guid.clone(),
             name: usb_product(&found.path).unwrap_or_else(|| node.name()),
             vendor_id,
             product_id,
             axes: slots,
-            buttons: codes.len(),
+            buttons: raw.as_ref().map_or(codes.len(), |(_, n)| *n),
             hats: hat_count,
-            hid_path: hidraw_path(&found.path),
-            own: node.name().starts_with(keyboard::OWN_DEVICE_PREFIX),
+            hid_path,
+            own: keyboard::is_own(&node),
+            unread_buttons: raw_pending
+                .as_ref()
+                .map_or(0, |(p, _)| p.count - codes.len()),
         };
         let state = DeviceState::new(info);
         let mut dev = Self {
@@ -359,8 +563,11 @@ impl Device {
             events,
             dropped: false,
             grabbed: false,
+            raw: raw.map(|(r, _)| r),
+            raw_pending,
         };
         dev.sync();
+        dev.sync_raw();
         dev.previous.copy_readings(&dev.state);
         Ok(dev)
     }
@@ -384,6 +591,68 @@ impl Device {
         for (h, hat) in self.state.hats.iter_mut().zip(&self.hats) {
             *h = hat.direction();
         }
+    }
+
+    /// Button `i` (0-based) changed; sent as an event in event mode.
+    fn set_button(&mut self, i: usize, pressed: bool, emit: &mut dyn FnMut(InputEvent)) {
+        if let Some(b) = self.state.buttons.get_mut(i)
+            && *b != pressed
+        {
+            *b = pressed;
+            if self.events {
+                emit(InputEvent::Button {
+                    device: self.state.info.guid.clone(),
+                    id: i as u16 + 1,
+                    pressed,
+                });
+            }
+        }
+    }
+
+    /// The buttons held right now, from the raw HID node (at open, no events).
+    fn sync_raw(&mut self) {
+        let Some(raw) = &self.raw else {
+            return;
+        };
+        let buttons = &mut self.state.buttons;
+        raw.read_current(&mut |b, pressed| {
+            if let Some(v) = buttons.get_mut(usize::from(b) - 1) {
+                *v = pressed;
+            }
+        });
+    }
+
+    /// Opens the raw HID node once access is there, and from then on reads every button from it.
+    fn retry_raw(&mut self) {
+        let Some((plan, at)) = &mut self.raw_pending else {
+            return;
+        };
+        let now = Instant::now();
+        if now < *at {
+            return;
+        }
+        *at = now + RAW_RETRY;
+        let Ok(raw) = plan.open() else {
+            return;
+        };
+        let count = plan.count;
+        if raw_changed(&plan.path.to_string_lossy(), true) {
+            log::info!(
+                "{}: {count} buttons read from {}",
+                self.state.info.name,
+                plan.path.display()
+            );
+        }
+        self.raw_pending = None;
+        self.raw = Some(raw);
+        self.buttons.fill(u8::MAX);
+        for s in [&mut self.state, &mut self.previous] {
+            s.info.buttons = count;
+            s.info.unread_buttons = 0;
+            s.buttons.resize(count, false);
+        }
+        // The input filter sends what changed against its own view.
+        self.sync_raw();
     }
 
     fn set_axis(&mut self, axis: AxisMap, value: i32) {
@@ -439,19 +708,7 @@ impl Device {
                 let Some(&i) = self.buttons.get(code) else {
                     return;
                 };
-                let pressed = event.value != 0;
-                if let Some(b) = self.state.buttons.get_mut(usize::from(i))
-                    && *b != pressed
-                {
-                    *b = pressed;
-                    if self.events {
-                        emit(InputEvent::Button {
-                            device: self.state.info.guid.clone(),
-                            id: u16::from(i) + 1,
-                            pressed,
-                        });
-                    }
-                }
+                self.set_button(usize::from(i), event.value != 0, emit);
             }
             EV_ABS => self.set_abs(code, event.value),
             _ => {}
@@ -514,6 +771,18 @@ impl super::Device for Device {
             if count < buf.len() {
                 break;
             }
+        }
+        match self.raw.take() {
+            Some(raw) => {
+                let read = raw.read(&mut |b, pressed| {
+                    self.set_button(usize::from(b) - 1, pressed, emit);
+                });
+                if read.is_err() {
+                    return false;
+                }
+                self.raw = Some(raw);
+            }
+            None => self.retry_raw(),
         }
         if self.events {
             // Already sent: the diff must not send these again.
@@ -685,5 +954,10 @@ mod tests {
         assert_ne!(a, b);
         let serial = identity("ABC123", "anywhere", "VKB");
         assert_eq!(serial, identity("ABC123", "elsewhere", "VKB"));
+        assert_eq!(
+            identity("", "joystick-gobloon/joystick-2", "JoyGob 2"),
+            identity("", "joystick-gobloon/joystick-2", "Gobloon Throttle"),
+            "our devices keep their id when renamed"
+        );
     }
 }

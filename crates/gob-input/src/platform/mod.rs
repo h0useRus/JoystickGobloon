@@ -13,6 +13,8 @@ mod none;
 mod windows;
 
 #[cfg(target_os = "linux")]
+pub use linux::{Nodes, Opener, controller_nodes, set_opener};
+#[cfg(target_os = "linux")]
 pub(crate) use linux::{Platform, joystick_ids, keyboard};
 #[cfg(not(any(windows, target_os = "linux")))]
 pub(crate) use none::{Platform, joystick_ids, keyboard};

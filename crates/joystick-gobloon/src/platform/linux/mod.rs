@@ -7,6 +7,7 @@ mod autostart;
 mod fonts;
 mod instance;
 mod keys;
+mod menu;
 mod theme;
 mod update;
 mod window;
@@ -26,6 +27,22 @@ fn config_home() -> Option<PathBuf> {
         .filter(|d| !d.is_empty())
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+}
+
+/// `key` in `user-dirs.dirs` (`XDG_DOCUMENTS_DIR="$HOME/Documents"`), `$HOME` replaced.
+fn user_dir(text: &str, key: &str, home: &Path) -> Option<PathBuf> {
+    let value = text
+        .lines()
+        .filter_map(|l| l.trim().split_once('='))
+        .find(|(k, _)| k.trim() == key)?
+        .1
+        .trim()
+        .trim_matches('"');
+    match value.strip_prefix("$HOME") {
+        Some(rest) => Some(home.join(rest.trim_start_matches('/'))),
+        None if value.starts_with('/') => Some(PathBuf::from(value)),
+        None => None,
+    }
 }
 
 /// `key` in `[section]` of an INI-style file like `kdeglobals`.
@@ -51,6 +68,15 @@ impl super::Desktop for Desktop {
     /// `$XDG_CONFIG_HOME/JoystickGobloon`, where gob-virtual and gob-hide look without one too.
     fn default_data_dir() -> Option<PathBuf> {
         Some(config_home()?.join("JoystickGobloon"))
+    }
+
+    /// `XDG_DOCUMENTS_DIR` from `user-dirs.dirs` when it exists, else the home folder.
+    fn documents_dir() -> Option<PathBuf> {
+        let home = PathBuf::from(std::env::var_os("HOME")?);
+        let text =
+            std::fs::read_to_string(config_home()?.join("user-dirs.dirs")).unwrap_or_default();
+        let documents = user_dir(&text, "XDG_DOCUMENTS_DIR", &home).filter(|d| d.is_dir());
+        Some(documents.unwrap_or(home))
     }
 
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
@@ -97,10 +123,29 @@ impl super::Desktop for Desktop {
         instance::listen(event, show);
     }
 
-    /// Off for now: reading every keyboard needs the `input` group (the udev rule leaves
-    /// keyboards out, any program of the user could read what is typed). Back if users ask.
+    /// Keyboards are read through evdev, which needs access the main udev rule leaves out (any
+    /// program of the user could read what is typed): the user allows it on the Keyboard tab.
     fn keyboard_bindings() -> bool {
-        false
+        true
+    }
+
+    fn keyboard_access() -> super::KeyboardAccess {
+        use gob_uinput::access;
+        if access::keyboard_rule_installed() {
+            super::KeyboardAccess::Allowed
+        } else if access::keyboards_readable() {
+            super::KeyboardAccess::Open
+        } else {
+            super::KeyboardAccess::Missing
+        }
+    }
+
+    fn set_keyboard_access(allow: bool) -> Result<(), String> {
+        if allow {
+            gob_uinput::access::install_keyboard()
+        } else {
+            gob_uinput::access::remove_keyboard()
+        }
     }
 
     fn held_keys() -> Option<Vec<Key>> {
@@ -120,7 +165,9 @@ impl super::Desktop for Desktop {
         theme::watch(changed);
     }
 
+    /// Also puts the program in the application menu (its icon in the dock).
     fn main_window(cc: &eframe::CreationContext<'_>) -> Option<Self::Window> {
+        menu::integrate();
         window::main_window(cc)
     }
 
@@ -180,12 +227,66 @@ impl super::Desktop for Desktop {
         autostart::set(enabled, arg)
     }
 
+    /// With SystemGobloon running only controllers need access (it gives it too); virtual
+    /// devices come from the service.
     fn device_access_missing() -> bool {
-        gob_uinput::access::missing()
+        // SystemGobloon gives the seat's user the controllers itself (its runtime rule), and the
+        // nodes of hidden sticks are closed on purpose: nothing to grant while it runs.
+        if gob_system::Client::connect().is_ok() {
+            false
+        } else {
+            gob_uinput::access::missing()
+        }
     }
 
     fn grant_device_access() -> Result<(), String> {
         gob_uinput::access::install()
+    }
+
+    /// The stick's hidraw node: buttons past 80 come from there.
+    fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String> {
+        gob_uinput::access::install_raw(vendor_id, product_id)
+    }
+
+    /// SystemGobloon, the systemd service shipped next to the program (in the AppImage too).
+    fn system_part(version: &str) -> super::SystemPart {
+        use super::SystemPart;
+        use gob_system::install::{self, Status};
+        let bundled = install::bundled_binary().is_some();
+        match install::status(version) {
+            Status::Unsupported => SystemPart::Unavailable,
+            Status::NotInstalled if bundled => SystemPart::NotInstalled,
+            Status::NotInstalled => SystemPart::Unavailable,
+            Status::Stopped => SystemPart::Stopped,
+            Status::Running { version: v } if v != version && bundled => {
+                SystemPart::Outdated { version: v }
+            }
+            Status::Running { version } => SystemPart::Current { version },
+        }
+    }
+
+    fn install_system_part() -> Result<(), String> {
+        let binary = gob_system::install::bundled_binary()
+            .ok_or("System Gobloon is not next to the program")?;
+        // The service closes hidden sticks' raw HID nodes itself: the program's own rule for
+        // that would keep them closed after the service shows them again.
+        gob_system::install::install(&binary, &[gob_uinput::access::HIDDEN_RULE_PATH])
+    }
+
+    /// The rules the program's own hiding and devices need without the service are written in
+    /// the same step: one password. No hidden stick: the hidden-stick rule is deleted (one left
+    /// from before the service would keep a shown stick closed).
+    fn remove_system_part() -> Result<(), String> {
+        use gob_uinput::access;
+        let hidden = access::hidden_rules(&gob_hide::closed_sticks());
+        let mut files = Vec::new();
+        if !std::path::Path::new(access::RULE_PATH).exists() {
+            files.push((access::RULE_PATH, access::RULE));
+        }
+        if !hidden.is_empty() || std::path::Path::new(access::HIDDEN_RULE_PATH).exists() {
+            files.push((access::HIDDEN_RULE_PATH, hidden.as_str()));
+        }
+        gob_system::install::remove(&files)
     }
 
     /// Started from an AppImage (it updates as one file).
@@ -218,7 +319,9 @@ impl super::Desktop for Desktop {
 
 #[cfg(test)]
 mod tests {
-    use super::ini_value;
+    use std::path::{Path, PathBuf};
+
+    use super::{ini_value, user_dir};
 
     #[test]
     fn kdeglobals_double_click() {
@@ -226,5 +329,20 @@ mod tests {
         assert_eq!(ini_value(text, "KDE", "DoubleClickInterval"), Some("550"));
         assert_eq!(ini_value(text, "KDE", "Missing"), None);
         assert_eq!(ini_value("", "KDE", "DoubleClickInterval"), None);
+    }
+
+    #[test]
+    fn user_dirs_documents() {
+        let home = Path::new("/home/h0use");
+        let text =
+            "# comment\nXDG_DESKTOP_DIR=\"$HOME/Desktop\"\nXDG_DOCUMENTS_DIR=\"$HOME/Dokumente\"\n";
+        let key = "XDG_DOCUMENTS_DIR";
+        assert_eq!(user_dir(text, key, home), Some(home.join("Dokumente")));
+        let absolute = "XDG_DOCUMENTS_DIR=\"/data/docs\"";
+        assert_eq!(
+            user_dir(absolute, key, home),
+            Some(PathBuf::from("/data/docs"))
+        );
+        assert_eq!(user_dir("", key, home), None);
     }
 }

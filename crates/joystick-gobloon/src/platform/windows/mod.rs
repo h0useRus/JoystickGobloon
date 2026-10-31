@@ -20,6 +20,21 @@ impl super::Desktop for Desktop {
         std::env::var_os("APPDATA").map(|p| PathBuf::from(p).join("JoystickGobloon"))
     }
 
+    /// The Documents known folder (wherever the user moved it, e.g. into OneDrive).
+    fn documents_dir() -> Option<PathBuf> {
+        use windows::Win32::System::Com::CoTaskMemFree;
+        use windows::Win32::UI::Shell::{
+            FOLDERID_Documents, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
+        };
+        // SAFETY: the returned string is read once, then freed with CoTaskMemFree as documented.
+        unsafe {
+            let path = SHGetKnownFolderPath(&FOLDERID_Documents, KF_FLAG_DEFAULT, None).ok()?;
+            let dir = path.to_string().ok().map(PathBuf::from);
+            CoTaskMemFree(Some(path.as_ptr().cast()));
+            dir
+        }
+    }
+
     /// Fonts every Windows 10/11 has: Microsoft YaHei, Malgun Gothic.
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
         let windows = std::env::var_os("WINDIR").unwrap_or_else(|| r"C:\Windows".into());
@@ -58,6 +73,14 @@ impl super::Desktop for Desktop {
     /// The low-level keyboard hook sees every key.
     fn keyboard_bindings() -> bool {
         true
+    }
+
+    fn keyboard_access() -> super::KeyboardAccess {
+        super::KeyboardAccess::Open
+    }
+
+    fn set_keyboard_access(_allow: bool) -> Result<(), String> {
+        Ok(())
     }
 
     fn held_keys() -> Option<Vec<Key>> {
@@ -151,5 +174,23 @@ impl super::Desktop for Desktop {
 
     fn grant_device_access() -> Result<(), String> {
         Ok(())
+    }
+
+    /// DirectInput reads every button already.
+    fn grant_all_buttons(_vendor_id: u16, _product_id: u16) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// HidHide and vJoy do its work until our own driver comes.
+    fn system_part(_version: &str) -> super::SystemPart {
+        super::SystemPart::Unavailable
+    }
+
+    fn install_system_part() -> Result<(), String> {
+        Err("not supported on Windows yet".into())
+    }
+
+    fn remove_system_part() -> Result<(), String> {
+        Err("not supported on Windows yet".into())
     }
 }

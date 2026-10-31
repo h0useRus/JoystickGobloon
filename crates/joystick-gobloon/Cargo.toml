@@ -31,14 +31,21 @@ sha2 = "0.11.1"
 semver = "1.0.28"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+gob-system.workspace = true
 gob-uinput.workspace = true
 libc.workspace = true
 # The tray icon's thread (platform/linux/window.rs); the version tray-icon uses.
 gtk = "0.18"
 # Light/dark from the desktop portal (platform/linux/theme.rs); the versions and features rfd uses.
-ashpd = { version = "0.11", default-features = false, features = ["async-std"] }
-pollster = "0.4"
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "settings"] }
+pollster = "1"
 futures-util = { version = "0.3", default-features = false }
+# Only features: eframe without its defaults no longer turns these on. Title bar on GNOME
+# Wayland (client-side decorations), libwayland loaded at run time so X11-only systems start.
+winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita", "wayland-dlopen"] }
+
+[package.metadata.cargo-machete]
+ignored = ["winit"]
 
 [target.'cfg(windows)'.dependencies]
 # The main window's HWND (platform/windows/window.rs).
@@ -52,6 +59,7 @@ windows = { workspace = true, features = [
     "Win32_System_Threading",
     "Win32_Security",
     "Win32_UI_Shell",
+    "Win32_System_Com",
 ] }
 
 [build-dependencies]

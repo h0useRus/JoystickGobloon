@@ -16,6 +16,10 @@ impl super::Desktop for Desktop {
         None
     }
 
+    fn documents_dir() -> Option<PathBuf> {
+        std::env::var_os("HOME").map(PathBuf::from)
+    }
+
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
         Vec::new()
     }
@@ -47,6 +51,14 @@ impl super::Desktop for Desktop {
 
     fn keyboard_bindings() -> bool {
         false
+    }
+
+    fn keyboard_access() -> super::KeyboardAccess {
+        super::KeyboardAccess::Open
+    }
+
+    fn set_keyboard_access(_allow: bool) -> Result<(), String> {
+        Err("not supported on this system".into())
     }
 
     fn held_keys() -> Option<Vec<Key>> {
@@ -100,6 +112,22 @@ impl super::Desktop for Desktop {
     }
 
     fn grant_device_access() -> Result<(), String> {
+        Err("not supported on this system".into())
+    }
+
+    fn grant_all_buttons(_vendor_id: u16, _product_id: u16) -> Result<(), String> {
+        Err("not supported on this system".into())
+    }
+
+    fn system_part(_version: &str) -> super::SystemPart {
+        super::SystemPart::Unavailable
+    }
+
+    fn install_system_part() -> Result<(), String> {
+        Err("not supported on this system".into())
+    }
+
+    fn remove_system_part() -> Result<(), String> {
         Err("not supported on this system".into())
     }
 

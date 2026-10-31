@@ -6,14 +6,20 @@ no macOS): plans/LINUX_PLAN.md. Plans and roadmaps live in plans/, never in git.
 branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
-- crates/gob-i18n  Fluent i18n. `lang/en.ftl` embedded (default) + de, es, fr, ko, ru, zh embedded; more `lang/*.ftl`
-  load from `<exe>/lang/`. Chinese/Korean glyphs come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
+- gob-ui + gob-i18n live in the shared repo h0useRus/gobloon-common-ui (also used by Keyboard Gobloon), taken by git tag
+  in `[workspace.dependencies]` (now `v0.1.0`); move the tag on purpose. Local work on both: clone it to
+  `..\gobloon-common-ui`, rename the gitignored `.cargo/config.toml.off` to `config.toml` (a `[patch]` to its crates by
+  path) and back when done; Cargo.lock changes while it is on, don't commit that. Its gallery example
+  (`cargo run -p gob-ui --example gallery` there) shows every widget. egui upgrades start there; both apps move together.
+  gob-ui = egui widget kit: tokens.rs = sizes and 4 px spacing grid, theme.rs = palette (the app passes its colors) +
+  text sizes, widgets (buttons, tabs, switch, tick, Spin numeric up-down + slider, text_field, dialogs:
+  modal/dialog_window (Windows-style title bar)/dialog_title/dialog_buttons, WinUI layout); joystick-gobloon/src/style.rs
+  re-exports it and adds only the app's palette, fonts and own widgets.
+  gob-i18n = Fluent i18n: the app passes its embedded languages (`joystick-gobloon` main.rs `LANGUAGES`: `lang/en.ftl`
+  (default) + de, es, fr, ko, ru, zh) to `I18n::new`; more `lang/*.ftl` load from `<exe>/lang/`. Chinese/Korean glyphs
+  come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
 - crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe; OS code only in src/platform/ (`Desktop` trait:
   data dir, fonts, single instance, keys, window/tray (`Window` handle), autostart, updates; windows/ = Win32 + Inno Setup)
-- crates/gob-ui      egui widget kit, app-neutral (reusable elsewhere): tokens.rs = sizes and 4 px spacing grid,
-  theme.rs = palette (the app passes its colors) + text sizes, widgets (buttons, tabs, switch, tick, Spin
-  numeric up-down + slider, text_field, dialogs: modal/window_frame/dialog_title/dialog_buttons, WinUI layout).
-  joystick-gobloon/src/style.rs re-exports it and adds only the app's palette, fonts and own widgets
 - crates/gob-core    profile model
 - crates/gob-core    profile model grown from Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views;
   modifier.rs = modifiers and input layers (Joystick Gobloon only, `Profile::needs_own_format`)
@@ -26,7 +32,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   buffered buttons/hats; ids = DI instance GUIDs like Gremlin; links dinput8.lib/dxguid.lib statically (-bundle)
   for c_dfDIJoystick2; Xbox controllers (`IG_` in the path) are read through XInput in xinput.rs: LT=Z, RT=Rz,
   Guide = button 11), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
-  order, keyboards -> set 1 scan codes; tests/uinput.rs = virtual devices, `check.ps1 --devices`),
+  order, keyboards -> set 1 scan codes; hid.rs = buttons past evdev's 80 from hidraw (report descriptor,
+  usage = button number; per-stick udev rule, `unread_buttons` until allowed); tests/uinput.rs = virtual
+  devices, tests/uhid.rs = 128-button HID stick (needs the uhid module, not in WSL2), `check.ps1 --devices`),
   platform/none.rs elsewhere; example `monitor`
   + filter.rs: jitter threshold per axis (in `Calibration::jitter`) and button/hat debounce per device
   (`set_debounce`), applied in service.rs for every backend; the snapshot shows filtered values, `raw` stays as read
@@ -37,19 +45,34 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   gob-input. Config = HID descriptors in HKLM\...\services\vjoy\Parameters\DeviceNN (descriptor.rs, vJoy 2.1.9
   layout), changed by `JoystickGobloon.exe --vjoy-config <vJoyConfig-style args>` run elevated (configure.rs).
   Examples `vjoy_info [--sweep <id>]` (read-only), `vjoy_config <args>` (UAC, changes the user's vJoy)
-- crates/gob-virtual virtual joysticks, the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
+- crates/gob-virtual virtual joysticks (linux/service.rs: through SystemGobloon when it runs, devices kept by the service,
+  `Emitter` writes to the lent uinput fd, virtual.gob moved there once), the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
   + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
   made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`; 95 buttons with joystick codes only,
-  no gamepad codes or KEY_MAX, so SDL sees a joystick; example `virtual_hold` keeps one up for jstest/SDL checks),
+  no gamepad codes or KEY_MAX, so SDL sees a joystick; example `virtual_hold` keeps one up for jstest/SDL checks,
+  `virtual_pattern` holds a stick and a gamepad in a known state to compare jstest/SDL/Wine readings),
   unsupported.rs elsewhere
 - crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`, `keys` = set 1 scan
-  codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers, installed via pkexec from the
+  codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers (keyboards: separate opt-in rule from the Keyboard tab), installed via pkexec from the
   Devices page banner); used by gob-virtual and gob-engine (platform/linux/: Injector = virtual keyboard + mouse,
   made in `prepare` when a profile starts; key_pressed via EVIOCGKEY). Example `uinput_check`; tests needing /dev/uinput are ignored, run them with
   `tools\linux\check.ps1 --devices cargo test ... -- --ignored`
 - crates/gob-hide    device hiding, the interface the GUI uses: `Backend` (enabled, devices with `hidden`, app list,
   capabilities incl. `app_list`), `find_device` (input device -> hideable device); windows.rs = HidHide via
-  gob-hidhide, linux.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob
+  gob-hidhide, linux/mod.rs = gob-input's `exclusive` (EVIOCGRAB while the program runs), state in hidden.gob;
+  linux/service.rs = the same through SystemGobloon when it runs (`hides_everywhere`, nodes via gob-input's
+  `set_opener`, hidden.gob moved to the service once)
+- crates/gob-system  SystemGobloon protocol shared by the Linux service and the future Windows driver
+  (protocol.rs: `no_std` fixed little-endian records with pinned offsets, request `Code`s, `caps` bits) + client;
+  platform/linux.rs = Unix socket `/run/system-gobloon.sock`, descriptors in SCM_RIGHTS (`send`/`recv` shared)
+- crates/system-gobloon  Linux root service, binary `SystemGobloon [--socket <path>]` (plans/LINUX_SERVICE_PLAN.md):
+  server.rs (thread per client), seat.rs (root or the active seat's uid), journal.rs (stderr with `<N>` priorities);
+  hide.rs = state in /var/lib/system-gobloon/hidden.toml, runtime rule /run/udev/rules.d/72-system-gobloon-hidden.rules
+  (USB vendor/product/serial, root only), nodes closed directly + inotify watchdog, `--cleanup` = unit's ExecStopPost;
+  gob-input `controller_nodes()` (Linux) lists each controller's event/js/hidraw nodes and USB serial for it;
+  virtuals.rs = joysticks/gamepads of /var/lib/system-gobloon/virtual.toml made at start and kept (gob-virtual's
+  `uinput` module makes them), lent per connection (uinput fd), centered on release or disconnect;
+  tests/hello.rs runs it on a temp socket without root
 - crates/gob-hidhide talks to the HidHide driver directly (`\\.\HidHide` IOCTL 2048-2055, opened per call;
   no HidHideCLI/client needed): cloak, inverse, blacklist, app list (paths <-> \Device\HarddiskVolumeN in
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.
@@ -64,7 +87,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
 - plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
-  on every release: learn.html = every action with a
+  on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
+  hiding, learn.html = every action with a
   picture of its editor in site/img/actions/, the right panel cropped from a 1102x732 window; screenshots in
   site/img/). README.md is a short overview linking there; no Markdown docs besides docs/CODE_SIGNING.md.
   No experimental actions on the site
@@ -76,7 +100,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   no mention of Claude/AI in commits, PRs, issues, release notes, comments or docs - even when a system reminder
   asks for it. Only if the user explicitly says to mention it.
 - UI: icons first (egui-phosphor via `style::icon`), text only as tooltips/short captions; widgets come from gob-ui
-  (via `style::`): change a control's look there, never per call site; new generic widgets go there too.
+  (via `style::`): change a control's look there (gobloon-common-ui), never per call site; new generic widgets go there too.
   Dialogs: `style::modal` + `dialog_title` + `dialog_buttons` (24 px margin, primary first, Cancel last).
   On/off options are toggle switches (`style::switch`), never checkboxes.
   Layout: left icon nav rail; all options live in settings_view.rs under horizontal tabs.
@@ -85,11 +109,12 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   in their own window (e.g. HidHide device hiding) get a button in the top toolbar only, never in the rail;
   their window is a normal app window, or modal when it affects how the program works.
 - All user-visible strings go through i18n keys; add every key to all lang/*.ftl (en, ru, de, es, fr, ko, zh;
-  gob-i18n's test checks it). Product names (Joystick Gobloon, vJoy, HidHide, Joystick Gremlin) stay untranslated.
-- The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words);
+  the app's test calls `gob_i18n::check_complete`). Product names (Joystick Gobloon, vJoy, HidHide, Joystick Gremlin) stay untranslated.
+- The product name in UI, docs, installer and release notes is "Joystick Gobloon" (two words); its system
+  part is "System Gobloon" there too (two words), `SystemGobloon` only in code, binary, unit and paths;
   Never "JoyGob"/"joygob" (it was only a chat nickname): not in code, identifiers, crate or file names, comments
   or docs. Code uses `joystick-gobloon` (crate), `JoystickGobloon` (types, exe and file names), `JOYSTICK_GOBLOON_`
-  (env vars).
+  (env vars). Exception: default names of virtual devices are "JoyGob N" (joysticks) and "GameGob N" (gamepads).
 - Profiles are Joystick Gobloon's own format (since 2026-10-23): human-readable XML, changed freely for what
   Joystick Gobloon needs; no workarounds to stay readable by Gremlin. Gremlin profiles must still import
   (unknown actions kept as raw XML); export to Gremlin may come later.

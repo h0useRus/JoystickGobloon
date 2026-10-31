@@ -145,7 +145,7 @@ impl Editor<'_> {
                     scan_code: *scan_code,
                     extended: *extended,
                 };
-                let field = egui::Id::new(("macro-key", id, index));
+                let field = egui::Id::unique(("macro-key", id, index));
                 if let Some(keys) = crate::key_capture::keys_field(ui, field, &[key], self.i18n)
                     && let Some(k) = keys.first()
                 {
@@ -287,7 +287,7 @@ impl Editor<'_> {
                     let text = format!("{}  {}", step_icon(&step), self.i18n.tr(key));
                     if ui.button(text).clicked() {
                         add = Some(step);
-                        ui.close_menu();
+                        ui.close();
                     }
                 }
             },
@@ -320,7 +320,7 @@ fn step_icon(step: &MacroStep) -> &'static str {
         MacroStep::MouseButton { .. } => icon::MOUSE,
         MacroStep::MouseMotion { .. } => icon::ARROWS_OUT_CARDINAL,
         MacroStep::VjoyButton { .. } | MacroStep::VjoyAxis { .. } | MacroStep::VjoyHat { .. } => {
-            icon::GAME_CONTROLLER
+            icon::JOYSTICK
         }
         MacroStep::Other => icon::PUZZLE_PIECE,
     }

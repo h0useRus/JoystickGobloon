@@ -47,9 +47,11 @@ fn abs_range(node: &File, code: u16) -> (i32, i32) {
 #[ignore = "needs /dev/uinput"]
 fn gamepad_looks_like_a_wired_xbox_360_pad() {
     let name = "Joystick Gobloon Test Gamepad";
-    let dev = VirtualDevice::create(&gamepad::spec(name)).expect("create the gamepad");
+    let phys = "joystick-gobloon/test-gamepad";
+    let dev = VirtualDevice::create(&gamepad::spec(name, phys)).expect("create the gamepad");
     let sys = dev.sys_path().unwrap();
     assert_eq!(read(&sys, "name"), name);
+    assert_eq!(read(&sys, "phys"), phys);
     assert_eq!(read(&sys, "id/bustype"), format!("{:04x}", codes::BUS_USB));
     assert_eq!(read(&sys, "id/vendor"), "045e");
     assert_eq!(read(&sys, "id/product"), "028e");

@@ -330,6 +330,8 @@ fn virtual_devices_round_trip() {
                 buttons: 128,
                 hats: 4,
                 discrete_hats: false,
+                name: None,
+                product: None,
             },
             VirtualJoystick {
                 id: 3,
@@ -337,6 +339,8 @@ fn virtual_devices_round_trip() {
                 buttons: 16,
                 hats: 1,
                 discrete_hats: true,
+                name: Some("Gobloon Throttle".into()),
+                product: Some(0xBE21),
             },
         ],
         gamepads: vec![1, 2],
@@ -347,7 +351,7 @@ fn virtual_devices_round_trip() {
     ));
     assert!(
         written.contains(
-            r#"<joystick id="3" axes="X Y Rz" buttons="16" hats="1" hat-type="discrete"/>"#
+            r#"<joystick id="3" axes="X Y Rz" buttons="16" hats="1" hat-type="discrete" name="Gobloon Throttle" pid="0xBE21"/>"#
         )
     );
     assert!(written.contains(r#"<gamepad id="2"/>"#));

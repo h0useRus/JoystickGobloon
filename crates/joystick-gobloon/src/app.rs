@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Align, Layout, RichText, Vec2};
 use gob_i18n::I18n;
@@ -57,6 +57,7 @@ pub struct JoystickGobloonApp {
     apps_view: AppsView,
     /// Banner for device access the user still has to grant (Linux).
     device_access: crate::device_access::DeviceAccess,
+    system_part: crate::system_part_view::SystemPartView,
     /// Running profile, if activated.
     /// New releases from GitHub (About page, check on start).
     updater: crate::update::Updater,
@@ -136,7 +137,7 @@ impl JoystickGobloonApp {
         let lang_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|d| d.join("lang")));
-        let mut i18n = I18n::new(lang_dir.as_deref());
+        let mut i18n = I18n::new(crate::LANGUAGES, lang_dir.as_deref());
         i18n.set_language(&settings.language);
         style::install_fonts(&cc.egui_ctx);
         style::apply(&cc.egui_ctx, settings.theme);
@@ -200,6 +201,7 @@ impl JoystickGobloonApp {
             hidhide_window: false,
             apps_view: AppsView::new(),
             device_access: crate::device_access::DeviceAccess::new(),
+            system_part: crate::system_part_view::SystemPartView::new(),
             activation,
             was_active: false,
             edited: None,
@@ -401,11 +403,30 @@ impl JoystickGobloonApp {
         }
     }
 
+    /// File dialog for profiles, starting in `dir`, else where the last one was opened or
+    /// saved, else in the documents folder.
+    fn profile_dialog(&self, dir: Option<&Path>) -> rfd::FileDialog {
+        let dialog =
+            rfd::FileDialog::new().add_filter(self.i18n.tr("file-filter-gremlin"), &["xml"]);
+        let dir = dir
+            .map(Path::to_path_buf)
+            .or_else(|| self.settings.profile_dir.clone().filter(|d| d.is_dir()))
+            .or_else(crate::platform::documents_dir);
+        match dir {
+            Some(dir) => dialog.set_directory(dir),
+            None => dialog,
+        }
+    }
+
+    /// Remembers the folder of a profile picked in a file dialog.
+    fn remember_profile_dir(&mut self, path: &Path) {
+        self.settings.profile_dir = path.parent().map(Path::to_path_buf);
+        self.settings.save();
+    }
+
     fn import_dialog(&mut self) {
-        let picked = rfd::FileDialog::new()
-            .add_filter(self.i18n.tr("file-filter-gremlin"), &["xml"])
-            .pick_file();
-        if let Some(path) = picked {
+        if let Some(path) = self.profile_dialog(None).pick_file() {
+            self.remember_profile_dir(&path);
             self.open_profile(path, true);
         }
     }
@@ -446,7 +467,8 @@ impl JoystickGobloonApp {
         let Some(loaded) = &mut self.profile else {
             return;
         };
-        let taken = crate::virtual_setup::capture(&loaded.profile, &devices);
+        let configs = self.vjoy_view.configs();
+        let taken = crate::virtual_setup::capture(&loaded.profile, &devices, configs);
         if taken != loaded.profile.virtual_devices {
             loaded.profile.set_virtual_devices(taken);
         }
@@ -477,9 +499,11 @@ impl JoystickGobloonApp {
         let names: Vec<String> = changes
             .iter()
             .filter_map(|c| match c {
-                gob_virtual::Change::Set(c) => {
-                    Some(self.i18n.trf("vjoy-device-n", &[("n", c.id.into())]))
-                }
+                gob_virtual::Change::Set(c) => Some(match &c.name {
+                    Some(name) if caps.custom_names => name.clone(),
+                    _ if caps.custom_names => gob_virtual::DeviceConfig::default_name(c.id),
+                    _ => self.i18n.trf("vjoy-device-n", &[("n", c.id.into())]),
+                }),
                 gob_virtual::Change::AddGamepad(id) => {
                     Some(self.i18n.trf("gamepad-n", &[("n", (*id).into())]))
                 }
@@ -531,14 +555,13 @@ impl JoystickGobloonApp {
         let Some(loaded) = &self.profile else {
             return false;
         };
-        let mut dialog = rfd::FileDialog::new()
-            .add_filter(self.i18n.tr("file-filter-gremlin"), &["xml"])
-            .set_file_name(loaded.file_name());
-        if let Some(dir) = loaded.path.as_ref().and_then(|p| p.parent()) {
-            dialog = dialog.set_directory(dir);
-        }
+        let dir = loaded.path.as_ref().and_then(|p| p.parent());
+        let dialog = self.profile_dialog(dir).set_file_name(loaded.file_name());
         match dialog.save_file() {
-            Some(path) => self.save_checked(path, after),
+            Some(path) => {
+                self.remember_profile_dir(&path);
+                self.save_checked(path, after)
+            }
             None => false,
         }
     }
@@ -1107,8 +1130,41 @@ impl JoystickGobloonApp {
         )
     }
 
+    /// After the system part was installed or removed, the pages find their backends again
+    /// (the service's, or their own).
+    fn poll_system_part(&mut self) {
+        use crate::system_part_view::Job;
+        let Some((job, result)) = self.system_part.poll() else {
+            return;
+        };
+        match result {
+            Ok(()) => {
+                let key = match job {
+                    Job::Install => "system-installed",
+                    Job::Remove => "system-removed",
+                };
+                self.status = self.i18n.tr(key);
+                self.vjoy_view.release();
+                self.vjoy_view = VJoyView::new();
+                self.hidhide_view = HidHideView::new();
+                self.device_access = crate::device_access::DeviceAccess::new();
+            }
+            Err(e) => {
+                let text = self.i18n.trf("system-error", &[("error", e.into())]);
+                self.error(text);
+            }
+        }
+    }
+
     fn devices_page(&mut self, ui: &mut egui::Ui) {
-        match self.device_access.show(ui, &self.i18n) {
+        // Installing the system part gives the access too: one offer at a time.
+        let offered = self.system_part.banner(ui, &self.i18n);
+        let access = if offered {
+            None
+        } else {
+            self.device_access.show(ui, &self.i18n)
+        };
+        match access {
             Some(Ok(())) => {
                 log::info!("device access granted");
                 self.status = self.i18n.tr("access-granted");
@@ -1190,6 +1246,7 @@ impl JoystickGobloonApp {
         } else {
             Default::default()
         };
+        self.devices_view.system_part_offered = offered;
         self.devices_view.show(
             ui,
             &self.i18n,
@@ -1202,6 +1259,37 @@ impl JoystickGobloonApp {
             && let Some(d) = devices.iter().find(|d| d.info.guid == guid)
         {
             self.hidhide_view.set_device_hidden(&d.info, hide);
+        }
+        match self.devices_view.all_buttons_result.take() {
+            Some(Ok(())) => {
+                log::info!("all buttons allowed");
+                self.status = self.i18n.tr("all-buttons-allowed");
+            }
+            Some(Err(e)) => {
+                let text = self.i18n.trf("all-buttons-error", &[("error", e.into())]);
+                self.error(text);
+            }
+            None => {}
+        }
+        match self.devices_view.keyboard_result.take() {
+            Some((allow, Ok(()))) => {
+                log::info!(
+                    "keyboard access {}",
+                    if allow { "allowed" } else { "removed" }
+                );
+                self.status = self.i18n.tr(if allow {
+                    "keyboard-access-allowed"
+                } else {
+                    "keyboard-access-removed"
+                });
+            }
+            Some((_, Err(e))) => {
+                let text = self
+                    .i18n
+                    .trf("keyboard-access-error", &[("error", e.into())]);
+                self.error(text);
+            }
+            None => {}
         }
         if std::mem::take(&mut self.devices_view.open_modes) {
             self.show_modes = true;
@@ -1306,7 +1394,9 @@ impl JoystickGobloonApp {
 }
 
 impl eframe::App for JoystickGobloonApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    /// Runs every frame, and also while the window is in the tray or minimized (eframe then
+    /// draws nothing and skips [`Self::ui`]).
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
         // Started or stopped from the tray menu (maybe while the window was hidden).
         let active = self.activation.is_active();
@@ -1408,7 +1498,7 @@ impl eframe::App for JoystickGobloonApp {
             self.save();
         }
         // Text fields keep their own Ctrl+Z while focused.
-        if !ctx.wants_keyboard_input() {
+        if !ctx.egui_wants_keyboard_input() {
             let undo = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Z);
             let redo = egui::KeyboardShortcut::new(
                 egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
@@ -1470,28 +1560,32 @@ impl eframe::App for JoystickGobloonApp {
             modifiers,
         );
         self.was_shown = shown;
-        // In the tray only the logic above runs: nothing is drawn, so no page or window
-        // schedules repaints. Detached windows close and come back with the main window.
-        if in_tray {
+    }
+
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &root.ctx().clone();
+        // In the tray only the logic runs: nothing is drawn, so no page or window schedules
+        // repaints. Detached windows close and come back with the main window.
+        if self.main_window.is_some_and(crate::platform::in_tray) {
             return;
         }
-        egui::SidePanel::left("nav")
+        egui::Panel::left("nav")
             .resizable(false)
-            .exact_width(60.0)
-            .show(ctx, |ui| self.nav_rail(ui));
+            .exact_size(60.0)
+            .show(root, |ui| self.nav_rail(ui));
         let margin = egui::Margin {
             left: 16,
             right: 16,
             top: 4,
             bottom: 4,
         };
-        egui::TopBottomPanel::top("toolbar")
-            .frame(egui::Frame::side_top_panel(&ctx.style()).inner_margin(margin))
-            .show(ctx, |ui| self.toolbar(ui));
+        egui::Panel::top("toolbar")
+            .frame(egui::Frame::side_top_panel(&ctx.global_style()).inner_margin(margin))
+            .show(root, |ui| self.toolbar(ui));
 
         let cloak = self.hidhide_view.cloak(self.settings.hidhide_gaming_only);
         let mut switch_cloak = None;
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+        egui::Panel::bottom("status").show(root, |ui| {
             ui.horizontal(|ui| {
                 // Device hiding indicator: green crossed eye while on. A click asks before
                 // switching it, a double click switches it at once.
@@ -1572,10 +1666,11 @@ impl eframe::App for JoystickGobloonApp {
         if self.page != Page::VJoy {
             self.vjoy_view.release();
         }
-        let frame = egui::Frame::central_panel(&ctx.style()).inner_margin(16);
+        self.poll_system_part();
+        let frame = egui::Frame::central_panel(&ctx.global_style()).inner_margin(16);
         egui::CentralPanel::default()
             .frame(frame)
-            .show(ctx, |ui| match self.page {
+            .show(root, |ui| match self.page {
                 Page::Devices => self.devices_page(ui),
                 Page::Apps => {
                     self.apps_view.show(ui, &self.i18n, &self.settings);
@@ -1659,9 +1754,10 @@ impl eframe::App for JoystickGobloonApp {
                         &mut self.settings_tab,
                         &self.logo,
                         &mut self.updater,
-                        &settings_view::Attached {
+                        settings_view::Attached {
                             led_devices: &led_devices,
                             polls_devices: self.input.polls_devices(),
+                            system_part: &mut self.system_part,
                         },
                     );
                     if let Some(change) = change {
@@ -1762,7 +1858,7 @@ fn detached_window(
     let viewport = egui::ViewportId::from_hash_of(id);
     // Opens centered over the main window. The position is fixed when it opens, so the
     // window can be moved afterwards (egui re-applies only builder changes).
-    let pos_id = egui::Id::new(("window-pos", id));
+    let pos_id = egui::Id::unique(("window-pos", id));
     let main = ctx.input(|i| i.viewport().outer_rect);
     let pos = ctx.data(|d| d.get_temp::<egui::Pos2>(pos_id)).or_else(|| {
         let r = main?;

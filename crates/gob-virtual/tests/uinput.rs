@@ -99,10 +99,10 @@ fn acquire_drive_release() {
     assert_eq!(backend.status(1), Status::Own);
     assert!(backend.acquire(1).is_err(), "already held");
 
-    let name = "Joystick Gobloon Joystick 1";
+    let name = "JoyGob 1";
     let path = event_node(name).expect("event node of device 1");
     assert_eq!(sys_id(&path, "vendor"), "1234");
-    assert_eq!(sys_id(&path, "product"), "bead");
+    assert_eq!(sys_id(&path, "product"), "be01", "its own product id");
     let mut node = std::fs::OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NONBLOCK)
@@ -166,7 +166,7 @@ fn gamepad(backend: &dyn gob_virtual::Backend) {
     assert_eq!(backend.gamepads()[0].status, Status::Own);
     assert!(backend.acquire_gamepad(1).is_err(), "already held");
 
-    let name = "Joystick Gobloon Gamepad 1";
+    let name = "GameGob 1";
     let path = event_node(name).expect("event node of gamepad 1");
     assert_eq!(sys_id(&path, "vendor"), "045e");
     assert_eq!(sys_id(&path, "product"), "028e");

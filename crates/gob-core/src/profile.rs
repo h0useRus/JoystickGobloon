@@ -14,9 +14,12 @@ pub enum VirtualOutput {
     },
     /// `control` is a map-to-gamepad control name (`a`, `left-x`, `dpad`, ...).
     Gamepad { gamepad: u32, control: String },
+    /// Input `id` of that type on the profile's logical device.
+    Logical { input_type: InputType, id: u32 },
 }
 
-/// The virtual output `action` writes, if it is map-to-vjoy or map-to-gamepad.
+/// The virtual output `action` writes, if it is map-to-vjoy, map-to-gamepad or
+/// map-to-logical-device.
 pub fn virtual_output(action: &Action) -> Option<VirtualOutput> {
     match action.kind() {
         ActionKind::MapToVjoy {
@@ -35,6 +38,9 @@ pub fn virtual_output(action: &Action) -> Option<VirtualOutput> {
             gamepad,
             control: control.to_string(),
         }),
+        ActionKind::MapToLogicalDevice { input_type, id, .. } => {
+            Some(VirtualOutput::Logical { input_type, id })
+        }
         _ => None,
     }
 }
@@ -230,6 +236,10 @@ pub struct VirtualJoystick {
     pub hats: u32,
     /// 4-direction hats instead of continuous ones.
     pub discrete_hats: bool,
+    /// The name games see; `None` = the system's default name.
+    pub name: Option<String>,
+    /// USB product id games see; `None` = the system's default for the id.
+    pub product: Option<u16>,
 }
 
 /// Top-level profile sections, in the order they appear in the file.
@@ -378,12 +388,12 @@ impl Profile {
                     input_type,
                     id,
                 } => Some((device, input_type, id)),
-                VirtualOutput::Gamepad { .. } => None,
+                _ => None,
             })
             .collect()
     }
 
-    /// Virtual outputs that map-to-vjoy and map-to-gamepad actions write to, each with the
+    /// Virtual outputs that map-to-vjoy, map-to-gamepad and map-to-logical-device actions write to, each with the
     /// bindings writing it (one entry per binding). `mode` limits them to the bindings that can
     /// run together with it ([`Self::modes_overlap`]); `None` takes every mode.
     pub fn output_usage(&self, mode: Option<&str>) -> HashMap<VirtualOutput, Vec<OutputUse>> {
@@ -401,6 +411,25 @@ impl Profile {
             }
         }
         usage
+    }
+
+    /// Name of the controller whose inputs write the most outputs of virtual joystick
+    /// `device` (e.g. to suggest a name for it); ties go to the controller listed first.
+    pub fn main_source(&self, device: u32) -> Option<&str> {
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for (output, uses) in self.output_usage(None) {
+            if !matches!(output, VirtualOutput::Vjoy { device: d, .. } if d == device) {
+                continue;
+            }
+            for u in uses {
+                *counts.entry(&self.inputs[u.binding].device_id).or_default() += 1;
+            }
+        }
+        let rank = |id: &str| self.devices.iter().position(|d| d.id == id);
+        let best = counts
+            .into_iter()
+            .max_by(|a, b| a.1.cmp(&b.1).then(rank(b.0).cmp(&rank(a.0))))?;
+        self.device_name(best.0).filter(|n| !n.is_empty())
     }
 
     /// Outputs written in the action trees under `roots`, with the action writing each (an

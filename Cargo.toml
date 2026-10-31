@@ -9,12 +9,12 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-gob-i18n = { path = "crates/gob-i18n" }
+gob-i18n = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.1.0" }
 gob-core = { path = "crates/gob-core" }
 gob-gremlin = { path = "crates/gob-gremlin" }
-quick-xml = "0.37"
+quick-xml = "0.42"
 gob-input = { path = "crates/gob-input" }
-windows = "0.61"
+windows = "0.62"
 gob-vjoy = { path = "crates/gob-vjoy" }
 gob-virtual = { path = "crates/gob-virtual" }
 gob-uinput = { path = "crates/gob-uinput" }
@@ -22,15 +22,13 @@ gob-hidhide = { path = "crates/gob-hidhide" }
 gob-hide = { path = "crates/gob-hide" }
 gob-engine = { path = "crates/gob-engine" }
 gob-lighting = { path = "crates/gob-lighting" }
-gob-ui = { path = "crates/gob-ui" }
-eframe = "0.31"
-egui = "0.31"
-fluent-bundle = "0.15"
-unic-langid = "0.9"
+gob-ui = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.1.0" }
+gob-system = { path = "crates/gob-system" }
+# The OpenGL renderer: wgpu reserves hundreds of MB, the window stays small with glow.
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "glow", "links", "wayland", "x11"] }
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
-rfd = "0.15"
-egui-phosphor = "0.9"
+toml = "1"
+rfd = "0.17"
 log = "0.4"
 libc = "0.2"
 # Tests only: virtual Xbox 360 controllers through the ViGEmBus driver.

@@ -18,10 +18,12 @@ use super::evdev::{EV_KEY, EV_REP, Node};
 /// Reports (scan code, extended, pressed).
 pub type KeySink = Arc<dyn Fn(u16, bool, bool) + Send + Sync>;
 
-/// Name prefix of the virtual devices Joystick Gobloon creates (gob-virtual's joysticks and
-/// gamepads, gob-engine's keyboard and mouse): their keys are not input, and they are our
-/// output, not controllers (`DeviceInfo::own`).
-pub(crate) const OWN_DEVICE_PREFIX: &str = "Joystick Gobloon";
+/// The virtual devices Joystick Gobloon creates (gob-virtual's joysticks and gamepads,
+/// gob-engine's keyboard and mouse; their `phys` starts with gob-uinput's `OWN_PHYS`): their
+/// keys are not input, and they are our output, not controllers (`DeviceInfo::own`).
+pub(crate) fn is_own(node: &Node) -> bool {
+    node.phys().starts_with(gob_uinput::OWN_PHYS)
+}
 /// Look for new keyboards this often.
 const RESCAN: Duration = Duration::from_secs(2);
 /// Longest wait for keys, so stopping is noticed.
@@ -75,7 +77,8 @@ fn run(sink: &KeySink, stop: &AtomicBool) {
                 super::evdev::event_nodes()
                     .into_iter()
                     .filter(|p| !open.contains(p))
-                    .filter_map(|p| Node::open(&p).ok())
+                    // Keyboards are never hidden: no need to ask SystemGobloon for a node.
+                    .filter_map(|p| Node::open_direct(&p).ok())
                     .filter(is_keyboard),
             );
         }
@@ -128,5 +131,5 @@ fn is_keyboard(node: &Node) -> bool {
         && [KEY_ESC, KEY_A, KEY_Z, KEY_SPACE]
             .iter()
             .all(|&k| caps.keys.has(k))
-        && !node.name().starts_with(OWN_DEVICE_PREFIX)
+        && !is_own(node)
 }

@@ -23,6 +23,7 @@ mod settings;
 mod settings_view;
 mod style;
 mod substitute_view;
+mod system_part_view;
 mod tray;
 mod update;
 mod viewer_view;
@@ -32,10 +33,23 @@ mod vjoy_view;
 mod wizard_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
+/// The window's app id (Wayland) and class (X11); on Linux also the menu entry's name.
+pub const APP_ID: &str = "joystick-gobloon";
 /// Version shown to users, from build.rs: what CI sets in `JOYSTICK_GOBLOON_VERSION`
 /// (`0.2.0-alpha.12`), else the latest git tag and the commits since it (`0.9.0-alpha.45+3.g728daf5`),
 /// else the crate version.
 pub const VERSION: &str = env!("JOYSTICK_GOBLOON_VERSION");
+
+/// The built-in UI languages; more `lang/*.ftl` load from the exe's folder.
+pub const LANGUAGES: &[(&str, &str)] = &[
+    ("en", include_str!("../../../lang/en.ftl")),
+    ("ru", include_str!("../../../lang/ru.ftl")),
+    ("de", include_str!("../../../lang/de.ftl")),
+    ("es", include_str!("../../../lang/es.ftl")),
+    ("fr", include_str!("../../../lang/fr.ftl")),
+    ("ko", include_str!("../../../lang/ko.ftl")),
+    ("zh", include_str!("../../../lang/zh.ftl")),
+];
 
 /// Command-line switch for the uninstaller: take this exe off the device hiding's application list
 /// (Joystick Gobloon adds itself on start) and quit without a window.
@@ -79,6 +93,7 @@ fn main() -> eframe::Result {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_visible(!to_tray)
             .with_title(APP_NAME)
+            .with_app_id(APP_ID)
             .with_inner_size([1100.0, 700.0])
             .with_min_inner_size([640.0, 400.0])
             .with_icon(
@@ -94,4 +109,20 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| Ok(Box::new(app::JoystickGobloonApp::new(cc, instance)))),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn every_language_has_every_english_key() {
+        assert_eq!(gob_i18n::check_complete(super::LANGUAGES), Ok(()));
+    }
+
+    #[test]
+    fn languages_load() {
+        let mut i18n = gob_i18n::I18n::new(super::LANGUAGES, None);
+        i18n.set_language("ru");
+        assert_eq!(i18n.tr("nav-settings"), "Настройки");
+        assert_eq!(i18n.languages().len(), super::LANGUAGES.len());
+    }
 }

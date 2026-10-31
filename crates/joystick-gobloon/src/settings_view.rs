@@ -44,6 +44,8 @@ pub struct Attached<'a> {
     pub led_devices: &'a [LedDevice],
     /// Some controller is read at the poll interval (else its slider is off).
     pub polls_devices: bool,
+    /// The system part's section of the General tab.
+    pub system_part: &'a mut crate::system_part_view::SystemPartView,
 }
 
 pub fn show(
@@ -53,7 +55,7 @@ pub fn show(
     tab: &mut SettingsTab,
     logo: &egui::TextureHandle,
     updater: &mut crate::update::Updater,
-    attached: &Attached,
+    attached: Attached,
 ) -> Option<Change> {
     if !settings.experimental && *tab == SettingsTab::Lighting {
         *tab = SettingsTab::General;
@@ -90,7 +92,11 @@ pub fn show(
             ui.add_space(18.0);
             tray_section(ui, i18n, settings).or(change)
         }
-        SettingsTab::General => general(ui, i18n, settings, attached.polls_devices),
+        SettingsTab::General => {
+            let change = general(ui, i18n, settings, attached.polls_devices);
+            attached.system_part.section(ui, i18n);
+            change
+        }
         SettingsTab::Lighting => lighting(ui, i18n, settings, attached.led_devices),
         SettingsTab::About => {
             about(ui, i18n, logo, updater);
@@ -518,7 +524,7 @@ fn about(
                 .iter()
                 .map(|(g, k, _)| {
                     let text = format!("{g}  {}", i18n.tr(k));
-                    ui.fonts(|f| {
+                    ui.fonts_mut(|f| {
                         f.layout_no_wrap(text, egui::TextStyle::Body.resolve(ui.style()), accent)
                             .size()
                             .x

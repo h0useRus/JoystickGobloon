@@ -9,6 +9,9 @@ mod filter;
 mod platform;
 mod service;
 
+/// Linux: device nodes of the controllers, for SystemGobloon.
+#[cfg(target_os = "linux")]
+pub use platform::{Nodes, Opener, controller_nodes, set_opener};
 pub use service::{
     Calibrations, DEFAULT_POLL_INTERVAL, InputHandle, InputService, MAX_DEBOUNCE_MS, MAX_JITTER,
     MAX_POLL_INTERVAL, MIN_POLL_INTERVAL,
@@ -32,16 +35,20 @@ pub struct DeviceInfo {
     /// gob-lighting's LED control (same path there, compare ignoring case).
     pub hid_path: String,
     /// Set by the backend for Joystick Gobloon's own devices that cannot be told by their ids:
-    /// on Linux the uinput devices named "Joystick Gobloon ..." (a gamepad has a real Xbox
-    /// controller's ids).
+    /// on Linux the uinput devices at a `phys` starting with "joystick-gobloon/" (a gamepad has
+    /// a real Xbox controller's ids).
     pub own: bool,
+    /// Buttons the device has but the system does not pass on without further access (Linux:
+    /// the kernel gives evdev at most 80 buttons; the rest need read access to the raw HID
+    /// device). 0 when every button is read.
+    pub unread_buttons: usize,
 }
 
 impl DeviceInfo {
-    /// Joystick Gobloon's own virtual output (vJoy devices, our uinput devices), as opposed to
-    /// physical controllers.
+    /// Joystick Gobloon's own virtual output (vJoy devices, our virtual joysticks: vendor
+    /// 0x1234, product 0xBE01..=0xBEFF), as opposed to physical controllers.
     pub fn is_own(&self) -> bool {
-        self.own || (self.vendor_id == 0x1234 && self.product_id == 0xBEAD)
+        self.own || (self.vendor_id == 0x1234 && (0xBE01..=0xBEFF).contains(&self.product_id))
     }
 }
 

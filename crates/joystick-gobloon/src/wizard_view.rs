@@ -125,7 +125,7 @@ impl Wizard {
             ui.colored_label(ui.visuals().warn_fg_color, i18n.tr("wizard-no-vjoy"));
         }
         let none = i18n.tr("wizard-none");
-        let vjoy_name = |id: u32| i18n.trf("vjoy-device-n", &[("n", id.into())]);
+        let vjoy_name = |v: &gob_virtual::DeviceInfo| crate::vjoy_view::device_name(i18n, v);
         // What does not fit, per row: shown as ⚠ there and in words under the list.
         let mut warnings = Vec::new();
         egui::Grid::new("wizard-devices")
@@ -155,7 +155,7 @@ impl Wizard {
                     };
                     let chosen = target.and_then(|t| vjoy.iter().find(|v| v.id == t));
                     let selected = chosen.map_or(none.clone(), |v| {
-                        format!("{}  {}", icon::GAME_CONTROLLER, vjoy_name(v.id))
+                        format!("{}  {}", icon::JOYSTICK, vjoy_name(v))
                     });
                     ui.vertical(|ui| {
                         egui::ComboBox::from_id_salt(("wizard-target", &d.info.guid))
@@ -168,8 +168,8 @@ impl Wizard {
                                     // fight over its outputs.
                                     let text = format!(
                                         "{}  {}    {}",
-                                        icon::GAME_CONTROLLER,
-                                        vjoy_name(v.id),
+                                        icon::JOYSTICK,
+                                        vjoy_name(v),
                                         counts(&vjoy_layout(v))
                                     );
                                     let free = !taken.contains(&v.id);
@@ -199,7 +199,7 @@ impl Wizard {
                                 "wizard-fewer",
                                 &[
                                     ("device", d.info.name.trim().to_string().into()),
-                                    ("vjoy", vjoy_name(v.id).into()),
+                                    ("vjoy", vjoy_name(v).into()),
                                     ("missing", missing.into()),
                                 ],
                             ));

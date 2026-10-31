@@ -128,73 +128,72 @@ impl SubstituteDialog {
         let physical: Vec<&DeviceState> = devices.iter().filter(|d| !d.info.is_own()).collect();
         let keep = i18n.tr("subst-keep");
         let mut apply = false;
-        egui::Window::new(i18n.tr("subst-title"))
-            .frame(style::window_frame(ctx))
-            .open(open)
+        let title = i18n.tr("subst-title");
+        let window = egui::Window::new(&title)
             .collapsible(false)
             .resizable(false)
             .pivot(egui::Align2::CENTER_CENTER)
-            .default_pos(ctx.screen_rect().center())
-            .show(ctx, |ui| {
-                egui::Grid::new("subst")
-                    .num_columns(3)
-                    .spacing([12.0, 8.0])
-                    .show(ui, |ui| {
-                        for row in &mut self.rows {
-                            ui.label(format!("{}  {}", icon::PLUGS, row.old_name))
-                                .on_hover_text(&row.old_id);
-                            ui.label(RichText::new(icon::ARROW_RIGHT).size(style::ICON_SIZE));
-                            let selected = row
-                                .target
-                                .as_ref()
-                                .and_then(|g| physical.iter().find(|d| &d.info.guid == g))
-                                .map_or(keep.clone(), |d| {
-                                    format!("{}  {}", icon::JOYSTICK, d.info.name)
-                                });
-                            egui::ComboBox::from_id_salt(&row.old_id)
-                                .selected_text(selected)
-                                .width(260.0)
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(&mut row.target, None, &keep);
-                                    for d in &physical {
-                                        let text = format!("{}  {}", icon::JOYSTICK, d.info.name);
-                                        ui.selectable_value(
-                                            &mut row.target,
-                                            Some(d.info.guid.clone()),
-                                            text,
-                                        )
-                                        .on_hover_text(&d.info.guid);
-                                    }
-                                });
-                            ui.end_row();
-                        }
-                    });
-                let unmapped = self.rows.iter().any(|r| r.target.is_none());
-                let any = self.rows.iter().any(|r| r.target.is_some());
-                let buttons = [
-                    style::DialogButton::primary(format!(
-                        "{}  {}",
-                        icon::CHECK,
-                        i18n.tr("subst-apply")
-                    ))
-                    .enabled(any),
-                    style::DialogButton::secondary(format!(
-                        "{}  {}",
-                        icon::MAGIC_WAND,
-                        i18n.tr("subst-auto")
-                    ))
-                    .enabled(unmapped)
-                    .tip(i18n.tr("subst-auto-tip")),
-                ];
-                match style::dialog_buttons(ui, &buttons) {
-                    Some(0) => apply = true,
-                    Some(_) => {
-                        let mapped = self.auto_map();
-                        log::info!("map controls: auto-mapped {mapped} device(s) by name");
+            .default_pos(ctx.content_rect().center());
+        style::dialog_window(ctx, window, &title, open, |ui| {
+            egui::Grid::new("subst")
+                .num_columns(3)
+                .spacing([12.0, 8.0])
+                .show(ui, |ui| {
+                    for row in &mut self.rows {
+                        ui.label(format!("{}  {}", icon::PLUGS, row.old_name))
+                            .on_hover_text(&row.old_id);
+                        ui.label(RichText::new(icon::ARROW_RIGHT).size(style::ICON_SIZE));
+                        let selected = row
+                            .target
+                            .as_ref()
+                            .and_then(|g| physical.iter().find(|d| &d.info.guid == g))
+                            .map_or(keep.clone(), |d| {
+                                format!("{}  {}", icon::JOYSTICK, d.info.name)
+                            });
+                        egui::ComboBox::from_id_salt(&row.old_id)
+                            .selected_text(selected)
+                            .width(260.0)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut row.target, None, &keep);
+                                for d in &physical {
+                                    let text = format!("{}  {}", icon::JOYSTICK, d.info.name);
+                                    ui.selectable_value(
+                                        &mut row.target,
+                                        Some(d.info.guid.clone()),
+                                        text,
+                                    )
+                                    .on_hover_text(&d.info.guid);
+                                }
+                            });
+                        ui.end_row();
                     }
-                    None => {}
+                });
+            let unmapped = self.rows.iter().any(|r| r.target.is_none());
+            let any = self.rows.iter().any(|r| r.target.is_some());
+            let buttons = [
+                style::DialogButton::primary(format!(
+                    "{}  {}",
+                    icon::CHECK,
+                    i18n.tr("subst-apply")
+                ))
+                .enabled(any),
+                style::DialogButton::secondary(format!(
+                    "{}  {}",
+                    icon::MAGIC_WAND,
+                    i18n.tr("subst-auto")
+                ))
+                .enabled(unmapped)
+                .tip(i18n.tr("subst-auto-tip")),
+            ];
+            match style::dialog_buttons(ui, &buttons) {
+                Some(0) => apply = true,
+                Some(_) => {
+                    let mapped = self.auto_map();
+                    log::info!("map controls: auto-mapped {mapped} device(s) by name");
                 }
-            });
+                None => {}
+            }
+        });
         if !apply {
             return None;
         }

@@ -164,6 +164,9 @@ impl VJoyConfig {
             .cloned()
             .unwrap_or_else(|| DeviceConfig::new(id, &caps));
         c.id = id;
+        // The layout is copied; the name and product id would clash with the first device's.
+        c.name = None;
+        c.product = None;
         c
     }
 
@@ -183,7 +186,16 @@ impl VJoyConfig {
     }
 
     /// Editor for device `id` (`new`: not created yet). `locked`: a profile holds vJoy.
-    pub fn editor(&mut self, ui: &mut egui::Ui, i18n: &I18n, id: u32, new: bool, locked: bool) {
+    /// `source`: the controller the loaded profile maps most onto it, to suggest a name from.
+    pub fn editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        id: u32,
+        new: bool,
+        locked: bool,
+        source: Option<&str>,
+    ) {
         if self.edit.as_ref().is_none_or(|e| e.id != id) {
             self.edit = self.configs.iter().find(|c| c.id == id).cloned();
         }
@@ -193,11 +205,23 @@ impl VJoyConfig {
             return;
         };
         let original = self.configs.iter().find(|c| c.id == id);
+        let others: Vec<&DeviceConfig> = self.configs.iter().filter(|c| c.id != id).collect();
+        let mut valid = true;
 
         egui::Grid::new(("vjoy-config", id))
             .num_columns(2)
             .spacing([14.0, 8.0])
             .show(ui, |ui| {
+                if caps.custom_names {
+                    valid &= name_row(ui, i18n, edit, &others, source);
+                    if original.is_some_and(|o| o.name != edit.name) {
+                        ui.label("");
+                        ui.label(RichText::new(i18n.tr("vjoy-name-renamed")).weak());
+                        ui.end_row();
+                    }
+                    valid &= product_row(ui, i18n, edit, &others);
+                }
+
                 ui.label(i18n.tr("vjoy-axes"));
                 ui.horizontal_wrapped(|ui| {
                     for (i, on) in edit.axes.iter_mut().enumerate() {
@@ -262,7 +286,7 @@ impl VJoyConfig {
                 icon::CHECK
             };
             let mut apply = ui.add_enabled(
-                can && changed,
+                can && changed && valid,
                 egui::Button::new(format!("{glyph}  {}", i18n.tr(caption))),
             );
             if admin {
@@ -361,4 +385,99 @@ impl VJoyConfig {
             None => {}
         }
     }
+}
+
+/// The name a device has, set or by default.
+fn shown_name(c: &DeviceConfig) -> String {
+    c.name
+        .clone()
+        .unwrap_or_else(|| DeviceConfig::default_name(c.id))
+}
+
+/// Name field (empty = the default name) with a button that suggests one; `false` while the
+/// name cannot be applied.
+fn name_row(
+    ui: &mut egui::Ui,
+    i18n: &I18n,
+    edit: &mut DeviceConfig,
+    others: &[&DeviceConfig],
+    source: Option<&str>,
+) -> bool {
+    let taken: Vec<String> = others.iter().map(|c| shown_name(c)).collect();
+    let mut text = edit.name.clone().unwrap_or_default();
+    let valid = text.is_empty()
+        || (gob_virtual::name_allowed(&text)
+            && !taken.iter().any(|t| t.eq_ignore_ascii_case(&text)));
+    ui.label(i18n.tr("vjoy-name"));
+    ui.horizontal(|ui| {
+        let field = style::text_field(&mut text)
+            .hint_text(DeviceConfig::default_name(edit.id))
+            .char_limit(gob_virtual::MAX_NAME)
+            .desired_width(280.0);
+        if ui.add(field).changed() {
+            edit.name = (!text.is_empty()).then(|| text.clone());
+        }
+        if style::icon_button(ui, true, icon::MAGIC_WAND, &i18n.tr("vjoy-name-suggest")).clicked() {
+            let taken: Vec<&str> = taken.iter().map(String::as_str).collect();
+            edit.name = Some(gob_virtual::suggested_name(edit, source, &taken));
+        }
+    });
+    ui.end_row();
+    if !valid {
+        ui.label("");
+        ui.colored_label(ui.visuals().warn_fg_color, i18n.tr("vjoy-name-invalid"));
+        ui.end_row();
+    }
+    valid
+}
+
+/// Product id field in hex (empty = the device's default); `false` while it cannot be applied.
+fn product_row(
+    ui: &mut egui::Ui,
+    i18n: &I18n,
+    edit: &mut DeviceConfig,
+    others: &[&DeviceConfig],
+) -> bool {
+    let parse = |t: &str| -> Option<Option<u16>> {
+        let t = t.trim();
+        if t.is_empty() {
+            return Some(None);
+        }
+        let hex = t
+            .strip_prefix("0x")
+            .or_else(|| t.strip_prefix("0X"))
+            .unwrap_or(t);
+        u16::from_str_radix(hex, 16).ok().map(Some)
+    };
+    let shown = |p: Option<u16>| p.map(|p| format!("{p:04X}")).unwrap_or_default();
+    // The text survives frames while it is being typed; a valid one follows the device (Revert).
+    let key = egui::Id::unique(("vjoy-product", edit.id));
+    let mut text: String = ui
+        .data(|d| d.get_temp(key))
+        .filter(|t: &String| parse(t).is_none_or(|p| p == edit.product))
+        .unwrap_or_else(|| shown(edit.product));
+    ui.label(i18n.tr("vjoy-product"));
+    let field = style::text_field(&mut text)
+        .hint_text(format!("{:04X}", DeviceConfig::default_product(edit.id)))
+        .char_limit(6)
+        .desired_width(80.0);
+    let response = ui.add(field).on_hover_text(i18n.tr("vjoy-product-tip"));
+    let parsed = parse(&text);
+    if response.changed()
+        && let Some(p) = parsed
+    {
+        edit.product = p;
+    }
+    ui.data_mut(|d| d.insert_temp(key, text));
+    ui.end_row();
+    let product = edit.product_id();
+    let valid = parsed.is_some()
+        && edit.product.is_none_or(gob_virtual::product_allowed)
+        && !others.iter().any(|c| c.product_id() == product);
+    if !valid {
+        ui.label("");
+        ui.colored_label(ui.visuals().warn_fg_color, i18n.tr("vjoy-product-invalid"));
+        ui.end_row();
+    }
+    valid
 }

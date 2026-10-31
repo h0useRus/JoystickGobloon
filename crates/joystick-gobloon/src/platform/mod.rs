@@ -30,6 +30,8 @@ pub(crate) trait Desktop {
 
     /// Folder for settings, the app list and the log when the program has no portable one.
     fn default_data_dir() -> Option<PathBuf>;
+    /// The user's documents folder, where the profile file dialogs start the first time.
+    fn documents_dir() -> Option<PathBuf>;
     /// Font files with Chinese and Korean glyphs: (egui font name, file).
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)>;
     /// Opens a text file (the log) in the system's editor.
@@ -42,9 +44,14 @@ pub(crate) trait Desktop {
     fn claim_instance() -> Option<Self::InstanceEvent>;
     /// Calls `show` whenever a later start wakes this copy.
     fn listen_instance(event: Self::InstanceEvent, show: Box<dyn Fn() + Send>);
-    /// Keyboard keys can be bound as inputs (the Keyboard tab): the program may read every
-    /// keyboard.
+    /// Keyboard keys can be bound as inputs (the Keyboard tab); reading them may need
+    /// [`Desktop::keyboard_access`].
     fn keyboard_bindings() -> bool;
+    /// Whether the program may read the keyboards, for keyboard bindings.
+    fn keyboard_access() -> KeyboardAccess;
+    /// Allows reading the keyboards or takes it back, with administrator rights (the system
+    /// asks). Blocking: call it off the GUI thread.
+    fn set_keyboard_access(allow: bool) -> Result<(), String>;
     /// Keyboard keys held right now; `None` when the program cannot see the keyboard's state
     /// (key recording then uses the window's own key events).
     fn held_keys() -> Option<Vec<Key>>;
@@ -87,6 +94,18 @@ pub(crate) trait Desktop {
     /// Gives the user that access once and for good, with administrator rights (the system
     /// asks). Blocking: call it off the GUI thread.
     fn grant_device_access() -> Result<(), String>;
+    /// Lets the program read every button of the controller with these ids where the system
+    /// passes on only some ([`gob_input::DeviceInfo::unread_buttons`]), with administrator
+    /// rights. Blocking: call it off the GUI thread.
+    fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String>;
+    /// The system part (SystemGobloon: hiding from every program, virtual devices that stay)
+    /// as it is here, compared with this program's `version`.
+    fn system_part(version: &str) -> SystemPart;
+    /// Installs, updates or starts it with administrator rights (the system asks) and waits
+    /// until it answers. Blocking: call it off the GUI thread.
+    fn install_system_part() -> Result<(), String>;
+    /// Removes it like [`Desktop::install_system_part`].
+    fn remove_system_part() -> Result<(), String>;
 
     /// The copy in `exe_dir` is managed by the system's installer (it updates through a new one).
     fn installed_copy(exe_dir: &Path) -> bool;
@@ -102,6 +121,35 @@ pub(crate) trait Desktop {
     fn wait_for_process(pid: u32, timeout: Duration);
 }
 
+/// Whether the program may read the keyboards ([`keyboard_access`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum KeyboardAccess {
+    /// It may without anything from the program (Windows, the `input` group on Linux).
+    Open,
+    /// It may because the user allowed it in the program; [`set_keyboard_access`] takes it back.
+    Allowed,
+    /// It may not; [`set_keyboard_access`] can allow it.
+    Missing,
+}
+
+/// The system part ([`system_part`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(crate) enum SystemPart {
+    /// Not on this system, or not shipped with this copy.
+    Unavailable,
+    NotInstalled,
+    /// Installed but not answering.
+    Stopped,
+    /// Another version than the program's runs.
+    Outdated {
+        version: String,
+    },
+    Current {
+        version: String,
+    },
+}
+
 /// What a later start signals to wake this copy.
 pub(crate) type InstanceEvent = <Current as Desktop>::InstanceEvent;
 /// The main window (an opaque handle).
@@ -109,6 +157,10 @@ pub(crate) type Window = <Current as Desktop>::Window;
 
 pub(crate) fn default_data_dir() -> Option<PathBuf> {
     Current::default_data_dir()
+}
+
+pub(crate) fn documents_dir() -> Option<PathBuf> {
+    Current::documents_dir()
 }
 
 pub(crate) fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
@@ -137,6 +189,14 @@ pub(crate) fn listen_instance(event: InstanceEvent, show: impl Fn() + Send + 'st
 
 pub(crate) fn keyboard_bindings() -> bool {
     Current::keyboard_bindings()
+}
+
+pub(crate) fn keyboard_access() -> KeyboardAccess {
+    Current::keyboard_access()
+}
+
+pub(crate) fn set_keyboard_access(allow: bool) -> Result<(), String> {
+    Current::set_keyboard_access(allow)
 }
 
 pub(crate) fn held_keys() -> Option<Vec<Key>> {
@@ -205,6 +265,22 @@ pub(crate) fn device_access_missing() -> bool {
 
 pub(crate) fn grant_device_access() -> Result<(), String> {
     Current::grant_device_access()
+}
+
+pub(crate) fn grant_all_buttons(vendor_id: u16, product_id: u16) -> Result<(), String> {
+    Current::grant_all_buttons(vendor_id, product_id)
+}
+
+pub(crate) fn system_part(version: &str) -> SystemPart {
+    Current::system_part(version)
+}
+
+pub(crate) fn install_system_part() -> Result<(), String> {
+    Current::install_system_part()
+}
+
+pub(crate) fn remove_system_part() -> Result<(), String> {
+    Current::remove_system_part()
 }
 
 pub(crate) fn installed_copy(exe_dir: &Path) -> bool {
