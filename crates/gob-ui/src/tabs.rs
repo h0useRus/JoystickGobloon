@@ -45,7 +45,7 @@ pub fn tab_with_icons(
     let response = ui.add(button);
     // The icon areas are registered after the button, so they get the clicks there.
     let width = |text: &str| {
-        ui.fonts(|f| {
+        ui.fonts_mut(|f| {
             f.layout_no_wrap(text.to_owned(), font.clone(), text_color)
                 .size()
                 .x

@@ -1394,7 +1394,9 @@ impl JoystickGobloonApp {
 }
 
 impl eframe::App for JoystickGobloonApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    /// Runs every frame, and also while the window is in the tray or minimized (eframe then
+    /// draws nothing and skips [`Self::ui`]).
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
         // Started or stopped from the tray menu (maybe while the window was hidden).
         let active = self.activation.is_active();
@@ -1496,7 +1498,7 @@ impl eframe::App for JoystickGobloonApp {
             self.save();
         }
         // Text fields keep their own Ctrl+Z while focused.
-        if !ctx.wants_keyboard_input() {
+        if !ctx.egui_wants_keyboard_input() {
             let undo = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Z);
             let redo = egui::KeyboardShortcut::new(
                 egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
@@ -1558,28 +1560,32 @@ impl eframe::App for JoystickGobloonApp {
             modifiers,
         );
         self.was_shown = shown;
-        // In the tray only the logic above runs: nothing is drawn, so no page or window
-        // schedules repaints. Detached windows close and come back with the main window.
-        if in_tray {
+    }
+
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &root.ctx().clone();
+        // In the tray only the logic runs: nothing is drawn, so no page or window schedules
+        // repaints. Detached windows close and come back with the main window.
+        if self.main_window.is_some_and(crate::platform::in_tray) {
             return;
         }
-        egui::SidePanel::left("nav")
+        egui::Panel::left("nav")
             .resizable(false)
-            .exact_width(60.0)
-            .show(ctx, |ui| self.nav_rail(ui));
+            .exact_size(60.0)
+            .show(root, |ui| self.nav_rail(ui));
         let margin = egui::Margin {
             left: 16,
             right: 16,
             top: 4,
             bottom: 4,
         };
-        egui::TopBottomPanel::top("toolbar")
-            .frame(egui::Frame::side_top_panel(&ctx.style()).inner_margin(margin))
-            .show(ctx, |ui| self.toolbar(ui));
+        egui::Panel::top("toolbar")
+            .frame(egui::Frame::side_top_panel(&ctx.global_style()).inner_margin(margin))
+            .show(root, |ui| self.toolbar(ui));
 
         let cloak = self.hidhide_view.cloak(self.settings.hidhide_gaming_only);
         let mut switch_cloak = None;
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+        egui::Panel::bottom("status").show(root, |ui| {
             ui.horizontal(|ui| {
                 // Device hiding indicator: green crossed eye while on. A click asks before
                 // switching it, a double click switches it at once.
@@ -1661,10 +1667,10 @@ impl eframe::App for JoystickGobloonApp {
             self.vjoy_view.release();
         }
         self.poll_system_part();
-        let frame = egui::Frame::central_panel(&ctx.style()).inner_margin(16);
+        let frame = egui::Frame::central_panel(&ctx.global_style()).inner_margin(16);
         egui::CentralPanel::default()
             .frame(frame)
-            .show(ctx, |ui| match self.page {
+            .show(root, |ui| match self.page {
                 Page::Devices => self.devices_page(ui),
                 Page::Apps => {
                     self.apps_view.show(ui, &self.i18n, &self.settings);
@@ -1852,7 +1858,7 @@ fn detached_window(
     let viewport = egui::ViewportId::from_hash_of(id);
     // Opens centered over the main window. The position is fixed when it opens, so the
     // window can be moved afterwards (egui re-applies only builder changes).
-    let pos_id = egui::Id::new(("window-pos", id));
+    let pos_id = egui::Id::unique(("window-pos", id));
     let main = ctx.input(|i| i.viewport().outer_rect);
     let pos = ctx.data(|d| d.get_temp::<egui::Pos2>(pos_id)).or_else(|| {
         let r = main?;

@@ -451,7 +451,7 @@ fn product_row(
     };
     let shown = |p: Option<u16>| p.map(|p| format!("{p:04X}")).unwrap_or_default();
     // The text survives frames while it is being typed; a valid one follows the device (Revert).
-    let key = egui::Id::new(("vjoy-product", edit.id));
+    let key = egui::Id::unique(("vjoy-product", edit.id));
     let mut text: String = ui
         .data(|d| d.get_temp(key))
         .filter(|t: &String| parse(t).is_none_or(|p| p == edit.product))

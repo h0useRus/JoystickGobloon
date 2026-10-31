@@ -422,7 +422,7 @@ pub fn py_float(v: f32) -> String {
 
 use gob_core::TWO_AXIS_KINDS;
 
-/// The action kind's name for the user ("Map to Virtual Stick"), else its id in the profile.
+/// The action kind's name for the user ("Map to virtual stick"), else its id in the profile.
 fn kind_name(i18n: &I18n, kind: &str) -> String {
     let key = format!("kind-{kind}");
     let name = i18n.tr(&key);
@@ -443,7 +443,7 @@ fn merge_label(a: &Action, i18n: &I18n) -> String {
 
 pub fn kind_icon(kind: &str) -> &'static str {
     match kind {
-        "map-to-vjoy" => icon::GAME_CONTROLLER,
+        "map-to-vjoy" => icon::JOYSTICK,
         "response-curve" => icon::CHART_LINE,
         "change-mode" => icon::STACK,
         "tempo" => icon::TIMER,
@@ -523,7 +523,7 @@ fn addable(
     gamepads: bool,
 ) -> Vec<(&'static str, &'static str, NewAction)> {
     let mut list = vec![(
-        icon::GAME_CONTROLLER,
+        icon::JOYSTICK,
         "kind-map-to-vjoy",
         // Device and output are filled in by the add menu.
         NewAction::MapToVjoy {
@@ -716,7 +716,7 @@ impl Editor<'_> {
                             *id = self.logical_input_for_new(*input_type);
                         }
                         self.ops.push(make(AddKind::New(kind)));
-                        ui.close_menu();
+                        ui.close();
                     }
                 }
                 if self.behavior == InputType::Axis {
@@ -1225,7 +1225,7 @@ impl Editor<'_> {
                     }
                 }
                 ActionKind::MapToKeyboard { keys } => {
-                    let id = egui::Id::new(("keys", &action.id));
+                    let id = egui::Id::unique(("keys", &action.id));
                     if let Some(keys) = crate::key_capture::keys_field(ui, id, &keys, self.i18n) {
                         self.ops.push(Op::SetKeys {
                             action: action.id.clone(),
@@ -1363,7 +1363,7 @@ impl Editor<'_> {
         }
         if let Some(n) = set_pad {
             ui.ctx()
-                .data_mut(|m| m.insert_temp(egui::Id::new(LAST_GAMEPAD), n));
+                .data_mut(|m| m.insert_temp(egui::Id::unique(LAST_GAMEPAD), n));
             self.set(&id, "gamepad-id", "int", n.to_string());
         }
         if let Some(c) = set_control {
@@ -1466,7 +1466,7 @@ impl Editor<'_> {
             Some((_, ink)) => RichText::new(caption).color(ink),
             None => RichText::new(caption),
         };
-        ui.add_enabled(!blocked, egui::SelectableLabel::new(selected, text))
+        ui.add_enabled(!blocked, egui::Button::selectable(selected, text))
             .on_hover_ui(|ui| {
                 ui.label(marks.tooltip(self.i18n, output, &name));
             })
@@ -1489,7 +1489,7 @@ impl Editor<'_> {
     /// its first output of the input's type that nothing uses yet.
     fn vjoy_output_for_new(&self, ctx: &egui::Context) -> (u32, u32) {
         let devices = self.vjoy_devices();
-        let last: Option<u32> = ctx.data(|m| m.get_temp(egui::Id::new(LAST_VJOY_DEVICE)));
+        let last: Option<u32> = ctx.data(|m| m.get_temp(egui::Id::unique(LAST_VJOY_DEVICE)));
         let Some(device) = last
             .and_then(|l| devices.iter().find(|d| d.id == l))
             .or(devices.first())
@@ -1510,7 +1510,7 @@ impl Editor<'_> {
     /// and its first control that suits the input and nothing uses yet.
     fn gamepad_output_for_new(&self, ctx: &egui::Context) -> (u32, String) {
         let pads = self.gamepad_ids();
-        let last: Option<u32> = ctx.data(|m| m.get_temp(egui::Id::new(LAST_GAMEPAD)));
+        let last: Option<u32> = ctx.data(|m| m.get_temp(egui::Id::unique(LAST_GAMEPAD)));
         let pad = last
             .filter(|l| pads.contains(l))
             .or(pads.first().copied())
@@ -1548,7 +1548,7 @@ impl Editor<'_> {
         cells: impl Fn(u32) -> Vec<Cell>,
     ) -> Option<VirtualOutput> {
         let mut picked = None;
-        let tab_id = egui::Id::new(("quickmap", action));
+        let tab_id = egui::Id::unique(("quickmap", action));
         ui.menu_button(
             RichText::new(icon::GRID_NINE).size(style::ICON_SIZE),
             |ui| {
@@ -1595,7 +1595,7 @@ impl Editor<'_> {
                             .on_disabled_hover_text(self.i18n.tr("output-same-input"));
                         if r.clicked() {
                             picked = Some(cell.output);
-                            ui.close_menu();
+                            ui.close();
                         }
                     }
                 });
@@ -1694,7 +1694,7 @@ impl Editor<'_> {
         });
         if let Some(d) = set_device {
             ui.ctx()
-                .data_mut(|m| m.insert_temp(egui::Id::new(LAST_VJOY_DEVICE), d));
+                .data_mut(|m| m.insert_temp(egui::Id::unique(LAST_VJOY_DEVICE), d));
         }
         if let Some(d) = set_device {
             self.set(&id, "vjoy-device-id", "int", d.to_string());
@@ -1941,7 +1941,7 @@ impl Editor<'_> {
                                     self.adopt(&a.id);
                                 }
                                 self.ops.push(make(kind(a.id.clone())));
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                     });
@@ -2001,7 +2001,7 @@ impl Editor<'_> {
                 );
                 if ui.button(text).clicked() {
                     self.ops.push(make(AddKind::New(template)));
-                    ui.close_menu();
+                    ui.close();
                 }
             }
         }
@@ -2026,7 +2026,7 @@ impl Editor<'_> {
             {
                 self.adopt(&a.id);
                 self.ops.push(make(AddKind::Reuse(a.id.clone())));
-                ui.close_menu();
+                ui.close();
             }
         }
     }

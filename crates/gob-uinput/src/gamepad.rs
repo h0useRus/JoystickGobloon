@@ -103,6 +103,15 @@ mod tests {
     }
 
     #[test]
+    fn new_gamepad_rests_released_and_centered() {
+        let rest = |code| AXES.iter().find(|a| a.code == code).map(|a| a.rest());
+        assert_eq!(rest(ABS_Z), Some(0), "LT released");
+        assert_eq!(rest(ABS_RZ), Some(0), "RT released");
+        assert_eq!(rest(ABS_X), Some(0));
+        assert_eq!(rest(ABS_HAT0Y), Some(0));
+    }
+
+    #[test]
     fn dpad_directions() {
         assert_eq!(dpad(None), (0, 0));
         assert_eq!(dpad(Some(0)), (0, -1));

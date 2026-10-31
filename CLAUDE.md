@@ -43,7 +43,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `Emitter` writes to the lent uinput fd, virtual.gob moved there once), the interface engine and GUI use: `Backend` (devices, acquire, config, capabilities)
   + `Device`; backends per platform: windows.rs = vJoy via gob-vjoy, linux.rs = uinput via gob-uinput (device
   made on acquire, layouts in virtual.gob in the data dir from `set_data_dir`; 95 buttons with joystick codes only,
-  no gamepad codes or KEY_MAX, so SDL sees a joystick; example `virtual_hold` keeps one up for jstest/SDL checks),
+  no gamepad codes or KEY_MAX, so SDL sees a joystick; example `virtual_hold` keeps one up for jstest/SDL checks,
+  `virtual_pattern` holds a stick and a gamepad in a known state to compare jstest/SDL/Wine readings),
   unsupported.rs elsewhere
 - crates/gob-uinput  Linux virtual input devices on /dev/uinput (`VirtualDevice`, `codes`, `keys` = set 1 scan
   codes <-> evdev, `access` = udev rule giving the seat user uinput + controllers (keyboards: separate opt-in rule from the Keyboard tab), installed via pkexec from the

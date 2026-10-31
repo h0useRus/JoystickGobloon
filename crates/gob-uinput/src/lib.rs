@@ -71,6 +71,18 @@ pub struct Axis {
     pub max: i32,
 }
 
+impl Axis {
+    /// The value a new device starts with: a range starting at 0 (a trigger) rests there, any
+    /// other in its middle (a stick, a hat).
+    pub fn rest(self) -> i32 {
+        if self.min == 0 {
+            0
+        } else {
+            ((i64::from(self.min) + i64::from(self.max) + 1) / 2) as i32
+        }
+    }
+}
+
 /// What a new device reports.
 #[derive(Debug, Clone, Default)]
 pub struct Spec<'a> {
@@ -145,7 +157,7 @@ impl VirtualDevice {
         for axis in spec.axes {
             ioctl_int(&file, request::SET_ABSBIT, axis.code)?;
             let info = libc::input_absinfo {
-                value: ((i64::from(axis.min) + i64::from(axis.max) + 1) / 2) as i32,
+                value: axis.rest(),
                 minimum: axis.min,
                 maximum: axis.max,
                 fuzz: 0,

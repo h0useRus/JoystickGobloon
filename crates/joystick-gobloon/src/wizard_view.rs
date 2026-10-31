@@ -155,7 +155,7 @@ impl Wizard {
                     };
                     let chosen = target.and_then(|t| vjoy.iter().find(|v| v.id == t));
                     let selected = chosen.map_or(none.clone(), |v| {
-                        format!("{}  {}", icon::GAME_CONTROLLER, vjoy_name(v))
+                        format!("{}  {}", icon::JOYSTICK, vjoy_name(v))
                     });
                     ui.vertical(|ui| {
                         egui::ComboBox::from_id_salt(("wizard-target", &d.info.guid))
@@ -168,7 +168,7 @@ impl Wizard {
                                     // fight over its outputs.
                                     let text = format!(
                                         "{}  {}    {}",
-                                        icon::GAME_CONTROLLER,
+                                        icon::JOYSTICK,
                                         vjoy_name(v),
                                         counts(&vjoy_layout(v))
                                     );

@@ -103,10 +103,10 @@ impl ViewerView {
             return toggle;
         }
 
-        egui::SidePanel::left("viewer-devices")
+        egui::Panel::left("viewer-devices")
             .resizable(true)
-            .default_width(230.0)
-            .show_inside(ui, |ui| {
+            .default_size(230.0)
+            .show(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for d in devices {
                         let shown = self

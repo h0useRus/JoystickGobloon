@@ -126,7 +126,7 @@ impl<T: egui::emath::Numeric> egui::Widget for Spin<'_, T> {
                 .into_iter()
                 .filter(|v| v.is_finite() && v.abs() < 1e9)
                 .map(|v| {
-                    ui.fonts(|f| {
+                    ui.fonts_mut(|f| {
                         f.layout_no_wrap(format(v), font.clone(), Color32::WHITE)
                             .size()
                             .x
@@ -173,11 +173,10 @@ impl<T: egui::emath::Numeric> egui::Widget for Spin<'_, T> {
         let mut response = ui.new_child(egui::UiBuilder::new().max_rect(field)).add(
             egui::TextEdit::singleline(&mut text)
                 .id(id)
-                .frame(false)
+                .frame(egui::Frame::NONE)
                 .margin(Vec2::new(4.0, 0.0))
                 .min_size(field.size())
-                .vertical_align(egui::Align::Center)
-                .horizontal_align(egui::Align::Center),
+                .align(egui::Align2::CENTER_CENTER),
         );
         if response.gained_focus() {
             // Edit the bare number.
@@ -213,8 +212,10 @@ impl<T: egui::emath::Numeric> egui::Widget for Spin<'_, T> {
             // egui hands one notch to scroll areas over several frames (`smooth_scroll_delta`),
             // so every frame's share is taken, not just the first.
             let (scroll, shift) = ui.input_mut(|i| {
-                let scroll = i.raw_scroll_delta;
-                i.raw_scroll_delta = Vec2::ZERO;
+                let scroll = i.events.iter().fold(Vec2::ZERO, |sum, e| match e {
+                    egui::Event::MouseWheel { delta, .. } => sum + *delta,
+                    _ => sum,
+                });
                 i.smooth_scroll_delta = Vec2::ZERO;
                 (scroll, i.modifiers.shift)
             });

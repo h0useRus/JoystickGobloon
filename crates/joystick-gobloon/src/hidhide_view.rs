@@ -150,9 +150,9 @@ impl HidHideView {
         }
 
         let mut changed = false;
-        egui::TopBottomPanel::bottom("hidhide-options")
+        egui::Panel::bottom("hidhide-options")
             .show_separator_line(false)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 ui.add_space(6.0);
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {

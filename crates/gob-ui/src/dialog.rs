@@ -9,8 +9,8 @@ use crate::tokens::{DIALOG_MARGIN, ICON_SIZE, SPACE_L, SPACE_M, SPACE_S, SPACE_X
 
 /// A modal dialog with [`DIALOG_MARGIN`] around its content.
 pub fn modal(ctx: &egui::Context, id: &str) -> egui::Modal {
-    let frame = egui::Frame::popup(&ctx.style()).inner_margin(DIALOG_MARGIN);
-    egui::Modal::new(egui::Id::new(id)).frame(frame)
+    let frame = egui::Frame::popup(&ctx.global_style()).inner_margin(DIALOG_MARGIN);
+    egui::Modal::new(egui::Id::unique(id)).frame(frame)
 }
 
 /// Height of [`dialog_window`]'s title bar, like a Windows dialog's caption.
@@ -30,7 +30,7 @@ pub fn dialog_window<R>(
     if !*open {
         return None;
     }
-    let frame = egui::Frame::window(&ctx.style()).inner_margin(0);
+    let frame = egui::Frame::window(&ctx.global_style()).inner_margin(0);
     let mut close = false;
     let shown = window.title_bar(false).frame(frame).show(ctx, |ui| {
         let font = egui::TextStyle::Body.resolve(ui.style());
@@ -76,7 +76,11 @@ pub fn dialog_window<R>(
 
 /// A title bar's close button in `rect`: a plain X that turns red on hover, like Windows.
 fn close_button(ui: &mut egui::Ui, rect: egui::Rect) -> egui::Response {
-    let r = ui.interact(rect, ui.id().with("dialog-close"), egui::Sense::click());
+    let r = ui.interact(
+        rect,
+        ui.scope_id().with("dialog-close"),
+        egui::Sense::click(),
+    );
     let painter = ui.painter();
     let mut color = ui.visuals().text_color();
     if r.hovered() {

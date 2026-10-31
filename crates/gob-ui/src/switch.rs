@@ -30,7 +30,7 @@ pub fn switch<'a>(on: &'a mut bool, text: impl Into<egui::WidgetText>) -> impl e
         let checked = *on;
         response.widget_info(|| {
             egui::WidgetInfo::selected(
-                egui::WidgetType::Checkbox,
+                egui::Role::CheckBox,
                 ui.is_enabled(),
                 checked,
                 galley.as_ref().map_or("", |g| g.text()),
