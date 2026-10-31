@@ -1,10 +1,11 @@
 //! Lists microphones and recognizes phrases, push-to-talk with Enter or from a WAV file.
 //!
 //! voice_check                                        list microphones
-//! voice_check --lib <dir> --model <dir> [--mic <id>] [--wav <file>] <phrase>...
+//! voice_check --lib <dir> --model <dir> [--mic <id>] [--wav <file> | --save <file>] <phrase>...
 //!
 //! Without --wav: Enter starts listening, Enter again ends the phrase, q quits.
 //! --wav: a 16 kHz mono 16-bit PCM file, recognized as one phrase.
+//! --save: writes each phrase heard from the microphone to this WAV file, to listen to it.
 
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -14,13 +15,15 @@ use gob_voice::{Capture, Recognizer, Vosk, microphones};
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let (mut lib, mut model, mut mic, mut wav, mut phrases) = (None, None, None, None, Vec::new());
+    let (mut lib, mut model, mut mic, mut wav, mut save) = (None, None, None, None, None);
+    let mut phrases = Vec::new();
     while let Some(a) = args.next() {
         match a.as_str() {
             "--lib" => lib = args.next().map(PathBuf::from),
             "--model" => model = args.next().map(PathBuf::from),
             "--mic" => mic = args.next(),
             "--wav" => wav = args.next().map(PathBuf::from),
+            "--save" => save = args.next().map(PathBuf::from),
             _ => phrases.push(a),
         }
     }
@@ -51,11 +54,16 @@ fn main() {
             recognizer.feed(&read_wav(&wav));
             report(&mut recognizer, &phrases);
         }
-        None => listen(&mut recognizer, mic.as_deref(), &phrases),
+        None => listen(&mut recognizer, mic.as_deref(), save.as_ref(), &phrases),
     }
 }
 
-fn listen(recognizer: &mut Recognizer, mic: Option<&str>, phrases: &[String]) {
+fn listen(
+    recognizer: &mut Recognizer,
+    mic: Option<&str>,
+    save: Option<&PathBuf>,
+    phrases: &[String],
+) {
     println!("Enter: start / end a phrase, q: quit");
     let mut lines = std::io::stdin().lock().lines();
     loop {
@@ -69,19 +77,21 @@ fn listen(recognizer: &mut Recognizer, mic: Option<&str>, phrases: &[String]) {
             let _ = tx.send(s.to_vec());
         })
         .unwrap_or_else(|e| fail(e));
-        println!("listening...");
+        println!("listening on {}...", capture.name());
         let _ = lines.next();
-        let level = capture.level();
         drop(capture);
-        let mut samples = 0;
-        for chunk in rx.try_iter() {
-            samples += chunk.len();
-            recognizer.feed(&chunk);
-        }
+        let samples: Vec<i16> = rx.try_iter().flatten().collect();
+        recognizer.feed(&samples);
+        let peak = samples.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
         println!(
-            "{:.1} s of audio, last level {level:.2}",
-            samples as f32 / gob_voice::SAMPLE_RATE as f32
+            "{:.1} s of audio, loudest {:.2}",
+            samples.len() as f32 / gob_voice::SAMPLE_RATE as f32,
+            f32::from(peak) / f32::from(i16::MAX)
         );
+        if let Some(path) = save {
+            write_wav(path, &samples);
+            println!("saved to {}", path.display());
+        }
         report(recognizer, phrases);
     }
 }
@@ -99,6 +109,28 @@ fn report(recognizer: &mut Recognizer, phrases: &[String]) {
         heard.confidence,
         started.elapsed()
     );
+}
+
+/// Writes 16 kHz mono samples as a 16-bit PCM WAV file.
+fn write_wav(path: &PathBuf, samples: &[i16]) {
+    let data = (samples.len() * 2) as u32;
+    let mut out = Vec::with_capacity(44 + data as usize);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&gob_voice::SAMPLE_RATE.to_le_bytes());
+    out.extend_from_slice(&(gob_voice::SAMPLE_RATE * 2).to_le_bytes());
+    out.extend_from_slice(&2u16.to_le_bytes());
+    out.extend_from_slice(&16u16.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data.to_le_bytes());
+    samples
+        .iter()
+        .for_each(|s| out.extend_from_slice(&s.to_le_bytes()));
+    std::fs::write(path, out).unwrap_or_else(|e| fail(e));
 }
 
 /// The samples of a 16 kHz mono 16-bit PCM WAV file.

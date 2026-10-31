@@ -47,6 +47,7 @@ pub fn microphones() -> Vec<Microphone> {
 pub struct Capture {
     _stream: cpal::Stream,
     level: Arc<AtomicU32>,
+    name: String,
 }
 
 impl Capture {
@@ -87,14 +88,21 @@ impl Capture {
         }?;
         stream.play().map_err(|e| Error::Audio(e.to_string()))?;
         log::info!(
-            "microphone open: {device}, {} Hz, {} channels",
+            "microphone open: {device}, {} Hz, {} channels, {}",
             config.sample_rate,
-            config.channels
+            config.channels,
+            supported.sample_format()
         );
         Ok(Self {
             _stream: stream,
             level,
+            name: device.to_string(),
         })
+    }
+
+    /// The microphone's name.
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     /// Peak of the last block, 0.0..=1.0.
