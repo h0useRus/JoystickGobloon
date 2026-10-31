@@ -443,7 +443,7 @@ fn merge_label(a: &Action, i18n: &I18n) -> String {
 
 pub fn kind_icon(kind: &str) -> &'static str {
     match kind {
-        "map-to-vjoy" => icon::GAME_CONTROLLER,
+        "map-to-vjoy" => icon::JOYSTICK,
         "response-curve" => icon::CHART_LINE,
         "change-mode" => icon::STACK,
         "tempo" => icon::TIMER,
@@ -523,7 +523,7 @@ fn addable(
     gamepads: bool,
 ) -> Vec<(&'static str, &'static str, NewAction)> {
     let mut list = vec![(
-        icon::GAME_CONTROLLER,
+        icon::JOYSTICK,
         "kind-map-to-vjoy",
         // Device and output are filled in by the add menu.
         NewAction::MapToVjoy {

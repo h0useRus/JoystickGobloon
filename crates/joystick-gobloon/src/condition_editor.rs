@@ -140,7 +140,7 @@ impl Editor<'_> {
                         first_logical.0,
                     ),
                     (
-                        icon::GAME_CONTROLLER,
+                        icon::JOYSTICK,
                         "cond-vjoy",
                         ConditionSource::Vjoy {
                             device: 1,
@@ -221,7 +221,7 @@ impl Editor<'_> {
                 input_type,
                 id: input,
             } => {
-                ui.label(RichText::new(icon::GAME_CONTROLLER).size(style::ICON_SIZE))
+                ui.label(RichText::new(icon::JOYSTICK).size(style::ICON_SIZE))
                     .on_hover_text(self.i18n.tr("cond-vjoy"));
                 ui.add(style::Spin::new(device).range(1..=16).prefix("vJoy #"));
                 if let Some(t) = type_combo(ui, self, ("cond-type", &salt), *input_type) {

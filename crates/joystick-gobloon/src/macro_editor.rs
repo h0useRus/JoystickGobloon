@@ -320,7 +320,7 @@ fn step_icon(step: &MacroStep) -> &'static str {
         MacroStep::MouseButton { .. } => icon::MOUSE,
         MacroStep::MouseMotion { .. } => icon::ARROWS_OUT_CARDINAL,
         MacroStep::VjoyButton { .. } | MacroStep::VjoyAxis { .. } | MacroStep::VjoyHat { .. } => {
-            icon::GAME_CONTROLLER
+            icon::JOYSTICK
         }
         MacroStep::Other => icon::PUZZLE_PIECE,
     }
