@@ -40,6 +40,12 @@ gtk = "0.18"
 ashpd = { version = "0.13", default-features = false, features = ["async-io", "settings"] }
 pollster = "1"
 futures-util = { version = "0.3", default-features = false }
+# Only features: eframe without its defaults no longer turns these on. Title bar on GNOME
+# Wayland (client-side decorations), libwayland loaded at run time so X11-only systems start.
+winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita", "wayland-dlopen"] }
+
+[package.metadata.cargo-machete]
+ignored = ["winit"]
 
 [target.'cfg(windows)'.dependencies]
 # The main window's HWND (platform/windows/window.rs).
