@@ -39,6 +39,7 @@ no-devices-attached = No game controllers found
 status-ready = Ready
 status-loaded = Loaded { $file }
 status-saved = Saved { $file }
+status-last-missing = Last profile not found: { $file }
 import-error = Could not open the profile: { $error }
 save-error = Could not save the profile: { $error }
 file-filter-gremlin = Joystick Gremlin profile

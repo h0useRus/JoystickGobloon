@@ -39,6 +39,7 @@ no-devices-attached = Aucune manette de jeu trouvée
 status-ready = Prêt
 status-loaded = { $file } chargé
 status-saved = { $file } enregistré
+status-last-missing = Dernier profil introuvable : { $file }
 import-error = Impossible d’ouvrir le profil : { $error }
 save-error = Impossible d’enregistrer le profil : { $error }
 file-filter-gremlin = Profil Joystick Gremlin

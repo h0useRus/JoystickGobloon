@@ -39,6 +39,7 @@ no-devices-attached = 게임 컨트롤러를 찾을 수 없음
 status-ready = 준비
 status-loaded = { $file } 불러옴
 status-saved = { $file } 저장됨
+status-last-missing = 마지막 프로필을 찾을 수 없음: { $file }
 import-error = 프로필을 열 수 없습니다: { $error }
 save-error = 프로필을 저장할 수 없습니다: { $error }
 file-filter-gremlin = Joystick Gremlin 프로필

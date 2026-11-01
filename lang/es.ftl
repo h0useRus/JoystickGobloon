@@ -39,6 +39,7 @@ no-devices-attached = No se encontraron mandos de juego
 status-ready = Listo
 status-loaded = { $file } cargado
 status-saved = { $file } guardado
+status-last-missing = No se encontró el último perfil: { $file }
 import-error = No se pudo abrir el perfil: { $error }
 save-error = No se pudo guardar el perfil: { $error }
 file-filter-gremlin = Perfil de Joystick Gremlin

@@ -39,6 +39,7 @@ no-devices-attached = 未找到游戏控制器
 status-ready = 就绪
 status-loaded = 已加载 { $file }
 status-saved = 已保存 { $file }
+status-last-missing = 未找到上次的配置文件：{ $file }
 import-error = 无法打开配置文件：{ $error }
 save-error = 无法保存配置文件：{ $error }
 file-filter-gremlin = Joystick Gremlin 配置文件
