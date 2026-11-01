@@ -285,17 +285,31 @@ pub fn data_dir() -> Option<&'static Path> {
     .as_deref()
 }
 
+/// Reads `name` from the data folder; defaults when it is missing or does not parse (logged).
 fn load_toml<T: Default + for<'de> Deserialize<'de>>(name: &str) -> T {
-    data_dir()
-        .and_then(|dir| std::fs::read_to_string(dir.join(name)).ok())
-        .and_then(|s| toml::from_str(&s).ok())
-        .unwrap_or_default()
+    let Some(path) = data_dir().map(|dir| dir.join(name)) else {
+        return T::default();
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return T::default();
+    };
+    toml::from_str(&text).unwrap_or_else(|e| {
+        log::error!("{}: {e}; using defaults", path.display());
+        T::default()
+    })
 }
 
 fn save_toml(name: &str, value: &impl Serialize) {
-    let Some(dir) = data_dir() else { return };
-    let _ = std::fs::create_dir_all(dir);
-    if let Ok(text) = toml::to_string_pretty(value) {
-        let _ = std::fs::write(dir.join(name), text);
+    let Some(dir) = data_dir() else {
+        log::error!("saving {name}: no data folder");
+        return;
+    };
+    let path = dir.join(name);
+    let written = std::fs::create_dir_all(dir).and_then(|()| {
+        let text = toml::to_string_pretty(value).map_err(std::io::Error::other)?;
+        std::fs::write(&path, text)
+    });
+    if let Err(e) = written {
+        log::error!("saving {}: {e}", path.display());
     }
 }

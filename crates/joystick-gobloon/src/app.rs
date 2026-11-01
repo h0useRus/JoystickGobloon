@@ -159,10 +159,17 @@ impl JoystickGobloonApp {
         );
 
         let status = i18n.tr("status-ready");
-        let reopen = settings
-            .last_profile
-            .clone()
-            .filter(|p| settings.reopen_last && p.exists());
+        let reopen = match &settings.last_profile {
+            Some(path) if settings.reopen_last => Some(path.clone()),
+            Some(_) => {
+                log::info!("reopening the last profile is off");
+                None
+            }
+            None => {
+                log::info!("no last profile to reopen");
+                None
+            }
+        };
         let live_input = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
         let main_window = crate::platform::main_window(cc);
         let input = {
@@ -306,7 +313,17 @@ impl JoystickGobloonApp {
         if app.settings.check_updates && crate::update::enabled() {
             app.updater.check(&cc.egui_ctx, true);
         }
-        if let Some(path) = reopen {
+        if let Some(path) = reopen.filter(|p| {
+            let found = p.is_file();
+            if !found {
+                log::warn!("last profile {} not found", p.display());
+                app.status = app.i18n.trf(
+                    "status-last-missing",
+                    &[("file", p.display().to_string().into())],
+                );
+            }
+            found
+        }) {
             app.open_profile(path, false);
             if app.settings.activate_on_start && app.profile.is_some() {
                 app.toggle_runner(&cc.egui_ctx);
@@ -474,11 +491,13 @@ impl JoystickGobloonApp {
         }
     }
 
-    /// Banner when the profile's virtual devices are missing here or smaller than stored, with
+    /// Banner when the profile's virtual devices are missing here or smaller than stored or
+    /// than its outputs need, with
     /// a button that sets them up.
     fn virtual_devices_banner(&mut self, ui: &mut egui::Ui) {
         let Some(p) = &self.profile else { return };
-        if p.profile.virtual_devices.is_empty() {
+        let wanted = crate::virtual_setup::wanted(&p.profile);
+        if wanted.is_empty() {
             return;
         }
         let Some(caps) = self.vjoy_view.capabilities() else {
@@ -487,7 +506,7 @@ impl JoystickGobloonApp {
         let devices = self.vjoy_view.device_list();
         let (_, pads) = self.vjoy_view.gamepad_list();
         let changes = crate::virtual_setup::changes(
-            &p.profile.virtual_devices,
+            &wanted,
             &devices,
             self.vjoy_view.configs(),
             &pads,

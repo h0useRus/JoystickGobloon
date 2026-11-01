@@ -30,7 +30,7 @@ pub use modifier::{Layer, Modifier, Selection};
 pub use profile::{
     ActionConfig, AxisDirection, Device, InputBinding, Mode, OutputUse, Profile, Section,
     VirtualButton, VirtualDevices, VirtualJoystick, VirtualOutput, same_device_name,
-    virtual_output,
+    virtual_output, virtual_outputs,
 };
 pub use two_axis::{AxisInput, TWO_AXIS_KINDS};
 pub use xml::{Element, Node};

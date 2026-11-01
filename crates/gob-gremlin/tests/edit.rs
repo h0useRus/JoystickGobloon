@@ -281,6 +281,57 @@ fn output_usage_has_gamepad_and_logical_outputs() {
 }
 
 #[test]
+fn macro_steps_count_as_outputs() {
+    use gob_core::{MacroStep, VirtualOutput};
+    let mut p = Profile::default();
+    let root = p.bind(DEV, "button", "1", "Default");
+    let m = p
+        .add_child(&root, "actions", gob_core::Action::new(&NewAction::Macro))
+        .unwrap();
+    assert!(!p.needs_own_format());
+    let steps = [
+        MacroStep::VjoyButton {
+            device: 1,
+            id: 4,
+            pressed: true,
+        },
+        MacroStep::VjoyButton {
+            device: 1,
+            id: 4,
+            pressed: false,
+        },
+        MacroStep::GamepadDpad {
+            gamepad: 2,
+            direction: None,
+        },
+    ];
+    for (i, s) in steps.iter().enumerate() {
+        p.set_macro_step(&m, i, s);
+    }
+    let outputs = gob_core::virtual_outputs(p.action(&m).unwrap());
+    assert_eq!(
+        outputs,
+        [
+            VirtualOutput::Vjoy {
+                device: 1,
+                input_type: InputType::Button,
+                id: 4,
+            },
+            VirtualOutput::Gamepad {
+                gamepad: 2,
+                control: "dpad".into(),
+            },
+        ],
+        "each output once"
+    );
+    assert!(
+        p.used_vjoy_outputs("Default")
+            .contains(&(1, InputType::Button, 4))
+    );
+    assert!(p.needs_own_format(), "Gremlin has no gamepad steps");
+}
+
+#[test]
 fn duplicated_vjoy_output_moves_off_its_input() {
     let mut p = Profile::default();
     let root = p.bind(DEV, "button", "1", "Default");
@@ -594,6 +645,20 @@ fn macro_steps_round_trip_and_keep_unknown_ones() {
             id: 1,
             direction: Some(13500),
         },
+        MacroStep::GamepadButton {
+            gamepad: 2,
+            control: "lb".into(),
+            pressed: true,
+        },
+        MacroStep::GamepadAxis {
+            gamepad: 1,
+            control: "rt".into(),
+            value: 0.75,
+        },
+        MacroStep::GamepadDpad {
+            gamepad: 1,
+            direction: Some(27000),
+        },
     ];
     for (i, s) in steps.iter().enumerate() {
         p.set_macro_step(&m, i, s);
@@ -780,4 +845,74 @@ fn led_colors_and_modes_parse() {
     for b in gob_core::LedBlend::ALL {
         assert_eq!(gob_core::LedBlend::parse(b.name()), Some(b));
     }
+}
+
+#[test]
+fn needed_virtual_devices_follow_the_outputs() {
+    use gob_core::{VirtualDevices, VirtualJoystick};
+    let mut p = Profile::default();
+    let root = p.bind(DEV, "button", "1", "Default");
+    for kind in [
+        NewAction::MapToVjoy {
+            input_type: InputType::Button,
+            device: 2,
+            input_id: 40,
+        },
+        NewAction::MapToVjoy {
+            input_type: InputType::Axis,
+            device: 2,
+            input_id: 7,
+        },
+        NewAction::MapToVjoy {
+            input_type: InputType::Hat,
+            device: 1,
+            input_id: 3,
+        },
+        NewAction::MapToGamepad {
+            input_type: InputType::Button,
+            gamepad: 3,
+            control: "a".into(),
+        },
+    ] {
+        p.add_child(&root, "actions", gob_core::Action::new(&kind))
+            .unwrap();
+    }
+    let joystick = |id, axes: &[u8], buttons, hats| VirtualJoystick {
+        id,
+        axes: axes.to_vec(),
+        buttons,
+        hats,
+        discrete_hats: false,
+        name: None,
+        product: None,
+    };
+    let needed = p.needed_virtual_devices();
+    assert_eq!(
+        needed,
+        VirtualDevices {
+            joysticks: vec![joystick(1, &[], 0, 3), joystick(2, &[7], 40, 0)],
+            gamepads: vec![3],
+        }
+    );
+
+    // Stored devices grow to what is needed and keep their own setup.
+    let stored = VirtualDevices {
+        joysticks: vec![VirtualJoystick {
+            name: Some("Stick".into()),
+            ..joystick(2, &[1, 2], 32, 1)
+        }],
+        gamepads: vec![1],
+    };
+    let merged = stored.merged(&needed);
+    assert_eq!(
+        merged.joysticks,
+        [
+            joystick(1, &[], 0, 3),
+            VirtualJoystick {
+                name: Some("Stick".into()),
+                ..joystick(2, &[1, 2, 7], 40, 1)
+            },
+        ]
+    );
+    assert_eq!(merged.gamepads, [1, 3]);
 }

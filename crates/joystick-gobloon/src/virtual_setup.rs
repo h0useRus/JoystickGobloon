@@ -8,7 +8,8 @@ use gob_core::{Profile, VirtualDevices, VirtualJoystick};
 use gob_virtual::{Capabilities, Change, DeviceConfig, DeviceInfo, GamepadInfo};
 
 /// What `profile` stores when saved: the joysticks it writes to with their layout, name and
-/// product id here (as stored before when this system lacks one), and the gamepads it writes to.
+/// product id here (as stored before when this system lacks one), and the gamepads it writes to;
+/// never less than the outputs it writes need ([`wanted`]).
 pub fn capture(
     profile: &Profile,
     devices: &[DeviceInfo],
@@ -43,6 +44,15 @@ pub fn capture(
         joysticks,
         gamepads: engine.gamepads().into_iter().collect(),
     }
+    .merged(&profile.needed_virtual_devices())
+}
+
+/// The virtual devices `profile` needs: those it stores, grown to what the outputs it writes
+/// need (a profile from Joystick Gremlin, or saved where a device was missing, stores none).
+pub fn wanted(profile: &Profile) -> VirtualDevices {
+    profile
+        .virtual_devices
+        .merged(&profile.needed_virtual_devices())
 }
 
 /// The changes that give this system what `stored` needs: missing devices are created (with
@@ -212,6 +222,30 @@ mod tests {
 
     fn changes_len(stored: &VirtualDevices, devices: &[DeviceInfo], caps: &Capabilities) -> usize {
         changes(stored, devices, &[], &[], caps).len()
+    }
+
+    #[test]
+    fn outputs_ask_for_devices_the_profile_does_not_store() {
+        // The sample writes to vJoy device 1 and stores no virtual devices (a Gremlin profile).
+        let sample = include_str!("../../../tests/fixtures/sample_r14.xml");
+        let profile = gob_gremlin::from_str(sample).unwrap();
+        assert!(profile.virtual_devices.is_empty());
+        let wanted = wanted(&profile);
+        assert_eq!(wanted.joysticks.len(), 1);
+        let need = &wanted.joysticks[0];
+        // Missing here: created; with too few buttons: grown.
+        assert!(matches!(
+            changes(&wanted, &[], &[], &[], &caps())[..],
+            [Change::Set(DeviceConfig { id: 1, .. })]
+        ));
+        let small = info(1, &need.axes, need.buttons - 1, need.hats);
+        let grown = changes(&wanted, &[small], &[], &[], &caps());
+        let [Change::Set(c)] = &grown[..] else {
+            panic!("{grown:?}")
+        };
+        assert_eq!(c.buttons, need.buttons);
+        let enough = info(1, &need.axes, need.buttons, need.hats);
+        assert!(changes(&wanted, &[enough], &[], &[], &caps()).is_empty());
     }
 
     #[test]

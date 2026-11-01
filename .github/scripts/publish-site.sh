@@ -9,11 +9,11 @@ rev=${2:-$(git rev-parse --short HEAD)}
 find "$out" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp -r site/. "$out/"
 for page in "$out"/*.html; do
-  sed -i -E "s#(href|src)=\"(/gobloon/)?(styles\.css|main\.js|motion\.js)\"#\1=\"\2\3?v=$rev\"#g" "$page"
+  sed -i -E "s#(href|src)=\"(/joystick-gobloon/)?(styles\.css|main\.js|motion\.js)\"#\1=\"\2\3?v=$rev\"#g" "$page"
 done
 
 # Sitemap for search engines: every page except the 404, dated by its last commit.
-base=https://h0userus.github.io/gobloon/
+base=https://h0userus.github.io/joystick-gobloon/
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
