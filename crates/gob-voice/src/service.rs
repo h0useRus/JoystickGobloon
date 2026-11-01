@@ -185,11 +185,26 @@ impl Drop for VoiceService {
 
 /// One open microphone and its utterance so far.
 struct OpenMic {
-    device: Box<dyn Send>,
+    /// `None` once closed.
+    device: Option<Box<dyn Send>>,
     audio: Receiver<Vec<i16>>,
     recognizer: Box<dyn Recognize>,
     /// Samples fed so far.
     samples: usize,
+    /// Loudest of them.
+    peak: u16,
+}
+
+impl OpenMic {
+    /// Feeds the audio that came in since the last call.
+    fn take_audio(&mut self) {
+        while let Ok(s) = self.audio.try_recv() {
+            self.samples += s.len();
+            let peak = s.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
+            self.peak = self.peak.max(peak);
+            self.recognizer.feed(&s);
+        }
+    }
 }
 
 struct Worker {
@@ -217,7 +232,7 @@ impl Worker {
                 Err(RecvTimeoutError::Disconnected) => break,
             }
             for mic in self.open_mics.values_mut() {
-                feed(&mut mic.audio, &mut mic.recognizer, &mut mic.samples);
+                mic.take_audio();
             }
         }
         for microphone in self.open_mics.keys().cloned().collect::<Vec<_>>() {
@@ -265,10 +280,11 @@ impl Worker {
                 self.open_mics.insert(
                     microphone,
                     OpenMic {
-                        device,
+                        device: Some(device),
                         audio,
                         recognizer,
                         samples: 0,
+                        peak: 0,
                     },
                 );
             }
@@ -280,15 +296,23 @@ impl Worker {
         let Some(mut mic) = self.open_mics.remove(microphone) else {
             return;
         };
-        drop(mic.device);
+        mic.device = None;
         // With what arrived before the device closed.
-        feed(&mut mic.audio, &mut mic.recognizer, &mut mic.samples);
+        mic.take_audio();
         let _ = self.events.send(VoiceEvent::Listening {
             microphone: microphone.to_string(),
             on: false,
         });
         if mic.samples < MIN_SAMPLES {
             return;
+        }
+        let loudest = f32::from(mic.peak) / f32::from(i16::MAX);
+        if mic.peak == 0 {
+            log::warn!(
+                "voice: microphone {:?} gave only silence: muted, its level at 0, or blocked by the \
+                 system's privacy settings",
+                microphone
+            );
         }
         let heard = mic.recognizer.finish();
         let command = heard
@@ -297,7 +321,8 @@ impl Worker {
             .and_then(|i| self.phrases.get(i))
             .map(|(id, _)| *id);
         log::info!(
-            "voice: heard {:?} ({:.2}) -> {}",
+            "voice: {:.1} s, loudest {loudest:.2}: heard {:?} ({:.2}) -> {}",
+            mic.samples as f32 / crate::SAMPLE_RATE as f32,
             heard.text,
             heard.confidence,
             command.map_or("nothing".to_string(), |c| format!("command {c}"))
@@ -307,13 +332,6 @@ impl Worker {
             text: heard.text,
             confidence: heard.confidence,
         });
-    }
-}
-
-fn feed(audio: &mut Receiver<Vec<i16>>, recognizer: &mut Box<dyn Recognize>, samples: &mut usize) {
-    while let Ok(s) = audio.try_recv() {
-        *samples += s.len();
-        recognizer.feed(&s);
     }
 }
 
