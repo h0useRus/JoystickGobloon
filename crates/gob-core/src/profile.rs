@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use crate::action::{Action, ActionKind, InputType, Item};
+use crate::action::{Action, ActionKind, InputType, Item, MacroStep};
 use crate::modifier::{Layer, Modifier};
 use crate::xml::Element;
 
@@ -43,6 +43,41 @@ pub fn virtual_output(action: &Action) -> Option<VirtualOutput> {
         }
         _ => None,
     }
+}
+
+/// Every virtual output `action` writes: [`virtual_output`], or the outputs of a macro's steps.
+pub fn virtual_outputs(action: &Action) -> Vec<VirtualOutput> {
+    let ActionKind::Macro { steps, .. } = action.kind() else {
+        return virtual_output(action).into_iter().collect();
+    };
+    let mut outputs = Vec::new();
+    for step in steps {
+        let vjoy = |device, input_type, id| VirtualOutput::Vjoy {
+            device,
+            input_type,
+            id,
+        };
+        let output = match step {
+            MacroStep::VjoyButton { device, id, .. } => vjoy(device, InputType::Button, id),
+            MacroStep::VjoyAxis { device, id, .. } => vjoy(device, InputType::Axis, id),
+            MacroStep::VjoyHat { device, id, .. } => vjoy(device, InputType::Hat, id),
+            MacroStep::GamepadButton {
+                gamepad, control, ..
+            }
+            | MacroStep::GamepadAxis {
+                gamepad, control, ..
+            } => VirtualOutput::Gamepad { gamepad, control },
+            MacroStep::GamepadDpad { gamepad, .. } => VirtualOutput::Gamepad {
+                gamepad,
+                control: "dpad".into(),
+            },
+            _ => continue,
+        };
+        if !outputs.contains(&output) {
+            outputs.push(output);
+        }
+    }
+    outputs
 }
 
 /// One binding writing a [`VirtualOutput`].
@@ -224,6 +259,32 @@ impl VirtualDevices {
     pub fn is_empty(&self) -> bool {
         self.joysticks.is_empty() && self.gamepads.is_empty()
     }
+
+    /// Both sets of devices together: a joystick in both gets every axis and the larger button
+    /// and hat counts, and keeps `self`'s name, product id and hat kind.
+    pub fn merged(&self, other: &VirtualDevices) -> VirtualDevices {
+        let mut out = self.clone();
+        for j in &other.joysticks {
+            match out.joysticks.iter_mut().find(|o| o.id == j.id) {
+                Some(o) => {
+                    for &a in &j.axes {
+                        if !o.axes.contains(&a) {
+                            o.axes.push(a);
+                        }
+                    }
+                    o.axes.sort_unstable();
+                    o.buttons = o.buttons.max(j.buttons);
+                    o.hats = o.hats.max(j.hats);
+                }
+                None => out.joysticks.push(j.clone()),
+            }
+        }
+        out.joysticks.sort_by_key(|j| j.id);
+        out.gamepads.extend(&other.gamepads);
+        out.gamepads.sort_unstable();
+        out.gamepads.dedup();
+        out
+    }
 }
 
 /// A virtual joystick's layout.
@@ -324,7 +385,7 @@ impl Profile {
     }
 
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led and map-to-gamepad actions, monotone cubic curves, stored virtual devices): it is then written in Joystick Gobloon's own format, which
+    /// light-led and map-to-gamepad actions, gamepad macro steps, monotone cubic curves, stored virtual devices): it is then written in Joystick Gobloon's own format, which
     /// Joystick Gremlin cannot open.
     pub fn needs_own_format(&self) -> bool {
         !self.modifiers.is_empty()
@@ -337,6 +398,10 @@ impl Profile {
             || self.library.iter().any(|a| {
                 a.kind == "light-led"
                     || a.kind == "map-to-gamepad"
+                    || a.items.iter().any(|i| {
+                        matches!(i, Item::Group { tag, attrs, .. } if tag == "macro-action"
+                            && attrs.iter().any(|(k, v)| k == "type" && v == "gamepad"))
+                    })
                     || (a.kind == "response-curve"
                         && a.str("curve-type").map(crate::curve::CurveType::parse)
                             == Some(crate::curve::CurveType::MonotoneCubic))
@@ -393,17 +458,18 @@ impl Profile {
             .collect()
     }
 
-    /// Virtual outputs that map-to-vjoy, map-to-gamepad and map-to-logical-device actions write to, each with the
+    /// Virtual outputs that map-to-vjoy, map-to-gamepad, map-to-logical-device and macro actions write to, each with the
     /// bindings writing it (one entry per binding). `mode` limits them to the bindings that can
     /// run together with it ([`Self::modes_overlap`]); `None` takes every mode.
     pub fn output_usage(&self, mode: Option<&str>) -> HashMap<VirtualOutput, Vec<OutputUse>> {
         let mut usage: HashMap<VirtualOutput, Vec<OutputUse>> = HashMap::new();
+        let index = self.action_index();
         for (binding, b) in self.inputs.iter().enumerate() {
             if mode.is_some_and(|m| !self.modes_overlap(&b.mode, m)) {
                 continue;
             }
             let roots: Vec<&str> = b.configs.iter().map(|c| c.root_action.as_str()).collect();
-            for (action, output) in self.tree_outputs(&roots) {
+            for (action, output) in tree_outputs(&index, &roots) {
                 let uses = usage.entry(output).or_default();
                 if uses.last().is_none_or(|u| u.binding != binding) {
                     uses.push(OutputUse { binding, action });
@@ -411,6 +477,52 @@ impl Profile {
             }
         }
         usage
+    }
+
+    /// The least the virtual devices need for what the profile writes: per joystick the axes
+    /// it uses and its highest button and hat; the gamepads it uses.
+    pub fn needed_virtual_devices(&self) -> VirtualDevices {
+        let mut joysticks: BTreeMap<u32, VirtualJoystick> = BTreeMap::new();
+        let mut gamepads = BTreeSet::new();
+        for output in self.output_usage(None).into_keys() {
+            match output {
+                VirtualOutput::Vjoy {
+                    device,
+                    input_type,
+                    id,
+                } => {
+                    let j = joysticks.entry(device).or_insert_with(|| VirtualJoystick {
+                        id: device,
+                        axes: Vec::new(),
+                        buttons: 0,
+                        hats: 0,
+                        discrete_hats: false,
+                        name: None,
+                        product: None,
+                    });
+                    match input_type {
+                        InputType::Axis => {
+                            if let Ok(a @ 1..=8) = u8::try_from(id)
+                                && !j.axes.contains(&a)
+                            {
+                                j.axes.push(a);
+                                j.axes.sort_unstable();
+                            }
+                        }
+                        InputType::Hat => j.hats = j.hats.max(id),
+                        _ => j.buttons = j.buttons.max(id),
+                    }
+                }
+                VirtualOutput::Gamepad { gamepad, .. } => {
+                    gamepads.insert(gamepad);
+                }
+                VirtualOutput::Logical { .. } => {}
+            }
+        }
+        VirtualDevices {
+            joysticks: joysticks.into_values().collect(),
+            gamepads: gamepads.into_iter().collect(),
+        }
     }
 
     /// Name of the controller whose inputs write the most outputs of virtual joystick
@@ -435,23 +547,7 @@ impl Profile {
     /// Outputs written in the action trees under `roots`, with the action writing each (an
     /// action reached twice counts once).
     pub fn tree_outputs(&self, roots: &[&str]) -> Vec<(String, VirtualOutput)> {
-        let index = self.action_index();
-        let mut outputs = Vec::new();
-        let mut seen = HashSet::new();
-        let mut stack: Vec<&str> = roots.to_vec();
-        while let Some(id) = stack.pop() {
-            if !seen.insert(id) {
-                continue;
-            }
-            let Some(action) = index.get(id) else {
-                continue;
-            };
-            if let Some(output) = virtual_output(action) {
-                outputs.push((id.to_string(), output));
-            }
-            stack.extend(action.child_ids());
-        }
-        outputs
+        tree_outputs(&self.action_index(), roots)
     }
 
     /// After `moved` (a copy) was added to a binding: its map-to-vjoy actions that write an
@@ -485,6 +581,10 @@ impl Profile {
             };
             if !taken.contains(&output) {
                 taken.insert(output);
+                continue;
+            }
+            // Macro steps keep their outputs.
+            if self.action(&id).is_none_or(|a| a.kind != "map-to-vjoy") {
                 continue;
             }
             let max = match input_type {
@@ -608,4 +708,24 @@ fn replace_in_items(items: &mut [Item], old: &str, new: &str) -> usize {
         }
     }
     count
+}
+
+/// [`Profile::tree_outputs`] with the action index built once.
+fn tree_outputs(index: &HashMap<&str, &Action>, roots: &[&str]) -> Vec<(String, VirtualOutput)> {
+    let mut outputs = Vec::new();
+    let mut seen = HashSet::new();
+    let mut stack: Vec<&str> = roots.to_vec();
+    while let Some(id) = stack.pop() {
+        if !seen.insert(id) {
+            continue;
+        }
+        let Some(action) = index.get(id) else {
+            continue;
+        };
+        for output in virtual_outputs(action) {
+            outputs.push((id.to_string(), output));
+        }
+        stack.extend(action.child_ids());
+    }
+    outputs
 }

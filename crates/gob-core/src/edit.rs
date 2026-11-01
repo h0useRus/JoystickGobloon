@@ -198,6 +198,42 @@ fn macro_step_xml(step: &crate::MacroStep) -> Option<(&'static str, Vec<Item>)> 
             ));
             ("vjoy", items)
         }
+        S::GamepadButton {
+            gamepad,
+            ref control,
+            pressed,
+        } => (
+            "gamepad",
+            vec![
+                prop("int", "gamepad-id", gamepad.to_string()),
+                prop("string", "control", control.as_str()),
+                prop("bool", "value", b(pressed)),
+            ],
+        ),
+        S::GamepadAxis {
+            gamepad,
+            ref control,
+            value,
+        } => (
+            "gamepad",
+            vec![
+                prop("int", "gamepad-id", gamepad.to_string()),
+                prop("string", "control", control.as_str()),
+                prop("float", "value", format!("{value:?}")),
+            ],
+        ),
+        S::GamepadDpad { gamepad, direction } => (
+            "gamepad",
+            vec![
+                prop("int", "gamepad-id", gamepad.to_string()),
+                prop("string", "control", "dpad"),
+                prop(
+                    "hat_direction",
+                    "value",
+                    crate::profile::hat_direction_name(direction),
+                ),
+            ],
+        ),
         S::Other => return None,
     })
 }

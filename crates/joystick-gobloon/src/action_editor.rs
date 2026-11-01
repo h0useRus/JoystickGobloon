@@ -496,7 +496,7 @@ fn vjoy_type(behavior: InputType) -> InputType {
 }
 
 /// Output ids of type `ty` on `device` (every possible id when it is unknown).
-fn vjoy_outputs(device: Option<&gob_virtual::DeviceInfo>, ty: InputType) -> Vec<u32> {
+pub(crate) fn vjoy_outputs(device: Option<&gob_virtual::DeviceInfo>, ty: InputType) -> Vec<u32> {
     match (vjoy_type(ty), device) {
         (InputType::Axis, Some(d)) => d.axes.iter().map(|&a| u32::from(a)).collect(),
         (InputType::Axis, None) => (1..=8).collect(),
@@ -1281,6 +1281,50 @@ impl Editor<'_> {
         let id = action.id.clone();
         let controls = self.gamepad_controls();
         let current = GamepadControl::parse(control);
+        let mut picked = None;
+        ui.horizontal_wrapped(|ui| {
+            picked = self.gamepad_target(ui, &id, "", gamepad, control, &controls);
+            if current.is_some_and(|c| c.kind() != ControlKind::Dpad) {
+                let mut inv = inverted;
+                if ui
+                    .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
+                    .changed()
+                {
+                    self.set(&id, "inverted", "bool", if inv { "True" } else { "False" });
+                }
+            }
+            if self.behavior == InputType::Button {
+                ui.separator();
+                self.activation(ui, action);
+            }
+        });
+        self.gamepad_missing(ui, gamepad);
+        if let Some((n, c)) = picked {
+            if n != gamepad {
+                ui.ctx()
+                    .data_mut(|m| m.insert_temp(egui::Id::unique(LAST_GAMEPAD), n));
+                self.set(&id, "gamepad-id", "int", n.to_string());
+            }
+            if let Some(c) = c.filter(|&c| Some(c) != current) {
+                self.set(&id, "control", "string", c.name());
+            }
+        }
+    }
+
+    /// Gamepad and control pickers: a gamepad list, a list of `controls` with the uses marked
+    /// and the quickmap (no control pickers when `controls` is empty). Returns the picked
+    /// gamepad and control. `salt` tells apart several pickers of one action (macro steps).
+    pub(crate) fn gamepad_target(
+        &self,
+        ui: &mut egui::Ui,
+        action: &str,
+        salt: &str,
+        gamepad: u32,
+        control: &str,
+        controls: &[gob_virtual::GamepadControl],
+    ) -> Option<(u32, Option<gob_virtual::GamepadControl>)> {
+        use gob_virtual::GamepadControl;
+        let current = GamepadControl::parse(control);
         let pad_name = |n: u32| self.i18n.trf("gamepad-n", &[("n", n.into())]);
         let control_name = |c: GamepadControl| self.i18n.tr(&format!("pad-{}", c.name()));
         // Configured gamepads and the one in use.
@@ -1289,26 +1333,27 @@ impl Editor<'_> {
             pads.push(gamepad);
             pads.sort_unstable();
         }
+        let now = OutputMarks::gamepad(gamepad, control);
         let mut set_pad = None;
         let mut set_control = None;
-        ui.horizontal_wrapped(|ui| {
-            egui::ComboBox::from_id_salt(("gamepad", &id))
-                .selected_text(pad_name(gamepad))
-                .show_ui(ui, |ui| {
-                    for &n in &pads {
-                        if ui.selectable_label(n == gamepad, pad_name(n)).clicked() {
-                            set_pad = Some(n);
-                        }
+        egui::ComboBox::from_id_salt(("gamepad", action, salt))
+            .selected_text(pad_name(gamepad))
+            .show_ui(ui, |ui| {
+                for &n in &pads {
+                    if ui.selectable_label(n == gamepad, pad_name(n)).clicked() {
+                        set_pad = Some(n);
                     }
-                });
+                }
+            });
+        if !controls.is_empty() {
             let shown = current.map_or_else(|| control.to_string(), control_name);
-            egui::ComboBox::from_id_salt(("gamepad-control", &id))
+            egui::ComboBox::from_id_salt(("gamepad-control", action, salt))
                 .selected_text(shown)
                 .height(320.0)
                 .show_ui(ui, |ui| {
-                    let marks = self.output_marks(&id);
-                    let blocked = self.input_outputs(&id);
-                    for &c in &controls {
+                    let marks = self.output_marks(action);
+                    let blocked = self.input_outputs(action);
+                    for &c in controls {
                         let output = OutputMarks::gamepad(gamepad, c.name());
                         let selected = current == Some(c);
                         let off = !selected && blocked.contains(&output);
@@ -1333,46 +1378,30 @@ impl Editor<'_> {
                     })
                     .collect()
             };
-            let now = OutputMarks::gamepad(gamepad, control);
             if let Some(VirtualOutput::Gamepad {
                 gamepad: g,
                 control,
-            }) = self.quickmap(ui, &id, &tabs, (gamepad, &now), cells)
+            }) = self.quickmap(ui, action, salt, &tabs, (gamepad, &now), cells)
             {
                 set_pad = Some(g);
                 set_control = GamepadControl::parse(&control);
             }
-            self.clash_warning(ui, &id, &now);
-            if current.is_some_and(|c| c.kind() != ControlKind::Dpad) {
-                let mut inv = inverted;
-                if ui
-                    .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
-                    .changed()
-                {
-                    self.set(&id, "inverted", "bool", if inv { "True" } else { "False" });
-                }
-            }
-            if self.behavior == InputType::Button {
-                ui.separator();
-                self.activation(ui, action);
-            }
-        });
+        }
+        self.clash_warning(ui, action, &now);
+        (set_pad.is_some() || set_control.is_some())
+            .then(|| (set_pad.unwrap_or(gamepad), set_control.or(current)))
+    }
+
+    /// Note under a gamepad output whose gamepad is not configured.
+    pub(crate) fn gamepad_missing(&self, ui: &mut egui::Ui, gamepad: u32) {
         if !self.gamepads.iter().any(|g| g.id == gamepad) {
             let text = self.i18n.trf("gamepad-missing", &[("n", gamepad.into())]);
             ui.label(RichText::new(format!("{}  {text}", icon::WARNING)).weak());
         }
-        if let Some(n) = set_pad {
-            ui.ctx()
-                .data_mut(|m| m.insert_temp(egui::Id::unique(LAST_GAMEPAD), n));
-            self.set(&id, "gamepad-id", "int", n.to_string());
-        }
-        if let Some(c) = set_control {
-            self.set(&id, "control", "string", c.name());
-        }
     }
 
     /// Configured gamepads; without any, every id the system can have.
-    fn gamepad_ids(&self) -> Vec<u32> {
+    pub(crate) fn gamepad_ids(&self) -> Vec<u32> {
         let mut pads: Vec<u32> = if self.gamepads.is_empty() {
             (1..=self.max_gamepads).collect()
         } else {
@@ -1394,7 +1423,7 @@ impl Editor<'_> {
     }
 
     /// Configured virtual devices; without them, the ids a profile may use.
-    fn vjoy_devices(&self) -> Vec<gob_virtual::DeviceInfo> {
+    pub(crate) fn vjoy_devices(&self) -> Vec<gob_virtual::DeviceInfo> {
         if !self.vjoy.is_empty() {
             return self.vjoy.to_vec();
         }
@@ -1538,72 +1567,170 @@ impl Editor<'_> {
 
     /// Quickmap button: a popup with a tab per device and its outputs (`cells`) as buttons,
     /// those in use marked; returns the clicked output. `current` = the action's device and
-    /// output.
+    /// output; `salt` tells apart several of one action.
     fn quickmap(
         &self,
         ui: &mut egui::Ui,
         action: &str,
+        salt: &str,
         tabs: &[(u32, String)],
         current: (u32, &VirtualOutput),
         cells: impl Fn(u32) -> Vec<Cell>,
     ) -> Option<VirtualOutput> {
         let mut picked = None;
-        let tab_id = egui::Id::unique(("quickmap", action));
-        ui.menu_button(
+        let tab_id = egui::Id::unique(("quickmap", action, salt));
+        // Clicking a device tab keeps the popup open; picking an output closes it.
+        let config = egui::containers::menu::MenuConfig::new()
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+        let (button, open) = egui::containers::menu::MenuButton::new(
             RichText::new(icon::GRID_NINE).size(style::ICON_SIZE),
-            |ui| {
-                ui.set_width(44.0 * 10.0);
-                let marks = self.output_marks(action);
-                let blocked = self.input_outputs(action);
-                let mut tab: u32 = ui.data(|m| m.get_temp(tab_id)).unwrap_or(current.0);
-                if !tabs.iter().any(|(id, _)| *id == tab) {
-                    tab = tabs.first().map_or(1, |(id, _)| *id);
-                }
-                ui.horizontal_wrapped(|ui| {
-                    for (id, text) in tabs {
-                        if ui.selectable_label(*id == tab, text).clicked() {
-                            tab = *id;
-                        }
-                    }
-                });
-                ui.data_mut(|m| m.insert_temp(tab_id, tab));
-                ui.separator();
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = egui::Vec2::splat(4.0);
-                    for cell in cells(tab) {
-                        let selected = cell.output == *current.1;
-                        let enabled = selected || !blocked.contains(&cell.output);
-                        let (mark, count) = if enabled {
-                            marks.mark(&cell.output)
-                        } else {
-                            (OutputMark::Free, 0)
-                        };
-                        // Allocated at its size, not in a scope: a scope never wraps the row.
-                        let size = egui::Vec2::new(cell.width, 26.0);
-                        let r = ui
-                            .allocate_ui(size, |ui| {
-                                if !enabled {
-                                    ui.disable();
-                                }
-                                style::output_button(ui, cell.label, size, selected, mark, count)
-                            })
-                            .inner;
-                        let r = r
-                            .on_hover_ui(|ui| {
-                                ui.label(marks.tooltip(self.i18n, &cell.output, &cell.name));
-                            })
-                            .on_disabled_hover_text(self.i18n.tr("output-same-input"));
-                        if r.clicked() {
-                            picked = Some(cell.output);
-                            ui.close();
-                        }
-                    }
-                });
-            },
         )
-        .response
-        .on_hover_text(self.i18n.tr("vjoy-quickmap"));
+        .config(config)
+        .ui(ui, |ui| {
+            ui.set_width(44.0 * 10.0);
+            let marks = self.output_marks(action);
+            let blocked = self.input_outputs(action);
+            let mut tab: u32 = ui.data(|m| m.get_temp(tab_id)).unwrap_or(current.0);
+            if !tabs.iter().any(|(id, _)| *id == tab) {
+                tab = tabs.first().map_or(1, |(id, _)| *id);
+            }
+            ui.horizontal_wrapped(|ui| {
+                for (id, text) in tabs {
+                    if ui.selectable_label(*id == tab, text).clicked() {
+                        tab = *id;
+                    }
+                }
+            });
+            ui.data_mut(|m| m.insert_temp(tab_id, tab));
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = egui::Vec2::splat(4.0);
+                for cell in cells(tab) {
+                    let selected = cell.output == *current.1;
+                    let enabled = selected || !blocked.contains(&cell.output);
+                    let (mark, count) = if enabled {
+                        marks.mark(&cell.output)
+                    } else {
+                        (OutputMark::Free, 0)
+                    };
+                    // Allocated at its size, not in a scope: a scope never wraps the row.
+                    let size = egui::Vec2::new(cell.width, 26.0);
+                    let r = ui
+                        .allocate_ui(size, |ui| {
+                            if !enabled {
+                                ui.disable();
+                            }
+                            style::output_button(ui, cell.label, size, selected, mark, count)
+                        })
+                        .inner;
+                    let r = r
+                        .on_hover_ui(|ui| {
+                            ui.label(marks.tooltip(self.i18n, &cell.output, &cell.name));
+                        })
+                        .on_disabled_hover_text(self.i18n.tr("output-same-input"));
+                    if r.clicked() {
+                        picked = Some(cell.output);
+                        ui.close();
+                    }
+                }
+            });
+        });
+        // Closed: the next opening starts on the action's device again.
+        if open.is_none() {
+            ui.data_mut(|m| m.remove::<u32>(tab_id));
+        }
+        button.on_hover_text(self.i18n.tr("vjoy-quickmap"));
         picked
+    }
+
+    /// Device and output pickers of a virtual stick output of type `ty` (button, axis or hat):
+    /// a device list, an output list with the uses marked and the quickmap. Returns the picked
+    /// device and output id (one the device has). `salt` tells apart several pickers of one
+    /// action (macro steps).
+    pub(crate) fn vjoy_target(
+        &self,
+        ui: &mut egui::Ui,
+        action: &str,
+        salt: &str,
+        device: u32,
+        ty: InputType,
+        input_id: u32,
+    ) -> Option<(u32, u32)> {
+        let devices = self.vjoy_devices();
+        let inputs = vjoy_outputs(devices.iter().find(|d| d.id == device), ty);
+        let name = |n: u32| vjoy_output_name(self.i18n, ty, n);
+        let device_name = |n: u32| match devices.iter().find(|d| d.id == n) {
+            Some(d) => crate::vjoy_view::device_name(self.i18n, d),
+            None => self.i18n.trf("vjoy-device-n", &[("n", n.into())]),
+        };
+        let mut set_device = None;
+        let mut set_input = None;
+        egui::ComboBox::from_id_salt(("vjoy-device", action, salt))
+            .selected_text(device_name(device))
+            .show_ui(ui, |ui| {
+                for d in &devices {
+                    if ui
+                        .selectable_label(d.id == device, device_name(d.id))
+                        .clicked()
+                    {
+                        set_device = Some(d.id);
+                    }
+                }
+            });
+        let marks = self.output_marks(action);
+        let blocked = self.input_outputs(action);
+        egui::ComboBox::from_id_salt(("vjoy-input", action, salt))
+            .selected_text(name(input_id))
+            .height(320.0)
+            .show_ui(ui, |ui| {
+                for &n in &inputs {
+                    let output = OutputMarks::vjoy(device, ty, n);
+                    let off = n != input_id && blocked.contains(&output);
+                    if self
+                        .output_item(ui, &marks, &output, n == input_id, off, name(n))
+                        .clicked()
+                    {
+                        set_input = Some(n);
+                    }
+                }
+            });
+        let tabs: Vec<(u32, String)> = devices.iter().map(|d| (d.id, device_name(d.id))).collect();
+        let cells = |tab: u32| {
+            vjoy_outputs(devices.iter().find(|d| d.id == tab), ty)
+                .into_iter()
+                .map(|n| Cell {
+                    output: OutputMarks::vjoy(tab, ty, n),
+                    label: match ty {
+                        InputType::Axis => vjoy_output_name(self.i18n, ty, n),
+                        _ => n.to_string(),
+                    },
+                    name: vjoy_output_name(self.i18n, ty, n),
+                    width: if ty == InputType::Axis { 84.0 } else { 40.0 },
+                })
+                .collect()
+        };
+        let current = OutputMarks::vjoy(device, ty, input_id);
+        if let Some(VirtualOutput::Vjoy {
+            device: d, id: n, ..
+        }) = self.quickmap(ui, action, salt, &tabs, (device, &current), cells)
+        {
+            set_device = Some(d);
+            set_input = Some(n);
+        }
+        self.clash_warning(ui, action, &current);
+        if set_device.is_none() && set_input.is_none() {
+            return None;
+        }
+        let d = set_device.unwrap_or(device);
+        let n = set_input.unwrap_or(input_id);
+        // Another device may not have the output: take its first one then.
+        let outputs = vjoy_outputs(devices.iter().find(|x| x.id == d), ty);
+        let n = if outputs.contains(&n) {
+            n
+        } else {
+            outputs.first().copied().unwrap_or(1)
+        };
+        Some((d, n))
     }
 
     fn vjoy(
@@ -1616,91 +1743,23 @@ impl Editor<'_> {
         inverted: bool,
     ) {
         let id = action.id.clone();
-        let devices = self.vjoy_devices();
         let ty = if input_type == InputType::Other {
             self.behavior
         } else {
             input_type
         };
-        let inputs = vjoy_outputs(devices.iter().find(|d| d.id == device), ty);
-        let name = |n: u32| vjoy_output_name(self.i18n, ty, n);
-        let device_name = |n: u32| match devices.iter().find(|d| d.id == n) {
-            Some(d) => crate::vjoy_view::device_name(self.i18n, d),
-            None => self.i18n.trf("vjoy-device-n", &[("n", n.into())]),
-        };
-
-        let mut set_device = None;
-        let mut set_input = None;
-        ui.horizontal_wrapped(|ui| {
-            egui::ComboBox::from_id_salt(("vjoy-device", &id))
-                .selected_text(device_name(device))
-                .show_ui(ui, |ui| {
-                    for d in &devices {
-                        if ui
-                            .selectable_label(d.id == device, device_name(d.id))
-                            .clicked()
-                        {
-                            set_device = Some(d.id);
-                        }
-                    }
-                });
-            let marks = self.output_marks(&id);
-            let blocked = self.input_outputs(&id);
-            egui::ComboBox::from_id_salt(("vjoy-input", &id))
-                .selected_text(name(input_id))
-                .height(320.0)
-                .show_ui(ui, |ui| {
-                    for &n in &inputs {
-                        let output = OutputMarks::vjoy(device, vjoy_type(ty), n);
-                        let off = n != input_id && blocked.contains(&output);
-                        if self
-                            .output_item(ui, &marks, &output, n == input_id, off, name(n))
-                            .clicked()
-                        {
-                            set_input = Some(n);
-                        }
-                    }
-                });
-            let out_ty = vjoy_type(ty);
-            let tabs: Vec<(u32, String)> =
-                devices.iter().map(|d| (d.id, device_name(d.id))).collect();
-            let cells = |tab: u32| {
-                vjoy_outputs(devices.iter().find(|d| d.id == tab), out_ty)
-                    .into_iter()
-                    .map(|n| Cell {
-                        output: OutputMarks::vjoy(tab, out_ty, n),
-                        label: match out_ty {
-                            InputType::Axis => vjoy_output_name(self.i18n, out_ty, n),
-                            _ => n.to_string(),
-                        },
-                        name: vjoy_output_name(self.i18n, out_ty, n),
-                        width: if out_ty == InputType::Axis {
-                            84.0
-                        } else {
-                            40.0
-                        },
-                    })
-                    .collect()
-            };
-            let current = OutputMarks::vjoy(device, out_ty, input_id);
-            if let Some(VirtualOutput::Vjoy {
-                device: d, id: n, ..
-            }) = self.quickmap(ui, &id, &tabs, (device, &current), cells)
-            {
-                set_device = Some(d);
-                set_input = Some(n);
+        let picked = ui
+            .horizontal_wrapped(|ui| self.vjoy_target(ui, &id, "", device, vjoy_type(ty), input_id))
+            .inner;
+        if let Some((d, n)) = picked {
+            if d != device {
+                ui.ctx()
+                    .data_mut(|m| m.insert_temp(egui::Id::unique(LAST_VJOY_DEVICE), d));
+                self.set(&id, "vjoy-device-id", "int", d.to_string());
             }
-            self.clash_warning(ui, &id, &current);
-        });
-        if let Some(d) = set_device {
-            ui.ctx()
-                .data_mut(|m| m.insert_temp(egui::Id::unique(LAST_VJOY_DEVICE), d));
-        }
-        if let Some(d) = set_device {
-            self.set(&id, "vjoy-device-id", "int", d.to_string());
-        }
-        if let Some(n) = set_input {
-            self.set(&id, "vjoy-input-id", "int", n.to_string());
+            if n != input_id {
+                self.set(&id, "vjoy-input-id", "int", n.to_string());
+            }
         }
 
         ui.horizontal_wrapped(|ui| match ty {
@@ -2138,7 +2197,7 @@ impl Editor<'_> {
                     .collect()
             };
             if let Some(VirtualOutput::Logical { id, .. }) =
-                self.quickmap(ui, &aid, &tabs, (1, &output(id)), cells)
+                self.quickmap(ui, &aid, "", &tabs, (1, &output(id)), cells)
             {
                 set_input = Some(id);
             }
