@@ -491,11 +491,13 @@ impl JoystickGobloonApp {
         }
     }
 
-    /// Banner when the profile's virtual devices are missing here or smaller than stored, with
+    /// Banner when the profile's virtual devices are missing here or smaller than stored or
+    /// than its outputs need, with
     /// a button that sets them up.
     fn virtual_devices_banner(&mut self, ui: &mut egui::Ui) {
         let Some(p) = &self.profile else { return };
-        if p.profile.virtual_devices.is_empty() {
+        let wanted = crate::virtual_setup::wanted(&p.profile);
+        if wanted.is_empty() {
             return;
         }
         let Some(caps) = self.vjoy_view.capabilities() else {
@@ -504,7 +506,7 @@ impl JoystickGobloonApp {
         let devices = self.vjoy_view.device_list();
         let (_, pads) = self.vjoy_view.gamepad_list();
         let changes = crate::virtual_setup::changes(
-            &p.profile.virtual_devices,
+            &wanted,
             &devices,
             self.vjoy_view.configs(),
             &pads,

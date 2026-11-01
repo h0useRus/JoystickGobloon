@@ -259,6 +259,32 @@ impl VirtualDevices {
     pub fn is_empty(&self) -> bool {
         self.joysticks.is_empty() && self.gamepads.is_empty()
     }
+
+    /// Both sets of devices together: a joystick in both gets every axis and the larger button
+    /// and hat counts, and keeps `self`'s name, product id and hat kind.
+    pub fn merged(&self, other: &VirtualDevices) -> VirtualDevices {
+        let mut out = self.clone();
+        for j in &other.joysticks {
+            match out.joysticks.iter_mut().find(|o| o.id == j.id) {
+                Some(o) => {
+                    for &a in &j.axes {
+                        if !o.axes.contains(&a) {
+                            o.axes.push(a);
+                        }
+                    }
+                    o.axes.sort_unstable();
+                    o.buttons = o.buttons.max(j.buttons);
+                    o.hats = o.hats.max(j.hats);
+                }
+                None => out.joysticks.push(j.clone()),
+            }
+        }
+        out.joysticks.sort_by_key(|j| j.id);
+        out.gamepads.extend(&other.gamepads);
+        out.gamepads.sort_unstable();
+        out.gamepads.dedup();
+        out
+    }
 }
 
 /// A virtual joystick's layout.
@@ -437,12 +463,13 @@ impl Profile {
     /// run together with it ([`Self::modes_overlap`]); `None` takes every mode.
     pub fn output_usage(&self, mode: Option<&str>) -> HashMap<VirtualOutput, Vec<OutputUse>> {
         let mut usage: HashMap<VirtualOutput, Vec<OutputUse>> = HashMap::new();
+        let index = self.action_index();
         for (binding, b) in self.inputs.iter().enumerate() {
             if mode.is_some_and(|m| !self.modes_overlap(&b.mode, m)) {
                 continue;
             }
             let roots: Vec<&str> = b.configs.iter().map(|c| c.root_action.as_str()).collect();
-            for (action, output) in self.tree_outputs(&roots) {
+            for (action, output) in tree_outputs(&index, &roots) {
                 let uses = usage.entry(output).or_default();
                 if uses.last().is_none_or(|u| u.binding != binding) {
                     uses.push(OutputUse { binding, action });
@@ -450,6 +477,58 @@ impl Profile {
             }
         }
         usage
+    }
+
+    /// The least the virtual devices need for what the profile writes: per joystick the axes
+    /// it uses and its highest button and hat; the gamepads it uses.
+    pub fn needed_virtual_devices(&self) -> VirtualDevices {
+        let mut out = VirtualDevices::default();
+        for output in self.output_usage(None).into_keys() {
+            match output {
+                VirtualOutput::Vjoy {
+                    device,
+                    input_type,
+                    id,
+                } => {
+                    let j = match out.joysticks.iter().position(|j| j.id == device) {
+                        Some(i) => &mut out.joysticks[i],
+                        None => {
+                            out.joysticks.push(VirtualJoystick {
+                                id: device,
+                                axes: Vec::new(),
+                                buttons: 0,
+                                hats: 0,
+                                discrete_hats: false,
+                                name: None,
+                                product: None,
+                            });
+                            out.joysticks.last_mut().expect("just pushed")
+                        }
+                    };
+                    match input_type {
+                        InputType::Axis => {
+                            if let Ok(a) = u8::try_from(id)
+                                && (1..=8).contains(&a)
+                                && !j.axes.contains(&a)
+                            {
+                                j.axes.push(a);
+                            }
+                        }
+                        InputType::Hat => j.hats = j.hats.max(id),
+                        _ => j.buttons = j.buttons.max(id),
+                    }
+                }
+                VirtualOutput::Gamepad { gamepad, .. } => out.gamepads.push(gamepad),
+                VirtualOutput::Logical { .. } => {}
+            }
+        }
+        for j in &mut out.joysticks {
+            j.axes.sort_unstable();
+        }
+        out.joysticks.sort_by_key(|j| j.id);
+        out.gamepads.sort_unstable();
+        out.gamepads.dedup();
+        out
     }
 
     /// Name of the controller whose inputs write the most outputs of virtual joystick
@@ -474,23 +553,7 @@ impl Profile {
     /// Outputs written in the action trees under `roots`, with the action writing each (an
     /// action reached twice counts once).
     pub fn tree_outputs(&self, roots: &[&str]) -> Vec<(String, VirtualOutput)> {
-        let index = self.action_index();
-        let mut outputs = Vec::new();
-        let mut seen = HashSet::new();
-        let mut stack: Vec<&str> = roots.to_vec();
-        while let Some(id) = stack.pop() {
-            if !seen.insert(id) {
-                continue;
-            }
-            let Some(action) = index.get(id) else {
-                continue;
-            };
-            for output in virtual_outputs(action) {
-                outputs.push((id.to_string(), output));
-            }
-            stack.extend(action.child_ids());
-        }
-        outputs
+        tree_outputs(&self.action_index(), roots)
     }
 
     /// After `moved` (a copy) was added to a binding: its map-to-vjoy actions that write an
@@ -651,4 +714,24 @@ fn replace_in_items(items: &mut [Item], old: &str, new: &str) -> usize {
         }
     }
     count
+}
+
+/// [`Profile::tree_outputs`] with the action index built once.
+fn tree_outputs(index: &HashMap<&str, &Action>, roots: &[&str]) -> Vec<(String, VirtualOutput)> {
+    let mut outputs = Vec::new();
+    let mut seen = HashSet::new();
+    let mut stack: Vec<&str> = roots.to_vec();
+    while let Some(id) = stack.pop() {
+        if !seen.insert(id) {
+            continue;
+        }
+        let Some(action) = index.get(id) else {
+            continue;
+        };
+        for output in virtual_outputs(action) {
+            outputs.push((id.to_string(), output));
+        }
+        stack.extend(action.child_ids());
+    }
+    outputs
 }
