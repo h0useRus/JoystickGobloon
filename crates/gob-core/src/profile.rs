@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::action::{Action, ActionKind, InputType, Item, MacroStep};
 use crate::modifier::{Layer, Modifier};
@@ -482,7 +482,8 @@ impl Profile {
     /// The least the virtual devices need for what the profile writes: per joystick the axes
     /// it uses and its highest button and hat; the gamepads it uses.
     pub fn needed_virtual_devices(&self) -> VirtualDevices {
-        let mut out = VirtualDevices::default();
+        let mut joysticks: BTreeMap<u32, VirtualJoystick> = BTreeMap::new();
+        let mut gamepads = BTreeSet::new();
         for output in self.output_usage(None).into_keys() {
             match output {
                 VirtualOutput::Vjoy {
@@ -490,45 +491,38 @@ impl Profile {
                     input_type,
                     id,
                 } => {
-                    let j = match out.joysticks.iter().position(|j| j.id == device) {
-                        Some(i) => &mut out.joysticks[i],
-                        None => {
-                            out.joysticks.push(VirtualJoystick {
-                                id: device,
-                                axes: Vec::new(),
-                                buttons: 0,
-                                hats: 0,
-                                discrete_hats: false,
-                                name: None,
-                                product: None,
-                            });
-                            out.joysticks.last_mut().expect("just pushed")
-                        }
-                    };
+                    let j = joysticks.entry(device).or_insert_with(|| VirtualJoystick {
+                        id: device,
+                        axes: Vec::new(),
+                        buttons: 0,
+                        hats: 0,
+                        discrete_hats: false,
+                        name: None,
+                        product: None,
+                    });
                     match input_type {
                         InputType::Axis => {
-                            if let Ok(a) = u8::try_from(id)
-                                && (1..=8).contains(&a)
+                            if let Ok(a @ 1..=8) = u8::try_from(id)
                                 && !j.axes.contains(&a)
                             {
                                 j.axes.push(a);
+                                j.axes.sort_unstable();
                             }
                         }
                         InputType::Hat => j.hats = j.hats.max(id),
                         _ => j.buttons = j.buttons.max(id),
                     }
                 }
-                VirtualOutput::Gamepad { gamepad, .. } => out.gamepads.push(gamepad),
+                VirtualOutput::Gamepad { gamepad, .. } => {
+                    gamepads.insert(gamepad);
+                }
                 VirtualOutput::Logical { .. } => {}
             }
         }
-        for j in &mut out.joysticks {
-            j.axes.sort_unstable();
+        VirtualDevices {
+            joysticks: joysticks.into_values().collect(),
+            gamepads: gamepads.into_iter().collect(),
         }
-        out.joysticks.sort_by_key(|j| j.id);
-        out.gamepads.sort_unstable();
-        out.gamepads.dedup();
-        out
     }
 
     /// Name of the controller whose inputs write the most outputs of virtual joystick

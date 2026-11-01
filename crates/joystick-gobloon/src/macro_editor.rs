@@ -256,15 +256,8 @@ impl Editor<'_> {
         output: &mut u32,
     ) {
         let salt = index.to_string();
-        if let Some((d, n)) = self.vjoy_target(ui, id, &salt, *device, ty, *output) {
-            *device = d;
-            // Another device may not have the output: take its first one then.
-            let outputs = vjoy_outputs(self.vjoy_devices().iter().find(|x| x.id == d), ty);
-            *output = if outputs.contains(&n) {
-                n
-            } else {
-                outputs.first().copied().unwrap_or(1)
-            };
+        if let Some(picked) = self.vjoy_target(ui, id, &salt, *device, ty, *output) {
+            (*device, *output) = picked;
         }
     }
 

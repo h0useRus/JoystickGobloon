@@ -1333,6 +1333,7 @@ impl Editor<'_> {
             pads.push(gamepad);
             pads.sort_unstable();
         }
+        let now = OutputMarks::gamepad(gamepad, control);
         let mut set_pad = None;
         let mut set_control = None;
         egui::ComboBox::from_id_salt(("gamepad", action, salt))
@@ -1377,7 +1378,6 @@ impl Editor<'_> {
                     })
                     .collect()
             };
-            let now = OutputMarks::gamepad(gamepad, control);
             if let Some(VirtualOutput::Gamepad {
                 gamepad: g,
                 control,
@@ -1387,7 +1387,6 @@ impl Editor<'_> {
                 set_control = GamepadControl::parse(&control);
             }
         }
-        let now = OutputMarks::gamepad(gamepad, control);
         self.clash_warning(ui, action, &now);
         (set_pad.is_some() || set_control.is_some())
             .then(|| (set_pad.unwrap_or(gamepad), set_control.or(current)))
@@ -1646,7 +1645,8 @@ impl Editor<'_> {
 
     /// Device and output pickers of a virtual stick output of type `ty` (button, axis or hat):
     /// a device list, an output list with the uses marked and the quickmap. Returns the picked
-    /// device and output id. `salt` tells apart several pickers of one action (macro steps).
+    /// device and output id (one the device has). `salt` tells apart several pickers of one
+    /// action (macro steps).
     pub(crate) fn vjoy_target(
         &self,
         ui: &mut egui::Ui,
@@ -1718,8 +1718,19 @@ impl Editor<'_> {
             set_input = Some(n);
         }
         self.clash_warning(ui, action, &current);
-        (set_device.is_some() || set_input.is_some())
-            .then(|| (set_device.unwrap_or(device), set_input.unwrap_or(input_id)))
+        if set_device.is_none() && set_input.is_none() {
+            return None;
+        }
+        let d = set_device.unwrap_or(device);
+        let n = set_input.unwrap_or(input_id);
+        // Another device may not have the output: take its first one then.
+        let outputs = vjoy_outputs(devices.iter().find(|x| x.id == d), ty);
+        let n = if outputs.contains(&n) {
+            n
+        } else {
+            outputs.first().copied().unwrap_or(1)
+        };
+        Some((d, n))
     }
 
     fn vjoy(
