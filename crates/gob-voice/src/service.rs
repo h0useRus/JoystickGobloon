@@ -105,7 +105,13 @@ impl VoiceService {
                 Ok(Box::new(r) as Box<dyn Recognize>)
             });
             let open: OpenMicrophone = Box::new(move |microphone, gain, sink| {
-                let id = (!microphone.is_empty()).then_some(microphone);
+                // A chosen microphone that is not connected: the default one instead.
+                let known = microphone.is_empty()
+                    || crate::microphones().iter().any(|m| m.id == microphone);
+                if !known {
+                    log::warn!("voice: microphone {microphone:?} not found, using the default one");
+                }
+                let id = (known && !microphone.is_empty()).then_some(microphone);
                 Ok(Box::new(Capture::open(id, gain, sink)?) as Box<dyn Send>)
             });
             Ok((make, open))

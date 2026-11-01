@@ -480,6 +480,26 @@ pub fn apply(p: &mut Profile, op: Op) {
     }
 }
 
+/// The microphones, listed at most every few seconds (listing them takes a while); `fresh` asks
+/// for a new list when the last one is older than that.
+fn microphones(ctx: &egui::Context, fresh: bool) -> std::sync::Arc<Vec<gob_voice::Microphone>> {
+    const MAX_AGE: std::time::Duration = std::time::Duration::from_secs(3);
+    type Cached = (
+        std::time::Instant,
+        std::sync::Arc<Vec<gob_voice::Microphone>>,
+    );
+    let id = egui::Id::unique("voice-microphones");
+    let cached: Option<Cached> = ctx.data(|d| d.get_temp(id));
+    match cached {
+        Some((at, list)) if !fresh || at.elapsed() < MAX_AGE => list,
+        _ => {
+            let list = std::sync::Arc::new(gob_voice::microphones());
+            ctx.data_mut(|d| d.insert_temp(id, (std::time::Instant::now(), list.clone())));
+            list
+        }
+    }
+}
+
 /// Float text the way Python prints it (`1.0`, `0.25`), as Gremlin writes values.
 pub fn py_float(v: f32) -> String {
     let v = (v * 10_000.0).round() / 10_000.0;
@@ -538,6 +558,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "text-to-speech" => icon::CHAT_TEXT,
         "light-led" => icon::LIGHTBULB,
         "map-to-gamepad" => icon::GAME_CONTROLLER,
+        "voice-input" => icon::MICROPHONE,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -700,6 +721,7 @@ fn addable(
             "kind-load-profile",
             NewAction::LoadProfile,
         ));
+        list.push((icon::MICROPHONE, "kind-voice-input", NewAction::VoiceInput));
     }
     if behavior == InputType::Hat {
         list.push((icon::COMPASS, "kind-hat-buttons", NewAction::HatButtons));
@@ -771,10 +793,15 @@ impl Editor<'_> {
             RichText::new(icon::PLUS_CIRCLE).size(style::ICON_SIZE),
             |ui| {
                 let experimental = self.experimental;
+                // A voice command cannot start listening for voice commands.
+                let voice = self
+                    .input
+                    .is_some_and(|(d, _)| d.eq_ignore_ascii_case(gob_core::VOICE_GUID));
                 let all = addable(self.behavior, mode, self.max_gamepads > 0);
-                let offered = all
-                    .into_iter()
-                    .filter(|(_, _, k)| experimental || !matches!(k, NewAction::LightLed { .. }));
+                let offered = all.into_iter().filter(|(_, _, k)| {
+                    (experimental || !matches!(k, NewAction::LightLed { .. }))
+                        && !(voice && matches!(k, NewAction::VoiceInput))
+                });
                 for (glyph, key, mut kind) in offered {
                     if ui
                         .button(format!("{glyph}  {}", self.i18n.tr(key)))
@@ -1422,7 +1449,8 @@ impl Editor<'_> {
                     self.macro_editor(ui, action, &steps, repeat);
                     ui.horizontal(|ui| self.activation(ui, action));
                 }
-                ActionKind::Other | ActionKind::VoiceInput { .. } => {
+                ActionKind::VoiceInput { microphone } => self.voice_input(ui, action, microphone),
+                ActionKind::Other => {
                     ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
                 }
             }
@@ -1577,6 +1605,51 @@ impl Editor<'_> {
     }
 
     /// Note under a gamepad output whose gamepad is not configured.
+    /// voice-input: the microphone it listens on.
+    fn voice_input(&mut self, ui: &mut egui::Ui, action: &Action, microphone: &str) {
+        let mics = microphones(ui.ctx(), false);
+        let name = |id: &str| -> String {
+            if id.is_empty() {
+                return self.i18n.tr("voice-mic-default");
+            }
+            mics.iter()
+                .find(|m| m.id == id)
+                .map_or_else(|| id.to_string(), |m| m.name.clone())
+        };
+        let mut chosen = None;
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::MICROPHONE).size(style::ICON_SIZE))
+                .on_hover_text(self.i18n.tr("voice-mic"));
+            egui::ComboBox::from_id_salt(("voice-mic", &action.id))
+                .selected_text(name(microphone))
+                .width(280.0)
+                .show_ui(ui, |ui| {
+                    // Listed again while the list is open, for a microphone plugged in now.
+                    let mics = microphones(ui.ctx(), true);
+                    let default = self.i18n.tr("voice-mic-default");
+                    if ui
+                        .selectable_label(microphone.is_empty(), default)
+                        .clicked()
+                    {
+                        chosen = Some(String::new());
+                    }
+                    for m in mics.iter() {
+                        if ui.selectable_label(m.id == microphone, &m.name).clicked() {
+                            chosen = Some(m.id.clone());
+                        }
+                    }
+                });
+        });
+        if let Some(id) = chosen.filter(|id| id != microphone) {
+            self.set(&action.id, "microphone", "string", id);
+        }
+        if !microphone.is_empty() && !mics.iter().any(|m| m.id == microphone) {
+            let text = format!("{}  {}", icon::WARNING, self.i18n.tr("voice-mic-missing"));
+            ui.label(RichText::new(text).color(ui.visuals().warn_fg_color));
+        }
+        ui.label(RichText::new(self.i18n.tr("voice-input-hint")).weak());
+    }
+
     pub(crate) fn gamepad_missing(&self, ui: &mut egui::Ui, gamepad: u32) {
         if !self.gamepads.iter().any(|g| g.id == gamepad) {
             let text = self.i18n.trf("gamepad-missing", &[("n", gamepad.into())]);
