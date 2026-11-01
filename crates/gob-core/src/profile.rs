@@ -194,6 +194,51 @@ impl ActionConfig {
     }
 }
 
+impl VirtualButton {
+    /// The button an axis or hat starts with when it is first treated as one: the top tenth
+    /// of the axis, the hat's north.
+    pub fn default_for(input_type: InputType) -> Option<Self> {
+        match input_type {
+            InputType::Axis => Some(Self::Axis {
+                lower: 0.9,
+                upper: 1.0,
+                direction: AxisDirection::Anywhere,
+            }),
+            InputType::Hat => Some(Self::Hat {
+                directions: vec![Some(0)],
+            }),
+            _ => None,
+        }
+    }
+
+    /// The `<virtual-button>` element, as Gremlin writes it.
+    pub fn to_element(&self) -> Element {
+        let mut e = Element::new("virtual-button");
+        match self {
+            Self::Axis {
+                lower,
+                upper,
+                direction,
+            } => {
+                let direction = match direction {
+                    AxisDirection::Anywhere => "anywhere",
+                    AxisDirection::Above => "above",
+                    AxisDirection::Below => "below",
+                };
+                e.push(Element::with_text("lower-limit", lower.to_string()));
+                e.push(Element::with_text("upper-limit", upper.to_string()));
+                e.push(Element::with_text("axis-button-direction", direction));
+            }
+            Self::Hat { directions } => {
+                for &d in directions {
+                    e.push(Element::with_text("hat-direction", hat_direction_name(d)));
+                }
+            }
+        }
+        e
+    }
+}
+
 /// Gremlin hat direction name of a direction (`center` for `None`).
 pub(crate) fn hat_direction_name(d: Option<u16>) -> &'static str {
     const NAMES: [&str; 8] = [

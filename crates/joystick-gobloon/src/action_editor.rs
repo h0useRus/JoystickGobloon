@@ -5,8 +5,8 @@ use std::collections::HashSet;
 
 use eframe::egui::{self, RichText};
 use gob_core::{
-    Action, ActionKind, InputType, Item, Layer, MergeOp, MouseAction, MouseButton, NewAction,
-    Profile, Property, VirtualOutput, child_groups,
+    Action, ActionConfig, ActionKind, AxisDirection, InputType, Item, Layer, MergeOp, MouseAction,
+    MouseButton, NewAction, Profile, Property, VirtualButton, VirtualOutput, child_groups,
 };
 use gob_i18n::I18n;
 
@@ -102,6 +102,25 @@ pub enum Op {
         layer: Layer,
         keep: bool,
     },
+    /// Makes the action sequence `root` of an axis or hat run as a button (`Some`) or as the
+    /// input itself (`None`).
+    SetVirtualButton {
+        root: String,
+        input_type: String,
+        button: Option<VirtualButton>,
+    },
+    /// Adds an action sequence running as `button` to an input's layer, binding it if needed.
+    AddButtonSequence {
+        device: String,
+        name: String,
+        input_type: String,
+        input_id: String,
+        mode: String,
+        layer: Layer,
+        button: VirtualButton,
+    },
+    /// Removes one action sequence (the binding's layer with its last one).
+    RemoveSequence(String),
     Add {
         parent: String,
         group: String,
@@ -268,6 +287,35 @@ pub fn apply(p: &mut Profile, op: Op) {
             layer,
             keep,
         } => p.set_layer_keep_value(&device, &input_type, &input_id, &mode, &layer, keep),
+        Op::SetVirtualButton {
+            root,
+            input_type,
+            button,
+        } => p.set_virtual_button(&root, &input_type, button.as_ref()),
+        Op::AddButtonSequence {
+            device,
+            name,
+            input_type,
+            input_id,
+            mode,
+            layer,
+            button,
+        } => {
+            list_device(p, &device, name);
+            let added = p.add_sequence(
+                &device,
+                &input_type,
+                &input_id,
+                &mode,
+                &layer,
+                Some(&button),
+            );
+            if added.is_none() {
+                let root = p.bind_layer(&device, &input_type, &input_id, &mode, &layer);
+                p.set_virtual_button(&root, &input_type, Some(&button));
+            }
+        }
+        Op::RemoveSequence(root) => p.remove_sequence(&root),
         Op::Add {
             parent,
             group,
@@ -471,6 +519,19 @@ pub fn kind_icon(kind: &str) -> &'static str {
         _ => icon::PUZZLE_PIECE,
     }
 }
+
+/// Hat directions a hat's virtual button can be made of, with their names' keys.
+const HAT_DIRECTIONS: [(Option<u16>, &str); 9] = [
+    (Some(0), "hat-north"),
+    (Some(4500), "hat-north-east"),
+    (Some(9000), "hat-east"),
+    (Some(13500), "hat-south-east"),
+    (Some(18000), "hat-south"),
+    (Some(22500), "hat-south-west"),
+    (Some(27000), "hat-west"),
+    (Some(31500), "hat-north-west"),
+    (None, "hat-center"),
+];
 
 /// Temp memory key of the vJoy device picked last, the default for new map-to-vjoy actions.
 const LAST_VJOY_DEVICE: &str = "vjoy-last-device";
@@ -727,6 +788,107 @@ impl Editor<'_> {
         )
         .response
         .on_hover_text(self.i18n.tr("edit-add"));
+    }
+
+    /// Row above an action sequence of an axis or hat: whether it runs as a button, with the
+    /// axis range or hat directions that press it, and its remove button when the input has
+    /// more than one sequence.
+    pub fn sequence_header(
+        &mut self,
+        ui: &mut egui::Ui,
+        cfg: &ActionConfig,
+        input_type: &str,
+        removable: bool,
+    ) {
+        let ty = InputType::parse(input_type);
+        let current = cfg.virtual_button(ty);
+        let set = |button: Option<VirtualButton>| Op::SetVirtualButton {
+            root: cfg.root_action.clone(),
+            input_type: input_type.to_string(),
+            button,
+        };
+        ui.horizontal_wrapped(|ui| {
+            let mut on = current.is_some();
+            if ui
+                .add(style::switch(&mut on, self.i18n.tr("vb-as-button")))
+                .on_hover_text(self.i18n.tr("vb-as-button-tip"))
+                .changed()
+            {
+                let button = if on {
+                    VirtualButton::default_for(ty)
+                } else {
+                    None
+                };
+                self.ops.push(set(button));
+            }
+            match &current {
+                Some(VirtualButton::Axis {
+                    lower,
+                    upper,
+                    direction,
+                }) => {
+                    let (mut lo, mut hi) = (*lower, *upper);
+                    let mut changed = false;
+                    for (v, glyph, key) in [
+                        (&mut lo, icon::ARROW_LINE_LEFT, "vb-lower"),
+                        (&mut hi, icon::ARROW_LINE_RIGHT, "vb-upper"),
+                    ] {
+                        ui.label(RichText::new(glyph).size(style::ICON_SIZE))
+                            .on_hover_text(self.i18n.tr(key));
+                        let drag = style::Spin::new(v).range(-1.0..=1.0).step(0.01).decimals(2);
+                        changed |= ui.add(drag).changed();
+                    }
+                    // The limit being moved pushes the other one along.
+                    if lo > hi {
+                        if lo == *lower {
+                            lo = hi;
+                        } else {
+                            hi = lo;
+                        }
+                    }
+                    let mut dir = *direction;
+                    ui.separator();
+                    for (d, glyph, key) in [
+                        (AxisDirection::Anywhere, icon::ARROWS_DOWN_UP, "vb-anywhere"),
+                        (AxisDirection::Below, icon::ARROW_UP, "vb-from-below"),
+                        (AxisDirection::Above, icon::ARROW_DOWN, "vb-from-above"),
+                    ] {
+                        if style::icon_toggle(ui, dir == d, glyph, &self.i18n.tr(key)).clicked() {
+                            dir = d;
+                            changed = true;
+                        }
+                    }
+                    if changed {
+                        self.ops.push(set(Some(VirtualButton::Axis {
+                            lower: lo,
+                            upper: hi,
+                            direction: dir,
+                        })));
+                    }
+                }
+                Some(VirtualButton::Hat { directions }) => {
+                    for (d, key) in HAT_DIRECTIONS {
+                        let on = directions.contains(&d);
+                        if style::icon_toggle(ui, on, hat_glyph(d), &self.i18n.tr(key)).clicked() {
+                            let mut picked = directions.clone();
+                            if on {
+                                picked.retain(|x| *x != d);
+                            } else {
+                                picked.push(d);
+                            }
+                            self.ops
+                                .push(set(Some(VirtualButton::Hat { directions: picked })));
+                        }
+                    }
+                }
+                None => {}
+            }
+            if removable
+                && style::icon_button(ui, true, icon::TRASH, &self.i18n.tr("vb-remove")).clicked()
+            {
+                self.ops.push(Op::RemoveSequence(cfg.root_action.clone()));
+            }
+        });
     }
 
     /// Children of `parent`'s `group` as editable cards, plus an add button.

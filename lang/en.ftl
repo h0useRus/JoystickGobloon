@@ -243,6 +243,17 @@ layer-additive = Add to the base
 layer-additive-tip = On: these actions run together with the base layer. Off: they replace it while the modifiers are held.
 layer-keep-value = Keep the last value
 layer-keep-value-tip = On: when this layer stops, its axes keep their last value. Off: they go back to rest.
+
+# Axis or hat as a button
+vb-as-button = Treat as a button
+vb-as-button-tip = On: these actions run as a button, pressed while the axis is inside the range (or the hat points one of the chosen ways) and released when it leaves.
+vb-lower = Lower end of the range
+vb-upper = Upper end of the range
+vb-anywhere = Press whichever way the axis enters the range
+vb-from-below = Press only when the axis moves up into the range
+vb-from-above = Press only when the axis moves down into the range
+vb-add = Add actions that run as a button (an axis range or hat directions)
+vb-remove = Remove these actions
 layers-tip = Layers: { $layers }
 modes-title = Modes
 modes-name = Name
