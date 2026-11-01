@@ -60,6 +60,7 @@ pub fn config(settings: &Settings) -> Option<VoiceConfig> {
         model: path,
         gain: settings.voice_gain,
         min_confidence: settings.voice_min_confidence,
+        keep_open: settings.voice_keep_open,
     })
 }
 
@@ -409,6 +410,13 @@ impl VoicePanel {
         }
 
         ui.add_space(8.0);
+        let keep_open = ui
+            .add(style::switch(
+                &mut settings.voice_keep_open,
+                i18n.tr("settings-voice-keep-open"),
+            ))
+            .on_hover_text(i18n.tr("settings-voice-keep-open-tip"))
+            .changed();
         let mut confidence = (settings.voice_min_confidence * 100.0).round() as u8;
         let confidence_changed = ui
             .horizontal(|ui| {
@@ -423,6 +431,6 @@ impl VoicePanel {
             settings.voice_min_confidence = f32::from(confidence) / 100.0;
         }
         ui.label(RichText::new(i18n.tr("settings-voice-next-start")).weak());
-        gain_changed || confidence_changed
+        gain_changed || confidence_changed || keep_open
     }
 }

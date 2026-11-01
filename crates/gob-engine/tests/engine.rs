@@ -2047,6 +2047,7 @@ fn a_replaced_engine_stops_listening() {
         e.voice_phrases(),
         [(1, "lights on".to_string()), (2, "gear".to_string())]
     );
+    assert_eq!(e.voice_microphones(), ["m1", ""]);
     let (mut out, t0) = (Recorder::default(), Instant::now());
     let button = |n| InputKey::new(DEV, InputKind::Button, n);
     e.process(&button(1), Value::Button(true), t0, &mut out);

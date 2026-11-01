@@ -1,8 +1,9 @@
 //! [`VoiceService`]: voice commands on a thread of their own. It loads the speech model, opens a
-//! microphone while it is told to listen, feeds the recognizer and reports each utterance when
-//! listening stops. Nothing on the caller's thread waits for audio or the model.
+//! microphone while it is told to listen (or keeps the profile's microphones open, see
+//! [`VoiceConfig::keep_open`]), feeds the recognizer and reports each utterance when listening
+//! stops. Nothing on the caller's thread waits for audio or the model.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
@@ -16,6 +17,10 @@ const POLL: Duration = Duration::from_millis(10);
 /// Less audio than this (16 kHz samples, 0.15 s) is a slip of the button, not an utterance.
 const MIN_SAMPLES: usize = 2_400;
 
+/// Audio kept from before listening starts on an open microphone (0.3 s), so a word started
+/// just before the press is heard whole.
+const PRE_ROLL: usize = 4_800;
+
 /// What the service needs to run.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoiceConfig {
@@ -27,6 +32,10 @@ pub struct VoiceConfig {
     pub gain: f32,
     /// Utterances heard with a lower confidence (0.0..=1.0) count as not recognized.
     pub min_confidence: f32,
+    /// Keep the microphones of [`VoiceService::set_microphones`] open between utterances: some
+    /// give silence for a second or two after they open, which would swallow short commands.
+    /// Only audio while listening is recognized.
+    pub keep_open: bool,
 }
 
 /// What the service reports.
@@ -36,7 +45,7 @@ pub enum VoiceEvent {
     Ready,
     /// The service cannot listen (no library, no model, ...); it ignores requests from now on.
     Failed(String),
-    /// A microphone opened (`true`) or closed.
+    /// Listening on a microphone started (`true`) or stopped.
     Listening { microphone: String, on: bool },
     /// An utterance ended. `command` is the id of the command whose phrase was heard, `None`
     /// when it was none of them or too unsure.
@@ -73,6 +82,7 @@ enum Request {
     Listen { microphone: String, on: bool },
     Phrases(Vec<(u32, String)>),
     Gain(f32),
+    Microphones(Vec<String>),
 }
 
 /// The voice thread. Dropping it closes every microphone and ends the thread.
@@ -89,8 +99,11 @@ impl VoiceService {
         phrases: Vec<(u32, String)>,
         events: Sender<VoiceEvent>,
     ) -> Self {
-        let gain = config.gain;
-        let min_confidence = config.min_confidence;
+        let settings = Settings {
+            gain: config.gain,
+            min_confidence: config.min_confidence,
+            keep_open: config.keep_open,
+        };
         let setup = move || -> Result<(MakeRecognizer, OpenMicrophone), Error> {
             let vosk = Vosk::load(&config.library_dirs)?;
             let started = std::time::Instant::now();
@@ -116,12 +129,12 @@ impl VoiceService {
             });
             Ok((make, open))
         };
-        Self::spawn(setup, (gain, min_confidence), phrases, events)
+        Self::spawn(setup, settings, phrases, events)
     }
 
     fn spawn(
         setup: impl FnOnce() -> Result<(MakeRecognizer, OpenMicrophone), Error> + Send + 'static,
-        (gain, min_confidence): (f32, f32),
+        settings: Settings,
         phrases: Vec<(u32, String)>,
         events: Sender<VoiceEvent>,
     ) -> Self {
@@ -134,11 +147,11 @@ impl VoiceService {
                     Worker {
                         make,
                         open,
-                        gain,
-                        min_confidence,
+                        settings,
                         phrases,
                         events,
-                        open_mics: HashMap::new(),
+                        mics: HashMap::new(),
+                        warm: Vec::new(),
                     }
                     .run(&inbox);
                 }
@@ -154,8 +167,8 @@ impl VoiceService {
         }
     }
 
-    /// Opens (`on`) or closes a microphone (its id; empty = the default one). Closing it ends
-    /// the utterance: what was heard comes as [`VoiceEvent::Heard`].
+    /// Starts (`on`) or stops listening on a microphone (its id; empty = the default one).
+    /// Stopping ends the utterance: what was heard comes as [`VoiceEvent::Heard`].
     pub fn listen(&self, microphone: &str, on: bool) {
         self.send(Request::Listen {
             microphone: microphone.to_string(),
@@ -171,6 +184,12 @@ impl VoiceService {
     /// The gain of microphones opened from now on.
     pub fn set_gain(&self, gain: f32) {
         self.send(Request::Gain(gain));
+    }
+
+    /// The microphones the profile listens on: with [`VoiceConfig::keep_open`] they open now and
+    /// stay open, the others close.
+    pub fn set_microphones(&self, microphones: Vec<String>) {
+        self.send(Request::Microphones(microphones));
     }
 
     fn send(&self, request: Request) {
@@ -189,26 +208,48 @@ impl Drop for VoiceService {
     }
 }
 
-/// One open microphone and its utterance so far.
-struct OpenMic {
-    /// `None` once closed.
-    device: Option<Box<dyn Send>>,
-    audio: Receiver<Vec<i16>>,
+#[derive(Debug, Clone, Copy)]
+struct Settings {
+    gain: f32,
+    min_confidence: f32,
+    keep_open: bool,
+}
+
+/// An utterance being heard.
+struct Utterance {
     recognizer: Box<dyn Recognize>,
-    /// Samples fed so far.
+    /// Samples fed since listening started (the pre-roll not counted).
     samples: usize,
     /// Loudest of them.
     peak: u16,
 }
 
+/// An open microphone.
+struct OpenMic {
+    _device: Box<dyn Send>,
+    audio: Receiver<Vec<i16>>,
+    /// The last [`PRE_ROLL`] samples while nobody listens.
+    recent: VecDeque<i16>,
+    utterance: Option<Utterance>,
+}
+
 impl OpenMic {
-    /// Feeds the audio that came in since the last call.
+    /// Takes the audio that came in: to the utterance, else into `recent`.
     fn take_audio(&mut self) {
         while let Ok(s) = self.audio.try_recv() {
-            self.samples += s.len();
-            let peak = s.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
-            self.peak = self.peak.max(peak);
-            self.recognizer.feed(&s);
+            match &mut self.utterance {
+                Some(u) => {
+                    u.samples += s.len();
+                    let peak = s.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
+                    u.peak = u.peak.max(peak);
+                    u.recognizer.feed(&s);
+                }
+                None => {
+                    self.recent.extend(&s);
+                    let extra = self.recent.len().saturating_sub(PRE_ROLL);
+                    self.recent.drain(..extra);
+                }
+            }
         }
     }
 }
@@ -216,18 +257,19 @@ impl OpenMic {
 struct Worker {
     make: MakeRecognizer,
     open: OpenMicrophone,
-    gain: f32,
-    min_confidence: f32,
+    settings: Settings,
     phrases: Vec<(u32, String)>,
     events: Sender<VoiceEvent>,
-    open_mics: HashMap<String, OpenMic>,
+    mics: HashMap<String, OpenMic>,
+    /// Microphones kept open ([`VoiceConfig::keep_open`]).
+    warm: Vec<String>,
 }
 
 impl Worker {
     fn run(mut self, inbox: &Receiver<Request>) {
         loop {
-            // Idle: sleep until a request; listening: also take the audio every POLL.
-            let request = if self.open_mics.is_empty() {
+            // Nothing open: sleep until a request; else also take the audio every POLL.
+            let request = if self.mics.is_empty() {
                 inbox.recv().map_err(|_| RecvTimeoutError::Disconnected)
             } else {
                 inbox.recv_timeout(POLL)
@@ -237,12 +279,13 @@ impl Worker {
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => break,
             }
-            for mic in self.open_mics.values_mut() {
+            for mic in self.mics.values_mut() {
                 mic.take_audio();
             }
         }
-        for microphone in self.open_mics.keys().cloned().collect::<Vec<_>>() {
-            self.close(&microphone);
+        self.warm.clear();
+        for microphone in self.mics.keys().cloned().collect::<Vec<_>>() {
+            self.stop(&microphone);
         }
     }
 
@@ -255,80 +298,129 @@ impl Worker {
             Request::Listen {
                 microphone,
                 on: false,
-            } => self.close(&microphone),
+            } => self.stop(&microphone),
             Request::Phrases(phrases) => self.phrases = phrases,
-            Request::Gain(gain) => self.gain = gain,
+            Request::Gain(gain) => self.settings.gain = gain,
+            Request::Microphones(microphones) => {
+                self.warm = if self.settings.keep_open {
+                    microphones
+                } else {
+                    Vec::new()
+                };
+                for m in self.warm.clone() {
+                    self.open_mic(&m);
+                }
+                let idle: Vec<String> = self
+                    .mics
+                    .iter()
+                    .filter(|(m, open)| open.utterance.is_none() && !self.warm.contains(m))
+                    .map(|(m, _)| m.clone())
+                    .collect();
+                for m in idle {
+                    self.mics.remove(&m);
+                }
+            }
+        }
+    }
+
+    /// Opens a microphone unless it is open; false when it cannot be opened.
+    fn open_mic(&mut self, microphone: &str) -> bool {
+        if self.mics.contains_key(microphone) {
+            return true;
+        }
+        let (tx, audio) = mpsc::channel();
+        let sink = Box::new(move |s: &[i16]| {
+            let _ = tx.send(s.to_vec());
+        });
+        match (self.open)(microphone, self.settings.gain, sink) {
+            Ok(device) => {
+                self.mics.insert(
+                    microphone.to_string(),
+                    OpenMic {
+                        _device: device,
+                        audio,
+                        recent: VecDeque::new(),
+                        utterance: None,
+                    },
+                );
+                true
+            }
+            Err(e) => {
+                log::warn!("voice: {e}");
+                false
+            }
         }
     }
 
     fn start(&mut self, microphone: String) {
-        if self.open_mics.contains_key(&microphone) {
+        if self
+            .mics
+            .get(&microphone)
+            .is_some_and(|m| m.utterance.is_some())
+        {
             return;
         }
         let texts: Vec<String> = self.phrases.iter().map(|(_, p)| p.clone()).collect();
-        let recognizer = match (self.make)(&texts) {
+        let mut recognizer = match (self.make)(&texts) {
             Ok(r) => r,
             Err(e) => {
                 log::warn!("voice: {e}");
                 return;
             }
         };
-        let (tx, audio) = mpsc::channel();
-        let sink = Box::new(move |s: &[i16]| {
-            let _ = tx.send(s.to_vec());
-        });
-        match (self.open)(&microphone, self.gain, sink) {
-            Ok(device) => {
-                let _ = self.events.send(VoiceEvent::Listening {
-                    microphone: microphone.clone(),
-                    on: true,
-                });
-                self.open_mics.insert(
-                    microphone,
-                    OpenMic {
-                        device: Some(device),
-                        audio,
-                        recognizer,
-                        samples: 0,
-                        peak: 0,
-                    },
-                );
-            }
-            Err(e) => log::warn!("voice: {e}"),
+        if !self.open_mic(&microphone) {
+            return;
         }
+        let mic = self.mics.get_mut(&microphone).expect("just opened");
+        mic.take_audio();
+        let recent: Vec<i16> = mic.recent.drain(..).collect();
+        recognizer.feed(&recent);
+        mic.utterance = Some(Utterance {
+            recognizer,
+            samples: 0,
+            peak: 0,
+        });
+        let _ = self.events.send(VoiceEvent::Listening {
+            microphone,
+            on: true,
+        });
     }
 
-    fn close(&mut self, microphone: &str) {
-        let Some(mut mic) = self.open_mics.remove(microphone) else {
+    fn stop(&mut self, microphone: &str) {
+        let Some(mic) = self.mics.get_mut(microphone) else {
             return;
         };
-        mic.device = None;
-        // With what arrived before the device closed.
         mic.take_audio();
+        let Some(mut u) = mic.utterance.take() else {
+            return;
+        };
+        if !self.warm.iter().any(|m| m == microphone) {
+            self.mics.remove(microphone);
+        }
         let _ = self.events.send(VoiceEvent::Listening {
             microphone: microphone.to_string(),
             on: false,
         });
-        if mic.samples < MIN_SAMPLES {
+        if u.samples < MIN_SAMPLES {
             return;
         }
-        let loudest = f32::from(mic.peak) / f32::from(i16::MAX);
-        if mic.peak == 0 {
+        let loudest = f32::from(u.peak) / f32::from(i16::MAX);
+        if u.peak == 0 {
             log::warn!(
-                "voice: microphone {:?} gave only silence: muted, its level at 0, or blocked by the \
-                 system's privacy settings",
+                "voice: microphone {:?} gave only silence: muted, its level at 0, blocked by the \
+                 system's privacy settings, or silent for a while after it opens",
                 microphone
             );
         }
-        let heard = mic.recognizer.finish();
+        let heard = u.recognizer.finish();
         let command = heard
             .phrase
-            .filter(|_| heard.confidence >= self.min_confidence)
+            .filter(|_| heard.confidence >= self.settings.min_confidence)
             .and_then(|i| self.phrases.get(i))
             .map(|(id, _)| *id);
         log::info!(
             "voice: {:.1} s, loudest {loudest:.2}: heard {:?} ({:.2}) -> {}",
-            mic.samples as f32 / crate::SAMPLE_RATE as f32,
+            u.samples as f32 / crate::SAMPLE_RATE as f32,
             heard.text,
             heard.confidence,
             command.map_or("nothing".to_string(), |c| format!("command {c}"))
@@ -349,20 +441,24 @@ mod tests {
 
     type Sinks = Arc<Mutex<HashMap<String, Box<dyn FnMut(&[i16]) + Send>>>>;
 
-    /// Hears phrase `samples[0] - 1` with confidence `samples[1] / 100` of its last chunk.
+    /// Hears phrase `samples[0] - 1` with confidence `samples[1] / 100` of the first chunk fed
+    /// that is not silence (`None` until then).
     struct Fake {
-        last: Vec<i16>,
+        said: Option<(i16, i16)>,
     }
 
     impl Recognize for Fake {
         fn feed(&mut self, samples: &[i16]) {
-            self.last = samples.to_vec();
+            if self.said.is_none() && samples.len() > 1 && (samples[0], samples[1]) != (0, 0) {
+                self.said = Some((samples[0], samples[1]));
+            }
         }
         fn finish(&mut self) -> Heard {
+            let (phrase, confidence) = self.said.unwrap_or_default();
             Heard {
-                phrase: usize::try_from(self.last[0] - 1).ok(),
-                text: format!("phrase {}", self.last[0]),
-                confidence: f32::from(self.last[1]) / 100.0,
+                phrase: usize::try_from(phrase - 1).ok(),
+                text: format!("phrase {phrase}"),
+                confidence: f32::from(confidence) / 100.0,
             }
         }
     }
@@ -386,13 +482,22 @@ mod tests {
 
     impl Rig {
         fn new(phrases: &[(u32, &str)]) -> Self {
+            Self::with(phrases, false)
+        }
+
+        /// With [`VoiceConfig::keep_open`].
+        fn warm(phrases: &[(u32, &str)]) -> Self {
+            Self::with(phrases, true)
+        }
+
+        fn with(phrases: &[(u32, &str)], keep_open: bool) -> Self {
             let sinks: Sinks = Arc::default();
             let gains: Arc<Mutex<Vec<f32>>> = Arc::default();
             let (tx, events) = mpsc::channel();
             let (s, g) = (sinks.clone(), gains.clone());
             let setup = move || -> Result<(MakeRecognizer, OpenMicrophone), Error> {
                 let make: MakeRecognizer =
-                    Box::new(|_| Ok(Box::new(Fake { last: vec![0, 0] }) as Box<dyn Recognize>));
+                    Box::new(|_| Ok(Box::new(Fake { said: None }) as Box<dyn Recognize>));
                 let open: OpenMicrophone = Box::new(move |microphone, gain, sink| {
                     if microphone == "broken" {
                         return Err(Error::Audio("broken".into()));
@@ -404,7 +509,12 @@ mod tests {
                 Ok((make, open))
             };
             let phrases = phrases.iter().map(|(id, p)| (*id, p.to_string())).collect();
-            let service = VoiceService::spawn(setup, (1.5, 0.5), phrases, tx);
+            let settings = Settings {
+                gain: 1.5,
+                min_confidence: 0.5,
+                keep_open,
+            };
+            let service = VoiceService::spawn(setup, settings, phrases, tx);
             let rig = Self {
                 service,
                 events,
@@ -428,6 +538,22 @@ mod tests {
             audio[1] = confidence;
             let mut sinks = self.sinks.lock().unwrap();
             (sinks.get_mut(microphone).expect("open"))(&audio);
+        }
+
+        /// Waits until the open microphones are these.
+        fn open_mics(&self, expected: &[&str]) {
+            let mut expected: Vec<&str> = expected.to_vec();
+            expected.sort_unstable();
+            let started = std::time::Instant::now();
+            loop {
+                let mut open: Vec<String> = self.sinks.lock().unwrap().keys().cloned().collect();
+                open.sort_unstable();
+                if open == expected {
+                    return;
+                }
+                assert!(started.elapsed() < Duration::from_secs(5), "open: {open:?}");
+                std::thread::sleep(Duration::from_millis(5));
+            }
         }
 
         fn opened(&self, microphone: &str, on: bool) {
@@ -533,7 +659,11 @@ mod tests {
         let (tx, events) = mpsc::channel();
         let service = VoiceService::spawn(
             || Err(Error::Model("missing".into())),
-            (1.0, 0.5),
+            Settings {
+                gain: 1.0,
+                min_confidence: 0.5,
+                keep_open: true,
+            },
             Vec::new(),
             tx,
         );
@@ -544,6 +674,43 @@ mod tests {
         );
         drop(service);
         assert!(events.recv().is_err(), "the thread ended");
+    }
+
+    #[test]
+    fn warm_microphones_stay_open() {
+        let rig = Rig::warm(&[(1, "a")]);
+        rig.service.set_microphones(vec!["".into(), "left".into()]);
+        rig.open_mics(&["", "left"]);
+        assert_eq!(rig.utterance("", 1, 100), heard(Some(1), 1, 1.0));
+        rig.open_mics(&["", "left"]);
+        assert_eq!(rig.utterance("right", 1, 100), heard(Some(1), 1, 1.0));
+        rig.open_mics(&["", "left"]);
+        rig.service.set_microphones(vec!["left".into()]);
+        rig.open_mics(&["left"]);
+        assert_eq!(*rig.gains.lock().unwrap(), [1.5; 3], "opened once each");
+    }
+
+    #[test]
+    fn a_word_started_before_the_press_is_heard() {
+        let rig = Rig::warm(&[(1, "a"), (2, "b"), (3, "c")]);
+        rig.service.set_microphones(vec!["".into()]);
+        rig.open_mics(&[""]);
+        rig.say("", 3, 100, 1_000);
+        std::thread::sleep(Duration::from_millis(50));
+        rig.service.listen("", true);
+        rig.opened("", true);
+        rig.say("", 0, 0, MIN_SAMPLES);
+        rig.service.listen("", false);
+        rig.opened("", false);
+        assert_eq!(rig.next(), heard(Some(3), 3, 1.0));
+    }
+
+    #[test]
+    fn microphones_stay_closed_without_keep_open() {
+        let rig = Rig::new(&[(1, "a")]);
+        rig.service.set_microphones(vec!["".into()]);
+        assert_eq!(rig.utterance("", 1, 100), heard(Some(1), 1, 1.0));
+        rig.open_mics(&[]);
     }
 
     #[test]

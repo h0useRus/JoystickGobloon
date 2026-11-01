@@ -448,6 +448,10 @@ fn prepare(
             (None, None) => log::info!("voice-input actions ignored: no speech model"),
         }
     }
+    // Microphones kept open follow the profile's voice-input actions (none: all close).
+    if let Some(voice) = &out.voice {
+        voice.set_microphones(engine.voice_microphones());
+    }
 
     let now = Instant::now();
     for d in initial.iter().filter(|d| !d.info.is_own()) {

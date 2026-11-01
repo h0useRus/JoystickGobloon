@@ -1169,6 +1169,19 @@ impl Engine {
         !self.listening.is_empty()
     }
 
+    /// The microphones voice-input actions listen on (empty = the default one), each once.
+    pub fn voice_microphones(&self) -> Vec<String> {
+        let mut found: Vec<String> = Vec::new();
+        for n in &self.nodes {
+            if let Node::Voice { microphone, .. } = n
+                && !found.contains(microphone)
+            {
+                found.push(microphone.clone());
+            }
+        }
+        found
+    }
+
     /// The phrases to listen for, each with its command's id.
     pub fn voice_phrases(&self) -> &[(u32, String)] {
         &self.voice_phrases

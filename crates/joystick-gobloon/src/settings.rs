@@ -70,6 +70,9 @@ pub struct Settings {
     pub voice_gain: f32,
     /// Voice commands heard less sure than this (0..1) count as not recognized.
     pub voice_min_confidence: f32,
+    /// Keep the microphones of voice commands open while a profile runs (some are silent for a
+    /// moment after they open); only what is said while listening is recognized.
+    pub voice_keep_open: bool,
     /// Experimental features (joystick LEDs): hidden and not run while off. Not in the UI:
     /// `experimental = true` in settings.gob turns them on.
     pub experimental: bool,
@@ -256,6 +259,7 @@ impl Default for Settings {
             voice_language: String::new(),
             voice_gain: 1.0,
             voice_min_confidence: 0.5,
+            voice_keep_open: true,
             calibration: BTreeMap::new(),
             debounce: BTreeMap::new(),
             leds: BTreeMap::new(),
