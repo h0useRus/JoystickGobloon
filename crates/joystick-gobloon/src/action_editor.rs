@@ -30,7 +30,8 @@ pub enum AddKind {
 /// Adds a bound device to the profile's `<devices>` (not the logical device or the keyboard).
 fn list_device(p: &mut Profile, device: &str, name: String) {
     let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
-        || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID);
+        || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
+        || device.eq_ignore_ascii_case(gob_core::VOICE_GUID);
     if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device)) {
         p.devices.push(gob_core::Device {
             id: device.to_string(),
@@ -217,6 +218,17 @@ pub enum Op {
         input_type: InputType,
         id: u32,
     },
+    AddVoiceCommand,
+    RemoveVoiceCommand(u32),
+    SetVoicePhrases {
+        id: u32,
+        phrases: Vec<String>,
+    },
+    /// Seconds a recognized command holds its button.
+    SetVoiceHold {
+        id: u32,
+        hold: f64,
+    },
     AddChainStep(String),
     RemoveChainStep {
         action: String,
@@ -384,6 +396,16 @@ pub fn apply(p: &mut Profile, op: Op) {
             p.rename_logical_input(input_type, id, &label);
         }
         Op::RemoveLogicalInput { input_type, id } => p.remove_logical_input(input_type, id),
+        Op::AddVoiceCommand => {
+            p.add_voice_command();
+        }
+        Op::RemoveVoiceCommand(id) => p.remove_voice_command(id),
+        Op::SetVoicePhrases { id, phrases } => {
+            p.set_voice_phrases(id, &phrases);
+        }
+        Op::SetVoiceHold { id, hold } => {
+            p.set_voice_hold(id, hold);
+        }
         Op::SetMacroStep {
             action,
             index,
