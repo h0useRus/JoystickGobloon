@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use gob_core::{
     Action, ActionKind, ActivationMode, AxisDirection, Comparator, ConditionSource, InputType,
     Item, Key, Layer, MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton, Profile,
-    Selection, VirtualButton,
+    Selection, VOICE_GUID, VOICE_INPUT_TYPE, VirtualButton,
 };
 
 use crate::media::{SpeechQueue, SpeechRequest};
@@ -22,6 +22,11 @@ const VIRTUAL_DEVICE: &str = "virtual";
 const HAT_BUTTON_DEVICE: &str = "virtual-hat";
 /// Gremlin's default pause between macro steps without an explicit pause.
 const MACRO_DELAY: f64 = 0.05;
+
+/// The input of voice command `id`.
+fn voice_key(id: u32) -> InputKey {
+    InputKey::new(VOICE_GUID, InputKind::Button, id)
+}
 /// Lower bound between macro repetitions so a zero delay cannot spin `tick`.
 const MACRO_MIN_REPEAT: Duration = Duration::from_millis(1);
 
@@ -54,6 +59,11 @@ enum Node {
         act: ActivationMode,
         /// Relative axis mode: speed (Gremlin's axis-scaling); absolute when `None`.
         relative: Option<f32>,
+    },
+    /// voice-input: listens on `microphone` while held.
+    Voice {
+        microphone: String,
+        act: ActivationMode,
     },
     /// map-to-gamepad.
     Gamepad {
@@ -285,7 +295,12 @@ enum TimerKind {
     TapTimeout(NodeId),
     TempoTimeout(NodeId),
     ToggleTimeout(NodeId),
-    PulseRelease { nodes: Vec<NodeId>, src: Source },
+    PulseRelease {
+        nodes: Vec<NodeId>,
+        src: Source,
+    },
+    /// A recognized voice command's button goes up.
+    VoiceRelease(u32),
 }
 
 #[derive(Debug)]
@@ -304,6 +319,7 @@ enum ReleaseAction {
     StopMacro(NodeId),
     TapRelease(NodeId),
     ReleaseKeys(NodeId),
+    StopListening(NodeId),
     HatButtons(NodeId),
     /// Releases a logical device button.
     Logical(InputKey),
@@ -443,6 +459,12 @@ pub struct Engine {
     hat_buttons: HashMap<NodeId, Vec<bool>>,
     /// map-to-keyboard actions whose keys are held.
     keys_down: HashSet<NodeId>,
+    /// voice-input actions held down, with their microphone.
+    listening: HashMap<NodeId, String>,
+    /// How long each voice command (by id) holds its button.
+    voice_holds: HashMap<u32, Duration>,
+    /// Release timer of each voice command whose button is down.
+    voice_releases: HashMap<u32, u64>,
     /// Profile's `macro-default-delay` in seconds.
     macro_delay: f64,
     /// Last value written to each vJoy axis, for relative macro steps.
@@ -513,6 +535,13 @@ impl Engine {
             logical_changed: false,
             cond_cache: HashMap::new(),
             keys_down: HashSet::new(),
+            listening: HashMap::new(),
+            voice_holds: profile
+                .voice_commands
+                .iter()
+                .map(|c| (c.id, Duration::from_secs_f64(c.hold.clamp(0.01, 10.0))))
+                .collect(),
+            voice_releases: HashMap::new(),
             macro_delay: profile
                 .settings
                 .child_text("macro-default-delay")
@@ -549,8 +578,10 @@ impl Engine {
                 InputType::Axis => InputKind::Axis,
                 InputType::Button => InputKind::Button,
                 InputType::Hat => InputKind::Hat,
-                // Keyboard keys (Gremlin's "key" inputs) behave like buttons.
-                InputType::Other if b.input_type.trim() == "key" => InputKind::Button,
+                // Keyboard keys (Gremlin's "key" inputs) and voice commands behave like buttons.
+                InputType::Other if matches!(b.input_type.trim(), "key" | VOICE_INPUT_TYPE) => {
+                    InputKind::Button
+                }
                 InputType::Other => continue,
             };
             let Ok(id) = b.input_id.trim().parse() else {
@@ -1011,10 +1042,11 @@ impl Engine {
                     repeat,
                     act: action.activation_mode(),
                 },
-                // Listening is not run yet: the action is kept and does nothing.
-                ActionKind::Other
-                | ActionKind::Description { .. }
-                | ActionKind::VoiceInput { .. } => Node::Noop,
+                ActionKind::VoiceInput { microphone } => Node::Voice {
+                    microphone: microphone.to_string(),
+                    act: action.activation_mode(),
+                },
+                ActionKind::Other | ActionKind::Description { .. } => Node::Noop,
             },
         };
         self.nodes.push(node);
@@ -1103,6 +1135,31 @@ impl Engine {
             .chain(relative)
             .chain(self.motion.next_deadline())
             .min()
+    }
+
+    /// Whether the profile has voice-input actions (a microphone may be needed).
+    pub fn uses_voice(&self) -> bool {
+        self.nodes.iter().any(|n| matches!(n, Node::Voice { .. }))
+    }
+
+    /// Voice command `id` was heard: its button is pressed and released after the command's
+    /// hold time ([`Engine::tick`]); heard again while down, it stays down that long from now.
+    /// Unknown ids are ignored.
+    pub fn voice_command(&mut self, id: u32, now: Instant, out: &mut dyn Output) {
+        let Some(&hold) = self.voice_holds.get(&id) else {
+            return;
+        };
+        match self.voice_releases.remove(&id) {
+            Some(timer) => self.timers.retain(|t| t.id != timer),
+            None => self.process(&voice_key(id), Value::Button(true), now, out),
+        }
+        let timer = self.add_timer(now + hold, TimerKind::VoiceRelease(id));
+        self.voice_releases.insert(id, timer);
+    }
+
+    /// Whether listening is on (a voice-input action is held).
+    pub fn is_listening(&self) -> bool {
+        !self.listening.is_empty()
     }
 
     /// Whether the profile has light-led actions.
@@ -1288,6 +1345,10 @@ impl Engine {
                     for n in nodes {
                         self.run(n, &src, &mut Value::Button(false), now, out, 0);
                     }
+                }
+                TimerKind::VoiceRelease(id) => {
+                    self.voice_releases.remove(&id);
+                    self.process(&voice_key(id), Value::Button(false), now, out);
                 }
             }
         }
@@ -1817,7 +1878,49 @@ impl Engine {
                     self.macro_trigger(node, repeat, src, now, out);
                 }
             }
+            Node::Voice { microphone, act } => {
+                if !should_execute(act, *value) {
+                    return;
+                }
+                if value.truthy() {
+                    self.start_listening(node, microphone, out);
+                    // Also when let go in another mode or while paused: the microphone must
+                    // never stay open.
+                    self.register(
+                        &src.key,
+                        ReleaseEntry {
+                            mode: src.mode.clone(),
+                            any_mode: true,
+                            on_press: false,
+                            action: ReleaseAction::StopListening(node),
+                        },
+                    );
+                } else {
+                    self.stop_listening(node, out);
+                }
+            }
             Node::Noop => {}
+        }
+    }
+
+    /// A voice-input action is pressed; the microphone opens unless another holds it open.
+    fn start_listening(&mut self, node: NodeId, microphone: String, out: &mut dyn Output) {
+        if self.listening.contains_key(&node) {
+            return;
+        }
+        if !self.listening.values().any(|m| *m == microphone) {
+            out.voice_listen(&microphone, true);
+        }
+        self.listening.insert(node, microphone);
+    }
+
+    /// A voice-input action is released; the microphone closes when nothing else holds it.
+    fn stop_listening(&mut self, node: NodeId, out: &mut dyn Output) {
+        let Some(microphone) = self.listening.remove(&node) else {
+            return;
+        };
+        if !self.listening.values().any(|m| *m == microphone) {
+            out.voice_listen(&microphone, false);
         }
     }
 
@@ -2595,6 +2698,7 @@ impl Engine {
                 }
                 ReleaseAction::LeaveTemporary(mode) => self.leave_temporary(&mode),
                 ReleaseAction::ReleaseKeys(node) => self.release_keys(node, out),
+                ReleaseAction::StopListening(node) => self.stop_listening(node, out),
                 ReleaseAction::Logical(key) => {
                     self.feed_logical(&key, Value::Button(false), now, out)
                 }

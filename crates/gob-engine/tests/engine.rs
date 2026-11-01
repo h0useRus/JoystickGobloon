@@ -25,6 +25,8 @@ enum Out {
     /// Gamepad, control name, value (buttons 0/1).
     Pad(u32, &'static str, f32),
     PadDpad(u32, Option<u16>),
+    /// Listening on a microphone started or stopped.
+    Listen(String, bool),
 }
 
 #[derive(Default)]
@@ -82,6 +84,9 @@ impl Output for Recorder {
     }
     fn load_profile(&mut self, file: &str) {
         self.0.push(Out::Load(file.into()));
+    }
+    fn voice_listen(&mut self, microphone: &str, on: bool) {
+        self.0.push(Out::Listen(microphone.into(), on));
     }
     fn light_led(&mut self, light: &gob_engine::Light) {
         self.0.push(Out::Light(
@@ -1867,4 +1872,170 @@ fn an_axis_both_layers_drive_does_not_jump() {
     );
     button(&mut e, &mut out, 30, false);
     assert_eq!(out.0, [Out::Axis(3, 0.6), Out::Axis(4, 0.0)]);
+}
+
+/// Bindings of voice commands (the voice device, input type `voice`).
+fn voice_input(id: u32, mode: &str, root: &str) -> String {
+    format!(
+        "<input><device-id>{}</device-id><input-type>voice</input-type><mode>{mode}</mode>\
+         <input-id>{id}</input-id><action-configuration><root-action>{root}</root-action>\
+         <behavior>button</behavior></action-configuration></input>",
+        gob_core::VOICE_GUID
+    )
+}
+
+fn listen(id: &str, microphone: &str) -> String {
+    act(
+        id,
+        "voice-input",
+        &format!(
+            "{}{}",
+            prop("string", "microphone", microphone),
+            prop("string", "listen", "hold")
+        ),
+    )
+}
+
+/// Buttons 1 and 3 listen on microphone `m1`, 2 on the default one; 4 switches to mode
+/// Other (a child of Default), 5 toggles pause. Voice command 1 (held 0.2 s) presses vJoy button 3, command 2
+/// (only in mode Other) button 4.
+fn voice_profile() -> Engine {
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs>{}{}{}{}{}{}{}</inputs><settings/>
+        <library>{}{}{}{}{}{}{}{}{}{}{}{}{}</library>
+        <modes><mode>Default</mode><mode parent="Default">Other</mode></modes>
+        <voice-commands><command id="1" hold="0.2"><phrase>lights on</phrase></command>
+        <command id="2"><phrase>gear</phrase></command></voice-commands></profile>"#,
+        input("button", 1, "Default", "r1", ""),
+        input("button", 2, "Default", "r2", ""),
+        input("button", 3, "Default", "r3", ""),
+        input("button", 4, "Default", "r4", ""),
+        input("button", 5, "Default", "r5", ""),
+        voice_input(1, "Default", "rv1"),
+        voice_input(2, "Other", "rv2"),
+        root("r1", &["l1"]),
+        listen("l1", "m1"),
+        root("r2", &["l2"]),
+        listen("l2", ""),
+        root("r3", &["l3"]),
+        listen("l3", "m1"),
+        root("r4", &["mode"]),
+        change_mode("mode", "Switch", &["Other"], "press"),
+        root("r5", &["pause"]),
+        act_on(
+            "pause",
+            "pause-resume",
+            &prop("string", "operation", "Toggle"),
+            "press"
+        ),
+        root("rv1", &["v3"]),
+        vjoy("v3", "button", 3),
+        root("rv2", &["v4"]) + &vjoy("v4", "button", 4),
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    Engine::new(&p, &HashMap::new())
+}
+
+#[test]
+fn voice_input_listens_while_held() {
+    let mut e = voice_profile();
+    assert!(e.uses_voice());
+    let (mut out, t0) = (Recorder::default(), Instant::now());
+    let button = |n| InputKey::new(DEV, InputKind::Button, n);
+    e.process(&button(1), Value::Button(true), t0, &mut out);
+    assert!(e.is_listening());
+    e.process(&button(3), Value::Button(true), t0, &mut out);
+    e.process(&button(1), Value::Button(false), t0, &mut out);
+    assert_eq!(
+        out.0,
+        [Out::Listen("m1".into(), true)],
+        "one start per microphone, held open by button 3"
+    );
+    e.process(&button(2), Value::Button(true), t0, &mut out);
+    e.process(&button(3), Value::Button(false), t0, &mut out);
+    e.process(&button(2), Value::Button(false), t0, &mut out);
+    assert_eq!(
+        out.0[1..],
+        [
+            Out::Listen("".into(), true),
+            Out::Listen("m1".into(), false),
+            Out::Listen("".into(), false),
+        ]
+    );
+    assert!(!e.is_listening());
+}
+
+#[test]
+fn listening_stops_in_another_mode_and_while_paused() {
+    let mut e = voice_profile();
+    let (mut out, t0) = (Recorder::default(), Instant::now());
+    let button = |n| InputKey::new(DEV, InputKind::Button, n);
+    e.process(&button(1), Value::Button(true), t0, &mut out);
+    e.process(&button(5), Value::Button(true), t0, &mut out);
+    assert!(e.is_paused());
+    e.process(&button(1), Value::Button(false), t0, &mut out);
+    assert_eq!(
+        out.0,
+        [
+            Out::Listen("m1".into(), true),
+            Out::Listen("m1".into(), false)
+        ],
+        "paused"
+    );
+    e.process(&button(1), Value::Button(true), t0, &mut out);
+    assert_eq!(out.0.len(), 2, "no listening while paused");
+    e.process(&button(5), Value::Button(true), t0, &mut out);
+    e.process(&button(1), Value::Button(true), t0, &mut out);
+    e.process(&button(4), Value::Button(true), t0, &mut out);
+    assert_eq!(e.current_mode(), "Other");
+    e.process(&button(1), Value::Button(false), t0, &mut out);
+    assert_eq!(
+        out.0[2..],
+        [
+            Out::Listen("m1".into(), true),
+            Out::Listen("m1".into(), false)
+        ],
+        "released in another mode"
+    );
+    assert!(!e.is_listening());
+}
+
+#[test]
+fn voice_commands_press_for_their_hold_time() {
+    let mut e = voice_profile();
+    let (mut out, t0) = (Recorder::default(), Instant::now());
+    let ms = |n| t0 + Duration::from_millis(n);
+    e.voice_command(1, t0, &mut out);
+    assert_eq!(out.0, [Out::Button(3, true)]);
+    assert_eq!(e.next_deadline(), Some(ms(200)));
+    e.tick(ms(100), &mut out);
+    e.voice_command(1, ms(150), &mut out);
+    assert_eq!(out.0.len(), 1, "heard again while down: no second press");
+    e.tick(ms(250), &mut out);
+    assert_eq!(out.0.len(), 1, "the hold starts again");
+    e.tick(ms(350), &mut out);
+    assert_eq!(out.0, [Out::Button(3, true), Out::Button(3, false)]);
+    assert_eq!(e.next_deadline(), None);
+    e.voice_command(9, ms(400), &mut out);
+    assert_eq!(out.0.len(), 2, "unknown commands are ignored");
+}
+
+#[test]
+fn voice_commands_follow_modes_and_pause() {
+    let mut e = voice_profile();
+    let (mut out, t0) = (Recorder::default(), Instant::now());
+    let ms = |n| t0 + Duration::from_millis(n);
+    e.voice_command(2, t0, &mut out);
+    e.tick(ms(200), &mut out);
+    assert!(out.0.is_empty(), "command 2 is bound in mode Other only");
+    let button = |n| InputKey::new(DEV, InputKind::Button, n);
+    e.process(&button(4), Value::Button(true), ms(200), &mut out);
+    e.voice_command(2, ms(300), &mut out);
+    assert_eq!(out.0, [Out::Button(4, true)]);
+    e.tick(ms(400), &mut out);
+    assert_eq!(out.0[1], Out::Button(4, false), "default hold 0.1 s");
+    e.process(&button(5), Value::Button(true), ms(500), &mut out);
+    e.voice_command(2, ms(600), &mut out);
+    e.tick(ms(800), &mut out);
+    assert_eq!(out.0.len(), 2, "paused");
 }
