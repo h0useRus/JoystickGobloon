@@ -1243,6 +1243,7 @@ impl JoystickGobloonApp {
         }
         self.virtual_devices_banner(ui);
         self.devices_view.logical = self.logical_device();
+        self.devices_view.voice = self.activation.status().and_then(|s| s.voice);
         let devices = self.input.devices();
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
@@ -1664,6 +1665,10 @@ impl eframe::App for JoystickGobloonApp {
                     );
                     ui.label(RichText::new(format!("{}  {mode}", icon::STACK)).size(12.0))
                         .on_hover_text(self.i18n.tr("label-mode"));
+                    if let Some(voice) = &status.voice {
+                        ui.separator();
+                        crate::voice_view::status_icon(ui, &self.i18n, voice);
+                    }
                     if let Some(latency) = status.latency {
                         let ms = |d: std::time::Duration| format!("{:.2}", d.as_secs_f64() * 1e3);
                         ui.separator();

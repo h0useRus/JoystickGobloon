@@ -35,7 +35,9 @@ pub struct RunnerStatus {
 pub struct VoiceStatus {
     /// The speech model is loaded.
     pub ready: bool,
-    /// Why voice commands do not work (no speech model, library missing, ...).
+    /// No speech model was given ([`Runner::start`]'s `voice`): voice-input actions do nothing.
+    pub no_model: bool,
+    /// Why the speech model or library could not be loaded (English, for the log).
     pub error: Option<String>,
     /// A microphone is open.
     pub listening: bool,
@@ -404,10 +406,7 @@ impl Drop for Runner {
 /// The voice status a new engine starts with: `None` without voice-input actions.
 fn initial_voice_status(engine: &Engine, out: &SystemOutput) -> Option<VoiceStatus> {
     engine.uses_voice().then(|| VoiceStatus {
-        error: out
-            .voice_config
-            .is_none()
-            .then(|| "no speech model".to_string()),
+        no_model: out.voice_config.is_none(),
         ..Default::default()
     })
 }
@@ -507,13 +506,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
                 // A held push-to-talk input would keep the microphone open otherwise.
                 engine.stop_listening_all(&mut out);
                 engine = r.engine;
-                let ready = voice_status.as_ref().is_some_and(|v| v.ready);
-                voice_status = initial_voice_status(&engine, &out).map(|mut v| {
-                    v.ready = ready;
-                    if ready {
-                        v.error = None;
-                    }
-                    v
+                // The voice service is kept: so are its state and error.
+                let previous = voice_status.take().unwrap_or_default();
+                voice_status = initial_voice_status(&engine, &out).map(|v| VoiceStatus {
+                    ready: previous.ready,
+                    error: previous.error,
+                    ..v
                 });
                 engine.activate(&mut out);
                 engine.take_logical_changed();

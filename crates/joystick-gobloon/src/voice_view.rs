@@ -2,7 +2,8 @@
 //! phrases and hold time above its actions.
 
 use eframe::egui::{self, RichText};
-use gob_core::VoiceCommand;
+use gob_core::{Profile, VoiceCommand};
+use gob_engine::{VoiceHeard, VoiceStatus};
 use gob_i18n::I18n;
 
 use crate::action_editor::Op;
@@ -24,6 +25,84 @@ pub fn no_button_banner(ui: &mut egui::Ui, i18n: &I18n) {
         });
     });
     ui.add_space(4.0);
+}
+
+/// The running profile's voice commands on the Voice tab: why they do not work, else whether
+/// it listens and what it heard last.
+pub fn status(ui: &mut egui::Ui, i18n: &I18n, profile: &Profile, status: &VoiceStatus) {
+    let warn = ui.visuals().warn_fg_color;
+    if status.no_model {
+        let text = format!("{}  {}", icon::WARNING, i18n.tr("voice-no-model"));
+        ui.label(RichText::new(text).color(warn));
+        return;
+    }
+    if let Some(e) = &status.error {
+        let text = i18n.trf("voice-failed", &[("error", e.clone().into())]);
+        ui.label(RichText::new(format!("{}  {text}", icon::WARNING)).color(warn));
+        return;
+    }
+    if status.listening {
+        let text = format!("{}  {}", icon::RECORD, i18n.tr("voice-listening"));
+        ui.label(RichText::new(text).color(style::accent(ui)));
+    } else if let Some(heard) = &status.heard {
+        ui.label(RichText::new(heard_text(i18n, profile, heard)).weak());
+    } else if !status.ready {
+        ui.label(RichText::new(i18n.tr("voice-loading")).weak());
+    }
+}
+
+/// What was heard last and what it did: `Heard "lights on" (92 %): lights on`.
+fn heard_text(i18n: &I18n, profile: &Profile, heard: &VoiceHeard) -> String {
+    let confidence = (heard.confidence * 100.0).round() as u32;
+    match heard.command {
+        Some(id) => {
+            let name = profile
+                .voice_command(id)
+                .and_then(|c| c.phrases.first().cloned())
+                .unwrap_or_else(|| i18n.trf("voice-command-n", &[("n", id.into())]));
+            i18n.trf(
+                "voice-heard",
+                &[
+                    ("text", heard.text.clone().into()),
+                    ("confidence", confidence.into()),
+                    ("command", name.into()),
+                ],
+            )
+        }
+        None if heard.text.is_empty() => i18n.tr("voice-heard-nothing"),
+        None => i18n.trf(
+            "voice-heard-unknown",
+            &[
+                ("text", heard.text.clone().into()),
+                ("confidence", confidence.into()),
+            ],
+        ),
+    }
+}
+
+/// The status bar's microphone: lit while listening, a warning when voice commands do not work.
+pub fn status_icon(ui: &mut egui::Ui, i18n: &I18n, status: &VoiceStatus) {
+    let (glyph, color, tip) = if status.no_model {
+        (
+            icon::MICROPHONE_SLASH,
+            ui.visuals().warn_fg_color,
+            i18n.tr("voice-no-model"),
+        )
+    } else if let Some(e) = &status.error {
+        let tip = i18n.trf("voice-failed", &[("error", e.clone().into())]);
+        (icon::MICROPHONE_SLASH, ui.visuals().warn_fg_color, tip)
+    } else if status.listening {
+        (
+            icon::MICROPHONE,
+            style::accent(ui),
+            i18n.tr("voice-listening"),
+        )
+    } else {
+        let tip = i18n.tr("status-voice");
+        (icon::MICROPHONE, ui.visuals().text_color(), tip)
+    };
+    ui.label(RichText::new(glyph).size(12.0).color(color))
+        .on_hover_text(tip);
 }
 
 /// A command's title with its delete button, its phrases (edited in place, an empty field adds

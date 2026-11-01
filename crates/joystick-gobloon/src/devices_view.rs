@@ -81,6 +81,8 @@ pub struct DevicesView {
     pub curve_right_click_invert: bool,
     /// The profile's logical device with its live values, filled by the app for each frame.
     pub logical: Option<DeviceState>,
+    /// Voice commands of the running profile, filled by the app for each frame.
+    pub voice: Option<gob_engine::VoiceStatus>,
     /// Configured virtual gamepads and how many the system can have, filled by the app.
     pub gamepads: Vec<gob_virtual::GamepadInfo>,
     pub max_gamepads: u32,
@@ -718,6 +720,9 @@ impl DevicesView {
         let listening = profile.voice_inputs();
         if listening.is_empty() {
             crate::voice_view::no_button_banner(ui, i18n);
+        }
+        if let Some(status) = &self.voice {
+            crate::voice_view::status(ui, i18n, profile, status);
         }
         for v in &listening {
             let b = &profile.inputs[v.binding];
