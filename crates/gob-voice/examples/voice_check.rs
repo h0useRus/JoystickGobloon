@@ -3,6 +3,8 @@
 //! voice_check                                        list microphones
 //! voice_check --meter [--mic <id>] [--gain <percent>]  microphone test: live level, no recognition
 //! voice_check --lib <dir> --model <dir> [--mic <id>] [--gain <percent>] [--wav <file> | --save <file>] <phrase>...
+//! voice_check --lib <dir> --models <dir> [--lang <code>] ...   the same with the language's model
+//!     from <dir>, downloaded (and checked) there first when it is missing; --lang defaults to en
 //!
 //! Without --wav: Enter starts listening, Enter again ends the phrase, q quits.
 //! While the microphone is open a bar shows its level after the gain; "+" or "-" and Enter raise
@@ -17,7 +19,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use gob_voice::{Capture, MAX_GAIN, Recognizer, Vosk, microphones};
+use gob_voice::{Capture, MAX_GAIN, Recognizer, Vosk, microphones, models};
 
 type Lines<'a> = std::io::Lines<std::io::StdinLock<'a>>;
 
@@ -25,6 +27,7 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let (mut lib, mut model, mut mic, mut wav, mut save) = (None, None, None, None, None);
     let (mut gain, mut meter) = (1.0, false);
+    let (mut models, mut lang) = (None, "en".to_string());
     let mut phrases = Vec::new();
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -38,6 +41,12 @@ fn main() {
             }
             "--lib" => lib = args.next().map(PathBuf::from),
             "--model" => model = args.next().map(PathBuf::from),
+            "--models" => models = args.next().map(PathBuf::from),
+            "--lang" => {
+                lang = args
+                    .next()
+                    .unwrap_or_else(|| fail("--lang takes a code, e.g. de"))
+            }
             "--mic" => mic = args.next(),
             "--wav" => wav = args.next().map(PathBuf::from),
             "--save" => save = args.next().map(PathBuf::from),
@@ -53,6 +62,7 @@ fn main() {
         hold(&capture, &mut std::io::stdin().lock().lines());
         return;
     }
+    let model = model.or_else(|| models.map(|dir| model_for(&dir, &lang)));
     let Some(model) = model else {
         for m in microphones() {
             println!(
@@ -128,6 +138,35 @@ fn listen(
         }
         report(recognizer, phrases);
     }
+}
+
+/// The language's model in `dir`, installed first when it is missing.
+fn model_for(dir: &std::path::Path, lang: &str) -> PathBuf {
+    let info = models::for_language(lang).unwrap_or_else(|| fail(format!("no model for {lang}")));
+    if let Some(path) = models::installed(dir, info) {
+        return path;
+    }
+    println!(
+        "downloading {} ({} MB)...",
+        info.url(),
+        info.size / 1_000_000
+    );
+    let mut shown = 0;
+    let path = models::install(
+        dir,
+        info,
+        &mut |done, total| {
+            let percent = done * 100 / total.max(1);
+            if percent >= shown + 10 || done == total {
+                shown = percent;
+                println!("  {percent:>3} %");
+            }
+        },
+        &AtomicBool::new(false),
+    )
+    .unwrap_or_else(|e| fail(e));
+    println!("installed in {}", path.display());
+    path
 }
 
 /// Shows the microphone's level until a line other than "+" / "-" (which change the gain) is

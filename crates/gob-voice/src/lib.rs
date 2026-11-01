@@ -1,11 +1,14 @@
 //! Voice commands: microphone capture (`audio`) and offline speech recognition with a fixed phrase
-//! list (`vosk`, libvosk loaded at run time, so the program runs without it).
+//! list (`vosk`, libvosk loaded at run time, so the program runs without it), with the speech
+//! models per language downloaded on demand (`models`).
 
 pub mod audio;
+pub mod models;
 mod platform;
 pub mod vosk;
 
 pub use audio::{Capture, MAX_GAIN, Microphone, SAMPLE_RATE, microphones};
+pub use models::ModelInfo;
 pub use vosk::{Heard, Model, Recognizer, Vosk};
 
 /// Why voice input is not available.
@@ -17,6 +20,10 @@ pub enum Error {
     Model(String),
     /// The microphone could not be opened.
     Audio(String),
+    /// A speech model could not be downloaded or unpacked.
+    Download(String),
+    /// The download was cancelled.
+    Cancelled,
 }
 
 impl std::fmt::Display for Error {
@@ -25,6 +32,8 @@ impl std::fmt::Display for Error {
             Self::Library(e) => write!(f, "speech library: {e}"),
             Self::Model(e) => write!(f, "speech model: {e}"),
             Self::Audio(e) => write!(f, "microphone: {e}"),
+            Self::Download(e) => write!(f, "speech model download: {e}"),
+            Self::Cancelled => write!(f, "cancelled"),
         }
     }
 }
