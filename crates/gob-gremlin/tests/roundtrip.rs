@@ -364,6 +364,48 @@ fn virtual_devices_round_trip() {
     );
 }
 
+/// Stored virtual joysticks and axes or hats as buttons are no reason to leave Gremlin's format:
+/// Joystick Gremlin reads virtual buttons and skips `<virtual-devices>`.
+#[test]
+fn gremlin_compatible_profile_keeps_gremlin_header() {
+    use gob_core::{
+        AxisDirection, InputType, Layer, VirtualButton, VirtualDevices, VirtualJoystick,
+    };
+    let mut p = Profile::default();
+    let base = Layer::base();
+    p.bind_layer("{DEV}", "axis", "3", "Default", &base);
+    let range = VirtualButton::Axis {
+        lower: 0.9,
+        upper: 1.0,
+        direction: AxisDirection::Below,
+    };
+    p.add_sequence("{DEV}", "axis", "3", "Default", &base, Some(&range));
+    let hat = p.bind("{DEV}", "hat", "1", "Default");
+    p.set_virtual_button(
+        &hat,
+        "hat",
+        VirtualButton::default_for(InputType::Hat).as_ref(),
+    );
+    p.set_virtual_devices(VirtualDevices {
+        joysticks: vec![VirtualJoystick {
+            id: 1,
+            axes: vec![1, 2, 3],
+            buttons: 32,
+            hats: 1,
+            discrete_hats: false,
+            name: None,
+            product: None,
+        }],
+        gamepads: Vec::new(),
+    });
+    assert!(!p.needs_own_format());
+    let written = gob_gremlin::to_string(&p);
+    assert!(written.contains(r#"<profile version="14">"#));
+    let read = assert_round_trip(&written);
+    assert_eq!(read.virtual_devices, p.virtual_devices);
+    assert_eq!(read.inputs[0].configs.len(), 2);
+}
+
 #[test]
 fn format_headers() {
     let body = "<inputs/><modes><mode>Default</mode></modes>";

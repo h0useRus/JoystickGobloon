@@ -430,11 +430,12 @@ impl Profile {
     }
 
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led and map-to-gamepad actions, gamepad macro steps, monotone cubic curves, stored virtual devices): it is then written in Joystick Gobloon's own format, which
-    /// Joystick Gremlin cannot open.
+    /// light-led and map-to-gamepad actions, gamepad macro steps, monotone cubic curves): it is
+    /// then written in Joystick Gobloon's own format, which Joystick Gremlin cannot open. Stored
+    /// virtual joysticks don't count: Joystick Gremlin skips the `<virtual-devices>` section.
     pub fn needs_own_format(&self) -> bool {
         !self.modifiers.is_empty()
-            || !self.virtual_devices.is_empty()
+            || !self.virtual_devices.gamepads.is_empty()
             || self
                 .inputs
                 .iter()
