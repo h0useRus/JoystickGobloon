@@ -462,9 +462,12 @@ macro-step-key = Taste
 macro-step-pause = Pause
 macro-step-mouse-button = Maustaste
 macro-step-mouse-motion = Mausbewegung
-macro-step-vjoy-button = vJoy-Taste
-macro-step-vjoy-axis = vJoy-Achse
-macro-step-vjoy-hat = vJoy-Coolie-Hat
+macro-step-vjoy-button = Taste des virtuellen Sticks
+macro-step-vjoy-axis = Achse des virtuellen Sticks
+macro-step-vjoy-hat = Coolie-Hat des virtuellen Sticks
+macro-step-pad-button = Gamepad-Taste
+macro-step-pad-axis = Gamepad-Stick oder -Trigger
+macro-step-pad-dpad = Gamepad-Steuerkreuz
 macro-press = Drücken
 macro-release = Loslassen
 

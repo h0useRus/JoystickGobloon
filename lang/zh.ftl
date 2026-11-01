@@ -450,9 +450,12 @@ macro-step-key = 按键
 macro-step-pause = 暂停
 macro-step-mouse-button = 鼠标按键
 macro-step-mouse-motion = 鼠标移动
-macro-step-vjoy-button = vJoy 按钮
-macro-step-vjoy-axis = vJoy 轴
-macro-step-vjoy-hat = vJoy 苦力帽
+macro-step-vjoy-button = 虚拟摇杆按钮
+macro-step-vjoy-axis = 虚拟摇杆轴
+macro-step-vjoy-hat = 虚拟摇杆苦力帽
+macro-step-pad-button = 手柄按钮
+macro-step-pad-axis = 手柄摇杆或扳机
+macro-step-pad-dpad = 手柄方向键
 macro-press = 按下
 macro-release = 松开
 

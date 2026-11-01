@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::action::{Action, ActionKind, InputType, Item};
+use crate::action::{Action, ActionKind, InputType, Item, MacroStep};
 use crate::modifier::{Layer, Modifier};
 use crate::xml::Element;
 
@@ -43,6 +43,41 @@ pub fn virtual_output(action: &Action) -> Option<VirtualOutput> {
         }
         _ => None,
     }
+}
+
+/// Every virtual output `action` writes: [`virtual_output`], or the outputs of a macro's steps.
+pub fn virtual_outputs(action: &Action) -> Vec<VirtualOutput> {
+    let ActionKind::Macro { steps, .. } = action.kind() else {
+        return virtual_output(action).into_iter().collect();
+    };
+    let mut outputs = Vec::new();
+    for step in steps {
+        let vjoy = |device, input_type, id| VirtualOutput::Vjoy {
+            device,
+            input_type,
+            id,
+        };
+        let output = match step {
+            MacroStep::VjoyButton { device, id, .. } => vjoy(device, InputType::Button, id),
+            MacroStep::VjoyAxis { device, id, .. } => vjoy(device, InputType::Axis, id),
+            MacroStep::VjoyHat { device, id, .. } => vjoy(device, InputType::Hat, id),
+            MacroStep::GamepadButton {
+                gamepad, control, ..
+            }
+            | MacroStep::GamepadAxis {
+                gamepad, control, ..
+            } => VirtualOutput::Gamepad { gamepad, control },
+            MacroStep::GamepadDpad { gamepad, .. } => VirtualOutput::Gamepad {
+                gamepad,
+                control: "dpad".into(),
+            },
+            _ => continue,
+        };
+        if !outputs.contains(&output) {
+            outputs.push(output);
+        }
+    }
+    outputs
 }
 
 /// One binding writing a [`VirtualOutput`].
@@ -324,7 +359,7 @@ impl Profile {
     }
 
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led and map-to-gamepad actions, monotone cubic curves, stored virtual devices): it is then written in Joystick Gobloon's own format, which
+    /// light-led and map-to-gamepad actions, gamepad macro steps, monotone cubic curves, stored virtual devices): it is then written in Joystick Gobloon's own format, which
     /// Joystick Gremlin cannot open.
     pub fn needs_own_format(&self) -> bool {
         !self.modifiers.is_empty()
@@ -337,6 +372,10 @@ impl Profile {
             || self.library.iter().any(|a| {
                 a.kind == "light-led"
                     || a.kind == "map-to-gamepad"
+                    || a.items.iter().any(|i| {
+                        matches!(i, Item::Group { tag, attrs, .. } if tag == "macro-action"
+                            && attrs.iter().any(|(k, v)| k == "type" && v == "gamepad"))
+                    })
                     || (a.kind == "response-curve"
                         && a.str("curve-type").map(crate::curve::CurveType::parse)
                             == Some(crate::curve::CurveType::MonotoneCubic))
@@ -393,7 +432,7 @@ impl Profile {
             .collect()
     }
 
-    /// Virtual outputs that map-to-vjoy, map-to-gamepad and map-to-logical-device actions write to, each with the
+    /// Virtual outputs that map-to-vjoy, map-to-gamepad, map-to-logical-device and macro actions write to, each with the
     /// bindings writing it (one entry per binding). `mode` limits them to the bindings that can
     /// run together with it ([`Self::modes_overlap`]); `None` takes every mode.
     pub fn output_usage(&self, mode: Option<&str>) -> HashMap<VirtualOutput, Vec<OutputUse>> {
@@ -446,7 +485,7 @@ impl Profile {
             let Some(action) = index.get(id) else {
                 continue;
             };
-            if let Some(output) = virtual_output(action) {
+            for output in virtual_outputs(action) {
                 outputs.push((id.to_string(), output));
             }
             stack.extend(action.child_ids());
@@ -485,6 +524,10 @@ impl Profile {
             };
             if !taken.contains(&output) {
                 taken.insert(output);
+                continue;
+            }
+            // Macro steps keep their outputs.
+            if self.action(&id).is_none_or(|a| a.kind != "map-to-vjoy") {
                 continue;
             }
             let max = match input_type {

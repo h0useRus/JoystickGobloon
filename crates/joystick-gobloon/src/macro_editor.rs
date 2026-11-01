@@ -1,9 +1,10 @@
 //! Editor of Gremlin's macro action: repeat settings and the list of steps.
 
 use eframe::egui::{self, RichText};
-use gob_core::{Action, Key, MacroRepeat, MacroStep, MouseButton};
+use gob_core::{Action, InputType, Key, MacroRepeat, MacroStep, MouseButton};
+use gob_virtual::{ControlKind, GamepadControl};
 
-use crate::action_editor::{Editor, Op, py_float};
+use crate::action_editor::{Editor, Op, py_float, vjoy_outputs};
 use crate::devices_view::hat_glyph;
 use crate::style::{self, icon};
 
@@ -30,37 +31,42 @@ impl Editor<'_> {
         let id = action.id.clone();
         self.repeat_row(ui, &id, repeat);
         for (index, step) in steps.iter().enumerate() {
-            let mut edited = *step;
+            let mut edited = step.clone();
             let mut op = None;
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(step_icon(step)).size(style::ICON_SIZE));
-                self.step_fields(ui, &id, index, &mut edited);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if style::icon_button(ui, true, icon::TRASH, &self.i18n.tr("edit-remove"))
-                        .clicked()
-                    {
-                        op = Some(Op::RemoveMacroStep {
-                            action: id.clone(),
-                            index,
-                        });
-                    }
-                    let down = index + 1 < steps.len();
-                    if style::icon_button(ui, down, icon::CARET_DOWN, &self.i18n.tr("edit-down"))
-                        .clicked()
-                    {
-                        op = Some(Op::SwapMacroSteps {
-                            action: id.clone(),
-                            index,
-                        });
-                    }
-                    if style::icon_button(ui, index > 0, icon::CARET_UP, &self.i18n.tr("edit-up"))
-                        .clicked()
-                    {
-                        op = Some(Op::SwapMacroSteps {
-                            action: id.clone(),
-                            index: index - 1,
-                        });
-                    }
+            // Buttons on the right first, so long steps wrap before them; one row high unless
+            // the fields wrap.
+            let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+            let buttons = egui::Layout::right_to_left(egui::Align::Center);
+            ui.allocate_ui_with_layout(row, buttons, |ui| {
+                if style::icon_button(ui, true, icon::TRASH, &self.i18n.tr("edit-remove")).clicked()
+                {
+                    op = Some(Op::RemoveMacroStep {
+                        action: id.clone(),
+                        index,
+                    });
+                }
+                let down = index + 1 < steps.len();
+                if style::icon_button(ui, down, icon::CARET_DOWN, &self.i18n.tr("edit-down"))
+                    .clicked()
+                {
+                    op = Some(Op::SwapMacroSteps {
+                        action: id.clone(),
+                        index,
+                    });
+                }
+                if style::icon_button(ui, index > 0, icon::CARET_UP, &self.i18n.tr("edit-up"))
+                    .clicked()
+                {
+                    op = Some(Op::SwapMacroSteps {
+                        action: id.clone(),
+                        index: index - 1,
+                    });
+                }
+                let fields = egui::Layout::left_to_right(egui::Align::Center).with_main_wrap(true);
+                ui.with_layout(fields, |ui| {
+                    ui.label(RichText::new(step_icon(step)).size(style::ICON_SIZE))
+                        .on_hover_text(self.i18n.tr(step_key(step)));
+                    self.step_fields(ui, &id, index, &mut edited);
                 });
             });
             if op.is_none() && edited != *step {
@@ -71,6 +77,20 @@ impl Editor<'_> {
                 });
             }
             self.ops.extend(op);
+        }
+        let mut pads: Vec<u32> = steps
+            .iter()
+            .filter_map(|s| match *s {
+                MacroStep::GamepadButton { gamepad, .. }
+                | MacroStep::GamepadAxis { gamepad, .. }
+                | MacroStep::GamepadDpad { gamepad, .. } => Some(gamepad),
+                _ => None,
+            })
+            .collect();
+        pads.sort_unstable();
+        pads.dedup();
+        for pad in pads {
+            self.gamepad_missing(ui, pad);
         }
         self.add_step_menu(ui, &id, steps.len());
     }
@@ -175,8 +195,7 @@ impl Editor<'_> {
                 id: button,
                 pressed,
             } => {
-                ui.add(style::Spin::new(device).range(1..=16).prefix("vJoy #"));
-                ui.add(style::Spin::new(button).range(1..=128).prefix("#"));
+                self.vjoy_step(ui, id, index, InputType::Button, device, button);
                 press_toggle(ui, self, pressed);
             }
             MacroStep::VjoyAxis {
@@ -185,26 +204,8 @@ impl Editor<'_> {
                 value,
                 relative,
             } => {
-                ui.add(style::Spin::new(device).range(1..=16).prefix("vJoy #"));
-                egui::ComboBox::from_id_salt(("macro-axis", id, index))
-                    .selected_text(self.i18n.tr(&format!("vjoy-axis-{axis}")))
-                    .show_ui(ui, |ui| {
-                        for n in 1..=8 {
-                            ui.selectable_value(axis, n, self.i18n.tr(&format!("vjoy-axis-{n}")));
-                        }
-                    });
-                let mut v = *value as f32;
-                if ui
-                    .add(
-                        style::Spin::new(&mut v)
-                            .range(-1.0..=1.0)
-                            .step(0.01)
-                            .decimals(2),
-                    )
-                    .changed()
-                {
-                    *value = f64::from(v);
-                }
+                self.vjoy_step(ui, id, index, InputType::Axis, device, axis);
+                axis_value(ui, value, -1.0);
                 ui.add(style::switch(relative, self.i18n.tr("vjoy-relative")));
             }
             MacroStep::VjoyHat {
@@ -212,14 +213,31 @@ impl Editor<'_> {
                 id: hat,
                 direction,
             } => {
-                ui.add(style::Spin::new(device).range(1..=16).prefix("vJoy #"));
-                ui.add(style::Spin::new(hat).range(1..=4).prefix("#"));
-                for d in DIRECTIONS {
-                    let tip = self.i18n.tr(hat_key(d));
-                    if style::icon_toggle(ui, *direction == d, hat_glyph(d), &tip).clicked() {
-                        *direction = d;
-                    }
-                }
+                self.vjoy_step(ui, id, index, InputType::Hat, device, hat);
+                hat_directions(ui, self, direction);
+            }
+            MacroStep::GamepadButton {
+                gamepad,
+                control,
+                pressed,
+            } => {
+                self.gamepad_step(ui, id, index, ControlKind::Button, gamepad, control);
+                press_toggle(ui, self, pressed);
+            }
+            MacroStep::GamepadAxis {
+                gamepad,
+                control,
+                value,
+            } => {
+                self.gamepad_step(ui, id, index, ControlKind::Stick, gamepad, control);
+                let trigger = GamepadControl::parse(control)
+                    .is_some_and(|c| c.kind() == ControlKind::Trigger);
+                axis_value(ui, value, if trigger { 0.0 } else { -1.0 });
+            }
+            MacroStep::GamepadDpad { gamepad, direction } => {
+                let mut control = GamepadControl::Dpad.name().to_string();
+                self.gamepad_step(ui, id, index, ControlKind::Dpad, gamepad, &mut control);
+                hat_directions(ui, self, direction);
             }
             MacroStep::Other => {
                 ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
@@ -227,7 +245,68 @@ impl Editor<'_> {
         }
     }
 
+    /// Virtual stick and output of type `ty` of a step.
+    fn vjoy_step(
+        &self,
+        ui: &mut egui::Ui,
+        id: &str,
+        index: usize,
+        ty: InputType,
+        device: &mut u32,
+        output: &mut u32,
+    ) {
+        let salt = index.to_string();
+        if let Some((d, n)) = self.vjoy_target(ui, id, &salt, *device, ty, *output) {
+            *device = d;
+            // Another device may not have the output: take its first one then.
+            let outputs = vjoy_outputs(self.vjoy_devices().iter().find(|x| x.id == d), ty);
+            *output = if outputs.contains(&n) {
+                n
+            } else {
+                outputs.first().copied().unwrap_or(1)
+            };
+        }
+    }
+
+    /// Gamepad and control of a step: buttons for `ControlKind::Button`, sticks and triggers
+    /// for `ControlKind::Stick`, only the gamepad for the d-pad.
+    fn gamepad_step(
+        &self,
+        ui: &mut egui::Ui,
+        id: &str,
+        index: usize,
+        kind: ControlKind,
+        gamepad: &mut u32,
+        control: &mut String,
+    ) {
+        let controls: Vec<GamepadControl> = GamepadControl::ALL
+            .into_iter()
+            .filter(|c| match kind {
+                ControlKind::Button => c.kind() == ControlKind::Button,
+                ControlKind::Stick | ControlKind::Trigger => {
+                    matches!(c.kind(), ControlKind::Stick | ControlKind::Trigger)
+                }
+                ControlKind::Dpad => false,
+            })
+            .collect();
+        let salt = index.to_string();
+        if let Some((pad, c)) = self.gamepad_target(ui, id, &salt, *gamepad, control, &controls) {
+            *gamepad = pad;
+            if let Some(c) = c {
+                *control = c.name().to_string();
+            }
+        }
+    }
+
     fn add_step_menu(&mut self, ui: &mut egui::Ui, id: &str, count: usize) {
+        // New steps take the first virtual stick and gamepad, and the stick's first axis.
+        let devices = self.vjoy_devices();
+        let device = devices.first().map_or(1, |d| d.id);
+        let axis = vjoy_outputs(devices.first(), InputType::Axis)
+            .first()
+            .copied()
+            .unwrap_or(1);
+        let pad = self.gamepad_ids().first().copied().unwrap_or(1);
         let mut add = None;
         ui.menu_button(
             RichText::new(format!(
@@ -236,55 +315,55 @@ impl Editor<'_> {
                 self.i18n.tr("macro-add-step")
             )),
             |ui| {
-                let choices = [
-                    (
-                        "macro-step-key",
-                        MacroStep::Key {
-                            scan_code: 0x1E,
-                            extended: false,
+                let mut choices = vec![
+                    MacroStep::Key {
+                        scan_code: 0x1E,
+                        extended: false,
+                        pressed: true,
+                    },
+                    MacroStep::Pause(0.1),
+                    MacroStep::MouseButton {
+                        button: MouseButton::Left,
+                        pressed: true,
+                    },
+                    MacroStep::MouseMotion { dx: 0, dy: 0 },
+                    MacroStep::VjoyButton {
+                        device,
+                        id: 1,
+                        pressed: true,
+                    },
+                    MacroStep::VjoyAxis {
+                        device,
+                        id: axis,
+                        value: 0.0,
+                        relative: false,
+                    },
+                    MacroStep::VjoyHat {
+                        device,
+                        id: 1,
+                        direction: None,
+                    },
+                ];
+                if self.max_gamepads > 0 {
+                    choices.extend([
+                        MacroStep::GamepadButton {
+                            gamepad: pad,
+                            control: GamepadControl::A.name().into(),
                             pressed: true,
                         },
-                    ),
-                    ("macro-step-pause", MacroStep::Pause(0.1)),
-                    (
-                        "macro-step-mouse-button",
-                        MacroStep::MouseButton {
-                            button: MouseButton::Left,
-                            pressed: true,
-                        },
-                    ),
-                    (
-                        "macro-step-mouse-motion",
-                        MacroStep::MouseMotion { dx: 0, dy: 0 },
-                    ),
-                    (
-                        "macro-step-vjoy-button",
-                        MacroStep::VjoyButton {
-                            device: 1,
-                            id: 1,
-                            pressed: true,
-                        },
-                    ),
-                    (
-                        "macro-step-vjoy-axis",
-                        MacroStep::VjoyAxis {
-                            device: 1,
-                            id: 1,
+                        MacroStep::GamepadAxis {
+                            gamepad: pad,
+                            control: GamepadControl::LeftX.name().into(),
                             value: 0.0,
-                            relative: false,
                         },
-                    ),
-                    (
-                        "macro-step-vjoy-hat",
-                        MacroStep::VjoyHat {
-                            device: 1,
-                            id: 1,
+                        MacroStep::GamepadDpad {
+                            gamepad: pad,
                             direction: None,
                         },
-                    ),
-                ];
-                for (key, step) in choices {
-                    let text = format!("{}  {}", step_icon(&step), self.i18n.tr(key));
+                    ]);
+                }
+                for step in choices {
+                    let text = format!("{}  {}", step_icon(&step), self.i18n.tr(step_key(&step)));
                     if ui.button(text).clicked() {
                         add = Some(step);
                         ui.close();
@@ -298,6 +377,31 @@ impl Editor<'_> {
                 index: count,
                 step,
             });
+        }
+    }
+}
+
+/// Axis value of a step, `low..=1`.
+fn axis_value(ui: &mut egui::Ui, value: &mut f64, low: f32) {
+    let mut v = (*value as f32).clamp(low, 1.0);
+    if ui
+        .add(
+            style::Spin::new(&mut v)
+                .range(low..=1.0)
+                .step(0.01)
+                .decimals(2),
+        )
+        .changed()
+    {
+        *value = f64::from(v);
+    }
+}
+
+fn hat_directions(ui: &mut egui::Ui, editor: &Editor<'_>, direction: &mut Option<u16>) {
+    for d in DIRECTIONS {
+        let tip = editor.i18n.tr(hat_key(d));
+        if style::icon_toggle(ui, *direction == d, hat_glyph(d), &tip).clicked() {
+            *direction = d;
         }
     }
 }
@@ -322,7 +426,27 @@ fn step_icon(step: &MacroStep) -> &'static str {
         MacroStep::VjoyButton { .. } | MacroStep::VjoyAxis { .. } | MacroStep::VjoyHat { .. } => {
             icon::JOYSTICK
         }
+        MacroStep::GamepadButton { .. }
+        | MacroStep::GamepadAxis { .. }
+        | MacroStep::GamepadDpad { .. } => icon::GAME_CONTROLLER,
         MacroStep::Other => icon::PUZZLE_PIECE,
+    }
+}
+
+/// Name of a step's type, as in the add menu.
+fn step_key(step: &MacroStep) -> &'static str {
+    match step {
+        MacroStep::Pause(_) => "macro-step-pause",
+        MacroStep::Key { .. } => "macro-step-key",
+        MacroStep::MouseButton { .. } => "macro-step-mouse-button",
+        MacroStep::MouseMotion { .. } => "macro-step-mouse-motion",
+        MacroStep::VjoyButton { .. } => "macro-step-vjoy-button",
+        MacroStep::VjoyAxis { .. } => "macro-step-vjoy-axis",
+        MacroStep::VjoyHat { .. } => "macro-step-vjoy-hat",
+        MacroStep::GamepadButton { .. } => "macro-step-pad-button",
+        MacroStep::GamepadAxis { .. } => "macro-step-pad-axis",
+        MacroStep::GamepadDpad { .. } => "macro-step-pad-dpad",
+        MacroStep::Other => "edit-not-editable",
     }
 }
 

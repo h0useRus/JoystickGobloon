@@ -462,9 +462,12 @@ macro-step-key = Touche
 macro-step-pause = Pause
 macro-step-mouse-button = Bouton de souris
 macro-step-mouse-motion = Mouvement de souris
-macro-step-vjoy-button = Bouton vJoy
-macro-step-vjoy-axis = Axe vJoy
-macro-step-vjoy-hat = Chapeau vJoy
+macro-step-vjoy-button = Bouton du stick virtuel
+macro-step-vjoy-axis = Axe du stick virtuel
+macro-step-vjoy-hat = Chapeau du stick virtuel
+macro-step-pad-button = Bouton de manette
+macro-step-pad-axis = Stick ou gâchette de manette
+macro-step-pad-dpad = Croix directionnelle de manette
 macro-press = Appuyer
 macro-release = Relâcher
 

@@ -470,9 +470,12 @@ macro-step-key = Клавиша
 macro-step-pause = Пауза
 macro-step-mouse-button = Кнопка мыши
 macro-step-mouse-motion = Движение мыши
-macro-step-vjoy-button = Кнопка vJoy
-macro-step-vjoy-axis = Ось vJoy
-macro-step-vjoy-hat = Хатка vJoy
+macro-step-vjoy-button = Кнопка виртуального стика
+macro-step-vjoy-axis = Ось виртуального стика
+macro-step-vjoy-hat = Хатка виртуального стика
+macro-step-pad-button = Кнопка геймпада
+macro-step-pad-axis = Стик или курок геймпада
+macro-step-pad-dpad = Крестовина геймпада
 macro-press = Нажать
 macro-release = Отпустить
 

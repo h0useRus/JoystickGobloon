@@ -1441,6 +1441,52 @@ fn map_to_gamepad() {
     );
 }
 
+/// Macro gamepad steps: a button, a trigger (clamped to 0..1) and the d-pad, 50 ms apart.
+#[test]
+fn macro_gamepad_steps() {
+    let step = |control: &str, ty: &str, value: &str| {
+        format!(
+            r#"<macro-action type="gamepad">{}{}{}</macro-action>"#,
+            prop("int", "gamepad-id", "2"),
+            prop("string", "control", control),
+            prop(ty, "value", value)
+        )
+    };
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs>{}</inputs><settings/><library>{}{}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        input("button", 1, "Default", "r", ""),
+        root("r", &["m"]),
+        macro_act(
+            "m",
+            "Single",
+            "Press",
+            &[
+                step("b", "bool", "True"),
+                step("lt", "float", "-0.5"),
+                step("dpad", "hat_direction", "north"),
+            ]
+        ),
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut e = Engine::new(&p, &HashMap::new());
+    assert_eq!(e.gamepads().into_iter().collect::<Vec<_>>(), [2]);
+    let mut out = Recorder::default();
+    let t0 = Instant::now();
+    let key = InputKey::new(DEV, InputKind::Button, 1);
+    e.process(&key, Value::Button(true), t0, &mut out);
+    e.tick(t0 + Duration::from_millis(50), &mut out);
+    e.tick(t0 + Duration::from_millis(100), &mut out);
+    assert_eq!(
+        out.0,
+        [
+            Out::Pad(2, "b", 1.0),
+            Out::Pad(2, "lt", 0.0),
+            Out::PadDpad(2, Some(0)),
+        ]
+    );
+}
+
 #[test]
 fn unknown_action_types_do_nothing() {
     let xml = format!(

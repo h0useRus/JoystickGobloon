@@ -458,7 +458,7 @@ pub struct Key {
 }
 
 /// One `<macro-action>` of a macro.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MacroStep {
     /// Seconds.
     Pause(f64),
@@ -492,6 +492,24 @@ pub enum MacroStep {
     VjoyHat {
         device: u32,
         id: u32,
+        direction: Option<u16>,
+    },
+    /// Joystick Gobloon's own steps (not in Gremlin) for virtual gamepad `gamepad` (1-based);
+    /// `control` is a map-to-gamepad control name (`a`, `dpad-up`, ...).
+    GamepadButton {
+        gamepad: u32,
+        control: String,
+        pressed: bool,
+    },
+    /// A stick (-1..1) or trigger (0..1) set to `value`.
+    GamepadAxis {
+        gamepad: u32,
+        control: String,
+        value: f64,
+    },
+    /// The whole d-pad; hundredths of a degree, `None` when centered.
+    GamepadDpad {
+        gamepad: u32,
         direction: Option<u16>,
     },
     /// `joystick` and `logical-device` steps, not executed.
@@ -950,6 +968,29 @@ fn macro_step(ty: &str, items: &[Item]) -> MacroStep {
                     direction: str("value").and_then(hat_direction),
                 },
                 InputType::Other => MacroStep::Other,
+            }
+        }
+        "gamepad" => {
+            let gamepad = (num("gamepad-id") as u32).max(1);
+            let control = str("control").unwrap_or_default();
+            let value = str("value").unwrap_or_default();
+            if control == "dpad" {
+                MacroStep::GamepadDpad {
+                    gamepad,
+                    direction: hat_direction(value),
+                }
+            } else if value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("false") {
+                MacroStep::GamepadButton {
+                    gamepad,
+                    control: control.to_string(),
+                    pressed: flag("value"),
+                }
+            } else {
+                MacroStep::GamepadAxis {
+                    gamepad,
+                    control: control.to_string(),
+                    value: num("value"),
+                }
             }
         }
         _ => MacroStep::Other,

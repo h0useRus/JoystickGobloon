@@ -281,6 +281,57 @@ fn output_usage_has_gamepad_and_logical_outputs() {
 }
 
 #[test]
+fn macro_steps_count_as_outputs() {
+    use gob_core::{MacroStep, VirtualOutput};
+    let mut p = Profile::default();
+    let root = p.bind(DEV, "button", "1", "Default");
+    let m = p
+        .add_child(&root, "actions", gob_core::Action::new(&NewAction::Macro))
+        .unwrap();
+    assert!(!p.needs_own_format());
+    let steps = [
+        MacroStep::VjoyButton {
+            device: 1,
+            id: 4,
+            pressed: true,
+        },
+        MacroStep::VjoyButton {
+            device: 1,
+            id: 4,
+            pressed: false,
+        },
+        MacroStep::GamepadDpad {
+            gamepad: 2,
+            direction: None,
+        },
+    ];
+    for (i, s) in steps.iter().enumerate() {
+        p.set_macro_step(&m, i, s);
+    }
+    let outputs = gob_core::virtual_outputs(p.action(&m).unwrap());
+    assert_eq!(
+        outputs,
+        [
+            VirtualOutput::Vjoy {
+                device: 1,
+                input_type: InputType::Button,
+                id: 4,
+            },
+            VirtualOutput::Gamepad {
+                gamepad: 2,
+                control: "dpad".into(),
+            },
+        ],
+        "each output once"
+    );
+    assert!(
+        p.used_vjoy_outputs("Default")
+            .contains(&(1, InputType::Button, 4))
+    );
+    assert!(p.needs_own_format(), "Gremlin has no gamepad steps");
+}
+
+#[test]
 fn duplicated_vjoy_output_moves_off_its_input() {
     let mut p = Profile::default();
     let root = p.bind(DEV, "button", "1", "Default");
@@ -593,6 +644,20 @@ fn macro_steps_round_trip_and_keep_unknown_ones() {
             device: 1,
             id: 1,
             direction: Some(13500),
+        },
+        MacroStep::GamepadButton {
+            gamepad: 2,
+            control: "lb".into(),
+            pressed: true,
+        },
+        MacroStep::GamepadAxis {
+            gamepad: 1,
+            control: "rt".into(),
+            value: 0.75,
+        },
+        MacroStep::GamepadDpad {
+            gamepad: 1,
+            direction: Some(27000),
         },
     ];
     for (i, s) in steps.iter().enumerate() {

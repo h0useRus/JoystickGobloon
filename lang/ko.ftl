@@ -450,9 +450,12 @@ macro-step-key = 키
 macro-step-pause = 대기
 macro-step-mouse-button = 마우스 버튼
 macro-step-mouse-motion = 마우스 이동
-macro-step-vjoy-button = vJoy 버튼
-macro-step-vjoy-axis = vJoy 축
-macro-step-vjoy-hat = vJoy 햇 스위치
+macro-step-vjoy-button = 가상 스틱 버튼
+macro-step-vjoy-axis = 가상 스틱 축
+macro-step-vjoy-hat = 가상 스틱 햇 스위치
+macro-step-pad-button = 게임패드 버튼
+macro-step-pad-axis = 게임패드 스틱 또는 트리거
+macro-step-pad-dpad = 게임패드 방향 패드
 macro-press = 누르기
 macro-release = 떼기
 

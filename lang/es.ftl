@@ -462,9 +462,12 @@ macro-step-key = Tecla
 macro-step-pause = Pausa
 macro-step-mouse-button = Botón del ratón
 macro-step-mouse-motion = Movimiento del ratón
-macro-step-vjoy-button = Botón de vJoy
-macro-step-vjoy-axis = Eje de vJoy
-macro-step-vjoy-hat = Cruceta de vJoy
+macro-step-vjoy-button = Botón del stick virtual
+macro-step-vjoy-axis = Eje del stick virtual
+macro-step-vjoy-hat = Cruceta del stick virtual
+macro-step-pad-button = Botón del gamepad
+macro-step-pad-axis = Stick o gatillo del gamepad
+macro-step-pad-dpad = Cruceta del gamepad
 macro-press = Pulsar
 macro-release = Soltar
 

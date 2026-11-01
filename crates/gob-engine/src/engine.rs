@@ -1070,9 +1070,18 @@ impl Engine {
     pub fn gamepads(&self) -> BTreeSet<u32> {
         self.nodes
             .iter()
-            .filter_map(|n| match n {
-                Node::Gamepad { gamepad, .. } => Some(*gamepad),
-                _ => None,
+            .flat_map(|n| match n {
+                Node::Gamepad { gamepad, .. } => vec![*gamepad],
+                Node::Macro { steps, .. } => steps
+                    .iter()
+                    .filter_map(|s| match *s {
+                        MacroStep::GamepadButton { gamepad, .. }
+                        | MacroStep::GamepadAxis { gamepad, .. }
+                        | MacroStep::GamepadDpad { gamepad, .. } => Some(gamepad),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
             })
             .collect()
     }
@@ -1937,7 +1946,7 @@ impl Engine {
                     return;
                 }
             }
-            let Some(&step) = steps.get(run.pos) else {
+            let Some(step) = steps.get(run.pos).cloned() else {
                 let delay = match repeat {
                     MacroRepeat::Single => {
                         self.macro_finish(node, now, out);
@@ -2022,6 +2031,31 @@ impl Engine {
                 id: n,
                 direction,
             } => out.hat(device, id(n), direction),
+            MacroStep::GamepadButton {
+                gamepad,
+                control,
+                pressed,
+            } => {
+                if let Some(c) = GamepadControl::parse(&control) {
+                    out.gamepad_button(gamepad, c, pressed);
+                }
+            }
+            MacroStep::GamepadAxis {
+                gamepad,
+                control,
+                value,
+            } => {
+                let Some(c) = GamepadControl::parse(&control) else {
+                    return;
+                };
+                let low = if c.kind() == ControlKind::Trigger {
+                    0.0
+                } else {
+                    -1.0
+                };
+                out.gamepad_axis(gamepad, c, (value as f32).clamp(low, 1.0));
+            }
+            MacroStep::GamepadDpad { gamepad, direction } => out.gamepad_dpad(gamepad, direction),
             MacroStep::Pause(_) | MacroStep::Other => {}
         }
     }
@@ -2793,11 +2827,11 @@ fn hat_button_key(node: NodeId, direction: usize) -> InputKey {
 fn with_default_delay(steps: &[MacroStep], delay: f64) -> Vec<MacroStep> {
     let pause = |s: &MacroStep| matches!(s, MacroStep::Pause(_));
     let mut out = Vec::with_capacity(steps.len() * 2);
-    for (i, &step) in steps.iter().enumerate() {
-        if i > 0 && !pause(&step) && !pause(&steps[i - 1]) {
+    for (i, step) in steps.iter().enumerate() {
+        if i > 0 && !pause(step) && !pause(&steps[i - 1]) {
             out.push(MacroStep::Pause(delay));
         }
-        out.push(step);
+        out.push(step.clone());
     }
     out
 }
