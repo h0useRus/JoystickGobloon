@@ -158,7 +158,8 @@ pub fn command_editor(ui: &mut egui::Ui, i18n: &I18n, command: &VoiceCommand, op
             .range(0.01..=10.0)
             .step(0.05)
             .suffix(" s");
-        if ui.add(spin).on_hover_text(i18n.tr("voice-hold")).changed() {
+        // The tooltip is on the icon: one on the spin clashes with its own parts.
+        if ui.add(spin).changed() {
             ops.push(Op::SetVoiceHold { id, hold });
         }
     });
