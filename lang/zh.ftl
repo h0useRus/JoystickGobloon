@@ -234,6 +234,17 @@ layer-additive = 叠加到基础层
 layer-additive-tip = 开：这些动作与基础层一起运行。关：按住修饰键时替代基础层。
 layer-keep-value = 保持最后的值
 layer-keep-value-tip = 开：此层停止时，其轴保持最后的值。关：轴回到静止位置。
+
+# Axis or hat as a button
+vb-as-button = 作为按钮
+vb-as-button-tip = 开启：这些动作作为按钮运行，轴在范围内（或苦力帽指向所选方向之一）时按下，离开时松开。
+vb-lower = 范围下限
+vb-upper = 范围上限
+vb-anywhere = 无论轴从哪一侧进入范围都按下
+vb-from-below = 仅当轴向上进入范围时按下
+vb-from-above = 仅当轴向下进入范围时按下
+vb-add = 添加作为按钮运行的动作（轴范围或苦力帽方向）
+vb-remove = 删除这些动作
 layers-tip = 层：{ $layers }
 modes-title = 模式
 modes-name = 名称

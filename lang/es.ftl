@@ -243,6 +243,17 @@ layer-additive = Añadir a la base
 layer-additive-tip = Activado: estas acciones se ejecutan junto con la capa base. Desactivado: la sustituyen mientras se mantienen los modificadores.
 layer-keep-value = Mantener el último valor
 layer-keep-value-tip = Activado: cuando esta capa deja de actuar, sus ejes mantienen el último valor. Desactivado: vuelven al reposo.
+
+# Axis or hat as a button
+vb-as-button = Tratar como botón
+vb-as-button-tip = Activado: estas acciones funcionan como un botón, pulsado mientras el eje está dentro del rango (o la cruceta apunta a una de las direcciones elegidas) y soltado al salir.
+vb-lower = Límite inferior del rango
+vb-upper = Límite superior del rango
+vb-anywhere = Pulsar sin importar por dónde entre el eje en el rango
+vb-from-below = Pulsar solo cuando el eje sube hasta el rango
+vb-from-above = Pulsar solo cuando el eje baja hasta el rango
+vb-add = Añadir acciones que funcionan como botón (un rango del eje o direcciones de la cruceta)
+vb-remove = Quitar estas acciones
 layers-tip = Capas: { $layers }
 modes-title = Modos
 modes-name = Nombre

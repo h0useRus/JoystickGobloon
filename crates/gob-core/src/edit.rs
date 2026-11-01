@@ -716,6 +716,85 @@ impl Profile {
         id
     }
 
+    /// The action sequence (`<action-configuration>`) whose root action is `root`.
+    pub fn config_mut(&mut self, root: &str) -> Option<&mut ActionConfig> {
+        self.inputs
+            .iter_mut()
+            .flat_map(|b| b.configs.iter_mut())
+            .find(|c| c.root_action == root)
+    }
+
+    /// Makes the sequence `root` of an `input_type` input behave as a button (`Some`) or as the
+    /// input itself again (`None`).
+    pub fn set_virtual_button(
+        &mut self,
+        root: &str,
+        input_type: &str,
+        button: Option<&crate::VirtualButton>,
+    ) {
+        if let Some(c) = self.config_mut(root) {
+            match button {
+                Some(vb) => {
+                    c.behavior = "button".into();
+                    c.virtual_button = Some(vb.to_element());
+                }
+                None => {
+                    c.behavior = input_type.into();
+                    c.virtual_button = None;
+                }
+            }
+        }
+    }
+
+    /// Adds another action sequence to an input's `layer` in a mode, next to the ones it has
+    /// (each runs on every event); returns its root action.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_sequence(
+        &mut self,
+        device_id: &str,
+        input_type: &str,
+        input_id: &str,
+        mode: &str,
+        layer: &Layer,
+        button: Option<&crate::VirtualButton>,
+    ) -> Option<String> {
+        let b = self.inputs.iter_mut().find(|b| {
+            b.device_id.eq_ignore_ascii_case(device_id)
+                && b.input_type == input_type
+                && b.input_id == input_id
+                && b.mode == mode
+        })?;
+        // A new sequence joins the layer the way its first one runs.
+        let first = b.configs.iter().find(|c| c.layer == *layer)?;
+        let (additive, keep_value) = (first.additive, first.keep_value);
+        let root = Action::new_root();
+        let id = root.id.clone();
+        b.configs.push(ActionConfig {
+            root_action: id.clone(),
+            behavior: match button {
+                Some(_) => "button".into(),
+                None => input_type.into(),
+            },
+            virtual_button: button.map(crate::VirtualButton::to_element),
+            layer: layer.clone(),
+            additive,
+            keep_value,
+            extra: Vec::new(),
+        });
+        self.library.push(root);
+        Some(id)
+    }
+
+    /// Removes the action sequence `root` (the binding with its last one) and every action only
+    /// it used.
+    pub fn remove_sequence(&mut self, root: &str) {
+        for b in &mut self.inputs {
+            b.configs.retain(|c| c.root_action != root);
+        }
+        self.inputs.retain(|b| !b.configs.is_empty());
+        self.collect_garbage();
+    }
+
     /// Removes an input's binding in a mode and every action only it used.
     pub fn unbind(&mut self, device_id: &str, input_type: &str, input_id: &str, mode: &str) {
         self.inputs.retain(|b| {
@@ -1142,4 +1221,57 @@ fn nth_ref(items: &[Item], n: usize) -> Option<usize> {
         .filter(|(_, i)| matches!(i, Item::ActionRef(_)))
         .nth(n)
         .map(|(pos, _)| pos)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AxisDirection, VirtualButton};
+
+    #[test]
+    fn axis_sequences_as_buttons() {
+        let mut p = Profile::default();
+        let base = Layer::base();
+        let axis = p.bind_layer("{DEV}", "axis", "3", "Default", &base);
+        let range = VirtualButton::Axis {
+            lower: 0.75,
+            upper: 1.0,
+            direction: AxisDirection::Below,
+        };
+        let button = p
+            .add_sequence("{DEV}", "axis", "3", "Default", &base, Some(&range))
+            .unwrap();
+        let b = &p.inputs[0];
+        assert_eq!(b.configs.len(), 2);
+        assert_eq!(b.configs[0].virtual_button(b.input_type()), None);
+        assert_eq!(b.configs[1].virtual_button(b.input_type()), Some(range));
+
+        p.set_virtual_button(
+            &axis,
+            "axis",
+            VirtualButton::default_for(InputType::Axis).as_ref(),
+        );
+        assert_eq!(p.inputs[0].configs[0].behavior(), InputType::Button);
+        p.set_virtual_button(&axis, "axis", None);
+        assert_eq!(p.inputs[0].configs[0].behavior(), InputType::Axis);
+        assert!(p.inputs[0].configs[0].virtual_button.is_none());
+
+        p.remove_sequence(&button);
+        assert_eq!(p.inputs[0].configs.len(), 1);
+        assert!(p.action(&button).is_none());
+        p.remove_sequence(&axis);
+        assert!(p.inputs.is_empty());
+    }
+
+    #[test]
+    fn hat_directions_round_trip() {
+        let mut p = Profile::default();
+        let root = p.bind("{DEV}", "hat", "1", "Default");
+        let vb = VirtualButton::Hat {
+            directions: vec![Some(0), Some(4500), None],
+        };
+        p.set_virtual_button(&root, "hat", Some(&vb));
+        let b = &p.inputs[0];
+        assert_eq!(b.configs[0].virtual_button(b.input_type()), Some(vb));
+    }
 }

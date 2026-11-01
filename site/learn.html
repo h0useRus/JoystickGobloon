@@ -145,6 +145,7 @@
             <li><a href="#merge-axis">Merge axis</a></li>
             <li><a href="#dual-axis-deadzone">Dual axis deadzone</a></li>
             <li><a href="#axis-delta">Axis delta</a></li>
+            <li><a href="#axis-as-button">Axis or hat as a button</a></li>
           </ul></li>
           <li><a class="toc-group" href="#buttons-and-hats">Buttons and hats</a><ul>
             <li><a href="#tempo">Tempo</a></li>
@@ -262,6 +263,12 @@
             <h3><i class="ph ph-trend-up" aria-hidden="true"></i>Axis delta</h3>
             <p>Turns movement into button presses: every time the axis has moved by the threshold, it presses the actions of that direction once. Good for a rotary or a slider that should step something up and down.</p>
             <figure class="shot"><img src="img/actions/axis-delta.png" loading="lazy" alt="Axis delta: moving up presses vJoy button 20, moving down vJoy button 21"></figure>
+          </article>
+          <article class="learn-action" id="axis-as-button">
+            <h3><i class="ph ph-radio-button" aria-hidden="true"></i>Axis or hat as a button</h3>
+            <p>Not an action but a switch above an axis's or hat's actions: <span class="term">Treat as a button</span> makes them run like a button, pressed while the axis is inside a range and released when it leaves, so any button action works there, a key or a virtual stick button. Set the two ends of the range (-1 to 1) and whether the axis may enter it from either side, only moving up or only moving down. A hat picks the directions that press it instead.</p>
+            <p>The <i class="ph ph-radio-button" aria-hidden="true"></i> button under the actions adds another set that runs as a button, next to the ones the input has, so one axis can drive a virtual axis and still press a button near its end. The bin next to the switch removes a set.</p>
+            <figure class="shot"><img src="img/actions/axis-as-button.png" loading="lazy" alt="The Z axis maps to the virtual Z axis, and between 0.90 and 1.00, moving up, presses vJoy button 20"></figure>
           </article>
         </section>
         <section class="learn-group" id="buttons-and-hats" aria-labelledby="buttons-and-hats-title">

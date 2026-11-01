@@ -85,10 +85,6 @@ impl Layer {
         self.0.is_empty()
     }
 
-    pub fn names(&self) -> &[String] {
-        &self.0
-    }
-
     pub fn contains(&self, name: &str) -> bool {
         self.0.iter().any(|n| n == name)
     }

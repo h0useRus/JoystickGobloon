@@ -5,7 +5,9 @@ use std::collections::{BTreeMap, HashMap};
 use eframe::egui::{
     self, Align, Align2, Color32, FontId, Layout, Margin, Rect, RichText, Sense, Stroke, Vec2,
 };
-use gob_core::{Action, ActionConfig, InputBinding, InputType, Layer, Profile, same_device_name};
+use gob_core::{
+    Action, ActionConfig, InputBinding, InputType, Layer, Profile, VirtualButton, same_device_name,
+};
 use gob_i18n::I18n;
 use gob_input::{DeviceState, InputEvent};
 
@@ -922,6 +924,19 @@ impl DevicesView {
             layer: layer.clone(),
             add,
         };
+        // Axes and hats can also run actions as a button.
+        let as_button = matches!(behavior, InputType::Axis | InputType::Hat);
+        let button_sequence = |layer: &Layer| {
+            VirtualButton::default_for(behavior).map(|button| Op::AddButtonSequence {
+                device: device.clone(),
+                name: tab.name.to_string(),
+                input_type: input_type.into(),
+                input_id: key.1.to_string(),
+                mode: mode.clone(),
+                layer: layer.clone(),
+                button,
+            })
+        };
 
         // Title: input name (a logical input's label is editable here).
         ui.horizontal(|ui| {
@@ -1041,8 +1056,8 @@ impl DevicesView {
                         });
                     }
                 }
-                let behavior = configs.first().map_or(behavior, |c| c.behavior());
-                if !p.profile.modifiers.is_empty() && behavior == InputType::Axis {
+                let axis_sequence = configs.iter().any(|c| c.behavior() == InputType::Axis);
+                if !p.profile.modifiers.is_empty() && axis_sequence {
                     let mut keep = configs.iter().any(|c| c.keep_value);
                     if ui
                         .add(style::switch(&mut keep, i18n.tr("layer-keep-value")))
@@ -1078,8 +1093,21 @@ impl DevicesView {
                     curve_right_click_invert: self.curve_right_click_invert,
                 };
                 let first_op = editor.ops.len();
-                for cfg in &configs {
+                for (n, cfg) in configs.iter().enumerate() {
+                    if n > 0 {
+                        ui.separator();
+                    }
+                    if as_button {
+                        editor.sequence_header(ui, cfg, &b.input_type, configs.len() > 1);
+                    }
+                    editor.behavior = cfg.behavior();
                     editor.container(ui, &cfg.root_action, "actions", 0);
+                }
+                if as_button {
+                    ui.add_space(4.0);
+                    if add_sequence_clicked(ui, i18n) {
+                        editor.ops.extend(button_sequence(&layer));
+                    }
                 }
                 self.follow_moved_axis(&p.profile, &ops[first_op..], &b.device_id, key);
             }
@@ -1120,7 +1148,12 @@ impl DevicesView {
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
                 };
-                editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));
+                ui.horizontal(|ui| {
+                    editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));
+                    if as_button && add_sequence_clicked(ui, i18n) {
+                        editor.ops.extend(button_sequence(&layer));
+                    }
+                });
             }
         }
     }
@@ -1177,6 +1210,14 @@ impl DevicesView {
             .cloned()
             .unwrap_or(selected)
     }
+}
+
+/// "Add actions that run as a button" under an axis's or hat's actions, looking like the add
+/// action button.
+fn add_sequence_clicked(ui: &mut egui::Ui, i18n: &I18n) -> bool {
+    ui.button(RichText::new(icon::RADIO_BUTTON).size(style::ICON_SIZE))
+        .on_hover_text(i18n.tr("vb-add"))
+        .clicked()
 }
 
 /// A modifier's name, filled with the accent while its button is held on the controller.
