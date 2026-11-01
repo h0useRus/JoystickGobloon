@@ -18,15 +18,15 @@
 </p>
 
 <p align="center">
-  <a href="https://h0userus.github.io/gobloon/"><b>Website</b></a> ·
+  <a href="https://h0userus.github.io/joystick-gobloon/"><b>Website</b></a> ·
   <a href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><b>Download</b></a> ·
-  <a href="https://h0userus.github.io/gobloon/learn.html"><b>Documentation</b></a> ·
-  <a href="https://h0userus.github.io/gobloon/emulation.html"><b>Virtual devices and hiding</b></a> ·
+  <a href="https://h0userus.github.io/joystick-gobloon/learn.html"><b>Documentation</b></a> ·
+  <a href="https://h0userus.github.io/joystick-gobloon/emulation.html"><b>Virtual devices and hiding</b></a> ·
   <a href="https://discord.gg/8cd9APqwG4"><b>Discord</b></a>
 </p>
 
 <p align="center">
-  <img src="https://h0userus.github.io/gobloon/img/vjoy.png" width="860" alt="vJoy page: device tabs, the device editor and the output tester">
+  <img src="https://h0userus.github.io/joystick-gobloon/img/vjoy.png" width="860" alt="vJoy page: device tabs, the device editor and the output tester">
 </p>
 
 ---
@@ -59,7 +59,7 @@ imports Joystick Gremlin profiles and keeps the workflow you know.
 | Device hiding | HidHide, for every program | System Gobloon, for every program (or exclusive reading while the app runs) |
 
 Everything else — every action with a picture of its editor, Windows and Linux differences, the FAQ — is on the
-[website](https://h0userus.github.io/gobloon/).
+[website](https://h0userus.github.io/joystick-gobloon/).
 
 ## Getting started
 
