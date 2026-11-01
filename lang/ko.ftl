@@ -234,6 +234,17 @@ layer-additive = 기본에 추가
 layer-additive-tip = 켜짐: 이 동작이 기본 레이어와 함께 실행됩니다. 꺼짐: 모디파이어를 누르고 있는 동안 기본 레이어를 대체합니다.
 layer-keep-value = 마지막 값 유지
 layer-keep-value-tip = 켜짐: 이 레이어가 멈추면 축이 마지막 값을 유지합니다. 꺼짐: 축이 기본 위치로 돌아갑니다.
+
+# Axis or hat as a button
+vb-as-button = 버튼처럼 사용
+vb-as-button-tip = 켜짐: 이 동작들은 버튼처럼 실행됩니다. 축이 범위 안에 있는 동안(또는 햇 스위치가 선택한 방향 중 하나를 가리키는 동안) 눌리고, 벗어나면 떼어집니다.
+vb-lower = 범위의 아래쪽 끝
+vb-upper = 범위의 위쪽 끝
+vb-anywhere = 축이 어느 쪽에서 범위에 들어오든 누름
+vb-from-below = 축이 아래에서 위로 범위에 들어올 때만 누름
+vb-from-above = 축이 위에서 아래로 범위에 들어올 때만 누름
+vb-add = 버튼처럼 실행되는 동작 추가 (축 범위 또는 햇 스위치 방향)
+vb-remove = 이 동작들 제거
 layers-tip = 레이어: { $layers }
 modes-title = 모드
 modes-name = 이름

@@ -243,6 +243,17 @@ layer-additive = Zur Basis hinzufügen
 layer-additive-tip = An: Diese Aktionen laufen zusammen mit der Basisebene. Aus: Sie ersetzen sie, solange die Modifikatoren gehalten werden.
 layer-keep-value = Letzten Wert behalten
 layer-keep-value-tip = An: Endet diese Ebene, behalten ihre Achsen den letzten Wert. Aus: Sie kehren in die Ruhestellung zurück.
+
+# Axis or hat as a button
+vb-as-button = Als Taste behandeln
+vb-as-button-tip = An: diese Aktionen laufen als Taste, gedrückt solange die Achse im Bereich ist (oder der Coolie-Hat in eine der gewählten Richtungen zeigt), losgelassen, wenn sie ihn verlässt.
+vb-lower = Untere Grenze des Bereichs
+vb-upper = Obere Grenze des Bereichs
+vb-anywhere = Drücken, egal von welcher Seite die Achse in den Bereich kommt
+vb-from-below = Nur drücken, wenn die Achse von unten in den Bereich kommt
+vb-from-above = Nur drücken, wenn die Achse von oben in den Bereich kommt
+vb-add = Aktionen hinzufügen, die als Taste laufen (Achsenbereich oder Coolie-Hat-Richtungen)
+vb-remove = Diese Aktionen entfernen
 layers-tip = Ebenen: { $layers }
 modes-title = Modi
 modes-name = Name

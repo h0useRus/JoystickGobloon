@@ -243,6 +243,17 @@ layer-additive = Ajouter à la base
 layer-additive-tip = Activé : ces actions s’exécutent avec la couche de base. Désactivé : elles la remplacent tant que les modificateurs sont maintenus.
 layer-keep-value = Garder la dernière valeur
 layer-keep-value-tip = Activé : quand cette couche s’arrête, ses axes gardent leur dernière valeur. Désactivé : ils reviennent au repos.
+
+# Axis or hat as a button
+vb-as-button = Traiter comme un bouton
+vb-as-button-tip = Activé : ces actions fonctionnent comme un bouton, appuyé tant que l'axe est dans la plage (ou que le chapeau pointe dans une des directions choisies) et relâché quand il en sort.
+vb-lower = Limite basse de la plage
+vb-upper = Limite haute de la plage
+vb-anywhere = Appuyer quel que soit le côté par lequel l'axe entre dans la plage
+vb-from-below = Appuyer seulement quand l'axe monte dans la plage
+vb-from-above = Appuyer seulement quand l'axe descend dans la plage
+vb-add = Ajouter des actions qui fonctionnent comme un bouton (plage d'axe ou directions du chapeau)
+vb-remove = Supprimer ces actions
 layers-tip = Couches : { $layers }
 modes-title = Modes
 modes-name = Nom
