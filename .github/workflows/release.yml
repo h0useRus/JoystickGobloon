@@ -257,8 +257,11 @@ jobs:
           target_commitish: ${{ github.sha }}
           prerelease: ${{ needs.windows.outputs.prerelease }}
           generate_release_notes: true
+          # A missing file fails the release instead of publishing it without that file.
+          fail_on_unmatched_files: true
+          # The windows artifact keeps its folders below target/: the installer is in installer/.
           files: |
-            target/release-files/JoystickGobloon-${{ env.VERSION }}-setup.exe
+            target/release-files/installer/JoystickGobloon-${{ env.VERSION }}-setup.exe
             target/release-files/JoystickGobloon-${{ env.VERSION }}-portable.zip
             target/release-files/JoystickGobloon-${{ env.VERSION }}-x86_64.AppImage
 
