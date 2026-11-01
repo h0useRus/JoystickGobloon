@@ -125,6 +125,8 @@ Name: "vjoy"; Description: "{cm:InstallVJoy}"; GroupDescription: "{cm:Drivers}";
 
 [Files]
 Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+; The speech library for voice commands (libvosk and its MinGW runtime; release.yml fetches it).
+Source: "..\target\voice\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\lang\*.ftl"; DestDir: "{app}\lang"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 ; Extracted to {tmp} only when needed (InstallHidHide / InstallVJoy); not installed or

@@ -5,11 +5,12 @@
 #     sh /src/tools/linux/appimage.sh <version> /target/appimage /target/release/JoystickGobloon
 #
 # The AppImage carries the program, SystemGobloon next to it (the program installs it as a
-# service from there), its extra languages and the desktop entry; GTK, the
+# service from there), the speech library for voice commands (libvosk, next to the program
+# where it looks first), its extra languages and the desktop entry; GTK, the
 # AppIndicator and the X11/Wayland libraries come from the system (every desktop has them),
 # except BUNDLED: the window library loads them at run time, and systems with GTK may not
 # have them (the AppImage catalog's test machine does not).
-# appimagetool and the AppImage runtime are pinned by SHA-256 like the Windows drivers.
+# appimagetool, the AppImage runtime and libvosk are pinned by SHA-256 like the Windows drivers.
 set -eu
 
 VERSION=$1
@@ -22,6 +23,9 @@ TOOL_URL=https://github.com/AppImage/appimagetool/releases/download/1.9.1/appima
 TOOL_SHA=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
 RUNTIME_URL=https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
 RUNTIME_SHA=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+# Vosk 0.3.45, the last release with built libraries (glibc 2.4 and the system's libstdc++).
+VOSK_URL=https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-linux-x86_64-0.3.45.zip
+VOSK_SHA=bbdc8ed85c43979f6443142889770ea95cbfbc56cffb5c5dcd73afa875c5fbb2
 
 # Not libxkbcommon.so.0 itself: GTK needs it, so the system's (newer) copy is always there.
 BUNDLED="libxkbcommon-x11.so.0 libxcb-xkb.so.1"
@@ -36,6 +40,7 @@ fetch() { # url sha file
 }
 fetch "$TOOL_URL" "$TOOL_SHA" "$TOOLS/appimagetool"
 fetch "$RUNTIME_URL" "$RUNTIME_SHA" "$TOOLS/runtime"
+fetch "$VOSK_URL" "$VOSK_SHA" "$TOOLS/vosk.zip"
 chmod +x "$TOOLS/appimagetool"
 
 APPDIR="$OUT/JoystickGobloon.AppDir"
@@ -44,6 +49,8 @@ mkdir -p "$APPDIR/usr/bin/lang" "$APPDIR/usr/lib" "$APPDIR/usr/share/application
     "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 install -m 755 "$BIN" "$APPDIR/usr/bin/JoystickGobloon"
 install -m 755 "$SERVICE" "$APPDIR/usr/bin/SystemGobloon"
+unzip -p "$TOOLS/vosk.zip" vosk-linux-x86_64-0.3.45/libvosk.so > "$APPDIR/usr/bin/libvosk.so"
+chmod 644 "$APPDIR/usr/bin/libvosk.so"
 for lib in $BUNDLED; do
     path=$(/sbin/ldconfig -p | awk -v l="$lib" '$1 == l && /x86-64/ { print $NF; exit }')
     [ -n "$path" ] || { echo "$lib not found: install it on the build system" >&2; exit 1; }
