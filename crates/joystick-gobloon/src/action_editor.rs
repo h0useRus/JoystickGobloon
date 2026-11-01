@@ -482,7 +482,10 @@ pub fn apply(p: &mut Profile, op: Op) {
 
 /// The microphones, listed at most every few seconds (listing them takes a while); `fresh` asks
 /// for a new list when the last one is older than that.
-fn microphones(ctx: &egui::Context, fresh: bool) -> std::sync::Arc<Vec<gob_voice::Microphone>> {
+pub(crate) fn microphones(
+    ctx: &egui::Context,
+    fresh: bool,
+) -> std::sync::Arc<Vec<gob_voice::Microphone>> {
     const MAX_AGE: std::time::Duration = std::time::Duration::from_secs(3);
     type Cached = (
         std::time::Instant,

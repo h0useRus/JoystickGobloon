@@ -64,6 +64,12 @@ pub struct Settings {
     pub curve_right_click_invert: bool,
     /// Ask before saving makes a profile Joystick Gremlin cannot open.
     pub warn_gremlin_format: bool,
+    /// Language voice commands are spoken in (a speech model's); empty = the program's.
+    pub voice_language: String,
+    /// Microphone gain of voice commands (1.0 = as recorded).
+    pub voice_gain: f32,
+    /// Voice commands heard less sure than this (0..1) count as not recognized.
+    pub voice_min_confidence: f32,
     /// Experimental features (joystick LEDs): hidden and not run while off. Not in the UI:
     /// `experimental = true` in settings.gob turns them on.
     pub experimental: bool,
@@ -247,6 +253,9 @@ impl Default for Settings {
             monotonic_curves: true,
             curve_right_click_invert: true,
             warn_gremlin_format: true,
+            voice_language: String::new(),
+            voice_gain: 1.0,
+            voice_min_confidence: 0.5,
             calibration: BTreeMap::new(),
             debounce: BTreeMap::new(),
             leds: BTreeMap::new(),
