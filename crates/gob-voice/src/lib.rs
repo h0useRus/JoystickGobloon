@@ -5,7 +5,7 @@ pub mod audio;
 mod platform;
 pub mod vosk;
 
-pub use audio::{Capture, Microphone, SAMPLE_RATE, microphones};
+pub use audio::{Capture, MAX_GAIN, Microphone, SAMPLE_RATE, microphones};
 pub use vosk::{Heard, Model, Recognizer, Vosk};
 
 /// Why voice input is not available.

@@ -1,6 +1,7 @@
 //! Microphones through cpal: the list of input devices and a capture stream that delivers 16 kHz
 //! mono samples, whatever the device records. The stream exists only while it is held, so the
-//! microphone is closed the rest of the time.
+//! microphone is closed the rest of the time. A software gain (the input volume, like a voice chat
+//! app's slider) scales the samples before the recognizer and the level meter see them.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -12,6 +13,9 @@ use crate::Error;
 
 /// The sample rate the recognizer gets.
 pub const SAMPLE_RATE: u32 = 16_000;
+
+/// The highest input gain (400 %): enough for a quiet microphone the OS does not boost.
+pub const MAX_GAIN: f32 = 4.0;
 
 /// An input device.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,14 +51,17 @@ pub fn microphones() -> Vec<Microphone> {
 pub struct Capture {
     _stream: cpal::Stream,
     level: Arc<AtomicU32>,
+    gain: Arc<AtomicU32>,
     name: String,
 }
 
 impl Capture {
-    /// Opens the microphone `id` (from [`microphones`]; `None` = the default one) and calls `sink`
-    /// with 16 kHz mono samples on the audio thread; `sink` must not block.
+    /// Opens the microphone `id` (from [`microphones`]; `None` = the default one) with the input
+    /// `gain` (1.0 = as recorded, see [`Capture::set_gain`]) and calls `sink` with 16 kHz mono
+    /// samples on the audio thread; `sink` must not block.
     pub fn open(
         id: Option<&str>,
+        gain: f32,
         sink: impl FnMut(&[i16]) + Send + 'static,
     ) -> Result<Self, Error> {
         let host = cpal::default_host();
@@ -71,10 +78,12 @@ impl Capture {
             .map_err(|e| Error::Audio(e.to_string()))?;
         let config = supported.config();
         let level = Arc::new(AtomicU32::new(0));
+        let gain = Arc::new(AtomicU32::new(clamp_gain(gain).to_bits()));
         let mixer = Mixer::new(
             config.channels.into(),
             config.sample_rate,
             level.clone(),
+            gain.clone(),
             sink,
         );
         let stream = match supported.sample_format() {
@@ -96,6 +105,7 @@ impl Capture {
         Ok(Self {
             _stream: stream,
             level,
+            gain,
             name: device.to_string(),
         })
     }
@@ -105,9 +115,28 @@ impl Capture {
         &self.name
     }
 
-    /// Peak of the last block, 0.0..=1.0.
+    /// Peak of the last block after the gain, 0.0..=1.0 (1.0 = clipping).
     pub fn level(&self) -> f32 {
         f32::from_bits(self.level.load(Ordering::Relaxed))
+    }
+
+    pub fn gain(&self) -> f32 {
+        f32::from_bits(self.gain.load(Ordering::Relaxed))
+    }
+
+    /// Changes the input gain while the microphone is open: 0.0 = silent, 1.0 = as recorded, up
+    /// to [`MAX_GAIN`]; louder samples are clipped.
+    pub fn set_gain(&self, gain: f32) {
+        self.gain
+            .store(clamp_gain(gain).to_bits(), Ordering::Relaxed);
+    }
+}
+
+fn clamp_gain(gain: f32) -> f32 {
+    if gain.is_nan() {
+        1.0
+    } else {
+        gain.clamp(0.0, MAX_GAIN)
     }
 }
 
@@ -141,11 +170,18 @@ struct Mixer<F> {
     last: f32,
     out: Vec<i16>,
     level: Arc<AtomicU32>,
+    gain: Arc<AtomicU32>,
     sink: F,
 }
 
 impl<F: FnMut(&[i16])> Mixer<F> {
-    fn new(channels: usize, rate: u32, level: Arc<AtomicU32>, sink: F) -> Self {
+    fn new(
+        channels: usize,
+        rate: u32,
+        level: Arc<AtomicU32>,
+        gain: Arc<AtomicU32>,
+        sink: F,
+    ) -> Self {
         Self {
             channels: channels.max(1),
             step: f64::from(rate) / f64::from(SAMPLE_RATE),
@@ -153,6 +189,7 @@ impl<F: FnMut(&[i16])> Mixer<F> {
             last: 0.0,
             out: Vec::new(),
             level,
+            gain,
             sink,
         }
     }
@@ -162,22 +199,22 @@ impl<F: FnMut(&[i16])> Mixer<F> {
         f32: FromSample<T>,
     {
         self.out.clear();
+        let gain = f32::from_bits(self.gain.load(Ordering::Relaxed)) / self.channels as f32;
         let mut peak = 0.0f32;
         for frame in data.chunks_exact(self.channels) {
             let sum: f32 = frame.iter().map(|s| f32::from_sample(*s)).sum();
-            let sample = sum / self.channels as f32;
+            let sample = (sum * gain).clamp(-1.0, 1.0);
             peak = peak.max(sample.abs());
             // Output samples that fall between the previous input sample and this one.
             while self.pos <= 1.0 {
                 let v = self.last + (sample - self.last) * self.pos as f32;
-                self.out
-                    .push((v.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16);
+                self.out.push((v * f32::from(i16::MAX)) as i16);
                 self.pos += self.step;
             }
             self.pos -= 1.0;
             self.last = sample;
         }
-        self.level.store(peak.min(1.0).to_bits(), Ordering::Relaxed);
+        self.level.store(peak.to_bits(), Ordering::Relaxed);
         if !self.out.is_empty() {
             (self.sink)(&self.out);
         }
@@ -189,9 +226,14 @@ mod tests {
     use super::*;
 
     fn mix(channels: usize, rate: u32, data: &[f32]) -> (Vec<i16>, f32) {
+        mix_with_gain(channels, rate, 1.0, data)
+    }
+
+    fn mix_with_gain(channels: usize, rate: u32, gain: f32, data: &[f32]) -> (Vec<i16>, f32) {
         let level = Arc::new(AtomicU32::new(0));
+        let gain = Arc::new(AtomicU32::new(gain.to_bits()));
         let mut got = Vec::new();
-        let mut mixer = Mixer::new(channels, rate, level.clone(), |s: &[i16]| {
+        let mut mixer = Mixer::new(channels, rate, level.clone(), gain, |s: &[i16]| {
             got.extend_from_slice(s)
         });
         mixer.push(data);
@@ -219,5 +261,48 @@ mod tests {
         assert_eq!(out.len(), 3);
         assert_eq!(out[1], 16383, "average of 0.25 and 0.75");
         assert_eq!(level, 1.0);
+    }
+
+    #[test]
+    fn gain_scales_samples_and_level() {
+        let (out, level) = mix_with_gain(1, 16_000, 2.0, &[0.25; 16]);
+        assert_eq!(out[1], 16383, "0.25 at 200 %");
+        assert_eq!(level, 0.5, "the meter shows the louder signal");
+        let (out, level) = mix_with_gain(2, 16_000, 0.5, &[0.5, 0.5, 0.5, 0.5]);
+        assert_eq!(out[1], 8191, "50 % of the channels' average");
+        assert_eq!(level, 0.25);
+        let (out, level) = mix_with_gain(1, 16_000, 0.0, &[0.9; 16]);
+        assert!(out.iter().all(|&s| s == 0), "0 % mutes");
+        assert_eq!(level, 0.0);
+    }
+
+    #[test]
+    fn loud_gain_clips_instead_of_wrapping() {
+        let (out, level) = mix_with_gain(1, 16_000, MAX_GAIN, &[0.5, -0.5, 0.5, -0.5]);
+        assert_eq!(&out[1..], &[-i16::MAX, i16::MAX, -i16::MAX]);
+        assert_eq!(level, 1.0, "clipping shows as full scale");
+    }
+
+    #[test]
+    fn gain_changes_while_open() {
+        let level = Arc::new(AtomicU32::new(0));
+        let gain = Arc::new(AtomicU32::new(1.0f32.to_bits()));
+        let mut got = Vec::new();
+        let mut mixer = Mixer::new(1, 16_000, level, gain.clone(), |s: &[i16]| {
+            got.push(s[s.len() - 1])
+        });
+        mixer.push(&[0.25f32; 4]);
+        gain.store(3.0f32.to_bits(), Ordering::Relaxed);
+        mixer.push(&[0.25f32; 4]);
+        drop(mixer);
+        assert_eq!(got, [8191, 24575]);
+    }
+
+    #[test]
+    fn gain_stays_in_range() {
+        assert_eq!(clamp_gain(-1.0), 0.0);
+        assert_eq!(clamp_gain(10.0), MAX_GAIN);
+        assert_eq!(clamp_gain(f32::NAN), 1.0);
+        assert_eq!(clamp_gain(1.5), 1.5);
     }
 }
