@@ -22,9 +22,10 @@ mod platform;
 mod runner;
 
 pub use engine::Engine;
+pub use gob_voice::VoiceConfig;
 pub use lighting::to_led;
 pub use media::{Media, SpeechQueue, SpeechRequest, voices};
-pub use runner::{Latency, Runner, RunnerStatus};
+pub use runner::{Latency, Runner, RunnerStatus, VoiceHeard, VoiceStatus};
 
 /// Values of the logical device's inputs that actions wrote, by input id.
 #[derive(Debug, Clone, Default, PartialEq)]

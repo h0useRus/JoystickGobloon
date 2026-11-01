@@ -465,6 +465,8 @@ pub struct Engine {
     voice_holds: HashMap<u32, Duration>,
     /// Release timer of each voice command whose button is down.
     voice_releases: HashMap<u32, u64>,
+    /// Every phrase of the profile's voice commands with the command's id.
+    voice_phrases: Vec<(u32, String)>,
     /// Profile's `macro-default-delay` in seconds.
     macro_delay: f64,
     /// Last value written to each vJoy axis, for relative macro steps.
@@ -542,6 +544,11 @@ impl Engine {
                 .map(|c| (c.id, Duration::from_secs_f64(c.hold.clamp(0.01, 10.0))))
                 .collect(),
             voice_releases: HashMap::new(),
+            voice_phrases: profile
+                .voice_phrases()
+                .into_iter()
+                .map(|(id, p)| (id, p.to_string()))
+                .collect(),
             macro_delay: profile
                 .settings
                 .child_text("macro-default-delay")
@@ -1160,6 +1167,20 @@ impl Engine {
     /// Whether listening is on (a voice-input action is held).
     pub fn is_listening(&self) -> bool {
         !self.listening.is_empty()
+    }
+
+    /// The phrases to listen for, each with its command's id.
+    pub fn voice_phrases(&self) -> &[(u32, String)] {
+        &self.voice_phrases
+    }
+
+    /// Stops listening on every microphone, as if each voice-input action were released: before
+    /// this engine is replaced while one is held.
+    pub fn stop_listening_all(&mut self, out: &mut dyn Output) {
+        let nodes: Vec<NodeId> = self.listening.keys().copied().collect();
+        for node in nodes {
+            self.stop_listening(node, out);
+        }
     }
 
     /// Whether the profile has light-led actions.

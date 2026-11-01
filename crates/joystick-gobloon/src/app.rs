@@ -237,6 +237,8 @@ impl JoystickGobloonApp {
         };
         app.update_tray(&cc.egui_ctx);
         app.activation.set_led_defaults(app.settings.led_defaults());
+        app.activation
+            .set_voice(crate::voice::config(&app.settings));
         app.calibrations = app.settings.calibrations();
         for ((device, slot), c) in &app.calibrations {
             app.input.set_calibration(device, *slot, Some(*c));
@@ -1395,6 +1397,9 @@ impl JoystickGobloonApp {
                 self.i18n.set_language(&code);
                 self.settings.language = self.i18n.language().to_string();
                 self.status = self.i18n.tr("status-ready");
+                // Voice commands use the speech model of the language.
+                self.activation
+                    .set_voice(crate::voice::config(&self.settings));
             }
             Change::PreviewLeds { device, leds } => {
                 let leds = leds

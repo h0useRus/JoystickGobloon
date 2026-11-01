@@ -2039,3 +2039,31 @@ fn voice_commands_follow_modes_and_pause() {
     e.tick(ms(800), &mut out);
     assert_eq!(out.0.len(), 2, "paused");
 }
+
+#[test]
+fn a_replaced_engine_stops_listening() {
+    let mut e = voice_profile();
+    assert_eq!(
+        e.voice_phrases(),
+        [(1, "lights on".to_string()), (2, "gear".to_string())]
+    );
+    let (mut out, t0) = (Recorder::default(), Instant::now());
+    let button = |n| InputKey::new(DEV, InputKind::Button, n);
+    e.process(&button(1), Value::Button(true), t0, &mut out);
+    e.process(&button(2), Value::Button(true), t0, &mut out);
+    e.stop_listening_all(&mut out);
+    out.0
+        .sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+    assert_eq!(
+        out.0,
+        [
+            Out::Listen("".into(), false),
+            Out::Listen("".into(), true),
+            Out::Listen("m1".into(), false),
+            Out::Listen("m1".into(), true),
+        ]
+    );
+    assert!(!e.is_listening());
+    e.process(&button(1), Value::Button(false), t0, &mut out);
+    assert_eq!(out.0.len(), 4, "nothing left to stop");
+}

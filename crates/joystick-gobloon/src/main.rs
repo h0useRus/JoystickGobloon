@@ -30,6 +30,7 @@ mod viewer_view;
 mod virtual_setup;
 mod vjoy_config_view;
 mod vjoy_view;
+mod voice;
 mod wizard_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
