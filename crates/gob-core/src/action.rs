@@ -225,6 +225,11 @@ pub enum ActionKind<'a> {
         exclusive: bool,
         preemptive: bool,
     },
+    /// Joystick Gobloon's own action: listens for voice commands while the input is held.
+    /// `microphone` is an id from gob-voice's list; empty = the system's default one.
+    VoiceInput {
+        microphone: &'a str,
+    },
     /// Preserved in the profile but not executed (yet).
     Other,
 }
@@ -574,6 +579,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "pause-resume",
     "run-command",
     "macro",
+    "voice-input",
 ];
 
 impl Action {
@@ -869,6 +875,9 @@ impl Action {
                     preemptive: self.bool("is-preemptive"),
                 }
             }
+            "voice-input" => ActionKind::VoiceInput {
+                microphone: self.str("microphone").unwrap_or_default().trim(),
+            },
             _ => ActionKind::Other,
         }
     }

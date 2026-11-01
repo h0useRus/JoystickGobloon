@@ -360,6 +360,7 @@ pub enum Section {
     Scripts,
     Devices,
     VirtualDevices,
+    VoiceCommands,
     /// Index into [`Profile::extra`].
     Extra(usize),
 }
@@ -380,6 +381,8 @@ pub struct Profile {
     pub scripts: Element,
     pub devices: Vec<Device>,
     pub virtual_devices: VirtualDevices,
+    /// Joystick Gobloon only (see [`crate::voice`]).
+    pub voice_commands: Vec<crate::voice::VoiceCommand>,
     pub extra: Vec<Element>,
     pub order: Vec<Section>,
 }
@@ -400,6 +403,7 @@ impl Default for Profile {
             scripts: Element::new("scripts"),
             devices: Vec::new(),
             virtual_devices: VirtualDevices::default(),
+            voice_commands: Vec::new(),
             extra: Vec::new(),
             order: vec![
                 Section::Inputs,
@@ -418,24 +422,38 @@ impl Default for Profile {
 impl Profile {
     /// Replaces the stored virtual devices, adding their section to a profile that had none.
     pub fn set_virtual_devices(&mut self, devices: VirtualDevices) {
-        if !self.order.contains(&Section::VirtualDevices) {
-            let at = self
-                .order
-                .iter()
-                .position(|s| *s == Section::Devices)
-                .map_or(self.order.len(), |i| i + 1);
-            self.order.insert(at, Section::VirtualDevices);
-        }
+        self.add_section(Section::VirtualDevices);
         self.virtual_devices = devices;
     }
 
+    /// Puts one of Joystick Gobloon's own sections into a profile that had none, after the
+    /// devices and the other own sections.
+    pub(crate) fn add_section(&mut self, section: Section) {
+        if self.order.contains(&section) {
+            return;
+        }
+        let at = self
+            .order
+            .iter()
+            .rposition(|s| {
+                matches!(
+                    s,
+                    Section::Devices | Section::VirtualDevices | Section::VoiceCommands
+                )
+            })
+            .map_or(self.order.len(), |i| i + 1);
+        self.order.insert(at, section);
+    }
+
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led and map-to-gamepad actions, gamepad macro steps, monotone cubic curves): it is
-    /// then written in Joystick Gobloon's own format, which Joystick Gremlin cannot open. Stored
-    /// virtual joysticks don't count: Joystick Gremlin skips the `<virtual-devices>` section.
+    /// light-led, map-to-gamepad and voice-input actions, gamepad macro steps, monotone cubic
+    /// curves, voice commands): it is then written in Joystick Gobloon's own format, which
+    /// Joystick Gremlin cannot open. Stored virtual joysticks don't count: Joystick Gremlin skips
+    /// the `<virtual-devices>` section.
     pub fn needs_own_format(&self) -> bool {
         !self.modifiers.is_empty()
             || !self.virtual_devices.gamepads.is_empty()
+            || !self.voice_commands.is_empty()
             || self
                 .inputs
                 .iter()
@@ -444,6 +462,7 @@ impl Profile {
             || self.library.iter().any(|a| {
                 a.kind == "light-led"
                     || a.kind == "map-to-gamepad"
+                    || a.kind == "voice-input"
                     || a.items.iter().any(|i| {
                         matches!(i, Item::Group { tag, attrs, .. } if tag == "macro-action"
                             && attrs.iter().any(|(k, v)| k == "type" && v == "gamepad"))

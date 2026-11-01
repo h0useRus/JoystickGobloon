@@ -51,6 +51,8 @@ pub enum NewAction {
     Chain,
     /// No steps, runs once.
     Macro,
+    /// Listens on the default microphone while held.
+    VoiceInput,
     /// Writes to a logical device input of the same type as the edited input.
     MapToLogicalDevice {
         input_type: InputType,
@@ -429,6 +431,14 @@ impl Action {
                 "disallowed",
             ),
             NewAction::MapToKeyboard => Self::build("map-to-keyboard", Vec::new(), "both"),
+            NewAction::VoiceInput => Self::build(
+                "voice-input",
+                vec![
+                    prop("string", "microphone", ""),
+                    prop("string", "listen", "hold"),
+                ],
+                "both",
+            ),
             NewAction::MapToLogicalDevice { input_type, id } => {
                 let ty = match input_type {
                     InputType::Axis => "axis",

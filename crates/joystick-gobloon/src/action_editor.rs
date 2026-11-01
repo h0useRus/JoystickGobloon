@@ -1400,7 +1400,7 @@ impl Editor<'_> {
                     self.macro_editor(ui, action, &steps, repeat);
                     ui.horizontal(|ui| self.activation(ui, action));
                 }
-                ActionKind::Other => {
+                ActionKind::Other | ActionKind::VoiceInput { .. } => {
                     ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
                 }
             }

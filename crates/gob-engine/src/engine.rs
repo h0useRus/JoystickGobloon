@@ -1011,7 +1011,10 @@ impl Engine {
                     repeat,
                     act: action.activation_mode(),
                 },
-                ActionKind::Other | ActionKind::Description { .. } => Node::Noop,
+                // Listening is not run yet: the action is kept and does nothing.
+                ActionKind::Other
+                | ActionKind::Description { .. }
+                | ActionKind::VoiceInput { .. } => Node::Noop,
             },
         };
         self.nodes.push(node);
