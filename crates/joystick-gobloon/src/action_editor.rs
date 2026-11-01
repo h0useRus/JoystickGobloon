@@ -1580,60 +1580,67 @@ impl Editor<'_> {
     ) -> Option<VirtualOutput> {
         let mut picked = None;
         let tab_id = egui::Id::unique(("quickmap", action, salt));
-        ui.menu_button(
+        // Clicking a device tab keeps the popup open; picking an output closes it.
+        let config = egui::containers::menu::MenuConfig::new()
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+        let (button, open) = egui::containers::menu::MenuButton::new(
             RichText::new(icon::GRID_NINE).size(style::ICON_SIZE),
-            |ui| {
-                ui.set_width(44.0 * 10.0);
-                let marks = self.output_marks(action);
-                let blocked = self.input_outputs(action);
-                let mut tab: u32 = ui.data(|m| m.get_temp(tab_id)).unwrap_or(current.0);
-                if !tabs.iter().any(|(id, _)| *id == tab) {
-                    tab = tabs.first().map_or(1, |(id, _)| *id);
-                }
-                ui.horizontal_wrapped(|ui| {
-                    for (id, text) in tabs {
-                        if ui.selectable_label(*id == tab, text).clicked() {
-                            tab = *id;
-                        }
-                    }
-                });
-                ui.data_mut(|m| m.insert_temp(tab_id, tab));
-                ui.separator();
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = egui::Vec2::splat(4.0);
-                    for cell in cells(tab) {
-                        let selected = cell.output == *current.1;
-                        let enabled = selected || !blocked.contains(&cell.output);
-                        let (mark, count) = if enabled {
-                            marks.mark(&cell.output)
-                        } else {
-                            (OutputMark::Free, 0)
-                        };
-                        // Allocated at its size, not in a scope: a scope never wraps the row.
-                        let size = egui::Vec2::new(cell.width, 26.0);
-                        let r = ui
-                            .allocate_ui(size, |ui| {
-                                if !enabled {
-                                    ui.disable();
-                                }
-                                style::output_button(ui, cell.label, size, selected, mark, count)
-                            })
-                            .inner;
-                        let r = r
-                            .on_hover_ui(|ui| {
-                                ui.label(marks.tooltip(self.i18n, &cell.output, &cell.name));
-                            })
-                            .on_disabled_hover_text(self.i18n.tr("output-same-input"));
-                        if r.clicked() {
-                            picked = Some(cell.output);
-                            ui.close();
-                        }
-                    }
-                });
-            },
         )
-        .response
-        .on_hover_text(self.i18n.tr("vjoy-quickmap"));
+        .config(config)
+        .ui(ui, |ui| {
+            ui.set_width(44.0 * 10.0);
+            let marks = self.output_marks(action);
+            let blocked = self.input_outputs(action);
+            let mut tab: u32 = ui.data(|m| m.get_temp(tab_id)).unwrap_or(current.0);
+            if !tabs.iter().any(|(id, _)| *id == tab) {
+                tab = tabs.first().map_or(1, |(id, _)| *id);
+            }
+            ui.horizontal_wrapped(|ui| {
+                for (id, text) in tabs {
+                    if ui.selectable_label(*id == tab, text).clicked() {
+                        tab = *id;
+                    }
+                }
+            });
+            ui.data_mut(|m| m.insert_temp(tab_id, tab));
+            ui.separator();
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = egui::Vec2::splat(4.0);
+                for cell in cells(tab) {
+                    let selected = cell.output == *current.1;
+                    let enabled = selected || !blocked.contains(&cell.output);
+                    let (mark, count) = if enabled {
+                        marks.mark(&cell.output)
+                    } else {
+                        (OutputMark::Free, 0)
+                    };
+                    // Allocated at its size, not in a scope: a scope never wraps the row.
+                    let size = egui::Vec2::new(cell.width, 26.0);
+                    let r = ui
+                        .allocate_ui(size, |ui| {
+                            if !enabled {
+                                ui.disable();
+                            }
+                            style::output_button(ui, cell.label, size, selected, mark, count)
+                        })
+                        .inner;
+                    let r = r
+                        .on_hover_ui(|ui| {
+                            ui.label(marks.tooltip(self.i18n, &cell.output, &cell.name));
+                        })
+                        .on_disabled_hover_text(self.i18n.tr("output-same-input"));
+                    if r.clicked() {
+                        picked = Some(cell.output);
+                        ui.close();
+                    }
+                }
+            });
+        });
+        // Closed: the next opening starts on the action's device again.
+        if open.is_none() {
+            ui.data_mut(|m| m.remove::<u32>(tab_id));
+        }
+        button.on_hover_text(self.i18n.tr("vjoy-quickmap"));
         picked
     }
 
