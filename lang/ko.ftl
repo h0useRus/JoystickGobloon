@@ -508,7 +508,7 @@ about-releases = 릴리스
 about-hiding = 장치 숨기기: { $backend }
 about-virtual = 가상 조이스틱: { $backend }
 about-not-installed = 설치되지 않음
-about-gremlin = 프로필은 Joystick Gremlin과 호환됩니다.
+about-gremlin = R14 이상의 Joystick Gremlin 프로필을 가져옵니다.
 about-license = MIT 라이선스에 따른 무료 오픈 소스 소프트웨어입니다.
 
 # Updates

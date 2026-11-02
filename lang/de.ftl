@@ -520,7 +520,7 @@ about-releases = Versionen
 about-hiding = Geräte ausblenden: { $backend }
 about-virtual = Virtuelle Joysticks: { $backend }
 about-not-installed = nicht installiert
-about-gremlin = Profile sind mit Joystick Gremlin kompatibel.
+about-gremlin = Importiert Joystick-Gremlin-Profile ab R14.
 about-license = Freie Open-Source-Software unter der MIT-Lizenz.
 
 # Updates

@@ -508,7 +508,7 @@ about-releases = 版本发布
 about-hiding = 设备隐藏：{ $backend }
 about-virtual = 虚拟摇杆：{ $backend }
 about-not-installed = 未安装
-about-gremlin = 配置文件与 Joystick Gremlin 兼容。
+about-gremlin = 可导入 R14 及以后版本的 Joystick Gremlin 配置文件。
 about-license = 基于 MIT 许可证的自由开源软件。
 
 # Updates
