@@ -38,6 +38,7 @@ no-devices-attached = Aucune manette de jeu trouvée
 # Status bar
 status-ready = Prêt
 status-loaded = { $file } chargé
+status-restored = Modifications non enregistrées de { $file } restaurées
 status-saved = { $file } enregistré
 status-last-missing = Dernier profil introuvable : { $file }
 import-error = Impossible d’ouvrir le profil : { $error }
@@ -162,6 +163,7 @@ action-activate = Activer le profil
 action-deactivate = Arrêter le profil
 title-active = Actif
 title-inactive = Inactif
+title-not-saved = non enregistré
 status-active = Profil actif
 status-stopped = Profil arrêté
 activate-error = Impossible d’activer le profil : { $error }

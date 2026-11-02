@@ -319,6 +319,7 @@ impl JoystickGobloonApp {
             }
         }
         crate::update::cleanup();
+        crate::autosave::prune(&mut app.settings.autosave);
         if app.settings.check_updates && crate::update::enabled() {
             app.updater.check(&cc.egui_ctx, true);
         }
@@ -393,6 +394,15 @@ impl JoystickGobloonApp {
 
     /// `interactive`: opened by the user, so import warnings are shown, not only logged.
     fn open_profile(&mut self, path: PathBuf, interactive: bool) {
+        if let Some(entry) = crate::autosave::find(&self.settings.autosave, &path).cloned() {
+            match gob_gremlin::load(&entry.file) {
+                Ok(profile) => return self.restore(profile, entry),
+                Err(e) => log::error!("autosave {}: {e}", entry.file.display()),
+            }
+            if entry.origin.is_none() {
+                return;
+            }
+        }
         match gob_gremlin::load(&path) {
             Ok(profile) => {
                 let report = gob_gremlin::report(&profile);
@@ -413,6 +423,7 @@ impl JoystickGobloonApp {
                         lines,
                     });
                 }
+                self.drop_autosave();
                 self.profile = Some(loaded);
                 self.activation.stop();
                 self.devices_view.reset_mode();
@@ -426,6 +437,99 @@ impl JoystickGobloonApp {
                     .trf("import-error", &[("error", e.to_string().into())]);
                 self.error(text);
             }
+        }
+    }
+
+    /// Opens the copy of a profile's unsaved changes (after a crash), still unsaved.
+    fn restore(&mut self, profile: gob_core::Profile, entry: crate::autosave::Entry) {
+        log::info!(
+            "restored unsaved changes from {} (profile {})",
+            entry.file.display(),
+            entry
+                .origin
+                .as_ref()
+                .map_or_else(|| "new".into(), |p| p.display().to_string())
+        );
+        let mut loaded = LoadedProfile::new(profile, entry.origin.clone());
+        loaded.dirty = true;
+        loaded.autosave = Some(entry.file.clone());
+        self.status = self
+            .i18n
+            .trf("status-restored", &[("file", loaded.file_name().into())]);
+        self.drop_autosave();
+        self.profile = Some(loaded);
+        self.activation.stop();
+        self.devices_view.reset_mode();
+        self.settings.last_profile = Some(entry.origin.unwrap_or(entry.file));
+        self.settings.save();
+    }
+
+    /// Writes the copy of the unsaved changes a moment after the last edit.
+    fn autosave_tick(&mut self, ctx: &egui::Context) {
+        let Some(loaded) = &mut self.profile else {
+            return;
+        };
+        let Some(edited) = loaded.autosave_after.filter(|_| loaded.dirty) else {
+            return;
+        };
+        if edited.elapsed() < crate::autosave::DELAY {
+            ctx.request_repaint_after(crate::autosave::DELAY - edited.elapsed());
+            return;
+        }
+        loaded.autosave_after = None;
+        let file = match &loaded.autosave {
+            Some(file) => file.clone(),
+            None => {
+                let Some(dir) = crate::autosave::dir() else {
+                    return;
+                };
+                let file = crate::autosave::next_file(&dir, &self.settings.autosave);
+                loaded.autosave = Some(file.clone());
+                file
+            }
+        };
+        if let Err(e) = crate::autosave::write(&file, &loaded.profile) {
+            log::error!("autosave {}: {e}", file.display());
+            return;
+        }
+        let entry = crate::autosave::Entry {
+            file: file.clone(),
+            origin: loaded.path.clone(),
+        };
+        let mut changed = false;
+        if !self.settings.autosave.contains(&entry) {
+            self.settings.autosave.retain(|e| e.file != file);
+            self.settings.autosave.push(entry);
+            changed = true;
+        }
+        // A new profile reopens from its copy.
+        if loaded.path.is_none() && self.settings.last_profile.as_ref() != Some(&file) {
+            self.settings.last_profile = Some(file);
+            changed = true;
+        }
+        if changed {
+            self.settings.save();
+        }
+    }
+
+    /// Removes the copy of the current profile's unsaved changes (saved or discarded).
+    fn drop_autosave(&mut self) {
+        let Some(loaded) = &mut self.profile else {
+            return;
+        };
+        loaded.autosave_after = None;
+        let Some(file) = loaded.autosave.clone() else {
+            return;
+        };
+        let _ = std::fs::remove_file(&file);
+        let before = self.settings.autosave.len();
+        self.settings.autosave.retain(|e| e.file != file);
+        let last = self.settings.last_profile.as_ref() == Some(&file);
+        if last {
+            self.settings.last_profile = None;
+        }
+        if last || before != self.settings.autosave.len() {
+            self.settings.save();
         }
     }
 
@@ -608,6 +712,10 @@ impl JoystickGobloonApp {
                 loaded.path = Some(path.clone());
                 loaded.dirty = false;
                 loaded.gremlin_file = !loaded.profile.needs_own_format();
+                self.drop_autosave();
+                if let Some(loaded) = &mut self.profile {
+                    loaded.autosave = None;
+                }
                 self.settings.last_profile = Some(path);
                 self.settings.save();
                 true
@@ -626,7 +734,12 @@ impl JoystickGobloonApp {
     fn new_profile(&mut self) {
         let mut profile = gob_core::Profile::default();
         profile.set_startup_mode("Default");
-        self.profile = Some(LoadedProfile::new(profile, None));
+        self.drop_autosave();
+        let mut loaded = LoadedProfile::new(profile, None);
+        // Named now, written after the first edit.
+        loaded.autosave = crate::autosave::dir()
+            .map(|dir| crate::autosave::next_file(&dir, &self.settings.autosave));
+        self.profile = Some(loaded);
         self.activation.stop();
         self.devices_view.reset_mode();
         self.status = self.i18n.tr("status-new");
@@ -958,6 +1071,7 @@ impl JoystickGobloonApp {
             }
             Some(1) => {
                 self.pending = None;
+                self.drop_autosave();
                 self.perform(action, ctx);
             }
             Some(_) => self.pending = None,
@@ -1006,7 +1120,11 @@ impl JoystickGobloonApp {
                 } else {
                     "title-inactive"
                 };
-                let modified = if p.dirty { "*" } else { "" };
+                let modified = match (&p.path, p.dirty) {
+                    (None, _) => format!(" ({})", self.i18n.tr("title-not-saved")),
+                    (Some(_), true) => "*".into(),
+                    (Some(_), false) => String::new(),
+                };
                 format!(
                     "{} | {}{modified} | {}",
                     crate::APP_NAME,
@@ -1548,6 +1666,7 @@ impl eframe::App for JoystickGobloonApp {
                 self.history(true);
             }
         }
+        self.autosave_tick(ctx);
         if let Some(t) = self.edited {
             let settle = std::time::Duration::from_millis(600);
             if !self.activation.is_active() {

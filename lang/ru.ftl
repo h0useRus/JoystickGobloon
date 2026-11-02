@@ -38,6 +38,7 @@ no-devices-attached = Игровые контроллеры не найдены
 # Status bar
 status-ready = Готово
 status-loaded = Загружен { $file }
+status-restored = Восстановлены несохранённые изменения { $file }
 status-saved = Сохранён { $file }
 status-last-missing = Последний профиль не найден: { $file }
 import-error = Не удалось открыть профиль: { $error }
@@ -166,6 +167,7 @@ action-activate = Активировать профиль
 action-deactivate = Остановить профиль
 title-active = Активен
 title-inactive = Неактивен
+title-not-saved = не сохранён
 status-active = Профиль активен
 status-stopped = Профиль остановлен
 activate-error = Не удалось активировать профиль: { $error }

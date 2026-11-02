@@ -38,6 +38,7 @@ no-devices-attached = No se encontraron mandos de juego
 # Status bar
 status-ready = Listo
 status-loaded = { $file } cargado
+status-restored = Cambios sin guardar de { $file } restaurados
 status-saved = { $file } guardado
 status-last-missing = No se encontró el último perfil: { $file }
 import-error = No se pudo abrir el perfil: { $error }
@@ -162,6 +163,7 @@ action-activate = Activar el perfil
 action-deactivate = Detener el perfil
 title-active = Activo
 title-inactive = Inactivo
+title-not-saved = sin guardar
 status-active = Perfil activo
 status-stopped = Perfil detenido
 activate-error = No se pudo activar el perfil: { $error }

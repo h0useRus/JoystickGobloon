@@ -38,6 +38,7 @@ no-devices-attached = 게임 컨트롤러를 찾을 수 없음
 # Status bar
 status-ready = 준비
 status-loaded = { $file } 불러옴
+status-restored = { $file }의 저장되지 않은 변경 내용을 복원함
 status-saved = { $file } 저장됨
 status-last-missing = 마지막 프로필을 찾을 수 없음: { $file }
 import-error = 프로필을 열 수 없습니다: { $error }
@@ -162,6 +163,7 @@ action-activate = 프로필 활성화
 action-deactivate = 프로필 중지
 title-active = 활성
 title-inactive = 비활성
+title-not-saved = 저장되지 않음
 status-active = 프로필 활성화됨
 status-stopped = 프로필 중지됨
 activate-error = 프로필을 활성화할 수 없습니다: { $error }

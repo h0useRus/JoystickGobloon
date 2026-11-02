@@ -38,6 +38,7 @@ no-devices-attached = Keine Gamecontroller gefunden
 # Status bar
 status-ready = Bereit
 status-loaded = { $file } geladen
+status-restored = Ungespeicherte Änderungen an { $file } wiederhergestellt
 status-saved = { $file } gespeichert
 status-last-missing = Letztes Profil nicht gefunden: { $file }
 import-error = Das Profil konnte nicht geöffnet werden: { $error }
@@ -162,6 +163,7 @@ action-activate = Profil aktivieren
 action-deactivate = Profil stoppen
 title-active = Aktiv
 title-inactive = Inaktiv
+title-not-saved = nicht gespeichert
 status-active = Profil aktiv
 status-stopped = Profil gestoppt
 activate-error = Das Profil konnte nicht aktiviert werden: { $error }

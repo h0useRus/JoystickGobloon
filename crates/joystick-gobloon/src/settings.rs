@@ -32,6 +32,8 @@ pub struct Settings {
     /// Device hiding window: only game controllers.
     pub hidhide_gaming_only: bool,
     pub last_profile: Option<PathBuf>,
+    /// Copies of unsaved profile changes (`autosave`).
+    pub autosave: Vec<crate::autosave::Entry>,
     /// Folder of the last profile opened or saved through a file dialog, where those dialogs
     /// start (else the documents folder).
     pub profile_dir: Option<PathBuf>,
@@ -241,6 +243,7 @@ impl Default for Settings {
             hidhide_hide_disconnected: true,
             hidhide_gaming_only: true,
             last_profile: None,
+            autosave: Vec::new(),
             profile_dir: None,
             show_tray: true,
             close_to_tray: false,
@@ -314,7 +317,7 @@ fn load_toml<T: Default + for<'de> Deserialize<'de>>(name: &str) -> T {
 
 /// Writes `path` so that a crash or power loss leaves either the old file or the new one, never
 /// a cut one: the text goes to a file next to it, reaches the disk, then replaces it.
-fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".new");

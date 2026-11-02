@@ -38,6 +38,7 @@ no-devices-attached = 未找到游戏控制器
 # Status bar
 status-ready = 就绪
 status-loaded = 已加载 { $file }
+status-restored = 已恢复 { $file } 未保存的更改
 status-saved = 已保存 { $file }
 status-last-missing = 未找到上次的配置文件：{ $file }
 import-error = 无法打开配置文件：{ $error }
@@ -162,6 +163,7 @@ action-activate = 激活配置文件
 action-deactivate = 停止配置文件
 title-active = 已激活
 title-inactive = 未激活
+title-not-saved = 未保存
 status-active = 配置文件已激活
 status-stopped = 配置文件已停止
 activate-error = 无法激活配置文件：{ $error }
