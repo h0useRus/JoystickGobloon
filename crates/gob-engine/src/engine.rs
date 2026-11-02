@@ -1164,11 +1164,6 @@ impl Engine {
         self.voice_releases.insert(id, timer);
     }
 
-    /// Whether listening is on (a voice-input action is held).
-    pub fn is_listening(&self) -> bool {
-        !self.listening.is_empty()
-    }
-
     /// The microphones voice-input actions listen on (empty = the default one), each once.
     pub fn voice_microphones(&self) -> Vec<String> {
         let mut found: Vec<String> = Vec::new();

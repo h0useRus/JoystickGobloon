@@ -433,10 +433,7 @@ impl Action {
             NewAction::MapToKeyboard => Self::build("map-to-keyboard", Vec::new(), "both"),
             NewAction::VoiceInput => Self::build(
                 "voice-input",
-                vec![
-                    prop("string", "microphone", ""),
-                    prop("string", "listen", "hold"),
-                ],
+                vec![prop("string", "microphone", "")],
                 "both",
             ),
             NewAction::MapToLogicalDevice { input_type, id } => {

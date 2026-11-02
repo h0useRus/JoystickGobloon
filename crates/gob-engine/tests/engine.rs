@@ -1885,15 +1885,7 @@ fn voice_input(id: u32, mode: &str, root: &str) -> String {
 }
 
 fn listen(id: &str, microphone: &str) -> String {
-    act(
-        id,
-        "voice-input",
-        &format!(
-            "{}{}",
-            prop("string", "microphone", microphone),
-            prop("string", "listen", "hold")
-        ),
-    )
+    act(id, "voice-input", &prop("string", "microphone", microphone))
 }
 
 /// Buttons 1 and 3 listen on microphone `m1`, 2 on the default one; 4 switches to mode
@@ -1943,7 +1935,6 @@ fn voice_input_listens_while_held() {
     let (mut out, t0) = (Recorder::default(), Instant::now());
     let button = |n| InputKey::new(DEV, InputKind::Button, n);
     e.process(&button(1), Value::Button(true), t0, &mut out);
-    assert!(e.is_listening());
     e.process(&button(3), Value::Button(true), t0, &mut out);
     e.process(&button(1), Value::Button(false), t0, &mut out);
     assert_eq!(
@@ -1962,7 +1953,6 @@ fn voice_input_listens_while_held() {
             Out::Listen("".into(), false),
         ]
     );
-    assert!(!e.is_listening());
 }
 
 #[test]
@@ -1997,7 +1987,6 @@ fn listening_stops_in_another_mode_and_while_paused() {
         ],
         "released in another mode"
     );
-    assert!(!e.is_listening());
 }
 
 #[test]
@@ -2064,7 +2053,6 @@ fn a_replaced_engine_stops_listening() {
             Out::Listen("m1".into(), true),
         ]
     );
-    assert!(!e.is_listening());
     e.process(&button(1), Value::Button(false), t0, &mut out);
     assert_eq!(out.0.len(), 4, "nothing left to stop");
 }
