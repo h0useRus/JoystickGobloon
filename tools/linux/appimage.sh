@@ -59,6 +59,7 @@ done
 # Languages beyond the embedded ones load from <exe>/lang/.
 cp "$SRC"/lang/*.ftl "$APPDIR/usr/bin/lang/"
 cp "$SRC/LICENSE" "$APPDIR/usr/bin/"
+cp "$SRC/assets/THIRD-PARTY-NOTICES.txt" "$APPDIR/usr/bin/"
 cp "$SRC/assets/icon/JoystickGobloon-256.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/joystick-gobloon.png"
 cp "$SRC/assets/icon/JoystickGobloon-256.png" "$APPDIR/joystick-gobloon.png"
 cat > "$APPDIR/joystick-gobloon.desktop" <<EOF

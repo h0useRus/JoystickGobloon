@@ -129,6 +129,7 @@ Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\voice\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\lang\*.ftl"; DestDir: "{app}\lang"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\assets\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; Extracted to {tmp} only when needed (InstallHidHide / InstallVJoy); not installed or
 ; uninstalled themselves.
 Source: "..\target\installer\deps\{#HidHideSetup}"; Flags: dontcopy
