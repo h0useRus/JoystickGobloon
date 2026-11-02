@@ -83,8 +83,12 @@ impl Vosk {
     /// Loads the speech model in `dir` (an unpacked Vosk model: am/, conf/, graph/...). Takes a
     /// second or two and 100-200 MB of memory.
     pub fn model(&self, dir: &Path) -> Result<Model, Error> {
-        let path = CString::new(dir.to_string_lossy().as_bytes())
-            .map_err(|_| Error::Model("bad path".into()))?;
+        let path = crate::platform::native_path(dir).ok_or_else(|| {
+            Error::Model(format!(
+                "{} cannot be opened by the speech library: move the data folder to a path with                  only Latin letters",
+                dir.display()
+            ))
+        })?;
         // SAFETY: a valid C string; null on failure.
         let ptr = unsafe { (self.0.model_new)(path.as_ptr()) };
         if ptr.is_null() {
