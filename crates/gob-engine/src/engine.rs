@@ -1182,12 +1182,19 @@ impl Engine {
         &self.voice_phrases
     }
 
-    /// Stops listening on every microphone, as if each voice-input action were released: before
-    /// this engine is replaced while one is held.
-    pub fn stop_listening_all(&mut self, out: &mut dyn Output) {
+    /// Before this engine is replaced: stops listening on every microphone, as if each
+    /// voice-input action were released, and releases the voice commands still held down (their
+    /// release timers go with this engine).
+    pub fn stop_voice(&mut self, now: Instant, out: &mut dyn Output) {
         let nodes: Vec<NodeId> = self.listening.keys().copied().collect();
         for node in nodes {
             self.stop_listening(node, out);
+        }
+        let mut held: Vec<(u32, u64)> = self.voice_releases.drain().collect();
+        held.sort_unstable();
+        for (id, timer) in held {
+            self.timers.retain(|t| t.id != timer);
+            self.process(&voice_key(id), Value::Button(false), now, out);
         }
     }
 

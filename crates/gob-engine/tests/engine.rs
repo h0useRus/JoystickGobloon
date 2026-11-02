@@ -2041,7 +2041,7 @@ fn a_replaced_engine_stops_listening() {
     let button = |n| InputKey::new(DEV, InputKind::Button, n);
     e.process(&button(1), Value::Button(true), t0, &mut out);
     e.process(&button(2), Value::Button(true), t0, &mut out);
-    e.stop_listening_all(&mut out);
+    e.stop_voice(t0, &mut out);
     out.0
         .sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
     assert_eq!(
@@ -2055,4 +2055,17 @@ fn a_replaced_engine_stops_listening() {
     );
     e.process(&button(1), Value::Button(false), t0, &mut out);
     assert_eq!(out.0.len(), 4, "nothing left to stop");
+}
+
+#[test]
+fn a_replaced_engine_releases_its_voice_commands() {
+    let mut e = voice_profile();
+    let (mut out, t0) = (Recorder::default(), Instant::now());
+    e.voice_command(1, t0, &mut out);
+    assert_eq!(out.0, [Out::Button(3, true)]);
+    e.stop_voice(t0 + Duration::from_millis(50), &mut out);
+    assert_eq!(out.0, [Out::Button(3, true), Out::Button(3, false)]);
+    assert_eq!(e.next_deadline(), None, "no release timer left");
+    e.tick(t0 + Duration::from_millis(300), &mut out);
+    assert_eq!(out.0.len(), 2, "released once");
 }
