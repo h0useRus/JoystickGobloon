@@ -17,7 +17,7 @@ base=https://h0userus.github.io/joystick-gobloon/
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-  for page in index.html learn.html emulation.html privacy.html; do
+  for page in index.html start.html learn.html emulation.html voice.html privacy.html; do
     [ -f "site/$page" ] || continue
     date=$(git log -1 --format=%cs -- "site/$page")
     loc=$base$page

@@ -3,7 +3,7 @@
 
 use gob_core::{
     Action, ActionConfig, Device, Element, InputBinding, Item, Layer, Mode, Modifier, Node,
-    Profile, Property, Section, VirtualDevices, VirtualJoystick,
+    Profile, Property, Section, VirtualDevices, VirtualJoystick, VoiceCommand,
 };
 
 use crate::Error;
@@ -102,6 +102,10 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
                 p.virtual_devices = virtual_from(section);
                 Section::VirtualDevices
             }
+            "voice-commands" => {
+                p.voice_commands = voice_from(section);
+                Section::VoiceCommands
+            }
             _ => {
                 p.extra.push(section.clone());
                 Section::Extra(p.extra.len() - 1)
@@ -125,6 +129,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
         let empty = match section {
             Section::Modifiers => p.modifiers.is_empty(),
             Section::VirtualDevices => p.virtual_devices.is_empty(),
+            Section::VoiceCommands => p.voice_commands.is_empty(),
             _ => false,
         };
         if empty {
@@ -166,6 +171,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
                 }),
             ),
             Section::VirtualDevices => virtual_to(&p.virtual_devices),
+            Section::VoiceCommands => voice_to(&p.voice_commands),
             Section::Extra(i) => p.extra[i].clone(),
         });
     }
@@ -246,6 +252,47 @@ fn virtual_to(v: &VirtualDevices) -> Element {
         .iter()
         .map(|id| Element::new("gamepad").with_attr("id", id.to_string()));
     container("virtual-devices", joysticks.chain(gamepads))
+}
+
+/// `<voice-commands>`: `<command id="1" hold="0.1"><phrase>lights on</phrase>...</command>`;
+/// commands without a valid id are skipped, a missing or bad hold is the default.
+fn voice_from(section: &Element) -> Vec<VoiceCommand> {
+    let mut commands: Vec<VoiceCommand> = Vec::new();
+    for c in named(section, "command") {
+        let Some(id) = c.attr("id").and_then(|v| v.trim().parse().ok()) else {
+            continue;
+        };
+        if id == 0 || commands.iter().any(|o| o.id == id) {
+            continue;
+        }
+        commands.push(VoiceCommand {
+            id,
+            phrases: named(c, "phrase")
+                .map(|p| p.text().split_whitespace().collect::<Vec<_>>().join(" "))
+                .filter(|p| !p.is_empty())
+                .collect(),
+            hold: c
+                .attr("hold")
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .filter(|h| h.is_finite() && *h > 0.0)
+                .unwrap_or(gob_core::DEFAULT_VOICE_HOLD),
+        });
+    }
+    commands
+}
+
+fn voice_to(commands: &[VoiceCommand]) -> Element {
+    container(
+        "voice-commands",
+        commands.iter().map(|c| {
+            container(
+                "command",
+                c.phrases.iter().map(|p| Element::with_text("phrase", p)),
+            )
+            .with_attr("id", c.id.to_string())
+            .with_attr("hold", c.hold.to_string())
+        }),
+    )
 }
 
 fn named<'a>(parent: &'a Element, name: &'a str) -> impl Iterator<Item = &'a Element> {

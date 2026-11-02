@@ -30,7 +30,8 @@ pub enum AddKind {
 /// Adds a bound device to the profile's `<devices>` (not the logical device or the keyboard).
 fn list_device(p: &mut Profile, device: &str, name: String) {
     let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
-        || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID);
+        || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
+        || device.eq_ignore_ascii_case(gob_core::VOICE_GUID);
     if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device)) {
         p.devices.push(gob_core::Device {
             id: device.to_string(),
@@ -217,6 +218,17 @@ pub enum Op {
         input_type: InputType,
         id: u32,
     },
+    AddVoiceCommand,
+    RemoveVoiceCommand(u32),
+    SetVoicePhrases {
+        id: u32,
+        phrases: Vec<String>,
+    },
+    /// Seconds a recognized command holds its button.
+    SetVoiceHold {
+        id: u32,
+        hold: f64,
+    },
     AddChainStep(String),
     RemoveChainStep {
         action: String,
@@ -384,6 +396,16 @@ pub fn apply(p: &mut Profile, op: Op) {
             p.rename_logical_input(input_type, id, &label);
         }
         Op::RemoveLogicalInput { input_type, id } => p.remove_logical_input(input_type, id),
+        Op::AddVoiceCommand => {
+            p.add_voice_command();
+        }
+        Op::RemoveVoiceCommand(id) => p.remove_voice_command(id),
+        Op::SetVoicePhrases { id, phrases } => {
+            p.set_voice_phrases(id, &phrases);
+        }
+        Op::SetVoiceHold { id, hold } => {
+            p.set_voice_hold(id, hold);
+        }
         Op::SetMacroStep {
             action,
             index,
@@ -516,6 +538,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "text-to-speech" => icon::CHAT_TEXT,
         "light-led" => icon::LIGHTBULB,
         "map-to-gamepad" => icon::GAME_CONTROLLER,
+        "voice-input" => icon::MICROPHONE,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -678,6 +701,7 @@ fn addable(
             "kind-load-profile",
             NewAction::LoadProfile,
         ));
+        list.push((icon::MICROPHONE, "kind-voice-input", NewAction::VoiceInput));
     }
     if behavior == InputType::Hat {
         list.push((icon::COMPASS, "kind-hat-buttons", NewAction::HatButtons));
@@ -749,10 +773,15 @@ impl Editor<'_> {
             RichText::new(icon::PLUS_CIRCLE).size(style::ICON_SIZE),
             |ui| {
                 let experimental = self.experimental;
+                // A voice command cannot start listening for voice commands.
+                let voice = self
+                    .input
+                    .is_some_and(|(d, _)| d.eq_ignore_ascii_case(gob_core::VOICE_GUID));
                 let all = addable(self.behavior, mode, self.max_gamepads > 0);
-                let offered = all
-                    .into_iter()
-                    .filter(|(_, _, k)| experimental || !matches!(k, NewAction::LightLed { .. }));
+                let offered = all.into_iter().filter(|(_, _, k)| {
+                    (experimental || !matches!(k, NewAction::LightLed { .. }))
+                        && !(voice && matches!(k, NewAction::VoiceInput))
+                });
                 for (glyph, key, mut kind) in offered {
                     if ui
                         .button(format!("{glyph}  {}", self.i18n.tr(key)))
@@ -1400,6 +1429,7 @@ impl Editor<'_> {
                     self.macro_editor(ui, action, &steps, repeat);
                     ui.horizontal(|ui| self.activation(ui, action));
                 }
+                ActionKind::VoiceInput { microphone } => self.voice_input(ui, action, microphone),
                 ActionKind::Other => {
                     ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
                 }
@@ -1552,6 +1582,53 @@ impl Editor<'_> {
         self.clash_warning(ui, action, &now);
         (set_pad.is_some() || set_control.is_some())
             .then(|| (set_pad.unwrap_or(gamepad), set_control.or(current)))
+    }
+
+    /// voice-input: the microphone it listens on.
+    fn voice_input(&mut self, ui: &mut egui::Ui, action: &Action, microphone: &str) {
+        let listed = crate::voice::microphones(ui.ctx(), false);
+        let mics = listed.as_deref().map_or(&[][..], Vec::as_slice);
+        let name = |id: &str| -> String {
+            if id.is_empty() {
+                return self.i18n.tr("voice-mic-default");
+            }
+            mics.iter()
+                .find(|m| m.id == id)
+                .map_or_else(|| id.to_string(), |m| m.name.clone())
+        };
+        let mut chosen = None;
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::MICROPHONE).size(style::ICON_SIZE))
+                .on_hover_text(self.i18n.tr("voice-mic"));
+            egui::ComboBox::from_id_salt(("voice-mic", &action.id))
+                .selected_text(name(microphone))
+                .width(280.0)
+                .show_ui(ui, |ui| {
+                    // Listed again while the list is open, for a microphone plugged in now.
+                    let fresh = crate::voice::microphones(ui.ctx(), true);
+                    let default = self.i18n.tr("voice-mic-default");
+                    if ui
+                        .selectable_label(microphone.is_empty(), default)
+                        .clicked()
+                    {
+                        chosen = Some(String::new());
+                    }
+                    for m in fresh.iter().flat_map(|l| l.iter()) {
+                        if ui.selectable_label(m.id == microphone, &m.name).clicked() {
+                            chosen = Some(m.id.clone());
+                        }
+                    }
+                });
+        });
+        if let Some(id) = chosen.filter(|id| id != microphone) {
+            self.set(&action.id, "microphone", "string", id);
+        }
+        // Not before the first list arrives: every microphone would look missing.
+        if !microphone.is_empty() && listed.is_some() && !mics.iter().any(|m| m.id == microphone) {
+            let text = format!("{}  {}", icon::WARNING, self.i18n.tr("voice-mic-missing"));
+            ui.label(RichText::new(text).color(ui.visuals().warn_fg_color));
+        }
+        ui.label(RichText::new(self.i18n.tr("voice-input-hint")).weak());
     }
 
     /// Note under a gamepad output whose gamepad is not configured.

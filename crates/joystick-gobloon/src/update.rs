@@ -384,15 +384,27 @@ pub fn apply(prepared: &Prepared) -> Result<(), String> {
     }
 }
 
+/// Copies the new version's files (the exe, libraries such as the speech library, LICENSE) and
+/// its `lang` folder over the old ones. Each old file is renamed aside first (a loaded library
+/// can be renamed, not overwritten) and removed by [`cleanup`] on the next start. All or nothing:
+/// when a file fails, every file is put back as it was.
 fn copy_portable(from: &Path, to: &Path) -> Result<(), String> {
-    let copy = |name: &Path| {
-        std::fs::copy(from.join(name), to.join(name))
-            .map(|_| ())
-            .map_err(|e| format!("{}: {e}", name.display()))
-    };
-    copy(Path::new(crate::platform::exe_name()))?;
-    if from.join("LICENSE").exists() {
-        copy(Path::new("LICENSE"))?;
+    copy_portable_with(from, to, |a, b| std::fs::copy(a, b).map(|_| ()))
+}
+
+fn copy_portable_with(
+    from: &Path,
+    to: &Path,
+    copy: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> Result<(), String> {
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(from)
+        .map_err(|e| e.to_string())?
+        .flatten()
+    {
+        if entry.path().is_file() {
+            names.push(PathBuf::from(entry.file_name()));
+        }
     }
     let lang = from.join("lang");
     if lang.is_dir() {
@@ -401,16 +413,53 @@ fn copy_portable(from: &Path, to: &Path) -> Result<(), String> {
             .map_err(|e| e.to_string())?
             .flatten()
         {
-            copy(&Path::new("lang").join(entry.file_name()))?;
+            names.push(Path::new("lang").join(entry.file_name()));
         }
+    }
+    // Files written so far, with where their old version went.
+    let mut done: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
+    for name in &names {
+        let target = to.join(name);
+        let aside = target.exists().then(|| old_exe(&target));
+        let replaced = match &aside {
+            Some(aside) => {
+                let _ = std::fs::remove_file(aside);
+                std::fs::rename(&target, aside)
+            }
+            None => Ok(()),
+        }
+        .and_then(|()| {
+            copy(&from.join(name), &target).inspect_err(|_| {
+                if let Some(aside) = &aside {
+                    let _ = std::fs::remove_file(&target);
+                    let _ = std::fs::rename(aside, &target);
+                }
+            })
+        });
+        if let Err(e) = replaced {
+            for (target, aside) in done.into_iter().rev() {
+                let _ = std::fs::remove_file(&target);
+                if let Some(aside) = aside {
+                    let _ = std::fs::rename(aside, &target);
+                }
+            }
+            return Err(format!("{}: {e}", name.display()));
+        }
+        done.push((target, aside));
     }
     Ok(())
 }
 
-/// Removes the exe a portable update left behind.
+/// Removes the files a portable update renamed aside (next to the exe and in `lang`).
 pub fn cleanup() {
-    if let Ok(exe) = std::env::current_exe() {
-        let _ = std::fs::remove_file(old_exe(&exe));
+    let Some(dir) = exe_dir() else { return };
+    let suffix = format!(".{OLD_SUFFIX}");
+    for folder in [dir.clone(), dir.join("lang")] {
+        for entry in std::fs::read_dir(&folder).into_iter().flatten().flatten() {
+            if entry.file_name().to_string_lossy().ends_with(&suffix) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
     }
 }
 
@@ -431,6 +480,83 @@ pub fn wait_for_previous() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_portable_update_puts_every_file_back() {
+        let root = std::env::temp_dir().join(format!("gobloon-rollback-{}", std::process::id()));
+        let (new, old) = (root.join("new"), root.join("old"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(new.join("lang")).unwrap();
+        std::fs::create_dir_all(old.join("lang")).unwrap();
+        for name in ["libvosk.dll", "LICENSE", "NEW.txt", "lang/de.ftl"] {
+            std::fs::write(new.join(name), "new").unwrap();
+        }
+        for name in ["libvosk.dll", "LICENSE", "lang/de.ftl"] {
+            std::fs::write(old.join(name), "old").unwrap();
+        }
+        // The language files copy after the others; one fails, as when it cannot be written.
+        let failing = |from: &Path, to: &Path| {
+            if from.ends_with("de.ftl") {
+                Err(std::io::Error::other("locked"))
+            } else {
+                std::fs::copy(from, to).map(|_| ())
+            }
+        };
+        assert!(copy_portable_with(&new, &old, failing).is_err());
+        let mut left: Vec<String> = ["", "lang"]
+            .iter()
+            .flat_map(|d| std::fs::read_dir(old.join(d)).unwrap().flatten())
+            .filter(|e| e.path().is_file())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        left.sort_unstable();
+        assert_eq!(
+            left,
+            ["LICENSE", "de.ftl", "libvosk.dll"],
+            "nothing new, nothing aside"
+        );
+        for name in ["libvosk.dll", "LICENSE", "lang/de.ftl"] {
+            assert_eq!(
+                std::fs::read_to_string(old.join(name)).unwrap(),
+                "old",
+                "{name}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_portable_update_copies_every_file() {
+        let root = std::env::temp_dir().join(format!("gobloon-portable-{}", std::process::id()));
+        let (new, old) = (root.join("new"), root.join("old"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(new.join("lang")).unwrap();
+        std::fs::create_dir_all(&old).unwrap();
+        let exe = crate::platform::exe_name();
+        for (name, text) in [
+            (exe, "new exe"),
+            ("libvosk.dll", "speech"),
+            ("LICENSE", "license"),
+            ("lang/de.ftl", "de"),
+        ] {
+            std::fs::write(new.join(name), text).unwrap();
+        }
+        std::fs::write(old.join(exe), "old exe").unwrap();
+        copy_portable(&new, &old).unwrap();
+        for (name, text) in [
+            (exe, "new exe"),
+            ("libvosk.dll", "speech"),
+            ("LICENSE", "license"),
+            ("lang/de.ftl", "de"),
+        ] {
+            assert_eq!(
+                std::fs::read_to_string(old.join(name)).unwrap(),
+                text,
+                "{name}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     /// Network: `cargo test -p joystick-gobloon -- --ignored`. This build's version is not older than
     /// the latest release, so nothing is offered; the request, TLS and JSON work.

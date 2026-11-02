@@ -225,6 +225,23 @@
       };
     },
 
+    // Push to talk: the listening line lights, the phrase is heard, its command and its action run.
+    voice(stage, W, H) {
+      const listen = overlay(stage, W, H, 85, 189, 372, 18, "ov-row");
+      const phrase = overlay(stage, W, H, 507, 246, 260, 27, "ov-row");
+      const command = overlay(stage, W, H, 85, 257, 403, 70, "ov-row");
+      const action = overlay(stage, W, H, 507, 428, 568, 110, "ov-row");
+      return {
+        period: 5.4,
+        draw(t) {
+          listen.style.opacity = pulse(t, 0.3, 1.5, 0.2, 0.3);
+          phrase.style.opacity = pulse(t, 1.4, 0.6, 0.15, 0.3);
+          command.style.opacity = pulse(t, 2.1, 0.7, 0.15, 0.3);
+          action.style.opacity = pulse(t, 2.5, 0.9, 0.15, 0.35);
+        },
+      };
+    },
+
     // Before and after: each old tool dims as the matching Joystick Gobloon row lights up.
     compare(el) {
       const before = el.querySelectorAll(".card:not(.solution) .tool-list li");
@@ -247,7 +264,7 @@
       };
     },
 
-    // A soft highlight steps through all 24 actions.
+    // A soft highlight steps through all 25 actions.
     actions(el) {
       const items = [...el.querySelectorAll("li")];
       return {

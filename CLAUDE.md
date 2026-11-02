@@ -85,6 +85,13 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
+- crates/gob-voice   voice commands (plans/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
+  and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
+  profile's phrases; models.rs = small Vosk model per program language (URL + SHA-256), downloaded into
+  `<data dir>/voice`; service.rs = `VoiceService` thread (keeps the profile's microphones open by default: some
+  are silent 1-2 s after opening). Profile side: gob-core voice.rs (`VOICE_GUID`, input type `voice`,
+  `<voice-commands>`, action `voice-input`); engine `Output::voice_listen` + `Engine::voice_command`.
+  Example `voice_check` (`--meter` mic test, `--models <dir> --lang`, `--wav`)
 - plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
   on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
@@ -142,7 +149,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
   pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss), a
   portable zip and a Linux AppImage (job `appimage`, tools/linux/appimage.sh; it updates itself in place). The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
-  (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; uninstall runs `JoystickGobloon.exe
+  (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; installer and portable zip
+  carry libvosk 0.3.45 (libvosk.dll + 3 MinGW DLLs next to the exe), the AppImage libvosk.so in usr/bin (both pinned); uninstall runs `JoystickGobloon.exe
   --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) checks commit
   messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches,
   and clippy + tests on Linux (job `linux`).

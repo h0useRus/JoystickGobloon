@@ -89,6 +89,7 @@
       <li><a href="start.html">Get started</a></li>
       <li><a href="learn.html" aria-current="page">Learning</a></li>
       <li><a href="emulation.html">Emulation</a></li>
+      <li><a href="voice.html">Voice</a></li>
       <li><a href="index.html#platforms">Windows and Linux</a></li>
       <li><a href="index.html#faq">FAQ</a></li>
     </ul>
@@ -107,9 +108,10 @@
       <li style="--i:2"><a href="start.html">Get started</a></li>
       <li style="--i:3"><a href="learn.html" aria-current="page">Learning</a></li>
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
-      <li style="--i:5"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:6"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:7"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:5"><a href="voice.html">Voice</a></li>
+      <li style="--i:6"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:7"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:8"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -118,7 +120,7 @@
       <div class="wrap">
         <p class="kicker">Learning</p>
         <h1 class="gradient">Every action,<br>explained with its editor</h1>
-        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 24 actions does.</p>
+        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 25 actions does.</p>
       </div>
     </header>
 
@@ -145,7 +147,14 @@
             <li><a href="#merge-axis">Merge axis</a></li>
             <li><a href="#dual-axis-deadzone">Dual axis deadzone</a></li>
             <li><a href="#axis-delta">Axis delta</a></li>
-            <li><a href="#axis-as-button">Axis or hat as a button</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#as-button">Axis or hat as a button</a><ul>
+            <li><a href="#axis-as-button">What it does</a></li>
+            <li><a href="#as-button-range">The range</a></li>
+            <li><a href="#as-button-direction">Which way the axis moves</a></li>
+            <li><a href="#as-button-several">One axis, several jobs</a></li>
+            <li><a href="#hat-as-button">Hats</a></li>
+            <li><a href="#as-button-tips">Good to know</a></li>
           </ul></li>
           <li><a class="toc-group" href="#buttons-and-hats">Buttons and hats</a><ul>
             <li><a href="#tempo">Tempo</a></li>
@@ -164,6 +173,7 @@
           <li><a class="toc-group" href="#other">Other</a><ul>
             <li><a href="#play-sound">Play sound</a></li>
             <li><a href="#text-to-speech">Text to speech</a></li>
+            <li><a href="#voice-input">Voice input</a></li>
             <li><a href="#run-command">Run command</a></li>
             <li><a href="#description">Description</a></li>
           </ul></li>
@@ -264,11 +274,54 @@
             <p>Turns movement into button presses: every time the axis has moved by the threshold, it presses the actions of that direction once. Good for a rotary or a slider that should step something up and down.</p>
             <figure class="shot"><img src="img/actions/axis-delta.png" loading="lazy" alt="Axis delta: moving up presses vJoy button 20, moving down vJoy button 21"></figure>
           </article>
+        </section>
+        <section class="learn-group" id="as-button" aria-labelledby="as-button-title">
+          <h2 id="as-button-title">Axis or hat as a button</h2>
           <article class="learn-action" id="axis-as-button">
-            <h3><i class="ph ph-radio-button" aria-hidden="true"></i>Axis or hat as a button</h3>
-            <p>Not an action but a switch above an axis's or hat's actions: <span class="term">Treat as a button</span> makes them run like a button, pressed while the axis is inside a range and released when it leaves, so any button action works there, a key or a virtual stick button. Set the two ends of the range (-1 to 1) and whether the axis may enter it from either side, only moving up or only moving down. A hat picks the directions that press it instead.</p>
-            <p>The <i class="ph ph-radio-button" aria-hidden="true"></i> button under the actions adds another set that runs as a button, next to the ones the input has, so one axis can drive a virtual axis and still press a button near its end. The bin next to the switch removes a set.</p>
+            <h3><i class="ph ph-radio-button" aria-hidden="true"></i>What it does</h3>
+            <p>An axis or a hat can press a button: a throttle pushed into its last tenth, a rotary turned past a mark, a hat pointing up. Every set of actions on an axis or a hat has a <span class="term">Treat as a button</span> switch above it. Switched on, the set runs as a button: pressed while the axis is inside the range you set (or the hat points one of the ways you pick) and released when it leaves. Everything a button can do works there: a virtual stick button, a key, a macro, a mode change.</p>
+            <p>To add one, select the axis or hat on the Devices page and click <i class="ph ph-radio-button" aria-hidden="true"></i> next to <i class="ph ph-plus-circle" aria-hidden="true"></i> (add action): a new set appears with the switch on, ready for button actions. On an axis that already has actions, the switch above them turns those into a button instead.</p>
             <figure class="shot"><img src="img/actions/axis-as-button.png" loading="lazy" alt="The Z axis maps to the virtual Z axis, and between 0.90 and 1.00, moving up, presses vJoy button 20"></figure>
+          </article>
+          <article class="learn-action" id="as-button-range">
+            <h3><i class="ph ph-arrows-horizontal" aria-hidden="true"></i>The range</h3>
+            <p>An axis runs from -1 at one end to 1 at the other, 0 in the middle. The two numbers after the switch are the ends of the range, <i class="ph ph-arrow-line-left" aria-hidden="true"></i> the lower and <i class="ph ph-arrow-line-right" aria-hidden="true"></i> the upper; a new range is 0.90 to 1.00, the last tenth. Type a value, use the arrows or the mouse wheel; moving one end past the other moves both.</p>
+            <p>To find the values, move the stick and watch the bar next to the input's name at the top: it shows where the axis is now. Some ranges to start from:</p>
+            <ul>
+              <li><strong>0.90 to 1.00</strong>: the end of the travel, for a throttle's detent or an afterburner.</li>
+              <li><strong>-1.00 to -0.90</strong>: the other end, for idle or cut-off.</li>
+              <li><strong>-0.05 to 0.05</strong>: the middle, for a rotary's center click.</li>
+            </ul>
+          </article>
+          <article class="learn-action" id="as-button-direction">
+            <h3><i class="ph ph-arrows-down-up" aria-hidden="true"></i>Which way the axis moves</h3>
+            <p>Three buttons after the range set when the axis presses:</p>
+            <ul>
+              <li><i class="ph ph-arrows-down-up" aria-hidden="true"></i> <strong>Either way</strong> (the default): pressed as long as the axis is inside the range.</li>
+              <li><i class="ph ph-arrow-up" aria-hidden="true"></i> <strong>Moving up</strong>: pressed when the axis moves up inside the range, released when it leaves the range or moves back down.</li>
+              <li><i class="ph ph-arrow-down" aria-hidden="true"></i> <strong>Moving down</strong>: the same the other way.</li>
+            </ul>
+            <p>With two sets on the same range, one moving up and one moving down, pushing through a detent and pulling back out of it do different things. An axis that jumps over the whole range at once still gives a short press.</p>
+          </article>
+          <article class="learn-action" id="as-button-several">
+            <h3><i class="ph ph-stack" aria-hidden="true"></i>One axis, several jobs</h3>
+            <p>An input can have several sets of actions, and each runs on its own. Keep the first set driving a virtual axis and add button sets next to it with <i class="ph ph-radio-button" aria-hidden="true"></i>: a throttle can move the game's thrust, press one button in its last tenth and another at idle. Ranges may overlap; each set presses its own button.</p>
+            <p>The <i class="ph ph-trash" aria-hidden="true"></i> bin next to a set's switch removes that set; it shows when the input has more than one. The bin at the top removes all of the input's actions.</p>
+          </article>
+          <article class="learn-action" id="hat-as-button">
+            <h3><i class="ph ph-compass" aria-hidden="true"></i>Hats</h3>
+            <p>On a hat, the switch is followed by its eight directions and the center: pick the ones that press the button. Several picked directions make one button, so up, up-left and up-right together press it whenever the hat leans up. Two sets give a hat an up button and a down button that also work on the diagonals.</p>
+            <figure class="shot"><img src="img/actions/hat-as-button.png" loading="lazy" alt="Hat 1 with two sets: north, north-east and north-west press vJoy button 5, south, south-east and south-west press button 6"></figure>
+            <p>For one button per direction, <a href="#hat-buttons">Hat buttons</a> is quicker: it splits the hat into four or eight buttons in one action.</p>
+          </article>
+          <article class="learn-action" id="as-button-tips">
+            <h3><i class="ph ph-lightbulb" aria-hidden="true"></i>Good to know</h3>
+            <ul>
+              <li>Once the switch is on, the add menu of that set offers button actions; turned off, axis actions again. Actions already in the set stay.</li>
+              <li>A button set works with <a href="#modes">modes</a> and <a href="#modifiers">modifiers</a> like any other binding.</li>
+              <li>Joystick Gremlin calls this a virtual button. Imported profiles keep theirs, and they can be edited here.</li>
+              <li>Related actions: <a href="#axis-delta">Axis delta</a> presses a button for every step the axis moves, <a href="#split-axis">Split axis</a> sends the two halves of an axis to different outputs.</li>
+            </ul>
           </article>
         </section>
         <section class="learn-group" id="buttons-and-hats" aria-labelledby="buttons-and-hats-title">
@@ -339,6 +392,11 @@
             <p>Speaks a text with a voice of the system. <code>${current_mode}</code> becomes the name of the active mode. Speed, volume and pitch can be set; the new text can wait for the current one or interrupt it.</p>
             <figure class="shot"><img src="img/actions/text-to-speech.png" loading="lazy" alt="Text to speech saying the mode name"></figure>
           </article>
+          <article class="learn-action" id="voice-input">
+            <h3><i class="ph ph-microphone" aria-hidden="true"></i>Voice input</h3>
+            <p>Makes its button a push-to-talk button: while it is held, the microphone listens for the profile's voice commands, and a phrase said runs its command when you let go. Choose the microphone, or leave the default one. The commands and their phrases are on the Voice tab of the Devices page; <a href="voice.html">Voice commands</a> shows the whole setup.</p>
+            <figure class="shot"><img src="img/actions/voice-input.png" loading="lazy" alt="Button 5 of a stick with the Voice input action listening on the default microphone"></figure>
+          </article>
           <article class="learn-action" id="run-command">
             <h3><i class="ph ph-terminal-window" aria-hidden="true"></i>Run command</h3>
             <p>Starts a program, with arguments if needed.</p>
@@ -368,6 +426,7 @@
             <li><a href="start.html">Get started</a></li>
             <li><a href="learn.html">Learning</a></li>
             <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="voice.html">Voice</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>

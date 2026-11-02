@@ -22,9 +22,10 @@ mod platform;
 mod runner;
 
 pub use engine::Engine;
+pub use gob_voice::VoiceConfig;
 pub use lighting::to_led;
 pub use media::{Media, SpeechQueue, SpeechRequest, voices};
-pub use runner::{Latency, Runner, RunnerStatus};
+pub use runner::{Latency, Runner, RunnerStatus, VoiceHeard, VoiceStatus};
 
 /// Values of the logical device's inputs that actions wrote, by input id.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -123,6 +124,10 @@ pub trait Output {
     fn speak(&mut self, _request: SpeechRequest) {}
     /// Load-profile action: the GUI switches to `file` and activates it.
     fn load_profile(&mut self, _file: &str) {}
+    /// Starts (`on`) or stops listening for voice commands on a microphone (its id; empty = the
+    /// system's default one): once when the first voice-input action on it is pressed, once
+    /// when the last is released. What is heard comes back as [`Engine::voice_command`].
+    fn voice_listen(&mut self, _microphone: &str, _on: bool) {}
     /// Last value sent to a vJoy input, for conditions; `None` if never set.
     fn vjoy_state(&self, _device: u32, _kind: InputKind, _id: u32) -> Option<Value> {
         None

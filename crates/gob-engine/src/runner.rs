@@ -26,6 +26,31 @@ pub struct RunnerStatus {
     pub load_profile: Option<String>,
     /// Of the last window with input; `None` until the first.
     pub latency: Option<Latency>,
+    /// Voice commands; `None` when the profile has no voice-input action.
+    pub voice: Option<VoiceStatus>,
+}
+
+/// Voice commands of the running profile.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct VoiceStatus {
+    /// The speech model is loaded.
+    pub ready: bool,
+    /// No speech model was given ([`Runner::start`]'s `voice`): voice-input actions do nothing.
+    pub no_model: bool,
+    /// Why the speech model or library could not be loaded (English, for the log).
+    pub error: Option<String>,
+    /// A microphone is listening.
+    pub listening: bool,
+    /// The last utterance.
+    pub heard: Option<VoiceHeard>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VoiceHeard {
+    pub text: String,
+    pub confidence: f32,
+    /// The command it triggered; `None` = not recognized.
+    pub command: Option<u32>,
 }
 
 /// Time from reading a device to the end of the outputs its event caused (vJoy written,
@@ -104,6 +129,10 @@ struct SystemOutput {
     media: crate::media::Media,
     lighting: crate::lighting::Lighting,
     load_profile: Option<String>,
+    /// Started for the first profile with voice-input actions; kept across reloads.
+    voice: Option<gob_voice::VoiceService>,
+    voice_config: Option<gob_voice::VoiceConfig>,
+    voice_events: std::sync::mpsc::Sender<gob_voice::VoiceEvent>,
 }
 
 impl SystemOutput {
@@ -198,6 +227,12 @@ impl Output for SystemOutput {
         self.load_profile = Some(file.to_string());
     }
 
+    fn voice_listen(&mut self, microphone: &str, on: bool) {
+        if let Some(voice) = &self.voice {
+            voice.listen(microphone, on);
+        }
+    }
+
     fn vjoy_state(&self, device: u32, kind: InputKind, id: u32) -> Option<Value> {
         self.written.get(&(device, kind, id)).copied()
     }
@@ -234,17 +269,20 @@ impl Runner {
     /// Takes the vJoy devices the profile needs and starts processing `events`.
     /// `initial` is the current device state, used to send axis positions right away.
     /// `led_defaults` are set on the devices whose LEDs the profile changed when it stops;
-    /// `None`: LED control is off and light-led actions do nothing.
+    /// `None`: LED control is off and light-led actions do nothing. `voice` is how voice
+    /// commands run; `None`: voice-input actions do nothing.
     pub fn start(
         profile: &Profile,
         aliases: &HashMap<String, String>,
         events: Receiver<Timed>,
         initial: &[DeviceState],
         led_defaults: Option<&[crate::Light]>,
+        voice: Option<crate::VoiceConfig>,
         on_change: impl Fn() + Send + 'static,
     ) -> Result<Self, String> {
         let mut engine = Engine::new(profile, aliases);
         let virtual_devices = gob_virtual::load().map_err(|e| e.to_string())?;
+        let (voice_events, voice_inbox) = std::sync::mpsc::channel();
         let mut out = SystemOutput {
             devices: HashMap::new(),
             gamepads: HashMap::new(),
@@ -261,8 +299,12 @@ impl Runner {
                 led_defaults.map(<[crate::Light]>::to_vec),
             ),
             load_profile: None,
+            voice: None,
+            voice_config: voice,
+            voice_events,
         };
         prepare(&mut engine, &mut out, virtual_devices.as_ref(), initial)?;
+        set_up_voice(&engine, &mut out);
         if led_defaults.is_none() && engine.uses_lights() {
             log::info!("light-led actions ignored: experimental features are off");
         }
@@ -274,6 +316,7 @@ impl Runner {
             paused: false,
             load_profile: None,
             latency: None,
+            voice: initial_voice_status(&engine, &out),
         }));
         engine.take_logical_changed();
         let logical = Arc::new(Mutex::new(engine.logical_values()));
@@ -283,6 +326,7 @@ impl Runner {
             let (status, logical, stop) = (status.clone(), logical.clone(), stop.clone());
             let threads = Threads {
                 events,
+                voice: voice_inbox,
                 reloads,
                 virtual_devices,
                 status,
@@ -360,6 +404,14 @@ impl Drop for Runner {
     }
 }
 
+/// The voice status a new engine starts with: `None` without voice-input actions.
+fn initial_voice_status(engine: &Engine, out: &SystemOutput) -> Option<VoiceStatus> {
+    engine.uses_voice().then(|| VoiceStatus {
+        no_model: out.voice_config.is_none(),
+        ..Default::default()
+    })
+}
+
 /// Acquires the virtual devices `engine` writes to that `out` does not hold yet, then seeds
 /// the engine with `initial` and sends the axis positions through it.
 fn prepare(
@@ -401,9 +453,91 @@ fn prepare(
     Ok(())
 }
 
+/// Gives the voice service `engine`'s phrases and microphones, starting it for the first
+/// profile with voice-input actions. Only for the engine that runs from now on: the service
+/// listens for one profile.
+fn set_up_voice(engine: &Engine, out: &mut SystemOutput) {
+    if engine.uses_voice() {
+        let phrases = engine.voice_phrases().to_vec();
+        match (&out.voice, &out.voice_config) {
+            (Some(voice), _) => voice.set_phrases(phrases),
+            (None, Some(config)) => {
+                out.voice = Some(gob_voice::VoiceService::start(
+                    config.clone(),
+                    phrases,
+                    out.voice_events.clone(),
+                ))
+            }
+            (None, None) => log::info!("voice-input actions ignored: no speech model"),
+        }
+    }
+    // Microphones kept open follow the profile's voice-input actions (none: all close).
+    if let Some(voice) = &out.voice {
+        voice.set_microphones(engine.voice_microphones());
+    }
+}
+
+/// What the voice service reported, whichever profile ran: it outlives reloads.
+#[derive(Default)]
+struct ServiceState {
+    ready: bool,
+    error: Option<String>,
+    /// Microphones listening now.
+    listening: HashSet<String>,
+}
+
+impl ServiceState {
+    /// Takes in an event; the utterance it reports, if any.
+    fn handle(&mut self, event: gob_voice::VoiceEvent) -> Option<VoiceHeard> {
+        use gob_voice::VoiceEvent;
+        match event {
+            VoiceEvent::Ready => {
+                self.ready = true;
+                self.error = None;
+            }
+            VoiceEvent::Failed(e) => self.error = Some(e),
+            VoiceEvent::Listening {
+                microphone,
+                on: true,
+            } => {
+                self.listening.insert(microphone);
+            }
+            VoiceEvent::Listening {
+                microphone,
+                on: false,
+            } => {
+                self.listening.remove(&microphone);
+            }
+            VoiceEvent::Heard {
+                command,
+                text,
+                confidence,
+            } => {
+                return Some(VoiceHeard {
+                    text,
+                    confidence,
+                    command,
+                });
+            }
+        }
+        None
+    }
+
+    /// `status` with the service's state.
+    fn apply(&self, status: VoiceStatus) -> VoiceStatus {
+        VoiceStatus {
+            ready: self.ready,
+            error: self.error.clone(),
+            listening: !self.listening.is_empty(),
+            ..status
+        }
+    }
+}
+
 /// What the engine thread shares with the [`Runner`].
 struct Threads {
     events: Receiver<Timed>,
+    voice: Receiver<gob_voice::VoiceEvent>,
     reloads: Receiver<Reload>,
     virtual_devices: Arc<dyn gob_virtual::Backend>,
     status: Arc<Mutex<RunnerStatus>>,
@@ -414,6 +548,7 @@ struct Threads {
 fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &dyn Fn()) {
     let Threads {
         events,
+        voice,
         reloads,
         virtual_devices,
         status,
@@ -421,6 +556,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         stop,
     } = shared;
     let mut window = LatencyWindow::new(Instant::now());
+    let mut service = ServiceState::default();
+    let mut voice_status = status
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .voice
+        .clone();
     while !stop.load(Ordering::Relaxed) {
         for mut r in reloads.try_iter() {
             let result = prepare(
@@ -430,7 +571,13 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
                 &r.initial,
             );
             if result.is_ok() {
+                // A held push-to-talk input would keep the microphone open otherwise, and a
+                // command's button would stay down. The utterance it ends is heard with the old
+                // phrases: they change only after it.
+                engine.stop_voice(Instant::now(), &mut out);
                 engine = r.engine;
+                set_up_voice(&engine, &mut out);
+                voice_status = initial_voice_status(&engine, &out).map(|v| service.apply(v));
                 engine.activate(&mut out);
                 engine.take_logical_changed();
                 *logical.lock().unwrap_or_else(|e| e.into_inner()) = engine.logical_values();
@@ -452,6 +599,16 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
                 window.add(timed.read.elapsed());
             }
         }
+        let mut voice_changed = false;
+        for event in voice.try_iter() {
+            voice_changed |= on_voice(
+                &mut engine,
+                &mut out,
+                &mut service,
+                &mut voice_status,
+                event,
+            );
+        }
         let now = Instant::now();
         engine.tick(now, &mut out);
 
@@ -466,9 +623,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             || s.paused != engine.is_paused()
             || load.is_some()
             || latency.is_some_and(|l| s.latency != Some(l))
+            || voice_changed
+            || s.voice != voice_status
         {
             s.mode = engine.current_mode().to_string();
             s.paused = engine.is_paused();
+            s.voice = voice_status.clone();
             if load.is_some() {
                 s.load_profile = load;
             }
@@ -479,6 +639,29 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         }
     }
     // Dropping `out` resets and releases the vJoy devices.
+}
+
+/// Hands a voice event to the engine, the service's state and the status; true when the status
+/// changed.
+fn on_voice(
+    engine: &mut Engine,
+    out: &mut SystemOutput,
+    service: &mut ServiceState,
+    status: &mut Option<VoiceStatus>,
+    event: gob_voice::VoiceEvent,
+) -> bool {
+    let heard = service.handle(event);
+    if let Some(id) = heard.as_ref().and_then(|h| h.command) {
+        engine.voice_command(id, Instant::now(), out);
+    }
+    let Some(s) = status else {
+        return false;
+    };
+    if heard.is_some() {
+        s.heard = heard;
+    }
+    *s = service.apply(s.clone());
+    true
 }
 
 fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
@@ -528,6 +711,37 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn listening(microphone: &str, on: bool) -> gob_voice::VoiceEvent {
+        gob_voice::VoiceEvent::Listening {
+            microphone: microphone.into(),
+            on,
+        }
+    }
+
+    #[test]
+    fn listening_while_any_microphone_listens() {
+        let mut service = ServiceState::default();
+        service.handle(listening("left", true));
+        service.handle(listening("right", true));
+        service.handle(listening("left", false));
+        assert!(service.apply(VoiceStatus::default()).listening);
+        service.handle(listening("right", false));
+        assert!(!service.apply(VoiceStatus::default()).listening);
+    }
+
+    #[test]
+    fn the_service_state_outlives_profiles() {
+        let mut service = ServiceState::default();
+        service.handle(gob_voice::VoiceEvent::Failed("no library".into()));
+        // A profile without voice in between does not lose it: the next one with voice shows it.
+        let next = service.apply(VoiceStatus::default());
+        assert_eq!(next.error.as_deref(), Some("no library"));
+        assert!(!next.ready);
+        service.handle(gob_voice::VoiceEvent::Ready);
+        let next = service.apply(VoiceStatus::default());
+        assert!(next.ready && next.error.is_none());
+    }
 
     #[test]
     fn latency_window() {

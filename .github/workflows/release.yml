@@ -176,6 +176,22 @@ jobs:
           $got = (Get-FileHash "$dir\$name" -Algorithm SHA256).Hash
           if ($got -ne $hash) { Write-Error "$name hash $got, expected $hash"; exit 1 }
 
+      # Voice commands: Vosk 0.3.45's libvosk.dll and its MinGW runtime next to the app, pinned
+      # by hash like the drivers (the last Vosk release with built libraries).
+      - name: Speech library
+        shell: pwsh
+        run: |
+          $name = "vosk-win64-0.3.45.zip"
+          $hash = "F1DCC9CCA460630F81EA8F71794F69C80BED6556D2A4E6237B5785E1D2DFF34B"
+          $dir = "target\voice"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Invoke-WebRequest "https://github.com/alphacep/vosk-api/releases/download/v0.3.45/$name" -OutFile "target\$name"
+          $got = (Get-FileHash "target\$name" -Algorithm SHA256).Hash
+          if ($got -ne $hash) { Write-Error "$name hash $got, expected $hash"; exit 1 }
+          Expand-Archive "target\$name" "target\voice-zip" -Force
+          Copy-Item "target\voice-zip\vosk-win64-0.3.45\*.dll" $dir
+          if ((Get-ChildItem "$dir\*.dll").Count -ne 4) { Write-Error "expected 4 DLLs in $name"; exit 1 }
+
       - name: Installer
         shell: pwsh
         run: |
@@ -219,8 +235,10 @@ jobs:
           $dir = "target\portable\JoystickGobloon"
           New-Item -ItemType Directory -Force "$dir\lang" | Out-Null
           Copy-Item target\release\JoystickGobloon.exe $dir
+          Copy-Item target\voice\*.dll $dir
           Copy-Item lang\*.ftl "$dir\lang"
           Copy-Item LICENSE $dir
+          Copy-Item assets\THIRD-PARTY-NOTICES.txt $dir
           Compress-Archive -Path $dir -DestinationPath "target\JoystickGobloon-${{ steps.version.outputs.version }}-portable.zip" -Force
 
       - uses: actions/upload-artifact@v7

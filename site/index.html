@@ -73,7 +73,7 @@
         "Virtual joysticks on Linux through uinput",
         "Virtual Xbox-style gamepads on Linux",
         "Xbox controllers through XInput on Windows",
-        "Map buttons, axes and hats with 24 actions",
+        "Map buttons, axes and hats with 25 actions",
         "Modes, modifiers and input layers",
         "Response curves, tempo, double tap, macros, conditions",
         "Imports Joystick Gremlin profiles",
@@ -105,7 +105,7 @@
           "name": "Can I import my Joystick Gremlin profiles?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Open one from the toolbar and it runs. Anything not supported yet is kept as it was in the file."
+            "text": "Yes, profiles from Joystick Gremlin R14 or newer: open one from the toolbar and it runs. Anything not supported yet is kept as it was in the file. Profiles from R13 and older cannot be imported (Joystick Gremlin R14 cannot open them either); the new profile wizard builds a new one in a minute."
           }
         },
         {
@@ -189,6 +189,7 @@
       <li><a href="start.html">Get started</a></li>
       <li><a href="learn.html">Learning</a></li>
       <li><a href="emulation.html">Emulation</a></li>
+      <li><a href="voice.html">Voice</a></li>
       <li><a href="#platforms">Windows and Linux</a></li>
       <li><a href="#faq">FAQ</a></li>
     </ul>
@@ -207,9 +208,10 @@
       <li style="--i:2"><a href="start.html">Get started</a></li>
       <li style="--i:3"><a href="learn.html">Learning</a></li>
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
-      <li style="--i:5"><a href="#platforms">Windows and Linux</a></li>
-      <li style="--i:6"><a href="#faq">FAQ</a></li>
-      <li style="--i:7"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:5"><a href="voice.html">Voice</a></li>
+      <li style="--i:6"><a href="#platforms">Windows and Linux</a></li>
+      <li style="--i:7"><a href="#faq">FAQ</a></li>
+      <li style="--i:8"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -320,7 +322,7 @@
           <div>
             <div class="benefit-icon" data-k="pop"><i class="ph ph-file-arrow-up" aria-hidden="true"></i></div>
             <h3 data-k="up">Keep the profile you already built</h3>
-            <p data-k="up">Import a Joystick Gremlin profile and it runs. Anything not supported yet is kept in the file, so nothing gets lost.</p>
+            <p data-k="up">Import a Joystick Gremlin profile (R14 or newer) and it runs. Anything not supported yet is kept in the file, so nothing gets lost.</p>
             <ul class="ticks">
               <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Modes with inheritance and per mode overrides</li>
               <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Map controls matches a profile from another PC to your devices in one click</li>
@@ -378,6 +380,20 @@
           </div>
           <figure class="shot" data-k="card"><div class="stage" data-story="viewer"><img src="img/viewer.png" loading="lazy" width="1102" height="732" alt="Input viewer: axes over time, current axis values, buttons and hats of a vJoy device"></div></figure>
         </article>
+
+        <article class="benefit flip anim">
+          <div>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-microphone" aria-hidden="true"></i></div>
+            <h3 data-k="up">Say it instead of pressing it</h3>
+            <p data-k="up">Hold a push-to-talk button and say a phrase: the voice command presses its button, a virtual stick button, a key or anything else a button can do. <a href="voice.html">How to set it up</a>.</p>
+            <ul class="ticks">
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Recognized offline on your PC, nothing leaves it</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>English, German, Spanish, French, Korean, Russian and Chinese</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Several phrases per command</li>
+            </ul>
+          </div>
+          <figure class="shot" data-k="card"><div class="stage" data-story="voice"><img src="img/voice.png" loading="lazy" width="1102" height="732" alt="Voice tab: two commands, lights on and gear down, heard while Button 5 of the stick is held; lights on presses virtual stick button 12"></div></figure>
+        </article>
       </div>
     </section>
 
@@ -386,7 +402,7 @@
       <div class="wrap">
         <div class="section-head reveal">
           <p class="kicker">Actions</p>
-          <h2 id="actions-title">24 actions for every input</h2>
+          <h2 id="actions-title">25 actions for every input</h2>
           <p>Stack them on any input. They run top to bottom and pass the value on, so a response curve can shape an axis before it reaches vJoy.</p>
         </div>
         <ul class="actions anim" data-story="actions">
@@ -412,6 +428,7 @@
           <li data-k="up"><i class="ph ph-folder-open" aria-hidden="true"></i>Load profile</li>
           <li data-k="up"><i class="ph ph-speaker-high" aria-hidden="true"></i>Play sound</li>
           <li data-k="up"><i class="ph ph-chat-text" aria-hidden="true"></i>Text to speech</li>
+          <li data-k="up"><i class="ph ph-microphone" aria-hidden="true"></i>Voice input</li>
           <li data-k="up"><i class="ph ph-terminal-window" aria-hidden="true"></i>Run command</li>
           <li data-k="up"><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</li>
         </ul>
@@ -469,6 +486,7 @@
               <tr><th scope="row">Physical controllers</th><td>DirectInput: all buttons. Xbox controllers through XInput: both triggers apart, also in the background</td><td>evdev: every button; a stick with more than 80 after you allow reading its raw device once</td></tr>
               <tr><th scope="row">Keyboard keys as inputs</th><td>Yes</td><td>Yes, after you allow keyboard input once on the Keyboard tab (any program you run can then read the keyboard)</td></tr>
               <tr><th scope="row">Text to speech</th><td>Windows voices</td><td>speech dispatcher</td></tr>
+              <tr><th scope="row">Voice commands</th><td>Yes, offline</td><td>Yes, offline</td></tr>
             </tbody>
           </table>
         </div>
@@ -489,7 +507,7 @@
           </details>
           <details>
             <summary>Can I import my Joystick Gremlin profiles?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
-            <div class="answer"><p>Yes. Open one from the toolbar and it runs. Anything not supported yet is kept as it was in the file.</p></div>
+            <div class="answer"><p>Yes, profiles from Joystick Gremlin R14 or newer: open one from the toolbar and it runs. Anything not supported yet is kept as it was in the file. Profiles from R13 and older cannot be imported (Joystick Gremlin R14 cannot open them either); the new profile wizard builds a new one in a minute.</p></div>
           </details>
           <details>
             <summary>Do I still need HidHide and vJoy installed?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
@@ -580,6 +598,7 @@
             <li><a href="start.html">Get started</a></li>
             <li><a href="learn.html">Learning</a></li>
             <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="voice.html">Voice</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>
