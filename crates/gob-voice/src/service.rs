@@ -5,6 +5,8 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -85,10 +87,15 @@ enum Request {
     Microphones(Vec<String>),
 }
 
+/// The commands and their phrases: (command id, phrase).
+type Phrases = Arc<Vec<(u32, String)>>;
+
 /// The voice thread. Dropping it closes every microphone and ends the thread.
 pub struct VoiceService {
     requests: Option<Sender<Request>>,
     thread: Option<JoinHandle<()>>,
+    /// libvosk and the model are loaded (or failed to): the thread then ends quickly.
+    set_up: Arc<AtomicBool>,
 }
 
 impl VoiceService {
@@ -139,16 +146,19 @@ impl VoiceService {
         events: Sender<VoiceEvent>,
     ) -> Self {
         let (requests, inbox) = mpsc::channel();
+        let set_up = Arc::new(AtomicBool::new(false));
+        let done = set_up.clone();
         let thread = std::thread::Builder::new()
             .name("gob-voice".into())
             .spawn(move || match setup() {
                 Ok((make, open)) => {
+                    done.store(true, Ordering::Release);
                     let _ = events.send(VoiceEvent::Ready);
                     Worker {
                         make,
                         open,
                         settings,
-                        phrases,
+                        phrases: Arc::new(phrases),
                         events,
                         mics: HashMap::new(),
                         warm: Vec::new(),
@@ -156,6 +166,7 @@ impl VoiceService {
                     .run(&inbox);
                 }
                 Err(e) => {
+                    done.store(true, Ordering::Release);
                     log::warn!("voice commands off: {e}");
                     let _ = events.send(VoiceEvent::Failed(e.to_string()));
                 }
@@ -164,6 +175,7 @@ impl VoiceService {
         Self {
             requests: Some(requests),
             thread,
+            set_up,
         }
     }
 
@@ -176,7 +188,7 @@ impl VoiceService {
         });
     }
 
-    /// Listens for these phrases from the next utterance on.
+    /// Listens for these phrases from the next utterance on; one under way keeps its own.
     pub fn set_phrases(&self, phrases: Vec<(u32, String)>) {
         self.send(Request::Phrases(phrases));
     }
@@ -200,9 +212,13 @@ impl VoiceService {
 }
 
 impl Drop for VoiceService {
+    /// Waits for the thread to close the microphones, unless it is still loading the model
+    /// (seconds on a slow disk): then it is left to end by itself once loaded.
     fn drop(&mut self) {
         self.requests = None;
-        if let Some(t) = self.thread.take() {
+        if let Some(t) = self.thread.take()
+            && self.set_up.load(Ordering::Acquire)
+        {
             let _ = t.join();
         }
     }
@@ -218,6 +234,8 @@ struct Settings {
 /// An utterance being heard.
 struct Utterance {
     recognizer: Box<dyn Recognize>,
+    /// The phrases the recognizer was made for: its result is an index into them.
+    phrases: Phrases,
     /// Samples fed since listening started (the pre-roll not counted).
     samples: usize,
     /// Loudest of them.
@@ -258,7 +276,7 @@ struct Worker {
     make: MakeRecognizer,
     open: OpenMicrophone,
     settings: Settings,
-    phrases: Vec<(u32, String)>,
+    phrases: Phrases,
     events: Sender<VoiceEvent>,
     mics: HashMap<String, OpenMic>,
     /// Microphones kept open ([`VoiceConfig::keep_open`]).
@@ -299,7 +317,7 @@ impl Worker {
                 microphone,
                 on: false,
             } => self.stop(&microphone),
-            Request::Phrases(phrases) => self.phrases = phrases,
+            Request::Phrases(phrases) => self.phrases = Arc::new(phrases),
             Request::Gain(gain) => self.settings.gain = gain,
             Request::Microphones(microphones) => {
                 self.warm = if self.settings.keep_open {
@@ -377,6 +395,7 @@ impl Worker {
         recognizer.feed(&recent);
         mic.utterance = Some(Utterance {
             recognizer,
+            phrases: self.phrases.clone(),
             samples: 0,
             peak: 0,
         });
@@ -416,7 +435,7 @@ impl Worker {
         let command = heard
             .phrase
             .filter(|_| heard.confidence >= self.settings.min_confidence)
-            .and_then(|i| self.phrases.get(i))
+            .and_then(|i| u.phrases.get(i))
             .map(|(id, _)| *id);
         log::info!(
             "voice: {:.1} s, loudest {loudest:.2}: heard {:?} ({:.2}) -> {}",
@@ -644,6 +663,50 @@ mod tests {
         rig.service.set_gain(0.5);
         assert_eq!(rig.utterance("", 2, 100), heard(Some(6), 2, 1.0));
         assert_eq!(*rig.gains.lock().unwrap(), [0.5]);
+    }
+
+    #[test]
+    fn an_utterance_keeps_the_phrases_it_started_with() {
+        let rig = Rig::new(&[(1, "a"), (2, "b")]);
+        rig.service.listen("", true);
+        rig.opened("", true);
+        rig.say("", 2, 100, MIN_SAMPLES);
+        rig.service.set_phrases(vec![(9, "x".into())]);
+        rig.service.listen("", false);
+        rig.opened("", false);
+        assert_eq!(
+            rig.next(),
+            heard(Some(2), 2, 1.0),
+            "the old list's second phrase"
+        );
+        assert_eq!(rig.utterance("", 1, 100), heard(Some(9), 1, 1.0));
+    }
+
+    #[test]
+    fn dropping_does_not_wait_for_the_model() {
+        let (tx, events) = mpsc::channel();
+        let (release, wait) = mpsc::channel::<()>();
+        let service = VoiceService::spawn(
+            move || {
+                let _ = wait.recv();
+                Err(Error::Model("slow".into()))
+            },
+            Settings {
+                gain: 1.0,
+                min_confidence: 0.5,
+                keep_open: false,
+            },
+            Vec::new(),
+            tx,
+        );
+        let started = std::time::Instant::now();
+        drop(service);
+        assert!(started.elapsed() < Duration::from_secs(1));
+        release.send(()).unwrap();
+        assert!(matches!(
+            events.recv_timeout(Duration::from_secs(5)),
+            Ok(VoiceEvent::Failed(_))
+        ));
     }
 
     #[test]
