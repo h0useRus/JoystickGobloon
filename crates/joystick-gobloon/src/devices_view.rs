@@ -28,6 +28,8 @@ enum Kind {
     Hat,
     /// Keyboard key; the id is Gremlin's `extended << 8 | scan code`.
     Key,
+    /// Voice command; the id is the command's.
+    Voice,
     Other,
 }
 
@@ -79,6 +81,8 @@ pub struct DevicesView {
     pub curve_right_click_invert: bool,
     /// The profile's logical device with its live values, filled by the app for each frame.
     pub logical: Option<DeviceState>,
+    /// Voice commands of the running profile, filled by the app for each frame.
+    pub voice: Option<gob_engine::VoiceStatus>,
     /// Configured virtual gamepads and how many the system can have, filled by the app.
     pub gamepads: Vec<gob_virtual::GamepadInfo>,
     pub max_gamepads: u32,
@@ -248,6 +252,7 @@ impl DevicesView {
             .collect();
         let logical_name = i18n.tr("logical-device");
         let keyboard_name = i18n.tr("keyboard-device");
+        let voice_name = i18n.tr("voice-device");
         if let Some(p) = profile {
             let known = |guid: &str| {
                 p.profile
@@ -257,7 +262,8 @@ impl DevicesView {
             };
             for d in &p.profile.devices {
                 let logical = d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
-                    || d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID);
+                    || d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
+                    || d.id.eq_ignore_ascii_case(gob_core::VOICE_GUID);
                 if logical || tabs.iter().any(|t| t.guid.eq_ignore_ascii_case(&d.id)) {
                     continue;
                 }
@@ -283,7 +289,8 @@ impl DevicesView {
                     });
                 }
             }
-            // The keyboard (where keys can be inputs), then the virtual (logical) device always last.
+            // The keyboard (where keys can be inputs), voice commands, then the virtual
+            // (logical) device always last.
             if crate::platform::keyboard_bindings() {
                 tabs.push(Tab {
                     guid: gob_core::KEYBOARD_GUID,
@@ -294,6 +301,13 @@ impl DevicesView {
                 });
             }
             tabs.push(Tab {
+                guid: gob_core::VOICE_GUID,
+                name: &voice_name,
+                live: None,
+                alias: None,
+                logical: false,
+            });
+            tabs.push(Tab {
                 guid: gob_core::LOGICAL_DEVICE_GUID,
                 name: &logical_name,
                 live: logical.as_ref(),
@@ -301,10 +315,12 @@ impl DevicesView {
                 logical: true,
             });
         }
-        // Debug builds: JOYSTICK_GOBLOON_TAB=keyboard | logical opens that tab at start (screenshots).
+        // Debug builds: JOYSTICK_GOBLOON_TAB=keyboard | voice | logical opens that tab at start
+        // (screenshots).
         if cfg!(debug_assertions) && self.selected.is_none() {
             let guid = match std::env::var("JOYSTICK_GOBLOON_TAB").as_deref() {
                 Ok("keyboard") => Some(gob_core::KEYBOARD_GUID),
+                Ok("voice") => Some(gob_core::VOICE_GUID),
                 Ok("logical") => Some(gob_core::LOGICAL_DEVICE_GUID),
                 _ => None,
             };
@@ -322,6 +338,7 @@ impl DevicesView {
                 && t.live.is_none()
                 && !t.logical
                 && !is_keyboard(t)
+                && !is_voice(t)
         });
         if let Some((was, instead)) = &self.left
             && self.selected.as_ref() == Some(instead)
@@ -387,13 +404,14 @@ impl DevicesView {
                         let (glyph, hint) = match (t.live, t.alias) {
                             _ if t.logical => (icon::CPU, Some("logical-device-tip")),
                             _ if is_keyboard(t) => (icon::KEYBOARD, Some("keyboard-tip")),
+                            _ if is_voice(t) => (icon::MICROPHONE, Some("voice-tip")),
                             (Some(_), Some(_)) => (icon::LINK, Some("device-linked")),
                             (Some(_), None) => (icon::JOYSTICK, None),
                             (None, _) => (icon::PLUGS, Some("device-disconnected")),
                         };
                         // Real devices (connected or from the profile) have an info icon
                         // inside their tab; connected ones known to HidHide also an eye.
-                        let mut r = if !t.logical && !is_keyboard(t) {
+                        let mut r = if !t.logical && !is_keyboard(t) && !is_voice(t) {
                             let info_tip = i18n.tr("device-info");
                             let hidden = self.hidden.get(t.guid).copied();
                             let eye_tip = crate::hidhide_view::eye_tip(
@@ -516,14 +534,7 @@ impl DevicesView {
                             .is_some_and(|a| b.device_id.eq_ignore_ascii_case(a));
                     own && &b.mode == m
                 }) {
-                    let kind = match b.input_type() {
-                        InputType::Axis => Kind::Axis,
-                        InputType::Button => Kind::Button,
-                        InputType::Hat => Kind::Hat,
-                        InputType::Other if b.input_type.trim() == "key" => Kind::Key,
-                        InputType::Other => Kind::Other,
-                    };
-                    let key = (kind, b.input_id.parse().unwrap_or(0));
+                    let key = (binding_kind(b), b.input_id.parse().unwrap_or(0));
                     let slot = rows.entry(key).or_insert(Bound::None);
                     if matches!(slot, Bound::None) {
                         *slot = if depth == 0 {
@@ -547,6 +558,15 @@ impl DevicesView {
                 };
                 rows.entry((kind, i.id)).or_insert(Bound::None);
                 labels.insert((kind, i.id), i.label);
+            }
+        }
+        // Voice commands too, named by their first phrase.
+        if let (true, Some(p)) = (is_voice(tab), profile) {
+            for c in &p.profile.voice_commands {
+                rows.entry((Kind::Voice, c.id)).or_insert(Bound::None);
+                if let Some(first) = c.phrases.first() {
+                    labels.insert((Kind::Voice, c.id), first.clone());
+                }
             }
         }
         let index = profile
@@ -688,6 +708,51 @@ impl DevicesView {
     }
 
     /// Above the list: record a key (Keyboard tab) or add logical inputs (Logical device).
+    /// The Voice tab's head: the inputs that listen (a click goes to one; a banner while none
+    /// does) and the button adding a command.
+    fn voice_tools(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        profile: &Profile,
+        ops: &mut Vec<Op>,
+    ) {
+        let listening = profile.voice_inputs();
+        if listening.is_empty() {
+            crate::voice_view::no_button_banner(ui, i18n);
+        }
+        if let Some(status) = &self.voice {
+            crate::voice_view::status(ui, i18n, profile, status);
+        }
+        for v in &listening {
+            let b = &profile.inputs[v.binding];
+            let key = (binding_kind(b), b.input_id.trim().parse().unwrap_or(0));
+            let text = i18n.trf(
+                "voice-button",
+                &[
+                    ("device", device_name(i18n, profile, &b.device_id).into()),
+                    ("input", input_name(i18n, key, None).into()),
+                ],
+            );
+            let link = ui.link(format!("{}  {text}", icon::MICROPHONE));
+            if link.on_hover_text(i18n.tr("voice-button-go")).clicked() {
+                let device = b.device_id.to_ascii_lowercase();
+                self.selected_input.insert(device.clone(), key);
+                self.selected = Some(device);
+                self.user_selected = true;
+                self.mode = Some(b.mode.clone());
+            }
+        }
+        let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add"));
+        if ui.button(add).clicked() {
+            ops.push(Op::AddVoiceCommand);
+        }
+        if profile.voice_commands.is_empty() {
+            ui.label(RichText::new(i18n.tr("voice-empty")).weak());
+        }
+        ui.separator();
+    }
+
     fn list_tools(
         &mut self,
         ui: &mut egui::Ui,
@@ -704,6 +769,9 @@ impl DevicesView {
             self.all_buttons_result = Some(done);
         }
         let Some(p) = profile else { return };
+        if is_voice(tab) {
+            self.voice_tools(ui, i18n, &p.profile, ops);
+        }
         if is_keyboard(tab) {
             if let Some(done) = self.keyboard_access.banner(ui, i18n) {
                 self.keyboard_result = Some(done);
@@ -909,9 +977,9 @@ impl DevicesView {
         // Bindings are written for the profile's device id (the alias when linked by name).
         let device = tab.alias.unwrap_or(tab.guid).to_string();
         let input_type = input_type_name(key.0);
-        // Keys act like buttons.
+        // Keys and voice commands act like buttons.
         let behavior = match key.0 {
-            Kind::Key => InputType::Button,
+            Kind::Key | Kind::Voice => InputType::Button,
             _ => InputType::parse(input_type),
         };
         let mode = self.mode.clone().unwrap_or_default();
@@ -938,47 +1006,54 @@ impl DevicesView {
             })
         };
 
-        // Title: input name (a logical input's label is editable here).
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(kind_glyph(key.0)).size(18.0));
-            match label {
-                Some(text) => {
-                    let ty = InputType::parse(input_type);
-                    // Edited text lives in egui memory; it is applied on Enter / focus loss.
-                    let buf_id = egui::Id::unique(("logical-label", key));
-                    let mut edited: String = ui
-                        .data(|d| d.get_temp(buf_id))
-                        .unwrap_or_else(|| text.to_string());
-                    let r = ui.add_sized([200.0, 28.0], style::text_field(&mut edited));
-                    if r.lost_focus() {
-                        ui.data_mut(|d| d.remove::<String>(buf_id));
-                        if edited.trim() != text {
-                            ops.push(Op::RenameLogicalInput {
+        // Title: input name (a logical input's label is editable here); a voice command's
+        // phrases and hold time instead.
+        if let (Kind::Voice, Some(p)) = (key.0, profile)
+            && let Some(command) = p.profile.voice_command(key.1)
+        {
+            crate::voice_view::command_editor(ui, i18n, command, ops);
+        } else {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(kind_glyph(key.0)).size(18.0));
+                match label {
+                    Some(text) => {
+                        let ty = InputType::parse(input_type);
+                        // Edited text lives in egui memory; it is applied on Enter / focus loss.
+                        let buf_id = egui::Id::unique(("logical-label", key));
+                        let mut edited: String = ui
+                            .data(|d| d.get_temp(buf_id))
+                            .unwrap_or_else(|| text.to_string());
+                        let r = ui.add_sized([200.0, 28.0], style::text_field(&mut edited));
+                        if r.lost_focus() {
+                            ui.data_mut(|d| d.remove::<String>(buf_id));
+                            if edited.trim() != text {
+                                ops.push(Op::RenameLogicalInput {
+                                    input_type: ty,
+                                    id: key.1,
+                                    label: edited,
+                                });
+                            }
+                        } else if r.has_focus() {
+                            ui.data_mut(|d| d.insert_temp(buf_id, edited));
+                        }
+                        if style::icon_button(ui, true, icon::TRASH, &i18n.tr("logical-remove"))
+                            .clicked()
+                        {
+                            ops.push(Op::RemoveLogicalInput {
                                 input_type: ty,
                                 id: key.1,
-                                label: edited,
                             });
                         }
-                    } else if r.has_focus() {
-                        ui.data_mut(|d| d.insert_temp(buf_id, edited));
                     }
-                    if style::icon_button(ui, true, icon::TRASH, &i18n.tr("logical-remove"))
-                        .clicked()
-                    {
-                        ops.push(Op::RemoveLogicalInput {
-                            input_type: ty,
-                            id: key.1,
-                        });
+                    None => {
+                        ui.heading(input_name(i18n, key, None));
                     }
                 }
-                None => {
-                    ui.heading(input_name(i18n, key, None));
+                if tab.live.is_some() {
+                    live_widget(ui, tab.live, key);
                 }
-            }
-            if tab.live.is_some() {
-                live_widget(ui, tab.live, key);
-            }
-        });
+            });
+        }
         ui.add_space(4.0);
 
         let Some(p) = profile else { return };
@@ -1281,6 +1356,7 @@ fn input_type_name(kind: Kind) -> &'static str {
         Kind::Axis => "axis",
         Kind::Hat => "hat",
         Kind::Key => "key",
+        Kind::Voice => gob_core::VOICE_INPUT_TYPE,
         Kind::Button | Kind::Other => "button",
     }
 }
@@ -1334,6 +1410,7 @@ fn input_name(i18n: &I18n, (kind, id): Key, label: Option<&str>) -> String {
         Kind::Button => i18n.trf("vjoy-button-n", &[("n", id.into())]),
         Kind::Hat => i18n.trf("vjoy-hat-n", &[("n", id.into())]),
         Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id)),
+        Kind::Voice => i18n.trf("voice-command-n", &[("n", id.into())]),
         Kind::Other => id.to_string(),
     }
 }
@@ -1422,6 +1499,7 @@ fn kind_glyph(kind: Kind) -> &'static str {
         Kind::Button => icon::RADIO_BUTTON,
         Kind::Hat => icon::ARROWS_OUT_CARDINAL,
         Kind::Key => icon::KEYBOARD,
+        Kind::Voice => icon::MICROPHONE,
         Kind::Other => icon::QUESTION,
     }
 }
@@ -1479,7 +1557,7 @@ fn live_widget(ui: &mut egui::Ui, live: Option<&DeviceState>, (kind, id): Key) {
             );
         }
         // Keys have no live state shown here; their row lights up when pressed.
-        Kind::Key | Kind::Other => {}
+        Kind::Key | Kind::Voice | Kind::Other => {}
     }
 }
 
@@ -1511,6 +1589,7 @@ fn debug_expanded((kind, id): Key) -> bool {
         Kind::Button => "button",
         Kind::Hat => "hat",
         Kind::Key => "key",
+        Kind::Voice => "voice",
         Kind::Other => "other",
     };
     std::env::var("JOYSTICK_GOBLOON_EXPAND").is_ok_and(|v| v == format!("{name}{id}"))
@@ -1518,4 +1597,35 @@ fn debug_expanded((kind, id): Key) -> bool {
 
 fn is_keyboard(tab: &Tab) -> bool {
     tab.guid == gob_core::KEYBOARD_GUID
+}
+
+fn is_voice(tab: &Tab) -> bool {
+    tab.guid == gob_core::VOICE_GUID
+}
+
+/// The kind of input a binding is for.
+fn binding_kind(b: &InputBinding) -> Kind {
+    match b.input_type() {
+        InputType::Axis => Kind::Axis,
+        InputType::Button => Kind::Button,
+        InputType::Hat => Kind::Hat,
+        InputType::Other if b.input_type.trim() == "key" => Kind::Key,
+        InputType::Other if b.input_type.trim() == gob_core::VOICE_INPUT_TYPE => Kind::Voice,
+        InputType::Other => Kind::Other,
+    }
+}
+
+/// A profile device's name as the tabs show it.
+fn device_name(i18n: &I18n, profile: &Profile, guid: &str) -> String {
+    if guid.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID) {
+        return i18n.tr("keyboard-device");
+    }
+    if guid.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID) {
+        return i18n.tr("logical-device");
+    }
+    profile
+        .devices
+        .iter()
+        .find(|d| d.id.eq_ignore_ascii_case(guid))
+        .map_or_else(|| guid.to_string(), |d| d.name.trim().to_string())
 }

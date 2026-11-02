@@ -17,6 +17,7 @@ pub enum SettingsTab {
     #[default]
     Appearance,
     General,
+    Voice,
     Lighting,
     About,
 }
@@ -36,6 +37,8 @@ pub enum Change {
     },
     /// Default LED colors were edited.
     LedDefaults,
+    /// Voice settings changed, or a speech model was installed or removed.
+    Voice,
 }
 
 /// What the attached controllers tell the settings pages.
@@ -46,6 +49,8 @@ pub struct Attached<'a> {
     pub polls_devices: bool,
     /// The system part's section of the General tab.
     pub system_part: &'a mut crate::system_part_view::SystemPartView,
+    /// The Voice tab's download and microphone test.
+    pub voice: &'a mut crate::voice::VoicePanel,
 }
 
 pub fn show(
@@ -72,6 +77,7 @@ pub fn show(
                 icon::SLIDERS_HORIZONTAL,
                 "settings-general",
             ),
+            (SettingsTab::Voice, icon::MICROPHONE, "settings-voice"),
             (SettingsTab::Lighting, icon::LIGHTBULB, "settings-lighting"),
             (SettingsTab::About, icon::INFO, "settings-about"),
         ] {
@@ -86,6 +92,9 @@ pub fn show(
     ui.separator();
     ui.add_space(8.0);
 
+    if *tab != SettingsTab::Voice {
+        attached.voice.hide();
+    }
     match tab {
         SettingsTab::Appearance => {
             let change = appearance(ui, i18n, settings);
@@ -97,6 +106,10 @@ pub fn show(
             attached.system_part.section(ui, i18n);
             change
         }
+        SettingsTab::Voice => attached
+            .voice
+            .show(ui, i18n, settings)
+            .then_some(Change::Voice),
         SettingsTab::Lighting => lighting(ui, i18n, settings, attached.led_devices),
         SettingsTab::About => {
             about(ui, i18n, logo, updater);
@@ -202,7 +215,7 @@ fn lighting(
 }
 
 /// Short title above a group of options.
-fn section_title(ui: &mut egui::Ui, glyph: &str, title: &str) {
+pub(crate) fn section_title(ui: &mut egui::Ui, glyph: &str, title: &str) {
     ui.label(RichText::new(format!("{glyph}  {title}")).strong());
     ui.add_space(4.0);
 }

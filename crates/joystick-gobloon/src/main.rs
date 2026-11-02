@@ -30,6 +30,8 @@ mod viewer_view;
 mod virtual_setup;
 mod vjoy_config_view;
 mod vjoy_view;
+mod voice;
+mod voice_view;
 mod wizard_view;
 
 pub const APP_NAME: &str = "Joystick Gobloon";
@@ -116,6 +118,44 @@ mod tests {
     #[test]
     fn every_language_has_every_english_key() {
         assert_eq!(gob_i18n::check_complete(super::LANGUAGES), Ok(()));
+    }
+
+    /// Every key the code passes to `tr` or `trf` as a string literal is in en.ftl; keys built
+    /// at run time are not checked.
+    #[test]
+    fn english_has_every_key_the_code_uses() {
+        let en = super::LANGUAGES[0].1;
+        let defined: std::collections::HashSet<&str> = en
+            .lines()
+            .filter_map(|l| l.split_once(" ="))
+            .map(|(k, _)| k.trim())
+            .collect();
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut missing = Vec::new();
+        let mut dirs = vec![src];
+        while let Some(dir) = dirs.pop() {
+            for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    dirs.push(path);
+                    continue;
+                }
+                if path.extension().is_none_or(|e| e != "rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                for call in [".tr(\"", ".trf(\""] {
+                    for (at, _) in text.match_indices(call) {
+                        let rest = &text[at + call.len()..];
+                        let key = &rest[..rest.find('"').unwrap()];
+                        if !defined.contains(key) {
+                            missing.push(format!("{}: {key}", path.display()));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(missing.is_empty(), "keys missing in en.ftl: {missing:#?}");
     }
 
     #[test]

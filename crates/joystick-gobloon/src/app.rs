@@ -58,6 +58,8 @@ pub struct JoystickGobloonApp {
     /// Banner for device access the user still has to grant (Linux).
     device_access: crate::device_access::DeviceAccess,
     system_part: crate::system_part_view::SystemPartView,
+    /// The settings' Voice tab: speech model download and microphone test.
+    voice_panel: crate::voice::VoicePanel,
     /// Running profile, if activated.
     /// New releases from GitHub (About page, check on start).
     updater: crate::update::Updater,
@@ -209,6 +211,7 @@ impl JoystickGobloonApp {
             apps_view: AppsView::new(),
             device_access: crate::device_access::DeviceAccess::new(),
             system_part: crate::system_part_view::SystemPartView::new(),
+            voice_panel: Default::default(),
             activation,
             was_active: false,
             edited: None,
@@ -237,6 +240,8 @@ impl JoystickGobloonApp {
         };
         app.update_tray(&cc.egui_ctx);
         app.activation.set_led_defaults(app.settings.led_defaults());
+        app.activation
+            .set_voice(crate::voice::config(&app.settings));
         app.calibrations = app.settings.calibrations();
         for ((device, slot), c) in &app.calibrations {
             app.input.set_calibration(device, *slot, Some(*c));
@@ -279,6 +284,10 @@ impl JoystickGobloonApp {
             Ok("lighting") => {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::Lighting;
+            }
+            Ok("voice") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::Voice;
             }
             _ => {}
         }
@@ -1234,6 +1243,7 @@ impl JoystickGobloonApp {
         }
         self.virtual_devices_banner(ui);
         self.devices_view.logical = self.logical_device();
+        self.devices_view.voice = self.activation.status().and_then(|s| s.voice);
         let devices = self.input.devices();
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
@@ -1395,6 +1405,9 @@ impl JoystickGobloonApp {
                 self.i18n.set_language(&code);
                 self.settings.language = self.i18n.language().to_string();
                 self.status = self.i18n.tr("status-ready");
+                // Voice commands use the speech model of the language.
+                self.activation
+                    .set_voice(crate::voice::config(&self.settings));
             }
             Change::PreviewLeds { device, leds } => {
                 let leds = leds
@@ -1406,6 +1419,10 @@ impl JoystickGobloonApp {
             Change::LedDefaults => {
                 self.activation
                     .set_led_defaults(self.settings.led_defaults());
+            }
+            Change::Voice => {
+                self.activation
+                    .set_voice(crate::voice::config(&self.settings));
             }
         }
         self.settings.save();
@@ -1648,6 +1665,10 @@ impl eframe::App for JoystickGobloonApp {
                     );
                     ui.label(RichText::new(format!("{}  {mode}", icon::STACK)).size(12.0))
                         .on_hover_text(self.i18n.tr("label-mode"));
+                    if let Some(voice) = &status.voice {
+                        ui.separator();
+                        crate::voice_view::status_icon(ui, &self.i18n, voice);
+                    }
                     if let Some(latency) = status.latency {
                         let ms = |d: std::time::Duration| format!("{:.2}", d.as_secs_f64() * 1e3);
                         ui.separator();
@@ -1686,6 +1707,10 @@ impl eframe::App for JoystickGobloonApp {
             self.vjoy_view.release();
         }
         self.poll_system_part();
+        // The settings' microphone test listens only while its tab is shown.
+        if self.page != Page::Settings {
+            self.voice_panel.hide();
+        }
         let frame = egui::Frame::central_panel(&ctx.global_style()).inner_margin(16);
         egui::CentralPanel::default()
             .frame(frame)
@@ -1777,6 +1802,7 @@ impl eframe::App for JoystickGobloonApp {
                             led_devices: &led_devices,
                             polls_devices: self.input.polls_devices(),
                             system_part: &mut self.system_part,
+                            voice: &mut self.voice_panel,
                         },
                     );
                     if let Some(change) = change {

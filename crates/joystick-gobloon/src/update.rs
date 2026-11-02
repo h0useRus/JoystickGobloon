@@ -384,15 +384,29 @@ pub fn apply(prepared: &Prepared) -> Result<(), String> {
     }
 }
 
+/// Copies the new version's files (the exe, libraries such as the speech library, LICENSE) and
+/// its `lang` folder over the old ones. A file in use (a loaded library) is renamed aside first,
+/// like the running exe, and removed by [`cleanup`] on the next start.
 fn copy_portable(from: &Path, to: &Path) -> Result<(), String> {
     let copy = |name: &Path| {
-        std::fs::copy(from.join(name), to.join(name))
+        let target = to.join(name);
+        std::fs::copy(from.join(name), &target)
+            .or_else(|e| {
+                let aside = old_exe(&target);
+                let _ = std::fs::remove_file(&aside);
+                std::fs::rename(&target, &aside).map_err(|_| e)?;
+                std::fs::copy(from.join(name), &target)
+            })
             .map(|_| ())
             .map_err(|e| format!("{}: {e}", name.display()))
     };
-    copy(Path::new(crate::platform::exe_name()))?;
-    if from.join("LICENSE").exists() {
-        copy(Path::new("LICENSE"))?;
+    for entry in std::fs::read_dir(from)
+        .map_err(|e| e.to_string())?
+        .flatten()
+    {
+        if entry.path().is_file() {
+            copy(Path::new(&entry.file_name()))?;
+        }
     }
     let lang = from.join("lang");
     if lang.is_dir() {
@@ -407,10 +421,14 @@ fn copy_portable(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Removes the exe a portable update left behind.
+/// Removes the exe and the libraries a portable update renamed aside.
 pub fn cleanup() {
-    if let Ok(exe) = std::env::current_exe() {
-        let _ = std::fs::remove_file(old_exe(&exe));
+    let Some(dir) = exe_dir() else { return };
+    let suffix = format!(".{OLD_SUFFIX}");
+    for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+        if entry.file_name().to_string_lossy().ends_with(&suffix) {
+            let _ = std::fs::remove_file(entry.path());
+        }
     }
 }
 
@@ -431,6 +449,39 @@ pub fn wait_for_previous() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_portable_update_copies_every_file() {
+        let root = std::env::temp_dir().join(format!("gobloon-portable-{}", std::process::id()));
+        let (new, old) = (root.join("new"), root.join("old"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(new.join("lang")).unwrap();
+        std::fs::create_dir_all(&old).unwrap();
+        let exe = crate::platform::exe_name();
+        for (name, text) in [
+            (exe, "new exe"),
+            ("libvosk.dll", "speech"),
+            ("LICENSE", "license"),
+            ("lang/de.ftl", "de"),
+        ] {
+            std::fs::write(new.join(name), text).unwrap();
+        }
+        std::fs::write(old.join(exe), "old exe").unwrap();
+        copy_portable(&new, &old).unwrap();
+        for (name, text) in [
+            (exe, "new exe"),
+            ("libvosk.dll", "speech"),
+            ("LICENSE", "license"),
+            ("lang/de.ftl", "de"),
+        ] {
+            assert_eq!(
+                std::fs::read_to_string(old.join(name)).unwrap(),
+                text,
+                "{name}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     /// Network: `cargo test -p joystick-gobloon -- --ignored`. This build's version is not older than
     /// the latest release, so nothing is offered; the request, TLS and JSON work.

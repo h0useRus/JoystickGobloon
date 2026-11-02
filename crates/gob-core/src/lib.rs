@@ -13,6 +13,7 @@ pub mod logical;
 pub mod modifier;
 pub mod profile;
 pub mod two_axis;
+pub mod voice;
 pub mod xml;
 
 pub use action::{
@@ -33,4 +34,8 @@ pub use profile::{
     virtual_output, virtual_outputs,
 };
 pub use two_axis::{AxisInput, TWO_AXIS_KINDS};
+pub use voice::{
+    DEFAULT_HOLD as DEFAULT_VOICE_HOLD, VOICE_GUID, VOICE_INPUT_TYPE, VoiceCommand, VoiceInput,
+    is_voice_binding,
+};
 pub use xml::{Element, Node};

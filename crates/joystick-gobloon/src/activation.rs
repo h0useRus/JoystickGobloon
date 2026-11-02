@@ -23,6 +23,8 @@ struct Inner {
     /// Default LED colors, set when a profile that changed them stops; `None`: LED control
     /// is off (experimental features off).
     led_defaults: Option<Vec<gob_engine::Light>>,
+    /// How voice commands run; `None`: voice-input actions do nothing.
+    voice: Option<gob_engine::VoiceConfig>,
 }
 
 impl Activation {
@@ -34,6 +36,7 @@ impl Activation {
             ctx,
             error: None,
             led_defaults: None,
+            voice: None,
         })))
     }
 
@@ -41,6 +44,11 @@ impl Activation {
     /// turns LED control off.
     pub fn set_led_defaults(&self, defaults: Option<Vec<gob_engine::Light>>) {
         self.lock().led_defaults = defaults;
+    }
+
+    /// Voice commands for the next start (a running profile keeps its own).
+    pub fn set_voice(&self, voice: Option<gob_engine::VoiceConfig>) {
+        self.lock().voice = voice;
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -97,6 +105,7 @@ impl Activation {
             inner.input.subscribe_timed(),
             &devices,
             inner.led_defaults.as_deref(),
+            inner.voice.clone(),
             repaint,
         )?;
         log::info!(
