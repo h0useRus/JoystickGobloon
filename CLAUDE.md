@@ -169,7 +169,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   device name part, e.g. `vjoy`)
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
   setup with /UPDATE=1 (it restarts the app), portable copies swap the files listed in the zip's files.gob (written by
-  release.yml; files the old list had and the new one lacks are removed, user files are never listed). Debug builds never update.
+  release.yml; files the old list had and the new one lacks are removed, user files are never listed; what was set
+  aside is listed in update-aside.gob, deleted on the next start). Debug builds never update.
   Network tests: `cargo test -p joystick-gobloon update:: -- --ignored`.
 - Linux (plans/LINUX_PLAN.md): `tools\linux\check.ps1` runs clippy + tests (or any command) in Podman (machine
   pod-h0use, start it first); Windows-only code stays behind `cfg(windows)`, so the Linux build must stay clean.

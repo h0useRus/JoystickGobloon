@@ -10,7 +10,7 @@ use std::time::Duration;
 use eframe::egui::{self, RichText};
 use gob_i18n::I18n;
 use semver::Version;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::style::{self, icon};
 
@@ -335,17 +335,27 @@ fn prepare(release: &Release) -> Result<Prepared, String> {
         // The zip holds a JoystickGobloon folder.
         let root = out.join("JoystickGobloon");
         let root = if root.is_dir() { root } else { out };
-        let exe = crate::platform::exe_name();
-        if !root.join(exe).exists() {
-            return Err(format!("the portable zip has no {exe}"));
-        }
-        if let Some(missing) = new_files(&root)?.iter().find(|n| !root.join(n).is_file()) {
-            return Err(format!("the portable zip has no {}", missing.display()));
-        }
+        check_portable(&root)?;
         Ok(Prepared::Portable(root))
     } else {
         Ok(Prepared::Installer(file))
     }
+}
+
+/// An unpacked portable version is complete: it has the exe, lists it and has every file it lists.
+fn check_portable(root: &Path) -> Result<(), String> {
+    let exe = crate::platform::exe_name();
+    if !root.join(exe).exists() {
+        return Err(format!("the portable zip has no {exe}"));
+    }
+    let files = new_files(root)?;
+    if !files.iter().any(|n| same_name(n, Path::new(exe))) {
+        return Err(format!("the portable zip's {MANIFEST} has no {exe}"));
+    }
+    if let Some(missing) = files.iter().find(|n| !root.join(n).is_file()) {
+        return Err(format!("the portable zip has no {}", missing.display()));
+    }
+    Ok(())
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -393,37 +403,61 @@ pub fn apply(prepared: &Prepared) -> Result<(), String> {
 /// release.yml writes it into the portable zip.
 const MANIFEST: &str = "files.gob";
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct Manifest {
     files: Vec<String>,
 }
 
-/// The files `dir`'s manifest lists (the manifest itself included); `None` without a manifest.
-fn manifest(dir: &Path) -> Result<Option<Vec<PathBuf>>, String> {
-    let file = dir.join(MANIFEST);
-    let Ok(text) = std::fs::read_to_string(&file) else {
+/// What the last portable update renamed aside (paths of the `.old` files), so [`cleanup`]
+/// finds them in any folder, also in folders the new version no longer has.
+const ASIDE: &str = "update-aside.gob";
+
+/// The paths a list file (`files = [...]`) names; `None` when there is no such file.
+fn read_list(file: &Path) -> Result<Option<Vec<PathBuf>>, String> {
+    let Ok(text) = std::fs::read_to_string(file) else {
         return Ok(None);
     };
-    let manifest: Manifest = toml::from_str(&text).map_err(|e| format!("{MANIFEST}: {e}"))?;
-    let mut names = Vec::new();
-    for name in &manifest.files {
-        let path = PathBuf::from(name);
-        // Only plain paths below the folder: nothing outside it is ever touched.
-        if name.is_empty()
-            || !path
-                .components()
-                .all(|c| matches!(c, std::path::Component::Normal(_)))
-        {
-            return Err(format!("{MANIFEST}: bad path {name:?}"));
+    let what = file.file_name().unwrap_or_default().to_string_lossy();
+    let list: Manifest = toml::from_str(&text).map_err(|e| format!("{what}: {e}"))?;
+    let mut names: Vec<PathBuf> = Vec::new();
+    for name in &list.files {
+        // Only plain relative paths below the folder, the same on every system: nothing outside
+        // it is ever touched (no "..", roots, drives or `\`).
+        if !name.split('/').all(|part| {
+            !part.is_empty() && part != "." && part != ".." && !part.contains([':', '\\'])
+        }) {
+            return Err(format!("{what}: bad path {name:?}"));
         }
-        if !names.contains(&path) {
+        let path = PathBuf::from(name);
+        if !names.iter().any(|n| same_name(n, &path)) {
             names.push(path);
         }
     }
-    if !names.iter().any(|n| n == Path::new(MANIFEST)) {
+    Ok(Some(names))
+}
+
+/// The files `dir`'s manifest lists (the manifest itself included); `None` without a manifest.
+fn manifest(dir: &Path) -> Result<Option<Vec<PathBuf>>, String> {
+    let Some(mut names) = read_list(&dir.join(MANIFEST))? else {
+        return Ok(None);
+    };
+    let suffix = format!(".{OLD_SUFFIX}");
+    // Set-aside names belong to the update itself.
+    if let Some(name) = names
+        .iter()
+        .find(|n| n.to_string_lossy().ends_with(&suffix))
+    {
+        return Err(format!("{MANIFEST}: bad path {:?}", name.display()));
+    }
+    if !names.iter().any(|n| same_name(n, Path::new(MANIFEST))) {
         names.push(PathBuf::from(MANIFEST));
     }
     Ok(Some(names))
+}
+
+/// File names compare without case, as Windows does.
+fn same_name(a: &Path, b: &Path) -> bool {
+    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
 }
 
 /// The files of the new version: its manifest, or (zips made before it) every file next to the
@@ -434,9 +468,12 @@ fn new_files(from: &Path) -> Result<Vec<PathBuf>, String> {
     }
     let mut names = Vec::new();
     for folder in [Path::new(""), Path::new("lang")] {
-        for entry in std::fs::read_dir(from.join(folder))
-            .into_iter()
-            .flatten()
+        let path = from.join(folder);
+        if folder != Path::new("") && !path.is_dir() {
+            continue;
+        }
+        for entry in std::fs::read_dir(&path)
+            .map_err(|e| format!("{}: {e}", path.display()))?
             .flatten()
         {
             if entry.path().is_file() {
@@ -450,8 +487,8 @@ fn new_files(from: &Path) -> Result<Vec<PathBuf>, String> {
 /// Copies the new version's files (the exe, libraries such as the speech library, languages)
 /// over the old ones and removes the old version's files the new one no longer lists. Each old
 /// file is renamed aside first (a loaded library can be renamed, not overwritten) and removed by
-/// [`cleanup`] on the next start. All or nothing: when a file fails, every file is put back as
-/// it was.
+/// [`cleanup`] on the next start. All or nothing: when a file fails, every file and folder is put
+/// back as it was.
 fn copy_portable(from: &Path, to: &Path) -> Result<(), String> {
     copy_portable_with(from, to, |a, b| std::fs::copy(a, b).map(|_| ()))
 }
@@ -462,84 +499,134 @@ fn copy_portable_with(
     copy: impl Fn(&Path, &Path) -> std::io::Result<()>,
 ) -> Result<(), String> {
     let names = new_files(from)?;
-    // A broken old manifest only means nothing is removed.
+    let exe = Path::new(crate::platform::exe_name());
+    // A broken old manifest only means nothing is removed. The running exe is apply's to move.
     let gone: Vec<PathBuf> = manifest(to)
         .ok()
         .flatten()
         .unwrap_or_default()
         .into_iter()
-        .filter(|n| !names.contains(n) && to.join(n).is_file())
+        .filter(|n| {
+            !same_name(n, exe) && !names.iter().any(|m| same_name(m, n)) && to.join(n).is_file()
+        })
         .collect();
-    // Files written (or removed) so far, with where their old version went.
-    let mut done: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
-    let undo = |done: Vec<(PathBuf, Option<PathBuf>)>| {
-        for (target, aside) in done.into_iter().rev() {
+    let mut undo = Undo::default();
+    let mut failed = None;
+    for (name, replace) in names
+        .iter()
+        .map(|n| (n, true))
+        .chain(gone.iter().map(|n| (n, false)))
+    {
+        let target = to.join(name);
+        let step = undo.step(to, &target).and_then(|()| {
+            if replace {
+                copy(&from.join(name), &target)
+            } else {
+                Ok(())
+            }
+        });
+        if let Err(e) = step {
+            failed = Some(format!("{}: {e}", name.display()));
+            break;
+        }
+    }
+    if let Some(e) = failed {
+        undo.run();
+        return Err(e);
+    }
+    let aside: Vec<String> = undo
+        .files
+        .iter()
+        .filter_map(|(_, a)| a.as_ref()?.strip_prefix(to).ok())
+        .map(|a| a.to_string_lossy().replace('\\', "/"))
+        .collect();
+    // Without the list only leftovers outside the exe's folder and `lang` stay.
+    let list = toml::to_string(&Manifest { files: aside }).unwrap_or_default();
+    let _ = std::fs::write(to.join(ASIDE), list);
+    Ok(())
+}
+
+/// What a portable update changed so far, to put it back when a file fails.
+#[derive(Default)]
+struct Undo {
+    /// Files written or set aside, with where their old version went.
+    files: Vec<(PathBuf, Option<PathBuf>)>,
+    /// Folders made for new files, outer ones first.
+    folders: Vec<PathBuf>,
+}
+
+impl Undo {
+    /// Makes `target`'s missing folders below `to` and renames an existing `target` to its
+    /// `.old` name, remembering both.
+    fn step(&mut self, to: &Path, target: &Path) -> std::io::Result<()> {
+        if let Some(parent) = target.parent() {
+            let mut missing: Vec<&Path> = parent
+                .ancestors()
+                .take_while(|a| *a != to && !a.exists())
+                .collect();
+            missing.reverse();
+            for folder in missing {
+                std::fs::create_dir(folder)?;
+                self.folders.push(folder.to_path_buf());
+            }
+        }
+        let aside = if target.exists() {
+            let aside = old_exe(target);
+            let _ = std::fs::remove_file(&aside);
+            std::fs::rename(target, &aside)?;
+            Some(aside)
+        } else {
+            None
+        };
+        self.files.push((target.to_path_buf(), aside));
+        Ok(())
+    }
+
+    fn run(self) {
+        for (target, aside) in self.files.into_iter().rev() {
             let _ = std::fs::remove_file(&target);
             if let Some(aside) = aside {
                 let _ = std::fs::rename(aside, &target);
             }
         }
-    };
-    for name in &names {
-        let target = to.join(name);
-        let aside = target.exists().then(|| old_exe(&target));
-        let replaced = target
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| match &aside {
-                Some(aside) => {
-                    let _ = std::fs::remove_file(aside);
-                    std::fs::rename(&target, aside)
-                }
-                None => Ok(()),
-            })
-            .and_then(|()| {
-                copy(&from.join(name), &target).inspect_err(|_| {
-                    if let Some(aside) = &aside {
-                        let _ = std::fs::remove_file(&target);
-                        let _ = std::fs::rename(aside, &target);
-                    }
-                })
-            });
-        if let Err(e) = replaced {
-            undo(done);
-            return Err(format!("{}: {e}", name.display()));
+        for folder in self.folders.into_iter().rev() {
+            let _ = std::fs::remove_dir(folder);
         }
-        done.push((target, aside));
     }
-    for name in &gone {
-        let target = to.join(name);
-        let aside = old_exe(&target);
-        let _ = std::fs::remove_file(&aside);
-        if let Err(e) = std::fs::rename(&target, &aside) {
-            undo(done);
-            return Err(format!("{}: {e}", name.display()));
-        }
-        done.push((target, Some(aside)));
-    }
-    Ok(())
 }
 
-/// Removes the files a portable update renamed aside (next to the exe, in `lang` and in every
-/// folder the manifest lists).
+/// Removes the files a portable update renamed aside, and the folders that leaves empty.
 pub fn cleanup() {
-    let Some(dir) = exe_dir() else { return };
-    let suffix = format!(".{OLD_SUFFIX}");
-    let mut folders = vec![dir.clone(), dir.join("lang")];
-    for name in manifest(&dir).ok().flatten().unwrap_or_default() {
-        if let Some(parent) = dir.join(name).parent()
-            && !folders.iter().any(|f| f == parent)
-        {
-            folders.push(parent.to_path_buf());
-        }
+    if let Some(dir) = exe_dir() {
+        cleanup_in(&dir);
     }
-    for folder in folders {
+}
+
+fn cleanup_in(dir: &Path) {
+    let suffix = format!(".{OLD_SUFFIX}");
+    // Updates before the aside list: the exe's folder and `lang`.
+    for folder in [dir.to_path_buf(), dir.join("lang")] {
         for entry in std::fs::read_dir(&folder).into_iter().flatten().flatten() {
             if entry.file_name().to_string_lossy().ends_with(&suffix) {
                 let _ = std::fs::remove_file(entry.path());
             }
         }
     }
+    let list = dir.join(ASIDE);
+    for name in read_list(&list).ok().flatten().unwrap_or_default() {
+        if !name.to_string_lossy().ends_with(&suffix) {
+            continue;
+        }
+        let file = dir.join(&name);
+        let _ = std::fs::remove_file(&file);
+        // Only folders left empty go, never the exe's folder itself.
+        for folder in file.ancestors().skip(1) {
+            if folder == dir || !folder.starts_with(dir) || std::fs::remove_dir(folder).is_err() {
+                break;
+            }
+        }
+    }
+    let _ = std::fs::remove_file(list);
 }
 
 /// `--wait-pid <pid>`: waits (at most 15 s) for the process this one replaces to exit.
@@ -704,7 +791,15 @@ mod tests {
     fn a_manifest_never_leaves_the_folder() {
         let dir = std::env::temp_dir().join(format!("gobloon-bad-manifest-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        for bad in ["../evil.dll", "C:/Windows/evil.dll", "/etc/evil", ""] {
+        for bad in [
+            "../evil.dll",
+            "C:/Windows/evil.dll",
+            "/etc/evil",
+            "lang\\..\\..\\evil.dll",
+            "a/./b",
+            "JoystickGobloon.exe.old",
+            "",
+        ] {
             std::fs::write(
                 dir.join(MANIFEST),
                 format!(
@@ -726,6 +821,112 @@ mod tests {
             [PathBuf::from("lang/en.ftl"), PathBuf::from(MANIFEST)]
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn temp(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("gobloon-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("new")).unwrap();
+        std::fs::create_dir_all(root.join("old")).unwrap();
+        root
+    }
+
+    #[test]
+    fn a_name_differing_only_in_case_is_not_removed() {
+        let root = temp("case");
+        let (new, old) = (root.join("new"), root.join("old"));
+        std::fs::create_dir_all(new.join("lang")).unwrap();
+        std::fs::create_dir_all(old.join("lang")).unwrap();
+        std::fs::write(new.join(MANIFEST), "files = [\"lang/de.ftl\"]\n").unwrap();
+        std::fs::write(new.join("lang/de.ftl"), "new").unwrap();
+        std::fs::write(old.join(MANIFEST), "files = [\"lang/DE.ftl\"]\n").unwrap();
+        std::fs::write(old.join("lang/DE.ftl"), "old").unwrap();
+        copy_portable(&new, &old).unwrap();
+        // Not set aside as gone (on Windows both names are the same file).
+        assert_eq!(
+            std::fs::read_to_string(old.join("lang/de.ftl")).unwrap(),
+            "new"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cleanup_removes_what_was_set_aside_and_the_emptied_folders() {
+        let root = temp("cleanup");
+        let (new, old) = (root.join("new"), root.join("old"));
+        std::fs::write(new.join(MANIFEST), "files = [\"a.dll\"]\n").unwrap();
+        std::fs::write(new.join("a.dll"), "new").unwrap();
+        std::fs::create_dir_all(old.join("voice/deep")).unwrap();
+        std::fs::write(
+            old.join(MANIFEST),
+            "files = [\"a.dll\", \"voice/deep/x.dll\"]\n",
+        )
+        .unwrap();
+        std::fs::write(old.join("a.dll"), "old").unwrap();
+        std::fs::write(old.join("voice/deep/x.dll"), "old").unwrap();
+        copy_portable(&new, &old).unwrap();
+        assert!(old.join("voice/deep/x.dll.old").exists());
+        cleanup_in(&old);
+        assert!(!old.join("voice").exists(), "the emptied folders go");
+        assert!(!old.join("a.dll.old").exists());
+        assert!(!old.join(ASIDE).exists());
+        assert_eq!(std::fs::read_to_string(old.join("a.dll")).unwrap(), "new");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_failed_update_removes_the_folders_it_made() {
+        let root = temp("folders");
+        let (new, old) = (root.join("new"), root.join("old"));
+        std::fs::create_dir_all(new.join("voice/deep")).unwrap();
+        std::fs::write(
+            new.join(MANIFEST),
+            "files = [\"voice/deep/model.txt\", \"b.dll\"]\n",
+        )
+        .unwrap();
+        std::fs::write(new.join("voice/deep/model.txt"), "new").unwrap();
+        std::fs::write(new.join("b.dll"), "new").unwrap();
+        let failing = |from: &Path, to: &Path| {
+            if from.ends_with("b.dll") {
+                Err(std::io::Error::other("locked"))
+            } else {
+                std::fs::copy(from, to).map(|_| ())
+            }
+        };
+        assert!(copy_portable_with(&new, &old, failing).is_err());
+        assert_eq!(std::fs::read_dir(&old).unwrap().count(), 0, "nothing left");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_unreadable_new_folder_is_an_error() {
+        let root = temp("unreadable");
+        assert!(copy_portable(&root.join("missing"), &root.join("old")).is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_portable_version_must_list_its_exe() {
+        let root = temp("exe");
+        let new = root.join("new");
+        let exe = crate::platform::exe_name();
+        std::fs::write(new.join(exe), "new").unwrap();
+        std::fs::write(new.join("a.dll"), "new").unwrap();
+        std::fs::write(new.join(MANIFEST), "files = [\"a.dll\"]\n").unwrap();
+        assert!(check_portable(&new).is_err());
+        std::fs::write(
+            new.join(MANIFEST),
+            format!("files = [\"a.dll\", \"{exe}\"]\n"),
+        )
+        .unwrap();
+        check_portable(&new).unwrap();
+        std::fs::write(
+            new.join(MANIFEST),
+            format!("files = [\"b.dll\", \"{exe}\"]\n"),
+        )
+        .unwrap();
+        assert!(check_portable(&new).is_err(), "a listed file is missing");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// Network: `cargo test -p joystick-gobloon -- --ignored`. This build's version is not older than
