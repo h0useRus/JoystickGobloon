@@ -92,9 +92,25 @@ pub struct Settings {
 }
 
 /// A program on the Applications page; options per program (e.g. its profile) go here.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppEntry {
     pub path: PathBuf,
+    /// Profile that runs while this program is in front (switching profiles by program).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<PathBuf>,
+    /// Mode of `profile` to start in; `None`: the profile's starting mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+}
+
+impl AppEntry {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            profile: None,
+            mode: None,
+        }
+    }
 }
 
 /// Programs on the Applications page, in `apps.gob` next to the settings.
@@ -349,6 +365,27 @@ fn save_toml(name: &str, value: &impl Serialize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_lists_keep_profiles_and_read_old_files() {
+        let old: AppList = toml::from_str("[[app]]\npath = 'C:/Games/One/One.exe'\n").unwrap();
+        assert_eq!(
+            old.apps,
+            [AppEntry::new(PathBuf::from("C:/Games/One/One.exe"))]
+        );
+        let mut list = old;
+        list.apps[0].profile = Some(PathBuf::from("D:/Profiles/Flight.xml"));
+        list.apps[0].mode = Some("Landing".into());
+        list.apps.push(AppEntry::new(PathBuf::from("radio.exe")));
+        let text = toml::to_string_pretty(&list).unwrap();
+        assert_eq!(
+            text.matches("profile").count(),
+            1,
+            "no empty fields:\n{text}"
+        );
+        let back: AppList = toml::from_str(&text).unwrap();
+        assert_eq!(back.apps, list.apps);
+    }
 
     #[test]
     fn whole_writes_replace_the_file() {

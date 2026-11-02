@@ -75,7 +75,7 @@ impl AppsView {
         let mut added = false;
         for path in &self.listed {
             if !self.list.apps.iter().any(|a| same_path(&a.path, path)) {
-                self.list.apps.push(AppEntry { path: path.clone() });
+                self.list.apps.push(AppEntry::new(path.clone()));
                 added = true;
             }
         }
@@ -140,7 +140,7 @@ impl AppsView {
                 && let Some(path) = program_dialog().pick_file()
             {
                 if !self.list.apps.iter().any(|a| same_path(&a.path, &path)) {
-                    self.list.apps.push(AppEntry { path: path.clone() });
+                    self.list.apps.push(AppEntry::new(path.clone()));
                     self.list.save();
                 }
                 // A new program sees hidden devices: whitelisted, or not blocked when inverse.
