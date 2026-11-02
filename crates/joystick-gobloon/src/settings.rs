@@ -312,6 +312,22 @@ fn load_toml<T: Default + for<'de> Deserialize<'de>>(name: &str) -> T {
     })
 }
 
+/// Writes `path` so that a crash or power loss leaves either the old file or the new one, never
+/// a cut one: the text goes to a file next to it, reaches the disk, then replaces it.
+fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".new");
+    let new = path.with_file_name(name);
+    let mut file = std::fs::File::create(&new)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(&new, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&new);
+    })
+}
+
 fn save_toml(name: &str, value: &impl Serialize) {
     let Some(dir) = data_dir() else {
         log::error!("saving {name}: no data folder");
@@ -320,9 +336,34 @@ fn save_toml(name: &str, value: &impl Serialize) {
     let path = dir.join(name);
     let written = std::fs::create_dir_all(dir).and_then(|()| {
         let text = toml::to_string_pretty(value).map_err(std::io::Error::other)?;
-        std::fs::write(&path, text)
+        write_whole(&path, text.as_bytes())
     });
     if let Err(e) = written {
         log::error!("saving {}: {e}", path.display());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn whole_writes_replace_the_file() {
+        let dir = std::env::temp_dir().join(format!("gobloon-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.gob");
+        std::fs::write(&path, "old = true\n").unwrap();
+        write_whole(&path, b"last_profile = 'a.xml'\n").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "last_profile = 'a.xml'\n"
+        );
+        let names: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names, ["settings.gob"], "no file left aside");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
