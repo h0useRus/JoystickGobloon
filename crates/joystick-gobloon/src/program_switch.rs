@@ -91,6 +91,16 @@ impl Switcher {
         self.applied = None;
     }
 
+    /// The program whose profile [`Self::check`] would apply now, without applying it.
+    pub fn due<'a>(
+        &self,
+        front: Option<&Program>,
+        apps: &'a [AppEntry],
+        own: &str,
+    ) -> Option<&'a AppEntry> {
+        choose(front, apps, own).filter(|app| self.applied.as_ref() != Some(&app.key()))
+    }
+
     /// The program whose profile should be applied now; `None`: keep the running one.
     pub fn check<'a>(
         &mut self,
@@ -98,14 +108,72 @@ impl Switcher {
         apps: &'a [AppEntry],
         own: &str,
     ) -> Option<&'a AppEntry> {
-        let app = choose(front, apps, own)?;
-        let key = app.key();
-        if self.applied.as_ref() == Some(&key) {
-            return None;
-        }
-        self.applied = Some(key);
+        let app = self.due(front, apps, own)?;
+        self.applied = Some(app.key());
         Some(app)
     }
+}
+
+/// A controller of the profile and the attached device standing in for it (itself, or one of
+/// the same name for a profile from another PC); `None`: not attached.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Served {
+    pub id: String,
+    pub name: String,
+    pub by: Option<String>,
+}
+
+/// Which attached device serves each controller of the profile.
+pub fn served(profile: &gob_core::Profile, devices: &[gob_input::DeviceState]) -> Vec<Served> {
+    let aliases = crate::substitute_view::auto_aliases(profile, devices);
+    profile
+        .devices
+        .iter()
+        .filter(|d| {
+            !d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
+                && !d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
+        })
+        .map(|d| {
+            let own = devices
+                .iter()
+                .find(|s| s.info.guid.eq_ignore_ascii_case(&d.id))
+                .map(|s| s.info.guid.clone());
+            Served {
+                id: d.id.clone(),
+                name: d.name.trim().to_string(),
+                by: own.or_else(|| aliases.get(&d.id.to_ascii_lowercase()).cloned()),
+            }
+        })
+        .collect()
+}
+
+/// How a controller of the running profile changed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DeviceChange {
+    Disconnected(String),
+    Connected(String),
+    /// Attached again as another device (a new id).
+    Replaced(String),
+}
+
+/// The changes from `before` to `after`; controllers only in one of them (the profile was
+/// edited) do not count.
+pub fn device_changes(before: &[Served], after: &[Served]) -> Vec<DeviceChange> {
+    after
+        .iter()
+        .filter_map(|a| {
+            let b = before.iter().find(|b| b.id == a.id)?;
+            let name = a.name.clone();
+            match (&b.by, &a.by) {
+                (Some(_), None) => Some(DeviceChange::Disconnected(name)),
+                (None, Some(_)) => Some(DeviceChange::Connected(name)),
+                (Some(x), Some(y)) if !x.eq_ignore_ascii_case(y) => {
+                    Some(DeviceChange::Replaced(name))
+                }
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -174,5 +242,46 @@ mod tests {
         // Activate applies the program in front even when it chose last time.
         switcher.reset();
         assert!(switcher.check(Some(&one), &apps, OWN).is_some());
+    }
+
+    #[test]
+    fn due_tells_without_applying() {
+        let apps = apps();
+        let mut switcher = Switcher::default();
+        let one = program("One.exe");
+        assert!(switcher.due(Some(&one), &apps, OWN).is_some());
+        assert!(switcher.due(Some(&one), &apps, OWN).is_some(), "still due");
+        assert!(switcher.check(Some(&one), &apps, OWN).is_some());
+        assert!(switcher.due(Some(&one), &apps, OWN).is_none());
+    }
+
+    #[test]
+    fn controllers_of_the_profile_that_change() {
+        let s = |id: &str, by: Option<&str>| Served {
+            id: id.into(),
+            name: format!("Stick {id}"),
+            by: by.map(String::from),
+        };
+        let before = [
+            s("a", Some("a")),
+            s("b", None),
+            s("c", Some("c")),
+            s("d", Some("d")),
+        ];
+        let after = [
+            s("a", None),
+            s("b", Some("b")),
+            s("c", Some("x")),
+            s("d", Some("D")),
+            s("e", Some("e")),
+        ];
+        assert_eq!(
+            device_changes(&before, &after),
+            [
+                DeviceChange::Disconnected("Stick a".into()),
+                DeviceChange::Connected("Stick b".into()),
+                DeviceChange::Replaced("Stick c".into()),
+            ]
+        );
     }
 }
