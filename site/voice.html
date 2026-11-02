@@ -132,16 +132,26 @@
           <li><a class="toc-group" href="#idea">The idea</a><ul>
             <li><a href="#how-it-works">How it works</a></li>
             <li><a href="#privacy">Offline and private</a></li>
+            <li><a href="#requirements">What you need</a></li>
           </ul></li>
           <li><a class="toc-group" href="#setup">Setting it up</a><ul>
             <li><a href="#language">1. Speech model</a></li>
-            <li><a href="#push-to-talk">2. Push-to-talk button</a></li>
-            <li><a href="#commands">3. Commands</a></li>
-            <li><a href="#command-actions">4. What a command does</a></li>
-            <li><a href="#speak">5. Speak</a></li>
+            <li><a href="#microphone">2. Microphone check</a></li>
+            <li><a href="#push-to-talk">3. Push-to-talk button</a></li>
+            <li><a href="#commands">4. Commands and phrases</a></li>
+            <li><a href="#command-actions">5. What a command does</a></li>
+            <li><a href="#speak">6. Speak</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#further">Going further</a><ul>
+            <li><a href="#several-microphones">Several microphones</a></li>
+            <li><a href="#modes">Modes and modifiers</a></li>
+            <li><a href="#hold-time">Hold time</a></li>
+            <li><a href="#keep-open">Keep the microphone open</a></li>
+            <li><a href="#confidence">Least confidence</a></li>
           </ul></li>
           <li><a class="toc-group" href="#tips">Tips</a><ul>
             <li><a href="#good-phrases">Good phrases</a></li>
+            <li><a href="#status">What the status bar says</a></li>
             <li><a href="#troubleshooting">When something is off</a></li>
           </ul></li>
           </ul>
@@ -153,12 +163,20 @@
           <h2 id="idea-title">The idea</h2>
           <article class="learn-action" id="how-it-works">
             <h3><i class="ph ph-microphone" aria-hidden="true"></i>How it works</h3>
-            <p>Each voice command is a button of its own on the <span class="term">Voice</span> tab of the Devices page, with one or more phrases. The microphone listens only while you hold a push-to-talk input: a stick button, a key or a gamepad button with the <a href="learn.html#voice-input">Voice input</a> action. When you let go, the phrase you said is matched against the profile's phrases, and the command it belongs to presses its button for a moment, so its actions run like any button's.</p>
-            <p>Only the profile's phrases are listened for, so recognition is quick and other words are not mistaken for commands.</p>
+            <p>A voice command is a button of its own, on the <span class="term">Voice</span> tab of the Devices page, with one or more phrases that set it off. The microphone listens only while you hold a push-to-talk input: a stick button, a key or a gamepad button with the <a href="learn.html#voice-input">Voice input</a> action. When you let go, what you said is matched against the profile's phrases, and the command it belongs to presses its button for a moment, so its actions run like any button's.</p>
+            <p>Only the profile's own phrases are listened for. That makes recognition quick (a few milliseconds after you let go) and keeps other words from being taken for commands.</p>
           </article>
           <article class="learn-action" id="privacy">
             <h3><i class="ph ph-lock-simple" aria-hidden="true"></i>Offline and private</h3>
-            <p>Speech is recognized on your computer by the <a href="https://alphacephei.com/vosk/">Vosk</a> speech library: nothing you say leaves it. Each language needs a speech model, about 40 MB (Korean about 85 MB), downloaded once in the settings. There are models for English, German, Spanish, French, Korean, Russian and Chinese.</p>
+            <p>Speech is recognized on your computer by the <a href="https://alphacephei.com/vosk/">Vosk</a> speech library: nothing you say leaves it, and nothing is recorded. The microphone is heard only while the push-to-talk input is held. The one download is the speech model of your language, once, when you ask for it.</p>
+          </article>
+          <article class="learn-action" id="requirements">
+            <h3><i class="ph ph-list-checks" aria-hidden="true"></i>What you need</h3>
+            <ul>
+              <li>Joystick Gobloon 0.12 or newer on Windows or Linux. The speech library comes with the installer, the portable zip and the AppImage.</li>
+              <li>A microphone: a headset, a desk microphone or a webcam's. On Windows, allow desktop apps to use the microphone in Privacy settings.</li>
+              <li>The speech model of the language you speak, about 40 MB (Korean about 85 MB). There are models for English, German, Spanish, French, Korean, Russian and Chinese.</li>
+            </ul>
           </article>
         </section>
 
@@ -166,26 +184,57 @@
           <h2 id="setup-title">Setting it up</h2>
           <article class="learn-action" id="language">
             <h3><i class="ph ph-translate" aria-hidden="true"></i>1. Speech model</h3>
-            <p>Open <span class="term">Settings</span>, <span class="term">Voice</span>. Commands are spoken in the program's language unless you choose another one; download its speech model there. The same page sets the microphone volume, with a test that shows the level as you speak, and the least confidence a command needs.</p>
+            <p>Open <span class="term">Settings</span>, <span class="term">Voice</span>. Commands are spoken in the program's language unless you choose another one in the list (<span class="term">Same as the program</span> is the default), so you can keep the program in one language and speak another. Click <span class="term">Download the speech model</span>; the progress bar shows the download, which is checked and unpacked by itself. <span class="term">Speech model installed</span> means it is ready; the bin removes it again.</p>
+            <p>Models are kept in the <code>voice</code> folder of the program's data folder: <code>%APPDATA%\JoystickGobloon\voice</code> on Windows, <code>~/.config/JoystickGobloon/voice</code> on Linux, or next to the program for a portable copy with its own settings.</p>
             <figure class="shot"><img src="img/voice-settings.png" loading="lazy" width="1102" height="732" alt="Settings, Voice: the speech model in the program's language is installed, the microphone volume at 100 %, the microphone test, Keep the microphone open switched on and the least confidence at 50 %"></figure>
           </article>
+          <article class="learn-action" id="microphone">
+            <h3><i class="ph ph-speaker-high" aria-hidden="true"></i>2. Microphone check</h3>
+            <p>On the same page, choose your microphone next to <span class="term">Test the microphone</span> and switch the test on. Speak as loudly as you will give commands: the bar should reach about the middle, never the end (<span class="term">Too loud</span>). Raise <span class="term">Microphone volume</span> (up to 400 %) for a quiet microphone, lower it when the bar hits the end. The test hears nothing it would keep; it only shows the level.</p>
+            <p>Voice settings take effect the next time a profile is activated.</p>
+          </article>
           <article class="learn-action" id="push-to-talk">
-            <h3><i class="ph ph-hand-pointing" aria-hidden="true"></i>2. Push-to-talk button</h3>
-            <p>Pick the input you will hold while speaking, a stick button, a key on the Keyboard tab or a gamepad button, and add the <span class="term">Voice input</span> action to it. Choose the microphone, or leave the default one.</p>
+            <h3><i class="ph ph-hand-pointing" aria-hidden="true"></i>3. Push-to-talk button</h3>
+            <p>Pick the input you will hold while speaking: a stick button, a key on the Keyboard tab or a gamepad button. Add the <span class="term">Voice input</span> action to it and choose the microphone, or leave <span class="term">Default microphone</span>, the system's. A chosen microphone that is not connected shows a warning, and the default one listens meanwhile.</p>
+            <p>A thumb button or a key you do not use for anything else works best. The push-to-talk input can have other actions too, for example the game's own radio key.</p>
             <figure class="shot"><img src="img/actions/voice-input.png" loading="lazy" alt="Button 5 of a stick with the Voice input action listening on the default microphone"></figure>
           </article>
           <article class="learn-action" id="commands">
-            <h3><i class="ph ph-list-plus" aria-hidden="true"></i>3. Commands</h3>
-            <p>Open the <span class="term">Voice</span> tab on the Devices page and add a command with <span class="term">+ Command</span>. Give it one or more phrases: any of them sets it off. The time below the phrases is how long the command holds its button once it was heard. The line at the top names the push-to-talk input; click it to go there.</p>
+            <h3><i class="ph ph-list-plus" aria-hidden="true"></i>4. Commands and phrases</h3>
+            <p>Open the <span class="term">Voice</span> tab on the Devices page. The line at the top names the push-to-talk input (click it to go there); without one, a note says how to add it. Click <span class="term">+ Command</span> and type its phrases under <span class="term">Say any of these phrases</span>: any of them sets the command off, so give it the words you would naturally use. The number below the phrases is the <a href="#hold-time">hold time</a>.</p>
             <figure class="shot"><img src="img/voice.png" loading="lazy" width="1102" height="732" alt="Voice tab: listens while Button 5 of the stick is held, two commands, lights on and gear down; lights on has the phrases lights on and lights, holds its button 0.10 s and presses virtual stick button 12"></figure>
           </article>
           <article class="learn-action" id="command-actions">
-            <h3><i class="ph ph-joystick" aria-hidden="true"></i>4. What a command does</h3>
-            <p>Add actions to a command as to any button: <a href="learn.html#map-to-vjoy">Map to virtual stick</a> for a button a game binds, <a href="learn.html#map-to-keyboard">Map to keyboard</a> for a key, a <a href="learn.html#macro">Macro</a>, <a href="learn.html#change-mode">Change mode</a> and the rest.</p>
+            <h3><i class="ph ph-joystick" aria-hidden="true"></i>5. What a command does</h3>
+            <p>Below its phrases, a command takes actions like any button: <a href="learn.html#map-to-vjoy">Map to virtual stick</a> for a button the game binds, <a href="learn.html#map-to-keyboard">Map to keyboard</a> for the game's own key, a <a href="learn.html#macro">Macro</a> for a sequence, <a href="learn.html#change-mode">Change mode</a>, <a href="learn.html#text-to-speech">Text to speech</a> for a spoken answer, and the rest.</p>
           </article>
           <article class="learn-action" id="speak">
-            <h3><i class="ph ph-waveform" aria-hidden="true"></i>5. Speak</h3>
-            <p>Activate the profile, hold the push-to-talk input, say the phrase and let go. The Voice tab and the status bar show what was heard, how sure the recognition was and which command ran.</p>
+            <h3><i class="ph ph-waveform" aria-hidden="true"></i>6. Speak</h3>
+            <p>Activate the profile. The first time, the speech model takes a second or two to load. Then hold the push-to-talk input, say the phrase and let go. The status bar and the Voice tab show what was heard, how sure the recognition was and which command ran.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="further" aria-labelledby="further-title">
+          <h2 id="further-title">Going further</h2>
+          <article class="learn-action" id="several-microphones">
+            <h3><i class="ph ph-microphone-stage" aria-hidden="true"></i>Several microphones</h3>
+            <p>Each Voice input action has its own microphone, so two push-to-talk buttons can listen on two microphones, for example a headset and a desk microphone. Both hear the same commands.</p>
+          </article>
+          <article class="learn-action" id="modes">
+            <h3><i class="ph ph-stack" aria-hidden="true"></i>Modes and modifiers</h3>
+            <p>Voice commands are inputs like any other: their actions belong to a <a href="learn.html#modes">mode</a>, and with <a href="learn.html#modifiers">modifiers</a> they can do something else on another layer. "Gear" can lower the landing gear in one mode and do nothing in another. While the profile is paused, commands do nothing.</p>
+          </article>
+          <article class="learn-action" id="hold-time">
+            <h3><i class="ph ph-timer" aria-hidden="true"></i>Hold time</h3>
+            <p>A command presses its button for its hold time (0.10 s for a new one) and lets go. Raise it for a game that misses short presses or for an action that needs a long press. A command heard again while its button is still down keeps it down for another hold time.</p>
+          </article>
+          <article class="learn-action" id="keep-open">
+            <h3><i class="ph ph-microphone" aria-hidden="true"></i>Keep the microphone open</h3>
+            <p>Some headsets stay silent for a second or two after they are opened, which would swallow a short command. With <span class="term">Keep the microphone open</span> (on by default), the profile's microphones stay open while it is active, so the first word after the press is heard. Nothing is recognized until the push-to-talk input is held. Turn it off if you do not want the microphone open at all between commands.</p>
+          </article>
+          <article class="learn-action" id="confidence">
+            <h3><i class="ph ph-gauge" aria-hidden="true"></i>Least confidence</h3>
+            <p>Every recognition comes with how sure it is. A command heard less sure than <span class="term">Least confidence</span> (50 % by default) does nothing. Raise it when other speech sets off commands, lower it when commands are often missed.</p>
           </article>
         </section>
 
@@ -194,18 +243,35 @@
           <article class="learn-action" id="good-phrases">
             <h3><i class="ph ph-chat-text" aria-hidden="true"></i>Good phrases</h3>
             <ul>
-              <li>Two or three words are recognized more surely than one short word.</li>
+              <li>Two or three words are recognized more surely than one short word: "gear down" rather than "gear".</li>
               <li>Phrases that sound alike in different commands get mixed up: make them differ from the first word.</li>
-              <li>Give a command a second phrase for the way you say it under stress.</li>
+              <li>Use everyday words of the model's language; names and abbreviations it does not know are not heard.</li>
+              <li>Give a command a second phrase for the way you say it in a hurry.</li>
+              <li>Press, then speak, then let go: a press shorter than about 0.15 s is taken for a slip and hears nothing.</li>
+            </ul>
+          </article>
+          <article class="learn-action" id="status">
+            <h3><i class="ph ph-info" aria-hidden="true"></i>What the status bar says</h3>
+            <ul>
+              <li><strong>Loading the speech model…</strong>: right after activation, for a second or two.</li>
+              <li><strong>Listening…</strong>: the push-to-talk input is held.</li>
+              <li><strong>Heard "lights" (93 %): lights on</strong>: what was heard, how sure, and the command that ran (named by its first phrase).</li>
+              <li><strong>Heard "…" (40 %): no command</strong>: not one of the phrases, or less sure than the least confidence.</li>
+              <li><strong>Heard nothing</strong>: no speech came through; see below.</li>
+              <li><strong>No speech model for voice commands</strong>: download it in Settings, Voice.</li>
             </ul>
           </article>
           <article class="learn-action" id="troubleshooting">
             <h3><i class="ph ph-first-aid-kit" aria-hidden="true"></i>When something is off</h3>
             <ul>
-              <li><strong>Nothing happens</strong>: check the status bar. Without a speech model it says so; download it in Settings, Voice.</li>
-              <li><strong>"Heard nothing"</strong>: the microphone is too quiet or another one listens. Test it in Settings, Voice, raise the volume until speech reaches about the middle of the bar, and check the microphone in the Voice input action.</li>
-              <li><strong>The first word is lost</strong>: some headsets are silent for a second after opening. Keep <span class="term">Keep the microphone open</span> on (the default).</li>
-              <li><strong>Other speech sets off commands</strong>: raise the least confidence. Commands often missed: lower it.</li>
+              <li><strong>Nothing happens when I speak</strong>: check that the profile is active and the push-to-talk input has the Voice input action (the Voice tab names it). Watch the status bar while you hold it.</li>
+              <li><strong>"Heard nothing"</strong>: the microphone is muted, too quiet, blocked by the system's privacy settings, or another one listens. Test it in Settings, Voice and check the microphone in the Voice input action.</li>
+              <li><strong>The first word is lost</strong>: keep <a href="#keep-open">Keep the microphone open</a> on, and start speaking a moment after the press.</li>
+              <li><strong>Wrong or no command</strong>: the bar of the microphone test should reach about the middle. Adjust the volume, choose clearer phrases, or lower the least confidence.</li>
+              <li><strong>Other speech sets off commands</strong>: raise the least confidence.</li>
+              <li><strong>Changed a setting and nothing changed</strong>: voice settings apply the next time a profile is activated.</li>
+              <li><strong>"The speech recognition library is missing"</strong>: the program's files are incomplete; reinstall Joystick Gobloon.</li>
+              <li>Still stuck? The log file <code>JoystickGobloon.log</code> in the data folder (see <a href="#language">Speech model</a>) lists every utterance with its length, loudness and what was heard. Attach it to a <a href="https://github.com/h0useRus/JoystickGobloon/issues">bug report</a>.</li>
             </ul>
           </article>
         </section>
