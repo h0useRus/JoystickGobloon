@@ -16,7 +16,7 @@ use crate::style::{self, icon};
 
 const NAME_WIDTH: f32 = 220.0;
 const PROFILE_WIDTH: f32 = 190.0;
-const MODE_WIDTH: f32 = 130.0;
+const MODE_WIDTH: f32 = 150.0;
 
 pub struct AppsView {
     hh: Result<Arc<dyn Backend>, String>,
