@@ -89,6 +89,7 @@
       <li><a href="start.html">Get started</a></li>
       <li><a href="learn.html" aria-current="page">Learning</a></li>
       <li><a href="emulation.html">Emulation</a></li>
+      <li><a href="voice.html">Voice</a></li>
       <li><a href="index.html#platforms">Windows and Linux</a></li>
       <li><a href="index.html#faq">FAQ</a></li>
     </ul>
@@ -107,9 +108,10 @@
       <li style="--i:2"><a href="start.html">Get started</a></li>
       <li style="--i:3"><a href="learn.html" aria-current="page">Learning</a></li>
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
-      <li style="--i:5"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:6"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:7"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:5"><a href="voice.html">Voice</a></li>
+      <li style="--i:6"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:7"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:8"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -118,7 +120,7 @@
       <div class="wrap">
         <p class="kicker">Learning</p>
         <h1 class="gradient">Every action,<br>explained with its editor</h1>
-        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 24 actions does.</p>
+        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 25 actions does.</p>
       </div>
     </header>
 
@@ -164,6 +166,7 @@
           <li><a class="toc-group" href="#other">Other</a><ul>
             <li><a href="#play-sound">Play sound</a></li>
             <li><a href="#text-to-speech">Text to speech</a></li>
+            <li><a href="#voice-input">Voice input</a></li>
             <li><a href="#run-command">Run command</a></li>
             <li><a href="#description">Description</a></li>
           </ul></li>
@@ -339,6 +342,11 @@
             <p>Speaks a text with a voice of the system. <code>${current_mode}</code> becomes the name of the active mode. Speed, volume and pitch can be set; the new text can wait for the current one or interrupt it.</p>
             <figure class="shot"><img src="img/actions/text-to-speech.png" loading="lazy" alt="Text to speech saying the mode name"></figure>
           </article>
+          <article class="learn-action" id="voice-input">
+            <h3><i class="ph ph-microphone" aria-hidden="true"></i>Voice input</h3>
+            <p>Makes its button a push-to-talk button: while it is held, the microphone listens for the profile's voice commands, and a phrase said runs its command when you let go. Choose the microphone, or leave the default one. The commands and their phrases are on the Voice tab of the Devices page; <a href="voice.html">Voice commands</a> shows the whole setup.</p>
+            <figure class="shot"><img src="img/actions/voice-input.png" loading="lazy" alt="Button 5 of a stick with the Voice input action listening on the default microphone"></figure>
+          </article>
           <article class="learn-action" id="run-command">
             <h3><i class="ph ph-terminal-window" aria-hidden="true"></i>Run command</h3>
             <p>Starts a program, with arguments if needed.</p>
@@ -368,6 +376,7 @@
             <li><a href="start.html">Get started</a></li>
             <li><a href="learn.html">Learning</a></li>
             <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="voice.html">Voice</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>
