@@ -177,6 +177,15 @@ apps-blind = Sieht verborgene Geräte nicht
 apps-inverse = Anwendungsliste umkehren
 apps-inverse-tip = Aufgeführte Programme sehen verborgene Geräte nicht; alle anderen schon
 apps-remove = Aus der Liste entfernen
+apps-add-running = Laufendes Programm hinzufügen
+apps-add-running-none = Keine anderen Programme mit Fenster laufen
+apps-profile-none = Kein Profil
+apps-profile-choose = Datei wählen…
+apps-profile-tip = Profil, das läuft, solange dieses Programm im Vordergrund ist (wenn ein Profil aktiv ist)
+apps-mode-start = Startmodus
+apps-mode-tip = Modus, in dem das Profil für dieses Programm startet
+apps-own-no-profile = Joystick Gobloon wählt nie ein Profil für sich selbst
+apps-running-tip = Sein Profil läuft gerade
 
 # Engine
 action-activate = Profil aktivieren

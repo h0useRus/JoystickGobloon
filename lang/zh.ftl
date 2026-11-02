@@ -177,6 +177,15 @@ apps-blind = 不可见隐藏设备
 apps-inverse = 反转应用列表
 apps-inverse-tip = 列表中的程序看不到隐藏设备；其他所有程序都能看到
 apps-remove = 从列表中移除
+apps-add-running = 添加正在运行的程序
+apps-add-running-none = 没有其他带窗口的程序在运行
+apps-profile-none = 无配置文件
+apps-profile-choose = 选择文件…
+apps-profile-tip = 此程序位于前台时运行的配置文件（配置文件已激活时）
+apps-mode-start = 启动模式
+apps-mode-tip = 此程序下配置文件启动时的模式
+apps-own-no-profile = Joystick Gobloon 从不为自身选择配置文件
+apps-running-tip = 正在运行它的配置文件
 
 # Engine
 action-activate = 激活配置文件

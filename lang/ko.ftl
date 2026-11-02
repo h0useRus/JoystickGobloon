@@ -177,6 +177,15 @@ apps-blind = 숨겨진 장치를 볼 수 없음
 apps-inverse = 애플리케이션 목록 반전
 apps-inverse-tip = 목록의 프로그램은 숨겨진 장치를 보지 못하고, 다른 모든 프로그램은 봅니다
 apps-remove = 목록에서 제거
+apps-add-running = 실행 중인 프로그램 추가
+apps-add-running-none = 창이 있는 다른 실행 중인 프로그램이 없습니다
+apps-profile-none = 프로필 없음
+apps-profile-choose = 파일 선택…
+apps-profile-tip = 이 프로그램이 전면에 있는 동안 실행되는 프로필 (프로필이 활성일 때)
+apps-mode-start = 시작 모드
+apps-mode-tip = 이 프로그램에서 프로필이 시작하는 모드
+apps-own-no-profile = Joystick Gobloon은 자신의 프로필을 선택하지 않습니다
+apps-running-tip = 지금 이 프로그램의 프로필이 실행 중
 
 # Engine
 action-activate = 프로필 활성화

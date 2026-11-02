@@ -77,6 +77,8 @@ pub struct JoystickGobloonApp {
     front: Option<crate::platform::Program>,
     /// This program's file name: it never chooses a profile.
     own_exe: String,
+    /// The program whose profile runs now by switching: (its key, its name, the profile file).
+    switched: Option<(String, String, String)>,
     /// Activated with unsaved changes while programs have profiles: ask to save first.
     ask_switch_unsaved: bool,
     /// The program whose waiting switch the user put off (no question again for it).
@@ -270,6 +272,7 @@ impl JoystickGobloonApp {
                 .and_then(|e| e.file_name().map(|n| n.to_string_lossy().into_owned()))
                 .unwrap_or_else(|| crate::platform::exe_name().into()),
             ask_switch_unsaved: false,
+            switched: None,
             held_dismissed: None,
             switch_paused: false,
             device_baseline: None,
@@ -539,6 +542,7 @@ impl JoystickGobloonApp {
         }
         if !wanted {
             self.switch_paused = false;
+            self.switched = None;
             return;
         }
         let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
@@ -583,6 +587,7 @@ impl JoystickGobloonApp {
         self.vjoy_view.release();
         match self.activation.reload() {
             Ok(()) => {
+                self.switched = Some((app.key(), program.clone(), file.clone()));
                 self.held_dismissed = None;
                 self.device_baseline = self.device_snapshot();
                 log::info!("{program} in front: {} runs", path.display());
@@ -1536,10 +1541,6 @@ impl JoystickGobloonApp {
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
                 (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
             ] {
-                // The Applications page edits the hiding program list; not every platform has one.
-                if page == Page::Apps && !gob_hide::capabilities().app_list {
-                    continue;
-                }
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
                 }
@@ -2056,7 +2057,21 @@ impl eframe::App for JoystickGobloonApp {
         if let Some(tray) = &mut self.tray {
             let active = self.activation.is_active();
             let tip = |key: &str| format!("{} | {}", crate::APP_NAME, self.i18n.tr(key));
-            tray.set_active(active, [tip("title-inactive"), tip("title-active")]);
+            let running = match &self.switched {
+                Some((_, program, file)) if active => format!(
+                    "{} | {}",
+                    crate::APP_NAME,
+                    self.i18n.trf(
+                        "status-switched",
+                        &[
+                            ("program", program.clone().into()),
+                            ("file", file.clone().into())
+                        ],
+                    )
+                ),
+                _ => tip("title-active"),
+            };
+            tray.set_active(active, [tip("title-inactive"), running]);
             tray.set_double_click_activates(self.settings.tray_double_click_activates);
             match self.activation.profile_name() {
                 Some(name) => {
@@ -2299,7 +2314,10 @@ impl eframe::App for JoystickGobloonApp {
             .show(root, |ui| match self.page {
                 Page::Devices => self.devices_page(ui),
                 Page::Apps => {
-                    self.apps_view.show(ui, &self.i18n, &self.settings);
+                    let running = self.switched.as_ref().map(|(key, _, _)| key.as_str());
+                    let current = self.profile.as_ref().and_then(|p| p.path.as_deref());
+                    self.apps_view
+                        .show(ui, &self.i18n, &self.settings, running, current);
                 }
                 Page::VJoy => {
                     let locked = self.activation.is_active();

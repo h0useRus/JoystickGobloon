@@ -177,6 +177,15 @@ apps-blind = Does not see hidden devices
 apps-inverse = Inverse application cloak
 apps-inverse-tip = Listed programs do not see hidden devices; all other programs do
 apps-remove = Remove from the list
+apps-add-running = Add a running program
+apps-add-running-none = No other programs with a window are running
+apps-profile-none = No profile
+apps-profile-choose = Choose a file…
+apps-profile-tip = Profile that runs while this program is in front (when a profile is active)
+apps-mode-start = Starting mode
+apps-mode-tip = Mode the profile starts in for this program
+apps-own-no-profile = Joystick Gobloon never chooses a profile for itself
+apps-running-tip = Its profile runs now
 
 # Engine
 action-activate = Activate the profile
