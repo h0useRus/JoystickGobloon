@@ -111,6 +111,17 @@ impl AppEntry {
             mode: None,
         }
     }
+
+    /// What programs are matched by: the file name without case, so every copy of a game
+    /// (other install folders, test builds) counts.
+    pub fn key(&self) -> String {
+        program_key(&self.path.file_name().unwrap_or_default().to_string_lossy())
+    }
+}
+
+/// [`AppEntry::key`] of a program's file name.
+pub fn program_key(name: &str) -> String {
+    name.to_lowercase()
 }
 
 /// Programs on the Applications page, in `apps.gob` next to the settings.

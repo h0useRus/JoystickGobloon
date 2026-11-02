@@ -20,6 +20,7 @@ mod modifiers_view;
 mod output_marks;
 mod platform;
 mod profile_view;
+mod program_switch;
 mod settings;
 mod settings_view;
 mod style;
