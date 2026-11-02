@@ -69,6 +69,14 @@ pub struct JoystickGobloonApp {
     activation: Activation,
     /// Active in the last frame: a change made from the tray updates the status bar.
     was_active: bool,
+    /// Switching profiles by program: on from Activate until the profile is stopped.
+    switching: bool,
+    switcher: crate::program_switch::Switcher,
+    watcher: crate::program_switch::Watcher,
+    /// The program in front, as the watcher last said.
+    front: Option<crate::platform::Program>,
+    /// This program's file name: it never chooses a profile.
+    own_exe: String,
     /// Time of the last edit; a running profile restarts once edits settle.
     edited: Option<std::time::Instant>,
     /// Action waiting for the "save changes?" answer.
@@ -113,6 +121,18 @@ pub struct JoystickGobloonApp {
 struct Alert {
     title: String,
     lines: Vec<String>,
+}
+
+/// Who opens a profile.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OpenAs {
+    /// The user: import warnings are shown, not only logged; a running profile stops.
+    User,
+    /// Reopened on start: warnings only logged.
+    Reopen,
+    /// A program of the Applications page came to the front: the running profile keeps
+    /// running (with its virtual devices) and errors go to the status bar, not a dialog.
+    Program,
 }
 
 #[derive(Clone)]
@@ -214,6 +234,14 @@ impl JoystickGobloonApp {
             voice_panel: Default::default(),
             activation,
             was_active: false,
+            switching: false,
+            switcher: Default::default(),
+            watcher: crate::program_switch::Watcher::start(cc.egui_ctx.clone()),
+            front: None,
+            own_exe: std::env::current_exe()
+                .ok()
+                .and_then(|e| e.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .unwrap_or_else(|| crate::platform::exe_name().into()),
             edited: None,
             pending: None,
             gremlin_warning: None,
@@ -334,7 +362,7 @@ impl JoystickGobloonApp {
             }
             found
         }) {
-            app.open_profile(path, false);
+            app.open_profile(path, OpenAs::Reopen);
             if app.settings.activate_on_start && app.profile.is_some() {
                 app.toggle_runner(&cc.egui_ctx);
             }
@@ -393,14 +421,22 @@ impl JoystickGobloonApp {
     }
 
     /// `interactive`: opened by the user, so import warnings are shown, not only logged.
-    fn open_profile(&mut self, path: PathBuf, interactive: bool) {
-        if let Some(entry) = crate::autosave::find(&self.settings.autosave, &path).cloned() {
+    /// Opens a profile file; `false` when it could not be read.
+    fn open_profile(&mut self, path: PathBuf, how: OpenAs) -> bool {
+        // A program's profile runs as saved; its unsaved copy reopens when the user opens it.
+        if let Some(entry) = crate::autosave::find(&self.settings.autosave, &path)
+            .filter(|_| how != OpenAs::Program)
+            .cloned()
+        {
             match gob_gremlin::load(&entry.file) {
-                Ok(profile) => return self.restore(profile, entry),
+                Ok(profile) => {
+                    self.restore(profile, entry);
+                    return true;
+                }
                 Err(e) => log::error!("autosave {}: {e}", entry.file.display()),
             }
             if entry.origin.is_none() {
-                return;
+                return false;
             }
         }
         match gob_gremlin::load(&path) {
@@ -415,7 +451,7 @@ impl JoystickGobloonApp {
                     .i18n
                     .trf("status-loaded", &[("file", loaded.file_name().into())]);
                 let lines = important_warnings(&self.i18n, &report);
-                if interactive && !lines.is_empty() {
+                if how == OpenAs::User && !lines.is_empty() {
                     self.alerts.push(Alert {
                         title: self
                             .i18n
@@ -425,17 +461,86 @@ impl JoystickGobloonApp {
                 }
                 self.drop_autosave();
                 self.profile = Some(loaded);
-                self.activation.stop();
+                if how != OpenAs::Program {
+                    self.activation.stop();
+                    self.activation.set_start_mode(None);
+                }
                 self.devices_view.reset_mode();
                 self.settings.last_profile = Some(path);
                 self.settings.save();
+                true
             }
             Err(e) => {
                 log::error!("loading {}: {e}", path.display());
-                let text = self
-                    .i18n
-                    .trf("import-error", &[("error", e.to_string().into())]);
-                self.error(text);
+                if how != OpenAs::Program {
+                    let text = self
+                        .i18n
+                        .trf("import-error", &[("error", e.to_string().into())]);
+                    self.error(text);
+                }
+                false
+            }
+        }
+    }
+
+    /// Switching profiles by program, every frame: follows the program in front while a
+    /// profile runs. Unsaved changes pause it; the program in front then counts once they are
+    /// saved or discarded.
+    fn switch_by_program(&mut self) {
+        let wanted = self.switching
+            && self.activation.is_active()
+            && self.apps_view.apps().iter().any(|a| a.profile.is_some());
+        self.watcher.set_enabled(wanted);
+        if let Some(front) = self.watcher.changed() {
+            self.front = front;
+        }
+        if !wanted || self.profile.as_ref().is_some_and(|p| p.dirty) {
+            return;
+        }
+        let Some(app) = self
+            .switcher
+            .check(self.front.as_ref(), self.apps_view.apps(), &self.own_exe)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(path) = app.profile.clone() else {
+            return;
+        };
+        let program = self
+            .front
+            .as_ref()
+            .map(|p| p.name.clone())
+            .unwrap_or_default();
+        let file = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        let current = self.profile.as_ref().and_then(|p| p.path.as_ref()) == Some(&path);
+        if !current && !self.open_profile(path.clone(), OpenAs::Program) {
+            self.status = self.i18n.trf(
+                "status-switch-failed",
+                &[("program", program.into()), ("file", file.into())],
+            );
+            return;
+        }
+        self.activation.set_start_mode(app.mode.clone());
+        self.sync_activation();
+        self.vjoy_view.release();
+        match self.activation.reload() {
+            Ok(()) => {
+                log::info!("{program} in front: {} runs", path.display());
+                self.status = self.i18n.trf(
+                    "status-switched",
+                    &[("program", program.into()), ("file", file.into())],
+                );
+            }
+            Err(e) => {
+                log::error!("{program} in front: {}: {e}", path.display());
+                self.status = self.i18n.trf(
+                    "status-switch-failed",
+                    &[("program", program.into()), ("file", file.into())],
+                );
             }
         }
     }
@@ -459,6 +564,7 @@ impl JoystickGobloonApp {
         self.drop_autosave();
         self.profile = Some(loaded);
         self.activation.stop();
+        self.activation.set_start_mode(None);
         self.devices_view.reset_mode();
         self.settings.last_profile = Some(entry.origin.unwrap_or(entry.file));
         self.settings.save();
@@ -557,7 +663,7 @@ impl JoystickGobloonApp {
     fn import_dialog(&mut self) {
         if let Some(path) = self.profile_dialog(None).pick_file() {
             self.remember_profile_dir(&path);
-            self.open_profile(path, true);
+            self.open_profile(path, OpenAs::User);
         }
     }
 
@@ -741,6 +847,7 @@ impl JoystickGobloonApp {
             .map(|dir| crate::autosave::next_file(&dir, &self.settings.autosave));
         self.profile = Some(loaded);
         self.activation.stop();
+        self.activation.set_start_mode(None);
         self.devices_view.reset_mode();
         self.status = self.i18n.tr("status-new");
     }
@@ -822,7 +929,7 @@ impl JoystickGobloonApp {
             Pending::Wizard => self.wizard = Some(crate::wizard_view::Wizard::new()),
             Pending::Open => self.import_dialog(),
             Pending::Load(path) => {
-                self.open_profile(path, true);
+                self.open_profile(path, OpenAs::User);
                 if self.profile.is_some() && !self.activation.is_active() {
                     self.toggle_runner(ctx);
                 }
@@ -1552,9 +1659,16 @@ impl eframe::App for JoystickGobloonApp {
     /// draws nothing and skips [`Self::ui`]).
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
+        self.switch_by_program();
         // Started or stopped from the tray menu (maybe while the window was hidden).
         let active = self.activation.is_active();
         if active != self.was_active {
+            // Activate (window or tray) starts switching by program; any stop ends it.
+            self.switching = active;
+            if active {
+                self.switcher.reset();
+                self.front = crate::platform::foreground_program();
+            }
             self.was_active = active;
             self.status = self.i18n.tr(if active {
                 "status-active"

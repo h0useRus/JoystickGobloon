@@ -2,8 +2,66 @@
 //! front. Only a program with a profile in front switches; anything else in front (another
 //! program, the desktop, Joystick Gobloon itself) keeps the running profile.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, channel};
+use std::time::Duration;
+
+use eframe::egui;
+
 use crate::platform::Program;
 use crate::settings::{AppEntry, program_key};
+
+/// How often the program in front is looked up.
+const INTERVAL: Duration = Duration::from_secs(1);
+
+/// Looks up the program in front on its own thread while switching is on and wakes the app
+/// when it changes (also with the window in the tray).
+pub struct Watcher {
+    on: Arc<AtomicBool>,
+    changed: Receiver<Option<Program>>,
+}
+
+impl Watcher {
+    pub fn start(ctx: egui::Context) -> Self {
+        let on = Arc::new(AtomicBool::new(false));
+        let (tx, changed) = channel();
+        let watching = on.clone();
+        std::thread::Builder::new()
+            .name("program-watcher".into())
+            .spawn(move || {
+                // Process of the window in front as last sent; `None`: send the next one.
+                let mut last: Option<Option<u32>> = None;
+                loop {
+                    std::thread::sleep(INTERVAL);
+                    if !watching.load(Ordering::Relaxed) {
+                        last = None;
+                        continue;
+                    }
+                    let front = crate::platform::foreground_program();
+                    let pid = front.as_ref().map(|p| p.pid);
+                    if last != Some(pid) {
+                        last = Some(pid);
+                        if tx.send(front).is_err() {
+                            return;
+                        }
+                        ctx.request_repaint();
+                    }
+                }
+            })
+            .expect("program watcher thread");
+        Self { on, changed }
+    }
+
+    pub fn set_enabled(&self, on: bool) {
+        self.on.store(on, Ordering::Relaxed);
+    }
+
+    /// The program in front, when it changed since the last call.
+    pub fn changed(&self) -> Option<Option<Program>> {
+        self.changed.try_iter().last()
+    }
+}
 
 /// The program of the Applications page whose profile the program in front asks for.
 /// `own`: Joystick Gobloon's file name, which never gets a profile.

@@ -40,6 +40,11 @@ impl AppsView {
         }
     }
 
+    /// The programs of the page.
+    pub fn apps(&self) -> &[AppEntry] {
+        &self.list.apps
+    }
+
     /// Lets Joystick Gobloon itself see hidden devices: adds it to the whitelist (not in inverse mode,
     /// where the list blocks programs instead).
     pub fn whitelist_self(&self) -> Option<Result<bool, String>> {

@@ -25,6 +25,9 @@ struct Inner {
     led_defaults: Option<Vec<gob_engine::Light>>,
     /// How voice commands run; `None`: voice-input actions do nothing.
     voice: Option<gob_engine::VoiceConfig>,
+    /// Mode the engine starts in instead of the profile's starting mode (the mode a program
+    /// of the Applications page chose for its profile).
+    start_mode: Option<String>,
 }
 
 impl Activation {
@@ -37,6 +40,7 @@ impl Activation {
             error: None,
             led_defaults: None,
             voice: None,
+            start_mode: None,
         })))
     }
 
@@ -49,6 +53,11 @@ impl Activation {
     /// Voice commands for the next start (a running profile keeps its own).
     pub fn set_voice(&self, voice: Option<gob_engine::VoiceConfig>) {
         self.lock().voice = voice;
+    }
+
+    /// Mode the next start or reload begins in; `None`: the profile's starting mode.
+    pub fn set_start_mode(&self, mode: Option<String>) {
+        self.lock().start_mode = mode;
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -93,6 +102,7 @@ impl Activation {
         let Some((profile, name)) = &inner.profile else {
             return Err("no profile loaded".into());
         };
+        let profile = &*starting_in(profile, inner.start_mode.as_deref());
         let devices = inner.input.devices();
         let aliases = crate::substitute_view::auto_aliases(profile, &devices);
         let repaint = {
@@ -123,6 +133,7 @@ impl Activation {
         let (Some(runner), Some((profile, name))) = (&inner.runner, &inner.profile) else {
             return Ok(());
         };
+        let profile = &*starting_in(profile, inner.start_mode.as_deref());
         let devices = inner.input.devices();
         let aliases = crate::substitute_view::auto_aliases(profile, &devices);
         runner.reload(profile, &aliases, &devices)?;
@@ -163,5 +174,20 @@ impl Activation {
             .runner
             .as_ref()
             .and_then(|r| r.take_load_request())
+    }
+}
+
+/// `profile`, starting in `mode` when it has that mode.
+fn starting_in<'a>(profile: &'a Profile, mode: Option<&str>) -> std::borrow::Cow<'a, Profile> {
+    match mode {
+        Some(mode)
+            if profile.startup_mode().as_deref() != Some(mode)
+                && profile.modes.iter().any(|m| m.name == mode) =>
+        {
+            let mut profile = profile.clone();
+            profile.set_startup_mode(mode);
+            std::borrow::Cow::Owned(profile)
+        }
+        _ => std::borrow::Cow::Borrowed(profile),
     }
 }
