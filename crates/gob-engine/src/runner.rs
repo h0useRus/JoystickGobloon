@@ -130,6 +130,9 @@ struct SystemOutput {
     pending_pads: Vec<(u32, Vec<gob_virtual::PadWrite>)>,
     /// Outputs whose last write the driver refused; logged once until one succeeds again.
     failing: HashSet<(u32, InputKind, u32)>,
+    /// Writes the driver did not take (refused, or no device held): sent again even when the
+    /// value is unchanged.
+    unsent: HashSet<(u32, InputKind, u32)>,
     failing_pads: HashSet<(u32, Option<GamepadControl>)>,
     media: crate::media::Media,
     lighting: crate::lighting::Lighting,
@@ -180,6 +183,7 @@ impl SystemOutput {
             pending: Vec::new(),
             pending_pads: Vec::new(),
             failing: HashSet::new(),
+            unsent: HashSet::new(),
             failing_pads: HashSet::new(),
             media: Default::default(),
             lighting,
@@ -195,7 +199,7 @@ impl SystemOutput {
     /// a short press still reaches the game.
     fn queue(&mut self, device: u32, write: gob_virtual::Write) {
         let (key, value) = write_key(device, write);
-        if self.written.get(&key) == Some(&value) {
+        if self.written.get(&key) == Some(&value) && !self.unsent.contains(&key) {
             return;
         }
         self.written.insert(key, value);
@@ -266,6 +270,11 @@ impl SystemOutput {
         let ok = self.devices.get(&device).map(|d| d.write(writes));
         for &w in writes.iter() {
             let key = write_key(device, w).0;
+            if ok != Some(true) {
+                self.unsent.insert(key);
+            } else if !self.unsent.is_empty() {
+                self.unsent.remove(&key);
+            }
             log_refused(&mut self.failing, key, ok, || {
                 format!("virtual device {device}: writing {w:?}")
             });
@@ -977,6 +986,24 @@ mod tests {
                 vec![Write::Button(4, true)],
                 vec![Write::Button(4, false), Write::Hat(1, Some(9000))]
             ]
+        );
+    }
+
+    #[test]
+    fn a_write_that_did_not_arrive_is_sent_again() {
+        let (mut out, calls) = output();
+        out.button(2, 1, true);
+        out.flush();
+        // Device 2 is held now: the same value goes out although it is unchanged.
+        out.devices.insert(2, Box::new(Calls(calls.clone())));
+        out.button(2, 1, true);
+        out.flush();
+        out.button(2, 1, true);
+        out.flush();
+        assert_eq!(
+            *calls.lock().unwrap(),
+            [vec![Write::Button(1, true)]],
+            "sent once, then unchanged again"
         );
     }
 

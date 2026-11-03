@@ -261,3 +261,79 @@ fn stopping_the_profile_stops_the_motion() {
     r.engine.release_all(&mut r.out);
     assert_eq!(r.engine.next_deadline(), None);
 }
+
+#[test]
+fn velocity_goes_on_when_one_of_two_buttons_is_let_go() {
+    let mut r = rig(&[("motion", "velocity"), ("speed", "0.5")]);
+    r.input(true, true, 0);
+    r.input(false, true, 100);
+    r.until(300);
+    let held = r.last();
+    r.input(false, false, 300);
+    r.until(500);
+    assert!(r.last() > held + 0.1, "up again: {} -> {}", held, r.last());
+}
+
+#[test]
+fn set_value_with_both_buttons_held() {
+    let mut r = rig(&[("set-value", "0.5"), ("return-on-release", "True")]);
+    r.input(true, true, 0);
+    r.input(false, true, 100);
+    r.input(true, false, 200);
+    assert_eq!(r.take(), [0.5, -0.5, -0.5], "down still held: its value");
+    r.input(false, false, 300);
+    assert_eq!(r.take(), [0.0], "both let go: back");
+}
+
+#[test]
+fn the_profile_acquires_the_device_it_writes() {
+    let r = rig(&[]);
+    assert!(r.engine.vjoy_devices().contains(&1));
+    let r = rig(&[("output-type", "gamepad"), ("gamepad-id", "2")]);
+    assert!(r.engine.gamepads().contains(&2));
+}
+
+#[test]
+fn the_decrease_input_goes_through_the_same_containers() {
+    let cond = format!(
+        "<condition>{}<comparator>{}{}</comparator><input>{}{}{}</input></condition>",
+        prop("condition-type", "joystick"),
+        prop("comparator-type", "pressed"),
+        prop("is-pressed", "True"),
+        prop("device-guid", DEV),
+        prop("input-type", "button"),
+        prop("input-id", "20"),
+    );
+    let body = prop("decrease-device-id", OTHER) + &prop("decrease-input-id", "1");
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs><input><device-id>{DEV}</device-id>
+        <input-type>button</input-type><mode>Default</mode><input-id>1</input-id>
+        <action-configuration><root-action>r</root-action><behavior>button</behavior>
+        </action-configuration></input></inputs><settings/><library>
+        <action id="r" type="root"><actions><action-id>c</action-id></actions></action>
+        <action id="c" type="condition">{}{cond}<true-actions><action-id>a</action-id></true-actions>
+        <false-actions/></action>
+        <action id="a" type="button-axis">{body}</action></library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        prop("logical-operator", "all")
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut r = Rig {
+        engine: Engine::new(&p, &HashMap::new()),
+        out: Recorder::default(),
+        t0: Instant::now(),
+    };
+    r.tap(false, 0);
+    assert!(
+        r.take().is_empty(),
+        "condition false: the decrease input does nothing"
+    );
+    r.engine.process(
+        &InputKey::new(DEV, InputKind::Button, 20),
+        Value::Button(true),
+        r.at(100),
+        &mut r.out,
+    );
+    r.tap(false, 200);
+    assert_eq!(r.take(), [-1.0]);
+}

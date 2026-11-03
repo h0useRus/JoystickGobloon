@@ -567,7 +567,8 @@ fn positions_strip(ui: &mut egui::Ui, id: &str, positions: &[f32], help: &str) -
                 -1.0
             };
             let hi = positions.get(i + 1).map_or(1.0, |n| n - 0.001);
-            let v = round(to_v(pos.x)).clamp(lo, hi);
+            // max/min, not clamp: hand-written positions may be closer than the margins.
+            let v = round(to_v(pos.x)).max(lo).min(hi);
             if v != positions[i] {
                 let mut p = positions.to_vec();
                 p[i] = v;

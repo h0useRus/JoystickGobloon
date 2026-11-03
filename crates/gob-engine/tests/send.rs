@@ -356,3 +356,57 @@ fn times_have_a_floor() {
         (10, 10, 500)
     );
 }
+
+#[test]
+fn repeat_on_press_stops_when_let_go() {
+    let mut r = vjoy("repeat", "press");
+    r.input(1, true, 0);
+    r.until(450);
+    r.input(1, false, 450);
+    r.take();
+    r.until(2000);
+    assert!(r.take().is_empty(), "no more pulses after the release");
+    assert_eq!(r.engine.next_deadline(), None);
+}
+
+#[test]
+fn wheel_turns_once_per_press_release_or_toggle() {
+    let mouse = |button: &str| {
+        format!(
+            "{}{}",
+            prop("string", "mode", "Button"),
+            prop("string", "button", button)
+        )
+    };
+    let mut r = rig(&[
+        ("t", "map-to-mouse", mouse("Wheel Up"), "toggle", "both"),
+        ("p", "map-to-mouse", mouse("Wheel Down"), "press", "both"),
+        ("l", "map-to-mouse", mouse("Wheel Up"), "release", "both"),
+    ]);
+    for (n, t) in [(1, 0), (1, 100), (2, 200), (3, 300)] {
+        r.input(n, true, t);
+        r.input(n, false, t + 10);
+    }
+    assert_eq!(
+        r.take(),
+        [Out::Wheel(1), Out::Wheel(1), Out::Wheel(-1), Out::Wheel(1)]
+    );
+}
+
+#[test]
+fn release_all_lets_go_of_buttons_without_a_release() {
+    // A smart toggle latches its button: nothing releases it but the toggle itself.
+    let toggle = format!(
+        "<actions><action-id>v</action-id></actions>{}",
+        prop("float", "delay", "0.5")
+    );
+    let mut r = rig(&[
+        ("s", "smart-toggle", toggle, "hold", "both"),
+        ("v", "map-to-vjoy", vjoy_button(9), "hold", "both"),
+    ]);
+    r.input(1, true, 0);
+    r.input(1, false, 50);
+    assert_eq!(r.take(), [Out::Button(9, true)], "latched");
+    r.engine.release_all(&mut r.out);
+    assert_eq!(r.take(), [Out::Button(9, false)]);
+}

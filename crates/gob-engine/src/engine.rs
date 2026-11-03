@@ -557,6 +557,10 @@ pub struct Engine {
     keys_down: HashSet<NodeId>,
     /// Mouse buttons the profile holds down.
     mouse_down: Vec<MouseButton>,
+    /// Virtual stick and gamepad buttons the profile holds down (released by
+    /// [`Engine::release_all`]).
+    vjoy_down: Vec<(u32, u8)>,
+    pad_down: Vec<(u32, GamepadControl)>,
     /// Button outputs with a send mode other than hold.
     sends: HashMap<NodeId, SendState>,
     /// voice-input actions held down, with their microphone.
@@ -586,8 +590,11 @@ pub struct Engine {
     /// Writes of moving axes, kept to reuse their memory.
     axis_writes: Vec<(AxisOut, f32)>,
     /// Decrease inputs of the button-axis actions met while compiling the current binding,
-    /// with the node they run.
-    compiled_decrease: Vec<(gob_core::DecreaseInput, NodeId)>,
+    /// with the action's id.
+    compiled_decrease: Vec<(gob_core::DecreaseInput, String)>,
+    /// While compiling a decrease input's tree: the button-axis action it runs. Other actions
+    /// compile to nothing, the containers on the way keep their logic.
+    prune: Option<String>,
     /// Start values are written once, when the profile starts.
     started: bool,
 }
@@ -648,6 +655,8 @@ impl Engine {
             cond_cache: HashMap::new(),
             keys_down: HashSet::new(),
             mouse_down: Vec::new(),
+            vjoy_down: Vec::new(),
+            pad_down: Vec::new(),
             sends: HashMap::new(),
             listening: HashMap::new(),
             voice_holds: profile
@@ -679,6 +688,7 @@ impl Engine {
             button_axes: HashMap::new(),
             axis_writes: Vec::new(),
             compiled_decrease: Vec::new(),
+            prune: None,
             started: false,
         };
         for m in &profile.modifiers {
@@ -753,8 +763,12 @@ impl Engine {
                     additive: cfg.additive,
                     keep_value: cfg.keep_value,
                 });
-                // A button-axis action's decrease input runs it too, in the same mode and layer.
-                for (input, node) in std::mem::take(&mut engine.compiled_decrease) {
+                // A button-axis action's decrease input runs it too, in the same mode and layer,
+                // through copies of the containers it sits in (their own state).
+                for (input, action) in std::mem::take(&mut engine.compiled_decrease) {
+                    engine.prune = Some(action);
+                    let node = engine.compile(&index, &cfg.root_action, 0);
+                    engine.prune = None;
                     let key = InputKey {
                         device: engine.device(&input.device),
                         kind: InputKind::Button,
@@ -815,7 +829,12 @@ impl Engine {
     }
 
     fn compile(&mut self, index: &HashMap<&str, &Action>, id: &str, depth: usize) -> NodeId {
-        let node = match index.get(id).filter(|_| depth < MAX_DEPTH) {
+        let pruned = self.prune.as_deref().is_some_and(|target| {
+            index
+                .get(id)
+                .is_some_and(|a| a.id != target && !is_container(a))
+        });
+        let node = match index.get(id).filter(|_| depth < MAX_DEPTH && !pruned) {
             None => Node::Noop,
             Some(action) => match action.kind() {
                 ActionKind::Root { children } => Node::Seq(
@@ -1197,7 +1216,7 @@ impl Engine {
                     microphone: microphone.to_string(),
                     act: action.activation_mode(),
                 },
-                ActionKind::ButtonAxis(axis) => self.button_axis_node(axis),
+                ActionKind::ButtonAxis(axis) => self.button_axis_node(axis, &action.id),
                 ActionKind::Other | ActionKind::Description { .. } => Node::Noop,
             },
         };
@@ -1205,8 +1224,9 @@ impl Engine {
         self.nodes.len() - 1
     }
 
-    /// button-axis: its node; the node of its decrease input goes to `compiled_decrease`.
-    fn button_axis_node(&mut self, axis: ButtonAxis) -> Node {
+    /// button-axis: its node, the decrease one while compiling the decrease input's tree;
+    /// otherwise the decrease input goes to `compiled_decrease`.
+    fn button_axis_node(&mut self, axis: ButtonAxis, id: &str) -> Node {
         let target = match &axis.output {
             AxisOutput::Vjoy { device, axis } => AxisOut::Vjoy(*device, (*axis).min(255) as u8),
             AxisOutput::Gamepad { gamepad, control } => match GamepadControl::parse(control) {
@@ -1221,15 +1241,19 @@ impl Engine {
                 id: *id,
             }),
         };
-        if let Some(input) = axis.decrease.clone()
+        // Compiling the decrease input's tree: this is the node it reaches.
+        if self.prune.as_deref() == Some(id) {
+            return Node::ButtonAxis {
+                axis,
+                target,
+                up: false,
+            };
+        }
+        if self.prune.is_none()
+            && let Some(input) = axis.decrease.clone()
             && matches!(input.input_type.as_str(), "button" | "key")
         {
-            self.nodes.push(Arc::new(Node::ButtonAxis {
-                axis: axis.clone(),
-                target: target.clone(),
-                up: false,
-            }));
-            self.compiled_decrease.push((input, self.nodes.len() - 1));
+            self.compiled_decrease.push((input, id.to_string()));
         }
         Node::ButtonAxis {
             axis,
@@ -1271,7 +1295,11 @@ impl Engine {
         self.nodes
             .iter()
             .flat_map(|n| match &**n {
-                Node::Vjoy { device, .. } => vec![*device],
+                Node::Vjoy { device, .. }
+                | Node::ButtonAxis {
+                    target: AxisOut::Vjoy(device, _),
+                    ..
+                } => vec![*device],
                 Node::Macro { steps, .. } => steps
                     .iter()
                     .filter_map(|s| match *s {
@@ -1291,7 +1319,11 @@ impl Engine {
         self.nodes
             .iter()
             .flat_map(|n| match &**n {
-                Node::Gamepad { gamepad, .. } => vec![*gamepad],
+                Node::Gamepad { gamepad, .. }
+                | Node::ButtonAxis {
+                    target: AxisOut::Pad(gamepad, _),
+                    ..
+                } => vec![*gamepad],
                 Node::Macro { steps, .. } => steps
                     .iter()
                     .filter_map(|s| match *s {
@@ -1736,12 +1768,13 @@ impl Engine {
                 relative,
                 send,
             } => {
-                if !should_execute(act, *value) {
-                    return;
-                }
+                // Send modes see both edges: a repeat stops on the one that does not trigger.
                 if let (VjoyTarget::Button(id), false) = (target, send.mode == SendMode::Hold) {
                     let press = Press::Vjoy(device, id);
                     self.send_event(node, press, send, act, src, *value, now, out);
+                    return;
+                }
+                if !should_execute(act, *value) {
                     return;
                 }
                 if let (VjoyTarget::Axis(id), Some(speed), Value::Axis(v)) =
@@ -1778,7 +1811,7 @@ impl Engine {
                             Value::Axis(v) => v != 0.0,
                             Value::Hat(d) => d.is_some(),
                         } != inverted;
-                        out.button(device, id, pressed);
+                        self.vjoy_button(device, id, pressed, out);
                         if pressed && !src.no_auto_release {
                             self.register(
                                 &src.key,
@@ -1805,12 +1838,12 @@ impl Engine {
                 act,
                 send,
             } => {
-                if !should_execute(act, *value) {
-                    return;
-                }
                 if control.kind() == ControlKind::Button && send.mode != SendMode::Hold {
                     let press = Press::Pad(gamepad, control);
                     self.send_event(node, press, send, act, src, *value, now, out);
+                    return;
+                }
+                if !should_execute(act, *value) {
                     return;
                 }
                 self.gamepad(gamepad, control, inverted, *value, src, out);
@@ -1935,24 +1968,24 @@ impl Engine {
                 }
             }
             Node::Mouse { action, act, send } => {
-                if !should_execute(act, *value) {
-                    return;
-                }
                 if let (MouseAction::Button(button), false) = (action, send.mode == SendMode::Hold)
                 {
                     let press = Press::Mouse(button);
                     self.send_event(node, press, send, act, src, *value, now, out);
                     return;
                 }
-                self.mouse(node, action, src, *value, now, out);
-            }
-            Node::Keys { act, send, .. } => {
                 if !should_execute(act, *value) {
                     return;
                 }
+                self.mouse(node, action, src, *value, now, out);
+            }
+            Node::Keys { act, send, .. } => {
                 if send.mode != SendMode::Hold {
                     let press = Press::Keys(node);
                     self.send_event(node, press, send, act, src, *value, now, out);
+                    return;
+                }
+                if !should_execute(act, *value) {
                     return;
                 }
                 if value.truthy() {
@@ -2279,6 +2312,18 @@ impl Engine {
         out: &mut dyn Output,
     ) {
         let triggered = value.truthy() != (act == ActivationMode::Release);
+        // A wheel has nothing to hold: press, release and toggle turn it one notch each time.
+        if let Press::Mouse(wheel @ (MouseButton::WheelUp | MouseButton::WheelDown)) = press
+            && matches!(
+                send.mode,
+                SendMode::Press | SendMode::Release | SendMode::Toggle
+            )
+        {
+            if triggered {
+                out.mouse_wheel(if wheel == MouseButton::WheelUp { 1 } else { -1 });
+            }
+            return;
+        }
         let state = self.sends.entry(node).or_default();
         match send.mode {
             SendMode::Hold => {}
@@ -2323,8 +2368,8 @@ impl Engine {
     /// A [`Press`] output goes down or up; the action's state remembers it.
     fn press(&mut self, node: NodeId, press: Press, down: bool, out: &mut dyn Output) {
         match press {
-            Press::Vjoy(device, button) => out.button(device, button, down),
-            Press::Pad(gamepad, control) => out.gamepad_button(gamepad, control, down),
+            Press::Vjoy(device, button) => self.vjoy_button(device, button, down, out),
+            Press::Pad(gamepad, control) => self.pad_button(gamepad, control, down, out),
             Press::Keys(node) if down => self.press_keys(node, out),
             Press::Keys(node) => self.release_keys(node, out),
             // A wheel turns one notch each time it goes down.
@@ -2424,6 +2469,30 @@ impl Engine {
         }
     }
 
+    /// A virtual stick button the profile presses or lets go.
+    fn vjoy_button(&mut self, device: u32, button: u8, down: bool, out: &mut dyn Output) {
+        out.button(device, button, down);
+        self.vjoy_down.retain(|&b| b != (device, button));
+        if down {
+            self.vjoy_down.push((device, button));
+        }
+    }
+
+    /// A virtual gamepad button the profile presses or lets go.
+    fn pad_button(
+        &mut self,
+        gamepad: u32,
+        control: GamepadControl,
+        down: bool,
+        out: &mut dyn Output,
+    ) {
+        out.gamepad_button(gamepad, control, down);
+        self.pad_down.retain(|&b| b != (gamepad, control));
+        if down {
+            self.pad_down.push((gamepad, control));
+        }
+    }
+
     /// Lets go of everything the profile holds down: keys, mouse buttons, virtual stick and
     /// gamepad buttons, latched and repeating outputs. Called when the profile stops or
     /// another one takes over (the virtual devices stay, so nothing else would release them).
@@ -2433,16 +2502,17 @@ impl Engine {
             .iter()
             .filter_map(|(&n, s)| s.press.filter(|_| s.down).map(|p| (n, p)))
             .collect();
-        self.sends.clear();
         for (node, press) in held {
             self.press(node, press, false, out);
         }
         self.sends.clear();
         for entry in std::mem::take(&mut self.releases).into_values().flatten() {
             match entry.action {
-                ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
+                ReleaseAction::VjoyButton(device, button) => {
+                    self.vjoy_button(device, button, false, out)
+                }
                 ReleaseAction::GamepadButton(gamepad, control) => {
-                    out.gamepad_button(gamepad, control, false)
+                    self.pad_button(gamepad, control, false, out)
                 }
                 _ => {}
             }
@@ -2452,6 +2522,13 @@ impl Engine {
         }
         for button in std::mem::take(&mut self.mouse_down) {
             out.mouse_button(button, false);
+        }
+        // Pressed without a release entry (pulses, macro steps) or still waiting for a timer.
+        for (device, button) in std::mem::take(&mut self.vjoy_down) {
+            out.button(device, button, false);
+        }
+        for (gamepad, control) in std::mem::take(&mut self.pad_down) {
+            out.gamepad_button(gamepad, control, false);
         }
         self.timers.clear();
         // Axes stay where they are, but stop moving.
@@ -2508,18 +2585,31 @@ impl Engine {
         let dir = if up { 1.0 } else { -1.0 };
         let state = self.axis_state(target, node, now);
         let write = match axis.motion {
-            AxisMotion::Set if pressed => {
-                state.before.get_or_insert(state.value);
-                Some(dir * axis.value)
+            AxisMotion::Set => {
+                state.held[usize::from(!up)] = pressed;
+                if pressed {
+                    state.before.get_or_insert(state.value);
+                    Some(dir * axis.value)
+                } else if state.held[usize::from(up)] {
+                    // The other button is still held: its value again.
+                    axis.return_on_release.then_some(-dir * axis.value)
+                } else {
+                    state.before.take().filter(|_| axis.return_on_release)
+                }
             }
-            AxisMotion::Set => state.before.take().filter(|_| axis.return_on_release),
             AxisMotion::Velocity => {
+                let was = held_direction(state.held);
                 state.held[usize::from(!up)] = pressed;
                 state.node = node;
-                if pressed {
+                let dir = held_direction(state.held);
+                // A new press, or one of two held buttons let go: it travels (again) from
+                // the start speed.
+                if dir != 0.0 && (pressed || dir != was || !state.moving) {
                     state.speed = axis.speed;
-                    state.moving = true;
-                    state.last_step = now;
+                    if !state.moving {
+                        state.moving = true;
+                        state.last_step = now;
+                    }
                 }
                 None
             }
@@ -2593,7 +2683,7 @@ impl Engine {
             };
             match axis.motion {
                 AxisMotion::Velocity => {
-                    let dir = f32::from(u8::from(a.held[0])) - f32::from(u8::from(a.held[1]));
+                    let dir = held_direction(a.held);
                     let top = axis.max_speed.max(axis.speed);
                     a.speed = (a.speed + axis.acceleration * dt).min(top);
                     a.value = (a.value + dir * a.speed * 2.0 * dt).clamp(-1.0, 1.0);
@@ -2666,7 +2756,7 @@ impl Engine {
                     Value::Axis(v) => v != 0.0,
                     Value::Hat(d) => d.is_some(),
                 } != inverted;
-                out.gamepad_button(gamepad, control, pressed);
+                self.pad_button(gamepad, control, pressed, out);
                 if pressed && !src.no_auto_release {
                     self.register(
                         &src.key,
@@ -2830,7 +2920,7 @@ impl Engine {
                 device,
                 id: n,
                 pressed,
-            } => out.button(device, id(n), pressed),
+            } => self.vjoy_button(device, id(n), pressed, out),
             MacroStep::VjoyAxis {
                 device,
                 id: n,
@@ -2854,7 +2944,7 @@ impl Engine {
                 pressed,
             } => {
                 if let Some(c) = GamepadControl::parse(&control) {
-                    out.gamepad_button(gamepad, c, pressed);
+                    self.pad_button(gamepad, c, pressed, out);
                 }
             }
             MacroStep::GamepadAxis {
@@ -3400,9 +3490,11 @@ impl Engine {
         }));
         for entry in fire.drain(..) {
             match entry.action {
-                ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
+                ReleaseAction::VjoyButton(device, button) => {
+                    self.vjoy_button(device, button, false, out)
+                }
                 ReleaseAction::GamepadButton(gamepad, control) => {
-                    out.gamepad_button(gamepad, control, false)
+                    self.pad_button(gamepad, control, false, out)
                 }
                 ReleaseAction::LeaveTemporary(mode) => self.leave_temporary(&mode),
                 ReleaseAction::ReleaseKeys(node) => self.release_keys(node, out),
@@ -3658,6 +3750,29 @@ fn with_default_delay(steps: &[MacroStep], delay: f64) -> Vec<MacroStep> {
         out.push(step.clone());
     }
     out
+}
+
+/// Velocity: 1 up, -1 down, 0 for none or both of its buttons held.
+fn held_direction(held: [bool; 2]) -> f32 {
+    f32::from(u8::from(held[0])) - f32::from(u8::from(held[1]))
+}
+
+/// Actions with child actions: kept when a decrease input's tree is compiled.
+fn is_container(action: &Action) -> bool {
+    matches!(
+        action.kind.as_str(),
+        "root"
+            | "tempo"
+            | "double-tap"
+            | "chain"
+            | "smart-toggle"
+            | "split-axis"
+            | "axis-delta"
+            | "condition"
+            | "hat-buttons"
+            | "merge-axis"
+            | "dual-axis-deadzone"
+    )
 }
 
 fn should_execute(act: ActivationMode, value: Value) -> bool {
