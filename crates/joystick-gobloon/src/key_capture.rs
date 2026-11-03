@@ -244,6 +244,26 @@ fn window_keys(ui: &egui::Ui, rec: &mut Recording) -> Vec<Key> {
     })
 }
 
+/// A key that is down now: from the system where it tells the held keys, else from this
+/// frame's key events.
+pub(crate) fn key_down(ui: &egui::Ui) -> Option<Key> {
+    if let Some(held) = crate::platform::held_keys() {
+        return held.first().copied();
+    }
+    ui.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::Key {
+                key,
+                physical_key,
+                pressed: true,
+                repeat: false,
+                ..
+            } => scan_code(physical_key.unwrap_or(*key)),
+            _ => None,
+        })
+    })
+}
+
 /// Keys as text chips plus a record button. Recording collects every key pressed until
 /// all are released again; the result replaces the keys. Returns the new keys once.
 pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) -> Option<Vec<Key>> {

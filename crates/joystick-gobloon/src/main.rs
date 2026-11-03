@@ -5,6 +5,7 @@ mod activation;
 mod app;
 mod apps_view;
 mod autosave;
+mod button_axis_editor;
 mod calibration_view;
 mod condition_editor;
 mod curve_editor;

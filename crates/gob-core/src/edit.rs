@@ -77,6 +77,11 @@ pub enum NewAction {
     SplitAxis,
     PauseResume,
     RunCommand,
+    /// Axis `axis` of virtual stick `device`; a press sets it to the top.
+    ButtonAxis {
+        device: u32,
+        axis: u32,
+    },
 }
 
 /// Child lists of container actions: `(group tag, is ordered list of actions)`.
@@ -431,6 +436,17 @@ impl Action {
                 "disallowed",
             ),
             NewAction::MapToKeyboard => Self::build("map-to-keyboard", Vec::new(), "both"),
+            NewAction::ButtonAxis { device, axis } => Self::build(
+                crate::BUTTON_AXIS,
+                vec![
+                    prop("string", "output-type", "vjoy"),
+                    prop("int", "vjoy-device-id", device.to_string()),
+                    prop("int", "vjoy-input-id", axis.to_string()),
+                    prop("string", "motion", "set"),
+                    prop("float", "set-value", "1.0"),
+                ],
+                "both",
+            ),
             NewAction::VoiceInput => Self::build(
                 "voice-input",
                 vec![prop("string", "microphone", "")],
