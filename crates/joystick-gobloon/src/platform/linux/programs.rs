@@ -171,6 +171,17 @@ mod tests {
         assert_eq!(windows_file_name("/usr/bin/firefox"), "firefox");
     }
 
+    /// By hand in a desktop session: `cargo test -p joystick-gobloon programs -- --ignored
+    /// --nocapture` prints the program in front and the programs with windows.
+    #[test]
+    #[ignore]
+    fn prints_the_running_programs() {
+        println!("front: {:?}", foreground_program());
+        for p in running_programs() {
+            println!("{} {} {}", p.pid, p.name, p.path.display());
+        }
+    }
+
     #[test]
     fn this_process_is_a_program() {
         let me = process(std::process::id()).unwrap();
