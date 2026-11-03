@@ -792,6 +792,7 @@ bax-to-logical = 逻辑设备的轴
 bax-decrease = 将轴向下移动（绑定的输入向上移动）
 bax-decrease-show = 显示此输入
 down-for = 将 { $input } 的轴向下移动（按键控制轴）
+input-not-shown = 该输入的设备不在“设备与绑定”页面上：请连接该设备
 bax-decrease-press = 请按一个按键或键…
 bax-decrease-none = 没有向下移动的输入
 bax-decrease-listen = 监听：按下使轴向下移动的按键或键

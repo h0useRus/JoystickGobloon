@@ -792,6 +792,7 @@ bax-to-logical = 논리 장치의 축
 bax-decrease = 축을 아래로 움직입니다 (연결된 입력은 위로)
 bax-decrease-show = 이 입력 보기
 down-for = { $input }의 축을 아래로 움직입니다 (버튼으로 축 조작)
+input-not-shown = 이 입력의 장치가 장치 및 바인딩 페이지에 없습니다. 장치를 연결하세요
 bax-decrease-press = 버튼이나 키를 누르세요…
 bax-decrease-none = 축을 아래로 움직이는 입력 없음
 bax-decrease-listen = 듣기: 축을 아래로 움직일 버튼이나 키를 누르세요

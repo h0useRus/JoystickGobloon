@@ -804,6 +804,7 @@ bax-to-logical = Un axe du périphérique logique
 bax-decrease = Déplace l’axe vers le bas (l’entrée liée le déplace vers le haut)
 bax-decrease-show = Afficher cette entrée
 down-for = Déplace vers le bas l’axe de { $input } (Axe par boutons)
+input-not-shown = L’appareil de cette entrée n’est pas sur la page Périphériques et affectations : branchez-le
 bax-decrease-press = Appuyez sur un bouton ou une touche…
 bax-decrease-none = Aucune entrée ne le déplace vers le bas
 bax-decrease-listen = Écouter : appuyez sur le bouton ou la touche qui déplace l’axe vers le bas

@@ -804,6 +804,7 @@ bax-to-logical = Eine Achse des logischen Geräts
 bax-decrease = Bewegt die Achse nach unten (der gebundene Eingang nach oben)
 bax-decrease-show = Diesen Eingang zeigen
 down-for = Bewegt die Achse von { $input } nach unten (Achse aus Tasten)
+input-not-shown = Das Gerät dieses Eingangs ist nicht auf der Seite „Geräte und Belegungen“: schließen Sie es an
 bax-decrease-press = Taste oder Knopf drücken…
 bax-decrease-none = Kein Eingang bewegt sie nach unten
 bax-decrease-listen = Zuhören: Knopf oder Taste drücken, der die Achse nach unten bewegt

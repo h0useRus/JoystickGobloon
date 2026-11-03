@@ -804,6 +804,7 @@ bax-to-logical = An axis of the logical device
 bax-decrease = Moves the axis down (the bound input moves it up)
 bax-decrease-show = Show this input
 down-for = Moves the axis of { $input } down (Axis from buttons)
+input-not-shown = That input's device is not on the Devices and bindings page: connect it
 bax-decrease-press = Press a button or key…
 bax-decrease-none = No input moves it down
 bax-decrease-listen = Listen: press the button or key that moves the axis down

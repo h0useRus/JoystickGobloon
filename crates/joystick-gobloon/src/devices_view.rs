@@ -97,6 +97,8 @@ pub struct DevicesView {
     /// The system part is offered above (it reads every button too): no banner of our own, so
     /// the first start asks for the password once. Set by the app.
     pub system_part_offered: bool,
+    /// A message for the status bar. The app shows it.
+    pub status: Option<String>,
 }
 
 struct Tab<'a> {
@@ -107,6 +109,15 @@ struct Tab<'a> {
     alias: Option<&'a str>,
     /// The profile's logical device: inputs come from the profile and can be edited.
     logical: bool,
+}
+
+impl Tab<'_> {
+    /// The profile's bindings of `device` show on this tab: its GUID, or the profile device it
+    /// is linked to by name.
+    fn owns(&self, device: &str) -> bool {
+        device.eq_ignore_ascii_case(self.guid)
+            || self.alias.is_some_and(|a| device.eq_ignore_ascii_case(a))
+    }
 }
 
 impl DevicesView {
@@ -212,12 +223,17 @@ impl DevicesView {
                 log::info!(
                     "two-axis action {action}: the editor follows it to {device} axis {axis}"
                 );
-                self.selected = Some(device.clone());
-                self.user_selected = true;
-                self.selected_input.insert(device.clone(), key);
-                self.scroll_to = Some((device.clone(), key));
+                self.show_input(device, key);
             }
         }
+    }
+
+    /// Selects tab `guid` and its input `key`, and scrolls the list to it.
+    fn show_input(&mut self, guid: &str, key: Key) {
+        self.selected = Some(guid.to_string());
+        self.user_selected = true;
+        self.selected_input.insert(guid.to_string(), key);
+        self.scroll_to = Some((guid.to_string(), key));
     }
 
     /// Forget the selected mode, e.g. after loading another profile.
@@ -513,17 +529,19 @@ impl DevicesView {
             rows.extend((1..=d.buttons.len() as u32).map(|b| ((Kind::Button, b), Bound::None)));
             rows.extend((1..=d.hats.len() as u32).map(|h| ((Kind::Hat, h), Bound::None)));
         }
-        if let (Some(p), Some(mode)) = (profile, &self.mode) {
-            // Walk from the current mode up through its parents; the nearest binding wins.
-            let chain = mode_chain(&p.profile, mode);
+        // The current mode and its parents, nearest first: the nearest binding wins.
+        let chain = match (profile, &self.mode) {
+            (Some(p), Some(mode)) => mode_chain(&p.profile, mode),
+            _ => Vec::new(),
+        };
+        if let Some(p) = profile {
             for (depth, m) in chain.iter().enumerate() {
-                for b in p.profile.inputs.iter().filter(|b| {
-                    let own = b.device_id.eq_ignore_ascii_case(tab.guid)
-                        || tab
-                            .alias
-                            .is_some_and(|a| b.device_id.eq_ignore_ascii_case(a));
-                    own && &b.mode == m
-                }) {
+                for b in p
+                    .profile
+                    .inputs
+                    .iter()
+                    .filter(|b| tab.owns(&b.device_id) && &b.mode == m)
+                {
                     let key = (binding_kind(b), b.input_id.parse().unwrap_or(0));
                     let slot = rows.entry(key).or_insert(Bound::None);
                     if matches!(slot, Bound::None) {
@@ -541,11 +559,7 @@ impl DevicesView {
         let mut labels: HashMap<Key, String> = HashMap::new();
         if let (true, Some(p)) = (tab.logical, profile) {
             for i in p.profile.logical_inputs() {
-                let kind = match i.input_type {
-                    InputType::Axis => Kind::Axis,
-                    InputType::Hat => Kind::Hat,
-                    _ => Kind::Button,
-                };
+                let kind = logical_kind(i.input_type);
                 rows.entry((kind, i.id)).or_insert(Bound::None);
                 labels.insert((kind, i.id), i.label);
             }
@@ -562,15 +576,15 @@ impl DevicesView {
         let index = profile
             .map(|p| p.profile.action_index())
             .unwrap_or_default();
-        let downs = match (profile, &self.mode) {
-            (Some(p), Some(mode)) => {
-                down_owners(i18n, &p.profile, &mode_chain(&p.profile, mode), tab, &index)
+        let downs = profile
+            .map(|p| down_owners(i18n, &p.profile, &chain, tab, &index))
+            .unwrap_or_default();
+        // A key that is only a down input has no binding of its own to list it. A connected
+        // device lists its real inputs only.
+        if tab.live.is_none() {
+            for &key in downs.keys() {
+                rows.entry(key).or_insert(Bound::None);
             }
-            _ => HashMap::new(),
-        };
-        // A key that is only a down input has no binding of its own to list it.
-        for &key in downs.keys() {
-            rows.entry(key).or_insert(Bound::None);
         }
 
         // The selected input of this tab: kept per device, else the first row.
@@ -626,7 +640,7 @@ impl DevicesView {
                         let down = downs.get(&key).map_or(&[][..], Vec::as_slice);
                         self.detail(
                             ui, i18n, profile, ops, vjoy, devices, tab, key, bound, &index, label,
-                            down,
+                            down, &mut jump,
                         );
                     });
             });
@@ -634,16 +648,12 @@ impl DevicesView {
             jump = Some((device, (type_kind(&input_type), id)));
         }
         if let Some((device, key)) = jump {
-            let found = tabs.iter().find(|t| {
-                t.guid.eq_ignore_ascii_case(&device)
-                    || t.alias.is_some_and(|a| a.eq_ignore_ascii_case(&device))
-            });
-            if let Some(t) = found {
-                let guid = t.guid.to_string();
-                self.selected = Some(guid.clone());
-                self.user_selected = true;
-                self.selected_input.insert(guid.clone(), key);
-                self.scroll_to = Some((guid, key));
+            match tabs.iter().find(|t| t.owns(&device)) {
+                Some(t) => self.show_input(t.guid, key),
+                None => {
+                    log::info!("input {device} {key:?} is on no tab of the Devices page");
+                    self.status = Some(i18n.tr("input-not-shown"));
+                }
             }
         }
     }
@@ -980,10 +990,11 @@ impl DevicesView {
                                 i18n.tr("bax-decrease-show")
                             );
                             let r = chip(ui, &glyph, &tip, true);
-                            if r.hovered() {
+                            if r.response.hovered() || r.inner.hovered() {
                                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                             }
-                            down_chips.push((r.rect, i));
+                            // The whole chip, border and padding too.
+                            down_chips.push((r.response.rect, i));
                         }
                     });
                 }
@@ -1033,8 +1044,9 @@ impl DevicesView {
         index: &HashMap<&str, &Action>,
         // Logical device input label: editable, with a delete button.
         label: Option<&str>,
-        // Axis from buttons actions this input moves down.
+        // Axis from buttons actions this input moves down; a click on one sets `jump`.
         downs: &[DownOwner],
+        jump: &mut Option<(String, Key)>,
     ) {
         // Bindings are written for the profile's device id (the alias when linked by name).
         let device = tab.alias.unwrap_or(tab.guid).to_string();
@@ -1126,8 +1138,7 @@ impl DevicesView {
                 .on_hover_text(i18n.tr("bax-decrease-show"))
                 .on_hover_cursor(egui::CursorIcon::PointingHand);
             if r.clicked() {
-                let input_type = input_type_name(d.key.0);
-                crate::button_axis_editor::request_jump(ui.ctx(), &d.device, input_type, d.key.1);
+                *jump = Some((d.device.clone(), d.key));
             }
         }
 
@@ -1555,7 +1566,12 @@ enum CardClick {
 }
 
 /// An action of a binding: its icon in a small frame, the name as tooltip.
-fn chip(ui: &mut egui::Ui, glyph: &str, tooltip: &str, weak: bool) -> egui::Response {
+fn chip(
+    ui: &mut egui::Ui,
+    glyph: &str,
+    tooltip: &str,
+    weak: bool,
+) -> egui::InnerResponse<egui::Response> {
     let visuals = ui.visuals();
     let text = RichText::new(glyph).size(style::ICON_SIZE - 2.0);
     let text = if weak { text.weak() } else { text };
@@ -1565,7 +1581,6 @@ fn chip(ui: &mut egui::Ui, glyph: &str, tooltip: &str, weak: bool) -> egui::Resp
         .inner_margin(Margin::symmetric(4, 1))
         // The label takes the hover, so the tooltip goes on it.
         .show(ui, |ui| ui.label(text).on_hover_text(tooltip))
-        .inner
 }
 
 #[derive(Clone, Copy)]
@@ -1691,6 +1706,15 @@ fn binding_kind(b: &InputBinding) -> Kind {
     type_kind(&b.input_type)
 }
 
+/// A logical input's kind: an axis, a hat, else a button.
+fn logical_kind(input_type: InputType) -> Kind {
+    match input_type {
+        InputType::Axis => Kind::Axis,
+        InputType::Hat => Kind::Hat,
+        _ => Kind::Button,
+    }
+}
+
 fn type_kind(input_type: &str) -> Kind {
     match InputType::parse(input_type) {
         InputType::Axis => Kind::Axis,
@@ -1727,6 +1751,26 @@ struct DownOwner {
     name: String,
 }
 
+/// The label a card shows instead of the input's name: a logical input's, a voice command's
+/// first phrase.
+fn input_label(profile: &Profile, device: &str, (kind, id): Key) -> Option<String> {
+    if device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID) {
+        return profile
+            .logical_inputs()
+            .into_iter()
+            .find(|i| logical_kind(i.input_type) == kind && i.id == id)
+            .map(|i| i.label);
+    }
+    if kind == Kind::Voice {
+        return profile
+            .voice_commands
+            .iter()
+            .find(|c| c.id == id)
+            .and_then(|c| c.phrases.first().cloned());
+    }
+    None
+}
+
 /// The down inputs of Axis from buttons actions that are on `tab`, each with the inputs whose
 /// action it is: the bindings that apply in the modes of `chain` (nearest first), every layer.
 fn down_owners(
@@ -1736,17 +1780,28 @@ fn down_owners(
     tab: &Tab,
     index: &HashMap<&str, &Action>,
 ) -> HashMap<Key, Vec<DownOwner>> {
-    let on_tab = |device: &str| {
-        device.eq_ignore_ascii_case(tab.guid)
-            || tab.alias.is_some_and(|a| device.eq_ignore_ascii_case(a))
-    };
-    let mut seen: HashSet<(String, Key)> = HashSet::new();
     let mut owners: HashMap<Key, Vec<DownOwner>> = HashMap::new();
+    // Most profiles have none: no need to walk the bindings then.
+    let any = profile.library.iter().any(|a| {
+        gob_core::ButtonAxis::of(a)
+            .and_then(|a| a.decrease)
+            .is_some_and(|d| tab.owns(&d.device))
+    });
+    if !any {
+        return owners;
+    }
+    let mut seen: HashSet<(String, Key)> = HashSet::new();
     for mode in chain {
         for b in profile.inputs.iter().filter(|b| &b.mode == mode) {
             let key = (binding_kind(b), b.input_id.parse().unwrap_or(0));
-            // A nearer mode's binding of the same input hides this one.
-            if !seen.insert((b.device_id.to_ascii_lowercase(), key)) {
+            // A nearer mode's binding of the same input hides this one; this tab's GUID and
+            // its linked profile device count as one device, as for the cards.
+            let device = if tab.owns(&b.device_id) {
+                String::new()
+            } else {
+                b.device_id.to_ascii_lowercase()
+            };
+            if !seen.insert((device, key)) {
                 continue;
             }
             for cfg in &b.configs {
@@ -1761,11 +1816,12 @@ fn down_owners(
                     else {
                         continue;
                     };
-                    if !on_tab(&down.device) {
+                    if !tab.owns(&down.device) {
                         continue;
                     }
-                    let mut name = input_name(i18n, key, None);
-                    if !on_tab(&b.device_id) {
+                    let label = input_label(profile, &b.device_id, key);
+                    let mut name = input_name(i18n, key, label.as_deref());
+                    if !tab.owns(&b.device_id) {
                         name = format!("{}: {name}", device_name(i18n, profile, &b.device_id));
                     }
                     let label = index
@@ -1805,4 +1861,131 @@ fn device_name(i18n: &I18n, profile: &Profile, guid: &str) -> String {
         .iter()
         .find(|d| d.id.eq_ignore_ascii_case(guid))
         .map_or_else(|| guid.to_string(), |d| d.name.trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const STICK: &str = "11111111-0000-0000-0000-000000000001";
+    const LINKED: &str = "11111111-0000-0000-0000-0000000000aa";
+    const OTHER: &str = "22222222-0000-0000-0000-000000000002";
+
+    fn prop(name: &str, value: &str) -> String {
+        format!(r#"<property type="string"><name>{name}</name><value>{value}</value></property>"#)
+    }
+
+    fn binding(device: &str, id: u32, mode: &str, root: &str, layer: &str) -> String {
+        format!(
+            r#"<input><device-id>{device}</device-id><input-type>button</input-type><mode>{mode}</mode><input-id>{id}</input-id><action-configuration layer="{layer}"><root-action>{root}</root-action><behavior>button</behavior></action-configuration></input>"#
+        )
+    }
+
+    /// An Axis from buttons moved down by `device` button `id`, under a root labeled `label`.
+    fn axis_down(root: &str, label: &str, device: &str, id: u32) -> String {
+        let down = prop("decrease-device-id", device)
+            + &prop("decrease-input-type", "button")
+            + &prop("decrease-input-id", &id.to_string());
+        format!(
+            r#"<action id="{root}" type="root">{}<actions><action-id>{root}-in</action-id></actions></action>
+            <action id="{root}-in" type="root"><actions><action-id>{root}-ax</action-id></actions></action>
+            <action id="{root}-ax" type="button-axis">{down}</action>"#,
+            prop("action-label", label)
+        )
+    }
+
+    fn profile() -> Profile {
+        let inputs = [
+            // Default: stick button 3 (through a nested root), moved down by stick button 4.
+            binding(STICK, 3, "Default", "a", ""),
+            // Child: stick button 3 does something else, so its axis is not there.
+            binding(STICK, 3, "Child", "plain", ""),
+            // Another stick's button 1 in layer M1, moved down by stick button 5.
+            binding(OTHER, 1, "Default", "b", "M1"),
+            // A labeled logical input, moved down by stick button 6.
+            binding(gob_core::LOGICAL_DEVICE_GUID, 2, "Default", "c", ""),
+        ]
+        .concat();
+        let library = [
+            axis_down("a", "Throttle", STICK, 4),
+            axis_down("b", "", STICK, 5),
+            axis_down("c", "", STICK, 6),
+            r#"<action id="plain" type="root"><actions/></action>"#.into(),
+        ]
+        .concat();
+        let xml = format!(
+            r#"<profile app="Gobloon" version="1"><devices><device><device-id>{STICK}</device-id><device-name>Stick</device-name></device><device><device-id>{OTHER}</device-id><device-name>Other</device-name></device></devices>
+            <inputs>{inputs}</inputs><settings/><library>{library}</library>
+            <logical-device><input><input-type>button</input-type><input-id>2</input-id><label>Flaps up</label></input></logical-device>
+            <modes><mode>Default</mode><mode parent="Default">Child</mode></modes></profile>"#
+        );
+        gob_gremlin::from_str(&xml).expect("profile")
+    }
+
+    fn tab(guid: &str) -> Tab<'_> {
+        Tab {
+            guid,
+            name: "Stick",
+            live: None,
+            alias: None,
+            logical: false,
+        }
+    }
+
+    fn owners(p: &Profile, tab: &Tab, mode: &str) -> Vec<(u32, String, String)> {
+        let i18n = I18n::new(crate::LANGUAGES, None);
+        let index = p.action_index();
+        let mut found: Vec<(u32, String, String)> =
+            down_owners(&i18n, p, &mode_chain(p, mode), tab, &index)
+                .into_iter()
+                .flat_map(|((_, id), v)| v.into_iter().map(move |o| (id, o.device, o.name)))
+                .collect();
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn a_mode_chain_runs_from_the_mode_to_its_parents() {
+        let p = profile();
+        assert_eq!(mode_chain(&p, "Child"), ["Child", "Default"]);
+        assert_eq!(mode_chain(&p, "Default"), ["Default"]);
+    }
+
+    #[test]
+    fn down_inputs_name_the_input_their_action_belongs_to() {
+        let p = profile();
+        let found = owners(&p, &tab(STICK), "Default");
+        assert_eq!(
+            found,
+            [
+                (4, STICK.to_string(), "Button 3 (Throttle)".to_string()),
+                (5, OTHER.to_string(), "Other: Button 1, M1".to_string()),
+                (
+                    6,
+                    gob_core::LOGICAL_DEVICE_GUID.to_string(),
+                    "Logical device: Flaps up".to_string()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_nearer_mode_hides_the_parents_owner() {
+        let p = profile();
+        let found = owners(&p, &tab(STICK), "Child");
+        assert!(found.iter().all(|(id, ..)| *id != 4), "{found:?}");
+        assert_eq!(found.len(), 2, "the other owners are inherited: {found:?}");
+    }
+
+    #[test]
+    fn a_linked_tab_counts_its_profile_device_as_its_own() {
+        let p = profile();
+        let mut linked = tab(LINKED);
+        linked.alias = Some(STICK);
+        // The binding is under the profile device id: the same device as the tab.
+        let found = owners(&p, &linked, "Default");
+        assert_eq!(found[0].2, "Button 3 (Throttle)");
+        // Down inputs of another device are not on this tab.
+        assert!(owners(&p, &tab(OTHER), "Default").is_empty());
+    }
 }

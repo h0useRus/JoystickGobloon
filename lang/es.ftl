@@ -804,6 +804,7 @@ bax-to-logical = Un eje del dispositivo lógico
 bax-decrease = Mueve el eje hacia abajo (la entrada asignada lo mueve hacia arriba)
 bax-decrease-show = Mostrar esta entrada
 down-for = Mueve hacia abajo el eje de { $input } (Eje desde botones)
+input-not-shown = El dispositivo de esa entrada no está en la página Dispositivos y asignaciones: conéctalo
 bax-decrease-press = Pulsa un botón o una tecla…
 bax-decrease-none = Ninguna entrada lo mueve hacia abajo
 bax-decrease-listen = Escuchar: pulsa el botón o la tecla que mueve el eje hacia abajo
