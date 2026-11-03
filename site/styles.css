@@ -1462,6 +1462,26 @@ footer {
   color: var(--text-muted);
 }
 
+/* Plain lists read like the paragraphs: muted text, the bold term in front stands out. */
+.learn-action ul:not(.ticks) {
+  max-width: 680px;
+  margin-top: var(--s-200);
+  padding-left: var(--s-300);
+  color: var(--text-muted);
+}
+
+.learn-action ul:not(.ticks) li + li {
+  margin-top: var(--s-75);
+}
+
+.learn-action ul:not(.ticks) strong {
+  color: var(--text);
+}
+
+.learn-action ul:not(.ticks) a {
+  color: var(--accent);
+}
+
 .learn-action .shot {
   max-width: 560px;
   margin: var(--s-300) 0 0;
