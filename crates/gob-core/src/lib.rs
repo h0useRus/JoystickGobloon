@@ -17,9 +17,9 @@ pub mod voice;
 pub mod xml;
 
 pub use action::{
-    Action, ActionKind, ActivationMode, InputType, Item, Key, LedBlend, LedMode, MacroRepeat,
-    MacroStep, MergeOp, MouseAction, MouseButton, Property, SUPPORTED_KINDS, format_color,
-    parse_color,
+    Action, ActionKind, ActivationMode, ButtonSend, InputType, Item, Key, LedBlend, LedMode,
+    MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton, Property, SUPPORTED_KINDS, SendMode,
+    format_color, parse_color,
 };
 pub use automap::Layout as InputLayout;
 pub use condition::{Comparator, Condition, Source as ConditionSource};

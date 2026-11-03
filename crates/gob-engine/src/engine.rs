@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gob_core::{
-    Action, ActionKind, ActivationMode, AxisDirection, Comparator, ConditionSource, InputType,
-    Item, Key, Layer, MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton, Profile,
-    Selection, VOICE_GUID, VOICE_INPUT_TYPE, VirtualButton,
+    Action, ActionKind, ActivationMode, AxisDirection, ButtonSend, Comparator, ConditionSource,
+    InputType, Item, Key, Layer, MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton,
+    Profile, Selection, SendMode, VOICE_GUID, VOICE_INPUT_TYPE, VirtualButton,
 };
 
 use crate::media::{SpeechQueue, SpeechRequest};
@@ -60,6 +60,8 @@ enum Node {
         act: ActivationMode,
         /// Relative axis mode: speed (Gremlin's axis-scaling); absolute when `None`.
         relative: Option<f32>,
+        /// How a button target follows the input.
+        send: ButtonSend,
     },
     /// voice-input: listens on `microphone` while held.
     Voice {
@@ -72,6 +74,8 @@ enum Node {
         control: GamepadControl,
         inverted: bool,
         act: ActivationMode,
+        /// How a button control follows the input.
+        send: ButtonSend,
     },
     ChangeMode {
         kind: ChangeKind,
@@ -86,10 +90,13 @@ enum Node {
     Mouse {
         action: MouseAction,
         act: ActivationMode,
+        /// How a button or the wheel follows the input.
+        send: ButtonSend,
     },
     Keys {
         keys: Vec<Key>,
         act: ActivationMode,
+        send: ButtonSend,
     },
     SmartToggle {
         children: Vec<NodeId>,
@@ -302,6 +309,37 @@ enum TimerKind {
     },
     /// A recognized voice command's button goes up.
     VoiceRelease(u32),
+    /// A pulse of a send mode ends.
+    SendUp(NodeId),
+    /// The next pulse of a repeat.
+    SendNext(NodeId),
+}
+
+/// What a button-like action presses.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Press {
+    Vjoy(u32, u8),
+    Pad(u32, GamepadControl),
+    /// The keys of a map-to-keyboard action.
+    Keys(NodeId),
+    Mouse(MouseButton),
+}
+
+/// A button output with a [`SendMode`] other than hold.
+#[derive(Debug, Default)]
+struct SendState {
+    /// The output is down (also the toggle's state).
+    down: bool,
+    /// Repeat runs.
+    repeating: bool,
+    /// What it pressed last, to release it from a timer.
+    press: Option<Press>,
+    up_timer: Option<u64>,
+    next_timer: Option<u64>,
+}
+
+fn ms(ms: u32) -> Duration {
+    Duration::from_millis(u64::from(ms))
 }
 
 #[derive(Debug)]
@@ -321,6 +359,8 @@ enum ReleaseAction {
     TapRelease(NodeId),
     ReleaseKeys(NodeId),
     StopListening(NodeId),
+    /// A repeat stops.
+    StopSend(NodeId),
     HatButtons(NodeId),
     /// Releases a logical device button.
     Logical(InputKey),
@@ -463,6 +503,10 @@ pub struct Engine {
     hat_buttons: HashMap<NodeId, Vec<bool>>,
     /// map-to-keyboard actions whose keys are held.
     keys_down: HashSet<NodeId>,
+    /// Mouse buttons the profile holds down.
+    mouse_down: Vec<MouseButton>,
+    /// Button outputs with a send mode other than hold.
+    sends: HashMap<NodeId, SendState>,
     /// voice-input actions held down, with their microphone.
     listening: HashMap<NodeId, String>,
     /// How long each voice command (by id) holds its button.
@@ -542,6 +586,8 @@ impl Engine {
             logical_changed: false,
             cond_cache: HashMap::new(),
             keys_down: HashSet::new(),
+            mouse_down: Vec::new(),
+            sends: HashMap::new(),
             listening: HashMap::new(),
             voice_holds: profile
                 .voice_commands
@@ -714,6 +760,7 @@ impl Engine {
                         inverted,
                         act: action.activation_mode(),
                         relative,
+                        send: action.button_send(),
                     })
                 }
                 ActionKind::MapToGamepad {
@@ -725,6 +772,7 @@ impl Engine {
                     control,
                     inverted,
                     act: action.activation_mode(),
+                    send: action.button_send(),
                 }),
                 ActionKind::ChangeMode { change_type, .. } => Node::ChangeMode {
                     kind: match change_type {
@@ -1009,10 +1057,12 @@ impl Engine {
                 ActionKind::MapToKeyboard { keys } => Node::Keys {
                     keys,
                     act: action.activation_mode(),
+                    send: action.button_send(),
                 },
                 ActionKind::MapToMouse(action_kind) => Node::Mouse {
                     action: action_kind,
                     act: action.activation_mode(),
+                    send: action.button_send(),
                 },
                 ActionKind::SmartToggle { children, delay } => Node::SmartToggle {
                     children: children
@@ -1387,6 +1437,8 @@ impl Engine {
                         self.run(n, &src, &mut Value::Button(false), now, out, 0);
                     }
                 }
+                TimerKind::SendUp(node) => self.send_up(node, out),
+                TimerKind::SendNext(node) => self.send_next(node, timer.at, out),
                 TimerKind::VoiceRelease(id) => {
                     self.voice_releases.remove(&id);
                     self.process(&voice_key(id), Value::Button(false), now, out);
@@ -1521,8 +1573,14 @@ impl Engine {
                 inverted,
                 act,
                 relative,
+                send,
             } => {
                 if !should_execute(act, *value) {
+                    return;
+                }
+                if let (VjoyTarget::Button(id), false) = (target, send.mode == SendMode::Hold) {
+                    let press = Press::Vjoy(device, id);
+                    self.send_event(node, press, send, act, src, *value, now, out);
                     return;
                 }
                 if let (VjoyTarget::Axis(id), Some(speed), Value::Axis(v)) =
@@ -1584,8 +1642,14 @@ impl Engine {
                 control,
                 inverted,
                 act,
+                send,
             } => {
                 if !should_execute(act, *value) {
+                    return;
+                }
+                if control.kind() == ControlKind::Button && send.mode != SendMode::Hold {
+                    let press = Press::Pad(gamepad, control);
+                    self.send_event(node, press, send, act, src, *value, now, out);
                     return;
                 }
                 self.gamepad(gamepad, control, inverted, *value, src, out);
@@ -1709,20 +1773,29 @@ impl Engine {
                     out.run_command(executable, arguments);
                 }
             }
-            Node::Mouse { action, act } => {
-                if should_execute(act, *value) {
-                    self.mouse(node, action, src, *value, now, out);
-                }
-            }
-            Node::Keys { ref keys, act } => {
+            Node::Mouse { action, act, send } => {
                 if !should_execute(act, *value) {
                     return;
                 }
+                if let (MouseAction::Button(button), false) = (action, send.mode == SendMode::Hold)
+                {
+                    let press = Press::Mouse(button);
+                    self.send_event(node, press, send, act, src, *value, now, out);
+                    return;
+                }
+                self.mouse(node, action, src, *value, now, out);
+            }
+            Node::Keys { act, send, .. } => {
+                if !should_execute(act, *value) {
+                    return;
+                }
+                if send.mode != SendMode::Hold {
+                    let press = Press::Keys(node);
+                    self.send_event(node, press, send, act, src, *value, now, out);
+                    return;
+                }
                 if value.truthy() {
-                    for k in keys {
-                        out.key(k.scan_code, k.extended, true);
-                    }
-                    self.keys_down.insert(node);
+                    self.press_keys(node, out);
                     // Not in Gremlin: release the keys if the input is let go in another mode.
                     self.register(
                         &src.key,
@@ -1998,6 +2071,210 @@ impl Engine {
         }
     }
 
+    /// Presses a map-to-keyboard action's keys in order, unless they are down already.
+    fn press_keys(&mut self, node: NodeId, out: &mut dyn Output) {
+        if !self.keys_down.insert(node) {
+            return;
+        }
+        if let Node::Keys { keys, .. } = &*self.nodes[node] {
+            for k in keys {
+                out.key(k.scan_code, k.extended, true);
+            }
+        }
+    }
+
+    /// An input event for a button output with a [`SendMode`] other than hold. The trigger is
+    /// the press, or the release when the action runs on release.
+    #[allow(clippy::too_many_arguments)]
+    fn send_event(
+        &mut self,
+        node: NodeId,
+        press: Press,
+        send: ButtonSend,
+        act: ActivationMode,
+        src: &Source,
+        value: Value,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        let triggered = value.truthy() != (act == ActivationMode::Release);
+        let state = self.sends.entry(node).or_default();
+        match send.mode {
+            SendMode::Hold => {}
+            SendMode::Press | SendMode::Release if triggered => {
+                self.press(node, press, send.mode == SendMode::Press, out)
+            }
+            SendMode::Toggle if triggered => {
+                let down = !state.down;
+                self.press(node, press, down, out);
+            }
+            SendMode::Pulse if triggered => {
+                self.press(node, press, true, out);
+                let at = now + ms(send.pulse_ms);
+                self.restart_send_timer(node, at, TimerKind::SendUp(node), false);
+            }
+            SendMode::Repeat if triggered => {
+                if state.repeating {
+                    return;
+                }
+                state.repeating = true;
+                self.press(node, press, true, out);
+                let up = now + ms(send.pulse_ms.min(send.delay_ms / 2).max(1));
+                self.restart_send_timer(node, up, TimerKind::SendUp(node), false);
+                let next = now + ms(send.delay_ms);
+                self.restart_send_timer(node, next, TimerKind::SendNext(node), true);
+                // Let go of the input in another mode: the repeat stops too.
+                self.register(
+                    &src.key,
+                    ReleaseEntry {
+                        mode: src.mode.clone(),
+                        any_mode: false,
+                        on_press: act == ActivationMode::Release,
+                        action: ReleaseAction::StopSend(node),
+                    },
+                );
+            }
+            SendMode::Repeat => self.stop_send(node, out),
+            _ => {}
+        }
+    }
+
+    /// A [`Press`] output goes down or up; the action's state remembers it.
+    fn press(&mut self, node: NodeId, press: Press, down: bool, out: &mut dyn Output) {
+        match press {
+            Press::Vjoy(device, button) => out.button(device, button, down),
+            Press::Pad(gamepad, control) => out.gamepad_button(gamepad, control, down),
+            Press::Keys(node) if down => self.press_keys(node, out),
+            Press::Keys(node) => self.release_keys(node, out),
+            // A wheel turns one notch each time it goes down.
+            Press::Mouse(MouseButton::WheelUp) if down => out.mouse_wheel(1),
+            Press::Mouse(MouseButton::WheelDown) if down => out.mouse_wheel(-1),
+            Press::Mouse(MouseButton::WheelUp | MouseButton::WheelDown) => {}
+            Press::Mouse(button) => self.mouse_button(button, down, out),
+        }
+        let state = self.sends.entry(node).or_default();
+        state.down = down;
+        state.press = Some(press);
+    }
+
+    /// Replaces the action's pending release (`next` false) or next pulse (`next` true).
+    fn restart_send_timer(&mut self, node: NodeId, at: Instant, kind: TimerKind, next: bool) {
+        let old = {
+            let state = self.sends.entry(node).or_default();
+            if next {
+                state.next_timer.take()
+            } else {
+                state.up_timer.take()
+            }
+        };
+        if let Some(id) = old {
+            self.timers.retain(|t| t.id != id);
+        }
+        let id = self.add_timer(at, kind);
+        let state = self.sends.entry(node).or_default();
+        if next {
+            state.next_timer = Some(id);
+        } else {
+            state.up_timer = Some(id);
+        }
+    }
+
+    /// A pulse's time is up.
+    fn send_up(&mut self, node: NodeId, out: &mut dyn Output) {
+        let Some(state) = self.sends.get_mut(&node) else {
+            return;
+        };
+        state.up_timer = None;
+        if let (true, Some(press)) = (state.down, state.press) {
+            self.press(node, press, false, out);
+        }
+    }
+
+    /// Repeat: the next pulse, `at` the time it was due (the period does not drift).
+    fn send_next(&mut self, node: NodeId, at: Instant, out: &mut dyn Output) {
+        let (
+            Some(state),
+            Node::Keys { send, .. }
+            | Node::Vjoy { send, .. }
+            | Node::Gamepad { send, .. }
+            | Node::Mouse { send, .. },
+        ) = (self.sends.get_mut(&node), &*self.nodes[node])
+        else {
+            return;
+        };
+        let send = *send;
+        state.next_timer = None;
+        let (true, Some(press)) = (state.repeating, state.press) else {
+            return;
+        };
+        if state.down {
+            // A pulse longer than the period: the output goes up for one pass first.
+            self.press(node, press, false, out);
+        }
+        self.press(node, press, true, out);
+        let up = at + ms(send.pulse_ms.min(send.period_ms / 2).max(1));
+        self.restart_send_timer(node, up, TimerKind::SendUp(node), false);
+        let next = at + ms(send.period_ms);
+        self.restart_send_timer(node, next, TimerKind::SendNext(node), true);
+    }
+
+    /// Repeat ends: no more pulses, the output goes up.
+    fn stop_send(&mut self, node: NodeId, out: &mut dyn Output) {
+        let Some(state) = self.sends.get_mut(&node) else {
+            return;
+        };
+        state.repeating = false;
+        let timers = [state.up_timer.take(), state.next_timer.take()];
+        let (down, press) = (state.down, state.press);
+        self.timers.retain(|t| !timers.contains(&Some(t.id)));
+        if let (true, Some(press)) = (down, press) {
+            self.press(node, press, false, out);
+        }
+    }
+
+    /// A mouse button held by the profile (released by [`Engine::release_all`]).
+    fn mouse_button(&mut self, button: MouseButton, down: bool, out: &mut dyn Output) {
+        out.mouse_button(button, down);
+        let held = self.mouse_down.contains(&button);
+        if down && !held {
+            self.mouse_down.push(button);
+        } else if !down && held {
+            self.mouse_down.retain(|&b| b != button);
+        }
+    }
+
+    /// Lets go of everything the profile holds down: keys, mouse buttons, virtual stick and
+    /// gamepad buttons, latched and repeating outputs. Called when the profile stops or
+    /// another one takes over (the virtual devices stay, so nothing else would release them).
+    pub fn release_all(&mut self, out: &mut dyn Output) {
+        let held: Vec<(NodeId, Press)> = self
+            .sends
+            .iter()
+            .filter_map(|(&n, s)| s.press.filter(|_| s.down).map(|p| (n, p)))
+            .collect();
+        self.sends.clear();
+        for (node, press) in held {
+            self.press(node, press, false, out);
+        }
+        self.sends.clear();
+        for entry in std::mem::take(&mut self.releases).into_values().flatten() {
+            match entry.action {
+                ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
+                ReleaseAction::GamepadButton(gamepad, control) => {
+                    out.gamepad_button(gamepad, control, false)
+                }
+                _ => {}
+            }
+        }
+        for node in self.keys_down.clone() {
+            self.release_keys(node, out);
+        }
+        for button in std::mem::take(&mut self.mouse_down) {
+            out.mouse_button(button, false);
+        }
+        self.timers.clear();
+    }
+
     /// Releases a map-to-keyboard action's keys in reverse order, once per press.
     fn release_keys(&mut self, node: NodeId, out: &mut dyn Output) {
         if !self.keys_down.remove(&node) {
@@ -2261,7 +2538,7 @@ impl Engine {
                     MouseButton::WheelUp if value.truthy() => out.mouse_wheel(1),
                     MouseButton::WheelDown if value.truthy() => out.mouse_wheel(-1),
                     MouseButton::WheelUp | MouseButton::WheelDown => {}
-                    b => out.mouse_button(b, value.truthy()),
+                    b => self.mouse_button(b, value.truthy(), out),
                 }
             }
             return;
@@ -2770,6 +3047,7 @@ impl Engine {
                 ReleaseAction::LeaveTemporary(mode) => self.leave_temporary(&mode),
                 ReleaseAction::ReleaseKeys(node) => self.release_keys(node, out),
                 ReleaseAction::StopListening(node) => self.stop_listening(node, out),
+                ReleaseAction::StopSend(node) => self.stop_send(node, out),
                 ReleaseAction::Logical(key) => {
                     self.feed_logical(&key, Value::Button(false), now, out)
                 }

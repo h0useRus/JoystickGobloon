@@ -539,6 +539,85 @@ pub enum MacroRepeat {
     },
 }
 
+/// How a button-like output (key, mouse button or wheel, virtual stick or gamepad button)
+/// follows its input: Joystick Gobloon's `send-mode` property, Gremlin has only [`SendMode::Hold`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum SendMode {
+    /// Down while the input is down.
+    #[default]
+    Hold,
+    /// The input presses it; something else releases it.
+    Press,
+    /// The input releases it.
+    Release,
+    /// Down for [`ButtonSend::pulse_ms`], however long the input is held.
+    Pulse,
+    /// Pulses while the input is held: the first at once, then after
+    /// [`ButtonSend::delay_ms`], then every [`ButtonSend::period_ms`].
+    Repeat,
+    /// The first press holds it, the next releases it.
+    Toggle,
+}
+
+impl SendMode {
+    pub const ALL: [SendMode; 6] = [
+        Self::Hold,
+        Self::Press,
+        Self::Release,
+        Self::Pulse,
+        Self::Repeat,
+        Self::Toggle,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Hold => "hold",
+            Self::Press => "press",
+            Self::Release => "release",
+            Self::Pulse => "pulse",
+            Self::Repeat => "repeat",
+            Self::Toggle => "toggle",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim();
+        Self::ALL
+            .into_iter()
+            .find(|m| m.name().eq_ignore_ascii_case(s))
+    }
+}
+
+/// [`SendMode`] with its times in milliseconds, each at least [`ButtonSend::MIN_MS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ButtonSend {
+    pub mode: SendMode,
+    /// How long a pulse holds the output down.
+    pub pulse_ms: u32,
+    /// Repeat: from the first pulse to the second.
+    pub delay_ms: u32,
+    /// Repeat: between the later pulses.
+    pub period_ms: u32,
+}
+
+impl ButtonSend {
+    /// Shorter pulses are missed by games that poll slowly, and shorter periods flood them.
+    pub const MIN_MS: u32 = 10;
+    pub const MAX_MS: u32 = 60_000;
+    pub const DEFAULT: Self = Self {
+        mode: SendMode::Hold,
+        pulse_ms: 50,
+        delay_ms: 500,
+        period_ms: 100,
+    };
+}
+
+impl Default for ButtonSend {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// hat-buttons group tags, clockwise from north (45 degrees apart).
 pub(crate) const HAT_BUTTONS: [&str; 8] = [
     "North",
@@ -601,6 +680,25 @@ impl Action {
             Some("release") => ActivationMode::Release,
             Some("disallowed") => ActivationMode::Disallowed,
             _ => ActivationMode::Both,
+        }
+    }
+
+    /// How the action's button output follows its input (`send-*` properties).
+    pub fn button_send(&self) -> ButtonSend {
+        let d = ButtonSend::DEFAULT;
+        let ms = |name: &str, default: u32| {
+            self.parse(name)
+                .unwrap_or(default)
+                .clamp(ButtonSend::MIN_MS, ButtonSend::MAX_MS)
+        };
+        ButtonSend {
+            mode: self
+                .str("send-mode")
+                .and_then(SendMode::parse)
+                .unwrap_or_default(),
+            pulse_ms: ms("send-pulse-ms", d.pulse_ms),
+            delay_ms: ms("send-delay-ms", d.delay_ms),
+            period_ms: ms("send-period-ms", d.period_ms),
         }
     }
 

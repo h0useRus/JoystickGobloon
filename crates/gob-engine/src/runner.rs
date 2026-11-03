@@ -698,6 +698,8 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
                 // command's button would stay down. The utterance it ends is heard with the old
                 // phrases: they change only after it.
                 engine.stop_voice(Instant::now(), &mut out);
+                // Keys, buttons and latched outputs of the old profile go up: the devices stay.
+                engine.release_all(&mut out);
                 engine = r.engine;
                 set_up_voice(&engine, &mut out);
                 voice_status = initial_voice_status(&engine, &out).map(|v| service.apply(v));
@@ -769,7 +771,9 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             on_change();
         }
     }
-    // Dropping `out` resets and releases the vJoy devices.
+    // Held keys and mouse buttons go up; dropping `out` resets and releases the vJoy devices.
+    engine.release_all(&mut out);
+    out.flush();
 }
 
 /// Hands a voice event to the engine, the service's state and the status; true when the status

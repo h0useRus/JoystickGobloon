@@ -462,6 +462,7 @@ impl Profile {
             || self.library.iter().any(|a| {
                 a.kind == "light-led"
                     || a.kind == "map-to-gamepad"
+                    || a.button_send().mode != crate::SendMode::Hold
                     || a.kind == "voice-input"
                     || a.items.iter().any(|i| {
                         matches!(i, Item::Group { tag, attrs, .. } if tag == "macro-action"
