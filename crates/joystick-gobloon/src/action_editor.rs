@@ -1423,7 +1423,11 @@ impl Editor<'_> {
                             keys,
                         });
                     }
-                    ui.horizontal(|ui| self.activation(ui, action));
+                    ui.horizontal_wrapped(|ui| {
+                        self.activation(ui, action);
+                        ui.separator();
+                        self.send_mode(ui, action);
+                    });
                 }
                 ActionKind::Macro { steps, repeat, .. } => {
                     self.macro_editor(ui, action, &steps, repeat);
@@ -1460,6 +1464,81 @@ impl Editor<'_> {
         }
     }
 
+    /// "How to send" of a button output: the send mode and the times it uses.
+    fn send_mode(&mut self, ui: &mut egui::Ui, action: &Action) {
+        use gob_core::{ButtonSend, SendMode};
+        let i18n = self.i18n;
+        let id = action.id.clone();
+        let send = action.button_send();
+        let tip = i18n.tr("send-mode-tip");
+        ui.label(RichText::new(icon::PAPER_PLANE_TILT).size(style::ICON_SIZE))
+            .on_hover_text(&tip);
+        let name = |m: SendMode| i18n.tr(&format!("send-{}", m.name()));
+        let mut picked = None;
+        egui::ComboBox::from_id_salt(("send-mode", &id))
+            .selected_text(name(send.mode))
+            .show_ui(ui, |ui| {
+                for m in SendMode::ALL {
+                    let item = ui
+                        .selectable_label(m == send.mode, name(m))
+                        .on_hover_text(i18n.tr(&format!("send-{}-tip", m.name())));
+                    if item.clicked() {
+                        picked = Some(m);
+                    }
+                }
+            })
+            .response
+            .on_hover_text(&tip);
+        match picked.filter(|&m| m != send.mode) {
+            // Hold is the plain action, as Gremlin knows it.
+            Some(SendMode::Hold) => {
+                for name in [
+                    "send-mode",
+                    "send-pulse-ms",
+                    "send-delay-ms",
+                    "send-period-ms",
+                ] {
+                    self.ops.push(Op::Unset {
+                        action: id.clone(),
+                        name: name.into(),
+                    });
+                }
+            }
+            Some(m) => self.set(&id, "send-mode", "string", m.name()),
+            None => {}
+        }
+        let times: &[(&str, u32)] = match send.mode {
+            SendMode::Pulse => &[("send-pulse-ms", send.pulse_ms)],
+            SendMode::Repeat => &[
+                ("send-pulse-ms", send.pulse_ms),
+                ("send-delay-ms", send.delay_ms),
+                ("send-period-ms", send.period_ms),
+            ],
+            _ => &[],
+        };
+        if times.len() > 1 {
+            // Three times get a line of their own.
+            ui.end_row();
+        }
+        for &(name, value) in times {
+            // A label stays on the line of its field when the row wraps.
+            let changed = ui
+                .horizontal(|ui| {
+                    ui.label(RichText::new(i18n.tr(name)).weak());
+                    let mut v = value;
+                    let spin = style::Spin::new(&mut v)
+                        .range(ButtonSend::MIN_MS..=ButtonSend::MAX_MS)
+                        .step(10.0)
+                        .suffix(" ms");
+                    ui.add(spin).changed().then_some(v)
+                })
+                .inner;
+            if let Some(v) = changed {
+                self.set(&id, name, "int", v.to_string());
+            }
+        }
+    }
+
     /// map-to-gamepad: the gamepad, a control that suits the input, inverted.
     fn gamepad(
         &mut self,
@@ -1476,7 +1555,11 @@ impl Editor<'_> {
         let mut picked = None;
         ui.horizontal_wrapped(|ui| {
             picked = self.gamepad_target(ui, &id, "", gamepad, control, &controls);
-            if current.is_some_and(|c| c.kind() != ControlKind::Dpad) {
+            let button = current.is_some_and(|c| c.kind() == ControlKind::Button)
+                && self.behavior == InputType::Button;
+            let holds = action.button_send().mode == gob_core::SendMode::Hold;
+            // Inverted only means something while the button follows the input.
+            if current.is_some_and(|c| c.kind() != ControlKind::Dpad) && (holds || !button) {
                 let mut inv = inverted;
                 if ui
                     .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
@@ -1488,6 +1571,10 @@ impl Editor<'_> {
             if self.behavior == InputType::Button {
                 ui.separator();
                 self.activation(ui, action);
+            }
+            if button {
+                ui.separator();
+                self.send_mode(ui, action);
             }
         });
         self.gamepad_missing(ui, gamepad);
@@ -2026,7 +2113,8 @@ impl Editor<'_> {
                 }
             }
             _ => {
-                if ty == InputType::Button {
+                let holds = action.button_send().mode == gob_core::SendMode::Hold;
+                if ty == InputType::Button && holds {
                     let mut inv = inverted;
                     if ui
                         .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
@@ -2042,6 +2130,10 @@ impl Editor<'_> {
                     ui.separator();
                 }
                 self.activation(ui, action);
+                if ty == InputType::Button {
+                    ui.separator();
+                    self.send_mode(ui, action);
+                }
             }
         });
     }
@@ -2103,6 +2195,10 @@ impl Editor<'_> {
                         });
                     ui.separator();
                     self.activation(ui, action);
+                    if self.behavior == InputType::Button {
+                        ui.separator();
+                        self.send_mode(ui, action);
+                    }
                 });
             }
             MouseAction::Motion {

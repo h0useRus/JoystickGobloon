@@ -1409,7 +1409,7 @@ fn input_name(i18n: &I18n, (kind, id): Key, label: Option<&str>) -> String {
         Kind::Axis => axis_name(i18n, id),
         Kind::Button => i18n.trf("vjoy-button-n", &[("n", id.into())]),
         Kind::Hat => i18n.trf("vjoy-hat-n", &[("n", id.into())]),
-        Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id)),
+        Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id), i18n),
         Kind::Voice => i18n.trf("voice-command-n", &[("n", id.into())]),
         Kind::Other => id.to_string(),
     }
