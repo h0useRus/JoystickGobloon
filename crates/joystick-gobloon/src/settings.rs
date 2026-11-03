@@ -115,7 +115,9 @@ impl AppEntry {
     /// What programs are matched by: the file name without case, so every copy of a game
     /// (other install folders, test builds) counts.
     pub fn key(&self) -> String {
-        program_key(&self.path.file_name().unwrap_or_default().to_string_lossy())
+        // Both separators: a Wine program may be kept by its Windows path on Linux.
+        let path = self.path.to_string_lossy();
+        program_key(path.rsplit(['\\', '/']).next().unwrap_or(&path))
     }
 }
 

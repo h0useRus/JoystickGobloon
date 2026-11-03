@@ -127,7 +127,11 @@ fn process(pid: u32) -> Option<Program> {
         .ok()
         .and_then(|c| wine_exe(&c))
     {
-        let mut program = Program::new(pid, PathBuf::from(&exe));
+        // The file itself where the Wine prefix can be found, so the Applications page can
+        // keep it; else the path as Wine names it.
+        let environ = std::fs::read(dir.join("environ")).unwrap_or_default();
+        let path = unix_path(&exe, &wine_prefix(&environ)).unwrap_or_else(|| PathBuf::from(&exe));
+        let mut program = Program::new(pid, path);
         program.name = windows_file_name(&exe).to_string();
         return Some(program);
     }
@@ -144,6 +148,40 @@ fn wine_exe(cmdline: &[u8]) -> Option<String> {
         .map(String::from_utf8_lossy)
         .find(|a| windows_file_name(a).to_lowercase().ends_with(".exe"))
         .map(|a| a.into_owned())
+}
+
+/// The Wine prefix of a process from its environment: `WINEPREFIX`, Proton's
+/// `STEAM_COMPAT_DATA_PATH`/pfx, else `~/.wine`.
+fn wine_prefix(environ: &[u8]) -> Option<PathBuf> {
+    let var = |name: &str| {
+        environ
+            .split(|&b| b == 0)
+            .filter_map(|v| std::str::from_utf8(v).ok())
+            .find_map(|v| v.strip_prefix(name)?.strip_prefix('=').map(String::from))
+            .filter(|v| !v.is_empty())
+    };
+    var("WINEPREFIX")
+        .map(PathBuf::from)
+        .or_else(|| var("STEAM_COMPAT_DATA_PATH").map(|d| Path::new(&d).join("pfx")))
+        .or_else(|| var("HOME").map(|h| Path::new(&h).join(".wine")))
+}
+
+/// A Windows path of a Wine program as a file of this system: drive letters through the
+/// prefix's `dosdevices` links (`Z:` is usually `/`). `None` when it cannot be found.
+fn unix_path(windows: &str, prefix: &Option<PathBuf>) -> Option<PathBuf> {
+    let (drive, rest) = windows.split_once(':')?;
+    if drive.len() != 1 || !drive.chars().all(|c| c.is_ascii_alphabetic()) {
+        return None;
+    }
+    let mut path = prefix
+        .as_ref()?
+        .join("dosdevices")
+        .join(format!("{}:", drive.to_ascii_lowercase()));
+    for part in rest.split(['\\', '/']).filter(|p| !p.is_empty()) {
+        path.push(part);
+    }
+    let path = std::fs::canonicalize(path).ok()?;
+    path.is_file().then_some(path)
 }
 
 /// The last part of a path with `\` or `/` between folders.
@@ -180,6 +218,30 @@ mod tests {
         for p in running_programs() {
             println!("{} {} {}", p.pid, p.name, p.path.display());
         }
+    }
+
+    #[test]
+    fn wine_paths_are_found_in_the_prefix() {
+        let root = std::env::temp_dir().join(format!("gobloon-wine-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let prefix = root.join("pfx");
+        std::fs::create_dir_all(prefix.join("drive_c/Games/Flight")).unwrap();
+        std::fs::create_dir_all(prefix.join("dosdevices")).unwrap();
+        std::os::unix::fs::symlink("../drive_c", prefix.join("dosdevices/c:")).unwrap();
+        let exe = prefix.join("drive_c/Games/Flight/Flight.exe");
+        std::fs::write(&exe, "").unwrap();
+        let found = unix_path(r"C:\Games\Flight\Flight.exe", &Some(prefix.clone())).unwrap();
+        assert_eq!(found, std::fs::canonicalize(&exe).unwrap());
+        assert_eq!(
+            unix_path(r"C:\Games\Missing.exe", &Some(prefix.clone())),
+            None
+        );
+        assert_eq!(unix_path("Flight.exe", &Some(prefix)), None);
+        let env = b"HOME=/home/h0use\0STEAM_COMPAT_DATA_PATH=/s/compatdata/1\0";
+        assert_eq!(wine_prefix(env), Some(PathBuf::from("/s/compatdata/1/pfx")));
+        let env = b"WINEPREFIX=/w\0STEAM_COMPAT_DATA_PATH=/s\0";
+        assert_eq!(wine_prefix(env), Some(PathBuf::from("/w")));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

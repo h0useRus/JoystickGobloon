@@ -31,6 +31,8 @@ pub struct AppsView {
     confirm_remove: Option<PathBuf>,
     /// Modes of the profiles chosen here, read once per file (empty: unreadable).
     modes: HashMap<PathBuf, Vec<String>>,
+    /// "Add a running program" while its menu is open: read once when it opens.
+    running: Option<Vec<crate::platform::Program>>,
 }
 
 /// A change to one program's row.
@@ -53,6 +55,7 @@ impl AppsView {
             error: None,
             confirm_remove: None,
             modes: HashMap::new(),
+            running: None,
         }
     }
 
@@ -335,28 +338,35 @@ impl AppsView {
     fn running_menu(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
         let text = format!("{}  {}", icon::LIST_PLUS, i18n.tr("apps-add-running"));
         let mut picked = None;
-        ui.menu_button(text, |ui| {
-            let own = std::env::current_exe().ok();
-            let mut programs = crate::platform::running_programs();
-            programs.retain(|p| {
-                !own.as_deref().is_some_and(|o| same_path(o, &p.path))
-                    && !self.list.apps.iter().any(|a| same_path(&a.path, &p.path))
+        let menu = ui.menu_button(text, |ui| {
+            let list = &self.list;
+            let programs = self.running.get_or_insert_with(|| {
+                let own = std::env::current_exe().ok();
+                let mut programs = crate::platform::running_programs();
+                programs.retain(|p| {
+                    !own.as_deref().is_some_and(|o| same_path(o, &p.path))
+                        && !list.apps.iter().any(|a| same_path(&a.path, &p.path))
+                });
+                programs.sort_by_key(|p| p.name.to_lowercase());
+                programs.dedup_by(|a, b| same_path(&a.path, &b.path));
+                programs
             });
-            programs.sort_by_key(|p| p.name.to_lowercase());
-            programs.dedup_by(|a, b| same_path(&a.path, &b.path));
             if programs.is_empty() {
                 ui.label(RichText::new(i18n.tr("apps-add-running-none")).weak());
             }
-            for p in programs {
+            for p in programs.iter() {
                 let r = ui
                     .button(&p.name)
                     .on_hover_text(p.path.display().to_string());
                 if r.clicked() {
-                    picked = Some(p.path);
+                    picked = Some(p.path.clone());
                     ui.close();
                 }
             }
         });
+        if menu.inner.is_none() || picked.is_some() {
+            self.running = None;
+        }
         if let Some(path) = picked {
             self.add(path);
         }

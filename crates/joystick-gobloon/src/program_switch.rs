@@ -83,12 +83,32 @@ pub fn choose<'a>(
 pub struct Switcher {
     /// [`AppEntry::key`] of the program whose profile was applied last.
     applied: Option<String>,
+    /// The program whose profile could not be applied; tried again when it comes to the front
+    /// again.
+    failed: Option<String>,
 }
 
 impl Switcher {
     /// Forgets the last program: the next check applies the program in front (Activate).
     pub fn reset(&mut self) {
         self.applied = None;
+        self.failed = None;
+    }
+
+    /// Another program came to the front: a failed one may be tried again.
+    pub fn front_changed(&mut self) {
+        self.failed = None;
+    }
+
+    /// `app`'s profile runs now.
+    pub fn applied(&mut self, app: &AppEntry) {
+        self.applied = Some(app.key());
+        self.failed = None;
+    }
+
+    /// `app`'s profile could not be applied.
+    pub fn failed(&mut self, app: &AppEntry) {
+        self.failed = Some(app.key());
     }
 
     /// The program whose profile [`Self::check`] would apply now, without applying it.
@@ -98,19 +118,10 @@ impl Switcher {
         apps: &'a [AppEntry],
         own: &str,
     ) -> Option<&'a AppEntry> {
-        choose(front, apps, own).filter(|app| self.applied.as_ref() != Some(&app.key()))
-    }
-
-    /// The program whose profile should be applied now; `None`: keep the running one.
-    pub fn check<'a>(
-        &mut self,
-        front: Option<&Program>,
-        apps: &'a [AppEntry],
-        own: &str,
-    ) -> Option<&'a AppEntry> {
-        let app = self.due(front, apps, own)?;
-        self.applied = Some(app.key());
-        Some(app)
+        choose(front, apps, own).filter(|app| {
+            let key = Some(app.key());
+            self.applied != key && self.failed != key
+        })
     }
 }
 
@@ -194,6 +205,29 @@ mod tests {
 
     const OWN: &str = "JoystickGobloon.exe";
 
+    /// What the app does: apply the due program at once.
+    trait Check {
+        fn check<'a>(
+            &mut self,
+            front: Option<&Program>,
+            apps: &'a [AppEntry],
+            own: &str,
+        ) -> Option<&'a AppEntry>;
+    }
+
+    impl Check for Switcher {
+        fn check<'a>(
+            &mut self,
+            front: Option<&Program>,
+            apps: &'a [AppEntry],
+            own: &str,
+        ) -> Option<&'a AppEntry> {
+            let app = self.due(front, apps, own)?;
+            self.applied(app);
+            Some(app)
+        }
+    }
+
     fn apps() -> Vec<AppEntry> {
         vec![
             app("C:/Games/One/One.exe", Some("one.xml")),
@@ -201,6 +235,18 @@ mod tests {
             app("C:/Tools/radio.exe", None),
             app("C:/Tools/JoystickGobloon.exe", Some("own.xml")),
         ]
+    }
+
+    #[test]
+    fn a_program_kept_by_its_windows_path_matches_everywhere() {
+        let apps = [app(r"C:\Games\Rally\Rally.EXE", Some("rally.xml"))];
+        assert_eq!(apps[0].key(), "rally.exe");
+        let front = Program {
+            pid: 1,
+            name: "Rally.exe".into(),
+            path: PathBuf::from(r"C:\Games\Rally\Rally.exe"),
+        };
+        assert!(choose(Some(&front), &apps, OWN).is_some());
     }
 
     #[test]
@@ -253,6 +299,30 @@ mod tests {
         assert!(switcher.due(Some(&one), &apps, OWN).is_some(), "still due");
         assert!(switcher.check(Some(&one), &apps, OWN).is_some());
         assert!(switcher.due(Some(&one), &apps, OWN).is_none());
+    }
+
+    #[test]
+    fn a_failed_program_is_tried_again_when_it_comes_back() {
+        let apps = apps();
+        let mut switcher = Switcher::default();
+        let (one, two) = (program("One.exe"), program("Two.exe"));
+        switcher.applied(&apps[0]);
+        let due = switcher.due(Some(&two), &apps, OWN).unwrap().clone();
+        switcher.failed(&due);
+        assert!(
+            switcher.due(Some(&two), &apps, OWN).is_none(),
+            "not every frame"
+        );
+        switcher.front_changed();
+        assert!(
+            switcher.due(Some(&one), &apps, OWN).is_none(),
+            "One runs already"
+        );
+        switcher.front_changed();
+        assert!(
+            switcher.due(Some(&two), &apps, OWN).is_some(),
+            "back to Two: again"
+        );
     }
 
     #[test]

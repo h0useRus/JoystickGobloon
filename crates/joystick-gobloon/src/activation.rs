@@ -60,6 +60,10 @@ impl Activation {
         self.lock().start_mode = mode;
     }
 
+    pub fn start_mode(&self) -> Option<String> {
+        self.lock().start_mode.clone()
+    }
+
     fn lock(&self) -> MutexGuard<'_, Inner> {
         self.0.lock().unwrap_or_else(|e| e.into_inner())
     }

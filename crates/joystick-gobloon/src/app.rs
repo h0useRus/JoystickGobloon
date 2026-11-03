@@ -77,6 +77,7 @@ pub struct JoystickGobloonApp {
     front: Option<crate::platform::Program>,
     /// This program's file name: it never chooses a profile.
     own_exe: String,
+    autosave_writer: crate::autosave::Writer,
     /// The program whose profile runs now by switching: (its key, its name, the profile file).
     switched: Option<(String, String, String)>,
     /// Activated with unsaved changes while programs have profiles: ask to save first.
@@ -86,6 +87,8 @@ pub struct JoystickGobloonApp {
     /// Switching waits for unsaved changes (said once in the status bar).
     switch_paused: bool,
     device_baseline: Option<DeviceBaseline>,
+    /// When [`Self::watch_devices`] last looked (it looks twice a second, not every frame).
+    devices_checked: std::time::Instant,
     stopped: Option<Stopped>,
     /// Time of the last edit; a running profile restarts once edits settle.
     edited: Option<std::time::Instant>,
@@ -172,6 +175,8 @@ enum Pending {
     /// A load-profile action asked for this file; it is activated after loading.
     Load(PathBuf),
     New,
+    /// Switching profiles by program starts once the running profile is saved.
+    Switching,
     /// A new profile through the wizard (`wizard_view`).
     Wizard,
     Open,
@@ -272,10 +277,12 @@ impl JoystickGobloonApp {
                 .and_then(|e| e.file_name().map(|n| n.to_string_lossy().into_owned()))
                 .unwrap_or_else(|| crate::platform::exe_name().into()),
             ask_switch_unsaved: false,
+            autosave_writer: crate::autosave::Writer::start(),
             switched: None,
             held_dismissed: None,
             switch_paused: false,
             device_baseline: None,
+            devices_checked: std::time::Instant::now(),
             stopped: None,
             edited: None,
             pending: None,
@@ -505,7 +512,7 @@ impl JoystickGobloonApp {
                         lines,
                     });
                 }
-                self.drop_autosave();
+                self.drop_autosave(false);
                 self.profile = Some(loaded);
                 if how != OpenAs::Program {
                     self.activation.stop();
@@ -539,6 +546,7 @@ impl JoystickGobloonApp {
         self.watcher.set_enabled(wanted);
         if let Some(front) = self.watcher.changed() {
             self.front = front;
+            self.switcher.front_changed();
         }
         if !wanted {
             self.switch_paused = false;
@@ -557,7 +565,7 @@ impl JoystickGobloonApp {
         }
         let Some(app) = self
             .switcher
-            .check(self.front.as_ref(), self.apps_view.apps(), &self.own_exe)
+            .due(self.front.as_ref(), self.apps_view.apps(), &self.own_exe)
             .cloned()
         else {
             return;
@@ -574,8 +582,11 @@ impl JoystickGobloonApp {
             || path.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        let current = self.profile.as_ref().and_then(|p| p.path.as_ref()) == Some(&path);
+        let previous = self.profile.as_ref().and_then(|p| p.path.clone());
+        let previous_mode = self.activation.start_mode();
+        let current = previous.as_ref() == Some(&path);
         if !current && !self.open_profile(path.clone(), OpenAs::Program) {
+            self.switcher.failed(&app);
             self.status = self.i18n.trf(
                 "status-switch-failed",
                 &[("program", program.into()), ("file", file.into())],
@@ -587,6 +598,7 @@ impl JoystickGobloonApp {
         self.vjoy_view.release();
         match self.activation.reload() {
             Ok(()) => {
+                self.switcher.applied(&app);
                 self.switched = Some((app.key(), program.clone(), file.clone()));
                 self.held_dismissed = None;
                 self.device_baseline = self.device_snapshot();
@@ -598,6 +610,13 @@ impl JoystickGobloonApp {
             }
             Err(e) => {
                 log::error!("{program} in front: {}: {e}", path.display());
+                // The engine keeps the old profile: the window shows it again too.
+                self.switcher.failed(&app);
+                self.activation.set_start_mode(previous_mode);
+                if !current && let Some(previous) = previous {
+                    self.open_profile(previous, OpenAs::Program);
+                }
+                self.sync_activation();
                 self.status = self.i18n.trf(
                     "status-switch-failed",
                     &[("program", program.into()), ("file", file.into())],
@@ -656,9 +675,12 @@ impl JoystickGobloonApp {
     /// While switching by program, a change to the profile's controllers or to the virtual
     /// devices it needs stops the profile and says what changed.
     fn watch_devices(&mut self) {
-        if !(self.switching && self.activation.is_active()) {
+        if !(self.switching && self.activation.is_active())
+            || self.devices_checked.elapsed() < std::time::Duration::from_millis(500)
+        {
             return;
         }
+        self.devices_checked = std::time::Instant::now();
         let Some(base) = &self.device_baseline else {
             return;
         };
@@ -733,7 +755,9 @@ impl JoystickGobloonApp {
             match choice {
                 Some(0) => {
                     self.ask_switch_unsaved = false;
-                    if self.save() {
+                    // Saving may first ask about the Joystick Gremlin format; it starts
+                    // switching itself then.
+                    if self.save_then(Some(Pending::Switching)) {
                         self.start_switching();
                     }
                 }
@@ -905,7 +929,7 @@ impl JoystickGobloonApp {
         self.status = self
             .i18n
             .trf("status-restored", &[("file", loaded.file_name().into())]);
-        self.drop_autosave();
+        self.drop_autosave(false);
         self.profile = Some(loaded);
         self.activation.stop();
         self.activation.set_start_mode(None);
@@ -938,10 +962,7 @@ impl JoystickGobloonApp {
                 file
             }
         };
-        if let Err(e) = crate::autosave::write(&file, &loaded.profile) {
-            log::error!("autosave {}: {e}", file.display());
-            return;
-        }
+        self.autosave_writer.write(file.clone(), &loaded.profile);
         let entry = crate::autosave::Entry {
             file: file.clone(),
             origin: loaded.path.clone(),
@@ -962,25 +983,39 @@ impl JoystickGobloonApp {
         }
     }
 
-    /// Removes the copy of the current profile's unsaved changes (saved or discarded).
-    fn drop_autosave(&mut self) {
+    /// Removes the copy of the current profile's unsaved changes. `all`: they were saved or
+    /// discarded, which makes every copy of that profile old (also one left by a crash);
+    /// otherwise (another profile opens in its place) only its own.
+    fn drop_autosave(&mut self, all: bool) {
         let Some(loaded) = &mut self.profile else {
             return;
         };
         loaded.autosave_after = None;
-        let Some(file) = loaded.autosave.clone() else {
+        let file = loaded.autosave.clone();
+        let origin = loaded.path.clone().filter(|_| all);
+        if file.is_none() && origin.is_none() {
             return;
-        };
-        let _ = std::fs::remove_file(&file);
-        let before = self.settings.autosave.len();
-        self.settings.autosave.retain(|e| e.file != file);
-        let last = self.settings.last_profile.as_ref() == Some(&file);
+        }
+        let gone = crate::autosave::take(
+            &mut self.settings.autosave,
+            file.as_deref(),
+            origin.as_deref(),
+        );
+        if gone.is_empty() {
+            return;
+        }
+        let last = self
+            .settings
+            .last_profile
+            .as_ref()
+            .is_some_and(|l| gone.contains(l));
         if last {
             self.settings.last_profile = None;
         }
-        if last || before != self.settings.autosave.len() {
-            self.settings.save();
+        for file in gone {
+            self.autosave_writer.remove(file);
         }
+        self.settings.save();
     }
 
     /// File dialog for profiles, starting in `dir`, else where the last one was opened or
@@ -1162,7 +1197,7 @@ impl JoystickGobloonApp {
                 loaded.path = Some(path.clone());
                 loaded.dirty = false;
                 loaded.gremlin_file = !loaded.profile.needs_own_format();
-                self.drop_autosave();
+                self.drop_autosave(true);
                 if let Some(loaded) = &mut self.profile {
                     loaded.autosave = None;
                 }
@@ -1184,7 +1219,7 @@ impl JoystickGobloonApp {
     fn new_profile(&mut self) {
         let mut profile = gob_core::Profile::default();
         profile.set_startup_mode("Default");
-        self.drop_autosave();
+        self.drop_autosave(false);
         let mut loaded = LoadedProfile::new(profile, None);
         // Named now, written after the first edit.
         loaded.autosave = crate::autosave::dir()
@@ -1242,6 +1277,10 @@ impl JoystickGobloonApp {
         {
             self.pending = Some(action);
         } else {
+            // Unsaved changes of an empty profile go without asking, and so does their copy.
+            if self.profile.as_ref().is_some_and(|p| p.dirty) {
+                self.drop_autosave(true);
+            }
             self.perform(action, ctx);
         }
     }
@@ -1270,6 +1309,11 @@ impl JoystickGobloonApp {
                 }
             }
             Pending::New => self.new_profile(),
+            Pending::Switching => {
+                if self.activation.is_active() {
+                    self.start_switching();
+                }
+            }
             Pending::Wizard => self.wizard = Some(crate::wizard_view::Wizard::new()),
             Pending::Open => self.import_dialog(),
             Pending::Load(path) => {
@@ -1522,7 +1566,7 @@ impl JoystickGobloonApp {
             }
             Some(1) => {
                 self.pending = None;
-                self.drop_autosave();
+                self.drop_autosave(true);
                 self.perform(action, ctx);
             }
             Some(_) => self.pending = None,
@@ -1604,7 +1648,6 @@ impl JoystickGobloonApp {
                 self.error(text);
             }
         }
-        self.was_active = self.activation.is_active();
     }
 
     /// Applies the edited profile to the running engine without releasing its virtual devices.
@@ -2017,6 +2060,8 @@ impl eframe::App for JoystickGobloonApp {
                 }
             } else {
                 self.ask_switch_unsaved = false;
+                // A program's mode was for that run only.
+                self.activation.set_start_mode(None);
             }
             self.was_active = active;
             self.status = self.i18n.tr(if active {

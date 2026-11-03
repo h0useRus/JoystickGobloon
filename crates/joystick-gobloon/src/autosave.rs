@@ -41,11 +41,69 @@ pub fn write(file: &Path, profile: &gob_core::Profile) -> std::io::Result<()> {
     crate::settings::write_whole(file, gob_gremlin::to_string(profile).as_bytes())
 }
 
-/// The copy that belongs to `path`: the profile's own file, or a new profile's copy itself.
+/// The copy that belongs to `path`: the profile's own file, or a new profile's copy itself;
+/// the newest when there are several.
 pub fn find<'a>(entries: &'a [Entry], path: &Path) -> Option<&'a Entry> {
     entries
         .iter()
+        .rev()
         .find(|e| e.origin.as_deref() == Some(path) || e.file == path)
+}
+
+/// Takes out the entry of the copy `file` and, with `origin`, of every copy of that profile
+/// (saved or discarded changes make them all old). Returns the copies to remove.
+pub fn take(entries: &mut Vec<Entry>, file: Option<&Path>, origin: Option<&Path>) -> Vec<PathBuf> {
+    let mut gone: Vec<PathBuf> = file.map(Path::to_path_buf).into_iter().collect();
+    entries.retain(|e| {
+        let same =
+            Some(e.file.as_path()) == file || (origin.is_some() && e.origin.as_deref() == origin);
+        if same && !gone.contains(&e.file) {
+            gone.push(e.file.clone());
+        }
+        !same
+    });
+    gone
+}
+
+enum Job {
+    Write(PathBuf, Box<gob_core::Profile>),
+    Remove(PathBuf),
+}
+
+/// Writes and removes copies on its own thread, in order, so the window never waits for the
+/// disk.
+pub struct Writer(std::sync::mpsc::Sender<Job>);
+
+impl Writer {
+    pub fn start() -> Self {
+        let (tx, rx) = std::sync::mpsc::channel::<Job>();
+        std::thread::Builder::new()
+            .name("autosave".into())
+            .spawn(move || {
+                for job in rx {
+                    match job {
+                        Job::Write(file, profile) => {
+                            if let Err(e) = write(&file, &profile) {
+                                log::error!("autosave {}: {e}", file.display());
+                            }
+                        }
+                        Job::Remove(file) => {
+                            let _ = std::fs::remove_file(file);
+                        }
+                    }
+                }
+            })
+            .expect("autosave thread");
+        Self(tx)
+    }
+
+    pub fn write(&self, file: PathBuf, profile: &gob_core::Profile) {
+        let _ = self.0.send(Job::Write(file, Box::new(profile.clone())));
+    }
+
+    pub fn remove(&self, file: PathBuf) {
+        let _ = self.0.send(Job::Remove(file));
+    }
 }
 
 /// Drops the entries whose copy is gone.
@@ -90,6 +148,21 @@ mod tests {
             },
         ];
         assert_eq!(find(&entries, Path::new("flight.xml")).unwrap().file, copy);
+        // A newer copy of the same profile wins.
+        let newer = Entry {
+            file: dir.join("profile_3.xml"),
+            origin: Some(PathBuf::from("flight.xml")),
+        };
+        let mut more = entries.clone();
+        more.push(newer.clone());
+        assert_eq!(find(&more, Path::new("flight.xml")), Some(&newer));
+        let gone = take(&mut more, Some(&newer.file), newer.origin.as_deref());
+        assert_eq!(
+            gone,
+            [newer.file.clone(), copy.clone()],
+            "all copies of flight.xml"
+        );
+        assert_eq!(more.len(), 1);
         assert_eq!(find(&entries, &new).unwrap().origin, None);
         assert!(find(&entries, Path::new("other.xml")).is_none());
         prune(&mut entries);
