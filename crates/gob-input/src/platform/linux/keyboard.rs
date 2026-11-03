@@ -5,7 +5,6 @@
 //! come back as input. Key codes become set 1 scan codes, as the Windows hook reports them.
 
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -13,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use gob_uinput::keys::scan_code;
 
-use super::evdev::{EV_KEY, EV_REP, Node};
+use super::evdev::{EV_KEY, EV_REP, Node, NodeCache};
 
 /// Reports (scan code, extended, pressed).
 pub type KeySink = Arc<dyn Fn(u16, bool, bool) + Send + Sync>;
@@ -64,6 +63,8 @@ impl Drop for Hook {
 
 fn run(sink: &KeySink, stop: &AtomicBool) {
     let mut keyboards: Vec<Node> = Vec::new();
+    // Nodes looked at already; keyboards among them stay open in `keyboards`.
+    let mut seen = NodeCache::<()>::default();
     let mut down: HashSet<(u16, bool)> = HashSet::new();
     let mut next_scan = Instant::now();
     // SAFETY: `input_event` is plain data; all zeroes is a valid value.
@@ -72,15 +73,14 @@ fn run(sink: &KeySink, stop: &AtomicBool) {
     while !stop.load(Ordering::Relaxed) {
         if Instant::now() >= next_scan {
             next_scan = Instant::now() + RESCAN;
-            let open: Vec<PathBuf> = keyboards.iter().map(|k| k.path.clone()).collect();
-            keyboards.extend(
-                super::evdev::event_nodes()
-                    .into_iter()
-                    .filter(|p| !open.contains(p))
-                    // Keyboards are never hidden: no need to ask SystemGobloon for a node.
-                    .filter_map(|p| Node::open_direct(&p).ok())
-                    .filter(is_keyboard),
-            );
+            seen.scan(super::evdev::event_nodes(), |path| {
+                // Keyboards are never hidden: no need to ask SystemGobloon for a node.
+                let node = Node::open_direct(path)?;
+                if is_keyboard(&node) && !keyboards.iter().any(|k| k.path == path) {
+                    keyboards.push(node);
+                }
+                Ok(())
+            });
         }
         fds.clear();
         fds.extend(keyboards.iter().map(|k| libc::pollfd {
@@ -96,6 +96,7 @@ fn run(sink: &KeySink, stop: &AtomicBool) {
         keyboards.retain(|k| {
             loop {
                 let Ok(count) = k.read(&mut buf) else {
+                    seen.forget(&k.path);
                     return false; // unplugged
                 };
                 for e in buf[..count].iter().filter(|e| e.type_ == EV_KEY) {
