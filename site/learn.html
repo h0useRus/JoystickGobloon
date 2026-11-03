@@ -120,7 +120,7 @@
       <div class="wrap">
         <p class="kicker">Learning</p>
         <h1 class="gradient">Every action,<br>explained with its editor</h1>
-        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 25 actions does.</p>
+        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 26 actions does.</p>
       </div>
     </header>
 
@@ -140,6 +140,8 @@
             <li><a href="#map-to-keyboard">Map to keyboard</a></li>
             <li><a href="#map-to-mouse">Map to mouse</a></li>
             <li><a href="#map-to-logical-device">Map to logical device</a></li>
+            <li><a href="#how-to-send">How to send</a></li>
+            <li><a href="#button-axis">Axis from buttons</a></li>
           </ul></li>
           <li><a class="toc-group" href="#axes">Axes</a><ul>
             <li><a href="#response-curve">Response curve</a></li>
@@ -231,8 +233,8 @@
           </article>
           <article class="learn-action" id="map-to-keyboard">
             <h3><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</h3>
-            <p>Presses keys while the input is held: they go down in order and come up in reverse order. Click the field and press the keys to record them. If the input is let go in another mode, the keys still come up.</p>
-            <figure class="shot"><img src="img/actions/map-to-keyboard.png" loading="lazy" alt="Map to keyboard with the keys Ctrl and F"></figure>
+            <p>Presses keys while the input is held: they go down in order and come up in reverse order. Click the record button and press the keys together; recording ends when all are let go. Keys most keyboards lack, F13 to F24 and the media keys (play/pause, next and previous track, volume, mute), are in the list behind the <strong>…</strong> button. If the input is let go in another mode, the keys still come up. How the keys follow the input, held, pulsed, repeated or toggled, is set with <a href="#how-to-send">How to send</a>.</p>
+            <figure class="shot"><img src="img/actions/map-to-keyboard.png" loading="lazy" alt="Map to keyboard with the keys Ctrl and F, sent repeatedly while the button is held"></figure>
           </article>
           <article class="learn-action" id="map-to-mouse">
             <h3><i class="ph ph-mouse" aria-hidden="true"></i>Map to mouse</h3>
@@ -245,6 +247,35 @@
             <p>The <strong>Logical device</strong> tab is a joystick that only exists inside the profile. Mapping inputs to it lets several physical inputs feed one logical input, whose own actions then do the rest. Logical inputs are added and renamed on that tab.</p>
             <p><strong>Picking the input works like <a href="#map-to-vjoy">Map to virtual stick</a>.</strong> A new one takes the first logical input of that type nothing uses yet, or adds one. The grid button next to the list shows every logical input of that type at once, and a click picks one. Logical inputs that other inputs already write to are marked the same way.</p>
             <figure class="shot"><img src="img/actions/map-to-logical-device.png" loading="lazy" alt="Map to logical device: logical button 1"></figure>
+          </article>
+          <article class="learn-action" id="how-to-send">
+            <h3><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>How to send</h3>
+            <p>When a button drives a key, a mouse button or a button of a virtual stick or gamepad, the list next to the paper plane sets how the output follows it:</p>
+            <ul>
+              <li><strong>Hold</strong>: down while the input is down. This is the default.</li>
+              <li><strong>Press only</strong>: the input presses it and it stays down; another input set to <strong>Release only</strong> lets it go.</li>
+              <li><strong>Release only</strong>: the input lets it go.</li>
+              <li><strong>Pulse</strong>: one press of a set length, however long the input is held. 50 ms, the default, suits most games: a shorter press may come and go before the game looks.</li>
+              <li><strong>Repeat</strong>: presses it again and again while the input is held: the first repeat after a delay, then at a steady pace. The mouse wheel turns notch after notch this way.</li>
+              <li><strong>Toggle</strong>: the first press holds it down, the next one lets it go.</li>
+            </ul>
+            <p>Whatever is still down when the profile stops or another profile starts is let go, so nothing stays stuck.</p>
+            <p>A picture of it is under <a href="#map-to-keyboard">Map to keyboard</a>.</p>
+          </article>
+          <article class="learn-action" id="button-axis">
+            <h3><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>Axis from buttons</h3>
+            <p>Buttons move an axis: a throttle on two buttons, a trim wheel on an encoder, detents for flaps. The axis can be on a virtual stick, a stick or trigger of a virtual gamepad, or the logical device; the icons in the first row pick which, and the outputs are picked as in <a href="#map-to-vjoy">Map to virtual stick</a>.</p>
+            <p>The button the action is bound to moves the axis up. The second row names the input that moves it down: click the record button and press a button on any stick, or a key. It runs in the same mode and with the same modifiers as the action.</p>
+            <p>How the buttons move it:</p>
+            <ul>
+              <li><strong>Set value</strong>: a press sets the axis to a value, the down input to its opposite. With <strong>Back on release</strong> the axis returns to where it was when the button is let go.</li>
+              <li><strong>Velocity</strong>: the axis travels while a button is held, at a speed in percent of the full travel per second, faster with the acceleration, up to the top speed.</li>
+              <li><strong>Steps</strong>: each press moves to the next position, and stops at the last one. Click the strip to add a position, drag one to move it, right click one to remove it; the count and the dots button spread that many positions evenly.</li>
+              <li><strong>Encoder</strong>: each press moves one step, a bigger one the faster the presses come, up to the largest step at the rate set. With <strong>Back to rest after</strong> the axis returns to its start value, or else to the center (a trigger to released), when no press has come for that long.</li>
+              <li><strong>Smooth</strong>: each press moves the target one step and the axis glides there within the response time.</li>
+            </ul>
+            <p>The axis keeps its position when the mode changes. Turn on <strong>Start value</strong> to put it somewhere when the profile starts; off, it stays where it was.</p>
+            <figure class="shot"><img src="img/actions/button-axis.png" loading="lazy" alt="Axis from buttons: button 3 moves Z axis of vJoy device 1 up through five positions, button 4 moves it down, starting at -1"></figure>
           </article>
         </section>
         <section class="learn-group" id="axes" aria-labelledby="axes-title">

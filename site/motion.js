@@ -264,7 +264,7 @@
       };
     },
 
-    // A soft highlight steps through all 25 actions.
+    // A soft highlight steps through all the actions.
     actions(el) {
       const items = [...el.querySelectorAll("li")];
       return {
