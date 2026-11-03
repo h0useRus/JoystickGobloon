@@ -1525,24 +1525,32 @@ impl Editor<'_> {
         let id = action.id.clone();
         let send = action.button_send();
         let tip = i18n.tr("send-mode-tip");
-        ui.label(RichText::new(icon::PAPER_PLANE_TILT).size(style::ICON_SIZE))
-            .on_hover_text(&tip);
         let name = |m: SendMode| i18n.tr(&format!("send-{}", m.name()));
         let mut picked = None;
-        egui::ComboBox::from_id_salt(("send-mode", &id))
-            .selected_text(name(send.mode))
-            .show_ui(ui, |ui| {
-                for m in SendMode::ALL {
-                    let item = ui
-                        .selectable_label(m == send.mode, name(m))
-                        .on_hover_text(i18n.tr(&format!("send-{}-tip", m.name())));
-                    if item.clicked() {
-                        picked = Some(m);
+        // The icon wraps together with its list: a new row when both do not fit.
+        let spacing = ui.spacing();
+        let width = style::ICON_SIZE + spacing.combo_width + 3.0 * spacing.item_spacing.x;
+        if ui.available_size_before_wrap().x < width {
+            ui.end_row();
+        }
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::PAPER_PLANE_TILT).size(style::ICON_SIZE))
+                .on_hover_text(&tip);
+            egui::ComboBox::from_id_salt(("send-mode", &id))
+                .selected_text(name(send.mode))
+                .show_ui(ui, |ui| {
+                    for m in SendMode::ALL {
+                        let item = ui
+                            .selectable_label(m == send.mode, name(m))
+                            .on_hover_text(i18n.tr(&format!("send-{}-tip", m.name())));
+                        if item.clicked() {
+                            picked = Some(m);
+                        }
                     }
-                }
-            })
-            .response
-            .on_hover_text(&tip);
+                })
+                .response
+                .on_hover_text(&tip);
+        });
         match picked.filter(|&m| m != send.mode) {
             // Hold is the plain action, as Gremlin knows it.
             Some(SendMode::Hold) => {
