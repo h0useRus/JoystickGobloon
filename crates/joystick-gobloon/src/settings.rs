@@ -32,6 +32,8 @@ pub struct Settings {
     /// Device hiding window: only game controllers.
     pub hidhide_gaming_only: bool,
     pub last_profile: Option<PathBuf>,
+    /// Copies of unsaved profile changes (`autosave`).
+    pub autosave: Vec<crate::autosave::Entry>,
     /// Folder of the last profile opened or saved through a file dialog, where those dialogs
     /// start (else the documents folder).
     pub profile_dir: Option<PathBuf>,
@@ -90,9 +92,38 @@ pub struct Settings {
 }
 
 /// A program on the Applications page; options per program (e.g. its profile) go here.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppEntry {
     pub path: PathBuf,
+    /// Profile that runs while this program is in front (switching profiles by program).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<PathBuf>,
+    /// Mode of `profile` to start in; `None`: the profile's starting mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+}
+
+impl AppEntry {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            profile: None,
+            mode: None,
+        }
+    }
+
+    /// What programs are matched by: the file name without case, so every copy of a game
+    /// (other install folders, test builds) counts.
+    pub fn key(&self) -> String {
+        // Both separators: a Wine program may be kept by its Windows path on Linux.
+        let path = self.path.to_string_lossy();
+        program_key(path.rsplit(['\\', '/']).next().unwrap_or(&path))
+    }
+}
+
+/// [`AppEntry::key`] of a program's file name.
+pub fn program_key(name: &str) -> String {
+    name.to_lowercase()
 }
 
 /// Programs on the Applications page, in `apps.gob` next to the settings.
@@ -241,6 +272,7 @@ impl Default for Settings {
             hidhide_hide_disconnected: true,
             hidhide_gaming_only: true,
             last_profile: None,
+            autosave: Vec::new(),
             profile_dir: None,
             show_tray: true,
             close_to_tray: false,
@@ -314,7 +346,7 @@ fn load_toml<T: Default + for<'de> Deserialize<'de>>(name: &str) -> T {
 
 /// Writes `path` so that a crash or power loss leaves either the old file or the new one, never
 /// a cut one: the text goes to a file next to it, reaches the disk, then replaces it.
-fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".new");
@@ -346,6 +378,27 @@ fn save_toml(name: &str, value: &impl Serialize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_lists_keep_profiles_and_read_old_files() {
+        let old: AppList = toml::from_str("[[app]]\npath = 'C:/Games/One/One.exe'\n").unwrap();
+        assert_eq!(
+            old.apps,
+            [AppEntry::new(PathBuf::from("C:/Games/One/One.exe"))]
+        );
+        let mut list = old;
+        list.apps[0].profile = Some(PathBuf::from("D:/Profiles/Flight.xml"));
+        list.apps[0].mode = Some("Landing".into());
+        list.apps.push(AppEntry::new(PathBuf::from("radio.exe")));
+        let text = toml::to_string_pretty(&list).unwrap();
+        assert_eq!(
+            text.matches("profile").count(),
+            1,
+            "no empty fields:\n{text}"
+        );
+        let back: AppList = toml::from_str(&text).unwrap();
+        assert_eq!(back.apps, list.apps);
+    }
 
     #[test]
     fn whole_writes_replace_the_file() {

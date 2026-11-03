@@ -119,6 +119,32 @@ pub(crate) trait Desktop {
     fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String>;
     /// Waits until process `pid` exits, at most `timeout`.
     fn wait_for_process(pid: u32, timeout: Duration);
+
+    /// The program in the foreground (its window has the focus); `None` when there is none or
+    /// the system does not tell.
+    fn foreground_program() -> Option<Program>;
+    /// Running programs with a window the user can switch to.
+    fn running_programs() -> Vec<Program>;
+}
+
+/// A running program, for switching profiles by program.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Program {
+    pub pid: u32,
+    /// The program's file name as the user knows it (a Windows game under Wine: its .exe).
+    pub name: String,
+    /// Its program file (under Wine: the .exe's path as Wine names it).
+    pub path: PathBuf,
+}
+
+impl Program {
+    pub fn new(pid: u32, path: PathBuf) -> Self {
+        let name = path
+            .file_name()
+            .map_or_else(|| path.to_string_lossy(), |n| n.to_string_lossy())
+            .into_owned();
+        Self { pid, name, path }
+    }
 }
 
 /// Whether the program may read the keyboards ([`keyboard_access`]).
@@ -305,6 +331,14 @@ pub(crate) fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
 
 pub(crate) fn wait_for_process(pid: u32, timeout: Duration) {
     Current::wait_for_process(pid, timeout);
+}
+
+pub(crate) fn foreground_program() -> Option<Program> {
+    Current::foreground_program()
+}
+
+pub(crate) fn running_programs() -> Vec<Program> {
+    Current::running_programs()
 }
 
 /// A key as its code, when the system has no name for it: `0x1d`, `E0 0x1d`.

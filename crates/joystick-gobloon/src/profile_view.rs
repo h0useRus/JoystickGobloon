@@ -21,6 +21,11 @@ pub struct LoadedProfile {
     pub gremlin_file: bool,
     /// Name given to a new profile (the wizard asks for one): its file name until saved.
     pub name: Option<String>,
+    /// Copy of the unsaved changes (`autosave`); a new profile's is named when it is made and
+    /// written after the first edit.
+    pub autosave: Option<PathBuf>,
+    /// Edited since the copy was last written: when.
+    pub autosave_after: Option<Instant>,
     undo: Vec<Profile>,
     redo: Vec<Profile>,
     last_checkpoint: Option<Instant>,
@@ -39,6 +44,8 @@ impl LoadedProfile {
             dirty: false,
             gremlin_file,
             name: None,
+            autosave: None,
+            autosave_after: None,
             undo: Vec::new(),
             redo: Vec::new(),
             last_checkpoint: None,
@@ -89,6 +96,7 @@ impl LoadedProfile {
     /// Call after editing the profile: marks it unsaved.
     pub fn refresh(&mut self) {
         self.dirty = true;
+        self.autosave_after = Some(Instant::now());
     }
 
     pub fn file_name(&self) -> String {
@@ -98,7 +106,14 @@ impl LoadedProfile {
                 |n| n.to_string_lossy().into_owned(),
             ),
             (None, Some(name)) => format!("{name}.xml"),
-            (None, None) => "untitled.xml".into(),
+            (None, None) => self
+                .autosave
+                .as_ref()
+                .and_then(|a| a.file_name())
+                .map_or_else(
+                    || "untitled.xml".into(),
+                    |n| n.to_string_lossy().into_owned(),
+                ),
         }
     }
 }

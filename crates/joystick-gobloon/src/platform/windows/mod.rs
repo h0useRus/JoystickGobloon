@@ -2,6 +2,7 @@
 
 mod instance;
 mod keys;
+mod programs;
 mod update;
 mod window;
 
@@ -165,6 +166,14 @@ impl super::Desktop for Desktop {
 
     fn wait_for_process(pid: u32, timeout: Duration) {
         update::wait_for_process(pid, timeout);
+    }
+
+    fn foreground_program() -> Option<super::Program> {
+        programs::foreground_program()
+    }
+
+    fn running_programs() -> Vec<super::Program> {
+        programs::running_programs()
     }
 
     /// The drivers' installers give access; nothing for the user to grant.

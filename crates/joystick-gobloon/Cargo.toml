@@ -39,6 +39,8 @@ gtk = "0.18"
 ashpd = { version = "0.13", default-features = false, features = ["async-io", "settings"] }
 pollster = "1"
 futures-util = { version = "0.3", default-features = false }
+# The window in front and the windows' programs on X11 and XWayland (platform/linux/programs.rs).
+x11rb = "0.13"
 # Only features: eframe without its defaults no longer turns these on. Title bar on GNOME
 # Wayland (client-side decorations), libwayland loaded at run time so X11-only systems start.
 winit = { version = "0.30", default-features = false, features = ["wayland-csd-adwaita", "wayland-dlopen"] }
