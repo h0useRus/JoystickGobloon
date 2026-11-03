@@ -1,9 +1,12 @@
 //! Mode stack with Gremlin's "Oldest" cycle resolution.
 
+use std::sync::Arc;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StackMode {
-    name: String,
-    previous: Option<String>,
+    /// Shared: every event and release entry keeps the mode it ran in.
+    name: Arc<str>,
+    previous: Option<Arc<str>>,
     temporary: bool,
 }
 
@@ -16,7 +19,7 @@ impl ModeStack {
     pub fn new(start: &str) -> Self {
         Self {
             stack: vec![StackMode {
-                name: start.to_string(),
+                name: start.into(),
                 previous: None,
                 temporary: false,
             }],
@@ -27,14 +30,23 @@ impl ModeStack {
         &self.stack.last().expect("mode stack is never empty").name
     }
 
+    /// The current mode's name, without copying it.
+    pub fn shared(&self) -> Arc<str> {
+        self.stack
+            .last()
+            .expect("mode stack is never empty")
+            .name
+            .clone()
+    }
+
     pub fn is_temporary(&self) -> bool {
         self.stack.last().is_some_and(|m| m.temporary)
     }
 
     pub fn switch_to(&mut self, name: &str, temporary: bool) {
         let mode = StackMode {
-            name: name.to_string(),
-            previous: Some(self.current().to_string()),
+            name: name.into(),
+            previous: Some(self.shared()),
             temporary,
         };
         // A cycle back to a mode already on the stack drops everything from it on.

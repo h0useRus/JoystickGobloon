@@ -678,6 +678,7 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
     let mut window = LatencyWindow::new(Instant::now());
     // When this pass's events were read; kept between passes.
     let mut reads: Vec<Instant> = Vec::new();
+    let mut ids = DeviceIds::default();
     let mut service = ServiceState::default();
     let mut voice_status = status
         .lock()
@@ -719,7 +720,7 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         };
         reads.clear();
         for timed in first.into_iter().chain(events.try_iter()) {
-            if let Some((key, value)) = convert(&timed.event) {
+            if let Some((key, value)) = convert(&mut ids, &timed.event) {
                 engine.process(&key, value, Instant::now(), &mut out);
                 reads.push(timed.read);
             }
@@ -794,10 +795,28 @@ fn on_voice(
     true
 }
 
-fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
+/// Device ids of input events as the engine's keys take them, made once per device.
+#[derive(Default)]
+struct DeviceIds(HashMap<String, Arc<str>>);
+
+impl DeviceIds {
+    fn key(&mut self, device: &str, kind: InputKind, id: u32) -> InputKey {
+        let device = match self.0.get(device) {
+            Some(d) => d.clone(),
+            None => {
+                let d: Arc<str> = device.to_ascii_lowercase().into();
+                self.0.insert(device.to_string(), d.clone());
+                d
+            }
+        };
+        InputKey { device, kind, id }
+    }
+}
+
+fn convert(ids: &mut DeviceIds, event: &InputEvent) -> Option<(InputKey, Value)> {
     Some(match event {
         InputEvent::Axis { device, id, value } => (
-            InputKey::new(device, InputKind::Axis, u32::from(*id)),
+            ids.key(device, InputKind::Axis, u32::from(*id)),
             Value::Axis(*value),
         ),
         InputEvent::Button {
@@ -805,7 +824,7 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
             id,
             pressed,
         } => (
-            InputKey::new(device, InputKind::Button, u32::from(*id)),
+            ids.key(device, InputKind::Button, u32::from(*id)),
             Value::Button(*pressed),
         ),
         InputEvent::Hat {
@@ -813,7 +832,7 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
             id,
             direction,
         } => (
-            InputKey::new(device, InputKind::Hat, u32::from(*id)),
+            ids.key(device, InputKind::Hat, u32::from(*id)),
             Value::Hat(*direction),
         ),
         InputEvent::Key {
@@ -826,7 +845,7 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
                 extended: *extended,
             };
             (
-                InputKey::new(
+                ids.key(
                     gob_core::KEYBOARD_GUID,
                     InputKind::Button,
                     gob_core::key_input_id(key),
@@ -875,6 +894,16 @@ mod tests {
         );
         out.devices.insert(1, Box::new(Calls(calls.clone())));
         (out, calls)
+    }
+
+    #[test]
+    fn device_ids_are_made_once_per_device() {
+        let mut ids = DeviceIds::default();
+        let a = ids.key("AAAA-01", InputKind::Axis, 1);
+        let b = ids.key("AAAA-01", InputKind::Button, 3);
+        assert_eq!(&*a.device, "aaaa-01");
+        assert!(Arc::ptr_eq(&a.device, &b.device));
+        assert_eq!(a, InputKey::new("aaaa-01", InputKind::Axis, 1));
     }
 
     #[test]

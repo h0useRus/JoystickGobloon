@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gob_core::{
@@ -208,7 +209,7 @@ struct Cond {
 #[derive(Debug, Clone)]
 struct Source {
     key: InputKey,
-    mode: String,
+    mode: Arc<str>,
     /// Set inside smart-toggle: vJoy presses are not auto-released.
     no_auto_release: bool,
 }
@@ -328,7 +329,7 @@ enum ReleaseAction {
 /// Runs when the physical input that registered it is released (Gremlin's ButtonReleaseActions).
 #[derive(Debug, Clone, PartialEq)]
 struct ReleaseEntry {
-    mode: String,
+    mode: Arc<str>,
     /// Run in any mode; otherwise only when the mode changed since registration.
     any_mode: bool,
     on_press: bool,
@@ -425,19 +426,22 @@ struct Config {
 }
 
 pub struct Engine {
-    nodes: Vec<Node>,
+    /// Shared so running a node does not copy it (its child lists, curve points, keys).
+    nodes: Vec<Arc<Node>>,
     tempo: HashMap<NodeId, TempoState>,
     cycle: HashMap<NodeId, usize>,
     sets: Vec<Vec<Config>>,
     lookup: HashMap<InputKey, HashMap<String, usize>>,
     modes: ModeStack,
     releases: HashMap<InputKey, Vec<ReleaseEntry>>,
+    /// Entries [`Engine::process_release`] runs, kept to reuse their memory.
+    release_buffer: Vec<ReleaseEntry>,
     timers: Vec<Timer>,
     next_timer: u64,
     axes: HashMap<InputKey, f32>,
     relative: HashMap<(u32, u8), RelativeAxis>,
     /// Cursor motion per (action, input), tagged with the mode it started in.
-    motion: Motion<(NodeId, InputKey), String>,
+    motion: Motion<(NodeId, InputKey), Arc<str>>,
     toggles: HashMap<NodeId, ToggleState>,
     macros: HashMap<NodeId, MacroRun>,
     taps: HashMap<NodeId, TapState>,
@@ -519,6 +523,7 @@ impl Engine {
             lookup: HashMap::new(),
             modes: ModeStack::new(&start),
             releases: HashMap::new(),
+            release_buffer: Vec::new(),
             timers: Vec::new(),
             next_timer: 0,
             axes: HashMap::new(),
@@ -626,7 +631,7 @@ impl Engine {
                     engine.sets.len() - 1
                 });
                 // pause-resume and load-profile (Gremlin's AlwaysExecute) also run while paused.
-                let always = matches!(&engine.nodes[root], Node::Seq(c) if c.iter().any(|&n| matches!(engine.nodes[n], Node::Pause(_) | Node::LoadProfile { .. })));
+                let always = matches!(&*engine.nodes[root], Node::Seq(c) if c.iter().any(|&n| matches!(*engine.nodes[n], Node::Pause(_) | Node::LoadProfile { .. })));
                 engine.sets[set].push(Config {
                     always,
                     root,
@@ -644,9 +649,9 @@ impl Engine {
     }
 
     /// Attached device for a profile device GUID.
-    fn device(&self, guid: &str) -> String {
+    fn device(&self, guid: &str) -> Arc<str> {
         let guid = guid.trim().to_ascii_lowercase();
-        self.aliases.get(&guid).cloned().unwrap_or(guid)
+        self.aliases.get(&guid).cloned().unwrap_or(guid).into()
     }
 
     /// Child modes use their parent's binding (the very same one) unless they override it.
@@ -844,7 +849,7 @@ impl Engine {
                     on_activate,
                 } => {
                     let light = Light {
-                        device: self.device(device),
+                        device: self.device(device).to_string(),
                         led,
                         element,
                         color,
@@ -1056,7 +1061,7 @@ impl Engine {
                 ActionKind::Other | ActionKind::Description { .. } => Node::Noop,
             },
         };
-        self.nodes.push(node);
+        self.nodes.push(Arc::new(node));
         self.nodes.len() - 1
     }
 
@@ -1077,7 +1082,7 @@ impl Engine {
     pub fn logical_values(&self) -> LogicalValues {
         fn of<T: Copy>(map: &HashMap<InputKey, T>) -> BTreeMap<u32, T> {
             map.iter()
-                .filter(|(k, _)| k.device == gob_core::LOGICAL_DEVICE_GUID)
+                .filter(|(k, _)| &*k.device == gob_core::LOGICAL_DEVICE_GUID)
                 .map(|(k, &v)| (k.id, v))
                 .collect()
         }
@@ -1092,7 +1097,7 @@ impl Engine {
     pub fn vjoy_devices(&self) -> BTreeSet<u32> {
         self.nodes
             .iter()
-            .flat_map(|n| match n {
+            .flat_map(|n| match &**n {
                 Node::Vjoy { device, .. } => vec![*device],
                 Node::Macro { steps, .. } => steps
                     .iter()
@@ -1112,7 +1117,7 @@ impl Engine {
     pub fn gamepads(&self) -> BTreeSet<u32> {
         self.nodes
             .iter()
-            .flat_map(|n| match n {
+            .flat_map(|n| match &**n {
                 Node::Gamepad { gamepad, .. } => vec![*gamepad],
                 Node::Macro { steps, .. } => steps
                     .iter()
@@ -1146,7 +1151,7 @@ impl Engine {
 
     /// Whether the profile has voice-input actions (a microphone may be needed).
     pub fn uses_voice(&self) -> bool {
-        self.nodes.iter().any(|n| matches!(n, Node::Voice { .. }))
+        self.nodes.iter().any(|n| matches!(**n, Node::Voice { .. }))
     }
 
     /// Voice command `id` was heard: its button is pressed and released after the command's
@@ -1168,7 +1173,7 @@ impl Engine {
     pub fn voice_microphones(&self) -> Vec<String> {
         let mut found: Vec<String> = Vec::new();
         for n in &self.nodes {
-            if let Node::Voice { microphone, .. } = n
+            if let Node::Voice { microphone, .. } = &**n
                 && !found.contains(microphone)
             {
                 found.push(microphone.clone());
@@ -1202,7 +1207,7 @@ impl Engine {
     pub fn uses_lights(&self) -> bool {
         self.nodes
             .iter()
-            .any(|n| matches!(n, Node::LightLed { .. }))
+            .any(|n| matches!(**n, Node::LightLed { .. }))
             || self.sets.iter().flatten().any(|c| !c.lights.is_empty())
     }
 
@@ -1249,7 +1254,7 @@ impl Engine {
             self.after_layer_change(&layer, now, out);
             return;
         }
-        let before = self.modes.current().to_string();
+        let before = self.modes.shared();
         self.dispatch(key, value, now, out);
         self.after_mode_change(&before, now, out);
     }
@@ -1356,14 +1361,14 @@ impl Engine {
     fn source(&self, key: &InputKey) -> Source {
         Source {
             key: key.clone(),
-            mode: self.modes.current().to_string(),
+            mode: self.modes.shared(),
             no_auto_release: false,
         }
     }
 
     /// Fires due timers (tempo thresholds, pulse releases).
     pub fn tick(&mut self, now: Instant, out: &mut dyn Output) {
-        let before = self.modes.current().to_string();
+        let before = self.modes.shared();
         while let Some(pos) = self.timers.iter().position(|t| t.at <= now) {
             let timer = self.timers.remove(pos);
             match timer.kind {
@@ -1426,7 +1431,7 @@ impl Engine {
         self.motion.retain(|(_, key), mode| {
             lookup
                 .get(key)
-                .is_some_and(|m| m.get(mode).is_some() && m.get(mode) == m.get(&current))
+                .is_some_and(|m| m.get(&**mode).is_some() && m.get(&**mode) == m.get(&current))
         });
         let axes: Vec<(InputKey, f32)> = self.axes.iter().map(|(k, v)| (k.clone(), *v)).collect();
         for (key, v) in axes {
@@ -1437,11 +1442,11 @@ impl Engine {
     fn dispatch(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
         let src = Source {
             key: key.clone(),
-            mode: self.modes.current().to_string(),
+            mode: self.modes.shared(),
             no_auto_release: false,
         };
         let layer = self.event_layer(key, value);
-        if let Some(&set) = self.lookup.get(key).and_then(|m| m.get(&src.mode)) {
+        if let Some(&set) = self.lookup.get(key).and_then(|m| m.get(&*src.mode)) {
             let selection = self.selection(set, &layer);
             for ci in 0..self.sets[set].len() {
                 if selection.runs(&self.sets[set][ci].layer) {
@@ -1503,9 +1508,10 @@ impl Engine {
         if depth > MAX_DEPTH {
             return;
         }
-        match self.nodes[node].clone() {
-            Node::Seq(children) => {
-                for c in children {
+        let shared = Arc::clone(&self.nodes[node]);
+        match *shared {
+            Node::Seq(ref children) => {
+                for &c in children {
                     self.run(c, src, value, now, out, depth + 1);
                 }
             }
@@ -1584,7 +1590,11 @@ impl Engine {
                 }
                 self.gamepad(gamepad, control, inverted, *value, src, out);
             }
-            Node::ChangeMode { kind, targets, act } => {
+            Node::ChangeMode {
+                kind,
+                ref targets,
+                act,
+            } => {
                 if !should_execute(act, *value) && !matches!(kind, ChangeKind::Temporary) {
                     return;
                 }
@@ -1624,14 +1634,20 @@ impl Engine {
                     }
                 }
             }
-            Node::Curve { deadzone, curve } => {
+            Node::Curve {
+                deadzone,
+                ref curve,
+            } => {
                 if let Value::Axis(v) = value {
                     *v = curve.eval(f64::from(apply_deadzone(*v, deadzone))) as f32;
                 }
             }
             Node::Tempo { .. } => self.tempo_event(node, src, *value, now, out),
             Node::DoubleTap { .. } => self.tap_event(node, src, *value, now, out),
-            Node::Chain { chains, timeout } => {
+            Node::Chain {
+                ref chains,
+                timeout,
+            } => {
                 if chains.is_empty() {
                     return;
                 }
@@ -1650,15 +1666,18 @@ impl Engine {
                     self.chains.entry(node).or_default().index = (index + 1) % chains.len();
                 }
             }
-            Node::SmartToggle { children, delay } => {
+            Node::SmartToggle {
+                ref children,
+                delay,
+            } => {
                 if let Value::Button(pressed) = *value {
-                    self.smart_toggle(node, &children, delay, src, pressed, now, out);
+                    self.smart_toggle(node, children, delay, src, pressed, now, out);
                 }
             }
             Node::Split {
                 split,
-                lower,
-                upper,
+                ref lower,
+                ref upper,
             } => {
                 if let Value::Axis(v) = *value {
                     let (scaled, nodes) = if v < split {
@@ -1667,7 +1686,7 @@ impl Engine {
                         (axis_interpolation(v, split, 1.0), upper)
                     };
                     *value = Value::Axis(scaled);
-                    for n in nodes {
+                    for &n in nodes {
                         self.run(n, src, value, now, out, depth + 1);
                     }
                 }
@@ -1682,12 +1701,12 @@ impl Engine {
                 }
             }
             Node::Run {
-                executable,
-                arguments,
+                ref executable,
+                ref arguments,
                 act,
             } => {
                 if should_execute(act, *value) && !executable.trim().is_empty() {
-                    out.run_command(&executable, &arguments);
+                    out.run_command(executable, arguments);
                 }
             }
             Node::Mouse { action, act } => {
@@ -1695,12 +1714,12 @@ impl Engine {
                     self.mouse(node, action, src, *value, now, out);
                 }
             }
-            Node::Keys { keys, act } => {
+            Node::Keys { ref keys, act } => {
                 if !should_execute(act, *value) {
                     return;
                 }
                 if value.truthy() {
-                    for k in &keys {
+                    for k in keys {
                         out.key(k.scan_code, k.extended, true);
                     }
                     self.keys_down.insert(node);
@@ -1719,7 +1738,7 @@ impl Engine {
                 }
             }
             Node::Logical {
-                key,
+                ref key,
                 inverted,
                 relative,
                 act,
@@ -1730,14 +1749,17 @@ impl Engine {
                 match (key.kind, *value) {
                     (InputKind::Axis, Value::Axis(v)) if relative.is_some() => {
                         let speed = relative.unwrap_or(1.0);
-                        let r = self.logical_relative.entry(key).or_insert(RelativeAxis {
-                            value: 0.0,
-                            delta: 0.0,
-                            active: false,
-                            stopping: false,
-                            last_update: now,
-                            last_step: now,
-                        });
+                        let r = self
+                            .logical_relative
+                            .entry(key.clone())
+                            .or_insert(RelativeAxis {
+                                value: 0.0,
+                                delta: 0.0,
+                                active: false,
+                                stopping: false,
+                                last_update: now,
+                                last_step: now,
+                            });
                         r.delta = v * speed * 0.001;
                         r.stopping = v.abs() < 0.05;
                         r.last_update = now;
@@ -1752,11 +1774,11 @@ impl Engine {
                             Value::Button(b) => f32::from(u8::from(b)),
                             Value::Hat(_) => return,
                         };
-                        self.feed_logical(&key, Value::Axis(v), now, out);
+                        self.feed_logical(key, Value::Axis(v), now, out);
                     }
                     (InputKind::Button, v) => {
                         let pressed = v.truthy() != inverted;
-                        self.feed_logical(&key, Value::Button(pressed), now, out);
+                        self.feed_logical(key, Value::Button(pressed), now, out);
                         if pressed && !src.no_auto_release {
                             self.register(
                                 &src.key,
@@ -1764,36 +1786,41 @@ impl Engine {
                                     mode: src.mode.clone(),
                                     any_mode: false,
                                     on_press: inverted,
-                                    action: ReleaseAction::Logical(key),
+                                    action: ReleaseAction::Logical(key.clone()),
                                 },
                             );
                         }
                     }
                     (InputKind::Hat, Value::Hat(d)) => {
-                        self.feed_logical(&key, Value::Hat(d), now, out)
+                        self.feed_logical(key, Value::Hat(d), now, out)
                     }
                     _ => {}
                 }
             }
-            Node::LoadProfile { file, act } => {
+            Node::LoadProfile { ref file, act } => {
                 if should_execute(act, *value) && !file.is_empty() {
                     log::info!("load-profile action: {file}");
-                    out.load_profile(&file);
+                    out.load_profile(file);
                 }
             }
-            Node::PlaySound { file, volume, act } => {
+            Node::PlaySound {
+                ref file,
+                volume,
+                act,
+            } => {
                 if should_execute(act, *value) && !file.is_empty() {
-                    out.play_sound(&file, volume);
+                    out.play_sound(file, volume);
                 }
             }
-            Node::LightLed { light, act } => {
+            Node::LightLed { ref light, act } => {
                 if should_execute(act, *value) {
-                    out.light_led(&light);
+                    out.light_led(light);
                 }
             }
-            Node::Speak { mut request, act } => {
+            Node::Speak { ref request, act } => {
                 if should_execute(act, *value) && !request.text.trim().is_empty() {
                     let mode = self.modes.current();
+                    let mut request = request.clone();
                     request.text = request
                         .text
                         .replace("${current_mode}", mode)
@@ -1803,8 +1830,8 @@ impl Engine {
             }
             Node::Condition {
                 all,
-                conditions,
-                branches,
+                ref conditions,
+                ref branches,
                 act,
             } => {
                 if !should_execute(act, *value) {
@@ -1847,16 +1874,18 @@ impl Engine {
                 }
             }
             Node::DualDeadzone {
-                axes,
+                ref axes,
                 inner,
                 outer,
-                outputs,
+                ref outputs,
             } => {
-                let [x, y] = axes.map(|k| self.axes.get(&k).copied().unwrap_or(0.0));
+                let [x, y] = axes
+                    .each_ref()
+                    .map(|k| self.axes.get(k).copied().unwrap_or(0.0));
                 if let Some(results) = dual_deadzone(x, y, inner, outer) {
                     for (v, nodes) in results.into_iter().zip(outputs) {
                         let mut v = Value::Axis(v);
-                        for n in nodes {
+                        for &n in nodes {
                             self.run(n, src, &mut v, now, out, depth + 1);
                         }
                     }
@@ -1864,8 +1893,8 @@ impl Engine {
             }
             Node::AxisDelta {
                 threshold,
-                positive,
-                negative,
+                ref positive,
+                ref negative,
             } => {
                 // Gremlin reads the raw input, not the value earlier actions changed.
                 let raw = match (self.axes.get(&src.key), *value) {
@@ -1895,18 +1924,24 @@ impl Engine {
                     no_auto_release: true,
                     ..src.clone()
                 };
-                self.pulse(&nodes, Value::Button(true), psrc, now, out);
+                self.pulse(nodes, Value::Button(true), psrc, now, out);
             }
-            Node::Merge { axes, op, children } => {
-                let [a, b] = axes.map(|k| self.axes.get(&k).copied().unwrap_or(0.0));
+            Node::Merge {
+                ref axes,
+                op,
+                ref children,
+            } => {
+                let [a, b] = axes
+                    .each_ref()
+                    .map(|k| self.axes.get(k).copied().unwrap_or(0.0));
                 *value = Value::Axis(op.apply(a, b));
-                for c in children {
+                for &c in children {
                     self.run(c, src, value, now, out, depth + 1);
                 }
             }
-            Node::HatButtons(buttons) => {
+            Node::HatButtons(ref buttons) => {
                 if let Value::Hat(d) = *value {
-                    self.hat_buttons_event(node, &buttons, src, d, now, out, depth);
+                    self.hat_buttons_event(node, buttons, src, d, now, out, depth);
                 }
             }
             Node::Macro { repeat, act, .. } => {
@@ -1914,12 +1949,15 @@ impl Engine {
                     self.macro_trigger(node, repeat, src, now, out);
                 }
             }
-            Node::Voice { microphone, act } => {
+            Node::Voice {
+                ref microphone,
+                act,
+            } => {
                 if !should_execute(act, *value) {
                     return;
                 }
                 if value.truthy() {
-                    self.start_listening(node, microphone, out);
+                    self.start_listening(node, microphone.clone(), out);
                     // Also when let go in another mode or while paused: the microphone must
                     // never stay open.
                     self.register(
@@ -1965,7 +2003,7 @@ impl Engine {
         if !self.keys_down.remove(&node) {
             return;
         }
-        if let Node::Keys { keys, .. } = &self.nodes[node] {
+        if let Node::Keys { keys, .. } = &*self.nodes[node] {
             for k in keys.iter().rev() {
                 out.key(k.scan_code, k.extended, false);
             }
@@ -2068,7 +2106,7 @@ impl Engine {
 
     /// Executes steps until the next pause, the end of the macro or its termination.
     fn macro_advance(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        let Node::Macro { steps, repeat, .. } = &self.nodes[node] else {
+        let Node::Macro { steps, repeat, .. } = &*self.nodes[node] else {
             return;
         };
         let (steps, repeat) = (steps.clone(), *repeat);
@@ -2337,7 +2375,7 @@ impl Engine {
             long,
             threshold,
             on_press,
-        } = self.nodes[node].clone()
+        } = (*self.nodes[node]).clone()
         else {
             return;
         };
@@ -2387,7 +2425,7 @@ impl Engine {
     }
 
     fn tempo_timeout(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        let Node::Tempo { long, .. } = self.nodes[node].clone() else {
+        let Node::Tempo { long, .. } = (*self.nodes[node]).clone() else {
             return;
         };
         let state = self.tempo.entry(node).or_default();
@@ -2555,7 +2593,7 @@ impl Engine {
             double,
             threshold,
             exclusive,
-        } = self.nodes[node].clone()
+        } = (*self.nodes[node]).clone()
         else {
             return;
         };
@@ -2619,7 +2657,7 @@ impl Engine {
     fn tap_timeout(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
         let Node::DoubleTap {
             single, exclusive, ..
-        } = self.nodes[node].clone()
+        } = (*self.nodes[node]).clone()
         else {
             return;
         };
@@ -2653,7 +2691,7 @@ impl Engine {
         now: Instant,
         out: &mut dyn Output,
     ) {
-        let Node::DoubleTap { single, double, .. } = self.nodes[node].clone() else {
+        let Node::DoubleTap { single, double, .. } = (*self.nodes[node]).clone() else {
             return;
         };
         let state = self.taps.entry(node).or_default();
@@ -2673,7 +2711,7 @@ impl Engine {
         now: Instant,
         out: &mut dyn Output,
     ) {
-        let Node::Tempo { short, long, .. } = self.nodes[node].clone() else {
+        let Node::Tempo { short, long, .. } = (*self.nodes[node]).clone() else {
             return;
         };
         self.cancel_tempo_timer(node);
@@ -2713,20 +2751,17 @@ impl Engine {
         now: Instant,
         out: &mut dyn Output,
     ) {
-        let Some(entries) = self.releases.remove(key) else {
+        let Some(entries) = self.releases.get_mut(key).filter(|e| !e.is_empty()) else {
             return;
         };
-        let current = self.modes.current().to_string();
-        let (fire, keep): (Vec<_>, Vec<_>) = entries
-            .into_iter()
-            .partition(|e| (e.any_mode || e.mode != current) && pressed == e.on_press);
-        if !keep.is_empty() {
-            self.releases
-                .entry(key.clone())
-                .or_default()
-                .splice(0..0, keep);
-        }
-        for entry in fire {
+        let current = self.modes.shared();
+        // The input's list stays in the map (emptied, its memory kept) and the entries to run
+        // move into a buffer kept between events: a press and release allocate nothing.
+        let mut fire = std::mem::take(&mut self.release_buffer);
+        fire.extend(entries.extract_if(.., |e| {
+            (e.any_mode || e.mode != current) && pressed == e.on_press
+        }));
+        for entry in fire.drain(..) {
             match entry.action {
                 ReleaseAction::VjoyButton(device, button) => out.button(device, button, false),
                 ReleaseAction::GamepadButton(gamepad, control) => {
@@ -2778,6 +2813,9 @@ impl Engine {
                     }
                 }
             }
+        }
+        if self.release_buffer.capacity() < fire.capacity() {
+            self.release_buffer = fire;
         }
     }
 }

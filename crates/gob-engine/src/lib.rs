@@ -66,7 +66,8 @@ pub enum InputKind {
 /// A physical (or virtual) input: lowercase device GUID, kind and 1-based id.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InputKey {
-    pub device: String,
+    /// Shared: the engine copies keys into every event it handles.
+    pub device: std::sync::Arc<str>,
     pub kind: InputKind,
     pub id: u32,
 }
@@ -74,7 +75,7 @@ pub struct InputKey {
 impl InputKey {
     pub fn new(device: &str, kind: InputKind, id: u32) -> Self {
         Self {
-            device: device.to_ascii_lowercase(),
+            device: device.to_ascii_lowercase().into(),
             kind,
             id,
         }
