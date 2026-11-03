@@ -158,12 +158,25 @@ impl Editor<'_> {
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new(icon::ARROW_FAT_DOWN).size(style::ICON_SIZE))
                 .on_hover_text(self.i18n.tr("bax-decrease"));
-            let text = match (&listening, &axis.decrease) {
-                (Some(_), _) => RichText::new(self.i18n.tr("bax-decrease-press")).weak(),
-                (None, Some(input)) => RichText::new(self.decrease_name(input)),
-                (None, None) => RichText::new(self.i18n.tr("bax-decrease-none")).weak(),
-            };
-            ui.label(text);
+            match (&listening, &axis.decrease) {
+                (Some(_), _) => {
+                    ui.label(RichText::new(self.i18n.tr("bax-decrease-press")).weak());
+                }
+                (None, Some(input)) => {
+                    // A click shows the input on the Devices page.
+                    let name = RichText::new(self.decrease_name(input)).underline();
+                    let r = ui
+                        .add(egui::Label::new(name).sense(egui::Sense::click()))
+                        .on_hover_text(self.i18n.tr("bax-decrease-show"))
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    if r.clicked() {
+                        request_jump(ui.ctx(), &input.device, &input.input_type, input.id);
+                    }
+                }
+                (None, None) => {
+                    ui.label(RichText::new(self.i18n.tr("bax-decrease-none")).weak());
+                }
+            }
             match listening {
                 None => {
                     if style::record_button(ui, &self.i18n.tr("bax-decrease-listen")).clicked() {
@@ -597,4 +610,19 @@ fn positions_strip(ui: &mut egui::Ui, id: &str, positions: &[f32], help: &str) -
         return Some(p);
     }
     None
+}
+
+fn jump_id() -> egui::Id {
+    egui::Id::unique("bax-show-decrease")
+}
+
+/// Asks the Devices page to show an input (profile device id, input type, id).
+pub(crate) fn request_jump(ctx: &egui::Context, device: &str, input_type: &str, id: u32) {
+    let to = (device.to_string(), input_type.to_string(), id);
+    ctx.data_mut(|d| d.insert_temp(jump_id(), to));
+}
+
+/// The input [`request_jump`] asked for, once.
+pub(crate) fn take_jump(ctx: &egui::Context) -> Option<(String, String, u32)> {
+    ctx.data_mut(|d| d.remove_temp(jump_id()))
 }
