@@ -69,6 +69,27 @@ pub struct JoystickGobloonApp {
     activation: Activation,
     /// Active in the last frame: a change made from the tray updates the status bar.
     was_active: bool,
+    /// Switching profiles by program: on from Activate until the profile is stopped.
+    switching: bool,
+    switcher: crate::program_switch::Switcher,
+    watcher: crate::program_switch::Watcher,
+    /// The program in front, as the watcher last said.
+    front: Option<crate::platform::Program>,
+    /// This program's file name: it never chooses a profile.
+    own_exe: String,
+    autosave_writer: crate::autosave::Writer,
+    /// The program whose profile runs now by switching: (its key, its name, the profile file).
+    switched: Option<(String, String, String)>,
+    /// Activated with unsaved changes while programs have profiles: ask to save first.
+    ask_switch_unsaved: bool,
+    /// The program whose waiting switch the user put off (no question again for it).
+    held_dismissed: Option<String>,
+    /// Switching waits for unsaved changes (said once in the status bar).
+    switch_paused: bool,
+    device_baseline: Option<DeviceBaseline>,
+    /// When [`Self::watch_devices`] last looked (it looks twice a second, not every frame).
+    devices_checked: std::time::Instant,
+    stopped: Option<Stopped>,
     /// Time of the last edit; a running profile restarts once edits settle.
     edited: Option<std::time::Instant>,
     /// Action waiting for the "save changes?" answer.
@@ -115,6 +136,37 @@ struct Alert {
     lines: Vec<String>,
 }
 
+/// The profile's devices when switching by program started (or last switched), to stop the
+/// profile when they change.
+struct DeviceBaseline {
+    /// Ids of every attached controller: a cheap check whether anything changed.
+    attached: Vec<String>,
+    served: Vec<crate::program_switch::Served>,
+    /// The virtual devices as set up then (not whether they are in use).
+    virtual_shape: Vec<String>,
+    /// What the virtual devices lacked for the profile then.
+    virtual_missing: usize,
+}
+
+/// Why the profile stopped while switching by program ("What changed").
+struct Stopped {
+    devices: Vec<crate::program_switch::DeviceChange>,
+    /// The virtual devices no longer have what the profile needs.
+    virtual_devices: bool,
+}
+
+/// Who opens a profile.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OpenAs {
+    /// The user: import warnings are shown, not only logged; a running profile stops.
+    User,
+    /// Reopened on start: warnings only logged.
+    Reopen,
+    /// A program of the Applications page came to the front: the running profile keeps
+    /// running (with its virtual devices) and errors go to the status bar, not a dialog.
+    Program,
+}
+
 #[derive(Clone)]
 enum Pending {
     Close,
@@ -123,6 +175,8 @@ enum Pending {
     /// A load-profile action asked for this file; it is activated after loading.
     Load(PathBuf),
     New,
+    /// Switching profiles by program starts once the running profile is saved.
+    Switching,
     /// A new profile through the wizard (`wizard_view`).
     Wizard,
     Open,
@@ -214,6 +268,22 @@ impl JoystickGobloonApp {
             voice_panel: Default::default(),
             activation,
             was_active: false,
+            switching: false,
+            switcher: Default::default(),
+            watcher: crate::program_switch::Watcher::start(cc.egui_ctx.clone()),
+            front: None,
+            own_exe: std::env::current_exe()
+                .ok()
+                .and_then(|e| e.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .unwrap_or_else(|| crate::platform::exe_name().into()),
+            ask_switch_unsaved: false,
+            autosave_writer: crate::autosave::Writer::start(),
+            switched: None,
+            held_dismissed: None,
+            switch_paused: false,
+            device_baseline: None,
+            devices_checked: std::time::Instant::now(),
+            stopped: None,
             edited: None,
             pending: None,
             gremlin_warning: None,
@@ -268,6 +338,17 @@ impl JoystickGobloonApp {
             Ok("viewer") => app.page = Page::Viewer,
             Ok("calibration") => app.page = Page::Calibration,
             Ok("wizard") => app.wizard = Some(crate::wizard_view::Wizard::new()),
+            Ok("switch-unsaved") => app.ask_switch_unsaved = true,
+            Ok("switch-stopped") => {
+                use crate::program_switch::DeviceChange;
+                app.stopped = Some(Stopped {
+                    devices: vec![
+                        DeviceChange::Disconnected("Right stick".into()),
+                        DeviceChange::Replaced("Throttle".into()),
+                    ],
+                    virtual_devices: true,
+                });
+            }
             Ok("viewer-window") => {
                 app.page = Page::Viewer;
                 app.viewer_window = true;
@@ -319,6 +400,7 @@ impl JoystickGobloonApp {
             }
         }
         crate::update::cleanup();
+        crate::autosave::prune(&mut app.settings.autosave);
         if app.settings.check_updates && crate::update::enabled() {
             app.updater.check(&cc.egui_ctx, true);
         }
@@ -333,7 +415,7 @@ impl JoystickGobloonApp {
             }
             found
         }) {
-            app.open_profile(path, false);
+            app.open_profile(path, OpenAs::Reopen);
             if app.settings.activate_on_start && app.profile.is_some() {
                 app.toggle_runner(&cc.egui_ctx);
             }
@@ -392,7 +474,24 @@ impl JoystickGobloonApp {
     }
 
     /// `interactive`: opened by the user, so import warnings are shown, not only logged.
-    fn open_profile(&mut self, path: PathBuf, interactive: bool) {
+    /// Opens a profile file; `false` when it could not be read.
+    fn open_profile(&mut self, path: PathBuf, how: OpenAs) -> bool {
+        // A program's profile runs as saved; its unsaved copy reopens when the user opens it.
+        if let Some(entry) = crate::autosave::find(&self.settings.autosave, &path)
+            .filter(|_| how != OpenAs::Program)
+            .cloned()
+        {
+            match gob_gremlin::load(&entry.file) {
+                Ok(profile) => {
+                    self.restore(profile, entry);
+                    return true;
+                }
+                Err(e) => log::error!("autosave {}: {e}", entry.file.display()),
+            }
+            if entry.origin.is_none() {
+                return false;
+            }
+        }
         match gob_gremlin::load(&path) {
             Ok(profile) => {
                 let report = gob_gremlin::report(&profile);
@@ -405,7 +504,7 @@ impl JoystickGobloonApp {
                     .i18n
                     .trf("status-loaded", &[("file", loaded.file_name().into())]);
                 let lines = important_warnings(&self.i18n, &report);
-                if interactive && !lines.is_empty() {
+                if how == OpenAs::User && !lines.is_empty() {
                     self.alerts.push(Alert {
                         title: self
                             .i18n
@@ -413,20 +512,510 @@ impl JoystickGobloonApp {
                         lines,
                     });
                 }
+                self.drop_autosave(false);
                 self.profile = Some(loaded);
-                self.activation.stop();
+                if how != OpenAs::Program {
+                    self.activation.stop();
+                    self.activation.set_start_mode(None);
+                }
                 self.devices_view.reset_mode();
                 self.settings.last_profile = Some(path);
                 self.settings.save();
+                true
             }
             Err(e) => {
                 log::error!("loading {}: {e}", path.display());
-                let text = self
-                    .i18n
-                    .trf("import-error", &[("error", e.to_string().into())]);
-                self.error(text);
+                if how != OpenAs::Program {
+                    let text = self
+                        .i18n
+                        .trf("import-error", &[("error", e.to_string().into())]);
+                    self.error(text);
+                }
+                false
             }
         }
+    }
+
+    /// Switching profiles by program, every frame: follows the program in front while a
+    /// profile runs. Unsaved changes pause it; the program in front then counts once they are
+    /// saved or discarded.
+    fn switch_by_program(&mut self) {
+        let wanted = self.switching
+            && self.activation.is_active()
+            && self.apps_view.apps().iter().any(|a| a.profile.is_some());
+        self.watcher.set_enabled(wanted);
+        if let Some(front) = self.watcher.changed() {
+            self.front = front;
+            self.switcher.front_changed();
+        }
+        if !wanted {
+            self.switch_paused = false;
+            self.switched = None;
+            return;
+        }
+        let dirty = self.profile.as_ref().is_some_and(|p| p.dirty);
+        if dirty != self.switch_paused {
+            self.switch_paused = dirty;
+            if dirty {
+                self.status = self.i18n.tr("status-switch-paused");
+            }
+        }
+        if dirty {
+            return;
+        }
+        let Some(app) = self
+            .switcher
+            .due(self.front.as_ref(), self.apps_view.apps(), &self.own_exe)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(path) = app.profile.clone() else {
+            return;
+        };
+        let program = self
+            .front
+            .as_ref()
+            .map(|p| p.name.clone())
+            .unwrap_or_default();
+        let file = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        let previous = self.profile.as_ref().and_then(|p| p.path.clone());
+        let previous_mode = self.activation.start_mode();
+        let current = previous.as_ref() == Some(&path);
+        if !current && !self.open_profile(path.clone(), OpenAs::Program) {
+            self.switcher.failed(&app);
+            self.status = self.i18n.trf(
+                "status-switch-failed",
+                &[("program", program.into()), ("file", file.into())],
+            );
+            return;
+        }
+        self.activation.set_start_mode(app.mode.clone());
+        self.sync_activation();
+        self.vjoy_view.release();
+        match self.activation.reload() {
+            Ok(()) => {
+                self.switcher.applied(&app);
+                self.switched = Some((app.key(), program.clone(), file.clone()));
+                self.held_dismissed = None;
+                self.device_baseline = self.device_snapshot();
+                log::info!("{program} in front: {} runs", path.display());
+                self.status = self.i18n.trf(
+                    "status-switched",
+                    &[("program", program.into()), ("file", file.into())],
+                );
+            }
+            Err(e) => {
+                log::error!("{program} in front: {}: {e}", path.display());
+                // The engine keeps the old profile: the window shows it again too.
+                self.switcher.failed(&app);
+                self.activation.set_start_mode(previous_mode);
+                if !current && let Some(previous) = previous {
+                    self.open_profile(previous, OpenAs::Program);
+                }
+                self.sync_activation();
+                self.status = self.i18n.trf(
+                    "status-switch-failed",
+                    &[("program", program.into()), ("file", file.into())],
+                );
+            }
+        }
+    }
+
+    /// What the virtual devices lack for the profile (changes the set-up banner would make).
+    fn virtual_changes(&mut self) -> Vec<gob_virtual::Change> {
+        let Some(p) = &self.profile else {
+            return Vec::new();
+        };
+        let wanted = crate::virtual_setup::wanted(&p.profile);
+        if wanted.is_empty() {
+            return Vec::new();
+        }
+        let Some(caps) = self.vjoy_view.capabilities() else {
+            return Vec::new();
+        };
+        let devices = self.vjoy_view.device_list();
+        let (_, pads) = self.vjoy_view.gamepad_list();
+        crate::virtual_setup::changes(&wanted, &devices, self.vjoy_view.configs(), &pads, &caps)
+    }
+
+    /// The virtual devices' setup (ids, axes, buttons, hats, names; gamepads), without their
+    /// state: a program taking one in use is no change.
+    fn virtual_shape(&mut self) -> Vec<String> {
+        let mut shape: Vec<String> = self
+            .vjoy_view
+            .device_list()
+            .iter()
+            .map(|d| {
+                format!(
+                    "joystick {} {:?} {} {} {} {:?}",
+                    d.id, d.axes, d.buttons, d.cont_hats, d.disc_hats, d.name
+                )
+            })
+            .collect();
+        let (_, pads) = self.vjoy_view.gamepad_list();
+        shape.extend(pads.iter().map(|p| format!("gamepad {}", p.id)));
+        shape
+    }
+
+    fn device_snapshot(&mut self) -> Option<DeviceBaseline> {
+        let devices = self.input.devices();
+        let served = crate::program_switch::served(&self.profile.as_ref()?.profile, &devices);
+        Some(DeviceBaseline {
+            attached: attached_ids(&devices),
+            served,
+            virtual_shape: self.virtual_shape(),
+            virtual_missing: self.virtual_changes().len(),
+        })
+    }
+
+    /// While switching by program, a change to the profile's controllers or to the virtual
+    /// devices it needs stops the profile and says what changed.
+    fn watch_devices(&mut self) {
+        if !(self.switching && self.activation.is_active())
+            || self.devices_checked.elapsed() < std::time::Duration::from_millis(500)
+        {
+            return;
+        }
+        self.devices_checked = std::time::Instant::now();
+        let Some(base) = &self.device_baseline else {
+            return;
+        };
+        let devices = self.input.devices();
+        let attached = attached_ids(&devices);
+        let base_attached = attached == base.attached;
+        let base_missing = base.virtual_missing;
+        let base_shape = base.virtual_shape.clone();
+        let shape = self.virtual_shape();
+        if base_attached && shape == base_shape {
+            return;
+        }
+        let virtual_missing = self.virtual_changes().len();
+        let Some(p) = &self.profile else {
+            return;
+        };
+        let served = crate::program_switch::served(&p.profile, &devices);
+        let Some(base) = &mut self.device_baseline else {
+            return;
+        };
+        let changes = crate::program_switch::device_changes(&base.served, &served);
+        let virtual_devices = virtual_missing > base_missing;
+        if changes.is_empty() && !virtual_devices {
+            // Another controller came or went: nothing of the profile's.
+            base.attached = attached;
+            base.virtual_shape = shape;
+            base.virtual_missing = virtual_missing;
+            return;
+        }
+        log::warn!(
+            "the devices of the running profile changed ({changes:?}, virtual devices {}): stopped",
+            if virtual_devices { "short" } else { "fine" }
+        );
+        self.activation.stop();
+        self.switching = false;
+        self.was_active = false;
+        self.device_baseline = None;
+        self.status = self.i18n.tr("status-switch-stopped");
+        self.stopped = Some(Stopped {
+            devices: changes,
+            virtual_devices,
+        });
+    }
+
+    /// Questions of switching by program: activated with unsaved changes, a switch waiting for
+    /// them, the profile stopped by a device change.
+    fn switch_dialogs(&mut self, ctx: &egui::Context) {
+        let file = self
+            .profile
+            .as_ref()
+            .map(|p| p.file_name())
+            .unwrap_or_default();
+        if self.stopped.is_some() {
+            self.stopped_dialog(ctx, file);
+        } else if self.ask_switch_unsaved {
+            let mut choice = None;
+            style::modal(ctx, "switch-unsaved").show(ctx, |ui| {
+                ui.set_width(440.0);
+                let title = self.i18n.tr("switch-unsaved-title");
+                style::dialog_title(ui, Some((icon::SWAP, None)), &title);
+                ui.label(
+                    self.i18n
+                        .trf("switch-unsaved-text", &[("file", file.into())]),
+                );
+                let save = format!("{}  {}", icon::FLOPPY_DISK, self.i18n.tr("switch-save"));
+                let buttons = [
+                    style::DialogButton::primary(save),
+                    style::DialogButton::secondary(self.i18n.tr("switch-without")),
+                ];
+                choice = style::dialog_buttons(ui, &buttons);
+            });
+            match choice {
+                Some(0) => {
+                    self.ask_switch_unsaved = false;
+                    // Saving may first ask about the Joystick Gremlin format; it starts
+                    // switching itself then.
+                    if self.save_then(Some(Pending::Switching)) {
+                        self.start_switching();
+                    }
+                }
+                Some(_) => self.ask_switch_unsaved = false,
+                None => {}
+            }
+        } else if let Some(app) = self.held_switch() {
+            let program = self
+                .front
+                .as_ref()
+                .map(|p| p.name.clone())
+                .unwrap_or_default();
+            let mut choice = None;
+            style::modal(ctx, "switch-held").show(ctx, |ui| {
+                ui.set_width(440.0);
+                let title = self.i18n.tr("switch-held-title");
+                style::dialog_title(ui, Some((icon::PAUSE, None)), &title);
+                ui.label(self.i18n.trf(
+                    "switch-held-text",
+                    &[("program", program.into()), ("file", file.into())],
+                ));
+                let save = format!(
+                    "{}  {}",
+                    icon::FLOPPY_DISK,
+                    self.i18n.tr("switch-save-continue")
+                );
+                let buttons = [
+                    style::DialogButton::primary(save),
+                    style::DialogButton::secondary(self.i18n.tr("switch-stop")),
+                    style::DialogButton::secondary(self.i18n.tr("cancel")),
+                ];
+                choice = style::dialog_buttons(ui, &buttons);
+            });
+            match choice {
+                // Saved: the switch follows in the next frame.
+                Some(0) => {
+                    self.save();
+                }
+                Some(1) => {
+                    self.switching = false;
+                    self.status = self.i18n.tr("status-switch-off");
+                }
+                Some(_) => self.held_dismissed = Some(app.key()),
+                None => {}
+            }
+        }
+    }
+
+    /// The program whose profile waits for unsaved changes, unless the user put it off.
+    fn held_switch(&self) -> Option<crate::settings::AppEntry> {
+        if !(self.switching && self.activation.is_active())
+            || !self.profile.as_ref().is_some_and(|p| p.dirty)
+        {
+            return None;
+        }
+        self.switcher
+            .due(self.front.as_ref(), self.apps_view.apps(), &self.own_exe)
+            .filter(|a| self.held_dismissed.as_ref() != Some(&a.key()))
+            .cloned()
+    }
+
+    /// Turns switching by program on for the running profile.
+    fn start_switching(&mut self) {
+        self.switching = true;
+        self.switcher.reset();
+        self.held_dismissed = None;
+        self.front = crate::platform::foreground_program();
+        self.device_baseline = self.device_snapshot();
+    }
+
+    /// "What changed": the profile stopped because its devices changed.
+    fn stopped_dialog(&mut self, ctx: &egui::Context, file: String) {
+        use crate::program_switch::DeviceChange;
+        let Some(stopped) = &self.stopped else {
+            return;
+        };
+        let mut lines: Vec<String> = stopped
+            .devices
+            .iter()
+            .map(|c| match c {
+                DeviceChange::Disconnected(d) => self.i18n.trf(
+                    "switch-device-disconnected",
+                    &[("device", d.clone().into())],
+                ),
+                DeviceChange::Connected(d) => self
+                    .i18n
+                    .trf("switch-device-connected", &[("device", d.clone().into())]),
+                DeviceChange::Replaced(d) => self
+                    .i18n
+                    .trf("switch-device-replaced", &[("device", d.clone().into())]),
+            })
+            .collect();
+        if stopped.virtual_devices {
+            lines.push(self.i18n.tr("switch-virtual-changed"));
+        }
+        let can_map = stopped
+            .devices
+            .iter()
+            .any(|c| !matches!(c, DeviceChange::Connected(_)));
+        let can_setup = stopped.virtual_devices;
+        let (mut map, mut setup, mut choice) = (false, false, None);
+        style::modal(ctx, "switch-stopped").show(ctx, |ui| {
+            ui.set_width(460.0);
+            let title = self.i18n.tr("switch-stopped-title");
+            style::dialog_title(ui, Some((icon::STOP, None)), &title);
+            ui.label(
+                self.i18n
+                    .trf("switch-stopped-text", &[("file", file.into())]),
+            );
+            for line in &lines {
+                ui.label(format!("•  {line}"));
+            }
+            ui.horizontal(|ui| {
+                if can_map {
+                    let text = format!("{}  {}", icon::SWAP, self.i18n.tr("subst-title"));
+                    map = ui.button(text).clicked();
+                }
+                if can_setup {
+                    let text = format!("{}  {}", icon::WRENCH, self.i18n.tr("virtual-setup"));
+                    setup = ui.button(text).clicked();
+                }
+            });
+            let activate = format!("{}  {}", icon::PLAY, self.i18n.tr("switch-activate"));
+            let buttons = [
+                style::DialogButton::primary(activate),
+                style::DialogButton::secondary(self.i18n.tr("cancel")),
+            ];
+            choice = style::dialog_buttons(ui, &buttons);
+        });
+        if map {
+            self.stopped = None;
+            if let Some(p) = &self.profile {
+                self.substitute = Some(SubstituteDialog::new(&p.profile, &self.input.devices()));
+            }
+        } else if setup {
+            if let Some(s) = &mut self.stopped {
+                s.virtual_devices = false;
+            }
+            let changes = self.virtual_changes();
+            if !changes.is_empty() {
+                self.virtual_setup = true;
+                self.vjoy_view.apply(changes);
+            }
+        } else {
+            match choice {
+                Some(0) => {
+                    self.stopped = None;
+                    self.toggle_runner(ctx);
+                }
+                Some(_) => self.stopped = None,
+                None => {}
+            }
+        }
+    }
+
+    /// Opens the copy of a profile's unsaved changes (after a crash), still unsaved.
+    fn restore(&mut self, profile: gob_core::Profile, entry: crate::autosave::Entry) {
+        log::info!(
+            "restored unsaved changes from {} (profile {})",
+            entry.file.display(),
+            entry
+                .origin
+                .as_ref()
+                .map_or_else(|| "new".into(), |p| p.display().to_string())
+        );
+        let mut loaded = LoadedProfile::new(profile, entry.origin.clone());
+        loaded.dirty = true;
+        loaded.autosave = Some(entry.file.clone());
+        self.status = self
+            .i18n
+            .trf("status-restored", &[("file", loaded.file_name().into())]);
+        self.drop_autosave(false);
+        self.profile = Some(loaded);
+        self.activation.stop();
+        self.activation.set_start_mode(None);
+        self.devices_view.reset_mode();
+        self.settings.last_profile = Some(entry.origin.unwrap_or(entry.file));
+        self.settings.save();
+    }
+
+    /// Writes the copy of the unsaved changes a moment after the last edit.
+    fn autosave_tick(&mut self, ctx: &egui::Context) {
+        let Some(loaded) = &mut self.profile else {
+            return;
+        };
+        let Some(edited) = loaded.autosave_after.filter(|_| loaded.dirty) else {
+            return;
+        };
+        if edited.elapsed() < crate::autosave::DELAY {
+            ctx.request_repaint_after(crate::autosave::DELAY - edited.elapsed());
+            return;
+        }
+        loaded.autosave_after = None;
+        let file = match &loaded.autosave {
+            Some(file) => file.clone(),
+            None => {
+                let Some(dir) = crate::autosave::dir() else {
+                    return;
+                };
+                let file = crate::autosave::next_file(&dir, &self.settings.autosave);
+                loaded.autosave = Some(file.clone());
+                file
+            }
+        };
+        self.autosave_writer.write(file.clone(), &loaded.profile);
+        let entry = crate::autosave::Entry {
+            file: file.clone(),
+            origin: loaded.path.clone(),
+        };
+        let mut changed = false;
+        if !self.settings.autosave.contains(&entry) {
+            self.settings.autosave.retain(|e| e.file != file);
+            self.settings.autosave.push(entry);
+            changed = true;
+        }
+        // A new profile reopens from its copy.
+        if loaded.path.is_none() && self.settings.last_profile.as_ref() != Some(&file) {
+            self.settings.last_profile = Some(file);
+            changed = true;
+        }
+        if changed {
+            self.settings.save();
+        }
+    }
+
+    /// Removes the copy of the current profile's unsaved changes. `all`: they were saved or
+    /// discarded, which makes every copy of that profile old (also one left by a crash);
+    /// otherwise (another profile opens in its place) only its own.
+    fn drop_autosave(&mut self, all: bool) {
+        let Some(loaded) = &mut self.profile else {
+            return;
+        };
+        loaded.autosave_after = None;
+        let file = loaded.autosave.clone();
+        let origin = loaded.path.clone().filter(|_| all);
+        if file.is_none() && origin.is_none() {
+            return;
+        }
+        let gone = crate::autosave::take(
+            &mut self.settings.autosave,
+            file.as_deref(),
+            origin.as_deref(),
+        );
+        if gone.is_empty() {
+            return;
+        }
+        let last = self
+            .settings
+            .last_profile
+            .as_ref()
+            .is_some_and(|l| gone.contains(l));
+        if last {
+            self.settings.last_profile = None;
+        }
+        for file in gone {
+            self.autosave_writer.remove(file);
+        }
+        self.settings.save();
     }
 
     /// File dialog for profiles, starting in `dir`, else where the last one was opened or
@@ -453,7 +1042,7 @@ impl JoystickGobloonApp {
     fn import_dialog(&mut self) {
         if let Some(path) = self.profile_dialog(None).pick_file() {
             self.remember_profile_dir(&path);
-            self.open_profile(path, true);
+            self.open_profile(path, OpenAs::User);
         }
     }
 
@@ -608,6 +1197,10 @@ impl JoystickGobloonApp {
                 loaded.path = Some(path.clone());
                 loaded.dirty = false;
                 loaded.gremlin_file = !loaded.profile.needs_own_format();
+                self.drop_autosave(true);
+                if let Some(loaded) = &mut self.profile {
+                    loaded.autosave = None;
+                }
                 self.settings.last_profile = Some(path);
                 self.settings.save();
                 true
@@ -626,8 +1219,14 @@ impl JoystickGobloonApp {
     fn new_profile(&mut self) {
         let mut profile = gob_core::Profile::default();
         profile.set_startup_mode("Default");
-        self.profile = Some(LoadedProfile::new(profile, None));
+        self.drop_autosave(false);
+        let mut loaded = LoadedProfile::new(profile, None);
+        // Named now, written after the first edit.
+        loaded.autosave = crate::autosave::dir()
+            .map(|dir| crate::autosave::next_file(&dir, &self.settings.autosave));
+        self.profile = Some(loaded);
         self.activation.stop();
+        self.activation.set_start_mode(None);
         self.devices_view.reset_mode();
         self.status = self.i18n.tr("status-new");
     }
@@ -678,6 +1277,10 @@ impl JoystickGobloonApp {
         {
             self.pending = Some(action);
         } else {
+            // Unsaved changes of an empty profile go without asking, and so does their copy.
+            if self.profile.as_ref().is_some_and(|p| p.dirty) {
+                self.drop_autosave(true);
+            }
             self.perform(action, ctx);
         }
     }
@@ -706,10 +1309,15 @@ impl JoystickGobloonApp {
                 }
             }
             Pending::New => self.new_profile(),
+            Pending::Switching => {
+                if self.activation.is_active() {
+                    self.start_switching();
+                }
+            }
             Pending::Wizard => self.wizard = Some(crate::wizard_view::Wizard::new()),
             Pending::Open => self.import_dialog(),
             Pending::Load(path) => {
-                self.open_profile(path, true);
+                self.open_profile(path, OpenAs::User);
                 if self.profile.is_some() && !self.activation.is_active() {
                     self.toggle_runner(ctx);
                 }
@@ -958,6 +1566,7 @@ impl JoystickGobloonApp {
             }
             Some(1) => {
                 self.pending = None;
+                self.drop_autosave(true);
                 self.perform(action, ctx);
             }
             Some(_) => self.pending = None,
@@ -976,10 +1585,6 @@ impl JoystickGobloonApp {
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
                 (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
             ] {
-                // The Applications page edits the hiding program list; not every platform has one.
-                if page == Page::Apps && !gob_hide::capabilities().app_list {
-                    continue;
-                }
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
                 }
@@ -1006,7 +1611,11 @@ impl JoystickGobloonApp {
                 } else {
                     "title-inactive"
                 };
-                let modified = if p.dirty { "*" } else { "" };
+                let modified = match (&p.path, p.dirty) {
+                    (None, _) => format!(" ({})", self.i18n.tr("title-not-saved")),
+                    (Some(_), true) => "*".into(),
+                    (Some(_), false) => String::new(),
+                };
                 format!(
                     "{} | {}{modified} | {}",
                     crate::APP_NAME,
@@ -1039,7 +1648,6 @@ impl JoystickGobloonApp {
                 self.error(text);
             }
         }
-        self.was_active = self.activation.is_active();
     }
 
     /// Applies the edited profile to the running engine without releasing its virtual devices.
@@ -1434,9 +2042,27 @@ impl eframe::App for JoystickGobloonApp {
     /// draws nothing and skips [`Self::ui`]).
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
+        self.switch_by_program();
         // Started or stopped from the tray menu (maybe while the window was hidden).
         let active = self.activation.is_active();
         if active != self.was_active {
+            // Activate (window or tray) starts switching by program; any stop ends it. With
+            // unsaved changes it first asks to save them (switching would close them).
+            self.switching = false;
+            self.device_baseline = None;
+            if active {
+                self.stopped = None;
+                let programs = self.apps_view.apps().iter().any(|a| a.profile.is_some());
+                if programs && self.profile.as_ref().is_some_and(|p| p.dirty) {
+                    self.ask_switch_unsaved = true;
+                } else {
+                    self.start_switching();
+                }
+            } else {
+                self.ask_switch_unsaved = false;
+                // A program's mode was for that run only.
+                self.activation.set_start_mode(None);
+            }
             self.was_active = active;
             self.status = self.i18n.tr(if active {
                 "status-active"
@@ -1444,6 +2070,7 @@ impl eframe::App for JoystickGobloonApp {
                 "status-stopped"
             });
         }
+        self.watch_devices();
         if let Some(ok) = self.vjoy_view.poll(&self.i18n)
             && std::mem::take(&mut self.virtual_setup)
         {
@@ -1475,7 +2102,21 @@ impl eframe::App for JoystickGobloonApp {
         if let Some(tray) = &mut self.tray {
             let active = self.activation.is_active();
             let tip = |key: &str| format!("{} | {}", crate::APP_NAME, self.i18n.tr(key));
-            tray.set_active(active, [tip("title-inactive"), tip("title-active")]);
+            let running = match &self.switched {
+                Some((_, program, file)) if active => format!(
+                    "{} | {}",
+                    crate::APP_NAME,
+                    self.i18n.trf(
+                        "status-switched",
+                        &[
+                            ("program", program.clone().into()),
+                            ("file", file.clone().into())
+                        ],
+                    )
+                ),
+                _ => tip("title-active"),
+            };
+            tray.set_active(active, [tip("title-inactive"), running]);
             tray.set_double_click_activates(self.settings.tray_double_click_activates);
             match self.activation.profile_name() {
                 Some(name) => {
@@ -1548,6 +2189,7 @@ impl eframe::App for JoystickGobloonApp {
                 self.history(true);
             }
         }
+        self.autosave_tick(ctx);
         if let Some(t) = self.edited {
             let settle = std::time::Duration::from_millis(600);
             if !self.activation.is_active() {
@@ -1566,7 +2208,7 @@ impl eframe::App for JoystickGobloonApp {
             )));
         let in_tray = self.main_window.is_some_and(crate::platform::in_tray);
         let shown = !in_tray && self.main_window.is_none_or(crate::platform::window_shown);
-        if in_tray && self.pending.is_some() {
+        if in_tray && (self.pending.is_some() || self.ask_switch_unsaved) {
             // A question needs the window, e.g. Quit from the tray with unsaved changes.
             if let Some(main_window) = self.main_window {
                 crate::platform::show_window(main_window);
@@ -1717,7 +2359,10 @@ impl eframe::App for JoystickGobloonApp {
             .show(root, |ui| match self.page {
                 Page::Devices => self.devices_page(ui),
                 Page::Apps => {
-                    self.apps_view.show(ui, &self.i18n, &self.settings);
+                    let running = self.switched.as_ref().map(|(key, _, _)| key.as_str());
+                    let current = self.profile.as_ref().and_then(|p| p.path.as_deref());
+                    self.apps_view
+                        .show(ui, &self.i18n, &self.settings, running, current);
                 }
                 Page::VJoy => {
                     let locked = self.activation.is_active();
@@ -1881,6 +2526,7 @@ impl eframe::App for JoystickGobloonApp {
             }
         }
         self.unsaved_dialog(ctx);
+        self.switch_dialogs(ctx);
         self.gremlin_dialog(ctx);
         self.cloak_dialog(ctx);
         self.alert_dialog(ctx);
@@ -1944,4 +2590,14 @@ pub(crate) fn empty_state(ui: &mut egui::Ui, glyph: &str, text: &str) {
         ui.label(RichText::new(text).weak());
         ui.add_space(8.0);
     });
+}
+
+/// Ids of the attached controllers, sorted.
+fn attached_ids(devices: &[gob_input::DeviceState]) -> Vec<String> {
+    let mut ids: Vec<String> = devices
+        .iter()
+        .map(|d| d.info.guid.to_ascii_lowercase())
+        .collect();
+    ids.sort_unstable();
+    ids
 }

@@ -152,4 +152,12 @@ impl super::Desktop for Desktop {
     }
 
     fn wait_for_process(_pid: u32, _timeout: Duration) {}
+
+    fn foreground_program() -> Option<super::Program> {
+        None
+    }
+
+    fn running_programs() -> Vec<super::Program> {
+        Vec::new()
+    }
 }
