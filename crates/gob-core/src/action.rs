@@ -230,6 +230,8 @@ pub enum ActionKind<'a> {
     VoiceInput {
         microphone: &'a str,
     },
+    /// Joystick Gobloon's own action: buttons move an axis (see [`crate::button_axis`]).
+    ButtonAxis(crate::ButtonAxis),
     /// Preserved in the profile but not executed (yet).
     Other,
 }
@@ -659,6 +661,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "run-command",
     "macro",
     "voice-input",
+    crate::button_axis::BUTTON_AXIS,
 ];
 
 impl Action {
@@ -976,6 +979,9 @@ impl Action {
             "voice-input" => ActionKind::VoiceInput {
                 microphone: self.str("microphone").unwrap_or_default().trim(),
             },
+            crate::button_axis::BUTTON_AXIS => {
+                crate::ButtonAxis::of(self).map_or(ActionKind::Other, ActionKind::ButtonAxis)
+            }
             _ => ActionKind::Other,
         }
     }

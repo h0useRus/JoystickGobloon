@@ -679,6 +679,8 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
     // When this pass's events were read; kept between passes.
     let mut reads: Vec<Instant> = Vec::new();
     let mut ids = DeviceIds::default();
+    // A fine timer is on: outputs move on their own.
+    let mut fine = false;
     let mut service = ServiceState::default();
     let mut voice_status = status
         .lock()
@@ -712,6 +714,10 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         }
         // Reloads wrote to the devices above.
         out.flush();
+        if engine.animating() != fine {
+            fine = !fine;
+            crate::platform::fine_timer(fine);
+        }
         let wait = engine.next_deadline().map_or(IDLE, |d| {
             d.saturating_duration_since(Instant::now()).min(IDLE)
         });
@@ -774,6 +780,9 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
     // Held keys and mouse buttons go up; dropping `out` resets and releases the vJoy devices.
     engine.release_all(&mut out);
     out.flush();
+    if fine {
+        crate::platform::fine_timer(false);
+    }
 }
 
 /// Hands a voice event to the engine, the service's state and the status; true when the status

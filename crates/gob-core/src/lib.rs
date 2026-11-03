@@ -6,6 +6,7 @@
 
 pub mod action;
 pub mod automap;
+pub mod button_axis;
 pub mod condition;
 pub mod curve;
 pub mod edit;
@@ -22,6 +23,7 @@ pub use action::{
     format_color, parse_color,
 };
 pub use automap::Layout as InputLayout;
+pub use button_axis::{AxisMotion, AxisOutput, BUTTON_AXIS, ButtonAxis, DecreaseInput};
 pub use condition::{Comparator, Condition, Source as ConditionSource};
 pub use edit::{NewAction, child_groups, new_uuid};
 pub use logical::{

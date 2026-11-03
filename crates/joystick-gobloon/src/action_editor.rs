@@ -1434,7 +1434,7 @@ impl Editor<'_> {
                     ui.horizontal(|ui| self.activation(ui, action));
                 }
                 ActionKind::VoiceInput { microphone } => self.voice_input(ui, action, microphone),
-                ActionKind::Other => {
+                ActionKind::ButtonAxis(_) | ActionKind::Other => {
                     ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
                 }
             }
