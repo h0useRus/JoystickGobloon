@@ -670,31 +670,61 @@ impl Device {
     }
 }
 
+impl Device {
+    /// Events of one change; false when the device lacks that input.
+    fn events(&self, change: crate::Write, events: &mut Vec<(u16, u16, i32)>) -> bool {
+        match change {
+            crate::Write::Axis(slot, value) => {
+                let i = usize::from(slot).wrapping_sub(1);
+                if !self.config.axes.get(i).is_some_and(|&on| on) {
+                    return false;
+                }
+                events.push((codes::EV_ABS, AXIS_CODES[i], axis_value(value)));
+            }
+            crate::Write::Button(n, pressed) => {
+                match button_code(u32::from(n)).filter(|_| u32::from(n) <= self.config.buttons) {
+                    Some(code) => events.push((codes::EV_KEY, code, i32::from(pressed))),
+                    None => return false,
+                }
+            }
+            crate::Write::Hat(n, direction) => {
+                if !(1..=self.config.hats).contains(&u32::from(n)) {
+                    return false;
+                }
+                events.extend(self.hat_events(u32::from(n), direction));
+            }
+        }
+        true
+    }
+}
+
 impl crate::Device for Device {
     fn set_axis(&self, slot: u8, value: f32) -> bool {
-        let i = usize::from(slot).wrapping_sub(1);
-        if !self.config.axes.get(i).is_some_and(|&on| on) {
-            return false;
-        }
-        self.emit(&[(codes::EV_ABS, AXIS_CODES[i], axis_value(value))])
+        self.write(&[crate::Write::Axis(slot, value)])
     }
 
     fn set_button(&self, n: u8, pressed: bool) -> bool {
-        match button_code(u32::from(n)).filter(|_| u32::from(n) <= self.config.buttons) {
-            Some(code) => self.emit(&[(codes::EV_KEY, code, i32::from(pressed))]),
-            None => false,
-        }
+        self.write(&[crate::Write::Button(n, pressed)])
     }
 
     fn set_hat(&self, n: u8, direction: Option<u16>) -> bool {
-        if !(1..=self.config.hats).contains(&u32::from(n)) {
-            return false;
-        }
-        self.emit(&self.hat_events(u32::from(n), direction))
+        self.write(&[crate::Write::Hat(n, direction)])
     }
 
     fn reset(&self) -> bool {
         self.emit(&joystick_reset(&self.config))
+    }
+
+    /// One `SYN_REPORT` frame for all of them.
+    fn write(&self, changes: &[crate::Write]) -> bool {
+        let mut events = Vec::with_capacity(changes.len() * 2);
+        let ok = changes
+            .iter()
+            .fold(true, |ok, &c| ok & self.events(c, &mut events));
+        if events.is_empty() {
+            return ok;
+        }
+        self.emit(&events) && ok
     }
 }
 
@@ -823,49 +853,81 @@ impl Pad {
         }
     }
 
-    fn emit_dpad(&self, bits: u8) -> bool {
+    fn dpad_events(&self, bits: u8, events: &mut Vec<(u16, u16, i32)>) {
         self.dpad.set(bits);
         let (x, y) = dpad_xy(bits);
-        self.emit(&[
-            (codes::EV_ABS, codes::ABS_HAT0X, x),
-            (codes::EV_ABS, codes::ABS_HAT0Y, y),
-        ])
+        events.push((codes::EV_ABS, codes::ABS_HAT0X, x));
+        events.push((codes::EV_ABS, codes::ABS_HAT0Y, y));
+    }
+
+    /// Events of one change; false when the control does not fit it.
+    fn events(&self, change: crate::PadWrite, events: &mut Vec<(u16, u16, i32)>) -> bool {
+        match change {
+            crate::PadWrite::Button(control, pressed) => {
+                let bit = match control {
+                    GamepadControl::DpadUp => UP,
+                    GamepadControl::DpadDown => DOWN,
+                    GamepadControl::DpadLeft => LEFT,
+                    GamepadControl::DpadRight => RIGHT,
+                    c if c.kind() == ControlKind::Button => {
+                        let Some(code) = pad_code(c) else {
+                            return false;
+                        };
+                        events.push((codes::EV_KEY, code, i32::from(pressed)));
+                        return true;
+                    }
+                    _ => return false,
+                };
+                let bits = self.dpad.get();
+                self.dpad_events(if pressed { bits | bit } else { bits & !bit }, events);
+            }
+            crate::PadWrite::Axis(control, value) => {
+                let value = match control.kind() {
+                    ControlKind::Stick => gamepad::stick(value),
+                    ControlKind::Trigger => gamepad::trigger(value),
+                    _ => return false,
+                };
+                let Some(code) = pad_code(control) else {
+                    return false;
+                };
+                events.push((codes::EV_ABS, code, value));
+            }
+            crate::PadWrite::Dpad(direction) => {
+                self.dpad_events(dpad_bits(gamepad::dpad(direction)), events)
+            }
+        }
+        true
     }
 }
 
 impl crate::Gamepad for Pad {
     fn set_button(&self, control: GamepadControl, pressed: bool) -> bool {
-        let bit = match control {
-            GamepadControl::DpadUp => UP,
-            GamepadControl::DpadDown => DOWN,
-            GamepadControl::DpadLeft => LEFT,
-            GamepadControl::DpadRight => RIGHT,
-            c if c.kind() == ControlKind::Button => {
-                return pad_code(c)
-                    .is_some_and(|code| self.emit(&[(codes::EV_KEY, code, i32::from(pressed))]));
-            }
-            _ => return false,
-        };
-        let bits = self.dpad.get();
-        self.emit_dpad(if pressed { bits | bit } else { bits & !bit })
+        self.write(&[crate::PadWrite::Button(control, pressed)])
     }
 
     fn set_axis(&self, control: GamepadControl, value: f32) -> bool {
-        let value = match control.kind() {
-            ControlKind::Stick => gamepad::stick(value),
-            ControlKind::Trigger => gamepad::trigger(value),
-            _ => return false,
-        };
-        pad_code(control).is_some_and(|code| self.emit(&[(codes::EV_ABS, code, value)]))
+        self.write(&[crate::PadWrite::Axis(control, value)])
     }
 
     fn set_dpad(&self, direction: Option<u16>) -> bool {
-        self.emit_dpad(dpad_bits(gamepad::dpad(direction)))
+        self.write(&[crate::PadWrite::Dpad(direction)])
     }
 
     fn reset(&self) -> bool {
         self.dpad.set(0);
         self.emit(&gamepad_reset())
+    }
+
+    /// One `SYN_REPORT` frame for all of them.
+    fn write(&self, changes: &[crate::PadWrite]) -> bool {
+        let mut events = Vec::with_capacity(changes.len() * 2);
+        let ok = changes
+            .iter()
+            .fold(true, |ok, &c| ok & self.events(c, &mut events));
+        if events.is_empty() {
+            return ok;
+        }
+        self.emit(&events) && ok
     }
 }
 
