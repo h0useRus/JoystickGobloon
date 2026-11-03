@@ -282,7 +282,22 @@
           <h2 id="axes-title">Axes</h2>
           <article class="learn-action" id="response-curve">
             <h3><i class="ph ph-chart-line" aria-hidden="true"></i>Response curve</h3>
-            <p>Shapes an axis: drag the points of the curve, double click to add one, right click a point to remove it. A right click on empty space inverts the curve (a switch in the settings turns this off). Linear, cubic spline, smooth (no overshoot) and Bézier curves. A cubic spline can swing past its points, turning back or running into the end of the axis; the smooth curve stays between them. <span class="term">Symmetric</span> mirrors your edits through the center; <span class="term">Invert</span> flips the curve. The deadzones below the chart set where the axis does nothing: at both ends and around the center. Put the curve before <span class="term">Map to virtual stick</span>, which then sends the shaped value.</p>
+            <p>Shapes an axis: how far the virtual axis moves for each position of the stick, for example softer around the center and quicker toward the ends. Put the curve before <span class="term">Map to virtual stick</span>, which then sends the shaped value.</p>
+            <ul>
+              <li><strong>Move a point</strong>: drag it.</li>
+              <li><strong>Add a point</strong>: double click in the chart where it should go.</li>
+              <li><strong>Remove a point</strong>: right click it.</li>
+              <li><strong>Invert the curve</strong>: right click on empty space, or the <span class="term">Invert</span> button. A switch in the settings turns the right click off.</li>
+              <li><strong>Symmetric</strong>: your edits are mirrored through the center.</li>
+            </ul>
+            <p>The <span class="term">Curve type</span> list sets how the curve runs through its points:</p>
+            <ul>
+              <li><strong>Piecewise linear</strong>: straight lines from point to point.</li>
+              <li><strong>Cubic spline</strong>: a smooth curve, but it can swing past its points, turning back or running into the end of the axis.</li>
+              <li><strong>Smooth, no overshoot</strong>: a smooth curve that stays between its points.</li>
+              <li><strong>Cubic Bezier spline</strong>: a smooth curve shaped with handles next to each point.</li>
+            </ul>
+            <p>The deadzones below the chart set where the axis does nothing: at both ends and around the center.</p>
             <figure class="shot"><img src="img/actions/response-curve.png" loading="lazy" alt="Response curve: a cubic spline that is flat around the center, with its points"></figure>
           </article>
           <article class="learn-action" id="split-axis">
