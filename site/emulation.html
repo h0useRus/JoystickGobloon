@@ -351,14 +351,14 @@
               <li>Activate any profile with the play button. From then on the game in front decides.</li>
             </ol>
             <figure class="shot"><img src="img/apps-profiles.png" loading="lazy" width="1102" height="284" alt="Applications page: FlightSim.exe runs Space flight.xml in mode Combat, RallyRacer.exe runs Rally.xml in its starting mode, radio.exe has no profile, and Joystick Gobloon's own row cannot get one"></figure>
-            <p>Programs are matched by their file name, so every copy of a game counts, also a test build or a second install. A Windows game under Wine or Proton on Linux is known by its <code>.exe</code>, the same as on Windows. Programs without a profile, like a radio tool listed only to see hidden devices, never change the profile. Joystick Gobloon never picks a profile for itself.</p>
+            <p>Programs are matched by their file name, so every copy of a game counts, also a test build or a second install. A Windows game under Wine or Proton on Linux is known by its <code>.exe</code>, the same as on Windows. On Linux the program in front is read from X11 windows, which is where Wine and Proton games run, also on a Wayland desktop through XWayland; a native Wayland window in front counts as any other program and keeps the profile. Programs without a profile, like a radio tool listed only to see hidden devices, never change the profile. Joystick Gobloon never picks a profile for itself.</p>
           </article>
 
           <article class="learn-action" id="per-program-switch">
             <h3><i class="ph ph-swap" aria-hidden="true"></i>When the profile switches</h3>
             <ul class="ticks">
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Only while a profile is active. A stopped profile never switches, and stopping it by hand turns switching off until the next activation.</span></li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>A game with a profile comes to the front: its profile opens in the window and runs. The virtual joysticks and gamepads stay, so a running game does not lose them.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Only while a profile is active. A stopped profile never switches, and stopping it by hand turns switching off until the next activation. After a stop the profile starts in its own starting mode again, not in the mode a game picked.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>A game with a profile comes to the front: within about a second its profile opens in the window and runs. The virtual joysticks and gamepads stay, so a running game does not lose them.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Several games with profiles are running: the one in front wins. Alt-tab to another of them and its profile runs.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Anything else in front (the desktop, a browser, Joystick Gobloon itself) changes nothing, and neither does closing a game: the current profile keeps running.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Back to the same game after alt-tab: its profile keeps running as it was, in the mode you switched to.</span></li>
@@ -376,7 +376,7 @@
               <dt>A stick of the profile is unplugged, plugged in or replaced</dt>
               <dd>The profile stops. <span class="term">Profile stopped</span> lists what changed, with <span class="term">Map controls</span> for a replaced stick and <span class="term">Activate</span> to go on. The same happens when the virtual joysticks or gamepads change and no longer have what the profile needs. Other devices, like a mouse or a stick the profile does not use, change nothing.</dd>
               <dt>A game's profile cannot be loaded</dt>
-              <dd>The current profile keeps running; the status bar names the file, and the log has the reason. Nothing pops up in the middle of a game.</dd>
+              <dd>The current profile keeps running and stays open in the window; the status bar names the file, and the log has the reason. Nothing pops up in the middle of a game. The game's profile is tried again the next time the game comes to the front, so fixing the file and switching back to the game is enough.</dd>
             </dl>
           </article>
         </section>
