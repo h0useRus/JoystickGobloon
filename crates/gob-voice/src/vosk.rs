@@ -253,8 +253,41 @@ struct Word {
     conf: f32,
 }
 
+/// Vosk writes numbers with the decimal mark of the process's locale: "1,000000" when the
+/// desktop's language uses a comma (the desktop libraries set it). Outside strings, a comma
+/// between two digits is then such a mark; the result has no lists of numbers.
+fn decimal_points(json: &str) -> String {
+    let chars: Vec<char> = json.chars().collect();
+    let mut out = String::with_capacity(json.len());
+    let (mut in_string, mut escaped) = (false, false);
+    for (i, &c) in chars.iter().enumerate() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_string = false;
+            }
+        } else if c == '"' {
+            in_string = true;
+        } else if c == ','
+            && i > 0
+            && chars[i - 1].is_ascii_digit()
+            && chars.get(i + 1).is_some_and(char::is_ascii_digit)
+        {
+            out.push('.');
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
 fn parse(json: &str, phrases: &[String]) -> Heard {
-    let r: Result_ = serde_json::from_str(json).unwrap_or_else(|e| {
+    let read = serde_json::from_str(json)
+        .or_else(|e| serde_json::from_str(&decimal_points(json)).map_err(|_| e));
+    let r: Result_ = read.unwrap_or_else(|e| {
         log::warn!("speech result {json:?}: {e}");
         Result_ {
             text: String::new(),
@@ -304,6 +337,51 @@ mod tests {
             &phrases,
         );
         assert_eq!(heard.phrase, None);
+        let heard = parse(r#"{"text":""}"#, &phrases);
+        assert_eq!(
+            heard,
+            Heard {
+                phrase: None,
+                text: String::new(),
+                confidence: 0.0
+            }
+        );
+    }
+
+    #[test]
+    fn numbers_written_with_a_decimal_comma() {
+        // As Vosk writes it under a locale with a decimal comma.
+        let json = "{
+  \"result\" : [{
+      \"conf\" : 1,000000,
+      \"end\" : 1,410000,
+      \"start\" : 0,900000,
+      \"word\" : \"fire\"
+    }, {
+      \"conf\" : 0,750000,
+      \"word\" : \"1,5\"
+    }],
+  \"text\" : \"fire\"
+}";
+        let heard = parse(json, &["fire".to_owned()]);
+        assert_eq!(
+            heard,
+            Heard {
+                phrase: Some(0),
+                text: "fire".into(),
+                confidence: 0.75
+            }
+        );
+        // Commas inside strings stay as they are.
+        assert_eq!(
+            decimal_points(r#"{"a":"1,5","b":2,5}"#),
+            r#"{"a":"1,5","b":2.5}"#
+        );
+    }
+
+    #[test]
+    fn an_empty_result_hears_nothing() {
+        let phrases = vec!["gear".to_owned()];
         let heard = parse(r#"{"text":""}"#, &phrases);
         assert_eq!(
             heard,
