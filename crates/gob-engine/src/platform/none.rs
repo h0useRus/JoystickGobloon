@@ -6,6 +6,8 @@ use crate::media::SpeechRequest;
 
 pub(crate) struct Injector;
 
+pub(crate) fn fine_timer(_on: bool) {}
+
 impl super::Injector for Injector {
     fn mouse_move(&self, _dx: i32, _dy: i32) {}
     fn mouse_button(&self, _button: MouseButton, _pressed: bool) {}

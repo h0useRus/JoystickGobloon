@@ -432,8 +432,7 @@ fn profile() -> String {
                 prop("bool", "is-extended", "True")
             ),
         ),
-        // Tap: vJoy button 26; hold: macro pulsing vJoy 2 button 46 on release
-        // (Star Citizen scan / light amplification bind).
+        // Tap: vJoy button 26; hold: macro pulsing vJoy 2 button 46 on release.
         act(
             "mtempo",
             "tempo",

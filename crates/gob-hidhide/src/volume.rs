@@ -124,9 +124,9 @@ mod tests {
     #[test]
     fn converts_both_ways() {
         let t = table();
-        let exe = Path::new(r"C:\Игры\Star Citizen\game.exe");
+        let exe = Path::new(r"C:\Игры\Some Game\game.exe");
         let image = to_image_name_in(&t, exe).unwrap();
-        assert_eq!(image, r"\Device\HarddiskVolume3\Игры\Star Citizen\game.exe");
+        assert_eq!(image, r"\Device\HarddiskVolume3\Игры\Some Game\game.exe");
         assert_eq!(from_image_name_in(&t, &image).unwrap(), exe);
         // The deepest mount point wins; Volume1 is not a prefix of Volume10.
         let nested = Path::new(r"c:\mnt\data\x.exe");

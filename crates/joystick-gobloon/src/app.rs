@@ -1897,6 +1897,9 @@ impl JoystickGobloonApp {
         {
             self.hidhide_view.set_device_hidden(&d.info, hide);
         }
+        if let Some(text) = self.devices_view.status.take() {
+            self.status = text;
+        }
         match self.devices_view.all_buttons_result.take() {
             Some(Ok(())) => {
                 log::info!("all buttons allowed");

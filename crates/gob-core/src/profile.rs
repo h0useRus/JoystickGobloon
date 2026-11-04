@@ -41,6 +41,20 @@ pub fn virtual_output(action: &Action) -> Option<VirtualOutput> {
         ActionKind::MapToLogicalDevice { input_type, id, .. } => {
             Some(VirtualOutput::Logical { input_type, id })
         }
+        ActionKind::ButtonAxis(a) => Some(match a.output {
+            crate::AxisOutput::Vjoy { device, axis } => VirtualOutput::Vjoy {
+                device,
+                input_type: InputType::Axis,
+                id: axis,
+            },
+            crate::AxisOutput::Gamepad { gamepad, control } => {
+                VirtualOutput::Gamepad { gamepad, control }
+            }
+            crate::AxisOutput::Logical { id } => VirtualOutput::Logical {
+                input_type: InputType::Axis,
+                id,
+            },
+        }),
         _ => None,
     }
 }
@@ -446,7 +460,7 @@ impl Profile {
     }
 
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led, map-to-gamepad and voice-input actions, gamepad macro steps, monotone cubic
+    /// light-led, map-to-gamepad, button-axis and voice-input actions, send modes, gamepad macro steps, monotone cubic
     /// curves, voice commands): it is then written in Joystick Gobloon's own format, which
     /// Joystick Gremlin cannot open. Stored virtual joysticks don't count: Joystick Gremlin skips
     /// the `<virtual-devices>` section.
@@ -462,6 +476,8 @@ impl Profile {
             || self.library.iter().any(|a| {
                 a.kind == "light-led"
                     || a.kind == "map-to-gamepad"
+                    || a.kind == crate::BUTTON_AXIS
+                    || a.button_send().mode != crate::SendMode::Hold
                     || a.kind == "voice-input"
                     || a.items.iter().any(|i| {
                         matches!(i, Item::Group { tag, attrs, .. } if tag == "macro-action"

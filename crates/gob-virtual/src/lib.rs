@@ -426,6 +426,22 @@ impl GamepadControl {
     }
 }
 
+/// One change of a virtual joystick, for [`Device::write`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Write {
+    Axis(u8, f32),
+    Button(u8, bool),
+    Hat(u8, Option<u16>),
+}
+
+/// One change of a virtual gamepad, for [`Gamepad::write`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PadWrite {
+    Button(GamepadControl, bool),
+    Axis(GamepadControl, f32),
+    Dpad(Option<u16>),
+}
+
 /// An acquired virtual gamepad. Reset and released when dropped.
 pub trait Gamepad: Send {
     /// Presses or releases a button or one d-pad direction (other controls: `false`).
@@ -436,6 +452,18 @@ pub trait Gamepad: Send {
     fn set_dpad(&self, direction: Option<u16>) -> bool;
     /// Centers sticks and d-pad, releases buttons and triggers.
     fn reset(&self) -> bool;
+    /// Several changes at once, in one report where the backend can (games see them together);
+    /// false when any of them failed. A control should appear once.
+    fn write(&self, changes: &[PadWrite]) -> bool {
+        changes.iter().fold(true, |ok, &c| {
+            let done = match c {
+                PadWrite::Button(control, pressed) => self.set_button(control, pressed),
+                PadWrite::Axis(control, value) => self.set_axis(control, value),
+                PadWrite::Dpad(direction) => self.set_dpad(direction),
+            };
+            ok & done
+        })
+    }
 }
 
 /// An acquired virtual device. Reset and released when dropped.
@@ -448,6 +476,18 @@ pub trait Device: Send {
     fn set_hat(&self, n: u8, direction: Option<u16>) -> bool;
     /// Centers axes and hats, releases buttons.
     fn reset(&self) -> bool;
+    /// Several changes at once, in one report where the backend can (one driver call instead of
+    /// one per change); false when any of them failed. An input should appear once.
+    fn write(&self, changes: &[Write]) -> bool {
+        changes.iter().fold(true, |ok, &c| {
+            let done = match c {
+                Write::Axis(slot, value) => self.set_axis(slot, value),
+                Write::Button(n, pressed) => self.set_button(n, pressed),
+                Write::Hat(n, direction) => self.set_hat(n, direction),
+            };
+            ok & done
+        })
+    }
 }
 
 /// This platform's backend.

@@ -23,6 +23,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-core    profile model
 - crates/gob-core    profile model grown from Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views;
   modifier.rs = modifiers and input layers (Joystick Gobloon only, `Profile::needs_own_format`)
+  button_axis.rs = axis from buttons (set/velocity/stepped/encoder/smooth, second "decrease" input);
+  `Action::button_send` = How to send of button outputs (`send-mode` hold/press/release/pulse/repeat/toggle)
   automap.rs = the new profile wizard's mapping (every input of a device onto one vJoy device); `Profile::output_usage`
   = which inputs write each virtual output (used/conflict marks, wizard_view.rs + output_marks.rs in the GUI)
 - crates/gob-gremlin XML <-> Element <-> Profile: Gremlin R14+ import, written as `<profile version="14">` while
@@ -32,7 +34,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   buffered buttons/hats; ids = DI instance GUIDs like Gremlin; links dinput8.lib/dxguid.lib statically (-bundle)
   for c_dfDIJoystick2; Xbox controllers (`IG_` in the path) are read through XInput in xinput.rs: LT=Z, RT=Rz,
   Guide = button 11), platform/linux/ = evdev (ids hash serial/phys, DirectInput axis slots, SDL button
-  order, keyboards -> set 1 scan codes; hid.rs = buttons past evdev's 80 from hidraw (report descriptor,
+  order, keyboards -> set 1 scan codes; rescans every 2 s open only new or changed nodes (evdev.rs `NodeCache`:
+  closing an event node waits for an RCU grace period and stalled reads); hid.rs = buttons past evdev's 80 from hidraw (report descriptor,
   usage = button number; per-stick udev rule, `unread_buttons` until allowed); tests/uinput.rs = virtual
   devices, tests/uhid.rs = 128-button HID stick (needs the uhid module, not in WSL2), `check.ps1 --devices`),
   platform/none.rs elsewhere; example `monitor`
@@ -80,7 +83,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   nefarius/HidHide#217 and its releases before each gob-hidhide session (plans/HIDHIDE_PLAN.md)
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
   semantics; platform/ = keyboard/mouse output (`Injector`) and speech (`SpeechEngine`): windows/ SendInput + SAPI (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy (`subscribe_timed`: RunnerStatus.latency = device read -> outputs written, per second, shown in the status bar);
-  examples `dry_run` (profile -> printed vJoy output) and `runner_check`
+  Runner batches writes: one driver call per virtual device and pass, unchanged values skipped (resent if a write
+  failed); send modes and button-axis motion run on engine timers (`next_deadline`), no allocations per event;
+  examples `dry_run` (profile -> printed vJoy output), `runner_check` and `engine_bench` (time + allocations per event)
 - crates/gob-lighting joystick LEDs: vendor-neutral `Device`/`Led` in lib.rs dispatching on `Vendor`; every vendor's
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput

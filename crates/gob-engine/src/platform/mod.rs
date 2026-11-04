@@ -48,6 +48,12 @@ pub(crate) trait SpeechEngine: Sized {
     fn speak(&mut self, request: &SpeechRequest);
 }
 
+/// While `on` (outputs move on their own), the runner's timeouts end within a millisecond
+/// instead of the system's coarser default, which saves power the rest of the time.
+pub(crate) fn fine_timer(on: bool) {
+    current::fine_timer(on);
+}
+
 /// This platform's keyboard and mouse output.
 pub(crate) fn injector() -> &'static impl Injector {
     static INJECTOR: current::Injector = current::Injector;

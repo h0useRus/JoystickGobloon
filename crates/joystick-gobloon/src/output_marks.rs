@@ -157,7 +157,7 @@ fn input_name(i18n: &I18n, input_type: &str, id: &str) -> String {
         "axis" => crate::devices_view::axis_name(i18n, n),
         "button" => i18n.trf("vjoy-button-n", &[("n", n.into())]),
         "hat" => i18n.trf("vjoy-hat-n", &[("n", n.into())]),
-        "key" => crate::key_capture::name(gob_core::key_from_input_id(n)),
+        "key" => crate::key_capture::name(gob_core::key_from_input_id(n), i18n),
         _ => id.to_string(),
     }
 }

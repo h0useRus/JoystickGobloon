@@ -102,6 +102,18 @@ impl crate::Device for Device {
     fn reset(&self) -> bool {
         self.0.reset()
     }
+
+    fn write(&self, changes: &[crate::Write]) -> bool {
+        self.0.batch(|b| {
+            for &c in changes {
+                match c {
+                    crate::Write::Axis(slot, value) => b.set_axis(slot, value),
+                    crate::Write::Button(n, pressed) => b.set_button(n, pressed),
+                    crate::Write::Hat(n, direction) => b.set_hat(n, direction),
+                }
+            }
+        })
+    }
 }
 
 fn error(e: gob_vjoy::Error) -> Error {

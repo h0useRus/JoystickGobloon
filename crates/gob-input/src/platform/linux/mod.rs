@@ -58,7 +58,12 @@ pub(crate) struct Platform {
     warned: Cell<bool>,
     /// Reused by `wait`, so waiting does not allocate.
     fds: std::cell::RefCell<Vec<libc::pollfd>>,
+    /// What each event node is (see [`Joystick`]).
+    nodes: std::cell::RefCell<evdev::NodeCache<Option<Joystick>>>,
 }
+
+/// A joystick node's bus, vendor, product and identity.
+type Joystick = (u16, u16, u16, String);
 
 /// A controller [`Platform::attached`] found.
 pub(crate) struct Found {
@@ -75,15 +80,25 @@ impl super::Backend for Platform {
         Some(Self {
             warned: Cell::new(false),
             fds: Default::default(),
+            nodes: Default::default(),
         })
     }
 
     fn attached(&self) -> Vec<(String, Found)> {
         let mut found: Vec<(String, Found)> = Vec::new();
         let mut denied = 0;
-        for path in evdev::event_nodes() {
-            let node = match Node::open(&path) {
-                Ok(node) => node,
+        let nodes = self.nodes.borrow_mut().scan(evdev::event_nodes(), |path| {
+            let node = Node::open(path)?;
+            Ok(is_joystick(&node.caps()).then(|| {
+                let [bus, vendor, product, _] = node.id();
+                let identity = identity(&node.uniq(), &node.phys(), &node.name());
+                (bus, vendor, product, identity)
+            }))
+        });
+        for (path, joystick) in nodes {
+            let (bus, vendor, product, mut identity) = match joystick {
+                Ok(Some(joystick)) => joystick,
+                Ok(None) => continue,
                 Err(e) => {
                     if e.kind() == io::ErrorKind::PermissionDenied {
                         denied += 1;
@@ -91,11 +106,6 @@ impl super::Backend for Platform {
                     continue;
                 }
             };
-            if !is_joystick(&node.caps()) {
-                continue;
-            }
-            let [bus, vendor, product, _] = node.id();
-            let mut identity = identity(&node.uniq(), &node.phys(), &node.name());
             // Two nodes that look the same (e.g. no serial and no location): tell them apart
             // by their node, which keeps them separate at least until they are replugged.
             if found

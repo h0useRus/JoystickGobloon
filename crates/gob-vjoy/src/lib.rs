@@ -149,16 +149,41 @@ impl Device {
         change(&mut device.position) && device.send()
     }
 
-    /// Sets axis `slot` (1..=8) from a value in -1.0..=1.0.
-    pub fn set_axis(&self, slot: u8, value: f32) -> bool {
+    /// Several changes sent to the driver as one report; false when any of them was refused
+    /// (the others are still sent).
+    pub fn batch(&self, change: impl FnOnce(&mut Batch<'_>)) -> bool {
+        let Ok(mut device) = self.acquired.lock() else {
+            return false;
+        };
+        let mut batch = Batch {
+            device: self,
+            position: &mut device.position,
+            ok: true,
+        };
+        change(&mut batch);
+        let ok = batch.ok;
+        device.send() && ok
+    }
+
+    fn axis(&self, p: &mut direct::Position, slot: u8, value: f32) -> bool {
         let Some(&(min, max)) = self.ranges.get(usize::from(slot).wrapping_sub(1)) else {
             return false;
         };
-        let raw = scale_axis(value, min, max);
-        self.update(|p| {
-            p.axes[usize::from(slot) - 1] = raw;
-            true
-        })
+        p.axes[usize::from(slot) - 1] = scale_axis(value, min, max);
+        true
+    }
+
+    fn hat(&self, p: &mut direct::Position, n: u8, direction: Option<u16>) -> bool {
+        if self.continuous {
+            p.set_cont_hat(n, direction.map_or(u32::MAX, |d| u32::from(d % 36000)))
+        } else {
+            p.set_disc_hat(n, discrete_pov(direction))
+        }
+    }
+
+    /// Sets axis `slot` (1..=8) from a value in -1.0..=1.0.
+    pub fn set_axis(&self, slot: u8, value: f32) -> bool {
+        self.update(|p| self.axis(p, slot, value))
     }
 
     /// Presses or releases button `n` (1-based).
@@ -168,17 +193,33 @@ impl Device {
 
     /// Sets hat `n` (1-based) to a direction in hundredths of a degree, or centered.
     pub fn set_hat(&self, n: u8, direction: Option<u16>) -> bool {
-        if self.continuous {
-            let raw = direction.map_or(u32::MAX, |d| u32::from(d % 36000));
-            self.update(|p| p.set_cont_hat(n, raw))
-        } else {
-            self.update(|p| p.set_disc_hat(n, discrete_pov(direction)))
-        }
+        self.update(|p| self.hat(p, n, direction))
     }
 
     /// Centers axes and hats, releases buttons.
     pub fn reset(&self) -> bool {
         self.acquired.lock().is_ok_and(|mut d| d.reset())
+    }
+}
+
+/// Changes collected by [`Device::batch`], sent together.
+pub struct Batch<'a> {
+    device: &'a Device,
+    position: &'a mut direct::Position,
+    ok: bool,
+}
+
+impl Batch<'_> {
+    pub fn set_axis(&mut self, slot: u8, value: f32) {
+        self.ok &= self.device.axis(self.position, slot, value);
+    }
+
+    pub fn set_button(&mut self, n: u8, pressed: bool) {
+        self.ok &= self.position.set_button(n, pressed);
+    }
+
+    pub fn set_hat(&mut self, n: u8, direction: Option<u16>) {
+        self.ok &= self.device.hat(self.position, n, direction);
     }
 }
 

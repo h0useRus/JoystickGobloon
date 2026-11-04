@@ -15,6 +15,7 @@ rodio = { version = "0.23", default-features = false, features = ["playback", "s
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = [
+    "Win32_Media",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_Media_Speech",
     "Win32_System_Com",

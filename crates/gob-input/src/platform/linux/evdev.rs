@@ -1,6 +1,7 @@
 //! Thin wrapper over the evdev character devices (`/dev/input/event*`): the ioctls that
 //! describe a device and non-blocking reads of its events.
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::os::fd::{AsRawFd, RawFd};
@@ -213,10 +214,109 @@ pub fn event_nodes() -> Vec<PathBuf> {
     nodes.into_iter().map(|(_, p)| p).collect()
 }
 
+/// What a rescan found in each event node, so it opens only new or changed nodes: closing an
+/// event node waits for an RCU grace period in the kernel (tens of milliseconds in a VM), and
+/// the thread that reads the devices would wait with it.
+pub struct NodeCache<T>(HashMap<PathBuf, (Stamp, T)>);
+
+/// A node's inode, device number and change time: a new device, or new permissions on the
+/// node (udev's rules), give it a new stamp.
+type Stamp = (u64, u64, i64, i64);
+
+fn stamp(path: &Path) -> Option<Stamp> {
+    use std::os::unix::fs::MetadataExt;
+    let m = std::fs::metadata(path).ok()?;
+    Some((m.ino(), m.rdev(), m.ctime(), m.ctime_nsec()))
+}
+
+impl<T: Clone> Default for NodeCache<T> {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
+
+impl<T: Clone> NodeCache<T> {
+    /// What `look` found in each of `paths`, in their order; `look` runs only for nodes not
+    /// seen in their current state. Errors are not kept, so access granted later is noticed.
+    pub fn scan(
+        &mut self,
+        paths: Vec<PathBuf>,
+        mut look: impl FnMut(&Path) -> io::Result<T>,
+    ) -> Vec<(PathBuf, io::Result<T>)> {
+        self.0.retain(|p, _| paths.contains(p));
+        paths
+            .into_iter()
+            .map(|path| {
+                let now = stamp(&path);
+                let found = match (self.0.get(&path), now) {
+                    (Some((seen, value)), Some(now)) if *seen == now => Ok(value.clone()),
+                    _ => {
+                        self.0.remove(&path);
+                        let found = look(&path);
+                        if let (Ok(value), Some(now)) = (&found, now) {
+                            self.0.insert(path.clone(), (now, value.clone()));
+                        }
+                        found
+                    }
+                };
+                (path, found)
+            })
+            .collect()
+    }
+
+    /// Looks at `path` again on the next scan.
+    pub fn forget(&mut self, path: &Path) {
+        self.0.remove(path);
+    }
+}
+
 /// Waits until one of `fds` can be read or `timeout_ms` passed.
 pub fn wait_readable(fds: &mut [libc::pollfd], timeout_ms: i32) {
     // SAFETY: `fds` is a valid array of `fds.len()` pollfd entries.
     unsafe {
         libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout_ms);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_node_is_looked_at_again_only_when_new_or_changed() {
+        let dir = std::env::temp_dir().join(format!("gob-node-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (dir.join("event0"), dir.join("event1"));
+        std::fs::write(&a, "").unwrap();
+        std::fs::write(&b, "").unwrap();
+        let mut cache = NodeCache::default();
+        let mut looked = Vec::new();
+        let scan = |cache: &mut NodeCache<u32>, looked: &mut Vec<PathBuf>| {
+            cache
+                .scan(vec![a.clone(), b.clone()], |p| {
+                    looked.push(p.to_owned());
+                    if p == b && looked.len() < 3 {
+                        Err(io::ErrorKind::PermissionDenied.into())
+                    } else {
+                        Ok(looked.len() as u32)
+                    }
+                })
+                .into_iter()
+                .map(|(_, found)| found.ok())
+                .collect::<Vec<_>>()
+        };
+        // First scan: both looked at, b not readable yet.
+        assert_eq!(scan(&mut cache, &mut looked), [Some(1), None]);
+        // a is kept; b failed, so it is looked at again.
+        assert_eq!(scan(&mut cache, &mut looked), [Some(1), Some(3)]);
+        assert_eq!(looked, [a.clone(), b.clone(), b.clone()]);
+        // A new node at a's path (another inode) is looked at again.
+        std::fs::remove_file(&a).unwrap();
+        std::fs::write(dir.join("other"), "").unwrap();
+        std::fs::write(&a, "").unwrap();
+        assert_eq!(scan(&mut cache, &mut looked), [Some(4), Some(3)]);
+        cache.forget(&b);
+        assert_eq!(scan(&mut cache, &mut looked), [Some(4), Some(5)]);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
