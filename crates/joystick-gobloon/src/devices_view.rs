@@ -1261,7 +1261,12 @@ impl DevicesView {
                     if as_button {
                         editor.sequence_header(ui, cfg, &b.input_type, configs.len() > 1);
                     }
-                    editor.behavior = cfg.behavior();
+                    // Keys and voice commands act like buttons, also in profiles that stored
+                    // their own input type as the behavior.
+                    editor.behavior = match key.0 {
+                        Kind::Key | Kind::Voice => InputType::Button,
+                        _ => cfg.behavior(),
+                    };
                     editor.container(ui, &cfg.root_action, "actions", 0);
                 }
                 if as_button {

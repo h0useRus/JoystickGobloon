@@ -277,6 +277,15 @@ fn condition_positions(items: &[Item]) -> Vec<usize> {
         .collect()
 }
 
+/// How an input of `input_type` runs its actions: an axis or a hat as itself, everything else
+/// (buttons, keys, voice commands) as a button.
+fn behavior_of(input_type: &str) -> &str {
+    match InputType::parse(input_type) {
+        InputType::Axis | InputType::Hat => input_type,
+        _ => "button",
+    }
+}
+
 fn remap_refs(items: &mut [Item], ids: &HashMap<String, String>) {
     for item in items {
         match item {
@@ -718,7 +727,7 @@ impl Profile {
         self.library.push(root);
         let config = ActionConfig {
             root_action: id.clone(),
-            behavior: input_type.into(),
+            behavior: behavior_of(input_type).into(),
             virtual_button: None,
             layer: layer.clone(),
             additive: false,
@@ -762,7 +771,7 @@ impl Profile {
                     c.virtual_button = Some(vb.to_element());
                 }
                 None => {
-                    c.behavior = input_type.into();
+                    c.behavior = behavior_of(input_type).into();
                     c.virtual_button = None;
                 }
             }
@@ -1296,5 +1305,29 @@ mod tests {
         p.set_virtual_button(&root, "hat", Some(&vb));
         let b = &p.inputs[0];
         assert_eq!(b.configs[0].virtual_button(b.input_type()), Some(vb));
+    }
+
+    #[test]
+    fn keys_and_voice_commands_run_their_actions_as_buttons() {
+        let mut p = Profile::default();
+        let base = Layer::base();
+        for (device, input_type) in [
+            (crate::KEYBOARD_GUID, "key"),
+            (crate::VOICE_GUID, crate::VOICE_INPUT_TYPE),
+            ("{DEV}", "button"),
+        ] {
+            p.bind_layer(device, input_type, "1", "Default", &base);
+        }
+        p.bind_layer("{DEV}", "axis", "2", "Default", &base);
+        let behaviors: Vec<InputType> = p.inputs.iter().map(|b| b.configs[0].behavior()).collect();
+        assert_eq!(
+            behaviors,
+            [
+                InputType::Button,
+                InputType::Button,
+                InputType::Button,
+                InputType::Axis
+            ]
+        );
     }
 }
