@@ -244,11 +244,11 @@ fn window_keys(ui: &egui::Ui, rec: &mut Recording) -> Vec<Key> {
     })
 }
 
-/// A key that is down now: from the system where it tells the held keys, else from this
-/// frame's key events.
-pub(crate) fn key_down(ui: &egui::Ui) -> Option<Key> {
+/// A key that is down now and not one of `ignore`: from the system where it tells the held
+/// keys, else from this frame's key events (a key held before makes none).
+pub(crate) fn key_down(ui: &egui::Ui, ignore: &[Key]) -> Option<Key> {
     if let Some(held) = crate::platform::held_keys() {
-        return held.first().copied();
+        return held.into_iter().find(|k| !ignore.contains(k));
     }
     ui.input(|i| {
         i.events.iter().find_map(|e| match e {

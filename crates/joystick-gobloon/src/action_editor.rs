@@ -1566,7 +1566,22 @@ impl Editor<'_> {
                     });
                 }
             }
-            Some(m) => self.set(&id, "send-mode", "string", m.name()),
+            Some(m) => {
+                self.set(&id, "send-mode", "string", m.name());
+                // Inverted means "down while the input is up", which only Hold has; its switch
+                // hides in the other modes, so it must not stay set unseen.
+                let inverted = match action.kind.as_str() {
+                    "map-to-vjoy" => Some("button-inverted"),
+                    "map-to-gamepad" => Some("inverted"),
+                    _ => None,
+                };
+                if let Some(name) = inverted.filter(|&n| action.str(n).is_some()) {
+                    self.ops.push(Op::Unset {
+                        action: id.clone(),
+                        name: name.into(),
+                    });
+                }
+            }
             None => {}
         }
         let times: &[(&str, u32)] = match send.mode {

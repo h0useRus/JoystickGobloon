@@ -14,6 +14,8 @@ use crate::style::{self, icon};
 struct Listening {
     /// (device GUID, button index) down at the click.
     held: Vec<(String, usize)>,
+    /// Keys down at the click (e.g. a modifier): they are not the input either.
+    keys: Vec<gob_core::Key>,
 }
 
 impl Editor<'_> {
@@ -187,7 +189,8 @@ impl Editor<'_> {
                             }
                         });
                         let held = self.held_buttons();
-                        ui.data_mut(|d| d.insert_temp(listen_id, Listening { held }));
+                        let keys = crate::platform::held_keys().unwrap_or_default();
+                        ui.data_mut(|d| d.insert_temp(listen_id, Listening { held, keys }));
                     }
                     if axis.decrease.is_some()
                         && style::icon_button(
@@ -277,7 +280,7 @@ impl Editor<'_> {
                 }
             }
         }
-        let key = crate::key_capture::key_down(ui)?;
+        let key = crate::key_capture::key_down(ui, &listening.keys)?;
         let id = gob_core::key_input_id(key);
         let is_bound = bound.is_some_and(|(g, b)| g == gob_core::KEYBOARD_GUID && b == id);
         (!is_bound).then(|| {
