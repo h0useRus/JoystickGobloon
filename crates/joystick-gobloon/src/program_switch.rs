@@ -42,6 +42,19 @@ impl Watcher {
                     let pid = front.as_ref().map(|p| p.pid);
                     if last != Some(pid) {
                         last = Some(pid);
+                        // What switching saw, for reports of a game that did not switch.
+                        match &front {
+                            Some(p) => log::info!(
+                                "program in front: {} (pid {}, {})",
+                                p.name,
+                                p.pid,
+                                p.path.display()
+                            ),
+                            None => log::info!(
+                                "program in front: none readable (desktop, or a window this \
+                                 system does not name)"
+                            ),
+                        }
                         if tx.send(front).is_err() {
                             return;
                         }
