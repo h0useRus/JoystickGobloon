@@ -174,6 +174,7 @@ apps-missing = Datei nicht gefunden
 apps-missing-text = Das Programm ist nicht mehr vorhanden. Aus der Liste entfernen?
 apps-sees = Sieht verborgene Geräte
 apps-blind = Sieht verborgene Geräte nicht
+apps-blind-all = Sieht verborgene Geräte nicht: Hier ist ein verborgenes Gerät vor allen Programmen verborgen, und kein Programm kann ausgenommen werden. Geräte mit dem Auge auf ihrem Reiter auf der Seite „Geräte und Belegungen“ verbergen oder zeigen
 apps-inverse = Anwendungsliste umkehren
 apps-inverse-tip = Aufgeführte Programme sehen verborgene Geräte nicht; alle anderen schon
 apps-remove = Aus der Liste entfernen

@@ -174,6 +174,7 @@ apps-missing = File not found
 apps-missing-text = The program is not there any more. Remove it from the list?
 apps-sees = Sees hidden devices
 apps-blind = Does not see hidden devices
+apps-blind-all = Does not see hidden devices: here a hidden device is hidden from every program, and no program can be let through. Hide or show devices with the eye on their tab on the Devices and bindings page
 apps-inverse = Inverse application cloak
 apps-inverse-tip = Listed programs do not see hidden devices; all other programs do
 apps-remove = Remove from the list

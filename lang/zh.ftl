@@ -174,6 +174,7 @@ apps-missing = 未找到文件
 apps-missing-text = 该程序已不存在。要从列表中移除吗？
 apps-sees = 可见隐藏设备
 apps-blind = 不可见隐藏设备
+apps-blind-all = 不可见隐藏设备：此系统中隐藏的设备对所有程序都隐藏，无法为单个程序设置例外。请在“设备与绑定”页面中用设备标签上的眼睛图标隐藏或显示设备
 apps-inverse = 反转应用列表
 apps-inverse-tip = 列表中的程序看不到隐藏设备；其他所有程序都能看到
 apps-remove = 从列表中移除

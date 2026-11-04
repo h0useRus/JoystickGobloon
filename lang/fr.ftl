@@ -174,6 +174,7 @@ apps-missing = Fichier introuvable
 apps-missing-text = Le programme n’existe plus. Le retirer de la liste ?
 apps-sees = Voit les périphériques masqués
 apps-blind = Ne voit pas les périphériques masqués
+apps-blind-all = Ne voit pas les périphériques masqués : ici, un périphérique masqué l’est pour tous les programmes, sans exception possible. Masquez ou affichez les périphériques avec l’œil de leur onglet sur la page Périphériques et affectations
 apps-inverse = Inverser la liste des applications
 apps-inverse-tip = Les programmes listés ne voient pas les périphériques masqués ; tous les autres les voient
 apps-remove = Retirer de la liste

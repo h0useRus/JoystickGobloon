@@ -201,6 +201,8 @@ impl AppsView {
             self.refresh();
         }
         let hiding = self.hiding();
+        // Hiding that cannot let single programs through (Linux): a muted eye says so.
+        let hides_from_all = !hiding && self.hh.is_ok();
         ui.horizontal(|ui| {
             let add = format!("{}  {}", icon::PLUS, i18n.tr("apps-add"));
             if ui.button(add).clicked()
@@ -285,6 +287,18 @@ impl AppsView {
                                 if style::icon_button(ui, true, glyph, &tip).clicked() {
                                     edit = Some(Edit::Hiding(app.path.clone(), !listed));
                                 }
+                            } else if hides_from_all {
+                                // The size of the eye button it stands for.
+                                let size = Vec2::splat(ui.spacing().interact_size.y);
+                                ui.add_sized(
+                                    size,
+                                    egui::Label::new(
+                                        RichText::new(icon::EYE_CLOSED)
+                                            .size(style::ICON_SIZE)
+                                            .weak(),
+                                    ),
+                                )
+                                .on_hover_text(i18n.tr("apps-blind-all"));
                             }
                             row(ui, i, app, is_own, &known, modes, i18n, &mut edit);
                         });

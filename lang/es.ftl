@@ -174,6 +174,7 @@ apps-missing = Archivo no encontrado
 apps-missing-text = El programa ya no está. ¿Quitarlo de la lista?
 apps-sees = Ve los dispositivos ocultos
 apps-blind = No ve los dispositivos ocultos
+apps-blind-all = No ve los dispositivos ocultos: aquí un dispositivo oculto se oculta a todos los programas y no se puede hacer una excepción con ninguno. Oculta o muestra los dispositivos con el ojo de su pestaña en la página Dispositivos y asignaciones
 apps-inverse = Invertir la lista de aplicaciones
 apps-inverse-tip = Los programas de la lista no ven los dispositivos ocultos; todos los demás sí
 apps-remove = Quitar de la lista
