@@ -267,9 +267,16 @@ impl SystemOutput {
             return;
         }
         let device = *device;
-        let ok = self.devices.get(&device).map(|d| d.write(writes));
+        let target = self.devices.get(&device);
+        let batch = target.map(|d| d.write(writes));
         for &w in writes.iter() {
             let key = write_key(device, w).0;
+            // A refused batch: each write alone tells which ones the device took (those of the
+            // batch it took are sent once more, which changes nothing).
+            let ok = match batch {
+                Some(false) => target.map(|d| d.write(std::slice::from_ref(&w))),
+                ok => ok,
+            };
             if ok != Some(true) {
                 self.unsent.insert(key);
             } else if !self.unsent.is_empty() {
@@ -288,8 +295,14 @@ impl SystemOutput {
             return;
         }
         let gamepad = *gamepad;
-        let ok = self.gamepads.get(&gamepad).map(|p| p.write(writes));
+        let target = self.gamepads.get(&gamepad);
+        let batch = target.map(|p| p.write(writes));
         for &w in writes.iter() {
+            // As in `send`: a refused batch is told apart write by write.
+            let ok = match batch {
+                Some(false) => target.map(|p| p.write(std::slice::from_ref(&w))),
+                ok => ok,
+            };
             let control = match w {
                 gob_virtual::PadWrite::Button(c, _) | gob_virtual::PadWrite::Axis(c, _) => Some(c),
                 gob_virtual::PadWrite::Dpad(_) => None,
@@ -431,7 +444,8 @@ impl Runner {
             led_defaults.map(<[crate::Light]>::to_vec),
         );
         let mut out = SystemOutput::new(lighting, voice, voice_events);
-        prepare(&mut engine, &mut out, virtual_devices.as_ref(), initial)?;
+        acquire(&engine, &mut out, virtual_devices.as_ref())?;
+        feed_initial(&mut engine, &mut out, initial);
         set_up_voice(&engine, &mut out);
         if led_defaults.is_none() && engine.uses_lights() {
             log::info!("light-led actions ignored: experimental features are off");
@@ -543,11 +557,11 @@ fn initial_voice_status(engine: &Engine, out: &SystemOutput) -> Option<VoiceStat
 
 /// Acquires the virtual devices `engine` writes to that `out` does not hold yet, then seeds
 /// the engine with `initial` and sends the axis positions through it.
-fn prepare(
-    engine: &mut Engine,
+/// Takes the virtual devices `engine` writes that are not taken yet.
+fn acquire(
+    engine: &Engine,
     out: &mut SystemOutput,
     virtual_devices: &dyn gob_virtual::Backend,
-    initial: &[DeviceState],
 ) -> Result<(), String> {
     use std::collections::hash_map::Entry;
     for id in engine.vjoy_devices() {
@@ -563,7 +577,12 @@ fn prepare(
             e.insert(pad);
         }
     }
+    Ok(())
+}
 
+/// Gives `engine` the inputs as they are: buttons and hats as its starting state, axes as
+/// events (they write their outputs at once).
+fn feed_initial(engine: &mut Engine, out: &mut SystemOutput, initial: &[DeviceState]) {
     let now = Instant::now();
     for d in initial.iter().filter(|d| !d.info.is_own()) {
         for (i, &b) in d.buttons.iter().enumerate() {
@@ -579,7 +598,6 @@ fn prepare(
             engine.process(&key, Value::Axis(d.axes[usize::from(axis) - 1]), now, out);
         }
     }
-    Ok(())
 }
 
 /// Gives the voice service `engine`'s phrases and microphones, starting it for the first
@@ -698,19 +716,16 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         .clone();
     while !stop.load(Ordering::Relaxed) {
         for mut r in reloads.try_iter() {
-            let result = prepare(
-                &mut r.engine,
-                &mut out,
-                virtual_devices.as_ref(),
-                &r.initial,
-            );
+            let result = acquire(&r.engine, &mut out, virtual_devices.as_ref());
             if result.is_ok() {
                 // A held push-to-talk input would keep the microphone open otherwise, and a
                 // command's button would stay down. The utterance it ends is heard with the old
                 // phrases: they change only after it.
                 engine.stop_voice(Instant::now(), &mut out);
                 // Keys, buttons and latched outputs of the old profile go up: the devices stay.
+                // Before the new profile writes, so what it presses stays down.
                 engine.release_all(&mut out);
+                feed_initial(&mut r.engine, &mut out, &r.initial);
                 engine = r.engine;
                 set_up_voice(&engine, &mut out);
                 voice_status = initial_voice_status(&engine, &out).map(|v| service.apply(v));
@@ -1005,6 +1020,54 @@ mod tests {
             [vec![Write::Button(1, true)]],
             "sent once, then unchanged again"
         );
+    }
+
+    /// A virtual joystick without axis 7: a call with it is refused, the rest of it is taken.
+    struct NoAxis7(Arc<Mutex<Vec<Vec<Write>>>>);
+
+    impl gob_virtual::Device for NoAxis7 {
+        fn set_axis(&self, slot: u8, value: f32) -> bool {
+            self.write(&[Write::Axis(slot, value)])
+        }
+        fn set_button(&self, n: u8, pressed: bool) -> bool {
+            self.write(&[Write::Button(n, pressed)])
+        }
+        fn set_hat(&self, n: u8, direction: Option<u16>) -> bool {
+            self.write(&[Write::Hat(n, direction)])
+        }
+        fn reset(&self) -> bool {
+            true
+        }
+        fn write(&self, changes: &[Write]) -> bool {
+            self.0.lock().unwrap().push(changes.to_vec());
+            !changes.iter().any(|w| matches!(w, Write::Axis(7, _)))
+        }
+    }
+
+    #[test]
+    fn one_refused_write_does_not_make_the_others_unsent() {
+        let (mut out, calls) = output();
+        out.devices.insert(1, Box::new(NoAxis7(calls.clone())));
+        out.axis(1, 1, 0.5);
+        out.axis(1, 7, 0.5);
+        out.button(1, 2, true);
+        out.flush();
+        calls.lock().unwrap().clear();
+        // The same values again: only the refused one is tried again.
+        out.axis(1, 1, 0.5);
+        out.axis(1, 7, 0.5);
+        out.button(1, 2, true);
+        out.flush();
+        let calls = calls.lock().unwrap();
+        assert!(
+            calls
+                .iter()
+                .flatten()
+                .all(|w| matches!(w, Write::Axis(7, _))),
+            "only axis 7 goes out again: {calls:?}"
+        );
+        assert!(out.failing.contains(&write_key(1, Write::Axis(7, 0.5)).0));
+        assert!(!out.failing.contains(&write_key(1, Write::Axis(1, 0.5)).0));
     }
 
     fn listening(microphone: &str, on: bool) -> gob_voice::VoiceEvent {

@@ -410,3 +410,90 @@ fn release_all_lets_go_of_buttons_without_a_release() {
     r.engine.release_all(&mut r.out);
     assert_eq!(r.take(), [Out::Button(9, false)]);
 }
+
+fn ctrl() -> String {
+    format!(
+        "<input>{}{}</input>",
+        prop("int", "scan-code", "29"),
+        prop("bool", "is-extended", "False")
+    )
+}
+
+#[test]
+fn keys_pressed_by_one_action_are_let_go_by_another() {
+    let mut r = rig(&[
+        ("a1", "map-to-keyboard", ctrl(), "press", "both"),
+        ("a2", "map-to-keyboard", ctrl(), "release", "both"),
+    ]);
+    r.input(1, true, 0);
+    r.input(1, false, 100);
+    assert_eq!(r.take(), [Out::Key(29, true)], "letting go keeps it down");
+    r.input(2, true, 200);
+    r.input(2, false, 300);
+    assert_eq!(r.take(), [Out::Key(29, false)]);
+    // Nothing is left to let go of when the profile stops.
+    r.engine.release_all(&mut r.out);
+    assert_eq!(r.take(), []);
+}
+
+/// One map-to-keyboard Ctrl with `send` on an input of `kind` (no virtual button).
+fn keys_on(kind: &str, send: &str) -> Rig {
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs><input><device-id>{DEV}</device-id><input-type>{kind}</input-type><mode>Default</mode>
+        <input-id>1</input-id><action-configuration><root-action>r</root-action><behavior>{kind}</behavior></action-configuration></input></inputs>
+        <settings/><library><action id="r" type="root"><actions><action-id>k</action-id></actions></action>{}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        action("k", "map-to-keyboard", &ctrl(), send, "both")
+    );
+    Rig {
+        engine: Engine::new(&gob_gremlin::from_str(&xml).unwrap(), &HashMap::new()),
+        out: Recorder::default(),
+        t0: Instant::now(),
+    }
+}
+
+#[test]
+fn an_axis_or_hat_that_keeps_moving_toggles_once() {
+    let mut r = keys_on("axis", "toggle");
+    for (ms, v) in [
+        (0, 0.3),
+        (10, 0.6),
+        (20, 0.9),
+        (30, 0.0),
+        (40, 0.4),
+        (50, 0.8),
+    ] {
+        r.engine.process(
+            &InputKey::new(DEV, InputKind::Axis, 1),
+            Value::Axis(v),
+            r.at(ms),
+            &mut r.out,
+        );
+    }
+    assert_eq!(
+        r.take(),
+        [Out::Key(29, true), Out::Key(29, false)],
+        "off center twice: on, then off"
+    );
+
+    let mut r = keys_on("hat", "toggle");
+    for (ms, d) in [
+        (0, Some(0)),
+        (10, Some(9000)),
+        (20, None),
+        (30, None),
+        (40, Some(0)),
+    ] {
+        r.engine.process(
+            &InputKey::new(DEV, InputKind::Hat, 1),
+            Value::Hat(d),
+            r.at(ms),
+            &mut r.out,
+        );
+    }
+    assert_eq!(
+        r.take(),
+        [Out::Key(29, true), Out::Key(29, false)],
+        "a direction change is no new press, centering is no press"
+    );
+}

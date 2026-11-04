@@ -337,3 +337,91 @@ fn the_decrease_input_goes_through_the_same_containers() {
     r.tap(false, 200);
     assert_eq!(r.take(), [-1.0]);
 }
+
+/// A profile from its inputs and library, starting in `start`, activated.
+fn profile_rig(inputs: &str, library: &str, modes: &str, start: &str) -> Rig {
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs>{inputs}</inputs>
+        <settings><startup-mode>{start}</startup-mode></settings><library>{library}</library>
+        <modes>{modes}</modes></profile>"#
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut r = Rig {
+        engine: Engine::new(&p, &HashMap::new()),
+        out: Recorder::default(),
+        t0: Instant::now(),
+    };
+    r.engine.activate(&mut r.out);
+    r
+}
+
+fn binding(device: &str, kind: &str, id: u32, mode: &str, root: &str) -> String {
+    format!(
+        "<input><device-id>{device}</device-id><input-type>{kind}</input-type><mode>{mode}</mode>\
+         <input-id>{id}</input-id><action-configuration><root-action>{root}</root-action>\
+         <behavior>{kind}</behavior></action-configuration></input>"
+    )
+}
+
+#[test]
+fn a_child_mode_binding_the_decrease_input_still_moves_the_axis_down() {
+    // Default: button 1 sets the axis, OTHER button 1 sets its opposite. Combat inherits that
+    // and binds OTHER button 1 itself (to nothing in particular).
+    let axis = prop("decrease-device-id", OTHER)
+        + &prop("decrease-input-id", "1")
+        + &prop("motion", "set")
+        + &prop("set-value", "1.0");
+    let inputs =
+        binding(DEV, "button", 1, "Default", "r") + &binding(OTHER, "button", 1, "Combat", "own");
+    let library = format!(
+        r#"<action id="r" type="root"><actions><action-id>a</action-id></actions></action>
+        <action id="a" type="button-axis">{axis}</action>
+        <action id="own" type="root"><actions/></action>"#
+    );
+    let modes = r#"<mode>Default</mode><mode parent="Default">Combat</mode>"#;
+    let mut r = profile_rig(&inputs, &library, modes, "Combat");
+    assert_eq!(r.engine.current_mode(), "Combat");
+    r.tap(true, 0);
+    assert_eq!(r.last(), 1.0);
+    r.tap(false, 100);
+    assert_eq!(
+        r.last(),
+        -1.0,
+        "the inherited action's decrease input works in Combat"
+    );
+}
+
+#[test]
+fn a_gamepad_axis_steps_from_where_another_action_left_it() {
+    // DEV axis 1 moves the gamepad's left stick X; button 1 steps the same stick by 0.1 (a
+    // step is a share of the whole travel, -1..1).
+    let pad = prop("gamepad-id", "1") + &prop("control", "left-x");
+    let steps = prop("output-type", "gamepad")
+        + &pad
+        + &prop("motion", "encoder")
+        + &prop("step", "0.05")
+        + &prop("max-step", "0.05");
+    let inputs =
+        binding(DEV, "axis", 1, "Default", "ra") + &binding(DEV, "button", 1, "Default", "rb");
+    let library = format!(
+        r#"<action id="ra" type="root"><actions><action-id>m</action-id></actions></action>
+        <action id="m" type="map-to-gamepad">{pad}</action>
+        <action id="rb" type="root"><actions><action-id>b</action-id></actions></action>
+        <action id="b" type="button-axis">{steps}</action>"#
+    );
+    let mut r = profile_rig(&inputs, &library, "<mode>Default</mode>", "Default");
+    let now = r.at(0);
+    r.engine.process(
+        &InputKey::new(DEV, InputKind::Axis, 1),
+        Value::Axis(0.8),
+        now,
+        &mut r.out,
+    );
+    r.tap(true, 100);
+    let (control, v) = *r.out.pad.last().expect("the stick was written");
+    assert_eq!(control, "left-x");
+    assert!(
+        close(v, 0.9),
+        "one step up from 0.8, not from the center: {v}"
+    );
+}
