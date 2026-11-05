@@ -276,6 +276,29 @@ pub enum Op {
         action: String,
         count: u8,
     },
+    AddScript {
+        name: String,
+        source: gob_core::ScriptSource,
+    },
+    RemoveScript(String),
+    MoveScript {
+        id: String,
+        up: bool,
+    },
+    SetScriptName {
+        id: String,
+        name: String,
+    },
+    SetScriptSource {
+        id: String,
+        source: gob_core::ScriptSource,
+    },
+    /// `None` clears the value.
+    SetScriptVariable {
+        id: String,
+        name: String,
+        value: Option<gob_core::ScriptValue>,
+    },
 }
 
 pub fn apply(p: &mut Profile, op: Op) {
@@ -402,6 +425,16 @@ pub fn apply(p: &mut Profile, op: Op) {
             }
         }
         Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
+        Op::AddScript { name, source } => {
+            p.add_script(&name, source);
+        }
+        Op::RemoveScript(id) => p.remove_script(&id),
+        Op::MoveScript { id, up } => p.move_script(&id, up),
+        Op::SetScriptName { id, name } => p.set_script_name(&id, &name),
+        Op::SetScriptSource { id, source } => p.set_script_source(&id, &source),
+        Op::SetScriptVariable { id, name, value } => {
+            p.set_script_variable(&id, &name, value.as_ref())
+        }
         Op::SetDecrease { action, input } => {
             if let Some((device, name, ..)) = &input {
                 list_device(p, device, name.clone());

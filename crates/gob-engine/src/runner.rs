@@ -28,6 +28,8 @@ pub struct RunnerStatus {
     pub latency: Option<Latency>,
     /// Voice commands; `None` when the profile has no voice-input action.
     pub voice: Option<VoiceStatus>,
+    /// Script errors the GUI has not taken yet ([`Runner::take_script_errors`]).
+    pub script_errors: Vec<crate::ScriptError>,
 }
 
 /// Voice commands of the running profile.
@@ -460,6 +462,7 @@ impl Runner {
             load_profile: None,
             latency: None,
             voice: initial_voice_status(&engine, &out),
+            script_errors: engine.take_script_errors(),
         }));
         engine.take_logical_changed();
         let logical = Arc::new(Mutex::new(engine.logical_values()));
@@ -511,6 +514,18 @@ impl Runner {
         answer
             .recv_timeout(RELOAD_TIMEOUT)
             .map_err(|_| "the engine did not answer".to_string())?
+    }
+
+    /// Script errors since the last call: a script that did not load, or the first error of a
+    /// running one.
+    pub fn take_script_errors(&self) -> Vec<crate::ScriptError> {
+        std::mem::take(
+            &mut self
+                .status
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .script_errors,
+        )
     }
 
     /// Profile file requested by a load-profile action, once.
@@ -782,6 +797,11 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         let mut s = status.lock().unwrap_or_else(|e| e.into_inner());
         let load = out.load_profile.take();
         let latency = window.finish(now);
+        let script_errors = engine.take_script_errors();
+        if !script_errors.is_empty() {
+            s.script_errors.extend(script_errors);
+            on_change();
+        }
         if s.mode != engine.current_mode()
             || s.paused != engine.is_paused()
             || load.is_some()

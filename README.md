@@ -53,6 +53,8 @@ imports Joystick Gremlin profiles and keeps the workflow you know.
 - **Device hiding** with one click on a stick's eye, so games see only the virtual devices.
 - **Voice commands**: hold a push-to-talk button and say a phrase; recognized offline on your PC
   ([how](https://h0userus.github.io/joystick-gobloon/voice.html)).
+- **Lua scripts**: your own logic next to the actions, like Joystick Gremlin's user scripts, sandboxed
+  ([how](https://h0userus.github.io/joystick-gobloon/scripts.html)).
 - **Input viewer and calibration**, with a jitter filter for worn axes and debounce for bouncing buttons; tray
   icon, light and dark theme that follow the system, seven languages.
 

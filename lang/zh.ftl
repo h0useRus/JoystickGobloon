@@ -833,3 +833,24 @@ bax-even-count = 位置数量
 bax-even = 均匀分布这么多位置
 bax-start = 起始值
 bax-start-tip = 配置文件启动时将轴设为此值；关闭时轴保持原位
+
+## Scripts
+nav-scripts = 脚本
+scripts-empty = 还没有脚本。脚本是响应你的输入的小型 Lua 程序：添加一个保存在配置文件中的脚本，或一个用你自己的编辑器编辑的 .lua 文件。
+scripts-new = 新建脚本
+scripts-new-name = 脚本 { $n }
+scripts-add-file = 添加文件
+scripts-python = Joystick Gremlin Python 脚本：已保留，不运行
+scripts-python-help = 这是 Joystick Gremlin 的 Python 脚本。Joystick Gobloon 会将其保留在配置文件中，但只运行 Lua 脚本。
+scripts-in-profile = 在配置文件中
+scripts-remove = 删除脚本
+scripts-name = 脚本名称
+scripts-choose-file = 选择其他文件
+scripts-open-editor = 在编辑器中打开
+scripts-file-missing = 无法读取文件：{ $error }
+scripts-error = 第 { $line } 行：{ $message }
+scripts-variables = 变量
+scripts-no-variables = 此脚本没有变量。
+scripts-needs-value = 需要一个值
+scripts-device = 设备
+alert-script-error = 脚本错误

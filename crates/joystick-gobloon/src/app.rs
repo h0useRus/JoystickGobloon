@@ -23,6 +23,7 @@ enum Page {
     VJoy,
     Viewer,
     Calibration,
+    Scripts,
     Settings,
 }
 
@@ -46,6 +47,9 @@ pub struct JoystickGobloonApp {
     viewer_view: crate::viewer_view::ViewerView,
     /// The input viewer is shown in its own window.
     viewer_window: bool,
+    scripts_view: crate::scripts_view::ScriptsView,
+    /// When the running profile's script files were last checked for changes.
+    scripts_checked: std::time::Instant,
     calibration_view: crate::calibration_view::CalibrationView,
     /// The calibration is shown in its own window.
     calibration_window: bool,
@@ -257,6 +261,8 @@ impl JoystickGobloonApp {
             vjoy_view: VJoyView::new(),
             viewer_view: Default::default(),
             viewer_window: false,
+            scripts_view: Default::default(),
+            scripts_checked: std::time::Instant::now(),
             calibration_view: Default::default(),
             calibration_window: false,
             calibrations: Default::default(),
@@ -337,6 +343,7 @@ impl JoystickGobloonApp {
             Ok("vjoy") => app.page = Page::VJoy,
             Ok("viewer") => app.page = Page::Viewer,
             Ok("calibration") => app.page = Page::Calibration,
+            Ok("scripts") => app.page = Page::Scripts,
             Ok("wizard") => app.wizard = Some(crate::wizard_view::Wizard::new()),
             Ok("switch-unsaved") => app.ask_switch_unsaved = true,
             Ok("switch-stopped") => {
@@ -1584,6 +1591,7 @@ impl JoystickGobloonApp {
                 (Page::VJoy, icon::GAME_CONTROLLER, "nav-vjoy"),
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
                 (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
+                (Page::Scripts, icon::CODE, "nav-scripts"),
             ] {
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
@@ -1668,6 +1676,39 @@ impl JoystickGobloonApp {
     fn sync_activation(&mut self) {
         self.activation
             .set_profile(self.profile.as_ref().map(|p| (&p.profile, p.file_name())));
+        self.activation.set_profile_folder(self.profile_folder());
+    }
+
+    /// The profile's folder: relative script file paths start there.
+    fn profile_folder(&self) -> Option<PathBuf> {
+        self.profile
+            .as_ref()
+            .and_then(|p| p.path.as_deref())
+            .and_then(Path::parent)
+            .map(Path::to_path_buf)
+    }
+
+    /// Script errors become alerts; a changed script file reloads the running profile.
+    fn watch_scripts(&mut self) {
+        let errors = self.activation.take_script_errors();
+        if !errors.is_empty() {
+            self.alerts.push(Alert {
+                title: self.i18n.tr("alert-script-error"),
+                lines: errors,
+            });
+        }
+        if self.scripts_checked.elapsed() < std::time::Duration::from_secs(1) {
+            return;
+        }
+        self.scripts_checked = std::time::Instant::now();
+        // Against the files as the running profile read them.
+        if self.activation.script_files_changed() {
+            log::info!("script file changed: reloading the profile");
+            if let Err(e) = self.activation.reload() {
+                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
+                self.error(text);
+            }
+        }
     }
 
     /// Main toolbar: always shown, above every page.
@@ -2045,6 +2086,7 @@ impl eframe::App for JoystickGobloonApp {
     /// draws nothing and skips [`Self::ui`]).
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
+        self.watch_scripts();
         self.switch_by_program();
         // Started or stopped from the tray menu (maybe while the window was hidden).
         let active = self.activation.is_active();
@@ -2431,6 +2473,25 @@ impl eframe::App for JoystickGobloonApp {
                     }
                     self.apply_calibration(out);
                 }
+                Page::Scripts => match &self.profile {
+                    None => empty_state(ui, icon::CODE, &self.i18n.tr("no-profile")),
+                    Some(p) => {
+                        let devices = self.input.devices();
+                        let vjoy = self.vjoy_view.device_list();
+                        let folder = self.profile_folder();
+                        let mut ops = Vec::new();
+                        self.scripts_view.show(
+                            ui,
+                            &self.i18n,
+                            &p.profile,
+                            folder.as_deref(),
+                            &devices,
+                            &vjoy,
+                            &mut ops,
+                        );
+                        self.apply_ops(ops);
+                    }
+                },
                 Page::Settings => {
                     let devices = self.input.devices();
                     let led_devices = if self.settings.experimental {

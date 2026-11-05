@@ -853,3 +853,24 @@ bax-even-count = Сколько позиций
 bax-even = Расставить столько позиций равномерно
 bax-start = Начальное значение
 bax-start-tip = Ставить оси это значение при запуске профиля; выключено — ось остаётся, где была
+
+## Scripts
+nav-scripts = Скрипты
+scripts-empty = Скриптов пока нет. Скрипт — это небольшая программа на Lua, которая реагирует на ваши входы: добавьте скрипт, хранящийся в профиле, или файл .lua, который вы правите в своём редакторе.
+scripts-new = Новый скрипт
+scripts-new-name = Скрипт { $n }
+scripts-add-file = Добавить файл
+scripts-python = Python-скрипт Joystick Gremlin: сохранён, не запускается
+scripts-python-help = Это Python-скрипт из Joystick Gremlin. Joystick Gobloon хранит его в профиле, но запускает только скрипты на Lua.
+scripts-in-profile = В профиле
+scripts-remove = Удалить скрипт
+scripts-name = Название скрипта
+scripts-choose-file = Выбрать другой файл
+scripts-open-editor = Открыть в редакторе
+scripts-file-missing = Не удаётся прочитать файл: { $error }
+scripts-error = Строка { $line }: { $message }
+scripts-variables = Переменные
+scripts-no-variables = У этого скрипта нет переменных.
+scripts-needs-value = Нужно значение
+scripts-device = Устройство
+alert-script-error = Ошибка скрипта

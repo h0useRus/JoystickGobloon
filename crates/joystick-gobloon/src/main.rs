@@ -22,6 +22,7 @@ mod output_marks;
 mod platform;
 mod profile_view;
 mod program_switch;
+mod scripts_view;
 mod settings;
 mod settings_view;
 mod style;
