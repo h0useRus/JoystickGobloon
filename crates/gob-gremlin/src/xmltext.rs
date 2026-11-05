@@ -99,6 +99,11 @@ fn write_element(out: &mut String, el: &Element, depth: usize) {
     let text = el.text();
     if !has_elements && text.is_empty() {
         out.push_str("/>\n");
+    } else if !has_elements && el.name == "code" && !text.contains("]]>") {
+        // Script code reads as written: `a < b`, not `a &lt; b`.
+        out.push_str("><![CDATA[");
+        out.push_str(&text);
+        out.push_str(&format!("]]></{}>\n", el.name));
     } else if !has_elements {
         out.push('>');
         out.push_str(&quick_xml::escape::partial_escape(text.as_str()));

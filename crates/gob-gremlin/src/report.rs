@@ -115,7 +115,7 @@ pub fn report(p: &Profile) -> ImportReport {
             });
         }
     }
-    if p.has_scripts() {
+    if p.has_python_scripts() {
         r.warnings.push(Warning::HasScripts);
     }
     r

@@ -439,3 +439,65 @@ fn format_headers() {
         Err(gob_gremlin::Error::NotAProfile)
     ));
 }
+
+/// Lua scripts (code kept exactly, written as CDATA; external files) and Gremlin's Python
+/// scripts with their variables survive a save.
+#[test]
+fn scripts_round_trip() {
+    use gob_core::{ScriptLanguage, ScriptSource, ScriptValue};
+    let mut p = gob_gremlin::from_str(SAMPLE).unwrap();
+    let code = "local a = 1\nif a < 2 and a > 0 then\n    log(\"a & b\")\nend\n";
+    let lua = p.add_script("Gear", ScriptSource::Code(code.into()));
+    let file = p.add_script("Trim", ScriptSource::File("scripts/trim.lua".into()));
+    p.set_script_variable(&lua, "Speed", Some(&ScriptValue::Float(1.25)));
+    p.set_script_variable(
+        &file,
+        "Out",
+        Some(&ScriptValue::Vjoy {
+            device: 2,
+            input_type: InputType::Hat,
+            id: 1,
+        }),
+    );
+    let text = gob_gremlin::to_string(&p);
+    assert!(text.contains("<![CDATA[local a = 1\nif a < 2"), "{text}");
+    let back = gob_gremlin::from_str(&text).unwrap();
+    assert_eq!(back.script_instances(), p.script_instances());
+    let s = back.script_instances();
+    assert_eq!(s[0].language, ScriptLanguage::Python, "Gremlin's plugin");
+    assert_eq!(s[0].name, "My plugin");
+    assert_eq!(s[1].source, ScriptSource::Code(code.into()));
+    assert!(back.needs_own_format());
+    assert!(report(&back).warnings.contains(&Warning::HasScripts));
+
+    // Gremlin R14 writes properties and variables.
+    let gremlin = SAMPLE.replace(
+        r#"<script path="C:\plugins\my_plugin.py" name="My plugin"/>"#,
+        r#"<script id="7f0c4b0e-0000-4000-8000-000000000001">
+            <property type="path"><name>path</name><value>C:\plugins\axis.py</value></property>
+            <property type="string"><name>name</name><value>Axis</value></property>
+            <variable type="float">
+                <property type="string"><name>name</name><value>Scale</value></property>
+                <property type="float"><name>value</name><value>0.5</value></property>
+            </variable>
+            <variable type="physical-input">
+                <property type="string"><name>name</name><value>Stick</value></property>
+                <property type="uuid"><name>device-guid</name><value>11111111-0000-0000-0000-000000000001</value></property>
+                <property type="input_type"><name>input-type</name><value>axis</value></property>
+                <property type="int"><name>input-id</name><value>3</value></property>
+            </variable>
+        </script>"#,
+    );
+    let p = assert_round_trip(&gremlin);
+    let s = &p.script_instances()[0];
+    assert_eq!(s.language, ScriptLanguage::Python);
+    assert_eq!(s.variables[0], ("Scale".into(), ScriptValue::Float(0.5)));
+    assert_eq!(
+        s.variables[1].1,
+        ScriptValue::PhysicalInput {
+            device: "11111111-0000-0000-0000-000000000001".into(),
+            input_type: InputType::Axis,
+            id: 3,
+        }
+    );
+}

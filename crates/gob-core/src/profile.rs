@@ -460,12 +460,13 @@ impl Profile {
     }
 
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led, map-to-gamepad, button-axis and voice-input actions, send modes, gamepad and run-action macro steps, monotone cubic
+    /// light-led, map-to-gamepad, button-axis and voice-input actions, Lua scripts, send modes, gamepad and run-action macro steps, monotone cubic
     /// curves, voice commands): it is then written in Joystick Gobloon's own format, which
     /// Joystick Gremlin cannot open. Stored virtual joysticks don't count: Joystick Gremlin skips
     /// the `<virtual-devices>` section.
     pub fn needs_own_format(&self) -> bool {
         !self.modifiers.is_empty()
+            || self.has_lua_scripts()
             || !self.virtual_devices.gamepads.is_empty()
             || !self.voice_commands.is_empty()
             || self
@@ -744,6 +745,7 @@ impl Profile {
         for a in &mut self.library {
             count += replace_in_items(&mut a.items, old, new);
         }
+        count += self.substitute_script_device(old, new);
         count += self.logical_device.replace_text(old, new);
         for e in &mut self.extra {
             count += e.replace_text(old, new);
