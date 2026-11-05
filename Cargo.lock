@@ -1977,7 +1977,7 @@ dependencies = [
 [[package]]
 name = "gob-i18n"
 version = "0.1.0"
-source = "git+https://github.com/h0useRus/gobloon-common-ui?tag=v0.2.0#19df283bc7e529daa148993af6a5e5369847ac8c"
+source = "git+https://github.com/h0useRus/gobloon-common-ui?tag=v0.3.0#693dbfb879420106050eee38fa3431d2d80e7309"
 dependencies = [
  "fluent-bundle",
  "unic-langid",
@@ -2020,7 +2020,7 @@ dependencies = [
 [[package]]
 name = "gob-ui"
 version = "0.1.0"
-source = "git+https://github.com/h0useRus/gobloon-common-ui?tag=v0.2.0#19df283bc7e529daa148993af6a5e5369847ac8c"
+source = "git+https://github.com/h0useRus/gobloon-common-ui?tag=v0.3.0#693dbfb879420106050eee38fa3431d2d80e7309"
 dependencies = [
  "egui 0.37.0",
  "egui-phosphor",
@@ -2475,6 +2475,7 @@ dependencies = [
  "gob-i18n",
  "gob-input",
  "gob-lighting",
+ "gob-script",
  "gob-system",
  "gob-ui",
  "gob-uinput",

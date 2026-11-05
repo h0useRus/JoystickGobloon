@@ -845,3 +845,24 @@ bax-even-count = Cuántas posiciones
 bax-even = Repartir tantas posiciones por igual
 bax-start = Valor inicial
 bax-start-tip = Poner el eje en este valor al iniciar el perfil; desactivado, se queda donde está
+
+## Scripts
+nav-scripts = Scripts
+scripts-empty = Aún no hay scripts. Un script es un pequeño programa Lua que reacciona a tus entradas: añade uno guardado en el perfil o un archivo .lua que editas en tu propio editor.
+scripts-new = Nuevo script
+scripts-new-name = Script { $n }
+scripts-add-file = Añadir un archivo
+scripts-python = Script Python de Joystick Gremlin: se conserva, no se ejecuta
+scripts-python-help = Es un script Python de Joystick Gremlin. Joystick Gobloon lo conserva en el perfil, pero solo ejecuta scripts Lua.
+scripts-in-profile = En el perfil
+scripts-remove = Quitar el script
+scripts-name = Nombre del script
+scripts-choose-file = Elegir otro archivo
+scripts-open-editor = Abrir en tu editor
+scripts-file-missing = No se puede leer el archivo: { $error }
+scripts-error = Línea { $line }: { $message }
+scripts-variables = Variables
+scripts-no-variables = Este script no tiene variables.
+scripts-needs-value = Necesita un valor
+scripts-device = Dispositivo
+alert-script-error = Error de script

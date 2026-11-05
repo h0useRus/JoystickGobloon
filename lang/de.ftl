@@ -845,3 +845,24 @@ bax-even-count = Wie viele Positionen
 bax-even = So viele Positionen gleichmäßig verteilen
 bax-start = Startwert
 bax-start-tip = Die Achse beim Start des Profils auf diesen Wert setzen; aus, bleibt sie, wo sie ist
+
+## Scripts
+nav-scripts = Skripte
+scripts-empty = Noch keine Skripte. Ein Skript ist ein kleines Lua-Programm, das auf deine Eingaben reagiert: füge eines im Profil hinzu oder eine .lua-Datei, die du in deinem eigenen Editor bearbeitest.
+scripts-new = Neues Skript
+scripts-new-name = Skript { $n }
+scripts-add-file = Datei hinzufügen
+scripts-python = Python-Skript von Joystick Gremlin: behalten, nicht ausgeführt
+scripts-python-help = Das ist ein Python-Skript aus Joystick Gremlin. Joystick Gobloon behält es im Profil, führt aber nur Lua-Skripte aus.
+scripts-in-profile = Im Profil
+scripts-remove = Skript entfernen
+scripts-name = Name des Skripts
+scripts-choose-file = Andere Datei wählen
+scripts-open-editor = In deinem Editor öffnen
+scripts-file-missing = Die Datei kann nicht gelesen werden: { $error }
+scripts-error = Zeile { $line }: { $message }
+scripts-variables = Variablen
+scripts-no-variables = Dieses Skript hat keine Variablen.
+scripts-needs-value = Braucht einen Wert
+scripts-device = Gerät
+alert-script-error = Skriptfehler

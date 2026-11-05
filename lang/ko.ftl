@@ -833,3 +833,24 @@ bax-even-count = 위치 개수
 bax-even = 이만큼의 위치를 고르게 배치
 bax-start = 시작 값
 bax-start-tip = 프로필이 시작될 때 축을 이 값으로 설정합니다. 끄면 축은 그대로 둡니다
+
+## Scripts
+nav-scripts = 스크립트
+scripts-empty = 아직 스크립트가 없습니다. 스크립트는 입력에 반응하는 작은 Lua 프로그램입니다. 프로필에 저장되는 스크립트나 직접 편집기로 편집하는 .lua 파일을 추가하세요.
+scripts-new = 새 스크립트
+scripts-new-name = 스크립트 { $n }
+scripts-add-file = 파일 추가
+scripts-python = Joystick Gremlin Python 스크립트: 보관됨, 실행 안 됨
+scripts-python-help = Joystick Gremlin의 Python 스크립트입니다. Joystick Gobloon은 이를 프로필에 보관하지만 Lua 스크립트만 실행합니다.
+scripts-in-profile = 프로필에 저장
+scripts-remove = 스크립트 제거
+scripts-name = 스크립트 이름
+scripts-choose-file = 다른 파일 선택
+scripts-open-editor = 편집기에서 열기
+scripts-file-missing = 파일을 읽을 수 없습니다: { $error }
+scripts-error = { $line }번째 줄: { $message }
+scripts-variables = 변수
+scripts-no-variables = 이 스크립트에는 변수가 없습니다.
+scripts-needs-value = 값이 필요합니다
+scripts-device = 장치
+alert-script-error = 스크립트 오류
