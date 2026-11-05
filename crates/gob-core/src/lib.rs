@@ -6,6 +6,7 @@
 
 pub mod action;
 pub mod automap;
+pub mod button_axis;
 pub mod condition;
 pub mod curve;
 pub mod edit;
@@ -17,11 +18,12 @@ pub mod voice;
 pub mod xml;
 
 pub use action::{
-    Action, ActionKind, ActivationMode, InputType, Item, Key, LedBlend, LedMode, MacroRepeat,
-    MacroStep, MergeOp, MouseAction, MouseButton, Property, SUPPORTED_KINDS, format_color,
-    parse_color,
+    Action, ActionKind, ActivationMode, ButtonSend, InputType, Item, Key, LedBlend, LedMode,
+    MacroRepeat, MacroStep, MergeOp, MouseAction, MouseButton, Property, SUPPORTED_KINDS, SendMode,
+    format_color, parse_color,
 };
 pub use automap::Layout as InputLayout;
+pub use button_axis::{AxisMotion, AxisOutput, BUTTON_AXIS, ButtonAxis, DecreaseInput};
 pub use condition::{Comparator, Condition, Source as ConditionSource};
 pub use edit::{NewAction, child_groups, new_uuid};
 pub use logical::{

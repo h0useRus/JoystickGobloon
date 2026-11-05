@@ -7,3 +7,6 @@ mod speech;
 
 pub(crate) use injector::Injector;
 pub(crate) use speech::Speech;
+
+/// Linux timeouts are precise already.
+pub(crate) fn fine_timer(_on: bool) {}

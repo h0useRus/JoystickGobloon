@@ -121,10 +121,18 @@ const RELOAD_TIMEOUT: Duration = Duration::from_secs(5);
 struct SystemOutput {
     devices: HashMap<u32, Box<dyn gob_virtual::Device>>,
     gamepads: HashMap<u32, Box<dyn gob_virtual::Gamepad>>,
-    /// Last values written, read back by vJoy conditions.
+    /// Last values written, read back by vJoy conditions; a write of the same value again is
+    /// not sent.
     written: HashMap<(u32, InputKind, u32), Value>,
+    /// Writes of this pass of the loop, sent per device by [`SystemOutput::flush`]: one driver
+    /// call per device instead of one per value. Buffers are kept between passes.
+    pending: Vec<(u32, Vec<gob_virtual::Write>)>,
+    pending_pads: Vec<(u32, Vec<gob_virtual::PadWrite>)>,
     /// Outputs whose last write the driver refused; logged once until one succeeds again.
     failing: HashSet<(u32, InputKind, u32)>,
+    /// Writes the driver did not take (refused, or no device held): sent again even when the
+    /// value is unchanged.
+    unsent: HashSet<(u32, InputKind, u32)>,
     failing_pads: HashSet<(u32, Option<GamepadControl>)>,
     media: crate::media::Media,
     lighting: crate::lighting::Lighting,
@@ -135,22 +143,176 @@ struct SystemOutput {
     voice_events: std::sync::mpsc::Sender<gob_voice::VoiceEvent>,
 }
 
+/// The joystick input a write changes.
+fn write_key(device: u32, write: gob_virtual::Write) -> ((u32, InputKind, u32), Value) {
+    use gob_virtual::Write;
+    match write {
+        Write::Axis(a, v) => ((device, InputKind::Axis, u32::from(a)), Value::Axis(v)),
+        Write::Button(b, p) => ((device, InputKind::Button, u32::from(b)), Value::Button(p)),
+        Write::Hat(h, d) => ((device, InputKind::Hat, u32::from(h)), Value::Hat(d)),
+    }
+}
+
+/// The gamepad control a write changes; the d-pad's directions and the d-pad as a whole count
+/// as one (`None`), since they change the same state.
+fn pad_key(write: gob_virtual::PadWrite) -> Option<GamepadControl> {
+    use gob_virtual::PadWrite;
+    match write {
+        PadWrite::Button(
+            GamepadControl::DpadUp
+            | GamepadControl::DpadDown
+            | GamepadControl::DpadLeft
+            | GamepadControl::DpadRight,
+            _,
+        )
+        | PadWrite::Dpad(_) => None,
+        PadWrite::Button(c, _) | PadWrite::Axis(c, _) => Some(c),
+    }
+}
+
 impl SystemOutput {
-    /// Records a write; a refused one is logged when it starts failing and when it works again.
-    fn wrote(&mut self, key: (u32, InputKind, u32), value: Value, ok: Option<bool>) {
-        self.written.insert(key, value);
-        let (device, kind, id) = key;
-        log_refused(&mut self.failing, key, ok, || {
-            format!("virtual device {device}: writing {kind:?} {id} = {value:?}")
-        });
+    fn new(
+        lighting: crate::lighting::Lighting,
+        voice_config: Option<gob_voice::VoiceConfig>,
+        voice_events: std::sync::mpsc::Sender<gob_voice::VoiceEvent>,
+    ) -> Self {
+        Self {
+            devices: HashMap::new(),
+            gamepads: HashMap::new(),
+            written: HashMap::new(),
+            pending: Vec::new(),
+            pending_pads: Vec::new(),
+            failing: HashSet::new(),
+            unsent: HashSet::new(),
+            failing_pads: HashSet::new(),
+            media: Default::default(),
+            lighting,
+            load_profile: None,
+            voice: None,
+            voice_config,
+            voice_events,
+        }
     }
 
-    /// A gamepad write (`control` `None`: the d-pad as a whole), logged like [`Self::wrote`].
-    fn wrote_pad(&mut self, gamepad: u32, control: Option<GamepadControl>, ok: Option<bool>) {
-        log_refused(&mut self.failing_pads, (gamepad, control), ok, || {
-            let control = control.map_or("dpad", GamepadControl::name);
-            format!("virtual gamepad {gamepad}: writing {control}")
-        });
+    /// Queues a joystick write for [`Self::flush`]. Unchanged values are dropped; a newer axis
+    /// value replaces a queued one, but a button or hat changing again is sent in between, so
+    /// a short press still reaches the game.
+    fn queue(&mut self, device: u32, write: gob_virtual::Write) {
+        let (key, value) = write_key(device, write);
+        if self.written.get(&key) == Some(&value) && !self.unsent.contains(&key) {
+            return;
+        }
+        self.written.insert(key, value);
+        let i = match self.pending.iter().position(|(d, _)| *d == device) {
+            Some(i) => i,
+            None => {
+                self.pending.push((device, Vec::new()));
+                self.pending.len() - 1
+            }
+        };
+        let queued = self.pending[i]
+            .1
+            .iter()
+            .position(|&w| write_key(device, w).0 == key);
+        match (queued, write) {
+            (Some(q), gob_virtual::Write::Axis(..)) => self.pending[i].1[q] = write,
+            (Some(_), _) => {
+                self.send(i);
+                self.pending[i].1.push(write);
+            }
+            (None, _) => self.pending[i].1.push(write),
+        }
+    }
+
+    /// Queues a gamepad write like [`Self::queue`], without dropping unchanged values (the
+    /// d-pad changes both as a whole and by direction).
+    fn queue_pad(&mut self, gamepad: u32, write: gob_virtual::PadWrite) {
+        let i = match self.pending_pads.iter().position(|(g, _)| *g == gamepad) {
+            Some(i) => i,
+            None => {
+                self.pending_pads.push((gamepad, Vec::new()));
+                self.pending_pads.len() - 1
+            }
+        };
+        let key = pad_key(write);
+        let queued = self.pending_pads[i]
+            .1
+            .iter()
+            .position(|&w| pad_key(w) == key);
+        match (queued, write) {
+            (Some(q), gob_virtual::PadWrite::Axis(..)) => self.pending_pads[i].1[q] = write,
+            (Some(_), _) => {
+                self.send_pad(i);
+                self.pending_pads[i].1.push(write);
+            }
+            (None, _) => self.pending_pads[i].1.push(write),
+        }
+    }
+
+    /// Sends what this pass of the loop changed, one report per device.
+    fn flush(&mut self) {
+        for i in 0..self.pending.len() {
+            self.send(i);
+        }
+        for i in 0..self.pending_pads.len() {
+            self.send_pad(i);
+        }
+    }
+
+    /// Sends the queued writes of `pending[i]`; a refused one is logged when it starts failing
+    /// and when it works again.
+    fn send(&mut self, i: usize) {
+        let (device, writes) = &mut self.pending[i];
+        if writes.is_empty() {
+            return;
+        }
+        let device = *device;
+        let target = self.devices.get(&device);
+        let batch = target.map(|d| d.write(writes));
+        for &w in writes.iter() {
+            let key = write_key(device, w).0;
+            // A refused batch: each write alone tells which ones the device took (those of the
+            // batch it took are sent once more, which changes nothing).
+            let ok = match batch {
+                Some(false) => target.map(|d| d.write(std::slice::from_ref(&w))),
+                ok => ok,
+            };
+            if ok != Some(true) {
+                self.unsent.insert(key);
+            } else if !self.unsent.is_empty() {
+                self.unsent.remove(&key);
+            }
+            log_refused(&mut self.failing, key, ok, || {
+                format!("virtual device {device}: writing {w:?}")
+            });
+        }
+        writes.clear();
+    }
+
+    fn send_pad(&mut self, i: usize) {
+        let (gamepad, writes) = &mut self.pending_pads[i];
+        if writes.is_empty() {
+            return;
+        }
+        let gamepad = *gamepad;
+        let target = self.gamepads.get(&gamepad);
+        let batch = target.map(|p| p.write(writes));
+        for &w in writes.iter() {
+            // As in `send`: a refused batch is told apart write by write.
+            let ok = match batch {
+                Some(false) => target.map(|p| p.write(std::slice::from_ref(&w))),
+                ok => ok,
+            };
+            let control = match w {
+                gob_virtual::PadWrite::Button(c, _) | gob_virtual::PadWrite::Axis(c, _) => Some(c),
+                gob_virtual::PadWrite::Dpad(_) => None,
+            };
+            log_refused(&mut self.failing_pads, (gamepad, control), ok, || {
+                let control = control.map_or("dpad", GamepadControl::name);
+                format!("virtual gamepad {gamepad}: writing {control}")
+            });
+        }
+        writes.clear();
     }
 }
 
@@ -170,45 +332,27 @@ fn log_refused<K: Copy + Eq + std::hash::Hash>(
 
 impl Output for SystemOutput {
     fn axis(&mut self, device: u32, axis: u8, value: f32) {
-        let ok = self.devices.get(&device).map(|d| d.set_axis(axis, value));
-        let key = (device, InputKind::Axis, u32::from(axis));
-        self.wrote(key, Value::Axis(value), ok);
+        self.queue(device, gob_virtual::Write::Axis(axis, value));
     }
 
     fn button(&mut self, device: u32, button: u8, pressed: bool) {
-        let ok = self
-            .devices
-            .get(&device)
-            .map(|d| d.set_button(button, pressed));
-        let key = (device, InputKind::Button, u32::from(button));
-        self.wrote(key, Value::Button(pressed), ok);
+        self.queue(device, gob_virtual::Write::Button(button, pressed));
     }
 
     fn hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
-        let ok = self.devices.get(&device).map(|d| d.set_hat(hat, direction));
-        let key = (device, InputKind::Hat, u32::from(hat));
-        self.wrote(key, Value::Hat(direction), ok);
+        self.queue(device, gob_virtual::Write::Hat(hat, direction));
     }
 
     fn gamepad_button(&mut self, gamepad: u32, control: GamepadControl, pressed: bool) {
-        let ok = self
-            .gamepads
-            .get(&gamepad)
-            .map(|p| p.set_button(control, pressed));
-        self.wrote_pad(gamepad, Some(control), ok);
+        self.queue_pad(gamepad, gob_virtual::PadWrite::Button(control, pressed));
     }
 
     fn gamepad_axis(&mut self, gamepad: u32, control: GamepadControl, value: f32) {
-        let ok = self
-            .gamepads
-            .get(&gamepad)
-            .map(|p| p.set_axis(control, value));
-        self.wrote_pad(gamepad, Some(control), ok);
+        self.queue_pad(gamepad, gob_virtual::PadWrite::Axis(control, value));
     }
 
     fn gamepad_dpad(&mut self, gamepad: u32, direction: Option<u16>) {
-        let ok = self.gamepads.get(&gamepad).map(|p| p.set_dpad(direction));
-        self.wrote_pad(gamepad, None, ok);
+        self.queue_pad(gamepad, gob_virtual::PadWrite::Dpad(direction));
     }
 
     fn play_sound(&mut self, file: &str, volume: u8) {
@@ -242,18 +386,26 @@ impl Output for SystemOutput {
     }
 
     fn mouse_move(&mut self, dx: i32, dy: i32) {
+        // Joystick writes queued before it go out first, in the profile's order.
+        self.flush();
         crate::platform::injector().mouse_move(dx, dy);
     }
 
     fn mouse_button(&mut self, button: gob_core::MouseButton, pressed: bool) {
+        // Joystick writes queued before it go out first, in the profile's order.
+        self.flush();
         crate::platform::injector().mouse_button(button, pressed);
     }
 
     fn mouse_wheel(&mut self, notches: i32) {
+        // Joystick writes queued before it go out first, in the profile's order.
+        self.flush();
         crate::platform::injector().mouse_wheel(notches);
     }
 
     fn key(&mut self, scan_code: u16, extended: bool, pressed: bool) {
+        // Joystick writes queued before it go out first, in the profile's order.
+        self.flush();
         crate::platform::injector().key(scan_code, extended, pressed);
     }
 
@@ -283,33 +435,24 @@ impl Runner {
         let mut engine = Engine::new(profile, aliases);
         let virtual_devices = gob_virtual::load().map_err(|e| e.to_string())?;
         let (voice_events, voice_inbox) = std::sync::mpsc::channel();
-        let mut out = SystemOutput {
-            devices: HashMap::new(),
-            gamepads: HashMap::new(),
-            written: HashMap::new(),
-            failing: HashSet::new(),
-            failing_pads: HashSet::new(),
-            media: Default::default(),
-            lighting: crate::lighting::Lighting::new(
-                initial
-                    .iter()
-                    .filter(|d| !d.info.hid_path.is_empty())
-                    .map(|d| (d.info.guid.to_ascii_lowercase(), d.info.hid_path.clone()))
-                    .collect(),
-                led_defaults.map(<[crate::Light]>::to_vec),
-            ),
-            load_profile: None,
-            voice: None,
-            voice_config: voice,
-            voice_events,
-        };
-        prepare(&mut engine, &mut out, virtual_devices.as_ref(), initial)?;
+        let lighting = crate::lighting::Lighting::new(
+            initial
+                .iter()
+                .filter(|d| !d.info.hid_path.is_empty())
+                .map(|d| (d.info.guid.to_ascii_lowercase(), d.info.hid_path.clone()))
+                .collect(),
+            led_defaults.map(<[crate::Light]>::to_vec),
+        );
+        let mut out = SystemOutput::new(lighting, voice, voice_events);
+        acquire(&engine, &mut out, virtual_devices.as_ref())?;
+        feed_initial(&mut engine, &mut out, initial);
         set_up_voice(&engine, &mut out);
         if led_defaults.is_none() && engine.uses_lights() {
             log::info!("light-led actions ignored: experimental features are off");
         }
         crate::platform::Injector::prepare(crate::platform::injector());
         engine.activate(&mut out);
+        out.flush();
 
         let status = Arc::new(Mutex::new(RunnerStatus {
             mode: engine.current_mode().to_string(),
@@ -414,11 +557,11 @@ fn initial_voice_status(engine: &Engine, out: &SystemOutput) -> Option<VoiceStat
 
 /// Acquires the virtual devices `engine` writes to that `out` does not hold yet, then seeds
 /// the engine with `initial` and sends the axis positions through it.
-fn prepare(
-    engine: &mut Engine,
+/// Takes the virtual devices `engine` writes that are not taken yet.
+fn acquire(
+    engine: &Engine,
     out: &mut SystemOutput,
     virtual_devices: &dyn gob_virtual::Backend,
-    initial: &[DeviceState],
 ) -> Result<(), String> {
     use std::collections::hash_map::Entry;
     for id in engine.vjoy_devices() {
@@ -434,7 +577,12 @@ fn prepare(
             e.insert(pad);
         }
     }
+    Ok(())
+}
 
+/// Gives `engine` the inputs as they are: buttons and hats as its starting state, axes as
+/// events (they write their outputs at once).
+fn feed_initial(engine: &mut Engine, out: &mut SystemOutput, initial: &[DeviceState]) {
     let now = Instant::now();
     for d in initial.iter().filter(|d| !d.info.is_own()) {
         for (i, &b) in d.buttons.iter().enumerate() {
@@ -450,7 +598,6 @@ fn prepare(
             engine.process(&key, Value::Axis(d.axes[usize::from(axis) - 1]), now, out);
         }
     }
-    Ok(())
 }
 
 /// Gives the voice service `engine`'s phrases and microphones, starting it for the first
@@ -556,6 +703,11 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         stop,
     } = shared;
     let mut window = LatencyWindow::new(Instant::now());
+    // When this pass's events were read; kept between passes.
+    let mut reads: Vec<Instant> = Vec::new();
+    let mut ids = DeviceIds::default();
+    // A fine timer is on: outputs move on their own.
+    let mut fine = false;
     let mut service = ServiceState::default();
     let mut voice_status = status
         .lock()
@@ -564,17 +716,16 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         .clone();
     while !stop.load(Ordering::Relaxed) {
         for mut r in reloads.try_iter() {
-            let result = prepare(
-                &mut r.engine,
-                &mut out,
-                virtual_devices.as_ref(),
-                &r.initial,
-            );
+            let result = acquire(&r.engine, &mut out, virtual_devices.as_ref());
             if result.is_ok() {
                 // A held push-to-talk input would keep the microphone open otherwise, and a
                 // command's button would stay down. The utterance it ends is heard with the old
                 // phrases: they change only after it.
                 engine.stop_voice(Instant::now(), &mut out);
+                // Keys, buttons and latched outputs of the old profile go up: the devices stay.
+                // Before the new profile writes, so what it presses stays down.
+                engine.release_all(&mut out);
+                feed_initial(&mut r.engine, &mut out, &r.initial);
                 engine = r.engine;
                 set_up_voice(&engine, &mut out);
                 voice_status = initial_voice_status(&engine, &out).map(|v| service.apply(v));
@@ -585,6 +736,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             }
             let _ = r.reply.send(result);
         }
+        // Reloads wrote to the devices above.
+        out.flush();
+        if engine.animating() != fine {
+            fine = !fine;
+            crate::platform::fine_timer(fine);
+        }
         let wait = engine.next_deadline().map_or(IDLE, |d| {
             d.saturating_duration_since(Instant::now()).min(IDLE)
         });
@@ -593,10 +750,11 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             Err(RecvTimeoutError::Timeout) => None,
             Err(RecvTimeoutError::Disconnected) => break,
         };
+        reads.clear();
         for timed in first.into_iter().chain(events.try_iter()) {
-            if let Some((key, value)) = convert(&timed.event) {
+            if let Some((key, value)) = convert(&mut ids, &timed.event) {
                 engine.process(&key, value, Instant::now(), &mut out);
-                window.add(timed.read.elapsed());
+                reads.push(timed.read);
             }
         }
         let mut voice_changed = false;
@@ -611,6 +769,11 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         }
         let now = Instant::now();
         engine.tick(now, &mut out);
+        out.flush();
+        // Latency ends when the outputs are written.
+        for read in &reads {
+            window.add(read.elapsed());
+        }
 
         if engine.take_logical_changed() {
             *logical.lock().unwrap_or_else(|e| e.into_inner()) = engine.logical_values();
@@ -638,7 +801,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             on_change();
         }
     }
-    // Dropping `out` resets and releases the vJoy devices.
+    // Held keys and mouse buttons go up; dropping `out` resets and releases the vJoy devices.
+    engine.release_all(&mut out);
+    out.flush();
+    if fine {
+        crate::platform::fine_timer(false);
+    }
 }
 
 /// Hands a voice event to the engine, the service's state and the status; true when the status
@@ -664,10 +832,28 @@ fn on_voice(
     true
 }
 
-fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
+/// Device ids of input events as the engine's keys take them, made once per device.
+#[derive(Default)]
+struct DeviceIds(HashMap<String, Arc<str>>);
+
+impl DeviceIds {
+    fn key(&mut self, device: &str, kind: InputKind, id: u32) -> InputKey {
+        let device = match self.0.get(device) {
+            Some(d) => d.clone(),
+            None => {
+                let d: Arc<str> = device.to_ascii_lowercase().into();
+                self.0.insert(device.to_string(), d.clone());
+                d
+            }
+        };
+        InputKey { device, kind, id }
+    }
+}
+
+fn convert(ids: &mut DeviceIds, event: &InputEvent) -> Option<(InputKey, Value)> {
     Some(match event {
         InputEvent::Axis { device, id, value } => (
-            InputKey::new(device, InputKind::Axis, u32::from(*id)),
+            ids.key(device, InputKind::Axis, u32::from(*id)),
             Value::Axis(*value),
         ),
         InputEvent::Button {
@@ -675,7 +861,7 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
             id,
             pressed,
         } => (
-            InputKey::new(device, InputKind::Button, u32::from(*id)),
+            ids.key(device, InputKind::Button, u32::from(*id)),
             Value::Button(*pressed),
         ),
         InputEvent::Hat {
@@ -683,7 +869,7 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
             id,
             direction,
         } => (
-            InputKey::new(device, InputKind::Hat, u32::from(*id)),
+            ids.key(device, InputKind::Hat, u32::from(*id)),
             Value::Hat(*direction),
         ),
         InputEvent::Key {
@@ -696,7 +882,7 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
                 extended: *extended,
             };
             (
-                InputKey::new(
+                ids.key(
                     gob_core::KEYBOARD_GUID,
                     InputKind::Button,
                     gob_core::key_input_id(key),
@@ -711,6 +897,178 @@ fn convert(event: &InputEvent) -> Option<(InputKey, Value)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use gob_virtual::Write;
+
+    /// A virtual joystick that records each driver call.
+    struct Calls(Arc<Mutex<Vec<Vec<Write>>>>);
+
+    impl gob_virtual::Device for Calls {
+        fn set_axis(&self, slot: u8, value: f32) -> bool {
+            self.write(&[Write::Axis(slot, value)])
+        }
+        fn set_button(&self, n: u8, pressed: bool) -> bool {
+            self.write(&[Write::Button(n, pressed)])
+        }
+        fn set_hat(&self, n: u8, direction: Option<u16>) -> bool {
+            self.write(&[Write::Hat(n, direction)])
+        }
+        fn reset(&self) -> bool {
+            true
+        }
+        fn write(&self, changes: &[Write]) -> bool {
+            self.0.lock().unwrap().push(changes.to_vec());
+            true
+        }
+    }
+
+    fn output() -> (SystemOutput, Arc<Mutex<Vec<Vec<Write>>>>) {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let mut out = SystemOutput::new(
+            crate::lighting::Lighting::new(HashMap::new(), None),
+            None,
+            std::sync::mpsc::channel().0,
+        );
+        out.devices.insert(1, Box::new(Calls(calls.clone())));
+        (out, calls)
+    }
+
+    #[test]
+    fn device_ids_are_made_once_per_device() {
+        let mut ids = DeviceIds::default();
+        let a = ids.key("AAAA-01", InputKind::Axis, 1);
+        let b = ids.key("AAAA-01", InputKind::Button, 3);
+        assert_eq!(&*a.device, "aaaa-01");
+        assert!(Arc::ptr_eq(&a.device, &b.device));
+        assert_eq!(a, InputKey::new("aaaa-01", InputKind::Axis, 1));
+    }
+
+    #[test]
+    fn one_driver_call_per_device_and_pass() {
+        let (mut out, calls) = output();
+        out.axis(1, 1, 0.5);
+        out.axis(1, 2, -0.5);
+        out.button(1, 3, true);
+        out.axis(1, 1, 0.25);
+        out.flush();
+        assert_eq!(
+            *calls.lock().unwrap(),
+            [vec![
+                Write::Axis(1, 0.25),
+                Write::Axis(2, -0.5),
+                Write::Button(3, true)
+            ]],
+            "the newer axis value replaces the queued one"
+        );
+        out.flush();
+        assert_eq!(
+            calls.lock().unwrap().len(),
+            1,
+            "nothing queued, nothing sent"
+        );
+    }
+
+    #[test]
+    fn unchanged_values_are_not_sent() {
+        let (mut out, calls) = output();
+        out.axis(1, 1, 0.5);
+        out.flush();
+        out.axis(1, 1, 0.5);
+        out.button(1, 1, false);
+        out.button(1, 1, false);
+        out.flush();
+        assert_eq!(
+            *calls.lock().unwrap(),
+            [vec![Write::Axis(1, 0.5)], vec![Write::Button(1, false)]]
+        );
+        assert_eq!(
+            out.vjoy_state(1, InputKind::Axis, 1),
+            Some(Value::Axis(0.5)),
+            "conditions still read the value"
+        );
+    }
+
+    #[test]
+    fn a_press_and_release_in_one_pass_both_reach_the_driver() {
+        let (mut out, calls) = output();
+        out.button(1, 4, true);
+        out.button(1, 4, false);
+        out.hat(1, 1, Some(9000));
+        out.flush();
+        assert_eq!(
+            *calls.lock().unwrap(),
+            [
+                vec![Write::Button(4, true)],
+                vec![Write::Button(4, false), Write::Hat(1, Some(9000))]
+            ]
+        );
+    }
+
+    #[test]
+    fn a_write_that_did_not_arrive_is_sent_again() {
+        let (mut out, calls) = output();
+        out.button(2, 1, true);
+        out.flush();
+        // Device 2 is held now: the same value goes out although it is unchanged.
+        out.devices.insert(2, Box::new(Calls(calls.clone())));
+        out.button(2, 1, true);
+        out.flush();
+        out.button(2, 1, true);
+        out.flush();
+        assert_eq!(
+            *calls.lock().unwrap(),
+            [vec![Write::Button(1, true)]],
+            "sent once, then unchanged again"
+        );
+    }
+
+    /// A virtual joystick without axis 7: a call with it is refused, the rest of it is taken.
+    struct NoAxis7(Arc<Mutex<Vec<Vec<Write>>>>);
+
+    impl gob_virtual::Device for NoAxis7 {
+        fn set_axis(&self, slot: u8, value: f32) -> bool {
+            self.write(&[Write::Axis(slot, value)])
+        }
+        fn set_button(&self, n: u8, pressed: bool) -> bool {
+            self.write(&[Write::Button(n, pressed)])
+        }
+        fn set_hat(&self, n: u8, direction: Option<u16>) -> bool {
+            self.write(&[Write::Hat(n, direction)])
+        }
+        fn reset(&self) -> bool {
+            true
+        }
+        fn write(&self, changes: &[Write]) -> bool {
+            self.0.lock().unwrap().push(changes.to_vec());
+            !changes.iter().any(|w| matches!(w, Write::Axis(7, _)))
+        }
+    }
+
+    #[test]
+    fn one_refused_write_does_not_make_the_others_unsent() {
+        let (mut out, calls) = output();
+        out.devices.insert(1, Box::new(NoAxis7(calls.clone())));
+        out.axis(1, 1, 0.5);
+        out.axis(1, 7, 0.5);
+        out.button(1, 2, true);
+        out.flush();
+        calls.lock().unwrap().clear();
+        // The same values again: only the refused one is tried again.
+        out.axis(1, 1, 0.5);
+        out.axis(1, 7, 0.5);
+        out.button(1, 2, true);
+        out.flush();
+        let calls = calls.lock().unwrap();
+        assert!(
+            calls
+                .iter()
+                .flatten()
+                .all(|w| matches!(w, Write::Axis(7, _))),
+            "only axis 7 goes out again: {calls:?}"
+        );
+        assert!(out.failing.contains(&write_key(1, Write::Axis(7, 0.5)).0));
+        assert!(!out.failing.contains(&write_key(1, Write::Axis(1, 0.5)).0));
+    }
 
     fn listening(microphone: &str, on: bool) -> gob_voice::VoiceEvent {
         gob_voice::VoiceEvent::Listening {

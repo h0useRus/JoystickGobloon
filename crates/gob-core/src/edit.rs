@@ -77,6 +77,11 @@ pub enum NewAction {
     SplitAxis,
     PauseResume,
     RunCommand,
+    /// Axis `axis` of virtual stick `device`; a press sets it to the top.
+    ButtonAxis {
+        device: u32,
+        axis: u32,
+    },
 }
 
 /// Child lists of container actions: `(group tag, is ordered list of actions)`.
@@ -236,6 +241,9 @@ fn macro_step_xml(step: &crate::MacroStep) -> Option<(&'static str, Vec<Item>)> 
                 ),
             ],
         ),
+        S::RunAction { ref action } => {
+            ("action", vec![prop("string", "action-id", action.as_str())])
+        }
         S::Other => return None,
     })
 }
@@ -272,12 +280,35 @@ fn condition_positions(items: &[Item]) -> Vec<usize> {
         .collect()
 }
 
+/// How an input of `input_type` runs its actions: an axis or a hat as itself, everything else
+/// (buttons, keys, voice commands) as a button.
+fn behavior_of(input_type: &str) -> &str {
+    match InputType::parse(input_type) {
+        InputType::Axis | InputType::Hat => input_type,
+        _ => "button",
+    }
+}
+
 fn remap_refs(items: &mut [Item], ids: &HashMap<String, String>) {
     for item in items {
         match item {
             Item::ActionRef(id) => {
                 if let Some(new) = ids.get(id.as_str()) {
                     *id = new.clone();
+                }
+            }
+            // A run-action step follows its target when the target is copied too.
+            Item::Group { tag, attrs, items }
+                if tag == "macro-action"
+                    && attrs.iter().any(|(k, v)| k == "type" && v == "action") =>
+            {
+                for i in items.iter_mut() {
+                    if let Item::Property(p) = i
+                        && p.name == "action-id"
+                        && let Some(new) = ids.get(p.value.trim())
+                    {
+                        p.value = new.clone();
+                    }
                 }
             }
             Item::Group { items, .. } => remap_refs(items, ids),
@@ -431,6 +462,17 @@ impl Action {
                 "disallowed",
             ),
             NewAction::MapToKeyboard => Self::build("map-to-keyboard", Vec::new(), "both"),
+            NewAction::ButtonAxis { device, axis } => Self::build(
+                crate::BUTTON_AXIS,
+                vec![
+                    prop("string", "output-type", "vjoy"),
+                    prop("int", "vjoy-device-id", device.to_string()),
+                    prop("int", "vjoy-input-id", axis.to_string()),
+                    prop("string", "motion", "set"),
+                    prop("float", "set-value", "1.0"),
+                ],
+                "both",
+            ),
             NewAction::VoiceInput => Self::build(
                 "voice-input",
                 vec![prop("string", "microphone", "")],
@@ -686,10 +728,11 @@ impl Profile {
         mode: &str,
         layer: &Layer,
     ) -> String {
+        // Hand-edited profiles may pad their values; the binding is still the same one.
         let found = self.inputs.iter().position(|b| {
-            b.device_id.eq_ignore_ascii_case(device_id)
-                && b.input_type == input_type
-                && b.input_id == input_id
+            b.device_id.trim().eq_ignore_ascii_case(device_id.trim())
+                && b.input_type.trim() == input_type.trim()
+                && b.input_id.trim() == input_id.trim()
                 && b.mode == mode
         });
         if let Some(cfg) =
@@ -702,7 +745,7 @@ impl Profile {
         self.library.push(root);
         let config = ActionConfig {
             root_action: id.clone(),
-            behavior: input_type.into(),
+            behavior: behavior_of(input_type).into(),
             virtual_button: None,
             layer: layer.clone(),
             additive: false,
@@ -746,7 +789,7 @@ impl Profile {
                     c.virtual_button = Some(vb.to_element());
                 }
                 None => {
-                    c.behavior = input_type.into();
+                    c.behavior = behavior_of(input_type).into();
                     c.virtual_button = None;
                 }
             }
@@ -968,7 +1011,7 @@ impl Profile {
         }
     }
 
-    /// `id` is `target` or contains it somewhere below.
+    /// `id` is `target` or uses it somewhere below (as a child or through a run-action step).
     pub fn reaches(&self, id: &str, target: &str) -> bool {
         let index = self.action_index();
         let mut seen: HashSet<&str> = HashSet::new();
@@ -980,10 +1023,31 @@ impl Profile {
             if seen.insert(cur)
                 && let Some(a) = index.get(cur)
             {
-                stack.extend(a.child_ids());
+                stack.extend(a.reference_ids());
             }
         }
         false
+    }
+
+    /// Every action that is `target` or uses it somewhere below (as a child or through a
+    /// run-action step): the ones a run-action step of `target` must not run.
+    pub fn reaching<'a>(&'a self, target: &'a str) -> HashSet<&'a str> {
+        let mut users: HashMap<&str, Vec<&str>> = HashMap::new();
+        for a in &self.library {
+            for r in a.reference_ids() {
+                users.entry(r).or_default().push(a.id.as_str());
+            }
+        }
+        let mut seen: HashSet<&str> = HashSet::new();
+        let mut stack = vec![target];
+        while let Some(cur) = stack.pop() {
+            if seen.insert(cur)
+                && let Some(u) = users.get(cur)
+            {
+                stack.extend(u.iter().copied());
+            }
+        }
+        seen
     }
 
     /// Deep copy of `id` and everything below it under new ids (Gremlin's "duplicate"
@@ -998,6 +1062,8 @@ impl Profile {
             }
             let a = index.get(cur.as_str())?;
             stack.extend(a.child_ids().into_iter().map(String::from));
+            // Run-action targets are not copied: the copy runs the same action unless the
+            // target is inside the copied part (remapped below).
             order.push(cur);
         }
         let ids: HashMap<String, String> =
@@ -1084,7 +1150,8 @@ impl Profile {
         self.collect_garbage();
     }
 
-    /// Drops library actions that no input reaches any more.
+    /// Drops library actions that no input reaches any more (run-action steps keep their
+    /// targets).
     pub fn collect_garbage(&mut self) {
         let index = self.action_index();
         let mut reachable: HashSet<String> = HashSet::new();
@@ -1097,7 +1164,7 @@ impl Profile {
             if reachable.insert(id.clone())
                 && let Some(a) = index.get(id.as_str())
             {
-                stack.extend(a.child_ids().into_iter().map(String::from));
+                stack.extend(a.reference_ids().into_iter().map(String::from));
             }
         }
         self.library.retain(|a| reachable.contains(&a.id));
@@ -1280,5 +1347,29 @@ mod tests {
         p.set_virtual_button(&root, "hat", Some(&vb));
         let b = &p.inputs[0];
         assert_eq!(b.configs[0].virtual_button(b.input_type()), Some(vb));
+    }
+
+    #[test]
+    fn keys_and_voice_commands_run_their_actions_as_buttons() {
+        let mut p = Profile::default();
+        let base = Layer::base();
+        for (device, input_type) in [
+            (crate::KEYBOARD_GUID, "key"),
+            (crate::VOICE_GUID, crate::VOICE_INPUT_TYPE),
+            ("{DEV}", "button"),
+        ] {
+            p.bind_layer(device, input_type, "1", "Default", &base);
+        }
+        p.bind_layer("{DEV}", "axis", "2", "Default", &base);
+        let behaviors: Vec<InputType> = p.inputs.iter().map(|b| b.configs[0].behavior()).collect();
+        assert_eq!(
+            behaviors,
+            [
+                InputType::Button,
+                InputType::Button,
+                InputType::Button,
+                InputType::Axis
+            ]
+        );
     }
 }

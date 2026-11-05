@@ -659,6 +659,9 @@ fn macro_steps_round_trip_and_keep_unknown_ones() {
             gamepad: 1,
             direction: Some(27000),
         },
+        MacroStep::RunAction {
+            action: root.clone(),
+        },
     ];
     for (i, s) in steps.iter().enumerate() {
         p.set_macro_step(&m, i, s);
@@ -915,4 +918,54 @@ fn needed_virtual_devices_follow_the_outputs() {
         ]
     );
     assert_eq!(merged.gamepads, [1, 3]);
+}
+
+/// A run-action step's target counts as used: removing it from its own input keeps it, loop
+/// checks see it, and copies follow a target copied with them.
+#[test]
+fn run_action_targets_are_references() {
+    use gob_core::{Action, MacroStep};
+    let button = || {
+        Action::new(&NewAction::MapToVjoy {
+            input_type: InputType::Button,
+            device: 1,
+            input_id: 1,
+        })
+    };
+    let mut p = sample();
+    let r1 = p.bind(DEV, "button", "21", "Default");
+    let x = p.add_child(&r1, "actions", button()).unwrap();
+    let r2 = p.bind(DEV, "button", "22", "Default");
+    let m = p
+        .add_child(&r2, "actions", Action::new(&NewAction::Macro))
+        .unwrap();
+    p.set_macro_step(&m, 0, &MacroStep::RunAction { action: x.clone() });
+    assert_eq!(p.action(&m).unwrap().run_targets(), [x.as_str()]);
+    assert!(p.reaches(&r2, &x));
+    let users = p.reaching(&x);
+    assert!(users.contains(m.as_str()) && users.contains(r2.as_str()));
+
+    p.remove_child(&r1, "actions", 0);
+    assert!(p.action(&x).is_some(), "the macro still runs it");
+
+    // A copy of the macro alone runs the same action; a copy of both runs the copied one.
+    let lone = p.duplicate(&m).unwrap();
+    assert_eq!(p.action(&lone).unwrap().run_targets(), [x.as_str()]);
+    let r3 = p.bind(DEV, "button", "23", "Default");
+    let y = p.add_child(&r3, "actions", button()).unwrap();
+    let m3 = p
+        .add_child(&r3, "actions", Action::new(&NewAction::Macro))
+        .unwrap();
+    p.set_macro_step(&m3, 0, &MacroStep::RunAction { action: y.clone() });
+    let copy = p.duplicate(&r3).unwrap();
+    let kids: Vec<String> = p
+        .action(&copy)
+        .unwrap()
+        .child_ids()
+        .into_iter()
+        .map(String::from)
+        .collect();
+    let (y2, m2) = (&kids[0], &kids[1]);
+    assert_ne!(*y2, y);
+    assert_eq!(p.action(m2).unwrap().run_targets(), [y2.as_str()]);
 }

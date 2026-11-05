@@ -1,6 +1,6 @@
 //! Devices page: live state of attached controllers merged with the profile's bindings.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use eframe::egui::{
     self, Align, Align2, Color32, FontId, Layout, Margin, Rect, RichText, Sense, Stroke, Vec2,
@@ -97,6 +97,8 @@ pub struct DevicesView {
     /// The system part is offered above (it reads every button too): no banner of our own, so
     /// the first start asks for the password once. Set by the app.
     pub system_part_offered: bool,
+    /// A message for the status bar. The app shows it.
+    pub status: Option<String>,
 }
 
 struct Tab<'a> {
@@ -107,6 +109,15 @@ struct Tab<'a> {
     alias: Option<&'a str>,
     /// The profile's logical device: inputs come from the profile and can be edited.
     logical: bool,
+}
+
+impl Tab<'_> {
+    /// The profile's bindings of `device` show on this tab: its GUID, or the profile device it
+    /// is linked to by name.
+    fn owns(&self, device: &str) -> bool {
+        device.eq_ignore_ascii_case(self.guid)
+            || self.alias.is_some_and(|a| device.eq_ignore_ascii_case(a))
+    }
 }
 
 impl DevicesView {
@@ -212,12 +223,17 @@ impl DevicesView {
                 log::info!(
                     "two-axis action {action}: the editor follows it to {device} axis {axis}"
                 );
-                self.selected = Some(device.clone());
-                self.user_selected = true;
-                self.selected_input.insert(device.clone(), key);
-                self.scroll_to = Some((device.clone(), key));
+                self.show_input(device, key);
             }
         }
+    }
+
+    /// Selects tab `guid` and its input `key`, and scrolls the list to it.
+    fn show_input(&mut self, guid: &str, key: Key) {
+        self.selected = Some(guid.to_string());
+        self.user_selected = true;
+        self.selected_input.insert(guid.to_string(), key);
+        self.scroll_to = Some((guid.to_string(), key));
     }
 
     /// Forget the selected mode, e.g. after loading another profile.
@@ -226,6 +242,34 @@ impl DevicesView {
     }
 
     pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        profile: Option<&LoadedProfile>,
+        devices: &[DeviceState],
+        ops: &mut Vec<Op>,
+        vjoy: &[gob_virtual::DeviceInfo],
+    ) {
+        self.show_page(ui, i18n, profile, devices, ops, vjoy);
+        // An action card made a voice command or asked for its own: open it on the Voice tab.
+        let mut open = None;
+        ops.retain(|op| match op {
+            Op::GoToVoice(id) => {
+                open = Some(*id);
+                false
+            }
+            Op::VoiceFromAction { id, .. } => {
+                open = Some(*id);
+                true
+            }
+            _ => true,
+        });
+        if let Some(id) = open {
+            self.show_input(gob_core::VOICE_GUID, (Kind::Voice, id));
+        }
+    }
+
+    fn show_page(
         &mut self,
         ui: &mut egui::Ui,
         i18n: &I18n,
@@ -513,27 +557,19 @@ impl DevicesView {
             rows.extend((1..=d.buttons.len() as u32).map(|b| ((Kind::Button, b), Bound::None)));
             rows.extend((1..=d.hats.len() as u32).map(|h| ((Kind::Hat, h), Bound::None)));
         }
-        if let (Some(p), Some(mode)) = (profile, &self.mode) {
-            // Walk from the current mode up through its parents; the nearest binding wins.
-            let mut chain = vec![mode.clone()];
-            while let Some(parent) = p
-                .profile
-                .modes
-                .iter()
-                .find(|m| Some(&m.name) == chain.last())
-                .and_then(|m| m.parent.clone())
-                .filter(|par| !chain.contains(par))
-            {
-                chain.push(parent);
-            }
+        // The current mode and its parents, nearest first: the nearest binding wins.
+        let chain = match (profile, &self.mode) {
+            (Some(p), Some(mode)) => mode_chain(&p.profile, mode),
+            _ => Vec::new(),
+        };
+        if let Some(p) = profile {
             for (depth, m) in chain.iter().enumerate() {
-                for b in p.profile.inputs.iter().filter(|b| {
-                    let own = b.device_id.eq_ignore_ascii_case(tab.guid)
-                        || tab
-                            .alias
-                            .is_some_and(|a| b.device_id.eq_ignore_ascii_case(a));
-                    own && &b.mode == m
-                }) {
+                for b in p
+                    .profile
+                    .inputs
+                    .iter()
+                    .filter(|b| tab.owns(&b.device_id) && &b.mode == m)
+                {
                     let key = (binding_kind(b), b.input_id.parse().unwrap_or(0));
                     let slot = rows.entry(key).or_insert(Bound::None);
                     if matches!(slot, Bound::None) {
@@ -551,11 +587,7 @@ impl DevicesView {
         let mut labels: HashMap<Key, String> = HashMap::new();
         if let (true, Some(p)) = (tab.logical, profile) {
             for i in p.profile.logical_inputs() {
-                let kind = match i.input_type {
-                    InputType::Axis => Kind::Axis,
-                    InputType::Hat => Kind::Hat,
-                    _ => Kind::Button,
-                };
+                let kind = logical_kind(i.input_type);
                 rows.entry((kind, i.id)).or_insert(Bound::None);
                 labels.insert((kind, i.id), i.label);
             }
@@ -572,6 +604,16 @@ impl DevicesView {
         let index = profile
             .map(|p| p.profile.action_index())
             .unwrap_or_default();
+        let downs = profile
+            .map(|p| down_owners(i18n, &p.profile, &chain, tab, &index))
+            .unwrap_or_default();
+        // A key that is only a down input has no binding of its own to list it. A connected
+        // device lists its real inputs only.
+        if tab.live.is_none() {
+            for &key in downs.keys() {
+                rows.entry(key).or_insert(Bound::None);
+            }
+        }
 
         // The selected input of this tab: kept per device, else the first row.
         let selected = self
@@ -582,6 +624,8 @@ impl DevicesView {
             .or_else(|| rows.keys().copied().find(|&k| debug_expanded(k)))
             .or_else(|| rows.keys().next().copied());
 
+        // An input to show instead: the owner of a down input (its card's chip or the editor).
+        let mut jump: Option<(String, Key)> = None;
         // Left: the inputs as cards. Right: the selected input's actions.
         egui::Panel::left(egui::Id::unique(("inputs", tab.guid)))
             .resizable(true)
@@ -597,8 +641,15 @@ impl DevicesView {
                             let is_sel = selected == Some(key);
                             let marker = profile
                                 .and_then(|p| card_marker(i18n, &p.profile, tab, key, bound));
-                            if self.card(ui, i18n, tab, key, bound, &index, label, is_sel, marker) {
-                                self.selected_input.insert(tab.guid.to_string(), key);
+                            let down = downs.get(&key).map_or(&[][..], Vec::as_slice);
+                            match self.card(
+                                ui, i18n, tab, key, bound, &index, label, is_sel, marker, down,
+                            ) {
+                                Some(CardClick::Select) => {
+                                    self.selected_input.insert(tab.guid.to_string(), key);
+                                }
+                                Some(CardClick::Owner(device, key)) => jump = Some((device, key)),
+                                None => {}
                             }
                         }
                     });
@@ -614,11 +665,25 @@ impl DevicesView {
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
                     .show(ui, |ui| {
+                        let down = downs.get(&key).map_or(&[][..], Vec::as_slice);
                         self.detail(
                             ui, i18n, profile, ops, vjoy, devices, tab, key, bound, &index, label,
+                            down, &mut jump,
                         );
                     });
             });
+        if let Some((device, input_type, id)) = crate::button_axis_editor::take_jump(ui.ctx()) {
+            jump = Some((device, (type_kind(&input_type), id)));
+        }
+        if let Some((device, key)) = jump {
+            match tabs.iter().find(|t| t.owns(&device)) {
+                Some(t) => self.show_input(t.guid, key),
+                None => {
+                    log::info!("input {device} {key:?} is on no tab of the Devices page");
+                    self.status = Some(i18n.tr("input-not-shown"));
+                }
+            }
+        }
     }
 
     /// Name, inputs, VID/PID, Windows joystick id and GUID of a device (copyable GUID).
@@ -838,7 +903,7 @@ impl DevicesView {
     }
 
     /// One input in the list: name, live state and description on the first line, the
-    /// actions on the second. Returns true when clicked.
+    /// actions on the second, then the Axis from buttons it moves down. Returns what was clicked.
     #[allow(clippy::too_many_arguments)]
     fn card(
         &mut self,
@@ -852,7 +917,8 @@ impl DevicesView {
         selected: bool,
         // Lock and name of a modifier or the layers icon, with its tooltip.
         marker: Option<Marker>,
-    ) -> bool {
+        downs: &[DownOwner],
+    ) -> Option<CardClick> {
         let visuals = ui.visuals();
         let fill = if selected {
             // A light accent tint: the live bar's track uses faint_bg_color and must show.
@@ -878,6 +944,8 @@ impl DevicesView {
             })
             .and_then(|c| index.get(c.root_action.as_str()).copied());
         let inherited = matches!(bound, Bound::Inherited(_));
+        // Where each down chip is: a click there shows the input the action belongs to.
+        let mut down_chips: Vec<(Rect, usize)> = Vec::new();
         let response = egui::Frame::new()
             .fill(fill)
             .stroke(stroke)
@@ -922,21 +990,41 @@ impl DevicesView {
                 if let Some(Marker::Modifier { name, tip }) = &marker {
                     name_chip(ui, name, false).on_hover_text(tip);
                 }
-                if let Some(root) = root {
-                    let children: Vec<&Action> = root
-                        .child_ids()
-                        .into_iter()
-                        .filter_map(|id| index.get(id).copied())
-                        .collect();
-                    if !children.is_empty() {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
-                            for a in children {
-                                let glyph = crate::action_editor::kind_icon(&a.kind);
-                                chip(ui, glyph, &chip_text(i18n, a, &self.vjoy_names), inherited);
+                let children: Vec<&Action> = root
+                    .map(|root| {
+                        root.child_ids()
+                            .into_iter()
+                            .filter_map(|id| index.get(id).copied())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !children.is_empty() || !downs.is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
+                        for a in children {
+                            let glyph = crate::action_editor::kind_icon(&a.kind);
+                            chip(ui, glyph, &chip_text(i18n, a, &self.vjoy_names), inherited);
+                        }
+                        let glyph = format!(
+                            "{} {}",
+                            crate::action_editor::kind_icon(gob_core::BUTTON_AXIS),
+                            icon::ARROW_FAT_DOWN
+                        );
+                        for (i, d) in downs.iter().enumerate() {
+                            let tip = format!(
+                                "{}
+{}",
+                                i18n.trf("down-for", &[("input", d.name.clone().into())]),
+                                i18n.tr("bax-decrease-show")
+                            );
+                            let r = chip(ui, &glyph, &tip, true);
+                            if r.response.hovered() || r.inner.hovered() {
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                             }
-                        });
-                    }
+                            // The whole chip, border and padding too.
+                            down_chips.push((r.response.rect, i));
+                        }
+                    });
                 }
             })
             .response;
@@ -954,7 +1042,18 @@ impl DevicesView {
             self.scroll_to = None;
         }
         ui.add_space(2.0);
-        response.clicked()
+        if !response.clicked() {
+            return None;
+        }
+        let at = ui.ctx().input(|i| i.pointer.interact_pos());
+        let owner = down_chips
+            .iter()
+            .find(|(rect, _)| at.is_some_and(|p| rect.contains(p)))
+            .map(|&(_, i)| &downs[i]);
+        Some(match owner {
+            Some(d) => CardClick::Owner(d.device.clone(), d.key),
+            None => CardClick::Select,
+        })
     }
 
     /// The selected input's editor (what used to open under its row).
@@ -973,6 +1072,9 @@ impl DevicesView {
         index: &HashMap<&str, &Action>,
         // Logical device input label: editable, with a delete button.
         label: Option<&str>,
+        // Axis from buttons actions this input moves down; a click on one sets `jump`.
+        downs: &[DownOwner],
+        jump: &mut Option<(String, Key)>,
     ) {
         // Bindings are written for the profile's device id (the alias when linked by name).
         let device = tab.alias.unwrap_or(tab.guid).to_string();
@@ -1055,6 +1157,18 @@ impl DevicesView {
             });
         }
         ui.add_space(4.0);
+        // Links to the inputs whose Axis from buttons this one moves down.
+        for d in downs {
+            let text = i18n.trf("down-for", &[("input", d.name.clone().into())]);
+            let text = RichText::new(format!("{}  {text}", icon::ARROW_FAT_DOWN)).underline();
+            let r = ui
+                .add(egui::Label::new(text).sense(Sense::click()))
+                .on_hover_text(i18n.tr("bax-decrease-show"))
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            if r.clicked() {
+                *jump = Some((d.device.clone(), d.key));
+            }
+        }
 
         let Some(p) = profile else { return };
         // A modifier only switches layers: nothing to bind.
@@ -1166,6 +1280,7 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
+                    voice_links: Default::default(),
                 };
                 let first_op = editor.ops.len();
                 for (n, cfg) in configs.iter().enumerate() {
@@ -1175,7 +1290,12 @@ impl DevicesView {
                     if as_button {
                         editor.sequence_header(ui, cfg, &b.input_type, configs.len() > 1);
                     }
-                    editor.behavior = cfg.behavior();
+                    // Keys and voice commands act like buttons, also in profiles that stored
+                    // their own input type as the behavior.
+                    editor.behavior = match key.0 {
+                        Kind::Key | Kind::Voice => InputType::Button,
+                        _ => cfg.behavior(),
+                    };
                     editor.container(ui, &cfg.root_action, "actions", 0);
                 }
                 if as_button {
@@ -1222,6 +1342,7 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
+                    voice_links: Default::default(),
                 };
                 ui.horizontal(|ui| {
                     editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));
@@ -1409,7 +1530,7 @@ fn input_name(i18n: &I18n, (kind, id): Key, label: Option<&str>) -> String {
         Kind::Axis => axis_name(i18n, id),
         Kind::Button => i18n.trf("vjoy-button-n", &[("n", id.into())]),
         Kind::Hat => i18n.trf("vjoy-hat-n", &[("n", id.into())]),
-        Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id)),
+        Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id), i18n),
         Kind::Voice => i18n.trf("voice-command-n", &[("n", id.into())]),
         Kind::Other => id.to_string(),
     }
@@ -1472,8 +1593,20 @@ fn chip_text(i18n: &I18n, a: &Action, vjoy_names: &HashMap<u32, String>) -> Stri
     name
 }
 
+/// What a click on an input's card asks for.
+enum CardClick {
+    Select,
+    /// Show this input (profile device id): the one a down chip's action belongs to.
+    Owner(String, Key),
+}
+
 /// An action of a binding: its icon in a small frame, the name as tooltip.
-fn chip(ui: &mut egui::Ui, glyph: &str, tooltip: &str, weak: bool) {
+fn chip(
+    ui: &mut egui::Ui,
+    glyph: &str,
+    tooltip: &str,
+    weak: bool,
+) -> egui::InnerResponse<egui::Response> {
     let visuals = ui.visuals();
     let text = RichText::new(glyph).size(style::ICON_SIZE - 2.0);
     let text = if weak { text.weak() } else { text };
@@ -1482,7 +1615,7 @@ fn chip(ui: &mut egui::Ui, glyph: &str, tooltip: &str, weak: bool) {
         .corner_radius(3)
         .inner_margin(Margin::symmetric(4, 1))
         // The label takes the hover, so the tooltip goes on it.
-        .show(ui, |ui| ui.label(text).on_hover_text(tooltip));
+        .show(ui, |ui| ui.label(text).on_hover_text(tooltip))
 }
 
 #[derive(Clone, Copy)]
@@ -1605,14 +1738,149 @@ fn is_voice(tab: &Tab) -> bool {
 
 /// The kind of input a binding is for.
 fn binding_kind(b: &InputBinding) -> Kind {
-    match b.input_type() {
+    type_kind(&b.input_type)
+}
+
+/// A logical input's kind: an axis, a hat, else a button.
+fn logical_kind(input_type: InputType) -> Kind {
+    match input_type {
+        InputType::Axis => Kind::Axis,
+        InputType::Hat => Kind::Hat,
+        _ => Kind::Button,
+    }
+}
+
+fn type_kind(input_type: &str) -> Kind {
+    match InputType::parse(input_type) {
         InputType::Axis => Kind::Axis,
         InputType::Button => Kind::Button,
         InputType::Hat => Kind::Hat,
-        InputType::Other if b.input_type.trim() == "key" => Kind::Key,
-        InputType::Other if b.input_type.trim() == gob_core::VOICE_INPUT_TYPE => Kind::Voice,
+        InputType::Other if input_type.trim() == "key" => Kind::Key,
+        InputType::Other if input_type.trim() == gob_core::VOICE_INPUT_TYPE => Kind::Voice,
         InputType::Other => Kind::Other,
     }
+}
+
+/// `mode`, then its parent, the parent's parent ...: where the bindings of `mode` come from,
+/// nearest first.
+fn mode_chain(profile: &Profile, mode: &str) -> Vec<String> {
+    let mut chain = vec![mode.to_string()];
+    while let Some(parent) = profile
+        .modes
+        .iter()
+        .find(|m| Some(&m.name) == chain.last())
+        .and_then(|m| m.parent.clone())
+        .filter(|par| !chain.contains(par))
+    {
+        chain.push(parent);
+    }
+    chain
+}
+
+/// An Axis from buttons whose down input is on the shown device.
+struct DownOwner {
+    /// Profile device id and input of the binding the action belongs to.
+    device: String,
+    key: Key,
+    /// "Button 3 (Throttle)", with the device and the layer when they are not this card's.
+    name: String,
+}
+
+/// The label a card shows instead of the input's name: a logical input's, a voice command's
+/// first phrase.
+fn input_label(profile: &Profile, device: &str, (kind, id): Key) -> Option<String> {
+    if device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID) {
+        return profile
+            .logical_inputs()
+            .into_iter()
+            .find(|i| logical_kind(i.input_type) == kind && i.id == id)
+            .map(|i| i.label);
+    }
+    if kind == Kind::Voice {
+        return profile
+            .voice_commands
+            .iter()
+            .find(|c| c.id == id)
+            .and_then(|c| c.phrases.first().cloned());
+    }
+    None
+}
+
+/// The down inputs of Axis from buttons actions that are on `tab`, each with the inputs whose
+/// action it is: the bindings that apply in the modes of `chain` (nearest first), every layer.
+fn down_owners(
+    i18n: &I18n,
+    profile: &Profile,
+    chain: &[String],
+    tab: &Tab,
+    index: &HashMap<&str, &Action>,
+) -> HashMap<Key, Vec<DownOwner>> {
+    let mut owners: HashMap<Key, Vec<DownOwner>> = HashMap::new();
+    // Most profiles have none: no need to walk the bindings then.
+    let any = profile.library.iter().any(|a| {
+        gob_core::ButtonAxis::of(a)
+            .and_then(|a| a.decrease)
+            .is_some_and(|d| tab.owns(&d.device))
+    });
+    if !any {
+        return owners;
+    }
+    let mut seen: HashSet<(String, Key)> = HashSet::new();
+    for mode in chain {
+        for b in profile.inputs.iter().filter(|b| &b.mode == mode) {
+            let key = (binding_kind(b), b.input_id.parse().unwrap_or(0));
+            // A nearer mode's binding of the same input hides this one; this tab's GUID and
+            // its linked profile device count as one device, as for the cards.
+            let device = if tab.owns(&b.device_id) {
+                String::new()
+            } else {
+                b.device_id.to_ascii_lowercase()
+            };
+            if !seen.insert((device, key)) {
+                continue;
+            }
+            for cfg in &b.configs {
+                let mut stack = vec![cfg.root_action.as_str()];
+                let mut visited = HashSet::new();
+                while let Some(id) = stack.pop() {
+                    let Some(action) = index.get(id).filter(|_| visited.insert(id)) else {
+                        continue;
+                    };
+                    stack.extend(action.child_ids());
+                    let Some(down) = gob_core::ButtonAxis::of(action).and_then(|a| a.decrease)
+                    else {
+                        continue;
+                    };
+                    if !tab.owns(&down.device) {
+                        continue;
+                    }
+                    let label = input_label(profile, &b.device_id, key);
+                    let mut name = input_name(i18n, key, label.as_deref());
+                    if !tab.owns(&b.device_id) {
+                        name = format!("{}: {name}", device_name(i18n, profile, &b.device_id));
+                    }
+                    let label = index
+                        .get(cfg.root_action.as_str())
+                        .and_then(|r| description(r));
+                    if let Some(label) = label {
+                        name = format!("{name} ({label})");
+                    }
+                    if !cfg.layer.is_base() {
+                        name = format!("{name}, {}", cfg.layer);
+                    }
+                    owners
+                        .entry((type_kind(&down.input_type), down.id))
+                        .or_default()
+                        .push(DownOwner {
+                            device: b.device_id.clone(),
+                            key,
+                            name,
+                        });
+                }
+            }
+        }
+    }
+    owners
 }
 
 /// A profile device's name as the tabs show it.
@@ -1628,4 +1896,131 @@ fn device_name(i18n: &I18n, profile: &Profile, guid: &str) -> String {
         .iter()
         .find(|d| d.id.eq_ignore_ascii_case(guid))
         .map_or_else(|| guid.to_string(), |d| d.name.trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const STICK: &str = "11111111-0000-0000-0000-000000000001";
+    const LINKED: &str = "11111111-0000-0000-0000-0000000000aa";
+    const OTHER: &str = "22222222-0000-0000-0000-000000000002";
+
+    fn prop(name: &str, value: &str) -> String {
+        format!(r#"<property type="string"><name>{name}</name><value>{value}</value></property>"#)
+    }
+
+    fn binding(device: &str, id: u32, mode: &str, root: &str, layer: &str) -> String {
+        format!(
+            r#"<input><device-id>{device}</device-id><input-type>button</input-type><mode>{mode}</mode><input-id>{id}</input-id><action-configuration layer="{layer}"><root-action>{root}</root-action><behavior>button</behavior></action-configuration></input>"#
+        )
+    }
+
+    /// An Axis from buttons moved down by `device` button `id`, under a root labeled `label`.
+    fn axis_down(root: &str, label: &str, device: &str, id: u32) -> String {
+        let down = prop("decrease-device-id", device)
+            + &prop("decrease-input-type", "button")
+            + &prop("decrease-input-id", &id.to_string());
+        format!(
+            r#"<action id="{root}" type="root">{}<actions><action-id>{root}-in</action-id></actions></action>
+            <action id="{root}-in" type="root"><actions><action-id>{root}-ax</action-id></actions></action>
+            <action id="{root}-ax" type="button-axis">{down}</action>"#,
+            prop("action-label", label)
+        )
+    }
+
+    fn profile() -> Profile {
+        let inputs = [
+            // Default: stick button 3 (through a nested root), moved down by stick button 4.
+            binding(STICK, 3, "Default", "a", ""),
+            // Child: stick button 3 does something else, so its axis is not there.
+            binding(STICK, 3, "Child", "plain", ""),
+            // Another stick's button 1 in layer M1, moved down by stick button 5.
+            binding(OTHER, 1, "Default", "b", "M1"),
+            // A labeled logical input, moved down by stick button 6.
+            binding(gob_core::LOGICAL_DEVICE_GUID, 2, "Default", "c", ""),
+        ]
+        .concat();
+        let library = [
+            axis_down("a", "Throttle", STICK, 4),
+            axis_down("b", "", STICK, 5),
+            axis_down("c", "", STICK, 6),
+            r#"<action id="plain" type="root"><actions/></action>"#.into(),
+        ]
+        .concat();
+        let xml = format!(
+            r#"<profile app="Gobloon" version="1"><devices><device><device-id>{STICK}</device-id><device-name>Stick</device-name></device><device><device-id>{OTHER}</device-id><device-name>Other</device-name></device></devices>
+            <inputs>{inputs}</inputs><settings/><library>{library}</library>
+            <logical-device><input><input-type>button</input-type><input-id>2</input-id><label>Flaps up</label></input></logical-device>
+            <modes><mode>Default</mode><mode parent="Default">Child</mode></modes></profile>"#
+        );
+        gob_gremlin::from_str(&xml).expect("profile")
+    }
+
+    fn tab(guid: &str) -> Tab<'_> {
+        Tab {
+            guid,
+            name: "Stick",
+            live: None,
+            alias: None,
+            logical: false,
+        }
+    }
+
+    fn owners(p: &Profile, tab: &Tab, mode: &str) -> Vec<(u32, String, String)> {
+        let i18n = I18n::new(crate::LANGUAGES, None);
+        let index = p.action_index();
+        let mut found: Vec<(u32, String, String)> =
+            down_owners(&i18n, p, &mode_chain(p, mode), tab, &index)
+                .into_iter()
+                .flat_map(|((_, id), v)| v.into_iter().map(move |o| (id, o.device, o.name)))
+                .collect();
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn a_mode_chain_runs_from_the_mode_to_its_parents() {
+        let p = profile();
+        assert_eq!(mode_chain(&p, "Child"), ["Child", "Default"]);
+        assert_eq!(mode_chain(&p, "Default"), ["Default"]);
+    }
+
+    #[test]
+    fn down_inputs_name_the_input_their_action_belongs_to() {
+        let p = profile();
+        let found = owners(&p, &tab(STICK), "Default");
+        assert_eq!(
+            found,
+            [
+                (4, STICK.to_string(), "Button 3 (Throttle)".to_string()),
+                (5, OTHER.to_string(), "Other: Button 1, M1".to_string()),
+                (
+                    6,
+                    gob_core::LOGICAL_DEVICE_GUID.to_string(),
+                    "Logical device: Flaps up".to_string()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_nearer_mode_hides_the_parents_owner() {
+        let p = profile();
+        let found = owners(&p, &tab(STICK), "Child");
+        assert!(found.iter().all(|(id, ..)| *id != 4), "{found:?}");
+        assert_eq!(found.len(), 2, "the other owners are inherited: {found:?}");
+    }
+
+    #[test]
+    fn a_linked_tab_counts_its_profile_device_as_its_own() {
+        let p = profile();
+        let mut linked = tab(LINKED);
+        linked.alias = Some(STICK);
+        // The binding is under the profile device id: the same device as the tab.
+        let found = owners(&p, &linked, "Default");
+        assert_eq!(found[0].2, "Button 3 (Throttle)");
+        // Down inputs of another device are not on this tab.
+        assert!(owners(&p, &tab(OTHER), "Default").is_empty());
+    }
 }

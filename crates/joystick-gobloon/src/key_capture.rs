@@ -11,9 +11,82 @@ use gob_i18n::I18n;
 
 use crate::style::{self, icon};
 
-/// A key's name in the current keyboard layout, e.g. "Right Ctrl".
-pub fn name(key: gob_core::Key) -> String {
-    crate::platform::key_name(key)
+/// A key's name in the current keyboard layout, e.g. "Right Ctrl"; F13-F24 and media keys
+/// by their own names (layouts often have none for them).
+pub fn name(key: gob_core::Key, i18n: &I18n) -> String {
+    if let Some(n) = FUNCTION_KEYS.iter().position(|&k| k == key) {
+        return format!("F{}", n + 13);
+    }
+    match MEDIA_KEYS.iter().find(|(k, _)| *k == key) {
+        Some((_, name)) => i18n.tr(name),
+        None => crate::platform::key_name(key),
+    }
+}
+
+const fn key(scan_code: u16, extended: bool) -> Key {
+    Key {
+        scan_code,
+        extended,
+    }
+}
+
+/// F13 to F24 (set 1 scan codes): many games take them, few keyboards have them.
+const FUNCTION_KEYS: [Key; 12] = [
+    key(0x64, false),
+    key(0x65, false),
+    key(0x66, false),
+    key(0x67, false),
+    key(0x68, false),
+    key(0x69, false),
+    key(0x6a, false),
+    key(0x6b, false),
+    key(0x6c, false),
+    key(0x6d, false),
+    key(0x6e, false),
+    key(0x76, false),
+];
+
+/// Media keys (E0 scan codes) with the i18n key of their name.
+const MEDIA_KEYS: [(Key, &str); 7] = [
+    (key(0x22, true), "key-play-pause"),
+    (key(0x24, true), "key-media-stop"),
+    (key(0x10, true), "key-previous-track"),
+    (key(0x19, true), "key-next-track"),
+    (key(0x20, true), "key-mute"),
+    (key(0x2e, true), "key-volume-down"),
+    (key(0x30, true), "key-volume-up"),
+];
+
+/// "Other keys": a list of the keys above; the picked one is added to `keys`.
+fn other_keys(ui: &mut egui::Ui, keys: &[Key], i18n: &I18n) -> Option<Vec<Key>> {
+    let mut picked = None;
+    let menu = ui.menu_button(
+        RichText::new(icon::DOTS_THREE).size(style::ICON_SIZE),
+        |ui| {
+            ui.set_min_width(160.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.set_max_width(220.0);
+                for (n, k) in FUNCTION_KEYS.into_iter().enumerate() {
+                    if ui.button(format!("F{}", n + 13)).clicked() {
+                        picked = Some(k);
+                    }
+                }
+            });
+            ui.separator();
+            for (k, name) in MEDIA_KEYS {
+                if ui.button(i18n.tr(name)).clicked() {
+                    picked = Some(k);
+                }
+            }
+        },
+    );
+    menu.response.on_hover_text(i18n.tr("keys-other"));
+    let k = picked?;
+    let mut keys = keys.to_vec();
+    if !keys.contains(&k) {
+        keys.push(k);
+    }
+    Some(keys)
 }
 
 /// Recording in progress: keys in the order they went down.
@@ -171,6 +244,26 @@ fn window_keys(ui: &egui::Ui, rec: &mut Recording) -> Vec<Key> {
     })
 }
 
+/// A key that is down now and not one of `ignore`: from the system where it tells the held
+/// keys, else from this frame's key events (a key held before makes none).
+pub(crate) fn key_down(ui: &egui::Ui, ignore: &[Key]) -> Option<Key> {
+    if let Some(held) = crate::platform::held_keys() {
+        return held.into_iter().find(|k| !ignore.contains(k));
+    }
+    ui.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::Key {
+                key,
+                physical_key,
+                pressed: true,
+                repeat: false,
+                ..
+            } => scan_code(physical_key.unwrap_or(*key)),
+            _ => None,
+        })
+    })
+}
+
 /// Keys as text chips plus a record button. Recording collects every key pressed until
 /// all are released again; the result replaces the keys. Returns the new keys once.
 pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) -> Option<Vec<Key>> {
@@ -195,7 +288,7 @@ pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) ->
                 .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
                 .corner_radius(4)
                 .inner_margin(egui::Margin::symmetric(6, 2));
-            chip.show(ui, |ui| ui.label(name(*k)));
+            chip.show(ui, |ui| ui.label(name(*k, i18n)));
         }
         match recording {
             None => {
@@ -207,6 +300,15 @@ pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) ->
                         }
                     });
                     ui.data_mut(|d| d.insert_temp(id, Recording::default()));
+                }
+                if let Some(keys) = other_keys(ui, keys, i18n) {
+                    result = Some(keys);
+                }
+                if !keys.is_empty()
+                    && style::icon_button(ui, true, icon::BACKSPACE, &i18n.tr("keys-clear"))
+                        .clicked()
+                {
+                    result = Some(Vec::new());
                 }
             }
             Some(mut rec) => {

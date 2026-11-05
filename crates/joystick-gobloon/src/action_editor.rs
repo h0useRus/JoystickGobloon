@@ -219,6 +219,17 @@ pub enum Op {
         id: u32,
     },
     AddVoiceCommand,
+    /// Makes a voice command saying `phrase` run `action` itself in `mode` and `layer` (the
+    /// card's); `id` is the command it goes to, which the page then opens.
+    VoiceFromAction {
+        action: String,
+        phrase: String,
+        mode: String,
+        layer: Layer,
+        id: u32,
+    },
+    /// Not an edit: the page opens voice command `id`.
+    GoToVoice(u32),
     RemoveVoiceCommand(u32),
     SetVoicePhrases {
         id: u32,
@@ -252,6 +263,14 @@ pub enum Op {
         device: String,
         led: crate::leds::LedValue,
     },
+    /// button-axis: the input that moves the axis down, `None` to remove it.
+    SetDecrease {
+        action: String,
+        /// (device GUID, device name for the profile's device list, input type, id).
+        input: Option<(String, String, String, u32)>,
+    },
+    /// button-axis: write a logical axis (the first one, a new one when there is none).
+    ButtonAxisLogical(String),
     /// hat-buttons: 4 or 8 directions.
     HatButtonCount {
         action: String,
@@ -383,6 +402,41 @@ pub fn apply(p: &mut Profile, op: Op) {
             }
         }
         Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
+        Op::SetDecrease { action, input } => {
+            if let Some((device, name, ..)) = &input {
+                list_device(p, device, name.clone());
+            }
+            if let Some(a) = p.action_mut(&action) {
+                match input {
+                    Some((device, _, input_type, id)) => {
+                        a.set("decrease-device-id", "uuid", device);
+                        a.set("decrease-input-type", "string", input_type);
+                        a.set("decrease-input-id", "int", id.to_string());
+                    }
+                    None => {
+                        for name in [
+                            "decrease-device-id",
+                            "decrease-input-type",
+                            "decrease-input-id",
+                        ] {
+                            a.unset(name);
+                        }
+                    }
+                }
+            }
+        }
+        Op::ButtonAxisLogical(action) => {
+            let first = p
+                .logical_inputs()
+                .into_iter()
+                .find(|i| i.input_type == InputType::Axis)
+                .map(|i| i.id);
+            let id = first.unwrap_or_else(|| p.add_logical_input(InputType::Axis));
+            if let Some(a) = p.action_mut(&action) {
+                a.set("output-type", "string", "logical");
+                a.set("logical-id", "int", id.to_string());
+            }
+        }
         Op::SetKeys { action, keys } => p.set_keys(&action, &keys),
         Op::AddChainStep(action) => p.add_chain_step(&action),
         Op::AddLogicalInput(input_type) => {
@@ -399,6 +453,15 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::AddVoiceCommand => {
             p.add_voice_command();
         }
+        Op::VoiceFromAction {
+            action,
+            phrase,
+            mode,
+            layer,
+            ..
+        } => {
+            p.add_voice_command_for(&action, &phrase, &mode, &layer);
+        }
         Op::RemoveVoiceCommand(id) => p.remove_voice_command(id),
         Op::SetVoicePhrases { id, phrases } => {
             p.set_voice_phrases(id, &phrases);
@@ -414,8 +477,11 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::RemoveMacroStep { action, index } => p.remove_macro_step(&action, index),
         Op::SwapMacroSteps { action, index } => p.swap_macro_steps(&action, index),
         Op::RemoveChainStep { action, index } => p.remove_chain_step(&action, index),
-        // Handled by the app before edits are applied.
-        Op::PreviewSound { .. } | Op::PreviewSpeech(_) | Op::PreviewLight { .. } => {}
+        // Handled by the app (previews) or the page (going to a command) before edits are applied.
+        Op::PreviewSound { .. }
+        | Op::PreviewSpeech(_)
+        | Op::PreviewLight { .. }
+        | Op::GoToVoice(_) => {}
         Op::SetCondition {
             action,
             index,
@@ -493,7 +559,7 @@ pub fn py_float(v: f32) -> String {
 use gob_core::TWO_AXIS_KINDS;
 
 /// The action kind's name for the user ("Map to virtual stick"), else its id in the profile.
-fn kind_name(i18n: &I18n, kind: &str) -> String {
+pub(crate) fn kind_name(i18n: &I18n, kind: &str) -> String {
     let key = format!("kind-{kind}");
     let name = i18n.tr(&key);
     if name == key { kind.to_string() } else { name }
@@ -539,6 +605,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "light-led" => icon::LIGHTBULB,
         "map-to-gamepad" => icon::GAME_CONTROLLER,
         "voice-input" => icon::MICROPHONE,
+        gob_core::BUTTON_AXIS => icon::SLIDERS_HORIZONTAL,
         _ => icon::PUZZLE_PIECE,
     }
 }
@@ -557,9 +624,9 @@ const HAT_DIRECTIONS: [(Option<u16>, &str); 9] = [
 ];
 
 /// Temp memory key of the vJoy device picked last, the default for new map-to-vjoy actions.
-const LAST_VJOY_DEVICE: &str = "vjoy-last-device";
+pub(crate) const LAST_VJOY_DEVICE: &str = "vjoy-last-device";
 /// Temp memory key of the gamepad picked last, the default for new map-to-gamepad actions.
-const LAST_GAMEPAD: &str = "gamepad-last";
+pub(crate) const LAST_GAMEPAD: &str = "gamepad-last";
 
 /// One output button of a quickmap popup.
 struct Cell {
@@ -656,6 +723,12 @@ fn addable(
             icon::KEYBOARD,
             "kind-map-to-keyboard",
             NewAction::MapToKeyboard,
+        ));
+        // The axis is filled in by the add menu.
+        list.push((
+            icon::SLIDERS_HORIZONTAL,
+            "kind-button-axis",
+            NewAction::ButtonAxis { device: 1, axis: 1 },
         ));
     }
     list.push((
@@ -757,9 +830,87 @@ pub struct Editor<'a> {
     pub monotonic_curves: bool,
     /// A right click on empty space of the curve chart inverts the curve.
     pub curve_right_click_invert: bool,
+    /// Actions voice commands run, with the command (built once per frame, when a card needs it).
+    pub voice_links: std::cell::OnceCell<std::collections::HashMap<String, u32>>,
+}
+
+/// Whether one spoken press makes sense for the action, so its card offers a voice command:
+/// buttons, keys, macros and the like; not axes, short / long press, conditions or toggles.
+fn speakable(action: &Action) -> bool {
+    match action.kind() {
+        ActionKind::MapToVjoy { input_type, .. } => input_type == InputType::Button,
+        ActionKind::MapToGamepad { control, .. } => gob_virtual::GamepadControl::parse(control)
+            .is_some_and(|c| c.kind() == gob_virtual::ControlKind::Button),
+        ActionKind::MapToMouse(m) => matches!(m, MouseAction::Button(_)),
+        // A temporary mode lasts only as long as the command's short press.
+        ActionKind::ChangeMode { change_type, .. } => change_type != "Temporary",
+        _ => matches!(
+            action.kind.as_str(),
+            "map-to-keyboard"
+                | "macro"
+                | "chain"
+                | "run-command"
+                | "play-sound"
+                | "text-to-speech"
+                | "load-profile"
+                | "pause-resume"
+        ),
+    }
 }
 
 impl Editor<'_> {
+    /// An action card's voice command button: opens the command that runs the action, or makes
+    /// one saying the card's name (none without a name). Not on a voice command's own actions.
+    fn voice_button(&mut self, ui: &mut egui::Ui, action: &Action) {
+        let Some((mode, layer)) = self.place else {
+            return;
+        };
+        let voice = self
+            .input
+            .is_some_and(|(d, _)| d.eq_ignore_ascii_case(gob_core::VOICE_GUID));
+        if voice || !speakable(action) {
+            return;
+        }
+        // A link, not a recording: the microphone carries an arrow (go to its command) or a
+        // plus (make one).
+        let links = self.voice_links.get_or_init(|| self.profile.voice_links());
+        if let Some(&id) = links.get(&action.id) {
+            let tip = self.i18n.tr("voice-from-action-go");
+            if style::icon_badge_button(ui, true, icon::MICROPHONE, icon::ARROW_UP_RIGHT, &tip)
+                .clicked()
+            {
+                self.ops.push(Op::GoToVoice(id));
+            }
+            return;
+        }
+        let name = action
+            .label()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && *l != "None");
+        // The command it goes to; a phrase another command already says with other actions
+        // would make one word run both, so the card needs another name first.
+        let target = name.map(|n| (n, self.profile.voice_command_for_phrase(n)));
+        let tip = match &target {
+            None => self.i18n.tr("voice-from-action-name-first"),
+            Some((_, Ok(_))) => self.i18n.tr("voice-from-action"),
+            Some((n, Err(_))) => self.i18n.trf(
+                "voice-from-action-taken",
+                &[("phrase", n.to_string().into())],
+            ),
+        };
+        let enabled = matches!(target, Some((_, Ok(_))));
+        let button = style::icon_badge_button(ui, enabled, icon::MICROPHONE, icon::PLUS, &tip);
+        if let (true, Some((name, Ok(id)))) = (button.clicked(), target) {
+            self.ops.push(Op::VoiceFromAction {
+                action: action.id.clone(),
+                phrase: name.to_string(),
+                mode: mode.to_string(),
+                layer: layer.clone(),
+                id,
+            });
+        }
+    }
+
     /// "Add action" menu button; `make` turns the chosen template into an op. `parent`
     /// is the action the list belongs to (`None` for a new binding), to avoid loops.
     pub fn add_menu(
@@ -801,6 +952,9 @@ impl Editor<'_> {
                         } = &mut kind
                         {
                             (*gamepad, *control) = self.gamepad_output_for_new(ui.ctx());
+                        }
+                        if let NewAction::ButtonAxis { device, axis } = &mut kind {
+                            (*device, *axis) = self.vjoy_axis_for_new(ui.ctx());
                         }
                         if let NewAction::MapToLogicalDevice { input_type, id } = &mut kind {
                             *id = self.logical_input_for_new(*input_type);
@@ -998,6 +1152,7 @@ impl Editor<'_> {
                             to: index - 1,
                         });
                     }
+                    self.voice_button(ui, action);
                     let mut label = action
                         .label()
                         .filter(|l| *l != "None")
@@ -1423,13 +1578,18 @@ impl Editor<'_> {
                             keys,
                         });
                     }
-                    ui.horizontal(|ui| self.activation(ui, action));
+                    ui.horizontal_wrapped(|ui| {
+                        self.activation(ui, action);
+                        ui.separator();
+                        self.send_mode(ui, action);
+                    });
                 }
                 ActionKind::Macro { steps, repeat, .. } => {
                     self.macro_editor(ui, action, &steps, repeat);
                     ui.horizontal(|ui| self.activation(ui, action));
                 }
                 ActionKind::VoiceInput { microphone } => self.voice_input(ui, action, microphone),
+                ActionKind::ButtonAxis(axis) => self.button_axis(ui, action, &axis),
                 ActionKind::Other => {
                     ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
                 }
@@ -1460,6 +1620,104 @@ impl Editor<'_> {
         }
     }
 
+    /// "How to send" of a button output: the send mode and the times it uses.
+    fn send_mode(&mut self, ui: &mut egui::Ui, action: &Action) {
+        use gob_core::{ButtonSend, SendMode};
+        let i18n = self.i18n;
+        let id = action.id.clone();
+        let send = action.button_send();
+        let tip = i18n.tr("send-mode-tip");
+        let name = |m: SendMode| i18n.tr(&format!("send-{}", m.name()));
+        let mut picked = None;
+        // The icon wraps together with its list: a new row when both do not fit.
+        let spacing = ui.spacing();
+        let width = style::ICON_SIZE + spacing.combo_width + 3.0 * spacing.item_spacing.x;
+        if ui.available_size_before_wrap().x < width {
+            ui.end_row();
+        }
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::PAPER_PLANE_TILT).size(style::ICON_SIZE))
+                .on_hover_text(&tip);
+            egui::ComboBox::from_id_salt(("send-mode", &id))
+                .selected_text(name(send.mode))
+                .show_ui(ui, |ui| {
+                    for m in SendMode::ALL {
+                        let item = ui
+                            .selectable_label(m == send.mode, name(m))
+                            .on_hover_text(i18n.tr(&format!("send-{}-tip", m.name())));
+                        if item.clicked() {
+                            picked = Some(m);
+                        }
+                    }
+                })
+                .response
+                .on_hover_text(&tip);
+        });
+        match picked.filter(|&m| m != send.mode) {
+            // Hold is the plain action, as Gremlin knows it.
+            Some(SendMode::Hold) => {
+                for name in [
+                    "send-mode",
+                    "send-pulse-ms",
+                    "send-delay-ms",
+                    "send-period-ms",
+                ] {
+                    self.ops.push(Op::Unset {
+                        action: id.clone(),
+                        name: name.into(),
+                    });
+                }
+            }
+            Some(m) => {
+                self.set(&id, "send-mode", "string", m.name());
+                // Inverted means "down while the input is up", which only Hold has; its switch
+                // hides in the other modes, so it must not stay set unseen.
+                let inverted = match action.kind.as_str() {
+                    "map-to-vjoy" => Some("button-inverted"),
+                    "map-to-gamepad" => Some("inverted"),
+                    _ => None,
+                };
+                if let Some(name) = inverted.filter(|&n| action.str(n).is_some()) {
+                    self.ops.push(Op::Unset {
+                        action: id.clone(),
+                        name: name.into(),
+                    });
+                }
+            }
+            None => {}
+        }
+        let times: &[(&str, u32)] = match send.mode {
+            SendMode::Pulse => &[("send-pulse-ms", send.pulse_ms)],
+            SendMode::Repeat => &[
+                ("send-pulse-ms", send.pulse_ms),
+                ("send-delay-ms", send.delay_ms),
+                ("send-period-ms", send.period_ms),
+            ],
+            _ => &[],
+        };
+        if times.len() > 1 {
+            // Three times get a line of their own.
+            ui.end_row();
+        }
+        for &(name, value) in times {
+            // A label stays on the line of its field when the row wraps.
+            let changed = ui
+                .horizontal(|ui| {
+                    ui.label(RichText::new(i18n.tr(name)).weak());
+                    let mut v = value;
+                    let spin = style::Spin::new(&mut v)
+                        .range(ButtonSend::MIN_MS..=ButtonSend::MAX_MS)
+                        .step(10.0)
+                        .suffix(" ms");
+                    ui.add(spin).changed().then_some(v)
+                })
+                .inner;
+            if let Some(v) = changed {
+                self.set(&id, name, "int", v.to_string());
+            }
+        }
+    }
+
     /// map-to-gamepad: the gamepad, a control that suits the input, inverted.
     fn gamepad(
         &mut self,
@@ -1476,7 +1734,11 @@ impl Editor<'_> {
         let mut picked = None;
         ui.horizontal_wrapped(|ui| {
             picked = self.gamepad_target(ui, &id, "", gamepad, control, &controls);
-            if current.is_some_and(|c| c.kind() != ControlKind::Dpad) {
+            let button = current.is_some_and(|c| c.kind() == ControlKind::Button)
+                && self.behavior == InputType::Button;
+            let holds = action.button_send().mode == gob_core::SendMode::Hold;
+            // Inverted only means something while the button follows the input.
+            if current.is_some_and(|c| c.kind() != ControlKind::Dpad) && (holds || !button) {
                 let mut inv = inverted;
                 if ui
                     .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
@@ -1488,6 +1750,10 @@ impl Editor<'_> {
             if self.behavior == InputType::Button {
                 ui.separator();
                 self.activation(ui, action);
+            }
+            if button {
+                ui.separator();
+                self.send_mode(ui, action);
             }
         });
         self.gamepad_missing(ui, gamepad);
@@ -1680,7 +1946,7 @@ impl Editor<'_> {
     }
 
     /// Mode of the edited binding (else the first mode).
-    fn edit_mode(&self) -> &str {
+    pub(crate) fn edit_mode(&self) -> &str {
         self.place
             .map(|(m, _)| m)
             .or_else(|| self.profile.modes.first().map(|m| m.name.as_str()))
@@ -1688,7 +1954,7 @@ impl Editor<'_> {
     }
 
     /// vJoy outputs other actions already write to while the edited mode runs.
-    fn used_vjoy_outputs(&self) -> HashSet<(u32, InputType, u32)> {
+    pub(crate) fn used_vjoy_outputs(&self) -> HashSet<(u32, InputType, u32)> {
         self.profile.used_vjoy_outputs(self.edit_mode())
     }
 
@@ -2026,7 +2292,8 @@ impl Editor<'_> {
                 }
             }
             _ => {
-                if ty == InputType::Button {
+                let holds = action.button_send().mode == gob_core::SendMode::Hold;
+                if ty == InputType::Button && holds {
                     let mut inv = inverted;
                     if ui
                         .add(style::switch(&mut inv, self.i18n.tr("edit-inverted")))
@@ -2042,6 +2309,10 @@ impl Editor<'_> {
                     ui.separator();
                 }
                 self.activation(ui, action);
+                if ty == InputType::Button {
+                    ui.separator();
+                    self.send_mode(ui, action);
+                }
             }
         });
     }
@@ -2103,6 +2374,10 @@ impl Editor<'_> {
                         });
                     ui.separator();
                     self.activation(ui, action);
+                    if self.behavior == InputType::Button {
+                        ui.separator();
+                        self.send_mode(ui, action);
+                    }
                 });
             }
             MouseAction::Motion {
@@ -2390,58 +2665,8 @@ impl Editor<'_> {
         relative: Option<f64>,
     ) {
         let aid = action.id.clone();
-        let inputs: Vec<gob_core::LogicalInput> = self
-            .profile
-            .logical_inputs()
-            .into_iter()
-            .filter(|i| i.input_type == input_type)
-            .collect();
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new(icon::CPU).size(style::ICON_SIZE))
-                .on_hover_text(self.i18n.tr("logical-device"));
-            let shown = inputs
-                .iter()
-                .find(|i| i.id == id)
-                .map_or_else(|| format!("#{id} ?"), |i| i.label.clone());
-            let mut set_input = None;
-            let output = |id| VirtualOutput::Logical { input_type, id };
-            egui::ComboBox::from_id_salt(("logical", &aid))
-                .selected_text(shown)
-                .width(180.0)
-                .height(320.0)
-                .show_ui(ui, |ui| {
-                    let marks = self.output_marks(&aid);
-                    let blocked = self.input_outputs(&aid);
-                    for i in &inputs {
-                        let out = output(i.id);
-                        let off = i.id != id && blocked.contains(&out);
-                        if self
-                            .output_item(ui, &marks, &out, i.id == id, off, i.label.clone())
-                            .clicked()
-                        {
-                            set_input = Some(i.id);
-                        }
-                    }
-                });
-            let tabs = [(1, self.i18n.tr("logical-device"))];
-            let cells = |_| {
-                inputs
-                    .iter()
-                    .map(|i| Cell {
-                        output: output(i.id),
-                        label: i.label.clone(),
-                        name: i.label.clone(),
-                        width: 104.0,
-                    })
-                    .collect()
-            };
-            if let Some(VirtualOutput::Logical { id, .. }) =
-                self.quickmap(ui, &aid, "", &tabs, (1, &output(id)), cells)
-            {
-                set_input = Some(id);
-            }
-            self.clash_warning(ui, &aid, &output(id));
-            if let Some(n) = set_input {
+            if let Some(n) = self.logical_picker(ui, &aid, input_type, id) {
                 self.set(&aid, "logical-input-id", "int", n.to_string());
             }
             match input_type {
@@ -2483,6 +2708,68 @@ impl Editor<'_> {
             ui.separator();
             self.activation(ui, action);
         });
+    }
+
+    /// Logical input list of `input_type` with the uses marked, and its quickmap. Returns the
+    /// picked input's id.
+    pub(crate) fn logical_picker(
+        &self,
+        ui: &mut egui::Ui,
+        action: &str,
+        input_type: InputType,
+        id: u32,
+    ) -> Option<u32> {
+        let inputs: Vec<gob_core::LogicalInput> = self
+            .profile
+            .logical_inputs()
+            .into_iter()
+            .filter(|i| i.input_type == input_type)
+            .collect();
+        ui.label(RichText::new(icon::CPU).size(style::ICON_SIZE))
+            .on_hover_text(self.i18n.tr("logical-device"));
+        let shown = inputs
+            .iter()
+            .find(|i| i.id == id)
+            .map_or_else(|| format!("#{id} ?"), |i| i.label.clone());
+        let mut set_input = None;
+        let output = |id| VirtualOutput::Logical { input_type, id };
+        egui::ComboBox::from_id_salt(("logical", action))
+            .selected_text(shown)
+            .width(180.0)
+            .height(320.0)
+            .show_ui(ui, |ui| {
+                let marks = self.output_marks(action);
+                let blocked = self.input_outputs(action);
+                for i in &inputs {
+                    let out = output(i.id);
+                    let off = i.id != id && blocked.contains(&out);
+                    if self
+                        .output_item(ui, &marks, &out, i.id == id, off, i.label.clone())
+                        .clicked()
+                    {
+                        set_input = Some(i.id);
+                    }
+                }
+            });
+        let tabs = [(1, self.i18n.tr("logical-device"))];
+        let cells = |_| {
+            inputs
+                .iter()
+                .map(|i| Cell {
+                    output: output(i.id),
+                    label: i.label.clone(),
+                    name: i.label.clone(),
+                    width: 104.0,
+                })
+                .collect()
+        };
+        if let Some(VirtualOutput::Logical { id, .. }) =
+            self.quickmap(ui, action, "", &tabs, (1, &output(id)), cells)
+        {
+            set_input = Some(id);
+        }
+        self.clash_warning(ui, action, &output(id));
+        set_input.filter(|&n| n != id)
     }
 
     /// Path text field with a browse button for the string property `name`.

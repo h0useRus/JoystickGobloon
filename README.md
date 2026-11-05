@@ -43,6 +43,8 @@ imports Joystick Gremlin profiles and keeps the workflow you know.
   made on another PC to your devices.
 - **Every Gremlin action** — map to vJoy, response curves, tempo, double tap, chain, macros, keyboard and mouse
   output, merge and split axis, conditions, sounds, text to speech and more — plus modes, undo / redo.
+- **Axis from buttons** (throttle on two buttons, trim on an encoder, detents in steps) and button outputs that
+  hold, pulse, repeat or toggle.
 - **New profile wizard**: name the profile, pick the virtual joystick each stick maps to, and every axis, button
   and hat is mapped at once.
 - **Modifiers and layers**: hold M1, M2 or both and the same button or axis does something else.
