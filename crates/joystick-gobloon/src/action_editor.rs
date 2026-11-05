@@ -219,6 +219,16 @@ pub enum Op {
         id: u32,
     },
     AddVoiceCommand,
+    /// Adds a voice command saying `phrase` that runs `action` itself in `mode`; `id` is the id
+    /// it gets, which the page then opens.
+    VoiceFromAction {
+        action: String,
+        phrase: String,
+        mode: String,
+        id: u32,
+    },
+    /// Not an edit: the page opens voice command `id`.
+    GoToVoice(u32),
     RemoveVoiceCommand(u32),
     SetVoicePhrases {
         id: u32,
@@ -442,6 +452,14 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::AddVoiceCommand => {
             p.add_voice_command();
         }
+        Op::VoiceFromAction {
+            action,
+            phrase,
+            mode,
+            ..
+        } => {
+            p.add_voice_command_for(&action, &phrase, &mode);
+        }
         Op::RemoveVoiceCommand(id) => p.remove_voice_command(id),
         Op::SetVoicePhrases { id, phrases } => {
             p.set_voice_phrases(id, &phrases);
@@ -457,8 +475,11 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::RemoveMacroStep { action, index } => p.remove_macro_step(&action, index),
         Op::SwapMacroSteps { action, index } => p.swap_macro_steps(&action, index),
         Op::RemoveChainStep { action, index } => p.remove_chain_step(&action, index),
-        // Handled by the app before edits are applied.
-        Op::PreviewSound { .. } | Op::PreviewSpeech(_) | Op::PreviewLight { .. } => {}
+        // Handled by the app (previews) or the page (going to a command) before edits are applied.
+        Op::PreviewSound { .. }
+        | Op::PreviewSpeech(_)
+        | Op::PreviewLight { .. }
+        | Op::GoToVoice(_) => {}
         Op::SetCondition {
             action,
             index,
@@ -809,7 +830,70 @@ pub struct Editor<'a> {
     pub curve_right_click_invert: bool,
 }
 
+/// Whether one spoken press makes sense for the action, so its card offers a voice command:
+/// buttons, keys, macros and the like; not axes, short / long press, conditions or toggles.
+fn speakable(action: &Action) -> bool {
+    match action.kind() {
+        ActionKind::MapToVjoy { input_type, .. } => input_type == InputType::Button,
+        ActionKind::MapToGamepad { control, .. } => gob_virtual::GamepadControl::parse(control)
+            .is_some_and(|c| c.kind() == gob_virtual::ControlKind::Button),
+        ActionKind::MapToMouse(m) => matches!(m, MouseAction::Button(_)),
+        _ => matches!(
+            action.kind.as_str(),
+            "map-to-keyboard"
+                | "macro"
+                | "chain"
+                | "change-mode"
+                | "run-command"
+                | "play-sound"
+                | "text-to-speech"
+                | "load-profile"
+                | "pause-resume"
+        ),
+    }
+}
+
 impl Editor<'_> {
+    /// An action card's voice command button: opens the command that runs the action, or makes
+    /// one saying the card's name (none without a name). Not on a voice command's own actions.
+    fn voice_button(&mut self, ui: &mut egui::Ui, action: &Action) {
+        let Some((mode, _)) = self.place else {
+            return;
+        };
+        let voice = self
+            .input
+            .is_some_and(|(d, _)| d.eq_ignore_ascii_case(gob_core::VOICE_GUID));
+        if voice || !speakable(action) {
+            return;
+        }
+        if let Some(id) = self.profile.voice_command_running(&action.id) {
+            let tip = self.i18n.tr("voice-from-action-go");
+            if style::icon_toggle(ui, true, icon::MICROPHONE, &tip).clicked() {
+                self.ops.push(Op::GoToVoice(id));
+            }
+            return;
+        }
+        let name = action
+            .label()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && *l != "None");
+        let button = style::icon_button(
+            ui,
+            name.is_some(),
+            icon::MICROPHONE,
+            &self.i18n.tr("voice-from-action"),
+        )
+        .on_disabled_hover_text(self.i18n.tr("voice-from-action-name-first"));
+        if let (true, Some(name)) = (button.clicked(), name) {
+            self.ops.push(Op::VoiceFromAction {
+                action: action.id.clone(),
+                phrase: name.to_string(),
+                mode: mode.to_string(),
+                id: self.profile.next_voice_command_id(),
+            });
+        }
+    }
+
     /// "Add action" menu button; `make` turns the chosen template into an op. `parent`
     /// is the action the list belongs to (`None` for a new binding), to avoid loops.
     pub fn add_menu(
@@ -1051,6 +1135,7 @@ impl Editor<'_> {
                             to: index - 1,
                         });
                     }
+                    self.voice_button(ui, action);
                     let mut label = action
                         .label()
                         .filter(|l| *l != "None")

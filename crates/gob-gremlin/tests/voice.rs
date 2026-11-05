@@ -230,3 +230,45 @@ fn reads_hand_edited_commands() {
         ]
     );
 }
+
+/// A voice command made from an action card runs that very action, survives a save, and is
+/// found again for the card; removing the command leaves the action on its input.
+#[test]
+fn voice_command_for_an_action() {
+    let mut p = voice_profile();
+    let root = p.bind(DEV, "button", "6", "Default");
+    let action = p
+        .add_child(
+            &root,
+            "actions",
+            gob_core::Action::new(&NewAction::MapToVjoy {
+                input_type: InputType::Button,
+                device: 1,
+                input_id: 8,
+            }),
+        )
+        .unwrap();
+    assert_eq!(p.voice_command_running(&action), None);
+    let next = p.next_voice_command_id();
+    let id = p.add_voice_command_for(&action, "  next   target ", "Default");
+    assert_eq!(id, next);
+    assert_eq!(p.voice_command(id).unwrap().phrases, ["next target"]);
+    let p = reload(&p);
+    assert_eq!(p.voice_command_running(&action), Some(id));
+    let b = p
+        .inputs
+        .iter()
+        .find(|b| b.device_id == VOICE_GUID && b.input_id == id.to_string())
+        .unwrap();
+    let voice_root = p.action(&b.configs[0].root_action).unwrap();
+    assert_eq!(
+        voice_root.child_ids(),
+        [action.as_str()],
+        "linked, not copied"
+    );
+
+    let mut p = p;
+    p.remove_voice_command(id);
+    assert!(p.action(&action).is_some(), "still on its input");
+    assert_eq!(p.voice_command_running(&action), None);
+}

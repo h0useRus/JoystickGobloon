@@ -250,6 +250,39 @@ impl DevicesView {
         ops: &mut Vec<Op>,
         vjoy: &[gob_virtual::DeviceInfo],
     ) {
+        self.show_page(ui, i18n, profile, devices, ops, vjoy);
+        // An action card made a voice command or asked for its own: open it on the Voice tab.
+        let mut open = None;
+        ops.retain(|op| match op {
+            Op::GoToVoice(id) => {
+                open = Some(*id);
+                false
+            }
+            Op::VoiceFromAction { id, .. } => {
+                open = Some(*id);
+                true
+            }
+            _ => true,
+        });
+        if let Some(id) = open {
+            let voice = gob_core::VOICE_GUID.to_string();
+            let key = (Kind::Voice, id);
+            self.selected_input.insert(voice.clone(), key);
+            self.scroll_to = Some((voice.clone(), key));
+            self.selected = Some(voice);
+            self.user_selected = true;
+        }
+    }
+
+    fn show_page(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        profile: Option<&LoadedProfile>,
+        devices: &[DeviceState],
+        ops: &mut Vec<Op>,
+        vjoy: &[gob_virtual::DeviceInfo],
+    ) {
         self.vjoy_names = vjoy
             .iter()
             .map(|v| (v.id, crate::vjoy_view::device_name(i18n, v)))

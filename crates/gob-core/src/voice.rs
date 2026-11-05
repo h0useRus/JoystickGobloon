@@ -42,11 +42,16 @@ impl Profile {
         self.voice_commands.iter().find(|c| c.id == id)
     }
 
+    /// The id [`Profile::add_voice_command`] gives the next command: the lowest free one.
+    pub fn next_voice_command_id(&self) -> u32 {
+        (1..)
+            .find(|n| self.voice_command(*n).is_none())
+            .unwrap_or(1)
+    }
+
     /// Adds a command with the lowest free id and no phrases yet; returns its id.
     pub fn add_voice_command(&mut self) -> u32 {
-        let id = (1..)
-            .find(|n| self.voice_command(*n).is_none())
-            .unwrap_or(1);
+        let id = self.next_voice_command_id();
         self.voice_commands.push(VoiceCommand {
             id,
             phrases: Vec::new(),
@@ -81,6 +86,31 @@ impl Profile {
             }
             _ => false,
         }
+    }
+
+    /// Adds a command saying `phrase` that runs the library action `action` itself (linked,
+    /// not copied) in `mode`; returns its id.
+    pub fn add_voice_command_for(&mut self, action: &str, phrase: &str, mode: &str) -> u32 {
+        let id = self.add_voice_command();
+        self.set_voice_phrases(id, &[phrase.to_string()]);
+        let root = self.bind(VOICE_GUID, VOICE_INPUT_TYPE, &id.to_string(), mode);
+        self.add_ref(&root, "actions", action);
+        id
+    }
+
+    /// The command that runs `action` directly (one of its bindings has it on top), if any.
+    pub fn voice_command_running(&self, action: &str) -> Option<u32> {
+        self.inputs
+            .iter()
+            .filter(|b| is_voice_binding(&b.device_id, &b.input_type))
+            .filter(|b| {
+                b.configs.iter().any(|c| {
+                    self.action(&c.root_action)
+                        .is_some_and(|r| r.child_ids().contains(&action))
+                })
+            })
+            .find_map(|b| b.input_id.trim().parse().ok())
+            .filter(|id| self.voice_command(*id).is_some())
     }
 
     /// Removes the command and its bindings (in every mode).
