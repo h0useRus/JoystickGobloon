@@ -525,6 +525,11 @@ macro-step-vjoy-hat = 虚拟摇杆苦力帽
 macro-step-pad-button = 手柄按钮
 macro-step-pad-axis = 手柄摇杆或扳机
 macro-step-pad-dpad = 手柄方向键
+macro-step-run-action = 运行动作
+macro-run-pick = 选择动作
+macro-run-missing = 找不到动作
+macro-run-none = 没有已命名的动作：请先在动作标题中为其命名
+macro-run-tip = 像短按其输入一样运行已命名的动作
 macro-press = 按下
 macro-release = 松开
 

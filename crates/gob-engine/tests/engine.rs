@@ -1491,6 +1491,52 @@ fn macro_gamepad_steps() {
     );
 }
 
+/// A run-action step presses the named action and releases it a pulse later; steps that would
+/// run the macro itself or the binding it sits in do nothing.
+#[test]
+fn macro_runs_named_action() {
+    let step = |id: &str| {
+        format!(
+            r#"<macro-action type="action">{}</macro-action>"#,
+            prop("string", "action-id", id)
+        )
+    };
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs>{}{}</inputs><settings/><library>{}{}{}{}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        input("button", 1, "Default", "r1", ""),
+        input("button", 2, "Default", "r2", ""),
+        root("r1", &["v"]),
+        vjoy("v", "button", 5),
+        root("r2", &["m"]),
+        macro_act(
+            "m",
+            "Single",
+            "press",
+            &[step("v"), step("m"), step("r2"), step("missing")]
+        ),
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut e = Engine::new(&p, &HashMap::new());
+    let mut out = Recorder::default();
+    let t0 = Instant::now();
+    let key = InputKey::new(DEV, InputKind::Button, 2);
+    e.process(&key, Value::Button(true), t0, &mut out);
+    assert_eq!(out.0, [Out::Button(5, true)]);
+    e.tick(t0 + Duration::from_millis(49), &mut out);
+    assert_eq!(out.0, [Out::Button(5, true)]);
+    for ms in (50..1000).step_by(10) {
+        e.tick(t0 + Duration::from_millis(ms), &mut out);
+    }
+    e.process(
+        &key,
+        Value::Button(false),
+        t0 + Duration::from_secs(1),
+        &mut out,
+    );
+    assert_eq!(out.0, [Out::Button(5, true), Out::Button(5, false)]);
+}
+
 #[test]
 fn unknown_action_types_do_nothing() {
     let xml = format!(

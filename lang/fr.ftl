@@ -537,6 +537,11 @@ macro-step-vjoy-hat = Chapeau du stick virtuel
 macro-step-pad-button = Bouton de manette
 macro-step-pad-axis = Stick ou gâchette de manette
 macro-step-pad-dpad = Croix directionnelle de manette
+macro-step-run-action = Exécuter une action
+macro-run-pick = Choisir une action
+macro-run-missing = Action introuvable
+macro-run-none = Aucune action nommée : donnez d'abord un nom à une action dans son titre
+macro-run-tip = Exécute l'action nommée comme un appui court sur son entrée
 macro-press = Appuyer
 macro-release = Relâcher
 

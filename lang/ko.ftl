@@ -525,6 +525,11 @@ macro-step-vjoy-hat = 가상 스틱 햇 스위치
 macro-step-pad-button = 게임패드 버튼
 macro-step-pad-axis = 게임패드 스틱 또는 트리거
 macro-step-pad-dpad = 게임패드 방향 패드
+macro-step-run-action = 동작 실행
+macro-run-pick = 동작 선택
+macro-run-missing = 동작을 찾을 수 없음
+macro-run-none = 이름 있는 동작 없음: 먼저 동작 제목에 이름을 지정하세요
+macro-run-tip = 이름 있는 동작을 입력을 짧게 누른 것처럼 실행합니다
 macro-press = 누르기
 macro-release = 떼기
 

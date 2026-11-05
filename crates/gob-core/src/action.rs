@@ -519,6 +519,11 @@ pub enum MacroStep {
         gamepad: u32,
         direction: Option<u16>,
     },
+    /// Joystick Gobloon's own step: runs the library action `action` (its id) as a short
+    /// press of its input would, press and release.
+    RunAction {
+        action: String,
+    },
     /// `joystick` and `logical-device` steps, not executed.
     Other,
 }
@@ -1106,6 +1111,9 @@ fn macro_step(ty: &str, items: &[Item]) -> MacroStep {
                 }
             }
         }
+        "action" => MacroStep::RunAction {
+            action: str("action-id").unwrap_or_default().to_string(),
+        },
         _ => MacroStep::Other,
     }
 }

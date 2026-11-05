@@ -537,6 +537,11 @@ macro-step-vjoy-hat = Coolie-Hat des virtuellen Sticks
 macro-step-pad-button = Gamepad-Taste
 macro-step-pad-axis = Gamepad-Stick oder -Trigger
 macro-step-pad-dpad = Gamepad-Steuerkreuz
+macro-step-run-action = Aktion ausführen
+macro-run-pick = Aktion wählen
+macro-run-missing = Aktion nicht gefunden
+macro-run-none = Keine benannten Aktionen: Gib zuerst einer Aktion in ihrem Titel einen Namen
+macro-run-tip = Führt die benannte Aktion wie ein kurzer Druck auf ihre Eingabe aus
 macro-press = Drücken
 macro-release = Loslassen
 

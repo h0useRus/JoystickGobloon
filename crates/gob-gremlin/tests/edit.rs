@@ -659,6 +659,9 @@ fn macro_steps_round_trip_and_keep_unknown_ones() {
             gamepad: 1,
             direction: Some(27000),
         },
+        MacroStep::RunAction {
+            action: root.clone(),
+        },
     ];
     for (i, s) in steps.iter().enumerate() {
         p.set_macro_step(&m, i, s);

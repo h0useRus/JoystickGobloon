@@ -460,7 +460,7 @@ impl Profile {
     }
 
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led, map-to-gamepad, button-axis and voice-input actions, send modes, gamepad macro steps, monotone cubic
+    /// light-led, map-to-gamepad, button-axis and voice-input actions, send modes, gamepad and run-action macro steps, monotone cubic
     /// curves, voice commands): it is then written in Joystick Gobloon's own format, which
     /// Joystick Gremlin cannot open. Stored virtual joysticks don't count: Joystick Gremlin skips
     /// the `<virtual-devices>` section.
@@ -481,7 +481,7 @@ impl Profile {
                     || a.kind == "voice-input"
                     || a.items.iter().any(|i| {
                         matches!(i, Item::Group { tag, attrs, .. } if tag == "macro-action"
-                            && attrs.iter().any(|(k, v)| k == "type" && v == "gamepad"))
+                            && attrs.iter().any(|(k, v)| k == "type" && (v == "gamepad" || v == "action")))
                     })
                     || (a.kind == "response-curve"
                         && a.str("curve-type").map(crate::curve::CurveType::parse)

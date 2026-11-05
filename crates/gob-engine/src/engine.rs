@@ -22,6 +22,8 @@ const MAX_DEPTH: usize = 32;
 const VIRTUAL_DEVICE: &str = "virtual";
 /// Device of the virtual buttons a hat-buttons action creates, one per direction.
 const HAT_BUTTON_DEVICE: &str = "virtual-hat";
+/// Device of the button a run-action macro step presses, one per action it runs.
+const RUN_ACTION_DEVICE: &str = "virtual-run";
 /// Gremlin's default pause between macro steps without an explicit pause.
 const MACRO_DELAY: f64 = 0.05;
 
@@ -192,6 +194,8 @@ enum Node {
         steps: Vec<MacroStep>,
         repeat: MacroRepeat,
         act: ActivationMode,
+        /// The actions its run-action steps run, by id, compiled for this macro.
+        targets: Vec<(String, NodeId)>,
     },
     /// button-axis: `up` for the input it is bound to, not for its decrease input.
     ButtonAxis {
@@ -359,6 +363,11 @@ enum TimerKind {
     },
     /// A recognized voice command's button goes up.
     VoiceRelease(u32),
+    /// The action a run-action macro step pressed is released.
+    RunRelease {
+        node: NodeId,
+        src: Source,
+    },
     /// A pulse of a send mode ends.
     SendUp(NodeId),
     /// The next pulse of a repeat.
@@ -620,6 +629,9 @@ pub struct Engine {
     prune: Option<String>,
     /// Start values are written once, when the profile starts.
     started: bool,
+    /// Ids of the actions being compiled, outermost first: a macro's run-action step never
+    /// runs an action it sits in.
+    compiling: Vec<String>,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -714,6 +726,7 @@ impl Engine {
             compiled_decrease: Vec::new(),
             prune: None,
             started: false,
+            compiling: Vec::new(),
         };
         for m in &profile.modifiers {
             let kind = match m.input_type.trim() {
@@ -888,6 +901,7 @@ impl Engine {
                 .get(id)
                 .is_some_and(|a| a.id != target && !is_container(a))
         });
+        self.compiling.push(id.to_string());
         let node = match index.get(id).filter(|_| depth < MAX_DEPTH && !pruned) {
             None => Node::Noop,
             Some(action) => match action.kind() {
@@ -1261,11 +1275,31 @@ impl Engine {
                     arguments: split_command(arguments),
                     act: action.activation_mode(),
                 },
-                ActionKind::Macro { steps, repeat, .. } => Node::Macro {
-                    steps: with_default_delay(&steps, self.macro_delay),
-                    repeat,
-                    act: action.activation_mode(),
-                },
+                ActionKind::Macro { steps, repeat, .. } => {
+                    let mut targets: Vec<(String, NodeId)> = Vec::new();
+                    for step in &steps {
+                        if let MacroStep::RunAction { action: target } = step
+                            && !targets.iter().any(|(t, _)| t == target)
+                            && !self.compiling.contains(target)
+                            // Only the action itself, not a decrease input's pruned copy.
+                            && self.prune.is_none()
+                        {
+                            // Its decrease inputs and start lights belong to its own binding.
+                            let (decrease, lights) =
+                                (self.compiled_decrease.len(), self.compiled_lights.len());
+                            let node = self.compile(index, target, depth + 1);
+                            self.compiled_decrease.truncate(decrease);
+                            self.compiled_lights.truncate(lights);
+                            targets.push((target.clone(), node));
+                        }
+                    }
+                    Node::Macro {
+                        steps: with_default_delay(&steps, self.macro_delay),
+                        repeat,
+                        act: action.activation_mode(),
+                        targets,
+                    }
+                }
                 ActionKind::VoiceInput { microphone } => Node::Voice {
                     microphone: microphone.to_string(),
                     act: action.activation_mode(),
@@ -1274,6 +1308,7 @@ impl Engine {
                 ActionKind::Other | ActionKind::Description { .. } => Node::Noop,
             },
         };
+        self.compiling.pop();
         self.nodes.push(Arc::new(node));
         self.nodes.len() - 1
     }
@@ -1688,6 +1723,10 @@ impl Engine {
                 TimerKind::VoiceRelease(id) => {
                     self.voice_releases.remove(&id);
                     self.process(&voice_key(id), Value::Button(false), now, out);
+                }
+                TimerKind::RunRelease { node, src } => {
+                    self.run(node, &src, &mut Value::Button(false), now, out, 0);
+                    self.process_release(&src.key, false, now, out);
                 }
             }
         }
@@ -2939,10 +2978,16 @@ impl Engine {
 
     /// Executes steps until the next pause, the end of the macro or its termination.
     fn macro_advance(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        let Node::Macro { steps, repeat, .. } = &*self.nodes[node] else {
+        let shared = Arc::clone(&self.nodes[node]);
+        let Node::Macro {
+            ref steps,
+            repeat,
+            ref targets,
+            ..
+        } = *shared
+        else {
             return;
         };
-        let (steps, repeat) = (steps.clone(), *repeat);
         loop {
             let Some(run) = self.macros.get_mut(&node) else {
                 return;
@@ -2984,8 +3029,27 @@ impl Engine {
                 );
                 return;
             }
+            if let MacroStep::RunAction { action } = &step {
+                if let Some(&(_, target)) = targets.iter().find(|(t, _)| t == action) {
+                    self.run_action(target, now, out);
+                }
+                continue;
+            }
             self.macro_step(step, out);
         }
+    }
+
+    /// A run-action step: the action runs as a short press of a button of its own would run
+    /// it, pressed now and released [`PULSE`] later.
+    fn run_action(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
+        let src = Source {
+            key: InputKey::new(RUN_ACTION_DEVICE, InputKind::Button, node as u32),
+            mode: self.modes.shared(),
+            no_auto_release: false,
+        };
+        self.run(node, &src, &mut Value::Button(true), now, out, 0);
+        self.process_release(&src.key, true, now, out);
+        self.add_timer(now + PULSE, TimerKind::RunRelease { node, src });
     }
 
     /// Ends a run and starts the next queued activation, if any.
@@ -3069,7 +3133,8 @@ impl Engine {
                 self.pad_axis(gamepad, c, (value as f32).clamp(low, 1.0), out);
             }
             MacroStep::GamepadDpad { gamepad, direction } => out.gamepad_dpad(gamepad, direction),
-            MacroStep::Pause(_) | MacroStep::Other => {}
+            // Run-action steps run in `macro_advance`, which knows the macro's targets.
+            MacroStep::Pause(_) | MacroStep::RunAction { .. } | MacroStep::Other => {}
         }
     }
 

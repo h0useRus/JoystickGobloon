@@ -241,6 +241,9 @@ fn macro_step_xml(step: &crate::MacroStep) -> Option<(&'static str, Vec<Item>)> 
                 ),
             ],
         ),
+        S::RunAction { ref action } => {
+            ("action", vec![prop("string", "action-id", action.as_str())])
+        }
         S::Other => return None,
     })
 }
