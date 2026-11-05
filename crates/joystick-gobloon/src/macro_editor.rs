@@ -4,7 +4,7 @@ use eframe::egui::{self, RichText};
 use gob_core::{Action, InputType, Key, MacroRepeat, MacroStep, MouseButton};
 use gob_virtual::{ControlKind, GamepadControl};
 
-use crate::action_editor::{Editor, Op, py_float, vjoy_outputs};
+use crate::action_editor::{Editor, Op, kind_icon, kind_name, py_float, vjoy_outputs};
 use crate::devices_view::hat_glyph;
 use crate::style::{self, icon};
 
@@ -239,10 +239,53 @@ impl Editor<'_> {
                 self.gamepad_step(ui, id, index, ControlKind::Dpad, gamepad, &mut control);
                 hat_directions(ui, self, direction);
             }
+            MacroStep::RunAction { action } => self.run_action_step(ui, id, index, action),
             MacroStep::Other => {
                 ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
             }
         }
+    }
+
+    /// The named action a run-action step runs: every action with a name that takes a button
+    /// press, except the ones that use the macro (they would run themselves).
+    fn run_action_step(&self, ui: &mut egui::Ui, id: &str, index: usize, action: &mut String) {
+        let selected = match self.profile.action(action) {
+            Some(a) => action_name(a).unwrap_or_else(|| kind_name(self.i18n, &a.kind)),
+            None if action.is_empty() => self.i18n.tr("macro-run-pick"),
+            None => self.i18n.tr("macro-run-missing"),
+        };
+        let missing = self.profile.action(action).is_none();
+        let text = if missing {
+            RichText::new(selected).color(ui.visuals().warn_fg_color)
+        } else {
+            RichText::new(selected)
+        };
+        egui::ComboBox::from_id_salt(("macro-run", id, index))
+            .selected_text(text)
+            .show_ui(ui, |ui| {
+                // Once per frame while open: every action that uses this macro, also through
+                // other macros' run-action steps.
+                let users = self.profile.reaching(id);
+                let mut named: Vec<(&Action, String)> = self
+                    .profile
+                    .library
+                    .iter()
+                    .filter(|a| a.runs_on_button() && !users.contains(a.id.as_str()))
+                    .filter_map(|a| Some((a, action_name(a)?)))
+                    .collect();
+                named.sort_by_cached_key(|(_, n)| n.to_lowercase());
+                if named.is_empty() {
+                    ui.label(RichText::new(self.i18n.tr("macro-run-none")).weak());
+                }
+                for (a, name) in named {
+                    let text = format!("{}  {name}", kind_icon(&a.kind));
+                    if ui.selectable_label(*action == a.id, text).clicked() {
+                        *action = a.id.clone();
+                    }
+                }
+            })
+            .response
+            .on_hover_text(self.i18n.tr("macro-run-tip"));
     }
 
     /// Virtual stick and output of type `ty` of a step.
@@ -355,6 +398,9 @@ impl Editor<'_> {
                         },
                     ]);
                 }
+                choices.push(MacroStep::RunAction {
+                    action: String::new(),
+                });
                 for step in choices {
                     let text = format!("{}  {}", step_icon(&step), self.i18n.tr(step_key(&step)));
                     if ui.button(text).clicked() {
@@ -422,6 +468,7 @@ fn step_icon(step: &MacroStep) -> &'static str {
         MacroStep::GamepadButton { .. }
         | MacroStep::GamepadAxis { .. }
         | MacroStep::GamepadDpad { .. } => icon::GAME_CONTROLLER,
+        MacroStep::RunAction { .. } => icon::PERSON_SIMPLE_RUN,
         MacroStep::Other => icon::PUZZLE_PIECE,
     }
 }
@@ -439,8 +486,17 @@ fn step_key(step: &MacroStep) -> &'static str {
         MacroStep::GamepadButton { .. } => "macro-step-pad-button",
         MacroStep::GamepadAxis { .. } => "macro-step-pad-axis",
         MacroStep::GamepadDpad { .. } => "macro-step-pad-dpad",
+        MacroStep::RunAction { .. } => "macro-step-run-action",
         MacroStep::Other => "edit-not-editable",
     }
+}
+
+/// The name the user gave an action (its card title), if any.
+fn action_name(a: &Action) -> Option<String> {
+    a.label()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && *l != "None")
+        .map(String::from)
 }
 
 fn mouse_key(b: MouseButton) -> &'static str {

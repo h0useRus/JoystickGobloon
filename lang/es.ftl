@@ -537,6 +537,11 @@ macro-step-vjoy-hat = Cruceta del stick virtual
 macro-step-pad-button = Botón del gamepad
 macro-step-pad-axis = Stick o gatillo del gamepad
 macro-step-pad-dpad = Cruceta del gamepad
+macro-step-run-action = Ejecutar acción
+macro-run-pick = Elige una acción
+macro-run-missing = Acción no encontrada
+macro-run-none = No hay acciones con nombre: primero pon nombre a una acción en su título
+macro-run-tip = Ejecuta la acción con nombre como una pulsación corta de su entrada
 macro-press = Pulsar
 macro-release = Soltar
 

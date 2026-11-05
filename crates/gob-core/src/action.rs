@@ -519,6 +519,11 @@ pub enum MacroStep {
         gamepad: u32,
         direction: Option<u16>,
     },
+    /// Joystick Gobloon's own step: runs the library action `action` (its id) as a short
+    /// press of its input would, press and release.
+    RunAction {
+        action: String,
+    },
     /// `joystick` and `logical-device` steps, not executed.
     Other,
 }
@@ -714,6 +719,50 @@ impl Action {
         let mut out = Vec::new();
         collect_refs(&self.items, &mut out);
         out
+    }
+
+    /// Ids of the actions a macro's run-action steps run (not its children: they are shown
+    /// and edited where they are bound).
+    pub fn run_targets(&self) -> Vec<&str> {
+        self.items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Group { tag, attrs, items }
+                    if tag == "macro-action"
+                        && attrs.iter().any(|(k, v)| k == "type" && v == "action") =>
+                {
+                    find_property(items, "action-id").map(|p| p.value.trim())
+                }
+                _ => None,
+            })
+            .filter(|id| !id.is_empty())
+            .collect()
+    }
+
+    /// Every action this one uses: its children and the actions its run-action steps run.
+    pub fn reference_ids(&self) -> Vec<&str> {
+        let mut out = self.child_ids();
+        out.extend(self.run_targets());
+        out
+    }
+
+    /// Whether a button press means something to the action, so a run-action macro step
+    /// (a short press) can run it. Axis-only and hat-only actions cannot.
+    pub fn runs_on_button(&self) -> bool {
+        match self.kind() {
+            ActionKind::MapToVjoy { input_type, .. } => input_type != InputType::Hat,
+            _ => !matches!(
+                self.kind.as_str(),
+                "root"
+                    | "description"
+                    | "response-curve"
+                    | "split-axis"
+                    | "merge-axis"
+                    | "axis-delta"
+                    | "dual-axis-deadzone"
+                    | "hat-buttons"
+            ),
+        }
     }
 
     pub fn kind(&self) -> ActionKind<'_> {
@@ -1106,6 +1155,9 @@ fn macro_step(ty: &str, items: &[Item]) -> MacroStep {
                 }
             }
         }
+        "action" => MacroStep::RunAction {
+            action: str("action-id").unwrap_or_default().to_string(),
+        },
         _ => MacroStep::Other,
     }
 }

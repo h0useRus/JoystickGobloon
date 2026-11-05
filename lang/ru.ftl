@@ -545,6 +545,11 @@ macro-step-vjoy-hat = Хатка виртуального стика
 macro-step-pad-button = Кнопка геймпада
 macro-step-pad-axis = Стик или курок геймпада
 macro-step-pad-dpad = Крестовина геймпада
+macro-step-run-action = Выполнить действие
+macro-run-pick = Выберите действие
+macro-run-missing = Действие не найдено
+macro-run-none = Нет действий с именем: сначала задайте имя действию в его заголовке
+macro-run-tip = Выполняет именованное действие как короткое нажатие его входа
 macro-press = Нажать
 macro-release = Отпустить
 

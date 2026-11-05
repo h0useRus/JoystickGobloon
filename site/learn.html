@@ -394,8 +394,9 @@
           </article>
           <article class="learn-action" id="macro">
             <h3><i class="ph ph-list-numbers" aria-hidden="true"></i>Macro</h3>
-            <p>Plays a sequence of steps: keys, mouse buttons and motion, buttons, axes and hats of a virtual stick, buttons, sticks, triggers and the d-pad of a virtual gamepad (Linux only for now), and pauses. Each step picks its device and output like <a href="#map-to-vjoy">Map to virtual stick</a> does, with the same grid of outputs and the same marks for outputs other inputs use. It can run once, a number of times, while the button is held, or until the next press.</p>
-            <figure class="shot"><img src="img/actions/macro.png" loading="lazy" alt="Macro: Ctrl down, virtual stick button 9 down, a pause, Z axis to 0.50, then button 9 and Ctrl up"></figure>
+            <p>Plays a sequence of steps: keys, mouse buttons and motion, buttons, axes and hats of a virtual stick, buttons, sticks, triggers and the d-pad of a virtual gamepad (Linux only for now), other actions of the profile, and pauses. Each step picks its device and output like <a href="#map-to-vjoy">Map to virtual stick</a> does, with the same grid of outputs and the same marks for outputs other inputs use. It can run once, a number of times, while the button is held, or until the next press.</p>
+            <p>A <span class="term">Run action</span> step runs another action of the profile, as a short press of its input would: give that action a name in its title first, then pick it in the step. It is the same action its input runs, so a toggle the macro starts stops on that input. Actions that use the macro (also through another macro) are left out of the list, so a macro never runs itself, and so are actions a button press means nothing to, like response curves. An action a macro runs stays in the profile even when it is removed from its input.</p>
+            <figure class="shot"><img src="img/actions/macro.png" loading="lazy" alt="Macro: Ctrl down, run the action named Lights, a pause, run the action named Landing gear, then Ctrl up"></figure>
           </article>
           <article class="learn-action" id="hat-buttons">
             <h3><i class="ph ph-compass" aria-hidden="true"></i>Hat buttons</h3>

@@ -537,6 +537,11 @@ macro-step-vjoy-hat = Virtual stick hat
 macro-step-pad-button = Gamepad button
 macro-step-pad-axis = Gamepad stick or trigger
 macro-step-pad-dpad = Gamepad d-pad
+macro-step-run-action = Run action
+macro-run-pick = Pick an action
+macro-run-missing = Action not found
+macro-run-none = No named actions: give an action a name in its title first
+macro-run-tip = Runs the named action like a short press of its input
 macro-press = Press
 macro-release = Release
 
