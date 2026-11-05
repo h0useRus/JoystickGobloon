@@ -267,7 +267,20 @@ fn voice_command_for_an_action() {
         "linked, not copied"
     );
 
+    // The link removed on the Voice tab: the card links the same command again.
+    let voice_root = b.configs[0].root_action.clone();
     let mut p = p;
+    p.remove_child(&voice_root, "actions", 0);
+    assert_eq!(p.voice_command_running(&action), None);
+    let count = p.voice_commands.len();
+    assert_eq!(p.voice_command_id_for("Next Target"), id);
+    assert_eq!(
+        p.add_voice_command_for(&action, "Next Target", "Default"),
+        id
+    );
+    assert_eq!(p.voice_commands.len(), count, "no second command");
+    assert_eq!(p.voice_command_running(&action), Some(id));
+
     p.remove_voice_command(id);
     assert!(p.action(&action).is_some(), "still on its input");
     assert_eq!(p.voice_command_running(&action), None);

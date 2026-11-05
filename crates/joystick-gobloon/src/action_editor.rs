@@ -892,7 +892,7 @@ impl Editor<'_> {
                 action: action.id.clone(),
                 phrase: name.to_string(),
                 mode: mode.to_string(),
-                id: self.profile.next_voice_command_id(),
+                id: self.profile.voice_command_id_for(name),
             });
         }
     }

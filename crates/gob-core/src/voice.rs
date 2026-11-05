@@ -88,11 +88,40 @@ impl Profile {
         }
     }
 
-    /// Adds a command saying `phrase` that runs the library action `action` itself (linked,
-    /// not copied) in `mode`; returns its id.
+    /// The command that has `phrase` among its phrases (case and extra spaces ignored).
+    pub fn voice_command_saying(&self, phrase: &str) -> Option<u32> {
+        let norm = |p: &str| {
+            p.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase()
+        };
+        let phrase = norm(phrase);
+        self.voice_commands
+            .iter()
+            .find(|c| c.phrases.iter().any(|p| norm(p) == phrase))
+            .map(|c| c.id)
+    }
+
+    /// The command [`Profile::add_voice_command_for`] links `phrase` to: the one already saying
+    /// it, else the next new one.
+    pub fn voice_command_id_for(&self, phrase: &str) -> u32 {
+        self.voice_command_saying(phrase)
+            .unwrap_or_else(|| self.next_voice_command_id())
+    }
+
+    /// Makes the command saying `phrase` run the library action `action` itself (linked, not
+    /// copied) in `mode`: the command that already says it (e.g. after its link was removed),
+    /// else a new one. Returns its id.
     pub fn add_voice_command_for(&mut self, action: &str, phrase: &str, mode: &str) -> u32 {
-        let id = self.add_voice_command();
-        self.set_voice_phrases(id, &[phrase.to_string()]);
+        let id = match self.voice_command_saying(phrase) {
+            Some(id) => id,
+            None => {
+                let id = self.add_voice_command();
+                self.set_voice_phrases(id, &[phrase.to_string()]);
+                id
+            }
+        };
         let root = self.bind(VOICE_GUID, VOICE_INPUT_TYPE, &id.to_string(), mode);
         self.add_ref(&root, "actions", action);
         id
