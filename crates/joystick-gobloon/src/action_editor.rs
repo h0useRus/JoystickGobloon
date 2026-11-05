@@ -219,6 +219,17 @@ pub enum Op {
         id: u32,
     },
     AddVoiceCommand,
+    /// Makes a voice command saying `phrase` run `action` itself in `mode` and `layer` (the
+    /// card's); `id` is the command it goes to, which the page then opens.
+    VoiceFromAction {
+        action: String,
+        phrase: String,
+        mode: String,
+        layer: Layer,
+        id: u32,
+    },
+    /// Not an edit: the page opens voice command `id`.
+    GoToVoice(u32),
     RemoveVoiceCommand(u32),
     SetVoicePhrases {
         id: u32,
@@ -442,6 +453,15 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::AddVoiceCommand => {
             p.add_voice_command();
         }
+        Op::VoiceFromAction {
+            action,
+            phrase,
+            mode,
+            layer,
+            ..
+        } => {
+            p.add_voice_command_for(&action, &phrase, &mode, &layer);
+        }
         Op::RemoveVoiceCommand(id) => p.remove_voice_command(id),
         Op::SetVoicePhrases { id, phrases } => {
             p.set_voice_phrases(id, &phrases);
@@ -457,8 +477,11 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::RemoveMacroStep { action, index } => p.remove_macro_step(&action, index),
         Op::SwapMacroSteps { action, index } => p.swap_macro_steps(&action, index),
         Op::RemoveChainStep { action, index } => p.remove_chain_step(&action, index),
-        // Handled by the app before edits are applied.
-        Op::PreviewSound { .. } | Op::PreviewSpeech(_) | Op::PreviewLight { .. } => {}
+        // Handled by the app (previews) or the page (going to a command) before edits are applied.
+        Op::PreviewSound { .. }
+        | Op::PreviewSpeech(_)
+        | Op::PreviewLight { .. }
+        | Op::GoToVoice(_) => {}
         Op::SetCondition {
             action,
             index,
@@ -807,9 +830,87 @@ pub struct Editor<'a> {
     pub monotonic_curves: bool,
     /// A right click on empty space of the curve chart inverts the curve.
     pub curve_right_click_invert: bool,
+    /// Actions voice commands run, with the command (built once per frame, when a card needs it).
+    pub voice_links: std::cell::OnceCell<std::collections::HashMap<String, u32>>,
+}
+
+/// Whether one spoken press makes sense for the action, so its card offers a voice command:
+/// buttons, keys, macros and the like; not axes, short / long press, conditions or toggles.
+fn speakable(action: &Action) -> bool {
+    match action.kind() {
+        ActionKind::MapToVjoy { input_type, .. } => input_type == InputType::Button,
+        ActionKind::MapToGamepad { control, .. } => gob_virtual::GamepadControl::parse(control)
+            .is_some_and(|c| c.kind() == gob_virtual::ControlKind::Button),
+        ActionKind::MapToMouse(m) => matches!(m, MouseAction::Button(_)),
+        // A temporary mode lasts only as long as the command's short press.
+        ActionKind::ChangeMode { change_type, .. } => change_type != "Temporary",
+        _ => matches!(
+            action.kind.as_str(),
+            "map-to-keyboard"
+                | "macro"
+                | "chain"
+                | "run-command"
+                | "play-sound"
+                | "text-to-speech"
+                | "load-profile"
+                | "pause-resume"
+        ),
+    }
 }
 
 impl Editor<'_> {
+    /// An action card's voice command button: opens the command that runs the action, or makes
+    /// one saying the card's name (none without a name). Not on a voice command's own actions.
+    fn voice_button(&mut self, ui: &mut egui::Ui, action: &Action) {
+        let Some((mode, layer)) = self.place else {
+            return;
+        };
+        let voice = self
+            .input
+            .is_some_and(|(d, _)| d.eq_ignore_ascii_case(gob_core::VOICE_GUID));
+        if voice || !speakable(action) {
+            return;
+        }
+        // A link, not a recording: the microphone carries an arrow (go to its command) or a
+        // plus (make one).
+        let links = self.voice_links.get_or_init(|| self.profile.voice_links());
+        if let Some(&id) = links.get(&action.id) {
+            let tip = self.i18n.tr("voice-from-action-go");
+            if style::icon_badge_button(ui, true, icon::MICROPHONE, icon::ARROW_UP_RIGHT, &tip)
+                .clicked()
+            {
+                self.ops.push(Op::GoToVoice(id));
+            }
+            return;
+        }
+        let name = action
+            .label()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && *l != "None");
+        // The command it goes to; a phrase another command already says with other actions
+        // would make one word run both, so the card needs another name first.
+        let target = name.map(|n| (n, self.profile.voice_command_for_phrase(n)));
+        let tip = match &target {
+            None => self.i18n.tr("voice-from-action-name-first"),
+            Some((_, Ok(_))) => self.i18n.tr("voice-from-action"),
+            Some((n, Err(_))) => self.i18n.trf(
+                "voice-from-action-taken",
+                &[("phrase", n.to_string().into())],
+            ),
+        };
+        let enabled = matches!(target, Some((_, Ok(_))));
+        let button = style::icon_badge_button(ui, enabled, icon::MICROPHONE, icon::PLUS, &tip);
+        if let (true, Some((name, Ok(id)))) = (button.clicked(), target) {
+            self.ops.push(Op::VoiceFromAction {
+                action: action.id.clone(),
+                phrase: name.to_string(),
+                mode: mode.to_string(),
+                layer: layer.clone(),
+                id,
+            });
+        }
+    }
+
     /// "Add action" menu button; `make` turns the chosen template into an op. `parent`
     /// is the action the list belongs to (`None` for a new binding), to avoid loops.
     pub fn add_menu(
@@ -1051,6 +1152,7 @@ impl Editor<'_> {
                             to: index - 1,
                         });
                     }
+                    self.voice_button(ui, action);
                     let mut label = action
                         .label()
                         .filter(|l| *l != "None")

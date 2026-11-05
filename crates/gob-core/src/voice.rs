@@ -42,11 +42,16 @@ impl Profile {
         self.voice_commands.iter().find(|c| c.id == id)
     }
 
+    /// The id [`Profile::add_voice_command`] gives the next command: the lowest free one.
+    pub fn next_voice_command_id(&self) -> u32 {
+        (1..)
+            .find(|n| self.voice_command(*n).is_none())
+            .unwrap_or(1)
+    }
+
     /// Adds a command with the lowest free id and no phrases yet; returns its id.
     pub fn add_voice_command(&mut self) -> u32 {
-        let id = (1..)
-            .find(|n| self.voice_command(*n).is_none())
-            .unwrap_or(1);
+        let id = self.next_voice_command_id();
         self.voice_commands.push(VoiceCommand {
             id,
             phrases: Vec::new(),
@@ -81,6 +86,104 @@ impl Profile {
             }
             _ => false,
         }
+    }
+
+    /// Where a card's voice command saying `phrase` goes: `Ok` with the command already saying
+    /// it that runs nothing (its link was removed), else the next new one; `Err` with the
+    /// command that already says it and runs other actions (the phrase is taken). Case and
+    /// extra spaces are ignored.
+    pub fn voice_command_for_phrase(&self, phrase: &str) -> Result<u32, u32> {
+        let norm = |p: &str| {
+            p.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase()
+        };
+        let phrase = norm(phrase);
+        match self
+            .voice_commands
+            .iter()
+            .find(|c| c.phrases.iter().any(|p| norm(p) == phrase))
+        {
+            Some(c) if self.voice_roots(c.id).any(|r| !r.child_ids().is_empty()) => Err(c.id),
+            Some(c) => Ok(c.id),
+            None => Ok(self.next_voice_command_id()),
+        }
+    }
+
+    /// Makes a voice command saying `phrase` run the library action `action` itself (linked,
+    /// not copied) in `mode` and `layer`, like the card it comes from: the command that already
+    /// says it and runs nothing, else a new one. Returns its id, or `None` when another command
+    /// already says `phrase` and runs other actions.
+    pub fn add_voice_command_for(
+        &mut self,
+        action: &str,
+        phrase: &str,
+        mode: &str,
+        layer: &crate::Layer,
+    ) -> Option<u32> {
+        let id = self.voice_command_for_phrase(phrase).ok()?;
+        if self.voice_command(id).is_none() {
+            self.add_voice_command();
+            self.set_voice_phrases(id, &[phrase.to_string()]);
+        }
+        let root = self.bind_layer(VOICE_GUID, VOICE_INPUT_TYPE, &id.to_string(), mode, layer);
+        self.add_ref(&root, "actions", action);
+        Some(id)
+    }
+
+    /// Root actions of command `id`'s bindings (every mode and layer).
+    fn voice_roots(&self, id: u32) -> impl Iterator<Item = &crate::Action> {
+        self.inputs
+            .iter()
+            .filter(move |b| {
+                is_voice_binding(&b.device_id, &b.input_type) && b.input_id.trim().parse() == Ok(id)
+            })
+            .flat_map(|b| &b.configs)
+            .filter_map(|c| self.action(&c.root_action))
+    }
+
+    /// Every action a voice command runs, anywhere among its actions, with the command's id
+    /// (the first command when several run it). Bindings of removed commands do not count.
+    pub fn voice_links(&self) -> std::collections::HashMap<String, u32> {
+        let index = self.action_index();
+        let mut links = std::collections::HashMap::new();
+        for b in &self.inputs {
+            if !is_voice_binding(&b.device_id, &b.input_type) {
+                continue;
+            }
+            let Some(id) = b
+                .input_id
+                .trim()
+                .parse()
+                .ok()
+                .filter(|id| self.voice_command(*id).is_some())
+            else {
+                continue;
+            };
+            for c in &b.configs {
+                let mut seen = std::collections::HashSet::new();
+                let mut stack: Vec<&str> = index
+                    .get(c.root_action.as_str())
+                    .map(|r| r.child_ids())
+                    .unwrap_or_default();
+                while let Some(a) = stack.pop() {
+                    if !seen.insert(a) {
+                        continue;
+                    }
+                    links.entry(a.to_string()).or_insert(id);
+                    if let Some(action) = index.get(a) {
+                        stack.extend(action.child_ids());
+                    }
+                }
+            }
+        }
+        links
+    }
+
+    /// The command that runs `action` (see [`Profile::voice_links`]), if any.
+    pub fn voice_command_running(&self, action: &str) -> Option<u32> {
+        self.voice_links().get(action).copied()
     }
 
     /// Removes the command and its bindings (in every mode).

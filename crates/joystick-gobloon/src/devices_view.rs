@@ -250,6 +250,34 @@ impl DevicesView {
         ops: &mut Vec<Op>,
         vjoy: &[gob_virtual::DeviceInfo],
     ) {
+        self.show_page(ui, i18n, profile, devices, ops, vjoy);
+        // An action card made a voice command or asked for its own: open it on the Voice tab.
+        let mut open = None;
+        ops.retain(|op| match op {
+            Op::GoToVoice(id) => {
+                open = Some(*id);
+                false
+            }
+            Op::VoiceFromAction { id, .. } => {
+                open = Some(*id);
+                true
+            }
+            _ => true,
+        });
+        if let Some(id) = open {
+            self.show_input(gob_core::VOICE_GUID, (Kind::Voice, id));
+        }
+    }
+
+    fn show_page(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        profile: Option<&LoadedProfile>,
+        devices: &[DeviceState],
+        ops: &mut Vec<Op>,
+        vjoy: &[gob_virtual::DeviceInfo],
+    ) {
         self.vjoy_names = vjoy
             .iter()
             .map(|v| (v.id, crate::vjoy_view::device_name(i18n, v)))
@@ -1252,6 +1280,7 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
+                    voice_links: Default::default(),
                 };
                 let first_op = editor.ops.len();
                 for (n, cfg) in configs.iter().enumerate() {
@@ -1313,6 +1342,7 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
+                    voice_links: Default::default(),
                 };
                 ui.horizontal(|ui| {
                     editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));
