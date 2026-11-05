@@ -25,6 +25,9 @@ gob-lighting = { path = "crates/gob-lighting" }
 gob-ui = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.2.0" }
 gob-system = { path = "crates/gob-system" }
 gob-voice = { path = "crates/gob-voice" }
+gob-script = { path = "crates/gob-script" }
+# User scripts: Luau (Lua 5.1 syntax, sandboxed), built from source; "send": the engine moves threads.
+mlua = { version = "0.12", features = ["luau", "send"] }
 # The OpenGL renderer: wgpu reserves hundreds of MB, the window stays small with glow.
 eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "glow", "links", "wayland", "x11"] }
 serde = { version = "1", features = ["derive"] }
