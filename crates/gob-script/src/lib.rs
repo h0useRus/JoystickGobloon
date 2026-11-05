@@ -85,7 +85,8 @@ pub trait ScriptApi {
     fn mouse_move(&mut self, dx: i32, dy: i32);
     fn mouse_wheel(&mut self, notches: i32);
     fn current_mode(&self) -> String;
-    fn switch_mode(&mut self, mode: &str);
+    /// Switches to `mode`; false when the profile has no such mode.
+    fn switch_mode(&mut self, mode: &str) -> bool;
     /// Current value of an input; `None` when unknown.
     fn input(&self, input: &ScriptInput) -> Option<EventValue>;
     fn speak(&mut self, text: &str);
@@ -577,8 +578,11 @@ fn host_call(lua: &Lua, args: MultiValue, api: &mut dyn ScriptApi) -> mlua::Resu
         "mode" => lua.pack_multi(api.current_mode()),
         "switch_mode" => {
             let name: String = lua.unpack_multi(rest)?;
-            api.switch_mode(&name);
-            none
+            if api.switch_mode(&name) {
+                none
+            } else {
+                Err(mlua::Error::runtime(format!("there is no mode '{name}'")))
+            }
         }
         "axis" | "button" | "hat" => {
             let (device, n): (String, u32) = lua.unpack_multi(rest)?;
@@ -658,6 +662,8 @@ struct Periodic {
 
 struct Running {
     state: State,
+    /// The table handlers get, filled anew for each event (no allocation per event).
+    event: Table,
     errors: u32,
     off: bool,
 }
@@ -666,8 +672,11 @@ struct Running {
 #[derive(Default)]
 pub struct ScriptHost {
     scripts: Vec<Running>,
-    handlers: HashMap<ScriptInput, Vec<Handler>>,
+    /// Inputs with their handlers; [`ScriptHost::input_index`] finds one.
+    handlers: Vec<(ScriptInput, Vec<Handler>)>,
     periodic: Vec<Periodic>,
+    /// Each mode with the modes it inherits from, nearest first ([`ScriptHost::set_modes`]).
+    mode_chains: HashMap<String, Vec<String>>,
     /// Errors not yet reported to the user (one per script).
     errors: Vec<ScriptError>,
 }
@@ -688,14 +697,25 @@ impl ScriptHost {
                 host.report(e);
                 continue;
             }
+            let event = match state.lua.create_table() {
+                Ok(t) => t,
+                Err(e) => {
+                    host.report(script_error(&s.name, &e));
+                    continue;
+                }
+            };
             let index = host.scripts.len();
             let collected = std::mem::take(&mut *lock(&state.collected));
             for (input, mode, f) in collected.handlers {
-                host.handlers.entry(input).or_default().push(Handler {
+                let handler = Handler {
                     script: index,
                     mode,
                     f,
-                });
+                };
+                match host.handlers.iter_mut().find(|(i, _)| *i == input) {
+                    Some((_, list)) => list.push(handler),
+                    None => host.handlers.push((input, vec![handler])),
+                }
             }
             for (every, f) in collected.periodic {
                 host.periodic.push(Periodic {
@@ -707,6 +727,7 @@ impl ScriptHost {
             }
             host.scripts.push(Running {
                 state,
+                event,
                 errors: 0,
                 off: false,
             });
@@ -714,18 +735,58 @@ impl ScriptHost {
         host
     }
 
+    /// The profile's modes: each one's name and its parent's. Handlers of a mode also run in
+    /// the modes that inherit from it, unless one closer has handlers of its own for the input.
+    pub fn set_modes(&mut self, modes: &[(String, Option<String>)]) {
+        let parents: HashMap<&str, &str> = modes
+            .iter()
+            .filter_map(|(m, p)| Some((m.as_str(), p.as_deref()?)))
+            .collect();
+        self.mode_chains = modes
+            .iter()
+            .map(|(m, _)| {
+                let mut chain = vec![m.clone()];
+                while chain.len() < 32 {
+                    match parents.get(chain[chain.len() - 1].as_str()) {
+                        Some(p) if !chain.iter().any(|c| c == p) => chain.push((*p).to_string()),
+                        _ => break,
+                    }
+                }
+                (m.clone(), chain)
+            })
+            .collect();
+    }
+
+    /// Whether `mode` is one of the profile's modes.
+    pub fn knows_mode(&self, mode: &str) -> bool {
+        self.mode_chains.contains_key(mode)
+    }
+
+    /// Renames the devices handlers listen to, e.g. a profile's stick to the attached one
+    /// standing in for it.
+    pub fn map_devices(&mut self, rename: impl Fn(&str) -> String) {
+        for (input, _) in &mut self.handlers {
+            input.device = rename(&input.device);
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.handlers.is_empty() && self.periodic.is_empty()
     }
 
-    /// Every input a handler listens to.
-    pub fn inputs(&self) -> impl Iterator<Item = &ScriptInput> {
-        self.handlers.keys()
+    /// Every input a handler listens to, with its index for [`ScriptHost::event_at`].
+    pub fn inputs(&self) -> impl Iterator<Item = (usize, &ScriptInput)> {
+        self.handlers.iter().map(|(i, _)| i).enumerate()
+    }
+
+    /// The index of `input`'s handlers.
+    pub fn input_index(&self, input: &ScriptInput) -> Option<usize> {
+        self.handlers.iter().position(|(i, _)| i == input)
     }
 
     /// A handler listens to `input`.
     pub fn handles(&self, input: &ScriptInput) -> bool {
-        self.handlers.contains_key(input)
+        self.input_index(input).is_some()
     }
 
     fn report(&mut self, e: ScriptError) {
@@ -757,35 +818,73 @@ impl ScriptHost {
         }
     }
 
-    /// Runs the handlers of `input` for an event. `modes` is the current mode and its parents:
-    /// handlers of the nearest mode that has some run, and handlers for every mode.
+    /// Runs the handlers of `input` for an event in `mode` (see [`ScriptHost::set_modes`]).
     pub fn event(
         &mut self,
         input: &ScriptInput,
         value: EventValue,
-        modes: &[&str],
+        mode: &str,
         api: &mut dyn ScriptApi,
     ) {
-        let Some(list) = self.handlers.get(input) else {
+        if let Some(index) = self.input_index(input) {
+            self.event_at(index, value, mode, api);
+        }
+    }
+
+    /// [`ScriptHost::event`] for the input at `index` ([`ScriptHost::inputs`]): no allocation
+    /// on the Rust side.
+    pub fn event_at(
+        &mut self,
+        index: usize,
+        value: EventValue,
+        mode: &str,
+        api: &mut dyn ScriptApi,
+    ) {
+        let chains = std::mem::take(&mut self.mode_chains);
+        self.run_handlers(index, value, mode, &chains, api);
+        self.mode_chains = chains;
+    }
+
+    fn run_handlers(
+        &mut self,
+        index: usize,
+        value: EventValue,
+        mode: &str,
+        chains: &HashMap<String, Vec<String>>,
+        api: &mut dyn ScriptApi,
+    ) {
+        let Some((_, list)) = self.handlers.get(index) else {
             return;
         };
-        let mode = modes
-            .iter()
-            .find(|m| list.iter().any(|h| h.mode.as_deref() == Some(**m)))
-            .copied();
-        let due: Vec<(usize, Function)> = list
-            .iter()
-            .filter(|h| h.mode.is_none() || h.mode.as_deref() == mode)
-            .map(|h| (h.script, h.f.clone()))
-            .collect();
-        for (script, f) in due {
-            let Some(lua) = self.scripts.get(script).map(|s| s.state.lua.clone()) else {
+        // The nearest mode of the chain with handlers for the input; handlers for every mode
+        // run too.
+        let only = std::slice::from_ref(&mode);
+        let nearest = match chains.get(mode) {
+            Some(chain) => chain
+                .iter()
+                .find(|m| list.iter().any(|h| h.mode.as_deref() == Some(m.as_str())))
+                .map(String::as_str),
+            None => only
+                .iter()
+                .find(|m| list.iter().any(|h| h.mode.as_deref() == Some(**m)))
+                .copied(),
+        };
+        for i in 0..list.len() {
+            let Some((_, list)) = self.handlers.get(index) else {
+                return;
+            };
+            let h = &list[i];
+            if h.mode.is_some() && h.mode.as_deref() != nearest {
+                continue;
+            }
+            let (script, f) = (h.script, h.f.clone());
+            let Some(s) = self.scripts.get(script) else {
                 continue;
             };
-            let arg = match event_table(&lua, value) {
-                Ok(t) => Value::Table(t),
-                Err(_) => continue,
-            };
+            if fill_event(&s.event, value).is_err() {
+                continue;
+            }
+            let arg = Value::Table(s.event.clone());
             self.run(script, &f, arg, api);
         }
     }
@@ -815,26 +914,27 @@ impl ScriptHost {
     pub fn next_deadline(&self) -> Option<Instant> {
         self.periodic.iter().filter_map(|p| p.next).min()
     }
-
-    /// Periodic functions not scheduled yet: the next tick should come soon.
-    pub fn starting(&self) -> bool {
-        self.periodic.iter().any(|p| p.next.is_none())
-    }
 }
 
-fn event_table(lua: &Lua, value: EventValue) -> mlua::Result<Table> {
-    let t = lua.create_table()?;
+/// The event table for a handler: `value`, and `pressed` (buttons) or `direction` (hats).
+fn fill_event(t: &Table, value: EventValue) -> mlua::Result<()> {
     match value {
-        EventValue::Axis(v) => t.set("value", f64::from(v))?,
+        EventValue::Axis(v) => {
+            t.raw_set("value", f64::from(v))?;
+            t.raw_set("pressed", Value::Nil)?;
+            t.raw_set("direction", Value::Nil)?;
+        }
         EventValue::Button(b) => {
-            t.set("value", b)?;
-            t.set("pressed", b)?;
+            t.raw_set("value", b)?;
+            t.raw_set("pressed", b)?;
+            t.raw_set("direction", Value::Nil)?;
         }
         EventValue::Hat(d) => {
             let deg = d.map(|d| f64::from(d) / 100.0);
-            t.set("value", deg)?;
-            t.set("direction", deg)?;
+            t.raw_set("value", deg)?;
+            t.raw_set("pressed", Value::Nil)?;
+            t.raw_set("direction", deg)?;
         }
     }
-    Ok(t)
+    Ok(())
 }

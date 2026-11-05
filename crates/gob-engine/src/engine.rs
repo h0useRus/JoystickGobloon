@@ -643,10 +643,14 @@ pub struct Engine {
     run_releases: HashMap<NodeId, u64>,
     /// The profile's Lua scripts; `None` without any.
     scripts: Option<ScriptHost>,
-    /// Inputs a script handler listens to: other events never reach the scripts.
-    script_keys: HashSet<InputKey>,
-    /// Each mode's parent, for script handlers of parent modes.
-    mode_parents: HashMap<String, String>,
+    /// Inputs a script handler listens to, with their index in the host: other events never
+    /// reach the scripts.
+    script_keys: HashMap<InputKey, usize>,
+    /// The profile's modes, for scripts' `mode.switch`.
+    script_modes: HashSet<String>,
+    /// Keys and virtual stick hats scripts hold, released by [`Engine::release_all`].
+    script_keys_down: Vec<Key>,
+    script_hats: Vec<(u32, u8)>,
     /// Action names (card titles) to their ids, for scripts' `run_action`.
     action_labels: HashMap<String, String>,
 }
@@ -747,8 +751,10 @@ impl Engine {
             run_targets: HashMap::new(),
             run_releases: HashMap::new(),
             scripts: None,
-            script_keys: HashSet::new(),
-            mode_parents: HashMap::new(),
+            script_keys: HashMap::new(),
+            script_modes: HashSet::new(),
+            script_keys_down: Vec::new(),
+            script_hats: Vec::new(),
             action_labels: HashMap::new(),
         };
         for m in profile.library.iter().filter(|a| a.kind == "macro") {
@@ -1484,7 +1490,12 @@ impl Engine {
                 let step = a.moving.then(|| a.last_step + AXIS_STEP);
                 step.into_iter().chain(a.spring_at).min()
             }))
-            .chain(self.scripts.as_ref().and_then(ScriptHost::next_deadline))
+            .chain(
+                self.scripts
+                    .as_ref()
+                    .filter(|_| !self.paused)
+                    .and_then(ScriptHost::next_deadline),
+            )
             .min()
     }
 
@@ -1604,26 +1615,31 @@ impl Engine {
         if loaded.is_empty() {
             return;
         }
-        let host = ScriptHost::load(&loaded);
+        let mut host = ScriptHost::load(&loaded);
+        let modes: Vec<(String, Option<String>)> = profile
+            .modes
+            .iter()
+            .map(|m| (m.name.clone(), m.parent.clone()))
+            .collect();
+        host.set_modes(&modes);
+        self.script_modes = modes.into_iter().map(|(m, _)| m).collect();
+        // A profile's stick may be another attached one: handlers listen to that one.
+        host.map_devices(|d| self.device(d).to_string());
         self.script_keys = host
             .inputs()
-            .map(|i| {
+            .map(|(index, i)| {
                 let kind = match i.kind {
                     ScriptKind::Axis => InputKind::Axis,
                     ScriptKind::Button => InputKind::Button,
                     ScriptKind::Hat => InputKind::Hat,
                 };
-                InputKey {
-                    device: self.device(&i.device),
+                let key = InputKey {
+                    device: i.device.as_str().into(),
                     kind,
                     id: i.id,
-                }
+                };
+                (key, index)
             })
-            .collect();
-        self.mode_parents = profile
-            .modes
-            .iter()
-            .filter_map(|m| Some((m.name.clone(), m.parent.clone()?)))
             .collect();
         self.action_labels = profile
             .library
@@ -1645,39 +1661,35 @@ impl Engine {
             .unwrap_or_default()
     }
 
-    /// The current mode and the modes it inherits from, nearest first.
-    fn mode_chain(&self) -> Vec<String> {
-        let mut chain = vec![self.modes.current().to_string()];
-        while chain.len() < MAX_DEPTH {
-            match self
-                .mode_parents
-                .get(chain.last().map_or("", String::as_str))
-            {
-                Some(p) if !chain.contains(p) => chain.push(p.clone()),
-                _ => break,
-            }
+    /// Runs the script handlers of an input event in `mode` (the mode when the event came).
+    fn run_scripts(
+        &mut self,
+        key: &InputKey,
+        value: Value,
+        mode: &str,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        if self.paused {
+            return;
         }
-        chain
-    }
-
-    fn run_scripts(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
+        let Some(&index) = self.script_keys.get(key) else {
+            return;
+        };
         let Some(mut host) = self.scripts.take() else {
             return;
         };
-        let (kind, event) = match value {
-            Value::Axis(v) => (ScriptKind::Axis, EventValue::Axis(v)),
-            Value::Button(b) => (ScriptKind::Button, EventValue::Button(b)),
-            Value::Hat(d) => (ScriptKind::Hat, EventValue::Hat(d)),
+        let event = match value {
+            Value::Axis(v) => EventValue::Axis(v),
+            Value::Button(b) => EventValue::Button(b),
+            Value::Hat(d) => EventValue::Hat(d),
         };
-        let input = ScriptInput::new(&key.device, kind, key.id);
-        let chain = self.mode_chain();
-        let modes: Vec<&str> = chain.iter().map(String::as_str).collect();
         let mut api = ScriptContext {
             engine: self,
             out,
             now,
         };
-        host.event(&input, event, &modes, &mut api);
+        host.event_at(index, event, mode, &mut api);
         self.scripts = Some(host);
     }
 
@@ -1738,12 +1750,16 @@ impl Engine {
     pub fn process(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
         let layer = self.held_layer();
         self.seed(key, value);
+        let before = self.modes.shared();
+        // Script handlers first, like Gremlin's user scripts; the event's actions still run in
+        // the mode it came in, even when a handler switched modes.
+        self.run_scripts(key, value, &before, now, out);
         if self.is_modifier(key) {
             self.after_layer_change(&layer, now, out);
+            self.after_mode_change(&before, now, out);
             return;
         }
-        let before = self.modes.shared();
-        self.dispatch(key, value, now, out);
+        self.dispatch(key, value, before.clone(), now, out);
         self.after_mode_change(&before, now, out);
     }
 
@@ -1931,18 +1947,22 @@ impl Engine {
         });
         let axes: Vec<(InputKey, f32)> = self.axes.iter().map(|(k, v)| (k.clone(), *v)).collect();
         for (key, v) in axes {
-            self.dispatch(&key, Value::Axis(v), now, out);
+            let mode = self.modes.shared();
+            self.dispatch(&key, Value::Axis(v), mode, now, out);
         }
     }
 
-    fn dispatch(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
-        // Script handlers first, like Gremlin's user scripts.
-        if !self.paused && self.script_keys.contains(key) {
-            self.run_scripts(key, value, now, out);
-        }
+    fn dispatch(
+        &mut self,
+        key: &InputKey,
+        value: Value,
+        mode: Arc<str>,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
         let src = Source {
             key: key.clone(),
-            mode: self.modes.shared(),
+            mode,
             no_auto_release: false,
         };
         let layer = self.event_layer(key, value);
@@ -2769,6 +2789,12 @@ impl Engine {
     /// gamepad buttons, latched and repeating outputs. Called when the profile stops or
     /// another one takes over (the virtual devices stay, so nothing else would release them).
     pub fn release_all(&mut self, out: &mut dyn Output) {
+        for key in std::mem::take(&mut self.script_keys_down) {
+            out.key(key.scan_code, key.extended, false);
+        }
+        for (device, hat) in std::mem::take(&mut self.script_hats) {
+            out.hat(device, hat, None);
+        }
         // Actions run-action steps hold pressed go up first, at their release time, so their
         // own state (taps, tempo, toggles) is not left down; what they hold is released below.
         self.run_releases.clear();
@@ -3560,7 +3586,9 @@ impl Engine {
         self.logical_depth += 1;
         self.logical_changed = true;
         self.seed(key, value);
-        self.dispatch(key, value, now, out);
+        let mode = self.modes.shared();
+        self.run_scripts(key, value, &mode, now, out);
+        self.dispatch(key, value, mode, now, out);
         self.logical_depth -= 1;
     }
 
@@ -4203,6 +4231,11 @@ impl ScriptApi for ScriptContext<'_> {
         self.engine.vjoy_button(device, button, pressed, self.out);
     }
     fn vjoy_hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
+        let held = &mut self.engine.script_hats;
+        held.retain(|&h| h != (device, hat));
+        if direction.is_some() {
+            held.push((device, hat));
+        }
         self.out.hat(device, hat, direction);
     }
     fn gamepad_button(&mut self, gamepad: u32, control: &str, pressed: bool) {
@@ -4222,6 +4255,11 @@ impl ScriptApi for ScriptContext<'_> {
         }
     }
     fn key(&mut self, key: Key, pressed: bool) {
+        let held = &mut self.engine.script_keys_down;
+        held.retain(|&k| k != key);
+        if pressed {
+            held.push(key);
+        }
         self.out.key(key.scan_code, key.extended, pressed);
     }
     fn mouse_button(&mut self, button: MouseButton, pressed: bool) {
@@ -4240,8 +4278,12 @@ impl ScriptApi for ScriptContext<'_> {
     fn current_mode(&self) -> String {
         self.engine.modes.current().to_string()
     }
-    fn switch_mode(&mut self, mode: &str) {
+    fn switch_mode(&mut self, mode: &str) -> bool {
+        if !self.engine.script_modes.contains(mode) {
+            return false;
+        }
         self.engine.modes.switch_to(mode, false);
+        true
     }
     fn input(&self, input: &ScriptInput) -> Option<EventValue> {
         let kind = match input.kind {

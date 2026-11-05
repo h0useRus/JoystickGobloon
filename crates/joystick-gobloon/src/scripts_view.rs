@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::SystemTime;
 
 use eframe::egui::{self, RichText};
@@ -40,15 +41,32 @@ struct FileCode {
     code: Result<String, String>,
 }
 
-#[derive(Default)]
+/// A finished check of a script: its id, the code's hash and what `describe` found.
+type Checked = (String, u64, Result<Vec<VariableDecl>, ScriptError>);
+
 pub struct ScriptsView {
     selected: Option<String>,
+    /// The last finished check of each script.
     described: HashMap<String, Described>,
+    /// Scripts being checked on another thread, with the hash of the code checked.
+    checking: HashMap<String, u64>,
+    checked: (Sender<Checked>, Receiver<Checked>),
     files: HashMap<PathBuf, FileCode>,
-    /// Modification times of the running profile's script files.
-    watched: Vec<(PathBuf, Option<SystemTime>)>,
     /// JOYSTICK_GOBLOON_EXPAND was handled (debug builds).
     debug_selected: bool,
+}
+
+impl Default for ScriptsView {
+    fn default() -> Self {
+        Self {
+            selected: None,
+            described: HashMap::new(),
+            checking: HashMap::new(),
+            checked: std::sync::mpsc::channel(),
+            files: HashMap::new(),
+            debug_selected: false,
+        }
+    }
 }
 
 fn hash(code: &str) -> u64 {
@@ -94,42 +112,40 @@ impl ScriptsView {
         }
     }
 
+    /// What the script declares, checked on another thread (a script's top level may run up
+    /// to [`gob_script::LOAD_BUDGET`]; the window never waits). Until a check of the current
+    /// code is done, the last one, or `None` before the first.
     fn describe(
         &mut self,
+        ctx: &egui::Context,
         s: &ScriptInstance,
         code: &str,
-    ) -> &Result<Vec<VariableDecl>, ScriptError> {
+    ) -> Option<&Result<Vec<VariableDecl>, ScriptError>> {
         let code_hash = hash(code);
         let fresh = self
             .described
             .get(&s.id)
             .is_some_and(|d| d.code_hash == code_hash);
-        if !fresh {
-            let result = gob_script::describe(&s.name, code);
-            self.described
-                .insert(s.id.clone(), Described { code_hash, result });
+        // One check per script at a time; the newest code is checked after it.
+        if !fresh && !self.checking.contains_key(&s.id) {
+            self.checking.insert(s.id.clone(), code_hash);
+            let (id, name, code) = (s.id.clone(), s.name.clone(), code.to_string());
+            let (tx, ctx) = (self.checked.0.clone(), ctx.clone());
+            std::thread::spawn(move || {
+                let result = gob_script::describe(&name, &code);
+                let _ = tx.send((id, code_hash, result));
+                ctx.request_repaint();
+            });
         }
-        &self.described[&s.id].result
+        self.described.get(&s.id).map(|d| &d.result)
     }
 
-    /// The running profile's script files changed since the last call (none on the first).
-    pub fn files_changed(&mut self, profile: &Profile, base: Option<&Path>) -> bool {
-        let now: Vec<(PathBuf, Option<SystemTime>)> = profile
-            .script_instances()
-            .into_iter()
-            .filter(|s| s.language == ScriptLanguage::Lua)
-            .filter_map(|s| match s.source {
-                ScriptSource::File(p) => Some(script_path(&p, base)),
-                ScriptSource::Code(_) => None,
-            })
-            .map(|p| {
-                let m = modified(&p);
-                (p, m)
-            })
-            .collect();
-        let changed = !self.watched.is_empty() && self.watched != now;
-        self.watched = now;
-        changed
+    /// Takes the checks that finished.
+    fn collect_checks(&mut self) {
+        while let Ok((id, code_hash, result)) = self.checked.1.try_recv() {
+            self.checking.remove(&id);
+            self.described.insert(id, Described { code_hash, result });
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -144,6 +160,7 @@ impl ScriptsView {
         ops: &mut Vec<Op>,
     ) {
         let scripts = profile.script_instances();
+        self.collect_checks();
         // Debug builds: JOYSTICK_GOBLOON_EXPAND=script2 selects the second script (screenshots).
         if cfg!(debug_assertions) && !self.debug_selected {
             self.debug_selected = true;
@@ -164,7 +181,7 @@ impl ScriptsView {
         // Every Lua script is checked (cached by its code), so the list marks broken ones.
         for sc in scripts.iter().filter(|x| x.language == ScriptLanguage::Lua) {
             if let Ok(code) = self.code(sc, base) {
-                self.describe(sc, &code);
+                self.describe(ui.ctx(), sc, &code);
             }
         }
         let list_width = 280.0;
@@ -375,8 +392,11 @@ impl ScriptsView {
                 return;
             }
         };
-        let result = self.describe(s, &code).clone();
-        let error_line = result.as_ref().err().and_then(|e| e.line);
+        let result = self.describe(ui.ctx(), s, &code).cloned();
+        let error_line = result
+            .as_ref()
+            .and_then(|r| r.as_ref().err())
+            .and_then(|e| e.line);
         if let ScriptSource::Code(_) = &s.source {
             let mut edited = code.clone();
             let editor = style::CodeEditor::new(&mut edited, ("script-code", &id))
@@ -390,6 +410,10 @@ impl ScriptsView {
             }
         }
         ui.add_space(style::SPACE_S);
+        let Some(result) = result else {
+            ui.spinner();
+            return;
+        };
         let decls = match result {
             Ok(decls) => decls,
             Err(e) => {

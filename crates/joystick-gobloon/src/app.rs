@@ -1701,14 +1701,8 @@ impl JoystickGobloonApp {
             return;
         }
         self.scripts_checked = std::time::Instant::now();
-        let folder = self.profile_folder();
-        let changed = match &self.profile {
-            Some(p) if self.activation.is_active() => self
-                .scripts_view
-                .files_changed(&p.profile, folder.as_deref()),
-            _ => false,
-        };
-        if changed {
+        // Against the files as the running profile read them.
+        if self.activation.script_files_changed() {
             log::info!("script file changed: reloading the profile");
             if let Err(e) = self.activation.reload() {
                 let text = self.i18n.trf("activate-error", &[("error", e.into())]);

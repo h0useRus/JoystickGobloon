@@ -46,8 +46,9 @@ impl ScriptApi for Api {
     fn current_mode(&self) -> String {
         self.mode.clone()
     }
-    fn switch_mode(&mut self, mode: &str) {
+    fn switch_mode(&mut self, mode: &str) -> bool {
         self.out.push(format!("mode {mode}"));
+        mode != "Nowhere"
     }
     fn input(&self, input: &ScriptInput) -> Option<EventValue> {
         (input.kind == InputKind::Axis).then_some(EventValue::Axis(0.25))
@@ -119,21 +120,21 @@ fn axis_values(mode: &str) -> Vec<(String, ScriptValue)> {
 #[test]
 fn handlers_run_in_their_mode_and_its_children() {
     let mut host = ScriptHost::load(&[script(AXIS_SCRIPT, axis_values("Flight"))]);
+    host.set_modes(&[
+        ("Default".into(), None),
+        ("Flight".into(), None),
+        ("Landing".into(), Some("Flight".into())),
+    ]);
     assert!(host.take_errors().is_empty());
     let input = ScriptInput::new(STICK, InputKind::Axis, 2);
     assert!(host.handles(&input));
     let mut api = Api::default();
-    host.event(&input, EventValue::Axis(0.4), &["Flight"], &mut api);
+    host.event(&input, EventValue::Axis(0.4), "Flight", &mut api);
     // Speed 5 is clamped to its max 2.
     assert_eq!(api.out, ["axis 1 3 0.80"]);
-    host.event(
-        &input,
-        EventValue::Axis(0.4),
-        &["Landing", "Flight"],
-        &mut api,
-    );
+    host.event(&input, EventValue::Axis(0.4), "Landing", &mut api);
     assert_eq!(api.out.len(), 2, "a child mode inherits the handler");
-    host.event(&input, EventValue::Axis(0.4), &["Default"], &mut api);
+    host.event(&input, EventValue::Axis(0.4), "Default", &mut api);
     assert_eq!(api.out.len(), 2, "not in another mode");
 }
 
@@ -153,6 +154,7 @@ script.on_input("AAAAAAAA-0000-0000-0000-000000000001", "button", 1, function(e)
     mode.switch(mode.current() .. "2")
     speak(joystick.axis("AAAAAAAA-0000-0000-0000-000000000001", 1))
     if run_action("Lights") then log("ran", 1) end
+    mode.switch("Nowhere")
 end)
 "#;
     let values = vec![(
@@ -169,8 +171,8 @@ end)
         ..Api::default()
     };
     let input = ScriptInput::new(STICK, InputKind::Button, 1);
-    host.event(&input, EventValue::Button(true), &["Default"], &mut api);
-    host.event(&input, EventValue::Button(false), &["Default"], &mut api);
+    host.event(&input, EventValue::Button(true), "Default", &mut api);
+    host.event(&input, EventValue::Button(false), "Default", &mut api);
     assert_eq!(
         api.out,
         [
@@ -185,9 +187,16 @@ end)
             "mode Default2",
             "say 0.25",
             "run Lights",
+            "mode Nowhere",
         ]
     );
-    assert!(host.take_errors().is_empty());
+    let errors = host.take_errors();
+    assert_eq!(errors.len(), 1, "an unknown mode is an error");
+    assert!(
+        errors[0].message.contains("no mode 'Nowhere'"),
+        "{}",
+        errors[0]
+    );
 }
 
 #[test]
@@ -196,7 +205,6 @@ fn periodic_functions_keep_their_rhythm() {
     let mut host = ScriptHost::load(&[script(code, Vec::new())]);
     let mut api = Api::default();
     let t0 = Instant::now();
-    assert!(host.starting());
     host.tick(t0, &mut api);
     assert_eq!(host.next_deadline(), Some(t0 + Duration::from_millis(100)));
     host.tick(t0 + Duration::from_millis(99), &mut api);
@@ -230,7 +238,7 @@ fn a_runaway_script_is_stopped_and_switched_off() {
     let input = ScriptInput::new("dev", InputKind::Button, 1);
     let start = Instant::now();
     for _ in 0..12 {
-        host.event(&input, EventValue::Button(true), &["Default"], &mut api);
+        host.event(&input, EventValue::Button(true), "Default", &mut api);
     }
     assert!(
         start.elapsed() < Duration::from_secs(2),
