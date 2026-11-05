@@ -866,9 +866,13 @@ impl Editor<'_> {
         if voice || !speakable(action) {
             return;
         }
+        // A link, not a recording: the microphone carries an arrow (go to its command) or a
+        // plus (make one).
         if let Some(id) = self.profile.voice_command_running(&action.id) {
             let tip = self.i18n.tr("voice-from-action-go");
-            if style::icon_toggle(ui, true, icon::MICROPHONE, &tip).clicked() {
+            if style::icon_badge_button(ui, true, icon::MICROPHONE, icon::ARROW_UP_RIGHT, &tip)
+                .clicked()
+            {
                 self.ops.push(Op::GoToVoice(id));
             }
             return;
@@ -877,13 +881,12 @@ impl Editor<'_> {
             .label()
             .map(str::trim)
             .filter(|l| !l.is_empty() && *l != "None");
-        let button = style::icon_button(
-            ui,
-            name.is_some(),
-            icon::MICROPHONE,
-            &self.i18n.tr("voice-from-action"),
-        )
-        .on_disabled_hover_text(self.i18n.tr("voice-from-action-name-first"));
+        let tip = match name {
+            Some(_) => self.i18n.tr("voice-from-action"),
+            None => self.i18n.tr("voice-from-action-name-first"),
+        };
+        let button =
+            style::icon_badge_button(ui, name.is_some(), icon::MICROPHONE, icon::PLUS, &tip);
         if let (true, Some(name)) = (button.clicked(), name) {
             self.ops.push(Op::VoiceFromAction {
                 action: action.id.clone(),
