@@ -237,6 +237,15 @@ fn read_instance(el: &Element) -> ScriptInstance {
     }
 }
 
+/// An external script's file: `path` as it is when absolute, else in `base` (the profile's folder).
+pub fn script_path(path: &str, base: Option<&std::path::Path>) -> std::path::PathBuf {
+    let p = std::path::Path::new(path.trim());
+    match base {
+        Some(base) if p.is_relative() => base.join(p),
+        _ => p.to_path_buf(),
+    }
+}
+
 impl Profile {
     /// The profile's scripts, in order.
     pub fn script_instances(&self) -> Vec<ScriptInstance> {
@@ -347,6 +356,27 @@ impl Profile {
             (None, Some(v)) => el.push(variable_node(name, v)),
             (None, None) => {}
         }
+    }
+
+    /// Puts the code of external Lua script files into the profile, for running it (the engine
+    /// reads no files). Relative paths are taken from `base`, the profile's folder. Returns the
+    /// scripts whose file could not be read, with the error.
+    pub fn read_script_files(&mut self, base: Option<&std::path::Path>) -> Vec<(String, String)> {
+        let mut failed = Vec::new();
+        for s in self.script_instances() {
+            let ScriptSource::File(path) = &s.source else {
+                continue;
+            };
+            if s.language != ScriptLanguage::Lua {
+                continue;
+            }
+            let path = script_path(path, base);
+            match std::fs::read_to_string(&path) {
+                Ok(code) => self.set_script_source(&s.id, &ScriptSource::Code(code)),
+                Err(e) => failed.push((s.name.clone(), format!("{}: {e}", path.display()))),
+            }
+        }
+        failed
     }
 
     /// Joystick Gremlin's Python scripts, kept but not run.

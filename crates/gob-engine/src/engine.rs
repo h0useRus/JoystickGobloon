@@ -13,6 +13,10 @@ use crate::media::{SpeechQueue, SpeechRequest};
 use crate::modes::ModeStack;
 use crate::motion::{Motion, compass};
 use crate::{GamepadControl, InputKey, InputKind, Light, LogicalValues, Output, Value};
+use gob_script::{
+    EventValue, InputKind as ScriptKind, LoadedScript, ScriptApi, ScriptError, ScriptHost,
+    ScriptInput,
+};
 use gob_virtual::ControlKind;
 
 /// Delay between press and release of a pulse (Gremlin: 50 ms).
@@ -637,6 +641,14 @@ pub struct Engine {
     run_targets: HashMap<String, Vec<String>>,
     /// Release timer of each action a run-action step holds pressed.
     run_releases: HashMap<NodeId, u64>,
+    /// The profile's Lua scripts; `None` without any.
+    scripts: Option<ScriptHost>,
+    /// Inputs a script handler listens to: other events never reach the scripts.
+    script_keys: HashSet<InputKey>,
+    /// Each mode's parent, for script handlers of parent modes.
+    mode_parents: HashMap<String, String>,
+    /// Action names (card titles) to their ids, for scripts' `run_action`.
+    action_labels: HashMap<String, String>,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -734,6 +746,10 @@ impl Engine {
             action_nodes: HashMap::new(),
             run_targets: HashMap::new(),
             run_releases: HashMap::new(),
+            scripts: None,
+            script_keys: HashSet::new(),
+            mode_parents: HashMap::new(),
+            action_labels: HashMap::new(),
         };
         for m in profile.library.iter().filter(|a| a.kind == "macro") {
             let targets = m.run_targets();
@@ -868,6 +884,7 @@ impl Engine {
         engine.compiled_decrease.clear();
         engine.compiled_lights.clear();
         engine.inherit_modes(profile);
+        engine.load_scripts(profile);
         // A child mode that binds a decrease input itself has a set of its own for it, so it
         // does not inherit the decrease entry: it gets one in every mode that inherits the
         // action's own input, as the action runs there too.
@@ -1467,6 +1484,7 @@ impl Engine {
                 let step = a.moving.then(|| a.last_step + AXIS_STEP);
                 step.into_iter().chain(a.spring_at).min()
             }))
+            .chain(self.scripts.as_ref().and_then(ScriptHost::next_deadline))
             .min()
     }
 
@@ -1547,6 +1565,8 @@ impl Engine {
         if !std::mem::replace(&mut self.started, true) {
             self.write_start_values(out);
         }
+        // Schedules the scripts' periodic functions.
+        self.tick_scripts(Instant::now(), out);
         let mode = self.modes.current();
         let mut configs: Vec<&Config> = self
             .lookup
@@ -1561,6 +1581,120 @@ impl Engine {
         for light in configs.iter().flat_map(|c| &c.lights) {
             out.light_led(light);
         }
+    }
+
+    /// Loads the profile's Lua scripts stored in it (external files are read in by the app).
+    fn load_scripts(&mut self, profile: &Profile) {
+        let loaded: Vec<LoadedScript> = profile
+            .script_instances()
+            .into_iter()
+            .filter(|s| s.language == gob_core::ScriptLanguage::Lua)
+            .filter_map(|s| match s.source {
+                gob_core::ScriptSource::Code(code) => Some(LoadedScript {
+                    name: s.name,
+                    code,
+                    values: s.variables,
+                }),
+                gob_core::ScriptSource::File(path) => {
+                    log::warn!("script {}: file {path} was not read in", s.name);
+                    None
+                }
+            })
+            .collect();
+        if loaded.is_empty() {
+            return;
+        }
+        let host = ScriptHost::load(&loaded);
+        self.script_keys = host
+            .inputs()
+            .map(|i| {
+                let kind = match i.kind {
+                    ScriptKind::Axis => InputKind::Axis,
+                    ScriptKind::Button => InputKind::Button,
+                    ScriptKind::Hat => InputKind::Hat,
+                };
+                InputKey {
+                    device: self.device(&i.device),
+                    kind,
+                    id: i.id,
+                }
+            })
+            .collect();
+        self.mode_parents = profile
+            .modes
+            .iter()
+            .filter_map(|m| Some((m.name.clone(), m.parent.clone()?)))
+            .collect();
+        self.action_labels = profile
+            .library
+            .iter()
+            .filter_map(|a| {
+                let label = a.label()?.trim();
+                (!label.is_empty() && label != "None").then(|| (label.to_string(), a.id.clone()))
+            })
+            .collect();
+        self.scripts = Some(host);
+    }
+
+    /// Script errors since the last call, one per script: load errors and a script's first error
+    /// while it runs.
+    pub fn take_script_errors(&mut self) -> Vec<ScriptError> {
+        self.scripts
+            .as_mut()
+            .map(ScriptHost::take_errors)
+            .unwrap_or_default()
+    }
+
+    /// The current mode and the modes it inherits from, nearest first.
+    fn mode_chain(&self) -> Vec<String> {
+        let mut chain = vec![self.modes.current().to_string()];
+        while chain.len() < MAX_DEPTH {
+            match self
+                .mode_parents
+                .get(chain.last().map_or("", String::as_str))
+            {
+                Some(p) if !chain.contains(p) => chain.push(p.clone()),
+                _ => break,
+            }
+        }
+        chain
+    }
+
+    fn run_scripts(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
+        let Some(mut host) = self.scripts.take() else {
+            return;
+        };
+        let (kind, event) = match value {
+            Value::Axis(v) => (ScriptKind::Axis, EventValue::Axis(v)),
+            Value::Button(b) => (ScriptKind::Button, EventValue::Button(b)),
+            Value::Hat(d) => (ScriptKind::Hat, EventValue::Hat(d)),
+        };
+        let input = ScriptInput::new(&key.device, kind, key.id);
+        let chain = self.mode_chain();
+        let modes: Vec<&str> = chain.iter().map(String::as_str).collect();
+        let mut api = ScriptContext {
+            engine: self,
+            out,
+            now,
+        };
+        host.event(&input, event, &modes, &mut api);
+        self.scripts = Some(host);
+    }
+
+    fn tick_scripts(&mut self, now: Instant, out: &mut dyn Output) {
+        if self.paused {
+            return;
+        }
+        let Some(mut host) = self.scripts.take() else {
+            return;
+        };
+        let mut api = ScriptContext {
+            engine: self,
+            out,
+            now,
+        };
+        host.tick(now, &mut api);
+        self.scripts = Some(host);
     }
 
     /// Start values of the button-axis actions, the first one met for each axis.
@@ -1756,6 +1890,7 @@ impl Engine {
         self.step_relative(now, out);
         self.step_logical(now, out);
         self.step_button_axes(now, out);
+        self.tick_scripts(now, out);
         if let Some((dx, dy)) = self.motion.step(now)
             && (dx != 0 || dy != 0)
         {
@@ -1801,6 +1936,10 @@ impl Engine {
     }
 
     fn dispatch(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
+        // Script handlers first, like Gremlin's user scripts.
+        if !self.paused && self.script_keys.contains(key) {
+            self.run_scripts(key, value, now, out);
+        }
         let src = Source {
             key: key.clone(),
             mode: self.modes.shared(),
@@ -4046,6 +4185,112 @@ fn apply_deadzone(value: f32, [low, center_low, center_high, high]: [f32; 4]) ->
         ((value - center_high) / (high - center_high).abs().max(0.01)).clamp(0.0, 1.0)
     } else {
         ((value - center_low) / (low - center_low).abs().max(0.01)).clamp(-1.0, 0.0)
+    }
+}
+
+/// What scripts reach while one of their functions runs: the engine and its outputs.
+struct ScriptContext<'a> {
+    engine: &'a mut Engine,
+    out: &'a mut dyn Output,
+    now: Instant,
+}
+
+impl ScriptApi for ScriptContext<'_> {
+    fn vjoy_axis(&mut self, device: u32, axis: u8, value: f32) {
+        self.engine.set_axis(device, axis, value, self.out);
+    }
+    fn vjoy_button(&mut self, device: u32, button: u8, pressed: bool) {
+        self.engine.vjoy_button(device, button, pressed, self.out);
+    }
+    fn vjoy_hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
+        self.out.hat(device, hat, direction);
+    }
+    fn gamepad_button(&mut self, gamepad: u32, control: &str, pressed: bool) {
+        if let Some(c) = GamepadControl::parse(control) {
+            self.engine.pad_button(gamepad, c, pressed, self.out);
+        }
+    }
+    fn gamepad_axis(&mut self, gamepad: u32, control: &str, value: f32) {
+        if let Some(c) = GamepadControl::parse(control) {
+            let low = if c.kind() == ControlKind::Trigger {
+                0.0
+            } else {
+                -1.0
+            };
+            self.engine
+                .pad_axis(gamepad, c, value.clamp(low, 1.0), self.out);
+        }
+    }
+    fn key(&mut self, key: Key, pressed: bool) {
+        self.out.key(key.scan_code, key.extended, pressed);
+    }
+    fn mouse_button(&mut self, button: MouseButton, pressed: bool) {
+        match button {
+            MouseButton::WheelUp => self.out.mouse_wheel(1),
+            MouseButton::WheelDown => self.out.mouse_wheel(-1),
+            b => self.engine.mouse_button(b, pressed, self.out),
+        }
+    }
+    fn mouse_move(&mut self, dx: i32, dy: i32) {
+        self.out.mouse_move(dx, dy);
+    }
+    fn mouse_wheel(&mut self, notches: i32) {
+        self.out.mouse_wheel(notches);
+    }
+    fn current_mode(&self) -> String {
+        self.engine.modes.current().to_string()
+    }
+    fn switch_mode(&mut self, mode: &str) {
+        self.engine.modes.switch_to(mode, false);
+    }
+    fn input(&self, input: &ScriptInput) -> Option<EventValue> {
+        let kind = match input.kind {
+            ScriptKind::Axis => InputKind::Axis,
+            ScriptKind::Button => InputKind::Button,
+            ScriptKind::Hat => InputKind::Hat,
+        };
+        let key = InputKey {
+            device: self.engine.device(&input.device),
+            kind,
+            id: input.id,
+        };
+        match kind {
+            InputKind::Axis => self.engine.axes.get(&key).map(|v| EventValue::Axis(*v)),
+            InputKind::Button => self
+                .engine
+                .buttons
+                .get(&key)
+                .map(|b| EventValue::Button(*b)),
+            InputKind::Hat => self.engine.hats.get(&key).map(|d| EventValue::Hat(*d)),
+        }
+    }
+    fn speak(&mut self, text: &str) {
+        self.out.speak(SpeechRequest {
+            text: text.to_string(),
+            voice: None,
+            rate: 0.0,
+            volume: 1.0,
+            pitch: 0.0,
+            queue: SpeechQueue::Back,
+        });
+    }
+    fn play_sound(&mut self, file: &str, volume: u8) {
+        self.out.play_sound(file, volume);
+    }
+    fn run_action(&mut self, name: &str) -> bool {
+        let node = self
+            .engine
+            .action_labels
+            .get(name.trim())
+            .and_then(|id| self.engine.action_nodes.get(id))
+            .copied();
+        match node {
+            Some(node) => {
+                self.engine.run_action(node, self.now, self.out);
+                true
+            }
+            None => false,
+        }
     }
 }
 

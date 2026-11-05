@@ -36,7 +36,7 @@ pub use profile::{
     VirtualButton, VirtualDevices, VirtualJoystick, VirtualOutput, same_device_name,
     virtual_output, virtual_outputs,
 };
-pub use script::{ScriptInstance, ScriptLanguage, ScriptSource, ScriptValue};
+pub use script::{ScriptInstance, ScriptLanguage, ScriptSource, ScriptValue, script_path};
 pub use two_axis::{AxisInput, TWO_AXIS_KINDS};
 pub use voice::{
     DEFAULT_HOLD as DEFAULT_VOICE_HOLD, VOICE_GUID, VOICE_INPUT_TYPE, VoiceCommand, VoiceInput,

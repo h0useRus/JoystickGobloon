@@ -1934,6 +1934,7 @@ dependencies = [
  "gob-gremlin",
  "gob-input",
  "gob-lighting",
+ "gob-script",
  "gob-system",
  "gob-uinput",
  "gob-virtual",

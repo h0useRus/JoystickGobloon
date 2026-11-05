@@ -718,6 +718,11 @@ impl ScriptHost {
         self.handlers.is_empty() && self.periodic.is_empty()
     }
 
+    /// Every input a handler listens to.
+    pub fn inputs(&self) -> impl Iterator<Item = &ScriptInput> {
+        self.handlers.keys()
+    }
+
     /// A handler listens to `input`.
     pub fn handles(&self, input: &ScriptInput) -> bool {
         self.handlers.contains_key(input)
