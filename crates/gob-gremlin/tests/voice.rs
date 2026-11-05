@@ -1,5 +1,6 @@
 use gob_core::{
-    ActionKind, InputType, NewAction, Profile, Section, VOICE_GUID, VOICE_INPUT_TYPE, VoiceCommand,
+    ActionKind, InputType, Layer, NewAction, Profile, Section, VOICE_GUID, VOICE_INPUT_TYPE,
+    VoiceCommand,
 };
 
 const SAMPLE: &str = include_str!("../../../tests/fixtures/sample_r14.xml");
@@ -235,22 +236,16 @@ fn reads_hand_edited_commands() {
 /// found again for the card; removing the command leaves the action on its input.
 #[test]
 fn voice_command_for_an_action() {
+    let base = Layer::base();
     let mut p = voice_profile();
-    let root = p.bind(DEV, "button", "6", "Default");
-    let action = p
-        .add_child(
-            &root,
-            "actions",
-            gob_core::Action::new(&NewAction::MapToVjoy {
-                input_type: InputType::Button,
-                device: 1,
-                input_id: 8,
-            }),
-        )
-        .unwrap();
+    let action = button(&mut p, "6", 8);
     assert_eq!(p.voice_command_running(&action), None);
+    // "gear down" (2) runs nothing yet, so a new phrase gets the next id.
     let next = p.next_voice_command_id();
-    let id = p.add_voice_command_for(&action, "  next   target ", "Default");
+    assert_eq!(p.voice_command_for_phrase("next target"), Ok(next));
+    let id = p
+        .add_voice_command_for(&action, "  next   target ", "Default", &base)
+        .unwrap();
     assert_eq!(id, next);
     assert_eq!(p.voice_command(id).unwrap().phrases, ["next target"]);
     let p = reload(&p);
@@ -260,28 +255,98 @@ fn voice_command_for_an_action() {
         .iter()
         .find(|b| b.device_id == VOICE_GUID && b.input_id == id.to_string())
         .unwrap();
-    let voice_root = p.action(&b.configs[0].root_action).unwrap();
+    let voice_root = b.configs[0].root_action.clone();
     assert_eq!(
-        voice_root.child_ids(),
+        p.action(&voice_root).unwrap().child_ids(),
         [action.as_str()],
         "linked, not copied"
     );
 
     // The link removed on the Voice tab: the card links the same command again.
-    let voice_root = b.configs[0].root_action.clone();
     let mut p = p;
     p.remove_child(&voice_root, "actions", 0);
     assert_eq!(p.voice_command_running(&action), None);
-    let count = p.voice_commands.len();
-    assert_eq!(p.voice_command_id_for("Next Target"), id);
+    let count = (p.voice_commands.len(), p.inputs.len());
+    assert_eq!(p.voice_command_for_phrase("Next Target"), Ok(id));
     assert_eq!(
-        p.add_voice_command_for(&action, "Next Target", "Default"),
-        id
+        p.add_voice_command_for(&action, "Next Target", "Default", &base),
+        Some(id)
     );
-    assert_eq!(p.voice_commands.len(), count, "no second command");
+    assert_eq!(
+        (p.voice_commands.len(), p.inputs.len()),
+        count,
+        "no second command"
+    );
     assert_eq!(p.voice_command_running(&action), Some(id));
 
     p.remove_voice_command(id);
     assert!(p.action(&action).is_some(), "still on its input");
     assert_eq!(p.voice_command_running(&action), None);
+}
+
+/// A vJoy button action bound to stick button `input`.
+fn button(p: &mut Profile, input: &str, vjoy: u32) -> String {
+    let root = p.bind(DEV, "button", input, "Default");
+    p.add_child(
+        &root,
+        "actions",
+        gob_core::Action::new(&NewAction::MapToVjoy {
+            input_type: InputType::Button,
+            device: 1,
+            input_id: vjoy,
+        }),
+    )
+    .unwrap()
+}
+
+/// A phrase a command with other actions says is taken; one that runs nothing is reused, also
+/// through a padded hand-edited binding, in the card's layer.
+#[test]
+fn voice_command_for_an_action_reuses_only_empty_commands() {
+    let mut p = voice_profile();
+    let action = button(&mut p, "6", 8);
+    let commands = p.voice_commands.len();
+    assert_eq!(p.voice_command_for_phrase(" Lights  ON"), Err(1));
+    assert_eq!(
+        p.add_voice_command_for(&action, "lights on", "Default", &Layer::base()),
+        None
+    );
+    assert_eq!(p.voice_commands.len(), commands);
+    assert_eq!(p.voice_command_running(&action), None);
+
+    // "gear down" (2) has a padded binding of its own and no actions.
+    p.bind(VOICE_GUID, VOICE_INPUT_TYPE, "2", "Default");
+    let b = p.inputs.iter_mut().find(|b| b.input_id == "2").unwrap();
+    (b.input_id, b.input_type) = (" 2 ".into(), " voice ".into());
+    let bindings = p.inputs.len();
+    let shift = Layer::new(["Shift"]);
+    assert_eq!(
+        p.add_voice_command_for(&action, "gear down", "Default", &shift),
+        Some(2)
+    );
+    assert_eq!(p.inputs.len(), bindings, "the padded binding is reused");
+    let b = p.inputs.iter().find(|b| b.input_id.trim() == "2").unwrap();
+    assert!(
+        b.configs.iter().any(|c| c.layer == shift),
+        "the card's layer"
+    );
+    assert_eq!(p.voice_command_running(&action), Some(2));
+}
+
+/// An action wrapped in a container on the Voice tab still counts as linked, and a leftover
+/// binding of a removed command does not hide the real one.
+#[test]
+fn voice_links_look_inside_containers() {
+    let mut p = voice_profile();
+    let action = button(&mut p, "6", 8);
+    let stale = p.bind(VOICE_GUID, VOICE_INPUT_TYPE, "7", "Default");
+    p.add_ref(&stale, "actions", &action);
+    let root = p.bind(VOICE_GUID, VOICE_INPUT_TYPE, "2", "Default");
+    let tempo = p
+        .add_child(&root, "actions", gob_core::Action::new(&NewAction::Tempo))
+        .unwrap();
+    p.add_ref(&tempo, "short-actions", &action);
+    assert_eq!(p.voice_command_running(&action), Some(2));
+    assert_eq!(p.voice_command_running(&tempo), Some(2));
+    assert_eq!(p.voice_command_for_phrase("gear down"), Err(2));
 }

@@ -666,6 +666,7 @@ voice-add = Comando
 voice-from-action = Añadir un comando de voz que diga el nombre de esta acción
 voice-from-action-name-first = Primero pon nombre a esta acción: será la frase del comando de voz
 voice-from-action-go = Ir a su comando de voz
+voice-from-action-taken = Otro comando de voz ya dice «{ $phrase }»: pon otro nombre a esta acción
 voice-empty = Aún no hay comandos de voz: añade uno con el botón de arriba.
 voice-remove = Quitar este comando y sus asignaciones
 voice-phrases = Di cualquiera de estas frases:

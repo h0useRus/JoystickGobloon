@@ -711,10 +711,11 @@ impl Profile {
         mode: &str,
         layer: &Layer,
     ) -> String {
+        // Hand-edited profiles may pad their values; the binding is still the same one.
         let found = self.inputs.iter().position(|b| {
-            b.device_id.eq_ignore_ascii_case(device_id)
-                && b.input_type == input_type
-                && b.input_id == input_id
+            b.device_id.trim().eq_ignore_ascii_case(device_id.trim())
+                && b.input_type.trim() == input_type.trim()
+                && b.input_id.trim() == input_id.trim()
                 && b.mode == mode
         });
         if let Some(cfg) =

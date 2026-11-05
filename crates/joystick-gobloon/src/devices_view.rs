@@ -265,12 +265,7 @@ impl DevicesView {
             _ => true,
         });
         if let Some(id) = open {
-            let voice = gob_core::VOICE_GUID.to_string();
-            let key = (Kind::Voice, id);
-            self.selected_input.insert(voice.clone(), key);
-            self.scroll_to = Some((voice.clone(), key));
-            self.selected = Some(voice);
-            self.user_selected = true;
+            self.show_input(gob_core::VOICE_GUID, (Kind::Voice, id));
         }
     }
 
@@ -1285,6 +1280,7 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
+                    voice_links: Default::default(),
                 };
                 let first_op = editor.ops.len();
                 for (n, cfg) in configs.iter().enumerate() {
@@ -1346,6 +1342,7 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
+                    voice_links: Default::default(),
                 };
                 ui.horizontal(|ui| {
                     editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));

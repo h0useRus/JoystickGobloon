@@ -666,6 +666,7 @@ voice-add = Command
 voice-from-action = Add a voice command that says this action's name
 voice-from-action-name-first = Give this action a name first: it becomes the voice command's phrase
 voice-from-action-go = Go to its voice command
+voice-from-action-taken = Another voice command already says "{ $phrase }": give this action another name
 voice-empty = No voice commands yet: add one with the button above.
 voice-remove = Remove this command and its bindings
 voice-phrases = Say any of these phrases:

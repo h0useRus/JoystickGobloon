@@ -654,6 +654,7 @@ voice-add = 명령
 voice-from-action = 이 동작의 이름을 말하는 음성 명령 추가
 voice-from-action-name-first = 먼저 이 동작에 이름을 지정하세요: 이름이 음성 명령의 문구가 됩니다
 voice-from-action-go = 해당 음성 명령으로 이동
+voice-from-action-taken = 다른 음성 명령이 이미 "{ $phrase }"를 사용합니다: 이 동작에 다른 이름을 지정하세요
 voice-empty = 아직 음성 명령이 없습니다. 위 버튼으로 추가하세요.
 voice-remove = 이 명령과 할당 제거
 voice-phrases = 다음 문구 중 하나를 말하세요:

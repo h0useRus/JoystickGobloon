@@ -666,6 +666,7 @@ voice-add = Befehl
 voice-from-action = Sprachbefehl mit dem Namen dieser Aktion hinzufügen
 voice-from-action-name-first = Gib dieser Aktion zuerst einen Namen: Er wird zur Phrase des Sprachbefehls
 voice-from-action-go = Zu ihrem Sprachbefehl
+voice-from-action-taken = Ein anderer Sprachbefehl sagt bereits „{ $phrase }“: Gib dieser Aktion einen anderen Namen
 voice-empty = Noch keine Sprachbefehle: füge mit der Schaltfläche oben einen hinzu.
 voice-remove = Diesen Befehl und seine Belegungen entfernen
 voice-phrases = Sag einen dieser Sätze:

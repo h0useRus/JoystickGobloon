@@ -219,12 +219,13 @@ pub enum Op {
         id: u32,
     },
     AddVoiceCommand,
-    /// Adds a voice command saying `phrase` that runs `action` itself in `mode`; `id` is the id
-    /// it gets, which the page then opens.
+    /// Makes a voice command saying `phrase` run `action` itself in `mode` and `layer` (the
+    /// card's); `id` is the command it goes to, which the page then opens.
     VoiceFromAction {
         action: String,
         phrase: String,
         mode: String,
+        layer: Layer,
         id: u32,
     },
     /// Not an edit: the page opens voice command `id`.
@@ -456,9 +457,10 @@ pub fn apply(p: &mut Profile, op: Op) {
             action,
             phrase,
             mode,
+            layer,
             ..
         } => {
-            p.add_voice_command_for(&action, &phrase, &mode);
+            p.add_voice_command_for(&action, &phrase, &mode, &layer);
         }
         Op::RemoveVoiceCommand(id) => p.remove_voice_command(id),
         Op::SetVoicePhrases { id, phrases } => {
@@ -828,6 +830,8 @@ pub struct Editor<'a> {
     pub monotonic_curves: bool,
     /// A right click on empty space of the curve chart inverts the curve.
     pub curve_right_click_invert: bool,
+    /// Actions voice commands run, with the command (built once per frame, when a card needs it).
+    pub voice_links: std::cell::OnceCell<std::collections::HashMap<String, u32>>,
 }
 
 /// Whether one spoken press makes sense for the action, so its card offers a voice command:
@@ -838,12 +842,13 @@ fn speakable(action: &Action) -> bool {
         ActionKind::MapToGamepad { control, .. } => gob_virtual::GamepadControl::parse(control)
             .is_some_and(|c| c.kind() == gob_virtual::ControlKind::Button),
         ActionKind::MapToMouse(m) => matches!(m, MouseAction::Button(_)),
+        // A temporary mode lasts only as long as the command's short press.
+        ActionKind::ChangeMode { change_type, .. } => change_type != "Temporary",
         _ => matches!(
             action.kind.as_str(),
             "map-to-keyboard"
                 | "macro"
                 | "chain"
-                | "change-mode"
                 | "run-command"
                 | "play-sound"
                 | "text-to-speech"
@@ -857,7 +862,7 @@ impl Editor<'_> {
     /// An action card's voice command button: opens the command that runs the action, or makes
     /// one saying the card's name (none without a name). Not on a voice command's own actions.
     fn voice_button(&mut self, ui: &mut egui::Ui, action: &Action) {
-        let Some((mode, _)) = self.place else {
+        let Some((mode, layer)) = self.place else {
             return;
         };
         let voice = self
@@ -868,7 +873,8 @@ impl Editor<'_> {
         }
         // A link, not a recording: the microphone carries an arrow (go to its command) or a
         // plus (make one).
-        if let Some(id) = self.profile.voice_command_running(&action.id) {
+        let links = self.voice_links.get_or_init(|| self.profile.voice_links());
+        if let Some(&id) = links.get(&action.id) {
             let tip = self.i18n.tr("voice-from-action-go");
             if style::icon_badge_button(ui, true, icon::MICROPHONE, icon::ARROW_UP_RIGHT, &tip)
                 .clicked()
@@ -881,18 +887,26 @@ impl Editor<'_> {
             .label()
             .map(str::trim)
             .filter(|l| !l.is_empty() && *l != "None");
-        let tip = match name {
-            Some(_) => self.i18n.tr("voice-from-action"),
+        // The command it goes to; a phrase another command already says with other actions
+        // would make one word run both, so the card needs another name first.
+        let target = name.map(|n| (n, self.profile.voice_command_for_phrase(n)));
+        let tip = match &target {
             None => self.i18n.tr("voice-from-action-name-first"),
+            Some((_, Ok(_))) => self.i18n.tr("voice-from-action"),
+            Some((n, Err(_))) => self.i18n.trf(
+                "voice-from-action-taken",
+                &[("phrase", n.to_string().into())],
+            ),
         };
-        let button =
-            style::icon_badge_button(ui, name.is_some(), icon::MICROPHONE, icon::PLUS, &tip);
-        if let (true, Some(name)) = (button.clicked(), name) {
+        let enabled = matches!(target, Some((_, Ok(_))));
+        let button = style::icon_badge_button(ui, enabled, icon::MICROPHONE, icon::PLUS, &tip);
+        if let (true, Some((name, Ok(id)))) = (button.clicked(), target) {
             self.ops.push(Op::VoiceFromAction {
                 action: action.id.clone(),
                 phrase: name.to_string(),
                 mode: mode.to_string(),
-                id: self.profile.voice_command_id_for(name),
+                layer: layer.clone(),
+                id,
             });
         }
     }

@@ -88,8 +88,11 @@ impl Profile {
         }
     }
 
-    /// The command that has `phrase` among its phrases (case and extra spaces ignored).
-    pub fn voice_command_saying(&self, phrase: &str) -> Option<u32> {
+    /// Where a card's voice command saying `phrase` goes: `Ok` with the command already saying
+    /// it that runs nothing (its link was removed), else the next new one; `Err` with the
+    /// command that already says it and runs other actions (the phrase is taken). Case and
+    /// extra spaces are ignored.
+    pub fn voice_command_for_phrase(&self, phrase: &str) -> Result<u32, u32> {
         let norm = |p: &str| {
             p.split_whitespace()
                 .collect::<Vec<_>>()
@@ -97,49 +100,90 @@ impl Profile {
                 .to_lowercase()
         };
         let phrase = norm(phrase);
-        self.voice_commands
+        match self
+            .voice_commands
             .iter()
             .find(|c| c.phrases.iter().any(|p| norm(p) == phrase))
-            .map(|c| c.id)
+        {
+            Some(c) if self.voice_roots(c.id).any(|r| !r.child_ids().is_empty()) => Err(c.id),
+            Some(c) => Ok(c.id),
+            None => Ok(self.next_voice_command_id()),
+        }
     }
 
-    /// The command [`Profile::add_voice_command_for`] links `phrase` to: the one already saying
-    /// it, else the next new one.
-    pub fn voice_command_id_for(&self, phrase: &str) -> u32 {
-        self.voice_command_saying(phrase)
-            .unwrap_or_else(|| self.next_voice_command_id())
-    }
-
-    /// Makes the command saying `phrase` run the library action `action` itself (linked, not
-    /// copied) in `mode`: the command that already says it (e.g. after its link was removed),
-    /// else a new one. Returns its id.
-    pub fn add_voice_command_for(&mut self, action: &str, phrase: &str, mode: &str) -> u32 {
-        let id = match self.voice_command_saying(phrase) {
-            Some(id) => id,
-            None => {
-                let id = self.add_voice_command();
-                self.set_voice_phrases(id, &[phrase.to_string()]);
-                id
-            }
-        };
-        let root = self.bind(VOICE_GUID, VOICE_INPUT_TYPE, &id.to_string(), mode);
+    /// Makes a voice command saying `phrase` run the library action `action` itself (linked,
+    /// not copied) in `mode` and `layer`, like the card it comes from: the command that already
+    /// says it and runs nothing, else a new one. Returns its id, or `None` when another command
+    /// already says `phrase` and runs other actions.
+    pub fn add_voice_command_for(
+        &mut self,
+        action: &str,
+        phrase: &str,
+        mode: &str,
+        layer: &crate::Layer,
+    ) -> Option<u32> {
+        let id = self.voice_command_for_phrase(phrase).ok()?;
+        if self.voice_command(id).is_none() {
+            self.add_voice_command();
+            self.set_voice_phrases(id, &[phrase.to_string()]);
+        }
+        let root = self.bind_layer(VOICE_GUID, VOICE_INPUT_TYPE, &id.to_string(), mode, layer);
         self.add_ref(&root, "actions", action);
-        id
+        Some(id)
     }
 
-    /// The command that runs `action` directly (one of its bindings has it on top), if any.
-    pub fn voice_command_running(&self, action: &str) -> Option<u32> {
+    /// Root actions of command `id`'s bindings (every mode and layer).
+    fn voice_roots(&self, id: u32) -> impl Iterator<Item = &crate::Action> {
         self.inputs
             .iter()
-            .filter(|b| is_voice_binding(&b.device_id, &b.input_type))
-            .filter(|b| {
-                b.configs.iter().any(|c| {
-                    self.action(&c.root_action)
-                        .is_some_and(|r| r.child_ids().contains(&action))
-                })
+            .filter(move |b| {
+                is_voice_binding(&b.device_id, &b.input_type) && b.input_id.trim().parse() == Ok(id)
             })
-            .find_map(|b| b.input_id.trim().parse().ok())
-            .filter(|id| self.voice_command(*id).is_some())
+            .flat_map(|b| &b.configs)
+            .filter_map(|c| self.action(&c.root_action))
+    }
+
+    /// Every action a voice command runs, anywhere among its actions, with the command's id
+    /// (the first command when several run it). Bindings of removed commands do not count.
+    pub fn voice_links(&self) -> std::collections::HashMap<String, u32> {
+        let index = self.action_index();
+        let mut links = std::collections::HashMap::new();
+        for b in &self.inputs {
+            if !is_voice_binding(&b.device_id, &b.input_type) {
+                continue;
+            }
+            let Some(id) = b
+                .input_id
+                .trim()
+                .parse()
+                .ok()
+                .filter(|id| self.voice_command(*id).is_some())
+            else {
+                continue;
+            };
+            for c in &b.configs {
+                let mut seen = std::collections::HashSet::new();
+                let mut stack: Vec<&str> = index
+                    .get(c.root_action.as_str())
+                    .map(|r| r.child_ids())
+                    .unwrap_or_default();
+                while let Some(a) = stack.pop() {
+                    if !seen.insert(a) {
+                        continue;
+                    }
+                    links.entry(a.to_string()).or_insert(id);
+                    if let Some(action) = index.get(a) {
+                        stack.extend(action.child_ids());
+                    }
+                }
+            }
+        }
+        links
+    }
+
+    /// The command that runs `action` (see [`Profile::voice_links`]), if any.
+    pub fn voice_command_running(&self, action: &str) -> Option<u32> {
+        self.voice_links().get(action).copied()
     }
 
     /// Removes the command and its bindings (in every mode).
