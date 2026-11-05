@@ -194,8 +194,8 @@ enum Node {
         steps: Vec<MacroStep>,
         repeat: MacroRepeat,
         act: ActivationMode,
-        /// The actions its run-action steps run, by id, compiled for this macro.
-        targets: Vec<(String, NodeId)>,
+        /// The actions its run-action steps may run, by id (see [`Engine::action_nodes`]).
+        targets: Vec<String>,
     },
     /// button-axis: `up` for the input it is bound to, not for its decrease input.
     ButtonAxis {
@@ -629,9 +629,14 @@ pub struct Engine {
     prune: Option<String>,
     /// Start values are written once, when the profile starts.
     started: bool,
-    /// Ids of the actions being compiled, outermost first: a macro's run-action step never
-    /// runs an action it sits in.
-    compiling: Vec<String>,
+    /// The node of each action as its own input runs it (the first binding that has it),
+    /// which run-action macro steps run too, so both share its state.
+    action_nodes: HashMap<String, NodeId>,
+    /// Per macro action id, the targets its run-action steps may run: actions that take a
+    /// button press and do not use the macro themselves (no loops).
+    run_targets: HashMap<String, Vec<String>>,
+    /// Release timer of each action a run-action step holds pressed.
+    run_releases: HashMap<NodeId, u64>,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -726,8 +731,25 @@ impl Engine {
             compiled_decrease: Vec::new(),
             prune: None,
             started: false,
-            compiling: Vec::new(),
+            action_nodes: HashMap::new(),
+            run_targets: HashMap::new(),
+            run_releases: HashMap::new(),
         };
+        for m in profile.library.iter().filter(|a| a.kind == "macro") {
+            let targets = m.run_targets();
+            if targets.is_empty() {
+                continue;
+            }
+            let users = profile.reaching(&m.id);
+            let mut allowed: Vec<String> = Vec::new();
+            for t in targets {
+                let ok = !users.contains(t) && index.get(t).is_some_and(|a| a.runs_on_button());
+                if ok && !allowed.iter().any(|a| a == t) {
+                    allowed.push(t.to_string());
+                }
+            }
+            engine.run_targets.insert(m.id.clone(), allowed);
+        }
         for m in &profile.modifiers {
             let kind = match m.input_type.trim() {
                 "button" | "key" => InputKind::Button,
@@ -827,6 +849,24 @@ impl Engine {
                 }
             }
         }
+        // Run-action targets no input runs (kept only by the macros) get a node of their own;
+        // their decrease inputs and start lights have no binding to go to.
+        let mut unbound: Vec<String> = engine
+            .run_targets
+            .values()
+            .flatten()
+            .filter(|t| !engine.action_nodes.contains_key(*t))
+            .cloned()
+            .collect();
+        unbound.sort_unstable();
+        unbound.dedup();
+        for t in unbound {
+            if !engine.action_nodes.contains_key(&t) {
+                engine.compile(&index, &t, 0);
+            }
+        }
+        engine.compiled_decrease.clear();
+        engine.compiled_lights.clear();
         engine.inherit_modes(profile);
         // A child mode that binds a decrease input itself has a set of its own for it, so it
         // does not inherit the decrease entry: it gets one in every mode that inherits the
@@ -901,7 +941,6 @@ impl Engine {
                 .get(id)
                 .is_some_and(|a| a.id != target && !is_container(a))
         });
-        self.compiling.push(id.to_string());
         let node = match index.get(id).filter(|_| depth < MAX_DEPTH && !pruned) {
             None => Node::Noop,
             Some(action) => match action.kind() {
@@ -1275,31 +1314,12 @@ impl Engine {
                     arguments: split_command(arguments),
                     act: action.activation_mode(),
                 },
-                ActionKind::Macro { steps, repeat, .. } => {
-                    let mut targets: Vec<(String, NodeId)> = Vec::new();
-                    for step in &steps {
-                        if let MacroStep::RunAction { action: target } = step
-                            && !targets.iter().any(|(t, _)| t == target)
-                            && !self.compiling.contains(target)
-                            // Only the action itself, not a decrease input's pruned copy.
-                            && self.prune.is_none()
-                        {
-                            // Its decrease inputs and start lights belong to its own binding.
-                            let (decrease, lights) =
-                                (self.compiled_decrease.len(), self.compiled_lights.len());
-                            let node = self.compile(index, target, depth + 1);
-                            self.compiled_decrease.truncate(decrease);
-                            self.compiled_lights.truncate(lights);
-                            targets.push((target.clone(), node));
-                        }
-                    }
-                    Node::Macro {
-                        steps: with_default_delay(&steps, self.macro_delay),
-                        repeat,
-                        act: action.activation_mode(),
-                        targets,
-                    }
-                }
+                ActionKind::Macro { steps, repeat, .. } => Node::Macro {
+                    steps: with_default_delay(&steps, self.macro_delay),
+                    repeat,
+                    act: action.activation_mode(),
+                    targets: self.run_targets.get(id).cloned().unwrap_or_default(),
+                },
                 ActionKind::VoiceInput { microphone } => Node::Voice {
                     microphone: microphone.to_string(),
                     act: action.activation_mode(),
@@ -1308,9 +1328,12 @@ impl Engine {
                 ActionKind::Other | ActionKind::Description { .. } => Node::Noop,
             },
         };
-        self.compiling.pop();
         self.nodes.push(Arc::new(node));
-        self.nodes.len() - 1
+        let node = self.nodes.len() - 1;
+        if self.prune.is_none() && index.contains_key(id) && !self.action_nodes.contains_key(id) {
+            self.action_nodes.insert(id.to_string(), node);
+        }
+        node
     }
 
     /// button-axis: its node, the decrease one while compiling the decrease input's tree;
@@ -1725,8 +1748,8 @@ impl Engine {
                     self.process(&voice_key(id), Value::Button(false), now, out);
                 }
                 TimerKind::RunRelease { node, src } => {
-                    self.run(node, &src, &mut Value::Button(false), now, out, 0);
-                    self.process_release(&src.key, false, now, out);
+                    self.run_releases.remove(&node);
+                    self.run_release(node, &src, now, out);
                 }
             }
         }
@@ -2607,6 +2630,18 @@ impl Engine {
     /// gamepad buttons, latched and repeating outputs. Called when the profile stops or
     /// another one takes over (the virtual devices stay, so nothing else would release them).
     pub fn release_all(&mut self, out: &mut dyn Output) {
+        // Actions run-action steps hold pressed go up first, at their release time, so their
+        // own state (taps, tempo, toggles) is not left down; what they hold is released below.
+        self.run_releases.clear();
+        let pending: Vec<Timer> = self
+            .timers
+            .extract_if(.., |t| matches!(t.kind, TimerKind::RunRelease { .. }))
+            .collect();
+        for t in pending {
+            if let TimerKind::RunRelease { node, src } = t.kind {
+                self.run_release(node, &src, t.at, out);
+            }
+        }
         let held: Vec<(NodeId, Press)> = self
             .sends
             .iter()
@@ -3030,7 +3065,9 @@ impl Engine {
                 return;
             }
             if let MacroStep::RunAction { action } = &step {
-                if let Some(&(_, target)) = targets.iter().find(|(t, _)| t == action) {
+                if targets.contains(action)
+                    && let Some(&target) = self.action_nodes.get(action)
+                {
                     self.run_action(target, now, out);
                 }
                 continue;
@@ -3041,7 +3078,15 @@ impl Engine {
 
     /// A run-action step: the action runs as a short press of a button of its own would run
     /// it, pressed now and released [`PULSE`] later.
+    /// A press still held from an earlier run is released first, so presses and releases
+    /// always alternate.
     fn run_action(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
+        if let Some(timer) = self.run_releases.remove(&node)
+            && let Some(pos) = self.timers.iter().position(|t| t.id == timer)
+            && let TimerKind::RunRelease { node, src } = self.timers.remove(pos).kind
+        {
+            self.run_release(node, &src, now, out);
+        }
         let src = Source {
             key: InputKey::new(RUN_ACTION_DEVICE, InputKind::Button, node as u32),
             mode: self.modes.shared(),
@@ -3049,7 +3094,13 @@ impl Engine {
         };
         self.run(node, &src, &mut Value::Button(true), now, out, 0);
         self.process_release(&src.key, true, now, out);
-        self.add_timer(now + PULSE, TimerKind::RunRelease { node, src });
+        let timer = self.add_timer(now + PULSE, TimerKind::RunRelease { node, src });
+        self.run_releases.insert(node, timer);
+    }
+
+    fn run_release(&mut self, node: NodeId, src: &Source, now: Instant, out: &mut dyn Output) {
+        self.run(node, src, &mut Value::Button(false), now, out, 0);
+        self.process_release(&src.key, false, now, out);
     }
 
     /// Ends a run and starts the next queued activation, if any.

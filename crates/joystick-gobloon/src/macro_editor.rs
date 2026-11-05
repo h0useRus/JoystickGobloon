@@ -246,8 +246,8 @@ impl Editor<'_> {
         }
     }
 
-    /// The named action a run-action step runs: every action with a name except the ones the
-    /// macro sits in (they would run themselves).
+    /// The named action a run-action step runs: every action with a name that takes a button
+    /// press, except the ones that use the macro (they would run themselves).
     fn run_action_step(&self, ui: &mut egui::Ui, id: &str, index: usize, action: &mut String) {
         let selected = match self.profile.action(action) {
             Some(a) => action_name(a).unwrap_or_else(|| kind_name(self.i18n, &a.kind)),
@@ -263,12 +263,15 @@ impl Editor<'_> {
         egui::ComboBox::from_id_salt(("macro-run", id, index))
             .selected_text(text)
             .show_ui(ui, |ui| {
+                // Once per frame while open: every action that uses this macro, also through
+                // other macros' run-action steps.
+                let users = self.profile.reaching(id);
                 let mut named: Vec<(&Action, String)> = self
                     .profile
                     .library
                     .iter()
+                    .filter(|a| a.runs_on_button() && !users.contains(a.id.as_str()))
                     .filter_map(|a| Some((a, action_name(a)?)))
-                    .filter(|(a, _)| !self.profile.reaches(&a.id, id))
                     .collect();
                 named.sort_by_cached_key(|(_, n)| n.to_lowercase());
                 if named.is_empty() {

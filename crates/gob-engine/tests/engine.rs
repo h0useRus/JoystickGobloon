@@ -1537,6 +1537,182 @@ fn macro_runs_named_action() {
     assert_eq!(out.0, [Out::Button(5, true), Out::Button(5, false)]);
 }
 
+fn step_run(id: &str) -> String {
+    format!(
+        r#"<macro-action type="action">{}</macro-action>"#,
+        prop("string", "action-id", id)
+    )
+}
+
+/// Engine for buttons `inputs` (button id, root action id) and library `actions`.
+fn run_engine(inputs: &[(u32, &str)], actions: &[String]) -> Engine {
+    let inputs: String = inputs
+        .iter()
+        .map(|&(id, r)| input("button", id, "Default", r, ""))
+        .collect();
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs>{inputs}</inputs><settings/><library>{}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        actions.concat()
+    );
+    Engine::new(&gob_gremlin::from_str(&xml).unwrap(), &HashMap::new())
+}
+
+fn ms(t0: Instant, ms: u64) -> Instant {
+    t0 + Duration::from_millis(ms)
+}
+
+/// The step runs the very node the target's own input runs: a toggle macro it starts stops
+/// on a press of that input.
+#[test]
+fn run_action_shares_state_with_its_input() {
+    let mut e = run_engine(
+        &[(1, "r1"), (2, "r2")],
+        &[
+            root("r1", &["t"]),
+            macro_act(
+                "t",
+                "Toggle",
+                "press",
+                &[step_vjoy(1, 7, true), step_vjoy(1, 7, false)],
+            ),
+            root("r2", &["m"]),
+            macro_act("m", "Single", "press", &[step_run("t")]),
+        ],
+    );
+    let mut out = Recorder::default();
+    let t0 = Instant::now();
+    let (b1, b2) = (
+        InputKey::new(DEV, InputKind::Button, 1),
+        InputKey::new(DEV, InputKind::Button, 2),
+    );
+    e.process(&b2, Value::Button(true), t0, &mut out);
+    e.process(&b2, Value::Button(false), ms(t0, 5), &mut out);
+    for t in (10..300).step_by(10) {
+        e.tick(ms(t0, t), &mut out);
+    }
+    e.process(&b1, Value::Button(true), ms(t0, 300), &mut out);
+    e.process(&b1, Value::Button(false), ms(t0, 305), &mut out);
+    for t in (310..600).step_by(10) {
+        e.tick(ms(t0, t), &mut out);
+    }
+    let presses = |out: &Recorder| out.0.iter().filter(|o| **o == Out::Button(7, true)).count();
+    let stopped = presses(&out);
+    assert!(stopped >= 2, "the toggle macro ran: {:?}", out.0);
+    for t in (600..2000).step_by(10) {
+        e.tick(ms(t0, t), &mut out);
+    }
+    assert_eq!(presses(&out), stopped, "its own input stopped it");
+    assert_eq!(out.0.last(), Some(&Out::Button(7, false)));
+}
+
+/// Running the same action again before its release: the earlier press goes up first.
+#[test]
+fn run_action_presses_and_releases_alternate() {
+    let mut e = run_engine(
+        &[(1, "r1"), (2, "r2")],
+        &[
+            root("r1", &["v"]),
+            vjoy("v", "button", 5),
+            root("r2", &["m"]),
+            macro_act(
+                "m",
+                "Single",
+                "press",
+                &[step_run("v"), step_pause("0"), step_run("v")],
+            ),
+        ],
+    );
+    let mut out = Recorder::default();
+    let t0 = Instant::now();
+    e.process(
+        &InputKey::new(DEV, InputKind::Button, 2),
+        Value::Button(true),
+        t0,
+        &mut out,
+    );
+    e.tick(t0, &mut out);
+    assert_eq!(
+        out.0,
+        [
+            Out::Button(5, true),
+            Out::Button(5, false),
+            Out::Button(5, true)
+        ]
+    );
+    for t in (10..300).step_by(10) {
+        e.tick(ms(t0, t), &mut out);
+    }
+    assert_eq!(out.0.len(), 4);
+    assert_eq!(out.0[3], Out::Button(5, false));
+}
+
+/// Steps that would loop through another macro, and actions a button press means nothing to,
+/// do nothing; the other steps still run.
+#[test]
+fn run_action_skips_loops_and_axis_actions() {
+    let mut e = run_engine(
+        &[(1, "ra"), (2, "rb"), (3, "rv"), (4, "rc")],
+        &[
+            root("ra", &["a"]),
+            macro_act(
+                "a",
+                "Single",
+                "press",
+                &[step_run("b"), step_run("c"), step_run("v")],
+            ),
+            root("rb", &["b"]),
+            macro_act("b", "Single", "press", &[step_run("a")]),
+            root("rv", &["v"]),
+            vjoy("v", "button", 5),
+            root("rc", &["c"]),
+            act("c", "response-curve", ""),
+        ],
+    );
+    let mut out = Recorder::default();
+    let t0 = Instant::now();
+    e.process(
+        &InputKey::new(DEV, InputKind::Button, 1),
+        Value::Button(true),
+        t0,
+        &mut out,
+    );
+    for t in (10..1000).step_by(10) {
+        e.tick(ms(t0, t), &mut out);
+    }
+    assert_eq!(out.0, [Out::Button(5, true), Out::Button(5, false)]);
+}
+
+/// Stopping the profile while a run-action step holds its target: released once, no timer left.
+#[test]
+fn run_action_released_on_stop() {
+    let mut e = run_engine(
+        &[(1, "r1"), (2, "r2")],
+        &[
+            root("r1", &["v"]),
+            vjoy("v", "button", 5),
+            root("r2", &["m"]),
+            macro_act("m", "Single", "press", &[step_run("v")]),
+        ],
+    );
+    let mut out = Recorder::default();
+    let t0 = Instant::now();
+    e.process(
+        &InputKey::new(DEV, InputKind::Button, 2),
+        Value::Button(true),
+        t0,
+        &mut out,
+    );
+    e.release_all(&mut out);
+    assert_eq!(out.0.first(), Some(&Out::Button(5, true)));
+    assert_eq!(out.0.last(), Some(&Out::Button(5, false)));
+    let n = out.0.len();
+    for t in (10..300).step_by(10) {
+        e.tick(ms(t0, t), &mut out);
+    }
+    assert_eq!(out.0.len(), n);
+}
+
 #[test]
 fn unknown_action_types_do_nothing() {
     let xml = format!(
