@@ -125,7 +125,7 @@ impl DirectInput {
             // Buffer and event must be set before Acquire. Without them the device is polled.
             let event = if events { buffered_event(&dev) } else { None };
             if events && event.is_none() {
-                log::warn!(
+                log::info!(
                     "{}: no DirectInput change events, the device is polled",
                     wide_to_string(&inst.tszProductName)
                 );

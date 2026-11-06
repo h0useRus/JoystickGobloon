@@ -4,7 +4,7 @@ use eframe::egui::{self, RichText, Vec2};
 use gob_i18n::I18n;
 
 use crate::leds::{LedDevice, LedValue};
-use crate::settings::{LedDefault, Settings, Theme};
+use crate::settings::{LedDefault, LogLevel, Settings, Theme};
 use crate::style::{self, icon};
 
 const REPO_URL: &str = "https://github.com/h0useRus/JoystickGobloon";
@@ -319,6 +319,45 @@ fn general(
         ))
         .on_hover_text(i18n.tr("settings-warn-gremlin-tip"));
 
+    ui.add_space(18.0);
+    section_title(ui, icon::FILE_TEXT, &i18n.tr("settings-group-log"));
+    let log_level = ui
+        .horizontal(|ui| {
+            let levels = [
+                (LogLevel::All, "settings-log-all"),
+                (LogLevel::Important, "settings-log-important"),
+                (LogLevel::Critical, "settings-log-critical"),
+            ];
+            let current = levels
+                .iter()
+                .find(|(l, _)| *l == settings.log_level)
+                .map_or_else(String::new, |(_, key)| i18n.tr(key));
+            let mut changed = false;
+            let combo = egui::ComboBox::from_id_salt("log-level")
+                .selected_text(current)
+                .show_ui(ui, |ui| {
+                    for (level, key) in levels {
+                        let selected = settings.log_level == level;
+                        let item = ui
+                            .selectable_label(selected, i18n.tr(key))
+                            .on_hover_text(i18n.tr(&format!("{key}-tip")));
+                        if item.clicked() && !selected {
+                            settings.log_level = level;
+                            changed = true;
+                        }
+                    }
+                });
+            ui.label(i18n.tr("settings-log-level"));
+            combo
+                .response
+                .on_hover_text(i18n.tr("settings-log-level-tip"));
+            changed
+        })
+        .inner;
+    if log_level {
+        crate::logfile::set_level(settings.log_level);
+    }
+
     let changed = [
         &autostart,
         &reopen,
@@ -334,7 +373,8 @@ fn general(
     ]
     .iter()
     .any(|r| r.changed())
-        || see_hidden.is_some_and(|r| r.changed());
+        || see_hidden.is_some_and(|r| r.changed())
+        || log_level;
     if changed {
         settings.save();
     }

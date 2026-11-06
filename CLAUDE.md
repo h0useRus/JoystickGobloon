@@ -150,6 +150,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   JoystickGobloon.log next to the settings via the `log` crate (English, not i18n; joystick-gobloon/src/logfile.rs).
   Only warnings/errors that matter to a general user become dialogs (`JoystickGobloonApp::error` / `alerts`),
   translated; routine info goes to the status bar. No report/diagnostics windows.
+  Log levels (Settings > General > Log level: All = debug+, Important = info+, Critical (default) = warn+;
+  libraries one step quieter): error = a feature or operation failed, warn = recovered or something set up
+  will not work as expected, info = notable events (profile loaded/started, device back, update), debug =
+  routine details (per utterance, editor actions, program in front); trace is never written.
 - Branches: development happens on `dev`; every work branch is created from `dev` and merged back into it
   by pull request. `main` only receives release requests: a pull request from `dev` whose title contains
   the version the merge releases (checked by .github/workflows/release-request.yml). Never commit directly

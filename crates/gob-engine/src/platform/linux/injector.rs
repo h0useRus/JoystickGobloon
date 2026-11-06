@@ -88,7 +88,7 @@ impl Devices {
             Ok((k, m)) => (self.keyboard, self.mouse) = (Some(Sink::Own(k)), Some(Sink::Own(m))),
             Err(e) => {
                 self.failed = true;
-                log::warn!("keyboard and mouse output is off: /dev/uinput: {e}");
+                log::error!("keyboard and mouse output is off: /dev/uinput: {e}");
             }
         }
     }
@@ -108,7 +108,7 @@ fn emit(mouse: bool, events: &[(u16, u16, i32)]) {
         if let Some(device) = device
             && let Err(e) = device.emit(events)
         {
-            log::warn!("keyboard/mouse output: {e}");
+            log::error!("keyboard/mouse output: {e}");
         }
     });
 }

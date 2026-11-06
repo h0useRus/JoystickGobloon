@@ -18,6 +18,19 @@ pub enum Theme {
     System,
 }
 
+/// What goes into the log file (`logfile`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    /// Everything, debug messages too.
+    All,
+    /// Warnings, errors and notable events (a profile loaded, a device back, an update).
+    Important,
+    /// Warnings and errors only.
+    #[default]
+    Critical,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -75,6 +88,8 @@ pub struct Settings {
     /// Keep the microphones of voice commands open while a profile runs (some are silent for a
     /// moment after they open); only what is said while listening is recognized.
     pub voice_keep_open: bool,
+    /// What the log file records.
+    pub log_level: LogLevel,
     /// Experimental features (joystick LEDs): hidden and not run while off. Not in the UI:
     /// `experimental = true` in settings.gob turns them on.
     pub experimental: bool,
@@ -292,6 +307,7 @@ impl Default for Settings {
             voice_gain: 1.0,
             voice_min_confidence: 0.5,
             voice_keep_open: true,
+            log_level: LogLevel::default(),
             calibration: BTreeMap::new(),
             debounce: BTreeMap::new(),
             leds: BTreeMap::new(),

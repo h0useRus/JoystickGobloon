@@ -342,7 +342,7 @@ impl VoicePanel {
             Ok(()) => true,
             Err(_) if cancelled => false,
             Err(e) => {
-                log::warn!("speech model {name}: {e}");
+                log::error!("speech model {name}: {e}");
                 self.error = Some(e);
                 false
             }
@@ -490,7 +490,7 @@ impl VoicePanel {
                     self.opening = None;
                 }
                 Ok(Err(e)) => {
-                    log::warn!("microphone test: {e}");
+                    log::error!("microphone test: {e}");
                     self.testing = false;
                     self.opening = None;
                 }
@@ -518,7 +518,7 @@ impl VoicePanel {
                 match spawned {
                     Ok(_) => self.opening = Some(Opening { microphone, done }),
                     Err(e) => {
-                        log::warn!("microphone test: {e}");
+                        log::error!("microphone test: {e}");
                         self.testing = false;
                     }
                 }

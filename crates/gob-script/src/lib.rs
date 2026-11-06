@@ -809,7 +809,7 @@ impl ScriptHost {
             s.errors += 1;
             if s.errors >= MAX_ERRORS {
                 s.off = true;
-                log::warn!(
+                log::error!(
                     "script {}: switched off after {MAX_ERRORS} errors",
                     s.state.name
                 );

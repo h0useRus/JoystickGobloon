@@ -91,7 +91,7 @@ fn main() -> eframe::Result {
             None => return Ok(()),
         }
     };
-    logfile::init();
+    logfile::init(settings.log_level);
     // Started by Windows at logon: hidden in the tray, or minimized without one.
     let minimized = std::env::args().any(|a| a == tray::autostart::ARG);
     let to_tray = minimized && settings.show_tray;

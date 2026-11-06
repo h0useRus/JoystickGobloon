@@ -232,7 +232,7 @@ impl Hide {
             for path in &nodes.paths {
                 match self.system.close(path) {
                     Ok(true) => {
-                        log::info!("{}: closed ({})", path.display(), nodes.name);
+                        log::debug!("{}: closed ({})", path.display(), nodes.name);
                         closed += 1;
                     }
                     Ok(false) => {}

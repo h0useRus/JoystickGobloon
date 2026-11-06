@@ -630,7 +630,7 @@ fn set_up_voice(engine: &Engine, out: &mut SystemOutput) {
                     out.voice_events.clone(),
                 ))
             }
-            (None, None) => log::info!("voice-input actions ignored: no speech model"),
+            (None, None) => log::warn!("voice-input actions ignored: no speech model"),
         }
     }
     // Microphones kept open follow the profile's voice-input actions (none: all close).

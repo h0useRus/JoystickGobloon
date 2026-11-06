@@ -236,7 +236,7 @@ fn close_raw_nodes(again: bool) {
         *asked = Some(sticks.clone());
         match gob_uinput::access::set_hidden_sticks(&sticks) {
             Ok(true) => {
-                log::info!("raw HID nodes closed for {sticks:04x?}");
+                log::debug!("raw HID nodes closed for {sticks:04x?}");
                 CHANGED.store(true, Ordering::Relaxed);
             }
             Ok(false) => {}

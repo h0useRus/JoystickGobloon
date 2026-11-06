@@ -44,13 +44,13 @@ impl Watcher {
                         last = Some(pid);
                         // What switching saw, for reports of a game that did not switch.
                         match &front {
-                            Some(p) => log::info!(
+                            Some(p) => log::debug!(
                                 "program in front: {} (pid {}, {})",
                                 p.name,
                                 p.pid,
                                 p.path.display()
                             ),
-                            None => log::info!(
+                            None => log::debug!(
                                 "program in front: none readable (desktop, or a window this \
                                  system does not name)"
                             ),

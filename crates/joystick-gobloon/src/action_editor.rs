@@ -386,7 +386,7 @@ pub fn apply(p: &mut Profile, op: Op) {
         } => {
             list_device(p, &device, name);
             for line in p.set_two_axis_input(&action, slot, &(device, axis), &mode, &layer) {
-                log::info!("{line}");
+                log::debug!("{line}");
             }
         }
         Op::TwoAxisAdopt {
@@ -395,7 +395,7 @@ pub fn apply(p: &mut Profile, op: Op) {
             axis,
         } => {
             if let Some(line) = p.two_axis_adopt(&action, &(device, axis)) {
-                log::info!("{line}");
+                log::debug!("{line}");
             }
         }
         Op::Remove {

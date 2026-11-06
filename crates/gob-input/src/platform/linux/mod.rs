@@ -531,7 +531,7 @@ impl Device {
                 }
                 Err(e) => {
                     if raw_changed(&hid_path, false) {
-                        log::info!(
+                        log::warn!(
                             "{}: buttons {}-{} need read access to {hid_path}: {e}",
                             found.path.display(),
                             codes.len() + 1,

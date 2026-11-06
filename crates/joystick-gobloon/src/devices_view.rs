@@ -220,7 +220,7 @@ impl DevicesView {
             let new = (device.clone(), *axis);
             if same(&axes[i], &shown) && !same(&axes[1 - i], &shown) && !same(&new, &shown) {
                 let key = (Kind::Axis, *axis);
-                log::info!(
+                log::debug!(
                     "two-axis action {action}: the editor follows it to {device} axis {axis}"
                 );
                 self.show_input(device, key);
@@ -679,7 +679,7 @@ impl DevicesView {
             match tabs.iter().find(|t| t.owns(&device)) {
                 Some(t) => self.show_input(t.guid, key),
                 None => {
-                    log::info!("input {device} {key:?} is on no tab of the Devices page");
+                    log::debug!("input {device} {key:?} is on no tab of the Devices page");
                     self.status = Some(i18n.tr("input-not-shown"));
                 }
             }

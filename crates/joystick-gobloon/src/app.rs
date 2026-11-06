@@ -222,11 +222,11 @@ impl JoystickGobloonApp {
         let reopen = match &settings.last_profile {
             Some(path) if settings.reopen_last => Some(path.clone()),
             Some(_) => {
-                log::info!("reopening the last profile is off");
+                log::debug!("reopening the last profile is off");
                 None
             }
             None => {
-                log::info!("no last profile to reopen");
+                log::debug!("no last profile to reopen");
                 None
             }
         };
@@ -328,7 +328,7 @@ impl JoystickGobloonApp {
         if let (Some(main_window), Some(instance)) = (app.main_window, instance) {
             let (restored, ctx) = (app.restored.clone(), cc.egui_ctx.clone());
             crate::platform::listen_instance(instance, move || {
-                log::info!("started again: showing the running window");
+                log::debug!("started again: showing the running window");
                 restored.store(true, std::sync::atomic::Ordering::Relaxed);
                 crate::platform::show_window(main_window);
                 ctx.request_repaint();
@@ -394,7 +394,7 @@ impl JoystickGobloonApp {
         if app.settings.hidhide_whitelist_self {
             match app.apps_view.whitelist_self() {
                 Some(Ok(true)) => {
-                    log::info!("added to the HidHide whitelist");
+                    log::debug!("added to the HidHide whitelist");
                     app.status = app.i18n.tr("status-whitelisted");
                 }
                 Some(Err(e)) => {
@@ -459,7 +459,7 @@ impl JoystickGobloonApp {
                 );
                 match tray {
                     Ok(t) => {
-                        log::info!("tray icon shown");
+                        log::debug!("tray icon shown");
                         self.tray = Some(t);
                     }
                     Err(e) => log::error!("tray icon: {e}"),
@@ -1381,7 +1381,7 @@ impl JoystickGobloonApp {
     /// Saves and applies calibrations from the calibration page.
     fn apply_calibration(&mut self, out: crate::calibration_view::Output) {
         for (device, slot, c) in out.save {
-            log::info!("calibration saved: {device} axis {slot}: {c:?}");
+            log::debug!("calibration saved: {device} axis {slot}: {c:?}");
             self.settings
                 .calibration
                 .entry(device.clone())
@@ -1391,7 +1391,7 @@ impl JoystickGobloonApp {
             self.calibrations.insert((device, slot), c);
         }
         if let Some((device, ms)) = out.debounce {
-            log::info!("debounce of {device}: {ms} ms");
+            log::debug!("debounce of {device}: {ms} ms");
             self.input.set_debounce(&device, ms);
             if ms == 0 {
                 self.settings.debounce.remove(&device);
