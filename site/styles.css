@@ -1487,6 +1487,11 @@ footer {
   margin: var(--s-300) 0 0;
 }
 
+/* The keyboard picker is wider than the action editor: shown at its own size. */
+.learn-action .shot.wide {
+  max-width: 790px;
+}
+
 /* Motion: sections with a visual load in when they scroll into view (rise and resolve from blur),
    then every visual acts out what it does on a loop (main.js). Only with JS and full motion. */
 
