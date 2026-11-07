@@ -225,7 +225,6 @@ pub enum Op {
         action: String,
         phrase: String,
         mode: String,
-        layer: Layer,
         id: u32,
     },
     /// Not an edit: the page opens voice command `id`.
@@ -490,10 +489,9 @@ pub fn apply(p: &mut Profile, op: Op) {
             action,
             phrase,
             mode,
-            layer,
             ..
         } => {
-            p.add_voice_command_for(&action, &phrase, &mode, &layer);
+            p.add_voice_command_for(&action, &phrase, &mode);
         }
         Op::RemoveVoiceCommand(id) => p.remove_voice_command(id),
         Op::SetVoicePhrases { id, phrases } => {
@@ -895,7 +893,7 @@ impl Editor<'_> {
     /// An action card's voice command button: opens the command that runs the action, or makes
     /// one saying the card's name (none without a name). Not on a voice command's own actions.
     fn voice_button(&mut self, ui: &mut egui::Ui, action: &Action) {
-        let Some((mode, layer)) = self.place else {
+        let Some((mode, _)) = self.place else {
             return;
         };
         let voice = self
@@ -938,7 +936,6 @@ impl Editor<'_> {
                 action: action.id.clone(),
                 phrase: name.to_string(),
                 mode: mode.to_string(),
-                layer: layer.clone(),
                 id,
             });
         }

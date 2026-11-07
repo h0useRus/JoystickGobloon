@@ -236,7 +236,6 @@ fn reads_hand_edited_commands() {
 /// found again for the card; removing the command leaves the action on its input.
 #[test]
 fn voice_command_for_an_action() {
-    let base = Layer::base();
     let mut p = voice_profile();
     let action = button(&mut p, "6", 8);
     assert_eq!(p.voice_command_running(&action), None);
@@ -244,7 +243,7 @@ fn voice_command_for_an_action() {
     let next = p.next_voice_command_id();
     assert_eq!(p.voice_command_for_phrase("next target"), Ok(next));
     let id = p
-        .add_voice_command_for(&action, "  next   target ", "Default", &base)
+        .add_voice_command_for(&action, "  next   target ", "Default")
         .unwrap();
     assert_eq!(id, next);
     assert_eq!(p.voice_command(id).unwrap().phrases, ["next target"]);
@@ -269,7 +268,7 @@ fn voice_command_for_an_action() {
     let count = (p.voice_commands.len(), p.inputs.len());
     assert_eq!(p.voice_command_for_phrase("Next Target"), Ok(id));
     assert_eq!(
-        p.add_voice_command_for(&action, "Next Target", "Default", &base),
+        p.add_voice_command_for(&action, "Next Target", "Default"),
         Some(id)
     );
     assert_eq!(
@@ -300,7 +299,7 @@ fn button(p: &mut Profile, input: &str, vjoy: u32) -> String {
 }
 
 /// A phrase a command with other actions says is taken; one that runs nothing is reused, also
-/// through a padded hand-edited binding, in the card's layer.
+/// through a padded hand-edited binding, on the base layer.
 #[test]
 fn voice_command_for_an_action_reuses_only_empty_commands() {
     let mut p = voice_profile();
@@ -308,7 +307,7 @@ fn voice_command_for_an_action_reuses_only_empty_commands() {
     let commands = p.voice_commands.len();
     assert_eq!(p.voice_command_for_phrase(" Lights  ON"), Err(1));
     assert_eq!(
-        p.add_voice_command_for(&action, "lights on", "Default", &Layer::base()),
+        p.add_voice_command_for(&action, "lights on", "Default"),
         None
     );
     assert_eq!(p.voice_commands.len(), commands);
@@ -319,16 +318,15 @@ fn voice_command_for_an_action_reuses_only_empty_commands() {
     let b = p.inputs.iter_mut().find(|b| b.input_id == "2").unwrap();
     (b.input_id, b.input_type) = (" 2 ".into(), " voice ".into());
     let bindings = p.inputs.len();
-    let shift = Layer::new(["Shift"]);
     assert_eq!(
-        p.add_voice_command_for(&action, "gear down", "Default", &shift),
+        p.add_voice_command_for(&action, "gear down", "Default"),
         Some(2)
     );
     assert_eq!(p.inputs.len(), bindings, "the padded binding is reused");
     let b = p.inputs.iter().find(|b| b.input_id.trim() == "2").unwrap();
     assert!(
-        b.configs.iter().any(|c| c.layer == shift),
-        "the card's layer"
+        b.configs.iter().all(|c| c.layer == Layer::base()),
+        "the base layer"
     );
     assert_eq!(p.voice_command_running(&action), Some(2));
 }
