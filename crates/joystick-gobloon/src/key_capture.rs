@@ -313,6 +313,28 @@ pub(crate) fn key_down(ui: &egui::Ui, ignore: &[Key]) -> Option<Key> {
     })
 }
 
+fn recording_id() -> egui::Id {
+    egui::Id::unique("input-recording")
+}
+
+/// How long after the last recording frame inputs still do not move the Devices page: the
+/// press that ends a recording may reach the event queue a few frames later.
+const RECORDING_GRACE: f64 = 0.5;
+
+/// An editor records an input this frame: pressing one must not move the Devices page
+/// to it (the editor would go away mid-recording).
+pub(crate) fn mark_recording(ctx: &egui::Context) {
+    let now = ctx.input(|i| i.time);
+    ctx.data_mut(|d| d.insert_temp(recording_id(), now));
+}
+
+/// An editor recorded an input within [`RECORDING_GRACE`].
+pub(crate) fn recording(ctx: &egui::Context) -> bool {
+    let now = ctx.input(|i| i.time);
+    ctx.data(|d| d.get_temp::<f64>(recording_id()))
+        .is_some_and(|t| now - t < RECORDING_GRACE)
+}
+
 /// Keys as text chips plus a record button. Recording collects every key pressed until
 /// all are released again; the result replaces the keys. Returns the new keys once.
 pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) -> Option<Vec<Key>> {
@@ -361,6 +383,7 @@ pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) ->
                 }
             }
             Some(mut rec) => {
+                mark_recording(ui.ctx());
                 let held =
                     crate::platform::held_keys().unwrap_or_else(|| window_keys(ui, &mut rec));
                 for k in &held {

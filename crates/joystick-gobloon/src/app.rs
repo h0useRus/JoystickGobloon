@@ -2270,8 +2270,15 @@ impl eframe::App for JoystickGobloonApp {
         self.live_input
             .store(live, std::sync::atomic::Ordering::Relaxed);
         // Always drained; events from before the window came back are stale and only dropped.
-        let focus =
-            self.settings.focus_used_input && shown && self.was_shown && self.page == Page::Devices;
+        // Not while an editor records an input or a text field is edited: either would go away.
+        let focus = self.settings.focus_used_input
+            && shown
+            && self.was_shown
+            && self.page == Page::Devices
+            && !crate::key_capture::recording(ctx)
+            && !ctx.text_edit_focused();
+        // Keys are read system-wide: only those typed into this window follow.
+        let keys = ctx.input(|i| i.focused);
         let modifiers = match &self.profile {
             Some(p) if self.settings.focus_skips_modifiers => p.profile.modifiers.as_slice(),
             _ => &[],
@@ -2280,6 +2287,7 @@ impl eframe::App for JoystickGobloonApp {
             self.input.events(),
             &self.input.devices(),
             focus,
+            keys,
             modifiers,
         );
         self.was_shown = shown;

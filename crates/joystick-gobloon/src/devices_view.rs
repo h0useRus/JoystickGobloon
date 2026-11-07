@@ -121,15 +121,17 @@ impl Tab<'_> {
 }
 
 impl DevicesView {
-    /// Pressing a button, moving a hat or clearly moving an axis selects its device and
-    /// scrolls the list to the input (`focus` off: events are only drained). The row is not
-    /// highlighted: its live widget already shows the input; a click selects it.
-    /// Inputs that are one of `modifiers` are skipped, so holding one keeps the list in place.
+    /// Pressing a button, moving a hat or clearly moving an axis selects its device tab and
+    /// scrolls the list to the input, which the editor then shows (`focus` off: events are
+    /// only drained). Inputs that are one of `modifiers` are skipped, so holding one keeps
+    /// the page in place. Keys follow only on an open keyboard tab and with `keys` on.
+    /// The follow is not a tab the user picked: a ghost tab still gives way to a live one.
     pub fn handle_events(
         &mut self,
         events: impl Iterator<Item = InputEvent>,
         devices: &[DeviceState],
         focus: bool,
+        keys: bool,
         modifiers: &[gob_core::Modifier],
     ) {
         for event in events {
@@ -169,7 +171,10 @@ impl DevicesView {
                     let modifier = modifiers
                         .iter()
                         .any(|m| m.is_input(gob_core::KEYBOARD_GUID, "key", &id.to_string()));
-                    if !modifier && self.selected.as_deref() == Some(gob_core::KEYBOARD_GUID) {
+                    if !modifier
+                        && keys
+                        && self.selected.as_deref() == Some(gob_core::KEYBOARD_GUID)
+                    {
                         self.scroll_to = Some((gob_core::KEYBOARD_GUID.into(), (Kind::Key, id)));
                     }
                     continue;
@@ -228,7 +233,8 @@ impl DevicesView {
         }
     }
 
-    /// Selects tab `guid` and its input `key`, and scrolls the list to it.
+    /// Selects tab `guid` (as picked by the user) and its input `key`, and scrolls the list
+    /// to it.
     fn show_input(&mut self, guid: &str, key: Key) {
         self.selected = Some(guid.to_string());
         self.user_selected = true;
@@ -1038,8 +1044,11 @@ impl DevicesView {
             .as_ref()
             .is_some_and(|(g, k)| g == tab.guid && *k == key)
         {
+            // Only an input with a row is selected: the one being edited stays otherwise.
             response.scroll_to_me(Some(Align::Center));
             self.scroll_to = None;
+            self.selected_input.insert(tab.guid.to_string(), key);
+            ui.ctx().request_repaint();
         }
         ui.add_space(2.0);
         if !response.clicked() {

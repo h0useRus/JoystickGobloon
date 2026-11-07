@@ -208,6 +208,7 @@ impl Editor<'_> {
                     }
                 }
                 Some(listening) => {
+                    crate::key_capture::mark_recording(ui.ctx());
                     let cancel =
                         style::icon_button(ui, true, icon::X, &self.i18n.tr("keys-cancel"))
                             .clicked();
