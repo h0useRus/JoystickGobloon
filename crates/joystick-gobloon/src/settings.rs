@@ -90,6 +90,10 @@ pub struct Settings {
     pub voice_keep_open: bool,
     /// What the log file records.
     pub log_level: LogLevel,
+    /// Main window size (logical points) when it was last resized; the next start opens it so.
+    pub window_size: [f32; 2],
+    /// The main window was maximized when last seen.
+    pub window_maximized: bool,
     /// Experimental features (joystick LEDs): hidden and not run while off. Not in the UI:
     /// `experimental = true` in settings.gob turns them on.
     pub experimental: bool,
@@ -277,6 +281,11 @@ impl Settings {
     }
 }
 
+/// The main window's size at the first start, in logical points.
+pub const DEFAULT_WINDOW_SIZE: [f32; 2] = [1240.0, 890.0];
+/// The main window's smallest size.
+pub const MIN_WINDOW_SIZE: [f32; 2] = [640.0, 400.0];
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -308,6 +317,8 @@ impl Default for Settings {
             voice_min_confidence: 0.5,
             voice_keep_open: true,
             log_level: LogLevel::default(),
+            window_size: DEFAULT_WINDOW_SIZE,
+            window_maximized: false,
             calibration: BTreeMap::new(),
             debounce: BTreeMap::new(),
             leds: BTreeMap::new(),
@@ -318,6 +329,16 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// The main window size to open with: the saved one, at least the smallest size (a
+    /// hand-edited or broken value falls back to the default).
+    pub fn window_size(&self) -> [f32; 2] {
+        let [w, h] = self.window_size;
+        if !(w.is_finite() && h.is_finite()) {
+            return DEFAULT_WINDOW_SIZE;
+        }
+        [w.max(MIN_WINDOW_SIZE[0]), h.max(MIN_WINDOW_SIZE[1])]
+    }
+
     /// Reads `settings.gob`; the first time, the old `settings.toml` instead.
     pub fn load() -> Self {
         let exists = data_dir().is_some_and(|dir| dir.join("settings.gob").is_file());

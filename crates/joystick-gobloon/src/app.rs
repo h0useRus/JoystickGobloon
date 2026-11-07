@@ -129,6 +129,8 @@ pub struct JoystickGobloonApp {
     live_input: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The window was on screen last frame (not in the tray, not minimized).
     was_shown: bool,
+    /// The main window was resized or (un)maximized: its settings are saved once it settles.
+    window_changed: Option<std::time::Instant>,
     /// Plugin DLLs from `<exe folder>\plugins`, kept loaded while the app runs.
     /// Window title last sent to the viewport.
     title: String,
@@ -313,6 +315,7 @@ impl JoystickGobloonApp {
             main_window,
             live_input,
             was_shown: true,
+            window_changed: None,
         };
         app.update_tray(&cc.egui_ctx);
         app.activation.set_led_defaults(app.settings.led_defaults());
@@ -1798,6 +1801,49 @@ impl JoystickGobloonApp {
         });
     }
 
+    /// Keeps the main window's size and maximized state in the settings for the next start;
+    /// saved half a second after the last change, so dragging a border writes once.
+    fn remember_window(&mut self, ctx: &egui::Context) {
+        const SETTLE: std::time::Duration = std::time::Duration::from_millis(500);
+        let (size, maximized, minimized) = ctx.input(|i| {
+            let v = i.viewport();
+            (
+                v.inner_rect.map(|r| r.size()),
+                v.maximized,
+                v.minimized == Some(true),
+            )
+        });
+        let in_tray = self.main_window.is_some_and(crate::platform::in_tray);
+        if !minimized && !in_tray {
+            if let Some(maximized) = maximized
+                && maximized != self.settings.window_maximized
+            {
+                self.settings.window_maximized = maximized;
+                self.window_changed = Some(std::time::Instant::now());
+            }
+            // A maximized window keeps the size it goes back to.
+            if let Some(size) = size
+                && maximized == Some(false)
+                && size.x >= 1.0
+                && size.y >= 1.0
+            {
+                let size = [size.x.round(), size.y.round()];
+                if size != self.settings.window_size {
+                    self.settings.window_size = size;
+                    self.window_changed = Some(std::time::Instant::now());
+                }
+            }
+        }
+        if let Some(t) = self.window_changed {
+            if t.elapsed() >= SETTLE {
+                self.window_changed = None;
+                self.settings.save();
+            } else {
+                ctx.request_repaint_after(SETTLE - t.elapsed());
+            }
+        }
+    }
+
     /// The profile's logical device with the values of the running profile.
     fn logical_device(&self) -> Option<gob_input::DeviceState> {
         crate::viewer_view::logical_device(
@@ -2189,6 +2235,7 @@ impl eframe::App for JoystickGobloonApp {
         if self.tray.as_ref().is_some_and(|t| t.take_quit()) {
             self.request(Pending::Close, ctx);
         }
+        self.remember_window(ctx);
         // Close button with "close to tray": hide instead of quitting (Quit is in the tray menu).
         let to_tray = self.settings.close_to_tray && self.tray.is_some() && !self.allow_close;
         if to_tray && ctx.input(|i| i.viewport().close_requested()) {

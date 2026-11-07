@@ -100,8 +100,9 @@ fn main() -> eframe::Result {
             .with_visible(!to_tray)
             .with_title(APP_NAME)
             .with_app_id(APP_ID)
-            .with_inner_size([1100.0, 700.0])
-            .with_min_inner_size([640.0, 400.0])
+            .with_inner_size(settings.window_size())
+            .with_min_inner_size(settings::MIN_WINDOW_SIZE)
+            .with_maximized(settings.window_maximized)
             .with_icon(
                 eframe::icon_data::from_png_bytes(include_bytes!(
                     "../../../assets/icon/JoystickGobloon-256.png"
