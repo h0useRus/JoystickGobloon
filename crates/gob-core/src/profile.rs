@@ -378,6 +378,7 @@ pub enum Section {
     Devices,
     VirtualDevices,
     VoiceCommands,
+    KeyCombos,
     /// Index into [`Profile::extra`].
     Extra(usize),
 }
@@ -400,6 +401,8 @@ pub struct Profile {
     pub virtual_devices: VirtualDevices,
     /// Joystick Gobloon only (see [`crate::voice`]).
     pub voice_commands: Vec<crate::voice::VoiceCommand>,
+    /// Joystick Gobloon only (see [`crate::combos`]).
+    pub key_combos: Vec<crate::combos::KeyCombo>,
     pub extra: Vec<Element>,
     pub order: Vec<Section>,
 }
@@ -421,6 +424,7 @@ impl Default for Profile {
             devices: Vec::new(),
             virtual_devices: VirtualDevices::default(),
             voice_commands: Vec::new(),
+            key_combos: Vec::new(),
             extra: Vec::new(),
             order: vec![
                 Section::Inputs,
@@ -455,7 +459,10 @@ impl Profile {
             .rposition(|s| {
                 matches!(
                     s,
-                    Section::Devices | Section::VirtualDevices | Section::VoiceCommands
+                    Section::Devices
+                        | Section::VirtualDevices
+                        | Section::VoiceCommands
+                        | Section::KeyCombos
                 )
             })
             .map_or(self.order.len(), |i| i + 1);
@@ -472,6 +479,7 @@ impl Profile {
             || self.has_lua_scripts()
             || !self.virtual_devices.gamepads.is_empty()
             || !self.voice_commands.is_empty()
+            || !self.key_combos.is_empty()
             || self
                 .inputs
                 .iter()

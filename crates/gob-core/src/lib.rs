@@ -7,6 +7,7 @@
 pub mod action;
 pub mod automap;
 pub mod button_axis;
+pub mod combos;
 pub mod condition;
 pub mod curve;
 pub mod edit;
@@ -26,6 +27,7 @@ pub use action::{
 };
 pub use automap::Layout as InputLayout;
 pub use button_axis::{AxisMotion, AxisOutput, BUTTON_AXIS, ButtonAxis, DecreaseInput};
+pub use combos::{COMBO_INPUT_TYPE, KeyCombo, MAX_COMBO_KEYS, is_combo_binding};
 pub use condition::{Comparator, Condition, Source as ConditionSource};
 pub use edit::{NewAction, child_groups, new_uuid};
 pub use events::{
