@@ -111,11 +111,14 @@ fn main() -> eframe::Result {
             ),
         ..Default::default()
     };
-    eframe::run_native(
+    let result = eframe::run_native(
         APP_NAME,
         options,
         Box::new(|cc| Ok(Box::new(app::JoystickGobloonApp::new(cc, instance)))),
-    )
+    );
+    // A profile that was running finishes its stop actions and lets go of the devices.
+    gob_engine::wait_stopped();
+    result
 }
 
 #[cfg(test)]

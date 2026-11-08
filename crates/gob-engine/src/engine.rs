@@ -43,8 +43,8 @@ fn event_key(event: ProfileEvent) -> InputKey {
 
 /// How long a profile event holds its button down, like a short press.
 const EVENT_HOLD: Duration = Duration::from_millis(100);
-/// Mode changes made by mode enter and leave actions themselves that still run their own
-/// events; a loop of modes switching each other stops there.
+/// Mode changes in a row made by mode enter and leave actions themselves (on their press or
+/// release) that still run their own events; a loop of modes switching each other stops there.
 const MAX_MODE_EVENTS: u8 = 8;
 /// Lower bound between macro repetitions so a zero delay cannot spin `tick`.
 const MACRO_MIN_REPEAT: Duration = Duration::from_millis(1);
@@ -626,6 +626,12 @@ pub struct Engine {
     event_releases: HashMap<u32, (u64, Arc<str>)>,
     /// Nesting of mode changes made by mode enter and leave actions.
     mode_event_depth: u8,
+    /// Mode changes in a row caused by event actions; another mode change starts over.
+    event_chain: u8,
+    /// A profile event's button went up in this tick: a mode change now comes from its actions.
+    event_released: bool,
+    /// The profile is stopping: no more events run (its stop actions may still change modes).
+    stopping: bool,
     /// Every phrase of the profile's voice commands with the command's id.
     voice_phrases: Vec<(u32, String)>,
     /// Profile's `macro-default-delay` in seconds.
@@ -745,6 +751,9 @@ impl Engine {
             voice_releases: HashMap::new(),
             event_releases: HashMap::new(),
             mode_event_depth: 0,
+            event_chain: 0,
+            event_released: false,
+            stopping: false,
             voice_phrases: profile
                 .voice_phrases()
                 .into_iter()
@@ -1931,6 +1940,7 @@ impl Engine {
                     if let (Some((_, mode)), Some(event)) =
                         (self.event_releases.remove(&id), ProfileEvent::from_id(id))
                     {
+                        self.event_released = true;
                         self.event_up(event, mode, now, out);
                     }
                 }
@@ -1950,6 +1960,7 @@ impl Engine {
             out.mouse_move(dx, dy);
         }
         self.after_mode_change(&before, now, out);
+        self.event_released = false;
     }
 
     fn step_relative(&mut self, now: Instant, out: &mut dyn Output) {
@@ -1975,43 +1986,75 @@ impl Engine {
             return;
         }
         self.refresh_mode(now, out);
-        // The mode left, then the one entered; their actions may switch modes again.
-        if self.mode_event_depth < MAX_MODE_EVENTS {
-            self.mode_event_depth += 1;
-            let entered = self.modes.shared();
-            self.fire_event(ProfileEvent::Leave, Arc::from(before), now, out);
-            self.fire_event(ProfileEvent::Enter, entered.clone(), now, out);
-            self.after_mode_change(&entered, now, out);
-            self.mode_event_depth -= 1;
-        } else {
-            log::warn!("mode enter and leave actions keep switching modes: their events stop");
+        if self.stopping {
+            return;
         }
+        // A change made by event actions (their press or release) continues the chain.
+        if self.mode_event_depth > 0 || std::mem::take(&mut self.event_released) {
+            self.event_chain = self.event_chain.saturating_add(1);
+        } else {
+            self.event_chain = 0;
+        }
+        if self.event_chain > MAX_MODE_EVENTS {
+            if self.event_chain == MAX_MODE_EVENTS + 1 {
+                log::warn!("mode enter and leave actions keep switching modes: their events stop");
+            }
+            return;
+        }
+        // The mode left, then the one entered; their actions may switch modes again.
+        self.mode_event_depth += 1;
+        let entered = self.modes.shared();
+        self.fire_event(ProfileEvent::Leave, Arc::from(before), now, out);
+        self.fire_event(ProfileEvent::Enter, entered.clone(), now, out);
+        self.after_mode_change(&entered, now, out);
+        self.mode_event_depth -= 1;
     }
 
-    /// The profile has just started (not an edit applied to it): the start and mode enter
-    /// events run in the starting mode, and held buttons that send their state at start run
-    /// their press.
+    /// The profile has just started (not an edit applied to it): the start event runs in the
+    /// starting mode, then mode enter and the held buttons that send their state at start in
+    /// the mode it is in after that (a start action may switch modes).
     pub fn profile_started(&mut self, now: Instant, out: &mut dyn Output) {
+        let starting = self.modes.shared();
+        self.fire_event(ProfileEvent::Start, starting.clone(), now, out);
         let mode = self.modes.shared();
-        self.fire_event(ProfileEvent::Start, mode.clone(), now, out);
+        if mode != starting {
+            self.refresh_mode(now, out);
+        }
         self.fire_event(ProfileEvent::Enter, mode.clone(), now, out);
         self.send_start_states(&mode, now, out);
         self.after_mode_change(&mode, now, out);
     }
 
-    /// The profile is about to stop: the mode leave and stop events run in the current mode.
-    /// True when either has actions, which then need a moment ([`Engine::tick`]) to finish
-    /// before [`Engine::release_all`].
+    /// The profile is about to stop: the mode leave and stop events run in the current mode,
+    /// and no events run after them. True when either has actions, which then need a moment
+    /// ([`Engine::tick`] while [`Engine::stop_pending`]) to finish before
+    /// [`Engine::release_all`]. Nothing runs while paused.
     pub fn profile_stopping(&mut self, now: Instant, out: &mut dyn Output) -> bool {
+        if self.paused {
+            self.stopping = true;
+            return false;
+        }
         let mode = self.modes.shared();
         let leave = self.fire_event(ProfileEvent::Leave, mode.clone(), now, out);
         let stop = self.fire_event(ProfileEvent::Stop, mode, now, out);
+        self.stopping = true;
         leave || stop
     }
 
-    /// Something still runs on a timer (event releases, macros, pulses).
-    pub fn has_timers(&self) -> bool {
-        !self.timers.is_empty()
+    /// Stop and leave actions are still under way: an event's button is down, or a macro, a
+    /// pulse or a run-action step is waiting for its next step (repeating outputs do not count:
+    /// they would keep going).
+    pub fn stop_pending(&self) -> bool {
+        !self.event_releases.is_empty()
+            || self.timers.iter().any(|t| {
+                matches!(
+                    t.kind,
+                    TimerKind::MacroStep(_)
+                        | TimerKind::PulseRelease { .. }
+                        | TimerKind::SendUp(_)
+                        | TimerKind::RunRelease { .. }
+                )
+            })
     }
 
     /// Presses a profile event's button in `mode` (it goes up after [`EVENT_HOLD`]); false
@@ -2024,10 +2067,11 @@ impl Engine {
         out: &mut dyn Output,
     ) -> bool {
         let key = event_key(event);
-        if !self
-            .lookup
-            .get(&key)
-            .is_some_and(|m| m.contains_key(&*mode))
+        if self.stopping
+            || !self
+                .lookup
+                .get(&key)
+                .is_some_and(|m| m.contains_key(&*mode))
         {
             return false;
         }
@@ -2061,7 +2105,11 @@ impl Engine {
         let mut held: Vec<(InputKey, usize)> = self
             .buttons
             .iter()
-            .filter(|&(k, &down)| down && !self.is_modifier(k))
+            // Controller buttons only: the program's own inputs (events just pressed among
+            // them) have no state of their own at start.
+            .filter(|&(k, &down)| {
+                down && !gob_core::is_builtin_device(&k.device) && !self.is_modifier(k)
+            })
             .filter_map(|(k, _)| {
                 let set = *self.lookup.get(k)?.get(&**mode)?;
                 self.sets[set]

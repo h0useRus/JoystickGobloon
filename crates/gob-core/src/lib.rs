@@ -28,7 +28,9 @@ pub use automap::Layout as InputLayout;
 pub use button_axis::{AxisMotion, AxisOutput, BUTTON_AXIS, ButtonAxis, DecreaseInput};
 pub use condition::{Comparator, Condition, Source as ConditionSource};
 pub use edit::{NewAction, child_groups, new_uuid};
-pub use events::{EVENT_INPUT_TYPE, EVENTS_GUID, ProfileEvent, is_event_binding};
+pub use events::{
+    EVENT_INPUT_TYPE, EVENTS_GUID, ProfileEvent, is_builtin_device, is_event_binding,
+};
 pub use logical::{
     KEYBOARD_GUID, LOGICAL_DEVICE_GUID, LogicalInput, key_from_input_id, key_input_id,
 };

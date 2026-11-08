@@ -123,6 +123,19 @@ struct Reload {
 /// outputs are let go.
 const STOP_BUDGET: Duration = Duration::from_millis(500);
 
+/// Engine threads of dropped runners that may still be running their stop actions; they hold
+/// the virtual devices until they end.
+static STOPPING: Mutex<Vec<JoinHandle<()>>> = Mutex::new(Vec::new());
+
+/// Waits for the engine threads of stopped runners: their stop actions are done and the virtual
+/// devices are let go. [`Runner::start`] does it first; call it before the program exits.
+pub fn wait_stopped() {
+    let threads = std::mem::take(&mut *STOPPING.lock().unwrap_or_else(|e| e.into_inner()));
+    for t in threads {
+        let _ = t.join();
+    }
+}
+
 /// How long [`Runner::reload`] waits for the engine thread.
 const RELOAD_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -440,6 +453,8 @@ impl Runner {
         voice: Option<crate::VoiceConfig>,
         on_change: impl Fn() + Send + 'static,
     ) -> Result<Self, String> {
+        // A profile that just stopped may still hold the devices for its stop actions.
+        wait_stopped();
         let mut engine = Engine::new(profile, aliases);
         let virtual_devices = gob_virtual::load().map_err(|e| e.to_string())?;
         let (voice_events, voice_inbox) = std::sync::mpsc::channel();
@@ -563,10 +578,12 @@ impl Runner {
 }
 
 impl Drop for Runner {
+    /// Stops the engine thread without waiting for it: it runs the profile's stop actions and
+    /// lets go of the devices on its own ([`wait_stopped`]).
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Some(t) = self.thread.take() {
-            let _ = t.join();
+            STOPPING.lock().unwrap_or_else(|e| e.into_inner()).push(t);
         }
     }
 }
@@ -615,7 +632,7 @@ fn finish_stop(engine: &mut Engine, out: &mut SystemOutput) {
     loop {
         out.flush();
         let now = Instant::now();
-        if !engine.has_timers() || now >= end {
+        if !engine.stop_pending() || now >= end {
             break;
         }
         let next = engine.next_deadline().unwrap_or(end).min(end);
@@ -762,6 +779,9 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
     while !stop.load(Ordering::Relaxed) {
         for mut r in reloads.try_iter() {
             let result = acquire(&r.engine, &mut out, virtual_devices.as_ref());
+            // Answered at once: the old profile's stop actions below must not hold up the
+            // caller (the GUI).
+            let _ = r.reply.send(result.clone());
             if result.is_ok() {
                 // A held push-to-talk input would keep the microphone open otherwise, and a
                 // command's button would stay down. The utterance it ends is heard with the old
@@ -785,7 +805,6 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
                 *logical.lock().unwrap_or_else(|e| e.into_inner()) = engine.logical_values();
                 on_change();
             }
-            let _ = r.reply.send(result);
         }
         // Reloads wrote to the devices above.
         out.flush();

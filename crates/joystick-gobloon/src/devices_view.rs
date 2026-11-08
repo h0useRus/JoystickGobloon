@@ -314,11 +314,9 @@ impl DevicesView {
                     .any(|d| d.id.eq_ignore_ascii_case(guid))
             };
             for d in &p.profile.devices {
-                let logical = d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
-                    || d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
-                    || d.id.eq_ignore_ascii_case(gob_core::VOICE_GUID)
-                    || d.id.eq_ignore_ascii_case(gob_core::EVENTS_GUID);
-                if logical || tabs.iter().any(|t| t.guid.eq_ignore_ascii_case(&d.id)) {
+                if gob_core::is_builtin_device(&d.id)
+                    || tabs.iter().any(|t| t.guid.eq_ignore_ascii_case(&d.id))
+                {
                     continue;
                 }
                 // Same stick on this PC under another GUID: show its bindings on the live tab.
@@ -396,12 +394,7 @@ impl DevicesView {
             .as_ref()
             .is_some_and(|s| tabs.iter().any(|t| t.guid == s));
         let on_ghost = tabs.iter().any(|t| {
-            self.selected.as_deref() == Some(t.guid)
-                && t.live.is_none()
-                && !t.logical
-                && !is_keyboard(t)
-                && !is_voice(t)
-                && !is_events(t)
+            self.selected.as_deref() == Some(t.guid) && t.live.is_none() && !is_builtin(t)
         });
         if let Some((was, instead)) = &self.left
             && self.selected.as_ref() == Some(instead)
@@ -475,64 +468,63 @@ impl DevicesView {
                         };
                         // Real devices (connected or from the profile) have an info icon
                         // inside their tab; connected ones known to HidHide also an eye.
-                        let mut r =
-                            if !t.logical && !is_keyboard(t) && !is_voice(t) && !is_events(t) {
-                                let info_tip = i18n.tr("device-info");
-                                let hidden = self.hidden.get(t.guid).copied();
-                                let eye_tip = crate::hidhide_view::eye_tip(
-                                    i18n,
-                                    hidden == Some(true),
-                                    self.hiding_on,
-                                );
-                                let led_tip = i18n.tr("device-leds");
-                                let exposed_tip = i18n.tr("hidhide-exposed");
-                                let mut icons = Vec::new();
-                                if let Some(hidden) = hidden {
-                                    let (glyph, color) = style::eye(ui, hidden, self.hiding_on);
-                                    icons.push(style::TabIcon {
-                                        glyph,
-                                        color: Some(color),
-                                        tip: &eye_tip,
-                                    });
-                                }
-                                if self.hiding_on && self.exposed.contains(t.guid) {
-                                    icons.push(style::TabIcon {
-                                        glyph: icon::WARNING,
-                                        color: Some(ui.visuals().warn_fg_color),
-                                        tip: &exposed_tip,
-                                    });
-                                }
-                                // Shows only that light-led can drive it; clicking does nothing.
-                                let leds = t.live.is_some() && self.leds.contains(t.guid);
-                                if leds {
-                                    icons.push(style::TabIcon {
-                                        glyph: icon::LIGHTBULB,
-                                        color: None,
-                                        tip: &led_tip,
-                                    });
-                                }
-                                let info_index = icons.len();
+                        let mut r = if !is_builtin(t) {
+                            let info_tip = i18n.tr("device-info");
+                            let hidden = self.hidden.get(t.guid).copied();
+                            let eye_tip = crate::hidhide_view::eye_tip(
+                                i18n,
+                                hidden == Some(true),
+                                self.hiding_on,
+                            );
+                            let led_tip = i18n.tr("device-leds");
+                            let exposed_tip = i18n.tr("hidhide-exposed");
+                            let mut icons = Vec::new();
+                            if let Some(hidden) = hidden {
+                                let (glyph, color) = style::eye(ui, hidden, self.hiding_on);
                                 icons.push(style::TabIcon {
-                                    glyph: icon::INFO,
-                                    // The info icon is always in the accent green.
-                                    color: Some(style::accent(ui)),
-                                    tip: &info_tip,
+                                    glyph,
+                                    color: Some(color),
+                                    tip: &eye_tip,
                                 });
-                                let (r, clicked) =
-                                    style::tab_with_icons(ui, selected, glyph, t.name, &icons);
-                                match (clicked, hidden) {
-                                    (Some(0), Some(hidden)) => {
-                                        self.hide_request = Some((t.guid.to_string(), !hidden));
-                                    }
-                                    (Some(i), _) if i == info_index => {
-                                        self.info = Some(t.guid.to_string());
-                                    }
-                                    _ => {}
+                            }
+                            if self.hiding_on && self.exposed.contains(t.guid) {
+                                icons.push(style::TabIcon {
+                                    glyph: icon::WARNING,
+                                    color: Some(ui.visuals().warn_fg_color),
+                                    tip: &exposed_tip,
+                                });
+                            }
+                            // Shows only that light-led can drive it; clicking does nothing.
+                            let leds = t.live.is_some() && self.leds.contains(t.guid);
+                            if leds {
+                                icons.push(style::TabIcon {
+                                    glyph: icon::LIGHTBULB,
+                                    color: None,
+                                    tip: &led_tip,
+                                });
+                            }
+                            let info_index = icons.len();
+                            icons.push(style::TabIcon {
+                                glyph: icon::INFO,
+                                // The info icon is always in the accent green.
+                                color: Some(style::accent(ui)),
+                                tip: &info_tip,
+                            });
+                            let (r, clicked) =
+                                style::tab_with_icons(ui, selected, glyph, t.name, &icons);
+                            match (clicked, hidden) {
+                                (Some(0), Some(hidden)) => {
+                                    self.hide_request = Some((t.guid.to_string(), !hidden));
                                 }
-                                r
-                            } else {
-                                style::tab(ui, selected, glyph, t.name)
-                            };
+                                (Some(i), _) if i == info_index => {
+                                    self.info = Some(t.guid.to_string());
+                                }
+                                _ => {}
+                            }
+                            r
+                        } else {
+                            style::tab(ui, selected, glyph, t.name)
+                        };
                         if let Some(key) = hint {
                             r = r.on_hover_text(i18n.tr(key));
                         }
@@ -1814,6 +1806,11 @@ fn is_events(tab: &Tab) -> bool {
     tab.guid == gob_core::EVENTS_GUID
 }
 
+/// The tab of one of the program's own devices, not a controller.
+fn is_builtin(tab: &Tab) -> bool {
+    tab.logical || gob_core::is_builtin_device(tab.guid)
+}
+
 /// The kind of input a binding is for.
 fn binding_kind(b: &InputBinding) -> Kind {
     type_kind(&b.input_type)
@@ -1969,6 +1966,12 @@ fn device_name(i18n: &I18n, profile: &Profile, guid: &str) -> String {
     }
     if guid.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID) {
         return i18n.tr("logical-device");
+    }
+    if guid.eq_ignore_ascii_case(gob_core::VOICE_GUID) {
+        return i18n.tr("voice-device");
+    }
+    if guid.eq_ignore_ascii_case(gob_core::EVENTS_GUID) {
+        return i18n.tr("events-device");
     }
     profile
         .devices

@@ -43,6 +43,20 @@ impl ProfileEvent {
     }
 }
 
+/// One of the program's own input devices, not a controller: the logical device, the keyboard,
+/// voice commands and profile events. They are never listed in `<devices>`.
+pub fn is_builtin_device(id: &str) -> bool {
+    let id = id.trim();
+    [
+        crate::LOGICAL_DEVICE_GUID,
+        crate::KEYBOARD_GUID,
+        crate::VOICE_GUID,
+        EVENTS_GUID,
+    ]
+    .iter()
+    .any(|g| id.eq_ignore_ascii_case(g))
+}
+
 /// Whether a binding belongs to a profile event (padded hand-edited values too).
 pub fn is_event_binding(device_id: &str, input_type: &str) -> bool {
     device_id.trim().eq_ignore_ascii_case(EVENTS_GUID) && input_type.trim() == EVENT_INPUT_TYPE
@@ -64,5 +78,8 @@ mod tests {
             " event "
         ));
         assert!(!is_event_binding(EVENTS_GUID, "button"));
+        assert!(is_builtin_device(crate::VOICE_GUID));
+        assert!(is_builtin_device(&crate::KEYBOARD_GUID.to_uppercase()));
+        assert!(!is_builtin_device("aaaaaaaa-0000-0000-0000-000000000001"));
     }
 }

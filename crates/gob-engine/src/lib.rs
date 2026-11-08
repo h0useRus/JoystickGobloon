@@ -26,7 +26,7 @@ pub use gob_script::ScriptError;
 pub use gob_voice::VoiceConfig;
 pub use lighting::to_led;
 pub use media::{Media, SpeechQueue, SpeechRequest, voices};
-pub use runner::{Latency, Runner, RunnerStatus, VoiceHeard, VoiceStatus};
+pub use runner::{Latency, Runner, RunnerStatus, VoiceHeard, VoiceStatus, wait_stopped};
 
 /// Values of the logical device's inputs that actions wrote, by input id.
 #[derive(Debug, Clone, Default, PartialEq)]

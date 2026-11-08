@@ -93,12 +93,12 @@ fn start_runs_start_and_enter_then_lets_go() {
     let (t0, mut out) = (Instant::now(), Recorder::default());
     e.profile_started(t0, &mut out);
     assert_eq!(out.0, [(1, true), (2, true)]);
-    assert!(e.has_timers());
+    assert!(e.stop_pending());
     e.tick(t0 + Duration::from_millis(50), &mut out);
     assert_eq!(out.0.len(), 2, "held for a moment");
     e.tick(t0 + Duration::from_millis(100), &mut out);
     assert_eq!(out.0[2..], [(1, false), (2, false)]);
-    assert!(!e.has_timers());
+    assert!(!e.stop_pending());
 }
 
 /// Leave runs in the mode left, enter in the one entered; a child mode without its own uses
@@ -150,7 +150,7 @@ fn mode_change_runs_leave_then_enter() {
         "{:?}",
         out.0
     );
-    assert!(!e.has_timers());
+    assert!(!e.stop_pending());
 }
 
 #[test]
@@ -170,7 +170,7 @@ fn stop_runs_leave_and_stop_in_the_current_mode() {
 
     let mut none = engine(&[button(1, "Default", "r1", "")], &[vjoy(1)]);
     assert!(!none.profile_stopping(t0, &mut out), "nothing bound");
-    assert!(!none.has_timers());
+    assert!(!none.stop_pending());
 }
 
 /// Enter actions that switch modes run the next mode's events too, up to a limit.
@@ -210,4 +210,132 @@ fn held_buttons_send_their_state_at_start() {
     assert_eq!(out.0, [(7, true)], "held and sending only");
     press(&mut e, 7, false, t0 + Duration::from_millis(10), &mut out);
     assert_eq!(out.0[1..], [(7, false)], "its release as usual");
+}
+
+/// A start action that switches modes: mode enter and send state run in the mode switched to,
+/// and the starting mode is not entered and left.
+#[test]
+fn start_switching_modes_enters_the_new_mode() {
+    let mut e = engine(
+        &[
+            event(ProfileEvent::Start, "Default", "ro"),
+            event(ProfileEvent::Enter, "Default", "r1"),
+            event(ProfileEvent::Leave, "Default", "r2"),
+            event(ProfileEvent::Enter, "Other", "r3"),
+            button(7, "Default", "r4", r#" send-state="true""#),
+            button(7, "Other", "r5", r#" send-state="true""#),
+        ],
+        &[
+            switch("o", "Other"),
+            vjoy(1),
+            vjoy(2),
+            vjoy(3),
+            vjoy(4),
+            vjoy(5),
+        ],
+    );
+    e.seed(
+        &InputKey::new(DEV, InputKind::Button, 7),
+        Value::Button(true),
+    );
+    let (t0, mut out) = (Instant::now(), Recorder::default());
+    e.profile_started(t0, &mut out);
+    assert_eq!(e.current_mode(), "Other");
+    assert_eq!(out.0, [(3, true), (5, true)]);
+}
+
+/// An event binding that sends its state does not run twice at start.
+#[test]
+fn events_do_not_send_their_state_again() {
+    let mut e = engine(
+        &[binding(
+            EVENTS_GUID,
+            "event",
+            ProfileEvent::Start.id(),
+            "Default",
+            "r1",
+            r#" send-state="true""#,
+        )],
+        &[vjoy(1)],
+    );
+    let (t0, mut out) = (Instant::now(), Recorder::default());
+    e.profile_started(t0, &mut out);
+    assert_eq!(out.0, [(1, true)]);
+}
+
+/// While stopping, a stop action that changes the mode runs no more events; paused, nothing
+/// runs and nothing is waited for.
+#[test]
+fn stopping_and_paused_run_no_further_events() {
+    let mut e = engine(
+        &[
+            event(ProfileEvent::Stop, "Default", "ro"),
+            event(ProfileEvent::Enter, "Other", "r1"),
+            event(ProfileEvent::Leave, "Default", "r2"),
+        ],
+        &[switch("o", "Other"), vjoy(1), vjoy(2)],
+    );
+    let (t0, mut out) = (Instant::now(), Recorder::default());
+    assert!(e.profile_stopping(t0, &mut out));
+    // Leave ran once, before the stop action switched modes; Other's enter did not.
+    assert_eq!(out.0, [(2, true)]);
+    assert_eq!(e.current_mode(), "Other");
+
+    let mut paused = engine(
+        &[
+            event(ProfileEvent::Stop, "Default", "r1"),
+            button(1, "Default", "rp", ""),
+        ],
+        &[
+            vjoy(1),
+            format!(
+                r#"<action id="p" type="pause-resume">{}{}</action>
+                <action id="rp" type="root"><actions><action-id>p</action-id></actions></action>"#,
+                prop("string", "operation", "pause"),
+                prop("activation-mode", "activation-mode", "press"),
+            ),
+        ],
+    );
+    press(&mut paused, 1, true, t0, &mut out);
+    assert!(paused.is_paused());
+    out.0.clear();
+    assert!(!paused.profile_stopping(t0, &mut out));
+    assert!(out.0.is_empty());
+    assert!(!paused.stop_pending());
+}
+
+/// Event actions that switch modes on their release keep running only up to a rate: the
+/// flipping stops.
+#[test]
+fn mode_flipping_through_releases_stops() {
+    // Each mode's enter switches to the other one when its button goes up.
+    let release_switch = |id: &str, mode: &str| {
+        format!(
+            r#"<action id="m{id}" type="change-mode">{}<target-mode>{}</target-mode>{}</action>
+            <action id="r{id}" type="root"><actions><action-id>m{id}</action-id></actions></action>"#,
+            prop("string", "change-type", "Switch"),
+            prop("string", "name", mode),
+            prop("activation-mode", "activation-mode", "release"),
+        )
+    };
+    let mut e = engine(
+        &[
+            event(ProfileEvent::Enter, "Default", "ro"),
+            event(ProfileEvent::Enter, "Other", "rd"),
+        ],
+        &[release_switch("o", "Other"), release_switch("d", "Default")],
+    );
+    let (t0, mut out) = (Instant::now(), Recorder::default());
+    e.profile_started(t0, &mut out);
+    let mut flips = 0;
+    let mut mode = e.current_mode().to_string();
+    for step in 1..=200u64 {
+        e.tick(t0 + Duration::from_millis(step * 100), &mut out);
+        if e.current_mode() != mode {
+            flips += 1;
+            mode = e.current_mode().to_string();
+        }
+    }
+    // 20 seconds of 100 ms holds would be 200 flips; the chain stops after a few.
+    assert!(flips <= 10, "{flips} flips");
 }

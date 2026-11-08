@@ -153,10 +153,7 @@ pub fn served(profile: &gob_core::Profile, devices: &[gob_input::DeviceState]) -
     profile
         .devices
         .iter()
-        .filter(|d| {
-            !d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
-                && !d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
-        })
+        .filter(|d| !gob_core::is_builtin_device(&d.id))
         .map(|d| {
             let own = devices
                 .iter()

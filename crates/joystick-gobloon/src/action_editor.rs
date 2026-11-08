@@ -29,11 +29,9 @@ pub enum AddKind {
 
 /// Adds a bound device to the profile's `<devices>` (not the logical device or the keyboard).
 fn list_device(p: &mut Profile, device: &str, name: String) {
-    let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
-        || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
-        || device.eq_ignore_ascii_case(gob_core::VOICE_GUID)
-        || device.eq_ignore_ascii_case(gob_core::EVENTS_GUID);
-    if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device)) {
+    if !gob_core::is_builtin_device(device)
+        && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device))
+    {
         p.devices.push(gob_core::Device {
             id: device.to_string(),
             name,
