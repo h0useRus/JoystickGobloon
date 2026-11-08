@@ -25,6 +25,65 @@ pub enum AddKind {
     Reuse(String),
     /// A deep copy of an existing action.
     Duplicate(String),
+    /// Copies of the actions on the clipboard.
+    Paste(std::sync::Arc<Clip>),
+}
+
+/// Actions copied with a copy button or Ctrl+C: kept as copies, so they survive edits, being
+/// removed and another profile.
+#[derive(Debug)]
+pub struct Clip {
+    /// The copied actions, in order.
+    pub tops: Vec<String>,
+    /// They and everything below them ([`Profile::subtree`]).
+    pub actions: Vec<Action>,
+    /// How the input they came from behaves: they paste only where an input behaves alike.
+    pub behavior: InputType,
+    /// Their names, for the paste button.
+    pub names: String,
+    /// Put on the system clipboard; Ctrl+V pastes the actions while it is still there.
+    pub marker: String,
+}
+
+fn clip_id() -> egui::Id {
+    egui::Id::unique("action-clipboard")
+}
+
+/// The copied actions, if any.
+pub fn clip(ctx: &egui::Context) -> Option<std::sync::Arc<Clip>> {
+    ctx.data(|d| d.get_temp(clip_id()))
+}
+
+/// Copies the actions `tops` (with everything below them) of an input behaving as `behavior`;
+/// returns their names, empty when there was nothing to copy.
+pub fn copy_actions(
+    ctx: &egui::Context,
+    i18n: &I18n,
+    profile: &Profile,
+    tops: Vec<String>,
+    behavior: InputType,
+) -> String {
+    let names: Vec<String> = tops
+        .iter()
+        .filter_map(|id| profile.action(id))
+        .map(crate::profile_view::display_name)
+        .collect();
+    if names.is_empty() {
+        return String::new();
+    }
+    let names = names.join(", ");
+    let marker = i18n.trf("clip-text", &[("actions", names.clone().into())]);
+    ctx.copy_text(marker.clone());
+    let clip = Clip {
+        actions: profile.subtree(&tops),
+        tops,
+        behavior,
+        names: names.clone(),
+        marker,
+    };
+    ctx.data_mut(|d| d.insert_temp(clip_id(), std::sync::Arc::new(clip)));
+    log::debug!("copied actions: {names}");
+    names
 }
 
 /// Adds a bound device to the profile's `<devices>` (not the logical device or the keyboard).
@@ -58,6 +117,12 @@ fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
         }
         AddKind::Duplicate(id) => {
             if let Some(copy) = p.duplicate(id) {
+                p.add_ref(parent, group, &copy);
+                p.separate_outputs(&copy);
+            }
+        }
+        AddKind::Paste(clip) => {
+            for copy in p.paste(&clip.actions, &clip.tops) {
                 p.add_ref(parent, group, &copy);
                 p.separate_outputs(&copy);
             }
@@ -964,6 +1029,26 @@ impl Editor<'_> {
         parent: Option<&str>,
         make: impl Fn(AddKind) -> Op,
     ) {
+        ui.horizontal(|ui| {
+            self.add_menu_button(ui, parent, &make);
+            // Copied actions paste where an input behaves like the one they came from.
+            if let Some(clip) = clip(ui.ctx()).filter(|c| c.behavior == self.behavior) {
+                let tip = self
+                    .i18n
+                    .trf("edit-paste", &[("actions", clip.names.clone().into())]);
+                if style::icon_button(ui, true, icon::CLIPBOARD_TEXT, &tip).clicked() {
+                    self.ops.push(make(AddKind::Paste(clip)));
+                }
+            }
+        });
+    }
+
+    fn add_menu_button(
+        &mut self,
+        ui: &mut egui::Ui,
+        parent: Option<&str>,
+        make: &impl Fn(AddKind) -> Op,
+    ) {
         let mode = self.profile.modes.first().map_or("", |m| m.name.as_str());
         ui.menu_button(
             RichText::new(icon::PLUS_CIRCLE).size(style::ICON_SIZE),
@@ -1009,9 +1094,9 @@ impl Editor<'_> {
                     }
                 }
                 if self.behavior == InputType::Axis {
-                    self.merge_menu(ui, &make);
+                    self.merge_menu(ui, make);
                 }
-                self.existing_menu(ui, parent, &make);
+                self.existing_menu(ui, parent, make);
             },
         )
         .response
@@ -1196,6 +1281,17 @@ impl Editor<'_> {
                             from: index,
                             to: index - 1,
                         });
+                    }
+                    if style::icon_button(ui, true, icon::COPY, &self.i18n.tr("edit-copy"))
+                        .clicked()
+                    {
+                        copy_actions(
+                            ui.ctx(),
+                            self.i18n,
+                            self.profile,
+                            vec![id.to_string()],
+                            self.behavior,
+                        );
                     }
                     self.voice_button(ui, action);
                     let mut label = action

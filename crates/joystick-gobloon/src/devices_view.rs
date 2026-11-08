@@ -235,6 +235,25 @@ impl DevicesView {
         }
     }
 
+    /// Copies every action of an input's action sequence; the status bar says what.
+    fn copy_input(
+        &mut self,
+        ctx: &egui::Context,
+        i18n: &I18n,
+        profile: &Profile,
+        cfg: &ActionConfig,
+        behavior: InputType,
+    ) {
+        let tops: Vec<String> = profile
+            .action(&cfg.root_action)
+            .map(|r| r.child_ids().into_iter().map(String::from).collect())
+            .unwrap_or_default();
+        let names = crate::action_editor::copy_actions(ctx, i18n, profile, tops, behavior);
+        if !names.is_empty() {
+            self.status = Some(i18n.trf("status-copied", &[("actions", names.into())]));
+        }
+    }
+
     /// Selects tab `guid` (as picked by the user) and its input `key`, and scrolls the list
     /// to it.
     fn show_input(&mut self, guid: &str, key: Key) {
@@ -1214,6 +1233,42 @@ impl DevicesView {
                 .cloned()
                 .collect()
         };
+        // Ctrl+C copies the shown input's actions, Ctrl+V pastes copied ones onto it (not
+        // while a text field takes them).
+        let own = match bound {
+            Bound::Own(b) => in_layer(b).into_iter().next(),
+            _ => None,
+        };
+        let (copy, paste) = if ui.ctx().text_edit_focused() {
+            (false, None)
+        } else {
+            ui.input(|i| {
+                let copy = i.events.iter().any(|e| matches!(e, egui::Event::Copy));
+                let paste = i.events.iter().find_map(|e| match e {
+                    egui::Event::Paste(text) => Some(text.clone()),
+                    _ => None,
+                });
+                (copy, paste)
+            })
+        };
+        if copy && let Some(cfg) = &own {
+            self.copy_input(ui.ctx(), i18n, &p.profile, cfg, behavior);
+        }
+        if let Some(text) = paste
+            && let Some(clip) = crate::action_editor::clip(ui.ctx())
+            && clip.marker.trim() == text.trim()
+            && clip.behavior == behavior
+        {
+            let kind = crate::action_editor::AddKind::Paste(clip);
+            ops.push(match &own {
+                Some(cfg) => Op::Add {
+                    parent: cfg.root_action.clone(),
+                    group: "actions".into(),
+                    action: kind,
+                },
+                None => bind(Some(kind), &layer),
+            });
+        }
         match bound {
             Bound::Own(b) if !in_layer(b).is_empty() => {
                 let configs = in_layer(b);
@@ -1231,6 +1286,12 @@ impl DevicesView {
                             mode: b.mode.clone(),
                             layer: layer.clone(),
                         });
+                    }
+                    if let Some(cfg) = configs.first()
+                        && style::icon_button(ui, true, icon::COPY, &i18n.tr("edit-copy-input"))
+                            .clicked()
+                    {
+                        self.copy_input(ui.ctx(), i18n, &p.profile, cfg, behavior);
                     }
                     // The binding's description: the root action's label, like Gremlin.
                     if let Some(root_id) = &root
