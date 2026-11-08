@@ -41,6 +41,9 @@ fn event_key(event: ProfileEvent) -> InputKey {
     InputKey::new(gob_core::EVENTS_GUID, InputKind::Button, event.id())
 }
 
+/// Key combinations are keyboard inputs with ids from here on (key ids stay below 0x200).
+const COMBO_ID_BASE: u32 = 0x1_0000;
+
 /// How long a profile event holds its button down, like a short press.
 const EVENT_HOLD: Duration = Duration::from_millis(100);
 /// Mode changes in a row made by mode enter and leave actions themselves (on their press or
@@ -626,6 +629,10 @@ pub struct Engine {
     event_releases: HashMap<u32, (u64, Arc<str>)>,
     /// Nesting of mode changes made by mode enter and leave actions.
     mode_event_depth: u8,
+    /// Key combinations: their input and their keys' inputs.
+    combos: Vec<(InputKey, Vec<InputKey>)>,
+    /// The combinations (their inputs) whose keys are all held.
+    combos_down: HashSet<InputKey>,
     /// Mode changes in a row caused by event actions; another mode change starts over.
     event_chain: u8,
     /// A profile event's button went up in this tick: a mode change now comes from its actions.
@@ -751,6 +758,8 @@ impl Engine {
             voice_releases: HashMap::new(),
             event_releases: HashMap::new(),
             mode_event_depth: 0,
+            combos: Vec::new(),
+            combos_down: HashSet::new(),
             event_chain: 0,
             event_released: false,
             stopping: false,
@@ -827,21 +836,27 @@ impl Engine {
                 InputType::Axis => InputKind::Axis,
                 InputType::Button => InputKind::Button,
                 InputType::Hat => InputKind::Hat,
-                // Keyboard keys (Gremlin's "key" inputs), voice commands and profile events
-                // behave like buttons.
+                // Keyboard keys (Gremlin's "key" inputs), key combinations, voice commands and
+                // profile events behave like buttons.
                 InputType::Other
                     if matches!(
                         b.input_type.trim(),
-                        "key" | VOICE_INPUT_TYPE | gob_core::EVENT_INPUT_TYPE
+                        "key"
+                            | gob_core::COMBO_INPUT_TYPE
+                            | VOICE_INPUT_TYPE
+                            | gob_core::EVENT_INPUT_TYPE
                     ) =>
                 {
                     InputKind::Button
                 }
                 InputType::Other => continue,
             };
-            let Ok(id) = b.input_id.trim().parse() else {
+            let Ok(mut id) = b.input_id.trim().parse::<u32>() else {
                 continue;
             };
+            if b.input_type.trim() == gob_core::COMBO_INPUT_TYPE {
+                id = id.saturating_add(COMBO_ID_BASE);
+            }
             let key = InputKey {
                 device: engine.device(&b.device_id),
                 kind,
@@ -929,6 +944,29 @@ impl Engine {
         engine.compiled_decrease.clear();
         engine.compiled_lights.clear();
         engine.inherit_modes(profile);
+        let keyboard = engine.device(gob_core::KEYBOARD_GUID);
+        engine.combos = profile
+            .key_combos
+            .iter()
+            .map(|c| {
+                let combo = InputKey {
+                    device: keyboard.clone(),
+                    kind: InputKind::Button,
+                    id: c.id.saturating_add(COMBO_ID_BASE),
+                };
+                let keys = c
+                    .keys
+                    .iter()
+                    .map(|k| InputKey {
+                        device: keyboard.clone(),
+                        kind: InputKind::Button,
+                        id: gob_core::key_input_id(*k),
+                    })
+                    .collect();
+                (combo, keys)
+            })
+            .filter(|(combo, _)| engine.lookup.contains_key(combo))
+            .collect();
         engine.load_scripts(profile);
         // A child mode that binds a decrease input itself has a set of its own for it, so it
         // does not inherit the decrease entry: it gets one in every mode that inherits the
@@ -1787,6 +1825,41 @@ impl Engine {
 
     /// Handles one physical input change.
     pub fn process(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
+        self.process_input(key, value, now, out);
+        if let Value::Button(pressed) = value
+            && !self.combos.is_empty()
+        {
+            self.update_combos(key, pressed, now, out);
+        }
+    }
+
+    /// A keyboard key went down or up: the combinations it belongs to go down once all their
+    /// keys are held, and up when one is let go.
+    fn update_combos(&mut self, key: &InputKey, pressed: bool, now: Instant, out: &mut dyn Output) {
+        for i in 0..self.combos.len() {
+            let (combo, keys) = &self.combos[i];
+            if !keys.contains(key) {
+                continue;
+            }
+            let all = keys
+                .iter()
+                .all(|k| self.buttons.get(k).copied().unwrap_or(false));
+            let down = self.combos_down.contains(combo);
+            if all == down || (all && !pressed) {
+                continue;
+            }
+            let combo = combo.clone();
+            if all {
+                self.combos_down.insert(combo.clone());
+            } else {
+                self.combos_down.remove(&combo);
+            }
+            self.process_input(&combo, Value::Button(all), now, out);
+        }
+    }
+
+    /// One input change: script handlers, then its actions.
+    fn process_input(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
         let layer = self.held_layer();
         self.seed(key, value);
         let before = self.modes.shared();
