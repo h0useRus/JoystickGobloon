@@ -135,6 +135,7 @@
             <li><a href="#how-actions-run">How actions run</a></li>
             <li><a href="#modes">Modes</a></li>
             <li><a href="#modifiers">Modifiers</a></li>
+            <li><a href="#events">Profile and mode events</a></li>
           </ul></li>
           <li><a class="toc-group" href="#output">Output</a><ul>
             <li><a href="#map-to-vjoy">Map to virtual stick</a></li>
@@ -218,6 +219,17 @@
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Held modifiers light up next to the mode selector; the button of a modifier shows a lock and runs no actions.</span></li>
             </ul>
             <figure class="shot"><img src="img/modifiers.png" loading="lazy" width="1102" height="732" alt="Modifiers window with M1 and M2 on a button of each stick, next to the layers Base, M1, M2 and M1 plus M2 of an axis"></figure>
+          </article>
+          <article class="learn-action" id="events">
+            <h3><i class="ph ph-lightning" aria-hidden="true"></i>Profile and mode events</h3>
+            <p>The <span class="term">Events</span> tab next to Voice has four inputs that are not on any stick: <strong>Profile start</strong>, <strong>Profile stop</strong>, <strong>Mode enter</strong> and <strong>Mode leave</strong>. Give them actions like any button: when the event happens, its button is pressed and let go a moment later. Say the mode's name when you enter it, set a virtual stick button the game expects at the start, or let go of a key when the profile stops.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Events belong to a mode like every input: pick the mode in the toolbar first. <strong>Mode enter</strong> runs in the mode entered, <strong>Mode leave</strong> in the mode left, and a mode without its own uses its parent's, so actions on the top mode run for every mode below it.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>When the profile starts, Profile start runs, then Mode enter of the starting mode. When it stops, Mode leave runs, then Profile stop, and their actions get half a second to finish before everything is let go.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>They also run when another profile takes over for the program in front, but not when you edit the running profile.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Layers, containers and conditions work as on any button. Enter actions that change the mode again run that mode's events too.</span></li>
+            </ul>
+            <p>A stick button can also <strong>send its state at start</strong>: turn on the switch above its actions, and if the button is held when the profile starts, its press runs right then. A latching switch that is already on reaches the game without flipping it off and on again.</p>
           </article>
         </section>
 
