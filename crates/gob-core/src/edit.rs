@@ -1056,32 +1056,47 @@ impl Profile {
     /// Deep copy of `id` and everything below it under new ids (Gremlin's "duplicate"
     /// in the reference action). Returns the copy's id.
     pub fn duplicate(&mut self, id: &str) -> Option<String> {
+        let actions = self.subtree(&[id.to_string()]);
+        self.paste(&actions, &[id.to_string()]).pop()
+    }
+
+    /// The actions `tops` and everything below them, cloned (each once, `tops` first): what
+    /// [`Profile::paste`] copies into this or another profile. Run-action targets are not
+    /// included: a copy runs the same action unless the target is inside the copied part.
+    /// Unknown ids are left out.
+    pub fn subtree(&self, tops: &[String]) -> Vec<Action> {
         let index = self.action_index();
-        let mut order: Vec<String> = Vec::new();
-        let mut stack = vec![id.to_string()];
+        let mut order: Vec<&str> = Vec::new();
+        let mut stack: Vec<&str> = tops.iter().rev().map(String::as_str).collect();
         while let Some(cur) = stack.pop() {
             if order.contains(&cur) {
                 continue;
             }
-            let a = index.get(cur.as_str())?;
-            stack.extend(a.child_ids().into_iter().map(String::from));
-            // Run-action targets are not copied: the copy runs the same action unless the
-            // target is inside the copied part (remapped below).
+            let Some(a) = index.get(cur) else {
+                continue;
+            };
+            stack.extend(a.child_ids().into_iter().rev());
             order.push(cur);
         }
+        order
+            .into_iter()
+            .filter_map(|id| index.get(id).map(|a| (*a).clone()))
+            .collect()
+    }
+
+    /// Adds copies of `actions` (from [`Profile::subtree`], of this profile or another one)
+    /// under new ids, references among them following; returns the new ids of `tops` (those
+    /// not among `actions` are left out). The copies are not in any list yet.
+    pub fn paste(&mut self, actions: &[Action], tops: &[String]) -> Vec<String> {
         let ids: HashMap<String, String> =
-            order.iter().map(|old| (old.clone(), new_uuid())).collect();
-        let copies: Vec<Action> = order
-            .iter()
-            .filter_map(|old| {
-                let mut a = (*index.get(old.as_str())?).clone();
-                a.id = ids[old].clone();
-                remap_refs(&mut a.items, &ids);
-                Some(a)
-            })
-            .collect();
-        self.library.extend(copies);
-        ids.get(id).cloned()
+            actions.iter().map(|a| (a.id.clone(), new_uuid())).collect();
+        self.library.extend(actions.iter().map(|a| {
+            let mut copy = a.clone();
+            copy.id = ids[&a.id].clone();
+            remap_refs(&mut copy.items, &ids);
+            copy
+        }));
+        tops.iter().filter_map(|t| ids.get(t).cloned()).collect()
     }
 
     /// Removes the `index`-th child of `parent`'s `group` and actions left unreferenced.

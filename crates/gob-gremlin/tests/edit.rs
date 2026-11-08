@@ -969,3 +969,55 @@ fn run_action_targets_are_references() {
     assert_ne!(*y2, y);
     assert_eq!(p.action(m2).unwrap().run_targets(), [y2.as_str()]);
 }
+
+/// Copied actions paste into another profile as new copies: the trees with their sharing,
+/// in order, each paste with ids of its own.
+#[test]
+fn copied_actions_paste_into_another_profile() {
+    let mut src = Profile::default();
+    let root = src.bind(DEV, "button", "1", "Default");
+    let chain = src
+        .add_child(&root, "actions", gob_core::Action::new(&NewAction::Chain))
+        .unwrap();
+    let desc = src
+        .add_child(
+            &chain,
+            "actions",
+            gob_core::Action::new(&NewAction::Description),
+        )
+        .unwrap();
+    assert!(src.add_ref(&chain, "actions", &desc), "shared inside");
+    let speak = src
+        .add_child(
+            &root,
+            "actions",
+            gob_core::Action::new(&NewAction::TextToSpeech),
+        )
+        .unwrap();
+    let tops = vec![chain.clone(), speak.clone()];
+    let clip = src.subtree(&tops);
+    assert_eq!(clip.len(), 3, "chain, its one shared child, speech");
+    assert_eq!(clip[0].id, chain, "tops first, in order");
+
+    let mut dst = Profile::default();
+    let target = dst.bind(DEV, "button", "2", "Default");
+    for _ in 0..2 {
+        for id in dst.paste(&clip, &tops) {
+            assert!(dst.add_ref(&target, "actions", &id));
+        }
+    }
+    let dst = reload(&dst);
+    let pasted = dst.action(&target).unwrap().child_ids();
+    assert_eq!(pasted.len(), 4);
+    assert!(
+        pasted.iter().all(|id| *id != chain && *id != speak),
+        "new ids"
+    );
+    assert_ne!(pasted[0], pasted[2], "each paste its own copy");
+    let copied = dst.action(pasted[0]).unwrap();
+    let kids = copied.child_ids();
+    assert_eq!(kids.len(), 2);
+    assert_eq!(kids[0], kids[1], "sharing kept");
+    assert_ne!(kids[0], desc);
+    assert_eq!(dst.action(pasted[1]).unwrap().kind, "text-to-speech");
+}
