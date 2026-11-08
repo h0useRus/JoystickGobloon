@@ -1,7 +1,7 @@
 # Joystick Gobloon
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
 Plans (local only, gitignored): phases 0-10 in plans/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13); Linux port (phase 10, Linux only,
-no macOS): plans/LINUX_PLAN.md. Plans and roadmaps live in plans/, never in git.
+no macOS): plans/LINUX_PLAN.md. Plans and roadmaps live in plans/ (finished ones in plans/completed/), never in git.
 "R14" = Gremlin profile format version 14, still current in Gremlin R15/R16; ref/JoystickGremlin is the develop
 branch (16.x) - read it for behavior. Work on ONE crate per session.
 
@@ -92,8 +92,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-lighting joystick LEDs: vendor-neutral `Device`/`Led` in lib.rs dispatching on `Vendor`; every vendor's
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
-  DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
-- crates/gob-script  Lua user scripts (plans/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
+  DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/completed/LIGHTING_PLAN.md
+- crates/gob-script  Lua user scripts (plans/completed/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
   (`send`: the engine is built off its thread), one sandboxed state per script, 5 ms per call (interrupt), off after
   10 errors; prelude.luau = the Lua API (script.<kind>{} variables, input:on(mode, fn), script.every, vjoy/gamepad/
   keyboard/mouse/mode/joystick, speak, run_action, log), `describe` for the Scripts page form, `ScriptHost` +
@@ -101,7 +101,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   (`<scripts>`: Lua code as CDATA or a file path, Gremlin's Python kept, variables in Gremlin's XML); the app reads
   external files on activation (activation.rs) and reloads when they change; Scripts page = scripts_view.rs, editor =
   gob-ui `CodeEditor`
-- crates/gob-voice   voice commands (plans/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
+- crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
   profile's phrases; models.rs = small Vosk model per program language (URL + SHA-256), downloaded into
   `<data dir>/voice`; service.rs = `VoiceService` thread (keeps the profile's microphones open by default: some
