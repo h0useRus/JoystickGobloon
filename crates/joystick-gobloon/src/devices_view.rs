@@ -30,6 +30,8 @@ enum Kind {
     Key,
     /// Voice command; the id is the command's.
     Voice,
+    /// Profile event; the id is [`gob_core::ProfileEvent::id`].
+    Event,
     Other,
 }
 
@@ -303,6 +305,7 @@ impl DevicesView {
         let logical_name = i18n.tr("logical-device");
         let keyboard_name = i18n.tr("keyboard-device");
         let voice_name = i18n.tr("voice-device");
+        let events_name = i18n.tr("events-device");
         if let Some(p) = profile {
             let known = |guid: &str| {
                 p.profile
@@ -313,7 +316,8 @@ impl DevicesView {
             for d in &p.profile.devices {
                 let logical = d.id.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
                     || d.id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
-                    || d.id.eq_ignore_ascii_case(gob_core::VOICE_GUID);
+                    || d.id.eq_ignore_ascii_case(gob_core::VOICE_GUID)
+                    || d.id.eq_ignore_ascii_case(gob_core::EVENTS_GUID);
                 if logical || tabs.iter().any(|t| t.guid.eq_ignore_ascii_case(&d.id)) {
                     continue;
                 }
@@ -358,6 +362,13 @@ impl DevicesView {
                 logical: false,
             });
             tabs.push(Tab {
+                guid: gob_core::EVENTS_GUID,
+                name: &events_name,
+                live: None,
+                alias: None,
+                logical: false,
+            });
+            tabs.push(Tab {
                 guid: gob_core::LOGICAL_DEVICE_GUID,
                 name: &logical_name,
                 live: logical.as_ref(),
@@ -365,12 +376,13 @@ impl DevicesView {
                 logical: true,
             });
         }
-        // Debug builds: JOYSTICK_GOBLOON_TAB=keyboard | voice | logical opens that tab at start
+        // Debug builds: JOYSTICK_GOBLOON_TAB=keyboard | voice | events | logical opens that tab at start
         // (screenshots).
         if cfg!(debug_assertions) && self.selected.is_none() {
             let guid = match std::env::var("JOYSTICK_GOBLOON_TAB").as_deref() {
                 Ok("keyboard") => Some(gob_core::KEYBOARD_GUID),
                 Ok("voice") => Some(gob_core::VOICE_GUID),
+                Ok("events") => Some(gob_core::EVENTS_GUID),
                 Ok("logical") => Some(gob_core::LOGICAL_DEVICE_GUID),
                 _ => None,
             };
@@ -389,6 +401,7 @@ impl DevicesView {
                 && !t.logical
                 && !is_keyboard(t)
                 && !is_voice(t)
+                && !is_events(t)
         });
         if let Some((was, instead)) = &self.left
             && self.selected.as_ref() == Some(instead)
@@ -455,69 +468,71 @@ impl DevicesView {
                             _ if t.logical => (icon::CPU, Some("logical-device-tip")),
                             _ if is_keyboard(t) => (icon::KEYBOARD, Some("keyboard-tip")),
                             _ if is_voice(t) => (icon::MICROPHONE, Some("voice-tip")),
+                            _ if is_events(t) => (icon::LIGHTNING, Some("events-tip")),
                             (Some(_), Some(_)) => (icon::LINK, Some("device-linked")),
                             (Some(_), None) => (icon::JOYSTICK, None),
                             (None, _) => (icon::PLUGS, Some("device-disconnected")),
                         };
                         // Real devices (connected or from the profile) have an info icon
                         // inside their tab; connected ones known to HidHide also an eye.
-                        let mut r = if !t.logical && !is_keyboard(t) && !is_voice(t) {
-                            let info_tip = i18n.tr("device-info");
-                            let hidden = self.hidden.get(t.guid).copied();
-                            let eye_tip = crate::hidhide_view::eye_tip(
-                                i18n,
-                                hidden == Some(true),
-                                self.hiding_on,
-                            );
-                            let led_tip = i18n.tr("device-leds");
-                            let exposed_tip = i18n.tr("hidhide-exposed");
-                            let mut icons = Vec::new();
-                            if let Some(hidden) = hidden {
-                                let (glyph, color) = style::eye(ui, hidden, self.hiding_on);
-                                icons.push(style::TabIcon {
-                                    glyph,
-                                    color: Some(color),
-                                    tip: &eye_tip,
-                                });
-                            }
-                            if self.hiding_on && self.exposed.contains(t.guid) {
-                                icons.push(style::TabIcon {
-                                    glyph: icon::WARNING,
-                                    color: Some(ui.visuals().warn_fg_color),
-                                    tip: &exposed_tip,
-                                });
-                            }
-                            // Shows only that light-led can drive it; clicking does nothing.
-                            let leds = t.live.is_some() && self.leds.contains(t.guid);
-                            if leds {
-                                icons.push(style::TabIcon {
-                                    glyph: icon::LIGHTBULB,
-                                    color: None,
-                                    tip: &led_tip,
-                                });
-                            }
-                            let info_index = icons.len();
-                            icons.push(style::TabIcon {
-                                glyph: icon::INFO,
-                                // The info icon is always in the accent green.
-                                color: Some(style::accent(ui)),
-                                tip: &info_tip,
-                            });
-                            let (r, clicked) =
-                                style::tab_with_icons(ui, selected, glyph, t.name, &icons);
-                            match (clicked, hidden) {
-                                (Some(0), Some(hidden)) => {
-                                    self.hide_request = Some((t.guid.to_string(), !hidden));
+                        let mut r =
+                            if !t.logical && !is_keyboard(t) && !is_voice(t) && !is_events(t) {
+                                let info_tip = i18n.tr("device-info");
+                                let hidden = self.hidden.get(t.guid).copied();
+                                let eye_tip = crate::hidhide_view::eye_tip(
+                                    i18n,
+                                    hidden == Some(true),
+                                    self.hiding_on,
+                                );
+                                let led_tip = i18n.tr("device-leds");
+                                let exposed_tip = i18n.tr("hidhide-exposed");
+                                let mut icons = Vec::new();
+                                if let Some(hidden) = hidden {
+                                    let (glyph, color) = style::eye(ui, hidden, self.hiding_on);
+                                    icons.push(style::TabIcon {
+                                        glyph,
+                                        color: Some(color),
+                                        tip: &eye_tip,
+                                    });
                                 }
-                                (Some(i), _) if i == info_index => {
-                                    self.info = Some(t.guid.to_string());
+                                if self.hiding_on && self.exposed.contains(t.guid) {
+                                    icons.push(style::TabIcon {
+                                        glyph: icon::WARNING,
+                                        color: Some(ui.visuals().warn_fg_color),
+                                        tip: &exposed_tip,
+                                    });
                                 }
-                                _ => {}
-                            }
-                            r
-                        } else {
-                            style::tab(ui, selected, glyph, t.name)
-                        };
+                                // Shows only that light-led can drive it; clicking does nothing.
+                                let leds = t.live.is_some() && self.leds.contains(t.guid);
+                                if leds {
+                                    icons.push(style::TabIcon {
+                                        glyph: icon::LIGHTBULB,
+                                        color: None,
+                                        tip: &led_tip,
+                                    });
+                                }
+                                let info_index = icons.len();
+                                icons.push(style::TabIcon {
+                                    glyph: icon::INFO,
+                                    // The info icon is always in the accent green.
+                                    color: Some(style::accent(ui)),
+                                    tip: &info_tip,
+                                });
+                                let (r, clicked) =
+                                    style::tab_with_icons(ui, selected, glyph, t.name, &icons);
+                                match (clicked, hidden) {
+                                    (Some(0), Some(hidden)) => {
+                                        self.hide_request = Some((t.guid.to_string(), !hidden));
+                                    }
+                                    (Some(i), _) if i == info_index => {
+                                        self.info = Some(t.guid.to_string());
+                                    }
+                                    _ => {}
+                                }
+                                r
+                            } else {
+                                style::tab(ui, selected, glyph, t.name)
+                            };
                         if let Some(key) = hint {
                             r = r.on_hover_text(i18n.tr(key));
                         }
@@ -605,6 +620,12 @@ impl DevicesView {
                 if let Some(first) = c.phrases.first() {
                     labels.insert((Kind::Voice, c.id), first.clone());
                 }
+            }
+        }
+        // Profile events, always all of them.
+        if is_events(tab) {
+            for e in gob_core::ProfileEvent::ALL {
+                rows.entry((Kind::Event, e.id())).or_insert(Bound::None);
             }
         }
         let index = profile
@@ -843,6 +864,10 @@ impl DevicesView {
         if is_voice(tab) {
             self.voice_tools(ui, i18n, &p.profile, ops);
         }
+        if is_events(tab) {
+            ui.label(RichText::new(i18n.tr("events-head")).weak());
+            ui.separator();
+        }
         if is_keyboard(tab) {
             if let Some(done) = self.keyboard_access.banner(ui, i18n) {
                 self.keyboard_result = Some(done);
@@ -960,7 +985,7 @@ impl DevicesView {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(kind_glyph(key.0)).size(15.0));
+                    ui.label(RichText::new(key_glyph(key)).size(15.0));
                     // Fixed-width name column so the live bars line up.
                     let name = input_name(i18n, key, label);
                     let used = ui.label(RichText::new(name).strong()).rect.width();
@@ -1088,9 +1113,9 @@ impl DevicesView {
         // Bindings are written for the profile's device id (the alias when linked by name).
         let device = tab.alias.unwrap_or(tab.guid).to_string();
         let input_type = input_type_name(key.0);
-        // Keys and voice commands act like buttons.
+        // Keys, voice commands and profile events act like buttons.
         let behavior = match key.0 {
-            Kind::Key | Kind::Voice => InputType::Button,
+            Kind::Key | Kind::Voice | Kind::Event => InputType::Button,
             _ => InputType::parse(input_type),
         };
         let mode = self.mode.clone().unwrap_or_default();
@@ -1125,7 +1150,7 @@ impl DevicesView {
             crate::voice_view::command_editor(ui, i18n, command, ops);
         } else {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(kind_glyph(key.0)).size(18.0));
+                ui.label(RichText::new(key_glyph(key)).size(18.0));
                 match label {
                     Some(text) => {
                         let ty = InputType::parse(input_type);
@@ -1254,6 +1279,24 @@ impl DevicesView {
                         });
                     }
                 }
+                // A stick button can run its press when it is held as the profile starts.
+                if key.0 == Kind::Button && !tab.logical {
+                    let mut send = configs.iter().any(|c| c.send_state);
+                    if ui
+                        .add(style::switch(&mut send, i18n.tr("send-state")))
+                        .on_hover_text(i18n.tr("send-state-tip"))
+                        .changed()
+                    {
+                        ops.push(Op::SetLayerSendState {
+                            device: b.device_id.clone(),
+                            input_type: b.input_type.clone(),
+                            input_id: b.input_id.clone(),
+                            mode: b.mode.clone(),
+                            layer: layer.clone(),
+                            send,
+                        });
+                    }
+                }
                 let axis_sequence = configs.iter().any(|c| c.behavior() == InputType::Axis);
                 if !p.profile.modifiers.is_empty() && axis_sequence {
                     let mut keep = configs.iter().any(|c| c.keep_value);
@@ -1302,7 +1345,7 @@ impl DevicesView {
                     // Keys and voice commands act like buttons, also in profiles that stored
                     // their own input type as the behavior.
                     editor.behavior = match key.0 {
-                        Kind::Key | Kind::Voice => InputType::Button,
+                        Kind::Key | Kind::Voice | Kind::Event => InputType::Button,
                         _ => cfg.behavior(),
                     };
                     editor.container(ui, &cfg.root_action, "actions", 0);
@@ -1487,6 +1530,7 @@ fn input_type_name(kind: Kind) -> &'static str {
         Kind::Hat => "hat",
         Kind::Key => "key",
         Kind::Voice => gob_core::VOICE_INPUT_TYPE,
+        Kind::Event => gob_core::EVENT_INPUT_TYPE,
         Kind::Button | Kind::Other => "button",
     }
 }
@@ -1541,6 +1585,13 @@ fn input_name(i18n: &I18n, (kind, id): Key, label: Option<&str>) -> String {
         Kind::Hat => i18n.trf("vjoy-hat-n", &[("n", id.into())]),
         Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id), i18n),
         Kind::Voice => i18n.trf("voice-command-n", &[("n", id.into())]),
+        Kind::Event => match gob_core::ProfileEvent::from_id(id) {
+            Some(gob_core::ProfileEvent::Start) => i18n.tr("event-start"),
+            Some(gob_core::ProfileEvent::Stop) => i18n.tr("event-stop"),
+            Some(gob_core::ProfileEvent::Enter) => i18n.tr("event-enter"),
+            Some(gob_core::ProfileEvent::Leave) => i18n.tr("event-leave"),
+            None => id.to_string(),
+        },
         Kind::Other => id.to_string(),
     }
 }
@@ -1635,6 +1686,18 @@ enum Bound<'a> {
     Inherited(&'a InputBinding),
 }
 
+/// A row's icon: its kind's, each profile event its own.
+fn key_glyph((kind, id): Key) -> &'static str {
+    use gob_core::ProfileEvent;
+    match (kind, ProfileEvent::from_id(id)) {
+        (Kind::Event, Some(ProfileEvent::Start)) => icon::PLAY,
+        (Kind::Event, Some(ProfileEvent::Stop)) => icon::STOP,
+        (Kind::Event, Some(ProfileEvent::Enter)) => icon::SIGN_IN,
+        (Kind::Event, Some(ProfileEvent::Leave)) => icon::SIGN_OUT,
+        _ => kind_glyph(kind),
+    }
+}
+
 fn kind_glyph(kind: Kind) -> &'static str {
     match kind {
         Kind::Axis => icon::ARROWS_OUT_LINE_HORIZONTAL,
@@ -1642,6 +1705,7 @@ fn kind_glyph(kind: Kind) -> &'static str {
         Kind::Hat => icon::ARROWS_OUT_CARDINAL,
         Kind::Key => icon::KEYBOARD,
         Kind::Voice => icon::MICROPHONE,
+        Kind::Event => icon::LIGHTNING,
         Kind::Other => icon::QUESTION,
     }
 }
@@ -1699,7 +1763,7 @@ fn live_widget(ui: &mut egui::Ui, live: Option<&DeviceState>, (kind, id): Key) {
             );
         }
         // Keys have no live state shown here; their row lights up when pressed.
-        Kind::Key | Kind::Voice | Kind::Other => {}
+        Kind::Key | Kind::Voice | Kind::Event | Kind::Other => {}
     }
 }
 
@@ -1732,6 +1796,7 @@ fn debug_expanded((kind, id): Key) -> bool {
         Kind::Hat => "hat",
         Kind::Key => "key",
         Kind::Voice => "voice",
+        Kind::Event => "event",
         Kind::Other => "other",
     };
     std::env::var("JOYSTICK_GOBLOON_EXPAND").is_ok_and(|v| v == format!("{name}{id}"))
@@ -1743,6 +1808,10 @@ fn is_keyboard(tab: &Tab) -> bool {
 
 fn is_voice(tab: &Tab) -> bool {
     tab.guid == gob_core::VOICE_GUID
+}
+
+fn is_events(tab: &Tab) -> bool {
+    tab.guid == gob_core::EVENTS_GUID
 }
 
 /// The kind of input a binding is for.
@@ -1766,6 +1835,7 @@ fn type_kind(input_type: &str) -> Kind {
         InputType::Hat => Kind::Hat,
         InputType::Other if input_type.trim() == "key" => Kind::Key,
         InputType::Other if input_type.trim() == gob_core::VOICE_INPUT_TYPE => Kind::Voice,
+        InputType::Other if input_type.trim() == gob_core::EVENT_INPUT_TYPE => Kind::Event,
         InputType::Other => Kind::Other,
     }
 }

@@ -31,7 +31,8 @@ pub enum AddKind {
 fn list_device(p: &mut Profile, device: &str, name: String) {
     let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
         || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
-        || device.eq_ignore_ascii_case(gob_core::VOICE_GUID);
+        || device.eq_ignore_ascii_case(gob_core::VOICE_GUID)
+        || device.eq_ignore_ascii_case(gob_core::EVENTS_GUID);
     if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device)) {
         p.devices.push(gob_core::Device {
             id: device.to_string(),
@@ -94,6 +95,14 @@ pub enum Op {
         mode: String,
         layer: Layer,
         additive: bool,
+    },
+    SetLayerSendState {
+        device: String,
+        input_type: String,
+        input_id: String,
+        mode: String,
+        layer: Layer,
+        send: bool,
     },
     SetLayerKeepValue {
         device: String,
@@ -332,6 +341,14 @@ pub fn apply(p: &mut Profile, op: Op) {
             layer,
             additive,
         } => p.set_layer_additive(&device, &input_type, &input_id, &mode, &layer, additive),
+        Op::SetLayerSendState {
+            device,
+            input_type,
+            input_id,
+            mode,
+            layer,
+            send,
+        } => p.set_layer_send_state(&device, &input_type, &input_id, &mode, &layer, send),
         Op::SetLayerKeepValue {
             device,
             input_type,
