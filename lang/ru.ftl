@@ -438,6 +438,9 @@ merge-sum = Сумма
 merge-bidirectional = Двунаправленное (ось 2 минус ось 1)
 merge-maximum-deflection = Наибольшее отклонение
 merge-closest-to-center = Ближайшее к центру
+merge-multiply = Умножение (ось 1 × ось 2)
+merge-scale = Масштаб (ось 2 задаёт, сколько оси 1 проходит)
+merge-trim = Триммер (ось 2 сдвигает центр оси 1)
 
 # Axis delta
 kind-axis-delta = Шаг оси

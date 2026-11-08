@@ -348,10 +348,17 @@ pub enum MergeOp {
     MaximumDeflection,
     /// Axis closest to center; ties go to the second.
     ClosestToCenter,
+    /// `axis1 * axis2`.
+    Multiply,
+    /// Axis 1 scaled by axis 2 read as 0..1 over its full travel (all the way down: nothing
+    /// passes, all the way up: all of it), like a sensitivity slider.
+    Scale,
+    /// Axis 2 moves the center of axis 1; its ends stay at -1 and 1.
+    Trim,
 }
 
 impl MergeOp {
-    pub const ALL: [MergeOp; 7] = [
+    pub const ALL: [MergeOp; 10] = [
         Self::Average,
         Self::Minimum,
         Self::Maximum,
@@ -359,6 +366,9 @@ impl MergeOp {
         Self::Bidirectional,
         Self::MaximumDeflection,
         Self::ClosestToCenter,
+        Self::Multiply,
+        Self::Scale,
+        Self::Trim,
     ];
 
     /// Value of the `operation` property.
@@ -371,6 +381,9 @@ impl MergeOp {
             Self::Bidirectional => "bidirectional",
             Self::MaximumDeflection => "maximum-deflection",
             Self::ClosestToCenter => "closest-to-center",
+            Self::Multiply => "multiply",
+            Self::Scale => "scale",
+            Self::Trim => "trim",
         }
     }
 
@@ -398,6 +411,15 @@ impl MergeOp {
                     a
                 } else {
                     b
+                }
+            }
+            Self::Multiply => a * b,
+            Self::Scale => a * (b + 1.0) / 2.0,
+            Self::Trim => {
+                if a >= 0.0 {
+                    b + (1.0 - b) * a
+                } else {
+                    b + (b + 1.0) * a
                 }
             }
         }

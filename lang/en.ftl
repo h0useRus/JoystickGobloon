@@ -430,6 +430,9 @@ merge-sum = Sum
 merge-bidirectional = Bidirectional (axis 2 minus axis 1)
 merge-maximum-deflection = Maximum deflection
 merge-closest-to-center = Closest to center
+merge-multiply = Multiply (axis 1 × axis 2)
+merge-scale = Scale (axis 2 sets how much of axis 1 passes)
+merge-trim = Trim (axis 2 moves the center of axis 1)
 
 # Axis delta
 kind-axis-delta = Axis delta

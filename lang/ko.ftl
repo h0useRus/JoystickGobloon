@@ -418,6 +418,9 @@ merge-sum = 합계
 merge-bidirectional = 양방향 (축 2 빼기 축 1)
 merge-maximum-deflection = 최대 편향
 merge-closest-to-center = 중앙에 가장 가까운 값
+merge-multiply = 곱하기 (축 1 × 축 2)
+merge-scale = 배율 (축 2가 축 1을 얼마나 통과시킬지 정함)
+merge-trim = 트림 (축 2가 축 1의 중앙을 옮김)
 
 # Axis delta
 kind-axis-delta = 축 변화량

@@ -1203,6 +1203,18 @@ fn merge_operations() {
     assert_eq!(Sum.apply(0.8, 0.6), 1.0);
     assert_eq!(MaximumDeflection.apply(-0.9, 0.5), -0.9);
     assert_eq!(ClosestToCenter.apply(0.5, -0.5), -0.5);
+    assert_eq!(Multiply.apply(0.5, -0.5), -0.25);
+    // Scale: axis 2 all the way down lets nothing through, centered half, up all of it.
+    assert_eq!(Scale.apply(0.8, -1.0), 0.0);
+    assert_eq!(Scale.apply(0.8, 0.0), 0.4);
+    assert_eq!(Scale.apply(-0.8, 1.0), -0.8);
+    // Trim: axis 2 is the new center; the ends stay.
+    assert_eq!(Trim.apply(0.0, 0.25), 0.25);
+    assert_eq!(Trim.apply(1.0, 0.25), 1.0);
+    assert_eq!(Trim.apply(-1.0, 0.25), -1.0);
+    assert_eq!(Trim.apply(0.5, 0.5), 0.75);
+    assert_eq!(Trim.apply(-0.5, 0.5), -0.25);
+    assert_eq!(gob_core::MergeOp::parse(" Trim "), Some(Trim));
     assert_eq!(
         gob_core::MergeOp::parse("Maximum-Deflection"),
         Some(MaximumDeflection)

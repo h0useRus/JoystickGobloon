@@ -430,6 +430,9 @@ merge-sum = Suma
 merge-bidirectional = Bidireccional (eje 2 menos eje 1)
 merge-maximum-deflection = Desviación máxima
 merge-closest-to-center = Más cercano al centro
+merge-multiply = Multiplicar (eje 1 × eje 2)
+merge-scale = Escalar (el eje 2 decide cuánto del eje 1 pasa)
+merge-trim = Compensar (el eje 2 mueve el centro del eje 1)
 
 # Axis delta
 kind-axis-delta = Variación de eje

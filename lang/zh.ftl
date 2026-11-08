@@ -418,6 +418,9 @@ merge-sum = 求和
 merge-bidirectional = 双向（轴 2 减轴 1）
 merge-maximum-deflection = 最大偏移
 merge-closest-to-center = 最接近中心
+merge-multiply = 相乘（轴 1 × 轴 2）
+merge-scale = 缩放（轴 2 决定轴 1 通过多少）
+merge-trim = 配平（轴 2 移动轴 1 的中心）
 
 # Axis delta
 kind-axis-delta = 轴变化量
