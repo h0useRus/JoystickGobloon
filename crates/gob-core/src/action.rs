@@ -199,6 +199,14 @@ pub enum ActionKind<'a> {
     MapToKeyboard {
         keys: Vec<Key>,
     },
+    /// Runs the children `seconds` after the press (Joystick Gobloon only); `while_held`: only
+    /// if the input is still held then, else a short press still runs them as a quick press
+    /// and release.
+    Delay {
+        children: Vec<&'a str>,
+        seconds: f64,
+        while_held: bool,
+    },
     /// Short press latches the children on, hold acts momentarily.
     SmartToggle {
         children: Vec<&'a str>,
@@ -348,10 +356,17 @@ pub enum MergeOp {
     MaximumDeflection,
     /// Axis closest to center; ties go to the second.
     ClosestToCenter,
+    /// `axis1 * axis2`.
+    Multiply,
+    /// Axis 1 scaled by axis 2 read as 0..1 over its full travel (all the way down: nothing
+    /// passes, all the way up: all of it), like a sensitivity slider.
+    Scale,
+    /// Axis 2 moves the center of axis 1; its ends stay at -1 and 1.
+    Trim,
 }
 
 impl MergeOp {
-    pub const ALL: [MergeOp; 7] = [
+    pub const ALL: [MergeOp; 10] = [
         Self::Average,
         Self::Minimum,
         Self::Maximum,
@@ -359,6 +374,9 @@ impl MergeOp {
         Self::Bidirectional,
         Self::MaximumDeflection,
         Self::ClosestToCenter,
+        Self::Multiply,
+        Self::Scale,
+        Self::Trim,
     ];
 
     /// Value of the `operation` property.
@@ -371,6 +389,9 @@ impl MergeOp {
             Self::Bidirectional => "bidirectional",
             Self::MaximumDeflection => "maximum-deflection",
             Self::ClosestToCenter => "closest-to-center",
+            Self::Multiply => "multiply",
+            Self::Scale => "scale",
+            Self::Trim => "trim",
         }
     }
 
@@ -398,6 +419,15 @@ impl MergeOp {
                     a
                 } else {
                     b
+                }
+            }
+            Self::Multiply => a * b,
+            Self::Scale => a * (b + 1.0) / 2.0,
+            Self::Trim => {
+                if a >= 0.0 {
+                    b + (1.0 - b) * a
+                } else {
+                    b + (b + 1.0) * a
                 }
             }
         }
@@ -661,6 +691,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "light-led",
     "text-to-speech",
     "smart-toggle",
+    "delay",
     "split-axis",
     "pause-resume",
     "run-command",
@@ -945,6 +976,11 @@ impl Action {
             },
             "description" => ActionKind::Description {
                 text: self.str("description").unwrap_or_default(),
+            },
+            "delay" => ActionKind::Delay {
+                children: self.refs_in("actions"),
+                seconds: self.parse("delay").unwrap_or(0.5),
+                while_held: self.bool("while-held"),
             },
             "smart-toggle" => ActionKind::SmartToggle {
                 children: self.refs_in("actions"),

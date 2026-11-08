@@ -22,6 +22,7 @@ mod output_marks;
 mod platform;
 mod profile_view;
 mod program_switch;
+mod scripts_view;
 mod settings;
 mod settings_view;
 mod style;
@@ -90,7 +91,7 @@ fn main() -> eframe::Result {
             None => return Ok(()),
         }
     };
-    logfile::init();
+    logfile::init(settings.log_level);
     // Started by Windows at logon: hidden in the tray, or minimized without one.
     let minimized = std::env::args().any(|a| a == tray::autostart::ARG);
     let to_tray = minimized && settings.show_tray;
@@ -99,8 +100,9 @@ fn main() -> eframe::Result {
             .with_visible(!to_tray)
             .with_title(APP_NAME)
             .with_app_id(APP_ID)
-            .with_inner_size([1100.0, 700.0])
-            .with_min_inner_size([640.0, 400.0])
+            .with_inner_size(settings.window_size())
+            .with_min_inner_size(settings::MIN_WINDOW_SIZE)
+            .with_maximized(settings.window_maximized)
             .with_icon(
                 eframe::icon_data::from_png_bytes(include_bytes!(
                     "../../../assets/icon/JoystickGobloon-256.png"
@@ -109,11 +111,14 @@ fn main() -> eframe::Result {
             ),
         ..Default::default()
     };
-    eframe::run_native(
+    let result = eframe::run_native(
         APP_NAME,
         options,
         Box::new(|cc| Ok(Box::new(app::JoystickGobloonApp::new(cc, instance)))),
-    )
+    );
+    // A profile that was running finishes its stop actions and lets go of the devices.
+    gob_engine::wait_stopped();
+    result
 }
 
 #[cfg(test)]

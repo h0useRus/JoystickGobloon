@@ -10,6 +10,7 @@ gob-input.workspace = true
 gob-virtual.workspace = true
 gob-lighting.workspace = true
 gob-voice.workspace = true
+gob-script.workspace = true
 log.workspace = true
 rodio = { version = "0.23", default-features = false, features = ["playback", "symphonia-wav", "symphonia-mp3", "symphonia-vorbis", "symphonia-flac"] }
 

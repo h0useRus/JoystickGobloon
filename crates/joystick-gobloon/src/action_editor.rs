@@ -25,14 +25,72 @@ pub enum AddKind {
     Reuse(String),
     /// A deep copy of an existing action.
     Duplicate(String),
+    /// Copies of the actions on the clipboard.
+    Paste(std::sync::Arc<Clip>),
+}
+
+/// Actions copied with a copy button or Ctrl+C: kept as copies, so they survive edits, being
+/// removed and another profile.
+#[derive(Debug)]
+pub struct Clip {
+    /// The copied actions, in order.
+    pub tops: Vec<String>,
+    /// They and everything below them ([`Profile::subtree`]).
+    pub actions: Vec<Action>,
+    /// How the input they came from behaves: they paste only where an input behaves alike.
+    pub behavior: InputType,
+    /// Their names, for the paste button.
+    pub names: String,
+    /// Put on the system clipboard; Ctrl+V pastes the actions while it is still there.
+    pub marker: String,
+}
+
+fn clip_id() -> egui::Id {
+    egui::Id::unique("action-clipboard")
+}
+
+/// The copied actions, if any.
+pub fn clip(ctx: &egui::Context) -> Option<std::sync::Arc<Clip>> {
+    ctx.data(|d| d.get_temp(clip_id()))
+}
+
+/// Copies the actions `tops` (with everything below them) of an input behaving as `behavior`;
+/// returns their names, empty when there was nothing to copy.
+pub fn copy_actions(
+    ctx: &egui::Context,
+    i18n: &I18n,
+    profile: &Profile,
+    tops: Vec<String>,
+    behavior: InputType,
+) -> String {
+    let names: Vec<String> = tops
+        .iter()
+        .filter_map(|id| profile.action(id))
+        .map(crate::profile_view::display_name)
+        .collect();
+    if names.is_empty() {
+        return String::new();
+    }
+    let names = names.join(", ");
+    let marker = i18n.trf("clip-text", &[("actions", names.clone().into())]);
+    ctx.copy_text(marker.clone());
+    let clip = Clip {
+        actions: profile.subtree(&tops),
+        tops,
+        behavior,
+        names: names.clone(),
+        marker,
+    };
+    ctx.data_mut(|d| d.insert_temp(clip_id(), std::sync::Arc::new(clip)));
+    log::debug!("copied actions: {names}");
+    names
 }
 
 /// Adds a bound device to the profile's `<devices>` (not the logical device or the keyboard).
 fn list_device(p: &mut Profile, device: &str, name: String) {
-    let logical = device.eq_ignore_ascii_case(gob_core::LOGICAL_DEVICE_GUID)
-        || device.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID)
-        || device.eq_ignore_ascii_case(gob_core::VOICE_GUID);
-    if !logical && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device)) {
+    if !gob_core::is_builtin_device(device)
+        && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device))
+    {
         p.devices.push(gob_core::Device {
             id: device.to_string(),
             name,
@@ -59,6 +117,12 @@ fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
         }
         AddKind::Duplicate(id) => {
             if let Some(copy) = p.duplicate(id) {
+                p.add_ref(parent, group, &copy);
+                p.separate_outputs(&copy);
+            }
+        }
+        AddKind::Paste(clip) => {
+            for copy in p.paste(&clip.actions, &clip.tops) {
                 p.add_ref(parent, group, &copy);
                 p.separate_outputs(&copy);
             }
@@ -94,6 +158,14 @@ pub enum Op {
         mode: String,
         layer: Layer,
         additive: bool,
+    },
+    SetLayerSendState {
+        device: String,
+        input_type: String,
+        input_id: String,
+        mode: String,
+        layer: Layer,
+        send: bool,
     },
     SetLayerKeepValue {
         device: String,
@@ -219,13 +291,22 @@ pub enum Op {
         id: u32,
     },
     AddVoiceCommand,
+    /// Adds a combination of these keys (or finds it) and binds it in `mode`.
+    AddCombo {
+        keys: Vec<gob_core::Key>,
+        mode: String,
+    },
+    SetComboKeys {
+        id: u32,
+        keys: Vec<gob_core::Key>,
+    },
+    RemoveCombo(u32),
     /// Makes a voice command saying `phrase` run `action` itself in `mode` and `layer` (the
     /// card's); `id` is the command it goes to, which the page then opens.
     VoiceFromAction {
         action: String,
         phrase: String,
         mode: String,
-        layer: Layer,
         id: u32,
     },
     /// Not an edit: the page opens voice command `id`.
@@ -276,6 +357,29 @@ pub enum Op {
         action: String,
         count: u8,
     },
+    AddScript {
+        name: String,
+        source: gob_core::ScriptSource,
+    },
+    RemoveScript(String),
+    MoveScript {
+        id: String,
+        up: bool,
+    },
+    SetScriptName {
+        id: String,
+        name: String,
+    },
+    SetScriptSource {
+        id: String,
+        source: gob_core::ScriptSource,
+    },
+    /// `None` clears the value.
+    SetScriptVariable {
+        id: String,
+        name: String,
+        value: Option<gob_core::ScriptValue>,
+    },
 }
 
 pub fn apply(p: &mut Profile, op: Op) {
@@ -310,6 +414,14 @@ pub fn apply(p: &mut Profile, op: Op) {
             layer,
             additive,
         } => p.set_layer_additive(&device, &input_type, &input_id, &mode, &layer, additive),
+        Op::SetLayerSendState {
+            device,
+            input_type,
+            input_id,
+            mode,
+            layer,
+            send,
+        } => p.set_layer_send_state(&device, &input_type, &input_id, &mode, &layer, send),
         Op::SetLayerKeepValue {
             device,
             input_type,
@@ -363,7 +475,7 @@ pub fn apply(p: &mut Profile, op: Op) {
         } => {
             list_device(p, &device, name);
             for line in p.set_two_axis_input(&action, slot, &(device, axis), &mode, &layer) {
-                log::info!("{line}");
+                log::debug!("{line}");
             }
         }
         Op::TwoAxisAdopt {
@@ -372,7 +484,7 @@ pub fn apply(p: &mut Profile, op: Op) {
             axis,
         } => {
             if let Some(line) = p.two_axis_adopt(&action, &(device, axis)) {
-                log::info!("{line}");
+                log::debug!("{line}");
             }
         }
         Op::Remove {
@@ -402,6 +514,16 @@ pub fn apply(p: &mut Profile, op: Op) {
             }
         }
         Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
+        Op::AddScript { name, source } => {
+            p.add_script(&name, source);
+        }
+        Op::RemoveScript(id) => p.remove_script(&id),
+        Op::MoveScript { id, up } => p.move_script(&id, up),
+        Op::SetScriptName { id, name } => p.set_script_name(&id, &name),
+        Op::SetScriptSource { id, source } => p.set_script_source(&id, &source),
+        Op::SetScriptVariable { id, name, value } => {
+            p.set_script_variable(&id, &name, value.as_ref())
+        }
         Op::SetDecrease { action, input } => {
             if let Some((device, name, ..)) = &input {
                 list_device(p, device, name.clone());
@@ -453,14 +575,28 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::AddVoiceCommand => {
             p.add_voice_command();
         }
+        Op::AddCombo { keys, mode } => {
+            if let Some(id) = p.add_key_combo(&keys) {
+                p.bind_layer(
+                    gob_core::KEYBOARD_GUID,
+                    gob_core::COMBO_INPUT_TYPE,
+                    &id.to_string(),
+                    &mode,
+                    &Layer::base(),
+                );
+            }
+        }
+        Op::SetComboKeys { id, keys } => {
+            p.set_combo_keys(id, &keys);
+        }
+        Op::RemoveCombo(id) => p.remove_key_combo(id),
         Op::VoiceFromAction {
             action,
             phrase,
             mode,
-            layer,
             ..
         } => {
-            p.add_voice_command_for(&action, &phrase, &mode, &layer);
+            p.add_voice_command_for(&action, &phrase, &mode);
         }
         Op::RemoveVoiceCommand(id) => p.remove_voice_command(id),
         Op::SetVoicePhrases { id, phrases } => {
@@ -586,6 +722,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "description" => icon::NOTE,
         "macro" => icon::KEYBOARD,
         "smart-toggle" => icon::TOGGLE_RIGHT,
+        "delay" => icon::HOURGLASS_MEDIUM,
         "split-axis" => icon::ARROWS_SPLIT,
         "pause-resume" => icon::PLAY_PAUSE,
         "run-command" => icon::TERMINAL_WINDOW,
@@ -744,6 +881,7 @@ fn addable(
             "kind-smart-toggle",
             NewAction::SmartToggle,
         ));
+        list.push((icon::HOURGLASS_MEDIUM, "kind-delay", NewAction::Delay));
         list.push((
             icon::PLAY_PAUSE,
             "kind-pause-resume",
@@ -862,7 +1000,7 @@ impl Editor<'_> {
     /// An action card's voice command button: opens the command that runs the action, or makes
     /// one saying the card's name (none without a name). Not on a voice command's own actions.
     fn voice_button(&mut self, ui: &mut egui::Ui, action: &Action) {
-        let Some((mode, layer)) = self.place else {
+        let Some((mode, _)) = self.place else {
             return;
         };
         let voice = self
@@ -905,7 +1043,6 @@ impl Editor<'_> {
                 action: action.id.clone(),
                 phrase: name.to_string(),
                 mode: mode.to_string(),
-                layer: layer.clone(),
                 id,
             });
         }
@@ -918,6 +1055,26 @@ impl Editor<'_> {
         ui: &mut egui::Ui,
         parent: Option<&str>,
         make: impl Fn(AddKind) -> Op,
+    ) {
+        ui.horizontal(|ui| {
+            self.add_menu_button(ui, parent, &make);
+            // Copied actions paste where an input behaves like the one they came from.
+            if let Some(clip) = clip(ui.ctx()).filter(|c| c.behavior == self.behavior) {
+                let tip = self
+                    .i18n
+                    .trf("edit-paste", &[("actions", clip.names.clone().into())]);
+                if style::icon_button(ui, true, icon::CLIPBOARD_TEXT, &tip).clicked() {
+                    self.ops.push(make(AddKind::Paste(clip)));
+                }
+            }
+        });
+    }
+
+    fn add_menu_button(
+        &mut self,
+        ui: &mut egui::Ui,
+        parent: Option<&str>,
+        make: &impl Fn(AddKind) -> Op,
     ) {
         let mode = self.profile.modes.first().map_or("", |m| m.name.as_str());
         ui.menu_button(
@@ -964,9 +1121,9 @@ impl Editor<'_> {
                     }
                 }
                 if self.behavior == InputType::Axis {
-                    self.merge_menu(ui, &make);
+                    self.merge_menu(ui, make);
                 }
-                self.existing_menu(ui, parent, &make);
+                self.existing_menu(ui, parent, make);
             },
         )
         .response
@@ -1151,6 +1308,17 @@ impl Editor<'_> {
                             from: index,
                             to: index - 1,
                         });
+                    }
+                    if style::icon_button(ui, true, icon::COPY, &self.i18n.tr("edit-copy"))
+                        .clicked()
+                    {
+                        copy_actions(
+                            ui.ctx(),
+                            self.i18n,
+                            self.profile,
+                            vec![id.to_string()],
+                            self.behavior,
+                        );
                     }
                     self.voice_button(ui, action);
                     let mut label = action
@@ -1454,6 +1622,40 @@ impl Editor<'_> {
                     );
                 }
                 ActionKind::MapToMouse(mouse) => self.mouse(ui, action, mouse),
+                ActionKind::Delay {
+                    seconds,
+                    while_held,
+                    ..
+                } => {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(icon::HOURGLASS_MEDIUM).size(style::ICON_SIZE))
+                            .on_hover_text(self.i18n.tr("edit-delay-wait"));
+                        let mut t = seconds as f32;
+                        let spin = style::Spin::new(&mut t)
+                            .range(0.0..=600.0)
+                            .step(0.05)
+                            .suffix(" s");
+                        if ui.add(spin).changed() {
+                            self.set(&action.id, "delay", "float", py_float(t));
+                        }
+                        let mut held = while_held;
+                        if ui
+                            .add(style::switch(&mut held, self.i18n.tr("edit-delay-held")))
+                            .on_hover_text(self.i18n.tr("edit-delay-held-tip"))
+                            .changed()
+                        {
+                            let v = if held { "True" } else { "False" };
+                            self.set(&action.id, "while-held", "bool", v);
+                        }
+                    });
+                    self.nested(
+                        ui,
+                        &action.id,
+                        &[("actions", icon::HOURGLASS_MEDIUM, "kind-delay")],
+                        InputType::Button,
+                        depth,
+                    );
+                }
                 ActionKind::SmartToggle { delay, .. } => {
                     self.seconds(ui, &action.id, "delay", "edit-delay", delay);
                     self.nested(

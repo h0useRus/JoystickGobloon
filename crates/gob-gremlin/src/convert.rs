@@ -106,6 +106,10 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
                 p.voice_commands = voice_from(section);
                 Section::VoiceCommands
             }
+            "key-combos" => {
+                p.key_combos = combos_from(section);
+                Section::KeyCombos
+            }
             _ => {
                 p.extra.push(section.clone());
                 Section::Extra(p.extra.len() - 1)
@@ -130,6 +134,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
             Section::Modifiers => p.modifiers.is_empty(),
             Section::VirtualDevices => p.virtual_devices.is_empty(),
             Section::VoiceCommands => p.voice_commands.is_empty(),
+            Section::KeyCombos => p.key_combos.is_empty(),
             _ => false,
         };
         if empty {
@@ -172,6 +177,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
             ),
             Section::VirtualDevices => virtual_to(&p.virtual_devices),
             Section::VoiceCommands => voice_to(&p.voice_commands),
+            Section::KeyCombos => combos_to(&p.key_combos),
             Section::Extra(i) => p.extra[i].clone(),
         });
     }
@@ -295,6 +301,52 @@ fn voice_to(commands: &[VoiceCommand]) -> Element {
     )
 }
 
+/// `<key-combos>`: `<combo id="1"><key scan-code="29" extended="false"/>...</combo>`;
+/// combinations without a valid id or with fewer than two keys are skipped.
+fn combos_from(section: &Element) -> Vec<gob_core::KeyCombo> {
+    let mut combos: Vec<gob_core::KeyCombo> = Vec::new();
+    for c in named(section, "combo") {
+        let Some(id) = c.attr("id").and_then(|v| v.trim().parse().ok()) else {
+            continue;
+        };
+        let mut keys: Vec<gob_core::Key> = Vec::new();
+        for k in named(c, "key") {
+            let Some(scan_code) = k.attr("scan-code").and_then(|v| v.trim().parse().ok()) else {
+                continue;
+            };
+            let key = gob_core::Key {
+                scan_code,
+                extended: k.attr("extended").is_some_and(|v| v.trim() == "true"),
+            };
+            if !keys.contains(&key) && keys.len() < gob_core::MAX_COMBO_KEYS {
+                keys.push(key);
+            }
+        }
+        if id == 0 || keys.len() < 2 || combos.iter().any(|o| o.id == id) {
+            continue;
+        }
+        combos.push(gob_core::KeyCombo { id, keys });
+    }
+    combos
+}
+
+fn combos_to(combos: &[gob_core::KeyCombo]) -> Element {
+    container(
+        "key-combos",
+        combos.iter().map(|c| {
+            container(
+                "combo",
+                c.keys.iter().map(|k| {
+                    Element::new("key")
+                        .with_attr("scan-code", k.scan_code.to_string())
+                        .with_attr("extended", if k.extended { "true" } else { "false" })
+                }),
+            )
+            .with_attr("id", c.id.to_string())
+        }),
+    )
+}
+
 fn named<'a>(parent: &'a Element, name: &'a str) -> impl Iterator<Item = &'a Element> {
     parent.elements().filter(move |e| e.name == name)
 }
@@ -344,6 +396,7 @@ fn config_from(e: &Element) -> ActionConfig {
         layer: Layer::parse(e.attr("layer").unwrap_or_default()),
         additive: e.attr("additive").is_some_and(|v| v == "true"),
         keep_value: e.attr("keep-value").is_some_and(|v| v == "true"),
+        send_state: e.attr("send-state").is_some_and(|v| v == "true"),
         extra: Vec::new(),
     };
     for c in e.elements() {
@@ -377,6 +430,9 @@ fn input_to(b: &InputBinding) -> Element {
         }
         if cfg.keep_value {
             el = el.with_attr("keep-value", "true");
+        }
+        if cfg.send_state {
+            el = el.with_attr("send-state", "true");
         }
         el
     });

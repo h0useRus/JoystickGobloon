@@ -90,6 +90,7 @@
       <li><a href="learn.html" aria-current="page">Learning</a></li>
       <li><a href="emulation.html">Emulation</a></li>
       <li><a href="voice.html">Voice</a></li>
+      <li><a href="scripts.html">Scripts</a></li>
       <li><a href="index.html#platforms">Windows and Linux</a></li>
       <li><a href="index.html#faq">FAQ</a></li>
     </ul>
@@ -109,9 +110,10 @@
       <li style="--i:3"><a href="learn.html" aria-current="page">Learning</a></li>
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
       <li style="--i:5"><a href="voice.html">Voice</a></li>
-      <li style="--i:6"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:7"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:8"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:6"><a href="scripts.html">Scripts</a></li>
+      <li style="--i:7"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:8"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:9"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -133,6 +135,7 @@
             <li><a href="#how-actions-run">How actions run</a></li>
             <li><a href="#modes">Modes</a></li>
             <li><a href="#modifiers">Modifiers</a></li>
+            <li><a href="#events">Profile and mode events</a></li>
           </ul></li>
           <li><a class="toc-group" href="#output">Output</a><ul>
             <li><a href="#map-to-vjoy">Map to virtual stick</a></li>
@@ -162,6 +165,7 @@
             <li><a href="#tempo">Tempo</a></li>
             <li><a href="#double-tap">Double tap</a></li>
             <li><a href="#smart-toggle">Smart toggle</a></li>
+            <li><a href="#delay">Delay</a></li>
             <li><a href="#chain">Chain</a></li>
             <li><a href="#macro">Macro</a></li>
             <li><a href="#hat-buttons">Hat buttons</a></li>
@@ -194,6 +198,9 @@
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Containers.</strong> Some actions hold other actions: tempo, double tap, condition, split axis and others. Their children are edited inside them.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Names.</strong> The name above the list names the input; it also shows on the input's card. It, the title of every action and description notes read as text: click one to edit it, then press Enter or click elsewhere.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Voice command.</strong> A named button-like action (a vJoy button, a key, a macro and the like) has a microphone with a plus next to its bin: it makes a voice command that says the name and runs that action. With an arrow instead, the action already has one, and a click goes to it. See <a href="voice.html#from-action">Voice commands</a>.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Scripts.</strong> When actions are not enough, a few lines of Lua on the Scripts page do the rest, next to the actions: see <a href="scripts.html">Scripts</a>.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Keys and key combinations.</strong> On the <span class="term">Keyboard</span> tab, record a key to bind it like a button. Keys pressed together while recording become a combination (up to five keys, for example Ctrl + F1): it goes down when the last of its keys does, in any order, and up when one is let go. The keys' own actions run as well. Record again in its title to change its keys.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Copy and paste.</strong> The copy icon on an action card copies that action with everything inside it; the one next to the bin at the top copies all actions of the input (or press Ctrl+C). A clipboard button then shows next to each add button: it pastes copies, also on another device or in another profile, on inputs of the same kind (axis actions onto axes, button actions onto buttons, keys and the like). Ctrl+V pastes onto the input shown.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Numbers.</strong> Type a value, click the arrows, or turn the mouse wheel over the field; Shift moves it ten steps at a time.</span></li>
             </ul>
             <figure class="shot"><img src="img/devices.png" loading="lazy" width="1102" height="732" alt="Devices page: the inputs of a stick on the left, the actions of the selected button on the right"></figure>
@@ -216,6 +223,18 @@
             </ul>
             <figure class="shot"><img src="img/modifiers.png" loading="lazy" width="1102" height="732" alt="Modifiers window with M1 and M2 on a button of each stick, next to the layers Base, M1, M2 and M1 plus M2 of an axis"></figure>
           </article>
+          <article class="learn-action" id="events">
+            <h3><i class="ph ph-lightning" aria-hidden="true"></i>Profile and mode events</h3>
+            <p>The <span class="term">Events</span> tab next to Voice has four inputs that are not on any stick: <strong>Profile start</strong>, <strong>Profile stop</strong>, <strong>Mode enter</strong> and <strong>Mode leave</strong>. Give them actions like any button: when the event happens, its button is pressed and let go a moment later. Say the mode's name when you enter it, set a virtual stick button the game expects at the start, or let go of a key when the profile stops.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Events belong to a mode like every input: pick the mode in the toolbar first. <strong>Mode enter</strong> runs in the mode entered, <strong>Mode leave</strong> in the mode left, and a mode without its own uses its parent's, so actions on the top mode run for every mode below it.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>When the profile starts, Profile start runs, then Mode enter of the starting mode. When it stops, Mode leave runs, then Profile stop, and their actions get half a second to finish before everything is let go.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>They also run when another profile takes over for the program in front, but not when you edit the running profile.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Layers, containers and conditions work as on any button. Enter actions that change the mode again run that mode's events too.</span></li>
+            </ul>
+            <p>A stick button can also <strong>send its state at start</strong>: turn on the switch above its actions, and if the button is held when the profile starts, its press runs right then. A latching switch that is already on reaches the game without flipping it off and on again.</p>
+            <figure class="shot"><img src="img/events.png" loading="lazy" width="1242" height="922" alt="Events tab: Profile start, Profile stop, Mode enter and Mode leave; Mode enter selected, saying the mode's name and pressing a virtual stick button"></figure>
+          </article>
         </section>
 
         <section class="learn-group" id="output" aria-labelledby="output-title">
@@ -234,8 +253,9 @@
           </article>
           <article class="learn-action" id="map-to-keyboard">
             <h3><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</h3>
-            <p>Presses keys while the input is held: they go down in order and come up in reverse order. Click the record button and press the keys together; recording ends when all are let go. Keys most keyboards lack, F13 to F24 and the media keys (play/pause, next and previous track, volume, mute), are in the list behind the <strong>…</strong> button. If the input is let go in another mode, the keys still come up. How the keys follow the input, held, pulsed, repeated or toggled, is set with <a href="#how-to-send">How to send</a>.</p>
+            <p>Presses keys while the input is held: they go down in order and come up in reverse order. Click the record button and press the keys together; recording ends when all are let go. The keyboard button opens a full-size keyboard: click keys to add them, click again to remove them. It also has the keys most keyboards lack: F13 to F24, the media keys (play/pause, stop, next and previous track, volume, mute), the browser and launch keys (back, forward, refresh, stop, home, search, favorites, mail, calculator, my computer, media player), sleep, wake and power, and the extra keys of other layouts: the ISO key next to Left Shift, the Japanese and Korean keys and the numpad's = and ,. If the input is let go in another mode, the keys still come up. How the keys follow the input, held, pulsed, repeated or toggled, is set with <a href="#how-to-send">How to send</a>.</p>
             <figure class="shot"><img src="img/actions/map-to-keyboard.png" loading="lazy" alt="Map to keyboard with the keys Ctrl and F, sent repeatedly while the button is held"></figure>
+            <figure class="shot wide"><img src="img/actions/map-to-keyboard-picker.png" loading="lazy" alt="The keyboard behind the keyboard button, with Ctrl and F picked"></figure>
           </article>
           <article class="learn-action" id="map-to-mouse">
             <h3><i class="ph ph-mouse" aria-hidden="true"></i>Map to mouse</h3>
@@ -290,6 +310,7 @@
               <li><strong>Remove a point</strong>: right click it.</li>
               <li><strong>Invert the curve</strong>: right click on empty space, or the <span class="term">Invert</span> button. A switch in the settings turns the right click off.</li>
               <li><strong>Symmetric</strong>: your edits are mirrored through the center.</li>
+              <li><strong>Start from a preset</strong>: the <span class="term">Preset</span> menu puts in a ready-made curve (linear, soft center, extra soft center or quick center) that you can edit from there.</li>
             </ul>
             <p>The <span class="term">Curve type</span> list sets how the curve runs through its points:</p>
             <ul>
@@ -308,7 +329,7 @@
           </article>
           <article class="learn-action" id="merge-axis">
             <h3><i class="ph ph-arrows-merge" aria-hidden="true"></i>Merge axis</h3>
-            <p>Combines two axes into one value: average, minimum, maximum, sum, difference (for two pedals as one rudder), the one deflected most, or the one closer to the center. It runs when either axis moves, so it is bound to both: picking an axis in its editor binds it there and takes it off the axis it no longer reads, and linking a new merge to another axis makes that its second axis. A merge reads two axes, so it cannot be linked to a third one.</p>
+            <p>Combines two axes into one value: average, minimum, maximum, sum, difference (for two pedals as one rudder), the one deflected most, or the one closer to the center. Three more let one axis adjust the other: <strong>Multiply</strong> (axis 1 times axis 2), <strong>Scale</strong> (axis 2 sets how much of axis 1 passes: all the way down nothing, centered half, all the way up all of it, like a sensitivity slider) and <strong>Trim</strong> (axis 2 moves the center of axis 1 while its ends stay where they are). It runs when either axis moves, so it is bound to both: picking an axis in its editor binds it there and takes it off the axis it no longer reads, and linking a new merge to another axis makes that its second axis. A merge reads two axes, so it cannot be linked to a third one.</p>
             <figure class="shot"><img src="img/actions/merge-axis.png" loading="lazy" alt="Merge axis with its two axes and the operation"></figure>
           </article>
           <article class="learn-action" id="dual-axis-deadzone">
@@ -387,6 +408,11 @@
             <h3><i class="ph ph-toggle-right" aria-hidden="true"></i>Smart toggle</h3>
             <p>A quick press switches its actions on until the next press; holding the button longer works like a normal button and lets go with it.</p>
             <figure class="shot"><img src="img/actions/smart-toggle.png" loading="lazy" alt="Smart toggle with vJoy button 5 inside"></figure>
+          </article>
+          <article class="learn-action" id="delay">
+            <h3><i class="ph ph-hourglass-medium" aria-hidden="true"></i>Delay</h3>
+            <p>Runs its actions a set time after the press. With <span class="term">Only if still held</span> on, letting go before the time is up runs nothing: hold to activate, for an action you don't want to trigger by a brush of the button. Off, a short press still runs the actions when the time is up, as a quick press; held longer, they stay pressed until you let go. Pressing again before the time is up starts it over.</p>
+            <figure class="shot"><img src="img/actions/delay.png" loading="lazy" alt="Delay of half a second, only if still held, with a vJoy button inside"></figure>
           </article>
           <article class="learn-action" id="chain">
             <h3><i class="ph ph-link" aria-hidden="true"></i>Chain</h3>
@@ -475,6 +501,7 @@
             <li><a href="learn.html">Learning</a></li>
             <li><a href="emulation.html">Emulation</a></li>
             <li><a href="voice.html">Voice</a></li>
+            <li><a href="scripts.html">Scripts</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>

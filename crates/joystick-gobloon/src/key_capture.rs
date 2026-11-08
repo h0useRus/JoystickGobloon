@@ -11,13 +11,13 @@ use gob_i18n::I18n;
 
 use crate::style::{self, icon};
 
-/// A key's name in the current keyboard layout, e.g. "Right Ctrl"; F13-F24 and media keys
-/// by their own names (layouts often have none for them).
+/// A key's name in the current keyboard layout, e.g. "Right Ctrl"; F13-F24 and the
+/// [`NAMED_KEYS`] by their own names (layouts often have none for them).
 pub fn name(key: gob_core::Key, i18n: &I18n) -> String {
     if let Some(n) = FUNCTION_KEYS.iter().position(|&k| k == key) {
         return format!("F{}", n + 13);
     }
-    match MEDIA_KEYS.iter().find(|(k, _)| *k == key) {
+    match NAMED_KEYS.iter().find(|(k, _)| *k == key) {
         Some((_, name)) => i18n.tr(name),
         None => crate::platform::key_name(key),
     }
@@ -46,8 +46,10 @@ const FUNCTION_KEYS: [Key; 12] = [
     key(0x76, false),
 ];
 
-/// Media keys (E0 scan codes) with the i18n key of their name.
-const MEDIA_KEYS: [(Key, &str); 7] = [
+/// Keys named by the program, not the keyboard layout (layouts often have no name for them),
+/// with the i18n key of their name: media, browser, launch and power keys, the Japanese and
+/// Korean layout keys and the numpad's = and ,.
+const NAMED_KEYS: [(Key, &str); 30] = [
     (key(0x22, true), "key-play-pause"),
     (key(0x24, true), "key-media-stop"),
     (key(0x10, true), "key-previous-track"),
@@ -55,36 +57,83 @@ const MEDIA_KEYS: [(Key, &str); 7] = [
     (key(0x20, true), "key-mute"),
     (key(0x2e, true), "key-volume-down"),
     (key(0x30, true), "key-volume-up"),
+    (key(0x6a, true), "key-browser-back"),
+    (key(0x69, true), "key-browser-forward"),
+    (key(0x67, true), "key-browser-refresh"),
+    (key(0x68, true), "key-browser-stop"),
+    (key(0x32, true), "key-browser-home"),
+    (key(0x65, true), "key-browser-search"),
+    (key(0x66, true), "key-browser-favorites"),
+    (key(0x6c, true), "key-mail"),
+    (key(0x21, true), "key-calculator"),
+    (key(0x6b, true), "key-my-computer"),
+    (key(0x6d, true), "key-media-player"),
+    (key(0x5f, true), "key-sleep"),
+    (key(0x63, true), "key-wake"),
+    (key(0x5e, true), "key-power"),
+    (key(0x73, false), "key-ro"),
+    (key(0x7d, false), "key-yen"),
+    (key(0x7b, false), "key-muhenkan"),
+    (key(0x79, false), "key-henkan"),
+    (key(0x70, false), "key-kana"),
+    (key(0x71, false), "key-hanja"),
+    (key(0x72, false), "key-han-yeong"),
+    (key(0x59, false), "key-num-equals"),
+    (key(0x7e, false), "key-num-comma"),
 ];
 
-/// "Other keys": a list of the keys above; the picked one is added to `keys`.
-fn other_keys(ui: &mut egui::Ui, keys: &[Key], i18n: &I18n) -> Option<Vec<Key>> {
-    let mut picked = None;
-    let menu = ui.menu_button(
-        RichText::new(icon::DOTS_THREE).size(style::ICON_SIZE),
-        |ui| {
-            ui.set_min_width(160.0);
-            ui.horizontal_wrapped(|ui| {
-                ui.set_max_width(220.0);
-                for (n, k) in FUNCTION_KEYS.into_iter().enumerate() {
-                    if ui.button(format!("F{}", n + 13)).clicked() {
-                        picked = Some(k);
-                    }
-                }
-            });
-            ui.separator();
-            for (k, name) in MEDIA_KEYS {
-                if ui.button(i18n.tr(name)).clicked() {
-                    picked = Some(k);
-                }
-            }
-        },
-    );
-    menu.response.on_hover_text(i18n.tr("keys-other"));
-    let k = picked?;
+fn scan_code_of(k: Key) -> style::ScanCode {
+    style::ScanCode {
+        code: k.scan_code,
+        extended: k.extended,
+    }
+}
+
+fn key_of(k: style::ScanCode) -> Key {
+    Key {
+        scan_code: k.code,
+        extended: k.extended,
+    }
+}
+
+/// A key cap legend from the current layout: only a single character fits ("A", "Ж", ";");
+/// longer names keep the picker's own legend.
+fn legend(k: Key) -> Option<String> {
+    if FUNCTION_KEYS.contains(&k) || NAMED_KEYS.iter().any(|(m, _)| *m == k) {
+        return None;
+    }
+    let name = crate::platform::key_name(k);
+    let mut chars = name.chars();
+    match (chars.next(), chars.next()) {
+        (Some(c), None) if !c.is_whitespace() => Some(c.to_uppercase().collect()),
+        _ => None,
+    }
+}
+
+/// A keyboard button opening a clickable full-size keyboard: a click adds a key to `keys`,
+/// a second click removes it. The keyboard stays open until a click outside it.
+fn keyboard(ui: &mut egui::Ui, keys: &[Key], i18n: &I18n) -> Option<Vec<Key>> {
+    let button = style::icon_toggle(ui, false, icon::KEYBOARD, &i18n.tr("keys-keyboard"));
+    let selected: Vec<style::ScanCode> = keys.iter().map(|&k| scan_code_of(k)).collect();
+    let picked = egui::Popup::menu(&button)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .show(|ui| {
+            style::keyboard_picker(
+                ui,
+                "keys",
+                &selected,
+                |k| legend(key_of(k)),
+                |k| name(key_of(k), i18n),
+            )
+        })
+        .and_then(|r| r.inner)?;
+    let k = key_of(picked);
     let mut keys = keys.to_vec();
-    if !keys.contains(&k) {
-        keys.push(k);
+    match keys.iter().position(|&x| x == k) {
+        Some(i) => {
+            keys.remove(i);
+        }
+        None => keys.push(k),
     }
     Some(keys)
 }
@@ -264,6 +313,28 @@ pub(crate) fn key_down(ui: &egui::Ui, ignore: &[Key]) -> Option<Key> {
     })
 }
 
+fn recording_id() -> egui::Id {
+    egui::Id::unique("input-recording")
+}
+
+/// How long after the last recording frame inputs still do not move the Devices page: the
+/// press that ends a recording may reach the event queue a few frames later.
+const RECORDING_GRACE: f64 = 0.5;
+
+/// An editor records an input this frame: pressing one must not move the Devices page
+/// to it (the editor would go away mid-recording).
+pub(crate) fn mark_recording(ctx: &egui::Context) {
+    let now = ctx.input(|i| i.time);
+    ctx.data_mut(|d| d.insert_temp(recording_id(), now));
+}
+
+/// An editor recorded an input within [`RECORDING_GRACE`].
+pub(crate) fn recording(ctx: &egui::Context) -> bool {
+    let now = ctx.input(|i| i.time);
+    ctx.data(|d| d.get_temp::<f64>(recording_id()))
+        .is_some_and(|t| now - t < RECORDING_GRACE)
+}
+
 /// Keys as text chips plus a record button. Recording collects every key pressed until
 /// all are released again; the result replaces the keys. Returns the new keys once.
 pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) -> Option<Vec<Key>> {
@@ -301,7 +372,7 @@ pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) ->
                     });
                     ui.data_mut(|d| d.insert_temp(id, Recording::default()));
                 }
-                if let Some(keys) = other_keys(ui, keys, i18n) {
+                if let Some(keys) = keyboard(ui, keys, i18n) {
                     result = Some(keys);
                 }
                 if !keys.is_empty()
@@ -312,6 +383,7 @@ pub fn keys_field(ui: &mut egui::Ui, id: egui::Id, keys: &[Key], i18n: &I18n) ->
                 }
             }
             Some(mut rec) => {
+                mark_recording(ui.ctx());
                 let held =
                     crate::platform::held_keys().unwrap_or_else(|| window_keys(ui, &mut rec));
                 for k in &held {

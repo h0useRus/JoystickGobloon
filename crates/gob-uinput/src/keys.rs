@@ -27,6 +27,7 @@ const TABLE: &[(u16, u16, bool)] = &[
     (113, 0x20, true),  // KEY_MUTE
     (114, 0x2e, true),  // KEY_VOLUMEDOWN
     (115, 0x30, true),  // KEY_VOLUMEUP
+    (116, 0x5e, true),  // KEY_POWER
     (117, 0x59, false), // KEY_KPEQUAL
     (119, 0x45, false), // KEY_PAUSE
     (121, 0x7e, false), // KEY_KPCOMMA
@@ -36,10 +37,21 @@ const TABLE: &[(u16, u16, bool)] = &[
     (125, 0x5b, true),  // KEY_LEFTMETA
     (126, 0x5c, true),  // KEY_RIGHTMETA
     (127, 0x5d, true),  // KEY_COMPOSE (Menu)
+    (128, 0x68, true),  // KEY_STOP (browser stop)
+    (140, 0x21, true),  // KEY_CALC
+    (142, 0x5f, true),  // KEY_SLEEP
+    (143, 0x63, true),  // KEY_WAKEUP
+    (155, 0x6c, true),  // KEY_MAIL
+    (156, 0x66, true),  // KEY_BOOKMARKS
+    (157, 0x6b, true),  // KEY_COMPUTER
+    (158, 0x6a, true),  // KEY_BACK
+    (159, 0x69, true),  // KEY_FORWARD
     (163, 0x19, true),  // KEY_NEXTSONG
     (164, 0x22, true),  // KEY_PLAYPAUSE
     (165, 0x10, true),  // KEY_PREVIOUSSONG
     (166, 0x24, true),  // KEY_STOPCD
+    (172, 0x32, true),  // KEY_HOMEPAGE
+    (173, 0x67, true),  // KEY_REFRESH
     (183, 0x64, false), // KEY_F13
     (184, 0x65, false),
     (185, 0x66, false),
@@ -52,6 +64,8 @@ const TABLE: &[(u16, u16, bool)] = &[
     (192, 0x6d, false),
     (193, 0x6e, false), // KEY_F23
     (194, 0x76, false), // KEY_F24
+    (217, 0x65, true),  // KEY_SEARCH
+    (226, 0x6d, true),  // KEY_MEDIA
 ];
 
 /// evdev key code -> (scan code, E0).

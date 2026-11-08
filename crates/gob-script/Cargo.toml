@@ -1,0 +1,11 @@
+[package]
+name = "gob-script"
+description = "Lua (Luau) user scripts: variables, input handlers and periodic functions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gob-core.workspace = true
+mlua.workspace = true
+log.workspace = true

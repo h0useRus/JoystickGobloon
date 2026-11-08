@@ -1,13 +1,13 @@
 # Joystick Gobloon
 Rust replacement for HidHide UI + vJoy UI + Joystick Gremlin. Uses existing HidHide/vJoy drivers.
 Plans (local only, gitignored): phases 0-10 in plans/ROADMAP.md (phases 0-8 done; R14+ profiles only, no R13); Linux port (phase 10, Linux only,
-no macOS): plans/LINUX_PLAN.md. Plans and roadmaps live in plans/, never in git.
+no macOS): plans/LINUX_PLAN.md. Plans and roadmaps live in plans/ (finished ones in plans/completed/), never in git.
 "R14" = Gremlin profile format version 14, still current in Gremlin R15/R16; ref/JoystickGremlin is the develop
 branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
 - gob-ui + gob-i18n live in the shared repo h0useRus/gobloon-common-ui (also used by Keyboard Gobloon), taken by git tag
-  in `[workspace.dependencies]` (now `v0.1.0`); move the tag on purpose. Local work on both: clone it to
+  in `[workspace.dependencies]` (now `v0.4.0`); move the tag on purpose. Local work on both: clone it to
   `..\gobloon-common-ui`, rename the gitignored `.cargo/config.toml.off` to `config.toml` (a `[patch]` to its crates by
   path) and back when done; Cargo.lock changes while it is on, don't commit that. Its gallery example
   (`cargo run -p gob-ui --example gallery` there) shows every widget. egui upgrades start there; both apps move together.
@@ -27,6 +27,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `Action::button_send` = How to send of button outputs (`send-mode` hold/press/release/pulse/repeat/toggle)
   automap.rs = the new profile wizard's mapping (every input of a device onto one vJoy device); `Profile::output_usage`
   = which inputs write each virtual output (used/conflict marks, wizard_view.rs + output_marks.rs in the GUI)
+  events.rs = profile events (`EVENTS_GUID`, input type `event`: start/stop/mode enter/leave, Events tab), run by
+  the engine's `profile_started`/`profile_stopping`/mode changes; `send-state` on a sequence = held button's press at start
+  combos.rs = key combinations (`<key-combos>`, keyboard input type `combo`, ids offset by COMBO_ID_BASE in the engine)
 - crates/gob-gremlin XML <-> Element <-> Profile: Gremlin R14+ import, written as `<profile version="14">` while
   Gremlin can read it, else `<profile app="Gobloon" version="1">`; lossless round-trip; `report()`; example `resave`
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
@@ -89,8 +92,16 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-lighting joystick LEDs: vendor-neutral `Device`/`Led` in lib.rs dispatching on `Vendor`; every vendor's
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
-  DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/LIGHTING_PLAN.md
-- crates/gob-voice   voice commands (plans/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
+  DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/completed/LIGHTING_PLAN.md
+- crates/gob-script  Lua user scripts (plans/completed/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
+  (`send`: the engine is built off its thread), one sandboxed state per script, 5 ms per call (interrupt), off after
+  10 errors; prelude.luau = the Lua API (script.<kind>{} variables, input:on(mode, fn), script.every, vjoy/gamepad/
+  keyboard/mouse/mode/joystick, speak, run_action, log), `describe` for the Scripts page form, `ScriptHost` +
+  `ScriptApi` (engine.rs `ScriptContext`); handlers run before an input's actions. Profile side: gob-core script.rs
+  (`<scripts>`: Lua code as CDATA or a file path, Gremlin's Python kept, variables in Gremlin's XML); the app reads
+  external files on activation (activation.rs) and reloads when they change; Scripts page = scripts_view.rs, editor =
+  gob-ui `CodeEditor`
+- crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
   profile's phrases; models.rs = small Vosk model per program language (URL + SHA-256), downloaded into
   `<data dir>/voice`; service.rs = `VoiceService` thread (keeps the profile's microphones open by default: some
@@ -142,6 +153,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   JoystickGobloon.log next to the settings via the `log` crate (English, not i18n; joystick-gobloon/src/logfile.rs).
   Only warnings/errors that matter to a general user become dialogs (`JoystickGobloonApp::error` / `alerts`),
   translated; routine info goes to the status bar. No report/diagnostics windows.
+  Log levels (Settings > General > Log level: All = debug+, Important = info+, Critical (default) = warn+;
+  libraries one step quieter): error = a feature or operation failed, warn = recovered or something set up
+  will not work as expected, info = notable events (profile loaded/started, device back, update), debug =
+  routine details (per utterance, editor actions, program in front); trace is never written.
 - Branches: development happens on `dev`; every work branch is created from `dev` and merged back into it
   by pull request. `main` only receives release requests: a pull request from `dev` whose title contains
   the version the merge releases (checked by .github/workflows/release-request.yml). Never commit directly
@@ -168,8 +183,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting,
-  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ..., a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | logical,
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting,
+  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new

@@ -152,7 +152,7 @@ fn speech_thread(rx: std::sync::mpsc::Receiver<SpeechRequest>) {
     let Some(mut engine) = <crate::platform::Speech as SpeechEngine>::new() else {
         log::warn!("text-to-speech is not available on this system");
         for r in rx {
-            log::warn!("text-to-speech skipped: {}", r.text);
+            log::debug!("text-to-speech skipped: {}", r.text);
         }
         return;
     };

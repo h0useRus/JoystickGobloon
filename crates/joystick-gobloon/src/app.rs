@@ -23,6 +23,7 @@ enum Page {
     VJoy,
     Viewer,
     Calibration,
+    Scripts,
     Settings,
 }
 
@@ -46,6 +47,9 @@ pub struct JoystickGobloonApp {
     viewer_view: crate::viewer_view::ViewerView,
     /// The input viewer is shown in its own window.
     viewer_window: bool,
+    scripts_view: crate::scripts_view::ScriptsView,
+    /// When the running profile's script files were last checked for changes.
+    scripts_checked: std::time::Instant,
     calibration_view: crate::calibration_view::CalibrationView,
     /// The calibration is shown in its own window.
     calibration_window: bool,
@@ -125,6 +129,8 @@ pub struct JoystickGobloonApp {
     live_input: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The window was on screen last frame (not in the tray, not minimized).
     was_shown: bool,
+    /// The main window was resized or (un)maximized: its settings are saved once it settles.
+    window_changed: Option<std::time::Instant>,
     /// Plugin DLLs from `<exe folder>\plugins`, kept loaded while the app runs.
     /// Window title last sent to the viewport.
     title: String,
@@ -218,11 +224,11 @@ impl JoystickGobloonApp {
         let reopen = match &settings.last_profile {
             Some(path) if settings.reopen_last => Some(path.clone()),
             Some(_) => {
-                log::info!("reopening the last profile is off");
+                log::debug!("reopening the last profile is off");
                 None
             }
             None => {
-                log::info!("no last profile to reopen");
+                log::debug!("no last profile to reopen");
                 None
             }
         };
@@ -257,6 +263,8 @@ impl JoystickGobloonApp {
             vjoy_view: VJoyView::new(),
             viewer_view: Default::default(),
             viewer_window: false,
+            scripts_view: Default::default(),
+            scripts_checked: std::time::Instant::now(),
             calibration_view: Default::default(),
             calibration_window: false,
             calibrations: Default::default(),
@@ -307,6 +315,7 @@ impl JoystickGobloonApp {
             main_window,
             live_input,
             was_shown: true,
+            window_changed: None,
         };
         app.update_tray(&cc.egui_ctx);
         app.activation.set_led_defaults(app.settings.led_defaults());
@@ -322,7 +331,7 @@ impl JoystickGobloonApp {
         if let (Some(main_window), Some(instance)) = (app.main_window, instance) {
             let (restored, ctx) = (app.restored.clone(), cc.egui_ctx.clone());
             crate::platform::listen_instance(instance, move || {
-                log::info!("started again: showing the running window");
+                log::debug!("started again: showing the running window");
                 restored.store(true, std::sync::atomic::Ordering::Relaxed);
                 crate::platform::show_window(main_window);
                 ctx.request_repaint();
@@ -337,6 +346,7 @@ impl JoystickGobloonApp {
             Ok("vjoy") => app.page = Page::VJoy,
             Ok("viewer") => app.page = Page::Viewer,
             Ok("calibration") => app.page = Page::Calibration,
+            Ok("scripts") => app.page = Page::Scripts,
             Ok("wizard") => app.wizard = Some(crate::wizard_view::Wizard::new()),
             Ok("switch-unsaved") => app.ask_switch_unsaved = true,
             Ok("switch-stopped") => {
@@ -387,7 +397,7 @@ impl JoystickGobloonApp {
         if app.settings.hidhide_whitelist_self {
             match app.apps_view.whitelist_self() {
                 Some(Ok(true)) => {
-                    log::info!("added to the HidHide whitelist");
+                    log::debug!("added to the HidHide whitelist");
                     app.status = app.i18n.tr("status-whitelisted");
                 }
                 Some(Err(e)) => {
@@ -452,7 +462,7 @@ impl JoystickGobloonApp {
                 );
                 match tray {
                     Ok(t) => {
-                        log::info!("tray icon shown");
+                        log::debug!("tray icon shown");
                         self.tray = Some(t);
                     }
                     Err(e) => log::error!("tray icon: {e}"),
@@ -596,7 +606,7 @@ impl JoystickGobloonApp {
         self.activation.set_start_mode(app.mode.clone());
         self.sync_activation();
         self.vjoy_view.release();
-        match self.activation.reload() {
+        match self.activation.reload(true) {
             Ok(()) => {
                 self.switcher.applied(&app);
                 self.switched = Some((app.key(), program.clone(), file.clone()));
@@ -1374,7 +1384,7 @@ impl JoystickGobloonApp {
     /// Saves and applies calibrations from the calibration page.
     fn apply_calibration(&mut self, out: crate::calibration_view::Output) {
         for (device, slot, c) in out.save {
-            log::info!("calibration saved: {device} axis {slot}: {c:?}");
+            log::debug!("calibration saved: {device} axis {slot}: {c:?}");
             self.settings
                 .calibration
                 .entry(device.clone())
@@ -1384,7 +1394,7 @@ impl JoystickGobloonApp {
             self.calibrations.insert((device, slot), c);
         }
         if let Some((device, ms)) = out.debounce {
-            log::info!("debounce of {device}: {ms} ms");
+            log::debug!("debounce of {device}: {ms} ms");
             self.input.set_debounce(&device, ms);
             if ms == 0 {
                 self.settings.debounce.remove(&device);
@@ -1584,6 +1594,7 @@ impl JoystickGobloonApp {
                 (Page::VJoy, icon::GAME_CONTROLLER, "nav-vjoy"),
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
                 (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
+                (Page::Scripts, icon::CODE, "nav-scripts"),
             ] {
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
@@ -1655,7 +1666,7 @@ impl JoystickGobloonApp {
         self.sync_activation();
         // The vJoy tester must not hold a device the profile now needs.
         self.vjoy_view.release();
-        match self.activation.reload() {
+        match self.activation.reload(false) {
             Ok(()) => self.status = self.i18n.tr("status-active"),
             Err(e) => {
                 let text = self.i18n.trf("activate-error", &[("error", e.into())]);
@@ -1668,6 +1679,39 @@ impl JoystickGobloonApp {
     fn sync_activation(&mut self) {
         self.activation
             .set_profile(self.profile.as_ref().map(|p| (&p.profile, p.file_name())));
+        self.activation.set_profile_folder(self.profile_folder());
+    }
+
+    /// The profile's folder: relative script file paths start there.
+    fn profile_folder(&self) -> Option<PathBuf> {
+        self.profile
+            .as_ref()
+            .and_then(|p| p.path.as_deref())
+            .and_then(Path::parent)
+            .map(Path::to_path_buf)
+    }
+
+    /// Script errors become alerts; a changed script file reloads the running profile.
+    fn watch_scripts(&mut self) {
+        let errors = self.activation.take_script_errors();
+        if !errors.is_empty() {
+            self.alerts.push(Alert {
+                title: self.i18n.tr("alert-script-error"),
+                lines: errors,
+            });
+        }
+        if self.scripts_checked.elapsed() < std::time::Duration::from_secs(1) {
+            return;
+        }
+        self.scripts_checked = std::time::Instant::now();
+        // Against the files as the running profile read them.
+        if self.activation.script_files_changed() {
+            log::info!("script file changed: reloading the profile");
+            if let Err(e) = self.activation.reload(false) {
+                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
+                self.error(text);
+            }
+        }
     }
 
     /// Main toolbar: always shown, above every page.
@@ -1755,6 +1799,49 @@ impl JoystickGobloonApp {
                 self.toggle_runner(ui.ctx());
             }
         });
+    }
+
+    /// Keeps the main window's size and maximized state in the settings for the next start;
+    /// saved half a second after the last change, so dragging a border writes once.
+    fn remember_window(&mut self, ctx: &egui::Context) {
+        const SETTLE: std::time::Duration = std::time::Duration::from_millis(500);
+        let (size, maximized, minimized) = ctx.input(|i| {
+            let v = i.viewport();
+            (
+                v.inner_rect.map(|r| r.size()),
+                v.maximized,
+                v.minimized == Some(true),
+            )
+        });
+        let in_tray = self.main_window.is_some_and(crate::platform::in_tray);
+        if !minimized && !in_tray {
+            if let Some(maximized) = maximized
+                && maximized != self.settings.window_maximized
+            {
+                self.settings.window_maximized = maximized;
+                self.window_changed = Some(std::time::Instant::now());
+            }
+            // A maximized window keeps the size it goes back to.
+            if let Some(size) = size
+                && maximized == Some(false)
+                && size.x >= 1.0
+                && size.y >= 1.0
+            {
+                let size = [size.x.round(), size.y.round()];
+                if size != self.settings.window_size {
+                    self.settings.window_size = size;
+                    self.window_changed = Some(std::time::Instant::now());
+                }
+            }
+        }
+        if let Some(t) = self.window_changed {
+            if t.elapsed() >= SETTLE {
+                self.window_changed = None;
+                self.settings.save();
+            } else {
+                ctx.request_repaint_after(SETTLE - t.elapsed());
+            }
+        }
     }
 
     /// The profile's logical device with the values of the running profile.
@@ -2045,6 +2132,7 @@ impl eframe::App for JoystickGobloonApp {
     /// draws nothing and skips [`Self::ui`]).
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
+        self.watch_scripts();
         self.switch_by_program();
         // Started or stopped from the tray menu (maybe while the window was hidden).
         let active = self.activation.is_active();
@@ -2147,6 +2235,7 @@ impl eframe::App for JoystickGobloonApp {
         if self.tray.as_ref().is_some_and(|t| t.take_quit()) {
             self.request(Pending::Close, ctx);
         }
+        self.remember_window(ctx);
         // Close button with "close to tray": hide instead of quitting (Quit is in the tray menu).
         let to_tray = self.settings.close_to_tray && self.tray.is_some() && !self.allow_close;
         if to_tray && ctx.input(|i| i.viewport().close_requested()) {
@@ -2228,8 +2317,15 @@ impl eframe::App for JoystickGobloonApp {
         self.live_input
             .store(live, std::sync::atomic::Ordering::Relaxed);
         // Always drained; events from before the window came back are stale and only dropped.
-        let focus =
-            self.settings.focus_used_input && shown && self.was_shown && self.page == Page::Devices;
+        // Not while an editor records an input or a text field is edited: either would go away.
+        let focus = self.settings.focus_used_input
+            && shown
+            && self.was_shown
+            && self.page == Page::Devices
+            && !crate::key_capture::recording(ctx)
+            && !ctx.text_edit_focused();
+        // Keys are read system-wide: only those typed into this window follow.
+        let keys = ctx.input(|i| i.focused);
         let modifiers = match &self.profile {
             Some(p) if self.settings.focus_skips_modifiers => p.profile.modifiers.as_slice(),
             _ => &[],
@@ -2238,6 +2334,7 @@ impl eframe::App for JoystickGobloonApp {
             self.input.events(),
             &self.input.devices(),
             focus,
+            keys,
             modifiers,
         );
         self.was_shown = shown;
@@ -2431,6 +2528,25 @@ impl eframe::App for JoystickGobloonApp {
                     }
                     self.apply_calibration(out);
                 }
+                Page::Scripts => match &self.profile {
+                    None => empty_state(ui, icon::CODE, &self.i18n.tr("no-profile")),
+                    Some(p) => {
+                        let devices = self.input.devices();
+                        let vjoy = self.vjoy_view.device_list();
+                        let folder = self.profile_folder();
+                        let mut ops = Vec::new();
+                        self.scripts_view.show(
+                            ui,
+                            &self.i18n,
+                            &p.profile,
+                            folder.as_deref(),
+                            &devices,
+                            &vjoy,
+                            &mut ops,
+                        );
+                        self.apply_ops(ops);
+                    }
+                },
                 Page::Settings => {
                     let devices = self.input.devices();
                     let led_devices = if self.settings.experimental {

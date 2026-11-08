@@ -209,7 +209,7 @@ fn install_from(
     let _ = fs::remove_dir_all(&unpacked);
     match &result {
         Ok(path) => log::info!("speech model installed: {}", path.display()),
-        Err(e) => log::warn!("{}: {e}", model.name),
+        Err(e) => log::error!("{}: {e}", model.name),
     }
     result
 }

@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lua scripts for joysticks | Joystick Gobloon</title>
+  <meta name="description" content="Lua scripts in Joystick Gobloon: shape axes, hold buttons past a detent, keep trim, speak and switch modes with a few lines of Lua, like Joystick Gremlin's user scripts. Sandboxed, with a variables form and an editor.">
+  <link rel="canonical" href="https://h0userus.github.io/joystick-gobloon/scripts.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Joystick Gobloon">
+  <meta property="og:title" content="Lua scripts for joysticks | Joystick Gobloon">
+  <meta property="og:description" content="Lua scripts in Joystick Gobloon: shape axes, hold buttons past a detent, keep trim, speak and switch modes with a few lines of Lua, like Joystick Gremlin's user scripts. Sandboxed, with a variables form and an editor.">
+  <meta property="og:url" content="https://h0userus.github.io/joystick-gobloon/scripts.html">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Lua scripts for joysticks | Joystick Gobloon">
+  <meta name="twitter:description" content="Lua scripts in Joystick Gobloon: shape axes, hold buttons past a detent, keep trim, speak and switch modes with a few lines of Lua, like Joystick Gremlin's user scripts. Sandboxed, with a variables form and an editor.">
+  <meta name="twitter:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
+  <meta name="author" content="Denis Ibragimov">
+  <meta name="theme-color" content="#131209">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "Lua scripts: your own logic for your controls",
+      "description": "Lua scripts in Joystick Gobloon: shape axes, hold buttons past a detent, keep trim, speak and switch modes with a few lines of Lua, like Joystick Gremlin's user scripts. Sandboxed, with a variables form and an editor.",
+      "url": "https://h0userus.github.io/joystick-gobloon/scripts.html",
+      "inLanguage": "en",
+      "image": "https://h0userus.github.io/joystick-gobloon/img/og.jpg",
+      "author": {
+        "@type": "Person",
+        "name": "Denis Ibragimov",
+        "url": "https://github.com/h0useRus"
+      },
+      "about": {
+        "@id": "https://h0userus.github.io/joystick-gobloon/#app"
+      },
+      "isPartOf": {
+        "@id": "https://h0userus.github.io/joystick-gobloon/#website"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Joystick Gobloon",
+          "item": "https://h0userus.github.io/joystick-gobloon/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Scripts",
+          "item": "https://h0userus.github.io/joystick-gobloon/scripts.html"
+        }
+      ]
+    }
+  ]
+}
+  </script>
+  <script>document.documentElement.classList.remove("no-js")</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <nav class="nav" aria-label="Main">
+    <a class="brand" href="index.html" aria-label="Joystick Gobloon home">
+      <img src="img/icon.svg" alt="" width="24" height="24">
+      Joystick Gobloon
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html#how">How it works</a></li>
+      <li><a href="start.html">Get started</a></li>
+      <li><a href="learn.html">Learning</a></li>
+      <li><a href="emulation.html">Emulation</a></li>
+      <li><a href="voice.html">Voice</a></li>
+      <li><a href="scripts.html" aria-current="page">Scripts</a></li>
+      <li><a href="index.html#platforms">Windows and Linux</a></li>
+      <li><a href="index.html#faq">FAQ</a></li>
+    </ul>
+    <a class="btn btn-primary btn-sm nav-cta" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
+      <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+      <span></span><span></span>
+    </button>
+  </nav>
+
+  <div class="menu" id="menu" aria-hidden="true">
+    <ul>
+      <li style="--i:0"><a href="index.html#features">Features</a></li>
+      <li style="--i:1"><a href="index.html#how">How it works</a></li>
+      <li style="--i:2"><a href="start.html">Get started</a></li>
+      <li style="--i:3"><a href="learn.html">Learning</a></li>
+      <li style="--i:4"><a href="emulation.html">Emulation</a></li>
+      <li style="--i:5"><a href="voice.html">Voice</a></li>
+      <li style="--i:6"><a href="scripts.html" aria-current="page">Scripts</a></li>
+      <li style="--i:7"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:8"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:9"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+    </ul>
+  </div>
+
+  <main id="main">
+    <header class="learn-hero">
+      <div class="wrap">
+        <p class="kicker">Scripts</p>
+        <h1 class="gradient">Your own logic,<br>in a few lines of Lua</h1>
+        <p class="sub">When actions are not enough, a script does the rest: shape an axis, hold a button past a detent, keep a trim value, answer with speech. Scripts react to your inputs next to the profile's actions, like Joystick Gremlin's user scripts, in Lua, the language many flight sim tools already use.</p>
+      </div>
+    </header>
+
+    <div class="wrap learn">
+      <aside class="toc" aria-label="On this page">
+        <details>
+          <summary>On this page<i class="ph-bold ph-caret-down" aria-hidden="true"></i></summary>
+          <ul>
+          <li><a class="toc-group" href="#idea">The idea</a><ul>
+            <li><a href="#how-it-works">How it works</a></li>
+            <li><a href="#safe">Safe to share</a></li>
+            <li><a href="#gremlin">Scripts from Joystick Gremlin</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#setup">Setting it up</a><ul>
+            <li><a href="#add">1. Add a script</a></li>
+            <li><a href="#variables">2. Fill in the variables</a></li>
+            <li><a href="#run">3. Run it</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#reference">Reference</a><ul>
+            <li><a href="#declare">Variables</a></li>
+            <li><a href="#handlers">Handlers and events</a></li>
+            <li><a href="#outputs">Outputs</a></li>
+            <li><a href="#more">Modes, inputs and more</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#examples">Examples</a><ul>
+            <li><a href="#example-curve">Axis curve</a></li>
+            <li><a href="#example-detent">Throttle detent</a></li>
+            <li><a href="#example-trim">Trim on a hat</a></li>
+            <li><a href="#example-gear">Gear with speech</a></li>
+          </ul></li>
+          </ul>
+        </details>
+      </aside>
+
+      <div class="learn-body">
+        <section class="learn-group" id="idea" aria-labelledby="idea-title">
+          <h2 id="idea-title">The idea</h2>
+          <article class="learn-action" id="how-it-works">
+            <h3><i class="ph ph-code" aria-hidden="true"></i>How it works</h3>
+            <p>A script is a small Lua program kept in the profile or in a <code>.lua</code> file next to it. It does three things:</p>
+            <ul>
+              <li><strong>Declares variables</strong>: the stick axis it reads, the virtual output it writes, a number, a mode, a key. You pick their values on the <span class="term">Scripts</span> page, so one script works with any stick and can be added twice with different settings.</li>
+              <li><strong>Listens to inputs</strong>: a function runs on every change of an input, in a mode or in all of them. It runs before the input's own actions.</li>
+              <li><strong>Acts</strong>: moves virtual stick and gamepad axes, presses buttons and keys, switches modes, speaks, or runs an action you named on another input.</li>
+            </ul>
+            <figure class="shot"><img src="img/scripts.png" loading="lazy" width="1102" height="732" alt="Scripts page: a throttle detent script with highlighted Lua code and its variables, a Gear script with an error mark, and a Joystick Gremlin Python script that is kept but not run"></figure>
+          </article>
+          <article class="learn-action" id="safe">
+            <h3><i class="ph ph-shield-check" aria-hidden="true"></i>Safe to share</h3>
+            <p>Scripts run in a sandbox (Luau, the Lua made for scripts from other people): they cannot read or write files, start programs or reach the network. A function that runs longer than 5 ms is stopped, so a mistake cannot freeze your inputs, and a script that keeps failing is switched off. A script someone shares with you can only do what the page lists below.</p>
+          </article>
+          <article class="learn-action" id="gremlin">
+            <h3><i class="ph ph-arrows-left-right" aria-hidden="true"></i>Scripts from Joystick Gremlin</h3>
+            <p>A Joystick Gremlin profile with Python user scripts imports with them: they stay in the profile, with the values of their variables, and are listed as not run. The idea is the same in Lua, so a Python script usually becomes a Lua script of about the same length: variables with the same names, a function per input.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="setup" aria-labelledby="setup-title">
+          <h2 id="setup-title">Setting it up</h2>
+          <article class="learn-action" id="add">
+            <h3><i class="ph ph-plus-circle" aria-hidden="true"></i>1. Add a script</h3>
+            <p>Open the <span class="term">Scripts</span> page in the left rail. <span class="term">New script</span> adds one kept in the profile, starting from a small example: edit it right there, with colors for Lua and line numbers. <span class="term">Add a file</span> takes a <code>.lua</code> file instead: open it in your own editor with the pencil button. A file next to the profile is found by its name, so the two can move together; while the profile runs, saving the file reloads it.</p>
+          </article>
+          <article class="learn-action" id="variables">
+            <h3><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>2. Fill in the variables</h3>
+            <p>Below the code, every variable the script declares gets a field: a stick and its axis, button or hat; a virtual stick and its output; a number with its limits; a switch, a text, a choice, a mode or a key. Hover a name to read its description. <span class="term">Needs a value</span> marks a variable the script cannot do without.</p>
+          </article>
+          <article class="learn-action" id="run">
+            <h3><i class="ph ph-play" aria-hidden="true"></i>3. Run it</h3>
+            <p>Activate the profile. A mistake in the code shows on the Scripts page with its line, marked red in the editor and in the list, and the rest of the profile runs without the script. An error while the profile runs opens a message once; the log file <code>JoystickGobloon.log</code> in the data folder keeps every one, and what <code>log()</code> writes when Settings &rsaquo; General &rsaquo; Log level is Important or All.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="reference" aria-labelledby="reference-title">
+          <h2 id="reference-title">Reference</h2>
+          <article class="learn-action" id="declare">
+            <h3><i class="ph ph-list-bullets" aria-hidden="true"></i>Variables</h3>
+            <p>Declare variables at the top of the script. Each takes a table with <code>name</code> (shown on the page), and optionally <code>description</code>, <code>default</code> and <code>optional = false</code> for one the script needs. <code>.value</code> holds what you picked.</p>
+            <ul>
+              <li><code>script.bool{}</code>, <code>script.int{ min, max }</code>, <code>script.float{ min, max }</code>, <code>script.string{}</code></li>
+              <li><code>script.selection{ options = { "a", "b" } }</code>: <code>.value</code> is the chosen option</li>
+              <li><code>script.mode{}</code>: a mode of the profile</li>
+              <li><code>script.key{}</code>: a keyboard key</li>
+              <li><code>script.physical_input{ types = { "axis", "button", "hat" } }</code>: an input of a stick; <code>.device</code>, <code>.type</code> and <code>.id</code> name it</li>
+              <li><code>script.virtual_output{ types = { ... } }</code>: an axis, button or hat of a virtual stick</li>
+              <li><code>script.logical_input{ types = { ... } }</code>: an input of the logical device</li>
+            </ul>
+          </article>
+          <article class="learn-action" id="handlers">
+            <h3><i class="ph ph-lightning" aria-hidden="true"></i>Handlers and events</h3>
+            <p><code>input:on(mode, function(e) ... end)</code> runs the function on every change of a physical input, key or logical input. <code>mode</code> is a mode variable, a mode's name, or left out for every mode; a handler also runs in the modes that inherit from its mode. The event tells what happened:</p>
+            <ul>
+              <li><code>e.value</code>: an axis from -1 to 1, a button <code>true</code> or <code>false</code>, a hat's direction</li>
+              <li><code>e.pressed</code>: buttons and keys</li>
+              <li><code>e.direction</code>: hats, in degrees clockwise from up (0, 45 ... 315), <code>nil</code> when centered</li>
+            </ul>
+            <p><code>script.every(0.1, function() ... end)</code> runs a function every 0.1 s (at least every 0.01 s) while the profile runs. <code>script.on_input(device, "button", 3, mode, fn)</code> listens to an input named by its device GUID.</p>
+          </article>
+          <article class="learn-action" id="outputs">
+            <h3><i class="ph ph-joystick" aria-hidden="true"></i>Outputs</h3>
+            <ul>
+              <li><code>output:set(x)</code> on a virtual output variable: an axis -1..1, a button <code>true</code>/<code>false</code>, a hat in degrees or <code>nil</code></li>
+              <li><code>vjoy.axis(stick, axis, value)</code>, <code>vjoy.button(stick, button, pressed)</code>, <code>vjoy.hat(stick, hat, degrees)</code></li>
+              <li><code>gamepad.button(pad, "a", pressed)</code>, <code>gamepad.axis(pad, "left-x", value)</code> (triggers 0..1)</li>
+              <li><code>keyboard.down(key)</code>, <code>keyboard.up(key)</code>, <code>keyboard.tap(key)</code>, with a key variable</li>
+              <li><code>mouse.button("Left", pressed)</code>, <code>mouse.move(dx, dy)</code>, <code>mouse.wheel(notches)</code></li>
+            </ul>
+          </article>
+          <article class="learn-action" id="more">
+            <h3><i class="ph ph-dots-three-circle" aria-hidden="true"></i>Modes, inputs and more</h3>
+            <ul>
+              <li><code>mode.current()</code>, <code>mode.switch("Landing")</code></li>
+              <li><code>joystick.axis(device, id)</code>, <code>joystick.button(device, id)</code>, <code>joystick.hat(device, id)</code>: the current state of any input, e.g. <code>joystick.axis(stick.device, 2)</code></li>
+              <li><code>speak("Gear down")</code>, <code>play_sound("C:/sounds/click.wav", 80)</code></li>
+              <li><code>run_action("Lights")</code>: runs the action with that name in its card title, like a short press of its input; <code>false</code> when there is none</li>
+              <li><code>log(...)</code> (and <code>print</code>) write to the log file; <code>os.clock()</code> measures time; <code>math</code>, <code>string</code> and <code>table</code> are there as in any Lua</li>
+            </ul>
+          </article>
+        </section>
+
+        <section class="learn-group" id="examples" aria-labelledby="examples-title">
+          <h2 id="examples-title">Examples</h2>
+          <article class="learn-action" id="example-curve">
+            <h3><i class="ph ph-chart-line" aria-hidden="true"></i>Axis curve</h3>
+            <p>A softer center: the stick's axis to a virtual axis, raised to a power you choose.</p>
+<pre><code>local stick = script.physical_input{ name = "Stick axis", types = { "axis" } }
+local out   = script.virtual_output{ name = "Output axis", types = { "axis" } }
+local power = script.float{ name = "Curve", min = 1, max = 3, default = 2 }
+
+stick:on(function(e)
+    local sign = e.value &lt; 0 and -1 or 1
+    out:set(sign * math.abs(e.value) ^ power.value)
+end)</code></pre>
+          </article>
+          <article class="learn-action" id="example-detent">
+            <h3><i class="ph ph-gauge" aria-hidden="true"></i>Throttle detent</h3>
+            <p>Past the detent, a virtual button is held, and announced once.</p>
+<pre><code>local throttle = script.physical_input{ name = "Throttle", types = { "axis" } }
+local button   = script.virtual_output{ name = "Past the detent", types = { "button" } }
+local detent   = script.float{ name = "Detent", min = -1, max = 1, default = 0.8 }
+local past = false
+
+throttle:on(function(e)
+    local now = e.value &gt; detent.value
+    if now ~= past then
+        past = now
+        button:set(now)
+        if now then speak("Detent") end
+    end
+end)</code></pre>
+          </article>
+          <article class="learn-action" id="example-trim">
+            <h3><i class="ph ph-compass" aria-hidden="true"></i>Trim on a hat</h3>
+            <p>Up and down on a hat move a virtual axis in small steps, and it stays there.</p>
+<pre><code>local hat  = script.physical_input{ name = "Trim hat", types = { "hat" } }
+local trim = script.virtual_output{ name = "Trim axis", types = { "axis" } }
+local step = script.float{ name = "Step", min = 0.001, max = 0.1, default = 0.01 }
+local value = 0
+
+hat:on(function(e)
+    if e.direction == 0 then
+        value = math.min(1, value + step.value)
+    elseif e.direction == 180 then
+        value = math.max(-1, value - step.value)
+    end
+    trim:set(value)
+end)</code></pre>
+          </article>
+          <article class="learn-action" id="example-gear">
+            <h3><i class="ph ph-speaker-high" aria-hidden="true"></i>Gear with speech</h3>
+            <p>One button presses the gear key and says which way it went.</p>
+<pre><code>local button = script.physical_input{ name = "Gear button", types = { "button" } }
+local key    = script.key{ name = "Gear key" }
+local down = true
+
+button:on(function(e)
+    if not e.pressed then return end
+    keyboard.tap(key)
+    down = not down
+    speak(down and "Gear down" or "Gear up")
+end)</code></pre>
+          </article>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div>
+          <a class="brand" href="index.html"><img src="img/icon.svg" alt="" width="24" height="24"> Joystick Gobloon</a>
+          <p>Built on <a href="https://github.com/nefarius/HidHide">HidHide</a> by Nefarius and <a href="https://github.com/shauleiz/vJoy">vJoy</a> by Shaul Eizikovich.</p>
+        </div>
+        <div>
+          <h3>Project</h3>
+          <ul>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/releases">Releases</a></li>
+            <li><a href="start.html">Get started</a></li>
+            <li><a href="learn.html">Learning</a></li>
+            <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="voice.html">Voice</a></li>
+            <li><a href="scripts.html">Scripts</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
+            <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>
+            <li><a href="https://www.paypal.com/paypalme/h0userus" rel="noopener">Donate with PayPal</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Legal</h3>
+          <ul>
+            <li><a href="privacy.html">Privacy</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/LICENSE">License and terms (MIT)</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/docs/CODE_SIGNING.md">Code signing policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="copyright">© 2026 Denis Ibragimov. Joystick Gobloon is released under the MIT license.</p>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

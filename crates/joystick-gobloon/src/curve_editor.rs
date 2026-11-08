@@ -3,7 +3,7 @@
 
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, RichText, Sense, Stroke, Vec2};
 use gob_core::Action;
-use gob_core::curve::{Curve, CurveType, Editable};
+use gob_core::curve::{Curve, CurvePreset, CurveType, Editable};
 
 use crate::action_editor::{Editor, Op, py_float};
 use crate::style::{self, icon};
@@ -60,6 +60,28 @@ impl Editor<'_> {
                 let inverted: Vec<(f64, f64)> = points.iter().map(|&(x, y)| (x, -y)).collect();
                 self.set_points(&id, &inverted);
             }
+            // A ready-made curve: symmetric, so symmetric editing goes on with it.
+            let preset = format!("{}  {}", icon::CHART_LINE, self.i18n.tr("curve-preset"));
+            ui.menu_button(preset, |ui| {
+                for p in CurvePreset::ALL {
+                    let name = self.i18n.tr(&format!("curve-preset-{}", p.name()));
+                    let tip = self.i18n.tr(&format!("curve-preset-{}-tip", p.name()));
+                    if ui.button(name).on_hover_text(tip).clicked() {
+                        let (k, new) = p.curve();
+                        if k != kind {
+                            self.set(&id, "curve-type", "string", k.name());
+                        }
+                        if !symmetric {
+                            self.set(&id, "symmetric", "bool", "True");
+                        }
+                        self.set_points(&id, &new);
+                        ui.data_mut(|d| d.insert_temp(sel_id, 0usize));
+                        ui.close();
+                    }
+                }
+            })
+            .response
+            .on_hover_text(self.i18n.tr("curve-preset-tip"));
             let mut sym = symmetric;
             if ui
                 .add(style::switch(&mut sym, self.i18n.tr("curve-symmetric")))

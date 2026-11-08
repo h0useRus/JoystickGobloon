@@ -5,14 +5,18 @@ use std::time::{Duration, Instant};
 use gob_core::{
     Action, ActionKind, ActivationMode, AxisDirection, AxisMotion, AxisOutput, ButtonAxis,
     ButtonSend, Comparator, ConditionSource, InputType, Item, Key, Layer, MacroRepeat, MacroStep,
-    MergeOp, MouseAction, MouseButton, Profile, Selection, SendMode, VOICE_GUID, VOICE_INPUT_TYPE,
-    VirtualButton,
+    MergeOp, MouseAction, MouseButton, Profile, ProfileEvent, Selection, SendMode, VOICE_GUID,
+    VOICE_INPUT_TYPE, VirtualButton,
 };
 
 use crate::media::{SpeechQueue, SpeechRequest};
 use crate::modes::ModeStack;
 use crate::motion::{Motion, compass};
 use crate::{GamepadControl, InputKey, InputKind, Light, LogicalValues, Output, Value};
+use gob_script::{
+    EventValue, InputKind as ScriptKind, LoadedScript, ScriptApi, ScriptError, ScriptHost,
+    ScriptInput,
+};
 use gob_virtual::ControlKind;
 
 /// Delay between press and release of a pulse (Gremlin: 50 ms).
@@ -31,6 +35,20 @@ const MACRO_DELAY: f64 = 0.05;
 fn voice_key(id: u32) -> InputKey {
     InputKey::new(VOICE_GUID, InputKind::Button, id)
 }
+
+/// The input of a profile event.
+fn event_key(event: ProfileEvent) -> InputKey {
+    InputKey::new(gob_core::EVENTS_GUID, InputKind::Button, event.id())
+}
+
+/// Key combinations are keyboard inputs with ids from here on (key ids stay below 0x200).
+const COMBO_ID_BASE: u32 = 0x1_0000;
+
+/// How long a profile event holds its button down, like a short press.
+const EVENT_HOLD: Duration = Duration::from_millis(100);
+/// Mode changes in a row made by mode enter and leave actions themselves (on their press or
+/// release) that still run their own events; a loop of modes switching each other stops there.
+const MAX_MODE_EVENTS: u8 = 8;
 /// Lower bound between macro repetitions so a zero delay cannot spin `tick`.
 const MACRO_MIN_REPEAT: Duration = Duration::from_millis(1);
 
@@ -104,6 +122,11 @@ enum Node {
     SmartToggle {
         children: Vec<NodeId>,
         delay: Duration,
+    },
+    Delay {
+        children: Vec<NodeId>,
+        delay: Duration,
+        while_held: bool,
     },
     Split {
         split: f32,
@@ -363,6 +386,10 @@ enum TimerKind {
     },
     /// A recognized voice command's button goes up.
     VoiceRelease(u32),
+    /// A profile event's button (by its id) goes up.
+    EventRelease(u32),
+    /// A Delay's time is up.
+    DelayFire(NodeId),
     /// The action a run-action macro step pressed is released.
     RunRelease {
         node: NodeId,
@@ -407,6 +434,15 @@ fn ms(ms: u32) -> Duration {
 }
 
 #[derive(Debug)]
+/// A Delay waiting for its time or for its input to go up.
+struct DelayState {
+    /// Its time is not up yet.
+    timer: Option<u64>,
+    src: Source,
+    /// The input is still down.
+    held: bool,
+}
+
 struct Timer {
     id: u64,
     at: Instant,
@@ -419,6 +455,8 @@ enum ReleaseAction {
     GamepadButton(u32, GamepadControl),
     LeaveTemporary(String),
     TempoRelease(NodeId),
+    /// A Delay's input went up in another mode.
+    DelayRelease(NodeId),
     StopMacro(NodeId),
     TapRelease(NodeId),
     ReleaseKeys(NodeId),
@@ -528,6 +566,7 @@ impl Config {
             layer,
             additive,
             keep_value: false,
+            send_state: false,
         }
     }
 }
@@ -545,6 +584,8 @@ struct Config {
     additive: bool,
     /// Axis outputs keep their value when the layer stops.
     keep_value: bool,
+    /// A button held when the profile starts runs its press then.
+    send_state: bool,
 }
 
 pub struct Engine {
@@ -601,6 +642,23 @@ pub struct Engine {
     voice_holds: HashMap<u32, Duration>,
     /// Release timer of each voice command whose button is down.
     voice_releases: HashMap<u32, u64>,
+    /// Delays pressed and not let go yet or not run yet.
+    delays: HashMap<NodeId, DelayState>,
+    /// Release timer of each profile event (by id) whose button is down, with the mode it runs
+    /// in.
+    event_releases: HashMap<u32, (u64, Arc<str>)>,
+    /// Nesting of mode changes made by mode enter and leave actions.
+    mode_event_depth: u8,
+    /// Key combinations: their input and their keys' inputs.
+    combos: Vec<(InputKey, Vec<InputKey>)>,
+    /// The combinations (their inputs) whose keys are all held.
+    combos_down: HashSet<InputKey>,
+    /// Mode changes in a row caused by event actions; another mode change starts over.
+    event_chain: u8,
+    /// A profile event's button went up in this tick: a mode change now comes from its actions.
+    event_released: bool,
+    /// The profile is stopping: no more events run (its stop actions may still change modes).
+    stopping: bool,
     /// Every phrase of the profile's voice commands with the command's id.
     voice_phrases: Vec<(u32, String)>,
     /// Profile's `macro-default-delay` in seconds.
@@ -637,6 +695,18 @@ pub struct Engine {
     run_targets: HashMap<String, Vec<String>>,
     /// Release timer of each action a run-action step holds pressed.
     run_releases: HashMap<NodeId, u64>,
+    /// The profile's Lua scripts; `None` without any.
+    scripts: Option<ScriptHost>,
+    /// Inputs a script handler listens to, with their index in the host: other events never
+    /// reach the scripts.
+    script_keys: HashMap<InputKey, usize>,
+    /// The profile's modes, for scripts' `mode.switch`.
+    script_modes: HashSet<String>,
+    /// Keys and virtual stick hats scripts hold, released by [`Engine::release_all`].
+    script_keys_down: Vec<Key>,
+    script_hats: Vec<(u32, u8)>,
+    /// Action names (card titles) to their ids, for scripts' `run_action`.
+    action_labels: HashMap<String, String>,
 }
 
 /// A vJoy axis moved by speed rather than position (Gremlin's relative mode).
@@ -706,6 +776,14 @@ impl Engine {
                 .map(|c| (c.id, Duration::from_secs_f64(c.hold.clamp(0.01, 10.0))))
                 .collect(),
             voice_releases: HashMap::new(),
+            delays: HashMap::new(),
+            event_releases: HashMap::new(),
+            mode_event_depth: 0,
+            combos: Vec::new(),
+            combos_down: HashSet::new(),
+            event_chain: 0,
+            event_released: false,
+            stopping: false,
             voice_phrases: profile
                 .voice_phrases()
                 .into_iter()
@@ -734,6 +812,12 @@ impl Engine {
             action_nodes: HashMap::new(),
             run_targets: HashMap::new(),
             run_releases: HashMap::new(),
+            scripts: None,
+            script_keys: HashMap::new(),
+            script_modes: HashSet::new(),
+            script_keys_down: Vec::new(),
+            script_hats: Vec::new(),
+            action_labels: HashMap::new(),
         };
         for m in profile.library.iter().filter(|a| a.kind == "macro") {
             let targets = m.run_targets();
@@ -773,15 +857,27 @@ impl Engine {
                 InputType::Axis => InputKind::Axis,
                 InputType::Button => InputKind::Button,
                 InputType::Hat => InputKind::Hat,
-                // Keyboard keys (Gremlin's "key" inputs) and voice commands behave like buttons.
-                InputType::Other if matches!(b.input_type.trim(), "key" | VOICE_INPUT_TYPE) => {
+                // Keyboard keys (Gremlin's "key" inputs), key combinations, voice commands and
+                // profile events behave like buttons.
+                InputType::Other
+                    if matches!(
+                        b.input_type.trim(),
+                        "key"
+                            | gob_core::COMBO_INPUT_TYPE
+                            | VOICE_INPUT_TYPE
+                            | gob_core::EVENT_INPUT_TYPE
+                    ) =>
+                {
                     InputKind::Button
                 }
                 InputType::Other => continue,
             };
-            let Ok(id) = b.input_id.trim().parse() else {
+            let Ok(mut id) = b.input_id.trim().parse::<u32>() else {
                 continue;
             };
+            if b.input_type.trim() == gob_core::COMBO_INPUT_TYPE {
+                id = id.saturating_add(COMBO_ID_BASE);
+            }
             let key = InputKey {
                 device: engine.device(&b.device_id),
                 kind,
@@ -824,6 +920,7 @@ impl Engine {
                     layer: cfg.layer.clone(),
                     additive: cfg.additive,
                     keep_value: cfg.keep_value,
+                    send_state: cfg.send_state,
                 });
                 // A button-axis action's decrease input runs it too, in the same mode and layer,
                 // through copies of the containers it sits in (their own state).
@@ -868,6 +965,30 @@ impl Engine {
         engine.compiled_decrease.clear();
         engine.compiled_lights.clear();
         engine.inherit_modes(profile);
+        let keyboard = engine.device(gob_core::KEYBOARD_GUID);
+        engine.combos = profile
+            .key_combos
+            .iter()
+            .map(|c| {
+                let combo = InputKey {
+                    device: keyboard.clone(),
+                    kind: InputKind::Button,
+                    id: c.id.saturating_add(COMBO_ID_BASE),
+                };
+                let keys = c
+                    .keys
+                    .iter()
+                    .map(|k| InputKey {
+                        device: keyboard.clone(),
+                        kind: InputKind::Button,
+                        id: gob_core::key_input_id(*k),
+                    })
+                    .collect();
+                (combo, keys)
+            })
+            .filter(|(combo, _)| engine.lookup.contains_key(combo))
+            .collect();
+        engine.load_scripts(profile);
         // A child mode that binds a decrease input itself has a set of its own for it, so it
         // does not inherit the decrease entry: it gets one in every mode that inherits the
         // action's own input, as the action runs there too.
@@ -1279,6 +1400,18 @@ impl Engine {
                     act: action.activation_mode(),
                     send: action.button_send(),
                 },
+                ActionKind::Delay {
+                    children,
+                    seconds,
+                    while_held,
+                } => Node::Delay {
+                    children: children
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                    delay: Duration::from_secs_f64(seconds.clamp(0.0, 600.0)),
+                    while_held,
+                },
                 ActionKind::SmartToggle { children, delay } => Node::SmartToggle {
                     children: children
                         .iter()
@@ -1467,6 +1600,12 @@ impl Engine {
                 let step = a.moving.then(|| a.last_step + AXIS_STEP);
                 step.into_iter().chain(a.spring_at).min()
             }))
+            .chain(
+                self.scripts
+                    .as_ref()
+                    .filter(|_| !self.paused)
+                    .and_then(ScriptHost::next_deadline),
+            )
             .min()
     }
 
@@ -1547,6 +1686,8 @@ impl Engine {
         if !std::mem::replace(&mut self.started, true) {
             self.write_start_values(out);
         }
+        // Schedules the scripts' periodic functions.
+        self.tick_scripts(Instant::now(), out);
         let mode = self.modes.current();
         let mut configs: Vec<&Config> = self
             .lookup
@@ -1561,6 +1702,121 @@ impl Engine {
         for light in configs.iter().flat_map(|c| &c.lights) {
             out.light_led(light);
         }
+    }
+
+    /// Loads the profile's Lua scripts stored in it (external files are read in by the app).
+    fn load_scripts(&mut self, profile: &Profile) {
+        let loaded: Vec<LoadedScript> = profile
+            .script_instances()
+            .into_iter()
+            .filter(|s| s.language == gob_core::ScriptLanguage::Lua)
+            .filter_map(|s| match s.source {
+                gob_core::ScriptSource::Code(code) => Some(LoadedScript {
+                    name: s.name,
+                    code,
+                    values: s.variables,
+                }),
+                gob_core::ScriptSource::File(path) => {
+                    log::warn!("script {}: file {path} was not read in", s.name);
+                    None
+                }
+            })
+            .collect();
+        if loaded.is_empty() {
+            return;
+        }
+        let mut host = ScriptHost::load(&loaded);
+        let modes: Vec<(String, Option<String>)> = profile
+            .modes
+            .iter()
+            .map(|m| (m.name.clone(), m.parent.clone()))
+            .collect();
+        host.set_modes(&modes);
+        self.script_modes = modes.into_iter().map(|(m, _)| m).collect();
+        // A profile's stick may be another attached one: handlers listen to that one.
+        host.map_devices(|d| self.device(d).to_string());
+        self.script_keys = host
+            .inputs()
+            .map(|(index, i)| {
+                let kind = match i.kind {
+                    ScriptKind::Axis => InputKind::Axis,
+                    ScriptKind::Button => InputKind::Button,
+                    ScriptKind::Hat => InputKind::Hat,
+                };
+                let key = InputKey {
+                    device: i.device.as_str().into(),
+                    kind,
+                    id: i.id,
+                };
+                (key, index)
+            })
+            .collect();
+        self.action_labels = profile
+            .library
+            .iter()
+            .filter_map(|a| {
+                let label = a.label()?.trim();
+                (!label.is_empty() && label != "None").then(|| (label.to_string(), a.id.clone()))
+            })
+            .collect();
+        self.scripts = Some(host);
+    }
+
+    /// Script errors since the last call, one per script: load errors and a script's first error
+    /// while it runs.
+    pub fn take_script_errors(&mut self) -> Vec<ScriptError> {
+        self.scripts
+            .as_mut()
+            .map(ScriptHost::take_errors)
+            .unwrap_or_default()
+    }
+
+    /// Runs the script handlers of an input event in `mode` (the mode when the event came).
+    fn run_scripts(
+        &mut self,
+        key: &InputKey,
+        value: Value,
+        mode: &str,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        if self.paused {
+            return;
+        }
+        let Some(&index) = self.script_keys.get(key) else {
+            return;
+        };
+        let Some(mut host) = self.scripts.take() else {
+            return;
+        };
+        let event = match value {
+            Value::Axis(v) => EventValue::Axis(v),
+            Value::Button(b) => EventValue::Button(b),
+            Value::Hat(d) => EventValue::Hat(d),
+        };
+        let mut api = ScriptContext {
+            engine: self,
+            out,
+            now,
+        };
+        host.event_at(index, event, mode, &mut api);
+        self.scripts = Some(host);
+    }
+
+    fn tick_scripts(&mut self, now: Instant, out: &mut dyn Output) {
+        if self.paused {
+            return;
+        }
+        let Some(mut host) = self.scripts.take() else {
+            return;
+        };
+        let mut api = ScriptContext {
+            engine: self,
+            out,
+            now,
+        };
+        host.tick(now, &mut api);
+        self.scripts = Some(host);
     }
 
     /// Start values of the button-axis actions, the first one met for each axis.
@@ -1602,14 +1858,53 @@ impl Engine {
 
     /// Handles one physical input change.
     pub fn process(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
+        self.process_input(key, value, now, out);
+        if let Value::Button(pressed) = value
+            && !self.combos.is_empty()
+        {
+            self.update_combos(key, pressed, now, out);
+        }
+    }
+
+    /// A keyboard key went down or up: the combinations it belongs to go down once all their
+    /// keys are held, and up when one is let go.
+    fn update_combos(&mut self, key: &InputKey, pressed: bool, now: Instant, out: &mut dyn Output) {
+        for i in 0..self.combos.len() {
+            let (combo, keys) = &self.combos[i];
+            if !keys.contains(key) {
+                continue;
+            }
+            let all = keys
+                .iter()
+                .all(|k| self.buttons.get(k).copied().unwrap_or(false));
+            let down = self.combos_down.contains(combo);
+            if all == down || (all && !pressed) {
+                continue;
+            }
+            let combo = combo.clone();
+            if all {
+                self.combos_down.insert(combo.clone());
+            } else {
+                self.combos_down.remove(&combo);
+            }
+            self.process_input(&combo, Value::Button(all), now, out);
+        }
+    }
+
+    /// One input change: script handlers, then its actions.
+    fn process_input(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
         let layer = self.held_layer();
         self.seed(key, value);
+        let before = self.modes.shared();
+        // Script handlers first, like Gremlin's user scripts; the event's actions still run in
+        // the mode it came in, even when a handler switched modes.
+        self.run_scripts(key, value, &before, now, out);
         if self.is_modifier(key) {
             self.after_layer_change(&layer, now, out);
+            self.after_mode_change(&before, now, out);
             return;
         }
-        let before = self.modes.shared();
-        self.dispatch(key, value, now, out);
+        self.dispatch(key, value, before.clone(), now, out);
         self.after_mode_change(&before, now, out);
     }
 
@@ -1747,6 +2042,15 @@ impl Engine {
                     self.voice_releases.remove(&id);
                     self.process(&voice_key(id), Value::Button(false), now, out);
                 }
+                TimerKind::DelayFire(node) => self.delay_fire(node, now, out),
+                TimerKind::EventRelease(id) => {
+                    if let (Some((_, mode)), Some(event)) =
+                        (self.event_releases.remove(&id), ProfileEvent::from_id(id))
+                    {
+                        self.event_released = true;
+                        self.event_up(event, mode, now, out);
+                    }
+                }
                 TimerKind::RunRelease { node, src } => {
                     self.run_releases.remove(&node);
                     self.run_release(node, &src, now, out);
@@ -1756,12 +2060,14 @@ impl Engine {
         self.step_relative(now, out);
         self.step_logical(now, out);
         self.step_button_axes(now, out);
+        self.tick_scripts(now, out);
         if let Some((dx, dy)) = self.motion.step(now)
             && (dx != 0 || dy != 0)
         {
             out.mouse_move(dx, dy);
         }
         self.after_mode_change(&before, now, out);
+        self.event_released = false;
     }
 
     fn step_relative(&mut self, now: Instant, out: &mut dyn Output) {
@@ -1786,6 +2092,163 @@ impl Engine {
         if self.modes.current() == before {
             return;
         }
+        self.refresh_mode(now, out);
+        if self.stopping {
+            return;
+        }
+        // A change made by event actions (their press or release) continues the chain.
+        if self.mode_event_depth > 0 || std::mem::take(&mut self.event_released) {
+            self.event_chain = self.event_chain.saturating_add(1);
+        } else {
+            self.event_chain = 0;
+        }
+        if self.event_chain > MAX_MODE_EVENTS {
+            if self.event_chain == MAX_MODE_EVENTS + 1 {
+                log::warn!("mode enter and leave actions keep switching modes: their events stop");
+            }
+            return;
+        }
+        // The mode left, then the one entered; their actions may switch modes again.
+        self.mode_event_depth += 1;
+        let entered = self.modes.shared();
+        self.fire_event(ProfileEvent::Leave, Arc::from(before), now, out);
+        self.fire_event(ProfileEvent::Enter, entered.clone(), now, out);
+        self.after_mode_change(&entered, now, out);
+        self.mode_event_depth -= 1;
+    }
+
+    /// The profile has just started (not an edit applied to it): the start event runs in the
+    /// starting mode, then mode enter and the held buttons that send their state at start in
+    /// the mode it is in after that (a start action may switch modes).
+    pub fn profile_started(&mut self, now: Instant, out: &mut dyn Output) {
+        let starting = self.modes.shared();
+        self.fire_event(ProfileEvent::Start, starting.clone(), now, out);
+        let mode = self.modes.shared();
+        if mode != starting {
+            self.refresh_mode(now, out);
+        }
+        self.fire_event(ProfileEvent::Enter, mode.clone(), now, out);
+        // Enter actions may switch modes again: their events run, then held buttons send their
+        // state in the mode the profile is in.
+        self.after_mode_change(&mode, now, out);
+        let mode = self.modes.shared();
+        self.send_start_states(&mode, now, out);
+    }
+
+    /// The profile is about to stop: the mode leave and stop events run in the current mode,
+    /// and no events run after them. True when either has actions, which then need a moment
+    /// ([`Engine::tick`] while [`Engine::stop_pending`]) to finish before
+    /// [`Engine::release_all`]. Nothing runs while paused.
+    pub fn profile_stopping(&mut self, now: Instant, out: &mut dyn Output) -> bool {
+        if self.paused {
+            self.stopping = true;
+            return false;
+        }
+        let mode = self.modes.shared();
+        let leave = self.fire_event(ProfileEvent::Leave, mode.clone(), now, out);
+        let stop = self.fire_event(ProfileEvent::Stop, mode, now, out);
+        self.stopping = true;
+        leave || stop
+    }
+
+    /// Stop and leave actions are still under way: an event's button is down, or a macro, a
+    /// pulse or a run-action step is waiting for its next step (repeating outputs do not count:
+    /// they would keep going).
+    pub fn stop_pending(&self) -> bool {
+        !self.event_releases.is_empty()
+            || self.timers.iter().any(|t| {
+                matches!(
+                    t.kind,
+                    TimerKind::MacroStep(_)
+                        | TimerKind::DelayFire(_)
+                        | TimerKind::PulseRelease { .. }
+                        | TimerKind::SendUp(_)
+                        | TimerKind::RunRelease { .. }
+                )
+            })
+    }
+
+    /// Presses a profile event's button in `mode` (it goes up after [`EVENT_HOLD`]); false
+    /// when the event has no actions there. A press still down goes up first.
+    fn fire_event(
+        &mut self,
+        event: ProfileEvent,
+        mode: Arc<str>,
+        now: Instant,
+        out: &mut dyn Output,
+    ) -> bool {
+        let key = event_key(event);
+        if self.stopping
+            || !self
+                .lookup
+                .get(&key)
+                .is_some_and(|m| m.contains_key(&*mode))
+        {
+            return false;
+        }
+        if let Some((timer, was)) = self.event_releases.remove(&event.id()) {
+            self.timers.retain(|t| t.id != timer);
+            self.event_up(event, was, now, out);
+        }
+        log::debug!("profile event {event:?} in mode {mode}");
+        self.seed(&key, Value::Button(true));
+        self.dispatch(&key, Value::Button(true), mode.clone(), now, out);
+        let timer = self.add_timer(now + EVENT_HOLD, TimerKind::EventRelease(event.id()));
+        self.event_releases.insert(event.id(), (timer, mode));
+        true
+    }
+
+    fn event_up(
+        &mut self,
+        event: ProfileEvent,
+        mode: Arc<str>,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        let key = event_key(event);
+        self.seed(&key, Value::Button(false));
+        self.dispatch(&key, Value::Button(false), mode, now, out);
+    }
+
+    /// Runs the press of the buttons held now whose binding in `mode` sends its state at start
+    /// (only those action sequences, in the held layer).
+    fn send_start_states(&mut self, mode: &Arc<str>, now: Instant, out: &mut dyn Output) {
+        let mut held: Vec<(InputKey, usize)> = self
+            .buttons
+            .iter()
+            // Controller buttons only: the program's own inputs (events just pressed among
+            // them) have no state of their own at start.
+            .filter(|&(k, &down)| {
+                down && !gob_core::is_builtin_device(&k.device) && !self.is_modifier(k)
+            })
+            .filter_map(|(k, _)| {
+                let set = *self.lookup.get(k)?.get(&**mode)?;
+                self.sets[set]
+                    .iter()
+                    .any(|c| c.send_state)
+                    .then(|| (k.clone(), set))
+            })
+            .collect();
+        held.sort_by(|a, b| (&a.0.device, a.0.id).cmp(&(&b.0.device, b.0.id)));
+        for (key, set) in held {
+            let src = Source {
+                key: key.clone(),
+                mode: mode.clone(),
+                no_auto_release: false,
+            };
+            let layer = self.event_layer(&key, Value::Button(true));
+            let selection = self.selection(set, &layer);
+            for ci in 0..self.sets[set].len() {
+                let c = &self.sets[set][ci];
+                if c.send_state && selection.runs(&c.layer) {
+                    self.run_config((set, ci), &src, Value::Button(true), now, out);
+                }
+            }
+        }
+    }
+
+    /// Lights, cursor motion and axis positions follow a mode change.
+    fn refresh_mode(&mut self, now: Instant, out: &mut dyn Output) {
         self.activate(out);
         // Stop cursor motion whose input is bound differently in the new mode.
         let (lookup, current) = (&self.lookup, self.modes.current().to_string());
@@ -1796,14 +2259,22 @@ impl Engine {
         });
         let axes: Vec<(InputKey, f32)> = self.axes.iter().map(|(k, v)| (k.clone(), *v)).collect();
         for (key, v) in axes {
-            self.dispatch(&key, Value::Axis(v), now, out);
+            let mode = self.modes.shared();
+            self.dispatch(&key, Value::Axis(v), mode, now, out);
         }
     }
 
-    fn dispatch(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
+    fn dispatch(
+        &mut self,
+        key: &InputKey,
+        value: Value,
+        mode: Arc<str>,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
         let src = Source {
             key: key.clone(),
-            mode: self.modes.shared(),
+            mode,
             no_auto_release: false,
         };
         let layer = self.event_layer(key, value);
@@ -2046,6 +2517,11 @@ impl Engine {
             } => {
                 if let Value::Button(pressed) = *value {
                     self.smart_toggle(node, children, delay, src, pressed, now, out);
+                }
+            }
+            Node::Delay { delay, .. } => {
+                if let Value::Button(pressed) = *value {
+                    self.delay_event(node, delay, src, pressed, now, out);
                 }
             }
             Node::Split {
@@ -2630,6 +3106,12 @@ impl Engine {
     /// gamepad buttons, latched and repeating outputs. Called when the profile stops or
     /// another one takes over (the virtual devices stay, so nothing else would release them).
     pub fn release_all(&mut self, out: &mut dyn Output) {
+        for key in std::mem::take(&mut self.script_keys_down) {
+            out.key(key.scan_code, key.extended, false);
+        }
+        for (device, hat) in std::mem::take(&mut self.script_hats) {
+            out.hat(device, hat, None);
+        }
         // Actions run-action steps hold pressed go up first, at their release time, so their
         // own state (taps, tempo, toggles) is not left down; what they hold is released below.
         self.run_releases.clear();
@@ -3421,7 +3903,9 @@ impl Engine {
         self.logical_depth += 1;
         self.logical_changed = true;
         self.seed(key, value);
-        self.dispatch(key, value, now, out);
+        let mode = self.modes.shared();
+        self.run_scripts(key, value, &mode, now, out);
+        self.dispatch(key, value, mode, now, out);
         self.logical_depth -= 1;
     }
 
@@ -3669,6 +4153,98 @@ impl Engine {
         self.run_all(&all, src, value, now, out);
     }
 
+    /// A Delay's input went down (its time starts again) or up.
+    fn delay_event(
+        &mut self,
+        node: NodeId,
+        delay: Duration,
+        src: &Source,
+        pressed: bool,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        if !pressed {
+            self.delay_release(node, now, out);
+            return;
+        }
+        if let Some(timer) = self.delays.remove(&node).and_then(|d| d.timer) {
+            self.timers.retain(|t| t.id != timer);
+        }
+        let timer = self.add_timer(now + delay, TimerKind::DelayFire(node));
+        self.delays.insert(
+            node,
+            DelayState {
+                timer: Some(timer),
+                src: src.clone(),
+                held: true,
+            },
+        );
+        // Inside a container that keeps the press latched (smart toggle), letting go of the
+        // input is not a release: the container sends its own.
+        if !src.no_auto_release {
+            self.register(
+                &src.key,
+                ReleaseEntry {
+                    mode: src.mode.clone(),
+                    any_mode: true,
+                    on_press: false,
+                    action: ReleaseAction::DelayRelease(node),
+                },
+            );
+        }
+    }
+
+    /// Let go before the time is up: cancelled while it needs the input held, else run as a
+    /// short press when the time is up; after it: the children are let go.
+    fn delay_release(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
+        let Node::Delay {
+            ref children,
+            while_held,
+            ..
+        } = *self.nodes[node].clone()
+        else {
+            return;
+        };
+        let Some(state) = self.delays.get_mut(&node).filter(|d| d.held) else {
+            return;
+        };
+        match state.timer {
+            Some(timer) if while_held => {
+                self.timers.retain(|t| t.id != timer);
+                self.delays.remove(&node);
+            }
+            Some(_) => state.held = false,
+            None => {
+                if let Some(state) = self.delays.remove(&node) {
+                    self.run_all(children, &state.src, Value::Button(false), now, out);
+                }
+            }
+        }
+    }
+
+    /// A Delay's time is up: its children run (held: pressed until the input goes up; let go
+    /// already: a short press).
+    fn delay_fire(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
+        let Node::Delay { ref children, .. } = *self.nodes[node].clone() else {
+            return;
+        };
+        let Some(state) = self.delays.get_mut(&node) else {
+            return;
+        };
+        state.timer = None;
+        if state.held {
+            let src = state.src.clone();
+            self.run_all(children, &src, Value::Button(true), now, out);
+        } else if let Some(state) = self.delays.remove(&node) {
+            // The input is up already: nothing may wait for its release (the pulse lets go).
+            let src = Source {
+                no_auto_release: true,
+                ..state.src
+            };
+            self.pulse(children, Value::Button(true), src, now, out);
+        }
+    }
+
     fn cancel_tempo_timer(&mut self, node: NodeId) {
         if let Some(id) = self.tempo.get_mut(&node).and_then(|s| s.timer.take()) {
             self.timers.retain(|t| t.id != id);
@@ -3758,6 +4334,7 @@ impl Engine {
                         run.queued = 0;
                     }
                 }
+                ReleaseAction::DelayRelease(node) => self.delay_release(node, now, out),
                 ReleaseAction::TempoRelease(node) => {
                     let phase = self.tempo.get(&node).map(|s| s.phase).unwrap_or_default();
                     if phase != Phase::Wait {
@@ -4046,6 +4623,126 @@ fn apply_deadzone(value: f32, [low, center_low, center_high, high]: [f32; 4]) ->
         ((value - center_high) / (high - center_high).abs().max(0.01)).clamp(0.0, 1.0)
     } else {
         ((value - center_low) / (low - center_low).abs().max(0.01)).clamp(-1.0, 0.0)
+    }
+}
+
+/// What scripts reach while one of their functions runs: the engine and its outputs.
+struct ScriptContext<'a> {
+    engine: &'a mut Engine,
+    out: &'a mut dyn Output,
+    now: Instant,
+}
+
+impl ScriptApi for ScriptContext<'_> {
+    fn vjoy_axis(&mut self, device: u32, axis: u8, value: f32) {
+        self.engine.set_axis(device, axis, value, self.out);
+    }
+    fn vjoy_button(&mut self, device: u32, button: u8, pressed: bool) {
+        self.engine.vjoy_button(device, button, pressed, self.out);
+    }
+    fn vjoy_hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
+        let held = &mut self.engine.script_hats;
+        held.retain(|&h| h != (device, hat));
+        if direction.is_some() {
+            held.push((device, hat));
+        }
+        self.out.hat(device, hat, direction);
+    }
+    fn gamepad_button(&mut self, gamepad: u32, control: &str, pressed: bool) {
+        if let Some(c) = GamepadControl::parse(control) {
+            self.engine.pad_button(gamepad, c, pressed, self.out);
+        }
+    }
+    fn gamepad_axis(&mut self, gamepad: u32, control: &str, value: f32) {
+        if let Some(c) = GamepadControl::parse(control) {
+            let low = if c.kind() == ControlKind::Trigger {
+                0.0
+            } else {
+                -1.0
+            };
+            self.engine
+                .pad_axis(gamepad, c, value.clamp(low, 1.0), self.out);
+        }
+    }
+    fn key(&mut self, key: Key, pressed: bool) {
+        let held = &mut self.engine.script_keys_down;
+        held.retain(|&k| k != key);
+        if pressed {
+            held.push(key);
+        }
+        self.out.key(key.scan_code, key.extended, pressed);
+    }
+    fn mouse_button(&mut self, button: MouseButton, pressed: bool) {
+        match button {
+            MouseButton::WheelUp => self.out.mouse_wheel(1),
+            MouseButton::WheelDown => self.out.mouse_wheel(-1),
+            b => self.engine.mouse_button(b, pressed, self.out),
+        }
+    }
+    fn mouse_move(&mut self, dx: i32, dy: i32) {
+        self.out.mouse_move(dx, dy);
+    }
+    fn mouse_wheel(&mut self, notches: i32) {
+        self.out.mouse_wheel(notches);
+    }
+    fn current_mode(&self) -> String {
+        self.engine.modes.current().to_string()
+    }
+    fn switch_mode(&mut self, mode: &str) -> bool {
+        if !self.engine.script_modes.contains(mode) {
+            return false;
+        }
+        self.engine.modes.switch_to(mode, false);
+        true
+    }
+    fn input(&self, input: &ScriptInput) -> Option<EventValue> {
+        let kind = match input.kind {
+            ScriptKind::Axis => InputKind::Axis,
+            ScriptKind::Button => InputKind::Button,
+            ScriptKind::Hat => InputKind::Hat,
+        };
+        let key = InputKey {
+            device: self.engine.device(&input.device),
+            kind,
+            id: input.id,
+        };
+        match kind {
+            InputKind::Axis => self.engine.axes.get(&key).map(|v| EventValue::Axis(*v)),
+            InputKind::Button => self
+                .engine
+                .buttons
+                .get(&key)
+                .map(|b| EventValue::Button(*b)),
+            InputKind::Hat => self.engine.hats.get(&key).map(|d| EventValue::Hat(*d)),
+        }
+    }
+    fn speak(&mut self, text: &str) {
+        self.out.speak(SpeechRequest {
+            text: text.to_string(),
+            voice: None,
+            rate: 0.0,
+            volume: 1.0,
+            pitch: 0.0,
+            queue: SpeechQueue::Back,
+        });
+    }
+    fn play_sound(&mut self, file: &str, volume: u8) {
+        self.out.play_sound(file, volume);
+    }
+    fn run_action(&mut self, name: &str) -> bool {
+        let node = self
+            .engine
+            .action_labels
+            .get(name.trim())
+            .and_then(|id| self.engine.action_nodes.get(id))
+            .copied();
+        match node {
+            Some(node) => {
+                self.engine.run_action(node, self.now, self.out);
+                true
+            }
+            None => false,
+        }
     }
 }
 

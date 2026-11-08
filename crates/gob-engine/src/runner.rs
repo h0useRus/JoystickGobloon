@@ -28,6 +28,8 @@ pub struct RunnerStatus {
     pub latency: Option<Latency>,
     /// Voice commands; `None` when the profile has no voice-input action.
     pub voice: Option<VoiceStatus>,
+    /// Script errors the GUI has not taken yet ([`Runner::take_script_errors`]).
+    pub script_errors: Vec<crate::ScriptError>,
 }
 
 /// Voice commands of the running profile.
@@ -112,7 +114,26 @@ pub struct Runner {
 struct Reload {
     engine: Engine,
     initial: Vec<DeviceState>,
+    /// Another profile takes over (its start events run), not an edit of the running one.
+    fresh: bool,
     reply: Sender<Result<(), String>>,
+}
+
+/// How long the actions of the stop and mode leave events may take before the profile's
+/// outputs are let go.
+const STOP_BUDGET: Duration = Duration::from_millis(500);
+
+/// Engine threads of dropped runners that may still be running their stop actions; they hold
+/// the virtual devices until they end.
+static STOPPING: Mutex<Vec<JoinHandle<()>>> = Mutex::new(Vec::new());
+
+/// Waits for the engine threads of stopped runners: their stop actions are done and the virtual
+/// devices are let go. [`Runner::start`] does it first; call it before the program exits.
+pub fn wait_stopped() {
+    let threads = std::mem::take(&mut *STOPPING.lock().unwrap_or_else(|e| e.into_inner()));
+    for t in threads {
+        let _ = t.join();
+    }
 }
 
 /// How long [`Runner::reload`] waits for the engine thread.
@@ -432,6 +453,8 @@ impl Runner {
         voice: Option<crate::VoiceConfig>,
         on_change: impl Fn() + Send + 'static,
     ) -> Result<Self, String> {
+        // A profile that just stopped may still hold the devices for its stop actions.
+        wait_stopped();
         let mut engine = Engine::new(profile, aliases);
         let virtual_devices = gob_virtual::load().map_err(|e| e.to_string())?;
         let (voice_events, voice_inbox) = std::sync::mpsc::channel();
@@ -452,6 +475,7 @@ impl Runner {
         }
         crate::platform::Injector::prepare(crate::platform::injector());
         engine.activate(&mut out);
+        engine.profile_started(Instant::now(), &mut out);
         out.flush();
 
         let status = Arc::new(Mutex::new(RunnerStatus {
@@ -460,6 +484,7 @@ impl Runner {
             load_profile: None,
             latency: None,
             voice: initial_voice_status(&engine, &out),
+            script_errors: engine.take_script_errors(),
         }));
         engine.take_logical_changed();
         let logical = Arc::new(Mutex::new(engine.logical_values()));
@@ -498,11 +523,13 @@ impl Runner {
         profile: &Profile,
         aliases: &HashMap<String, String>,
         initial: &[DeviceState],
+        fresh: bool,
     ) -> Result<(), String> {
         let (reply, answer) = std::sync::mpsc::channel();
         let request = Reload {
             engine: Engine::new(profile, aliases),
             initial: initial.to_vec(),
+            fresh,
             reply,
         };
         self.reload
@@ -511,6 +538,18 @@ impl Runner {
         answer
             .recv_timeout(RELOAD_TIMEOUT)
             .map_err(|_| "the engine did not answer".to_string())?
+    }
+
+    /// Script errors since the last call: a script that did not load, or the first error of a
+    /// running one.
+    pub fn take_script_errors(&self) -> Vec<crate::ScriptError> {
+        std::mem::take(
+            &mut self
+                .status
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .script_errors,
+        )
     }
 
     /// Profile file requested by a load-profile action, once.
@@ -539,10 +578,12 @@ impl Runner {
 }
 
 impl Drop for Runner {
+    /// Stops the engine thread without waiting for it: it runs the profile's stop actions and
+    /// lets go of the devices on its own ([`wait_stopped`]).
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Some(t) = self.thread.take() {
-            let _ = t.join();
+            STOPPING.lock().unwrap_or_else(|e| e.into_inner()).push(t);
         }
     }
 }
@@ -580,6 +621,27 @@ fn acquire(
     Ok(())
 }
 
+/// Runs the profile's mode leave and stop events and gives their actions (a key press, a
+/// macro, speech) up to [`STOP_BUDGET`] to finish.
+fn finish_stop(engine: &mut Engine, out: &mut SystemOutput) {
+    let start = Instant::now();
+    if !engine.profile_stopping(start, out) {
+        return;
+    }
+    let end = start + STOP_BUDGET;
+    loop {
+        out.flush();
+        let now = Instant::now();
+        if !engine.stop_pending() || now >= end {
+            break;
+        }
+        let next = engine.next_deadline().unwrap_or(end).min(end);
+        let wait = next.saturating_duration_since(now);
+        std::thread::sleep(wait.clamp(Duration::from_millis(1), Duration::from_millis(10)));
+        engine.tick(Instant::now(), out);
+    }
+}
+
 /// Gives `engine` the inputs as they are: buttons and hats as its starting state, axes as
 /// events (they write their outputs at once).
 fn feed_initial(engine: &mut Engine, out: &mut SystemOutput, initial: &[DeviceState]) {
@@ -615,7 +677,7 @@ fn set_up_voice(engine: &Engine, out: &mut SystemOutput) {
                     out.voice_events.clone(),
                 ))
             }
-            (None, None) => log::info!("voice-input actions ignored: no speech model"),
+            (None, None) => log::warn!("voice-input actions ignored: no speech model"),
         }
     }
     // Microphones kept open follow the profile's voice-input actions (none: all close).
@@ -717,11 +779,17 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
     while !stop.load(Ordering::Relaxed) {
         for mut r in reloads.try_iter() {
             let result = acquire(&r.engine, &mut out, virtual_devices.as_ref());
+            // Answered at once: the old profile's stop actions below must not hold up the
+            // caller (the GUI).
+            let _ = r.reply.send(result.clone());
             if result.is_ok() {
                 // A held push-to-talk input would keep the microphone open otherwise, and a
                 // command's button would stay down. The utterance it ends is heard with the old
                 // phrases: they change only after it.
                 engine.stop_voice(Instant::now(), &mut out);
+                if r.fresh {
+                    finish_stop(&mut engine, &mut out);
+                }
                 // Keys, buttons and latched outputs of the old profile go up: the devices stay.
                 // Before the new profile writes, so what it presses stays down.
                 engine.release_all(&mut out);
@@ -730,11 +798,13 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
                 set_up_voice(&engine, &mut out);
                 voice_status = initial_voice_status(&engine, &out).map(|v| service.apply(v));
                 engine.activate(&mut out);
+                if r.fresh {
+                    engine.profile_started(Instant::now(), &mut out);
+                }
                 engine.take_logical_changed();
                 *logical.lock().unwrap_or_else(|e| e.into_inner()) = engine.logical_values();
                 on_change();
             }
-            let _ = r.reply.send(result);
         }
         // Reloads wrote to the devices above.
         out.flush();
@@ -782,6 +852,11 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         let mut s = status.lock().unwrap_or_else(|e| e.into_inner());
         let load = out.load_profile.take();
         let latency = window.finish(now);
+        let script_errors = engine.take_script_errors();
+        if !script_errors.is_empty() {
+            s.script_errors.extend(script_errors);
+            on_change();
+        }
         if s.mode != engine.current_mode()
             || s.paused != engine.is_paused()
             || load.is_some()
@@ -801,6 +876,7 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             on_change();
         }
     }
+    finish_stop(&mut engine, &mut out);
     // Held keys and mouse buttons go up; dropping `out` resets and releases the vJoy devices.
     engine.release_all(&mut out);
     out.flush();

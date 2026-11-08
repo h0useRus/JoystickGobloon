@@ -29,4 +29,5 @@ fn main() {
         }
         Err(e) => eprintln!("start failed: {e}"),
     }
+    gob_engine::wait_stopped();
 }

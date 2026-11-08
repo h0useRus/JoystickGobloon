@@ -52,6 +52,62 @@ impl CurveType {
     }
 }
 
+/// Ready-made response curves (Joystick Gobloon only): symmetric monotone cubics through
+/// `sign(x) * |x|^power` at nine points, so they never overshoot and stay editable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CurvePreset {
+    Linear,
+    /// Less sensitive around the center, full travel at the ends (x squared).
+    SoftCenter,
+    /// Even calmer around the center (x cubed).
+    ExtraSoftCenter,
+    /// Quick around the center, finer towards the ends.
+    QuickCenter,
+}
+
+impl CurvePreset {
+    pub const ALL: [CurvePreset; 4] = [
+        Self::Linear,
+        Self::SoftCenter,
+        Self::ExtraSoftCenter,
+        Self::QuickCenter,
+    ];
+
+    /// Short name, for i18n keys (`curve-preset-<name>`).
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Linear => "linear",
+            Self::SoftCenter => "soft-center",
+            Self::ExtraSoftCenter => "extra-soft-center",
+            Self::QuickCenter => "quick-center",
+        }
+    }
+
+    /// The curve type and points it sets.
+    pub fn curve(self) -> (CurveType, Vec<(f64, f64)>) {
+        let power = match self {
+            Self::Linear => {
+                return (
+                    CurveType::PiecewiseLinear,
+                    vec![(-1.0, -1.0), (0.0, 0.0), (1.0, 1.0)],
+                );
+            }
+            Self::SoftCenter => 2.0,
+            Self::ExtraSoftCenter => 3.0,
+            Self::QuickCenter => 0.6,
+        };
+        let points = (-4..=4)
+            .map(|i| {
+                let x = f64::from(i) / 4.0;
+                let y = x.signum() * x.abs().powf(power);
+                // Four decimals, like the editor shows them.
+                ((x * 1e4).round() / 1e4, (y * 1e4).round() / 1e4)
+            })
+            .collect();
+        (CurveType::MonotoneCubic, points)
+    }
+}
+
 /// A curve ready to evaluate (spline coefficients / Bezier lookup precomputed).
 #[derive(Debug, Clone)]
 pub enum Curve {
@@ -580,6 +636,25 @@ impl Editable {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn presets_are_symmetric_monotonic_and_end_at_the_corners() {
+        for preset in CurvePreset::ALL {
+            let (kind, points) = preset.curve();
+            let curve = Curve::new(kind, &points);
+            assert!(curve.monotonic(), "{preset:?}");
+            assert_eq!(Editable::symmetric(kind, &points), points, "{preset:?}");
+            assert!((curve.eval(1.0) - 1.0).abs() < 1e-9 && (curve.eval(-1.0) + 1.0).abs() < 1e-9);
+            assert!(curve.eval(0.0).abs() < 1e-9);
+        }
+        let soft = Curve::new(
+            CurvePreset::SoftCenter.curve().0,
+            &CurvePreset::SoftCenter.curve().1,
+        );
+        assert!(soft.eval(0.5) < 0.3, "calm around the center");
+        let quick = CurvePreset::QuickCenter.curve();
+        assert!(Curve::new(quick.0, &quick.1).eval(0.5) > 0.6);
+    }
 
     /// Symmetric knots at (+-0.75, +-0.25) or (+-0.25, +-0.75): the natural cubic spline turns
     /// back or runs past 1 (clamped flat); the monotone cubic stays between its knots.

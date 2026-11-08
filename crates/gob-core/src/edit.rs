@@ -74,6 +74,7 @@ pub enum NewAction {
         input_type: InputType,
     },
     SmartToggle,
+    Delay,
     SplitAxis,
     PauseResume,
     RunCommand,
@@ -91,6 +92,7 @@ pub fn child_groups(kind: &str) -> &'static [&'static str] {
         "tempo" => &["short-actions", "long-actions"],
         "double-tap" => &["single-actions", "double-actions"],
         "smart-toggle" => &["actions"],
+        "delay" => &["actions"],
         "split-axis" => &["lower-actions", "upper-actions"],
         "axis-delta" => &["positive-actions", "negative-actions"],
         "condition" => &["true-actions", "false-actions"],
@@ -607,6 +609,15 @@ impl Action {
                 };
                 Self::build("map-to-mouse", items, "both")
             }
+            NewAction::Delay => Self::build(
+                "delay",
+                vec![
+                    group("actions", Vec::new()),
+                    prop("float", "delay", "0.5"),
+                    prop("bool", "while-held", "True"),
+                ],
+                "disallowed",
+            ),
             NewAction::SmartToggle => Self::build(
                 "smart-toggle",
                 vec![group("actions", Vec::new()), prop("float", "delay", "0.5")],
@@ -750,6 +761,7 @@ impl Profile {
             layer: layer.clone(),
             additive: false,
             keep_value: false,
+            send_state: false,
             extra: Vec::new(),
         };
         match found {
@@ -816,7 +828,8 @@ impl Profile {
         })?;
         // A new sequence joins the layer the way its first one runs.
         let first = b.configs.iter().find(|c| c.layer == *layer)?;
-        let (additive, keep_value) = (first.additive, first.keep_value);
+        let (additive, keep_value, send_state) =
+            (first.additive, first.keep_value, first.send_state);
         let root = Action::new_root();
         let id = root.id.clone();
         b.configs.push(ActionConfig {
@@ -829,6 +842,7 @@ impl Profile {
             layer: layer.clone(),
             additive,
             keep_value,
+            send_state,
             extra: Vec::new(),
         });
         self.library.push(root);
@@ -1053,32 +1067,67 @@ impl Profile {
     /// Deep copy of `id` and everything below it under new ids (Gremlin's "duplicate"
     /// in the reference action). Returns the copy's id.
     pub fn duplicate(&mut self, id: &str) -> Option<String> {
+        let actions = self.subtree(&[id.to_string()]);
+        self.paste(&actions, &[id.to_string()]).pop()
+    }
+
+    /// The actions `tops` and everything they use (below them, and what their run-action steps
+    /// run), cloned, each once, `tops` first: what [`Profile::paste`] copies into this or
+    /// another profile. Unknown ids are left out.
+    pub fn subtree(&self, tops: &[String]) -> Vec<Action> {
         let index = self.action_index();
-        let mut order: Vec<String> = Vec::new();
-        let mut stack = vec![id.to_string()];
+        let mut order: Vec<&str> = Vec::new();
+        let mut stack: Vec<&str> = tops.iter().rev().map(String::as_str).collect();
         while let Some(cur) = stack.pop() {
             if order.contains(&cur) {
                 continue;
             }
-            let a = index.get(cur.as_str())?;
-            stack.extend(a.child_ids().into_iter().map(String::from));
-            // Run-action targets are not copied: the copy runs the same action unless the
-            // target is inside the copied part (remapped below).
+            let Some(a) = index.get(cur) else {
+                continue;
+            };
+            stack.extend(a.reference_ids().into_iter().rev());
             order.push(cur);
         }
-        let ids: HashMap<String, String> =
-            order.iter().map(|old| (old.clone(), new_uuid())).collect();
-        let copies: Vec<Action> = order
+        order
+            .into_iter()
+            .filter_map(|id| index.get(id).map(|a| (*a).clone()))
+            .collect()
+    }
+
+    /// Adds copies of `actions` (from [`Profile::subtree`], of this profile or another one)
+    /// under new ids, references among them following; returns the new ids of `tops` (those
+    /// not among `actions` are left out). The copies are not in any list yet. An action only
+    /// run by a run-action step is copied only when this profile lacks it: otherwise the copy
+    /// runs the very same action, like the original.
+    pub fn paste(&mut self, actions: &[Action], tops: &[String]) -> Vec<String> {
+        let given: HashMap<&str, &Action> = actions.iter().map(|a| (a.id.as_str(), a)).collect();
+        // What `tops` contain (children, not run-action targets) is always copied.
+        let mut inside: HashSet<&str> = HashSet::new();
+        let mut stack: Vec<&str> = tops.iter().map(String::as_str).collect();
+        while let Some(cur) = stack.pop() {
+            if let Some(a) = given.get(cur)
+                && inside.insert(cur)
+            {
+                stack.extend(a.child_ids());
+            }
+        }
+        let copied: Vec<&Action> = actions
             .iter()
-            .filter_map(|old| {
-                let mut a = (*index.get(old.as_str())?).clone();
-                a.id = ids[old].clone();
-                remap_refs(&mut a.items, &ids);
-                Some(a)
+            .filter(|a| inside.contains(a.id.as_str()) || self.action(&a.id).is_none())
+            .collect();
+        let ids: HashMap<String, String> =
+            copied.iter().map(|a| (a.id.clone(), new_uuid())).collect();
+        let copies: Vec<Action> = copied
+            .into_iter()
+            .map(|a| {
+                let mut copy = a.clone();
+                copy.id = ids[&a.id].clone();
+                remap_refs(&mut copy.items, &ids);
+                copy
             })
             .collect();
         self.library.extend(copies);
-        ids.get(id).cloned()
+        tops.iter().filter_map(|t| ids.get(t).cloned()).collect()
     }
 
     /// Removes the `index`-th child of `parent`'s `group` and actions left unreferenced.
@@ -1356,6 +1405,7 @@ mod tests {
         for (device, input_type) in [
             (crate::KEYBOARD_GUID, "key"),
             (crate::VOICE_GUID, crate::VOICE_INPUT_TYPE),
+            (crate::EVENTS_GUID, crate::EVENT_INPUT_TYPE),
             ("{DEV}", "button"),
         ] {
             p.bind_layer(device, input_type, "1", "Default", &base);
@@ -1365,6 +1415,7 @@ mod tests {
         assert_eq!(
             behaviors,
             [
+                InputType::Button,
                 InputType::Button,
                 InputType::Button,
                 InputType::Button,

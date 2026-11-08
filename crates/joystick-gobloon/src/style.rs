@@ -135,47 +135,6 @@ pub fn output_button(
     r
 }
 
-/// Icon-only push button like [`icon_button`] whose glyph carries a small `badge` glyph at its
-/// lower right, e.g. a microphone with an arrow: "go to the voice command", not "record".
-pub fn icon_badge_button(
-    ui: &mut egui::Ui,
-    enabled: bool,
-    glyph: &str,
-    badge: &str,
-    tooltip: &str,
-) -> egui::Response {
-    let h = ui.spacing().interact_size.y;
-    let sense = if enabled {
-        egui::Sense::click()
-    } else {
-        egui::Sense::hover()
-    };
-    let (rect, response) = ui.allocate_exact_size(Vec2::splat(h), sense);
-    if ui.is_rect_visible(rect) {
-        let color = if enabled {
-            ui.style().interact(&response).text_color()
-        } else {
-            ui.visuals().weak_text_color()
-        };
-        let painter = ui.painter();
-        painter.text(
-            rect.center() - Vec2::new(h * 0.1, h * 0.04),
-            egui::Align2::CENTER_CENTER,
-            glyph,
-            egui::FontId::proportional(ICON_SIZE),
-            color,
-        );
-        painter.text(
-            rect.center() + Vec2::new(h * 0.27, h * 0.2),
-            egui::Align2::CENTER_CENTER,
-            badge,
-            egui::FontId::proportional(ICON_SIZE * 0.6),
-            color,
-        );
-    }
-    response.on_hover_text(tooltip)
-}
-
 /// Device eye: closed and red when hidden by HidHide, open and green when visible; gray
 /// while device hiding is off as a whole (`active` false).
 pub fn eye(ui: &egui::Ui, hidden: bool, active: bool) -> (&'static str, Color32) {

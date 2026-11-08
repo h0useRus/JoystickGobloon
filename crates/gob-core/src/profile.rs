@@ -139,6 +139,9 @@ pub struct ActionConfig {
     /// Axis outputs keep their last value when this layer stops running instead of going back
     /// to rest.
     pub keep_value: bool,
+    /// A button held when the profile starts runs its press then, so a latching switch's
+    /// position reaches the game (`send-state="true"`).
+    pub send_state: bool,
     /// Unknown children, kept verbatim.
     pub extra: Vec<Element>,
 }
@@ -375,6 +378,7 @@ pub enum Section {
     Devices,
     VirtualDevices,
     VoiceCommands,
+    KeyCombos,
     /// Index into [`Profile::extra`].
     Extra(usize),
 }
@@ -397,6 +401,8 @@ pub struct Profile {
     pub virtual_devices: VirtualDevices,
     /// Joystick Gobloon only (see [`crate::voice`]).
     pub voice_commands: Vec<crate::voice::VoiceCommand>,
+    /// Joystick Gobloon only (see [`crate::combos`]).
+    pub key_combos: Vec<crate::combos::KeyCombo>,
     pub extra: Vec<Element>,
     pub order: Vec<Section>,
 }
@@ -418,6 +424,7 @@ impl Default for Profile {
             devices: Vec::new(),
             virtual_devices: VirtualDevices::default(),
             voice_commands: Vec::new(),
+            key_combos: Vec::new(),
             extra: Vec::new(),
             order: vec![
                 Section::Inputs,
@@ -452,7 +459,10 @@ impl Profile {
             .rposition(|s| {
                 matches!(
                     s,
-                    Section::Devices | Section::VirtualDevices | Section::VoiceCommands
+                    Section::Devices
+                        | Section::VirtualDevices
+                        | Section::VoiceCommands
+                        | Section::KeyCombos
                 )
             })
             .map_or(self.order.len(), |i| i + 1);
@@ -460,25 +470,39 @@ impl Profile {
     }
 
     /// Whether the profile uses something only Joystick Gobloon has (modifiers and layers,
-    /// light-led, map-to-gamepad, button-axis and voice-input actions, send modes, gamepad and run-action macro steps, monotone cubic
+    /// light-led, map-to-gamepad, button-axis and voice-input actions, Lua scripts, send modes, gamepad and run-action macro steps, monotone cubic
     /// curves, voice commands): it is then written in Joystick Gobloon's own format, which
     /// Joystick Gremlin cannot open. Stored virtual joysticks don't count: Joystick Gremlin skips
     /// the `<virtual-devices>` section.
     pub fn needs_own_format(&self) -> bool {
         !self.modifiers.is_empty()
+            || self.has_lua_scripts()
             || !self.virtual_devices.gamepads.is_empty()
             || !self.voice_commands.is_empty()
+            || !self.key_combos.is_empty()
             || self
                 .inputs
                 .iter()
                 .flat_map(|b| &b.configs)
-                .any(|c| c.additive || c.keep_value || !c.layer.is_base())
+                .any(|c| c.additive || c.keep_value || c.send_state || !c.layer.is_base())
+            || self
+                .inputs
+                .iter()
+                .any(|b| crate::is_event_binding(&b.device_id, &b.input_type))
             || self.library.iter().any(|a| {
                 a.kind == "light-led"
                     || a.kind == "map-to-gamepad"
                     || a.kind == crate::BUTTON_AXIS
                     || a.button_send().mode != crate::SendMode::Hold
                     || a.kind == "voice-input"
+                    || a.kind == "delay"
+                    || (a.kind == "merge-axis"
+                        && a.str("operation").and_then(crate::MergeOp::parse).is_some_and(|o| {
+                            matches!(
+                                o,
+                                crate::MergeOp::Multiply | crate::MergeOp::Scale | crate::MergeOp::Trim
+                            )
+                        }))
                     || a.items.iter().any(|i| {
                         matches!(i, Item::Group { tag, attrs, .. } if tag == "macro-action"
                             && attrs.iter().any(|(k, v)| k == "type" && (v == "gamepad" || v == "action")))
@@ -744,6 +768,7 @@ impl Profile {
         for a in &mut self.library {
             count += replace_in_items(&mut a.items, old, new);
         }
+        count += self.substitute_script_device(old, new);
         count += self.logical_device.replace_text(old, new);
         for e in &mut self.extra {
             count += e.replace_text(old, new);

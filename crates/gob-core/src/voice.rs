@@ -112,22 +112,23 @@ impl Profile {
     }
 
     /// Makes a voice command saying `phrase` run the library action `action` itself (linked,
-    /// not copied) in `mode` and `layer`, like the card it comes from: the command that already
-    /// says it and runs nothing, else a new one. Returns its id, or `None` when another command
-    /// already says `phrase` and runs other actions.
-    pub fn add_voice_command_for(
-        &mut self,
-        action: &str,
-        phrase: &str,
-        mode: &str,
-        layer: &crate::Layer,
-    ) -> Option<u32> {
+    /// not copied) in `mode`, like the card it comes from, on the base layer: a modifier held
+    /// while speaking makes little sense. The command that already says it and runs nothing,
+    /// else a new one. Returns its id, or `None` when another command already says `phrase`
+    /// and runs other actions.
+    pub fn add_voice_command_for(&mut self, action: &str, phrase: &str, mode: &str) -> Option<u32> {
         let id = self.voice_command_for_phrase(phrase).ok()?;
         if self.voice_command(id).is_none() {
             self.add_voice_command();
             self.set_voice_phrases(id, &[phrase.to_string()]);
         }
-        let root = self.bind_layer(VOICE_GUID, VOICE_INPUT_TYPE, &id.to_string(), mode, layer);
+        let root = self.bind_layer(
+            VOICE_GUID,
+            VOICE_INPUT_TYPE,
+            &id.to_string(),
+            mode,
+            &crate::Layer::base(),
+        );
         self.add_ref(&root, "actions", action);
         Some(id)
     }
