@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 use gob_core::{
     Action, ActionKind, ActivationMode, AxisDirection, AxisMotion, AxisOutput, ButtonAxis,
     ButtonSend, Comparator, ConditionSource, InputType, Item, Key, Layer, MacroRepeat, MacroStep,
-    MergeOp, MouseAction, MouseButton, Profile, Selection, SendMode, VOICE_GUID, VOICE_INPUT_TYPE,
-    VirtualButton,
+    MergeOp, MouseAction, MouseButton, Profile, ProfileEvent, Selection, SendMode, VOICE_GUID,
+    VOICE_INPUT_TYPE, VirtualButton,
 };
 
 use crate::media::{SpeechQueue, SpeechRequest};
@@ -35,6 +35,17 @@ const MACRO_DELAY: f64 = 0.05;
 fn voice_key(id: u32) -> InputKey {
     InputKey::new(VOICE_GUID, InputKind::Button, id)
 }
+
+/// The input of a profile event.
+fn event_key(event: ProfileEvent) -> InputKey {
+    InputKey::new(gob_core::EVENTS_GUID, InputKind::Button, event.id())
+}
+
+/// How long a profile event holds its button down, like a short press.
+const EVENT_HOLD: Duration = Duration::from_millis(100);
+/// Mode changes made by mode enter and leave actions themselves that still run their own
+/// events; a loop of modes switching each other stops there.
+const MAX_MODE_EVENTS: u8 = 8;
 /// Lower bound between macro repetitions so a zero delay cannot spin `tick`.
 const MACRO_MIN_REPEAT: Duration = Duration::from_millis(1);
 
@@ -367,6 +378,8 @@ enum TimerKind {
     },
     /// A recognized voice command's button goes up.
     VoiceRelease(u32),
+    /// A profile event's button (by its id) goes up.
+    EventRelease(u32),
     /// The action a run-action macro step pressed is released.
     RunRelease {
         node: NodeId,
@@ -532,6 +545,7 @@ impl Config {
             layer,
             additive,
             keep_value: false,
+            send_state: false,
         }
     }
 }
@@ -549,6 +563,8 @@ struct Config {
     additive: bool,
     /// Axis outputs keep their value when the layer stops.
     keep_value: bool,
+    /// A button held when the profile starts runs its press then.
+    send_state: bool,
 }
 
 pub struct Engine {
@@ -605,6 +621,11 @@ pub struct Engine {
     voice_holds: HashMap<u32, Duration>,
     /// Release timer of each voice command whose button is down.
     voice_releases: HashMap<u32, u64>,
+    /// Release timer of each profile event (by id) whose button is down, with the mode it runs
+    /// in.
+    event_releases: HashMap<u32, (u64, Arc<str>)>,
+    /// Nesting of mode changes made by mode enter and leave actions.
+    mode_event_depth: u8,
     /// Every phrase of the profile's voice commands with the command's id.
     voice_phrases: Vec<(u32, String)>,
     /// Profile's `macro-default-delay` in seconds.
@@ -722,6 +743,8 @@ impl Engine {
                 .map(|c| (c.id, Duration::from_secs_f64(c.hold.clamp(0.01, 10.0))))
                 .collect(),
             voice_releases: HashMap::new(),
+            event_releases: HashMap::new(),
+            mode_event_depth: 0,
             voice_phrases: profile
                 .voice_phrases()
                 .into_iter()
@@ -795,8 +818,14 @@ impl Engine {
                 InputType::Axis => InputKind::Axis,
                 InputType::Button => InputKind::Button,
                 InputType::Hat => InputKind::Hat,
-                // Keyboard keys (Gremlin's "key" inputs) and voice commands behave like buttons.
-                InputType::Other if matches!(b.input_type.trim(), "key" | VOICE_INPUT_TYPE) => {
+                // Keyboard keys (Gremlin's "key" inputs), voice commands and profile events
+                // behave like buttons.
+                InputType::Other
+                    if matches!(
+                        b.input_type.trim(),
+                        "key" | VOICE_INPUT_TYPE | gob_core::EVENT_INPUT_TYPE
+                    ) =>
+                {
                     InputKind::Button
                 }
                 InputType::Other => continue,
@@ -846,6 +875,7 @@ impl Engine {
                     layer: cfg.layer.clone(),
                     additive: cfg.additive,
                     keep_value: cfg.keep_value,
+                    send_state: cfg.send_state,
                 });
                 // A button-axis action's decrease input runs it too, in the same mode and layer,
                 // through copies of the containers it sits in (their own state).
@@ -1897,6 +1927,13 @@ impl Engine {
                     self.voice_releases.remove(&id);
                     self.process(&voice_key(id), Value::Button(false), now, out);
                 }
+                TimerKind::EventRelease(id) => {
+                    if let (Some((_, mode)), Some(event)) =
+                        (self.event_releases.remove(&id), ProfileEvent::from_id(id))
+                    {
+                        self.event_up(event, mode, now, out);
+                    }
+                }
                 TimerKind::RunRelease { node, src } => {
                     self.run_releases.remove(&node);
                     self.run_release(node, &src, now, out);
@@ -1937,6 +1974,122 @@ impl Engine {
         if self.modes.current() == before {
             return;
         }
+        self.refresh_mode(now, out);
+        // The mode left, then the one entered; their actions may switch modes again.
+        if self.mode_event_depth < MAX_MODE_EVENTS {
+            self.mode_event_depth += 1;
+            let entered = self.modes.shared();
+            self.fire_event(ProfileEvent::Leave, Arc::from(before), now, out);
+            self.fire_event(ProfileEvent::Enter, entered.clone(), now, out);
+            self.after_mode_change(&entered, now, out);
+            self.mode_event_depth -= 1;
+        } else {
+            log::warn!("mode enter and leave actions keep switching modes: their events stop");
+        }
+    }
+
+    /// The profile has just started (not an edit applied to it): the start and mode enter
+    /// events run in the starting mode, and held buttons that send their state at start run
+    /// their press.
+    pub fn profile_started(&mut self, now: Instant, out: &mut dyn Output) {
+        let mode = self.modes.shared();
+        self.fire_event(ProfileEvent::Start, mode.clone(), now, out);
+        self.fire_event(ProfileEvent::Enter, mode.clone(), now, out);
+        self.send_start_states(&mode, now, out);
+        self.after_mode_change(&mode, now, out);
+    }
+
+    /// The profile is about to stop: the mode leave and stop events run in the current mode.
+    /// True when either has actions, which then need a moment ([`Engine::tick`]) to finish
+    /// before [`Engine::release_all`].
+    pub fn profile_stopping(&mut self, now: Instant, out: &mut dyn Output) -> bool {
+        let mode = self.modes.shared();
+        let leave = self.fire_event(ProfileEvent::Leave, mode.clone(), now, out);
+        let stop = self.fire_event(ProfileEvent::Stop, mode, now, out);
+        leave || stop
+    }
+
+    /// Something still runs on a timer (event releases, macros, pulses).
+    pub fn has_timers(&self) -> bool {
+        !self.timers.is_empty()
+    }
+
+    /// Presses a profile event's button in `mode` (it goes up after [`EVENT_HOLD`]); false
+    /// when the event has no actions there. A press still down goes up first.
+    fn fire_event(
+        &mut self,
+        event: ProfileEvent,
+        mode: Arc<str>,
+        now: Instant,
+        out: &mut dyn Output,
+    ) -> bool {
+        let key = event_key(event);
+        if !self
+            .lookup
+            .get(&key)
+            .is_some_and(|m| m.contains_key(&*mode))
+        {
+            return false;
+        }
+        if let Some((timer, was)) = self.event_releases.remove(&event.id()) {
+            self.timers.retain(|t| t.id != timer);
+            self.event_up(event, was, now, out);
+        }
+        log::debug!("profile event {event:?} in mode {mode}");
+        self.seed(&key, Value::Button(true));
+        self.dispatch(&key, Value::Button(true), mode.clone(), now, out);
+        let timer = self.add_timer(now + EVENT_HOLD, TimerKind::EventRelease(event.id()));
+        self.event_releases.insert(event.id(), (timer, mode));
+        true
+    }
+
+    fn event_up(
+        &mut self,
+        event: ProfileEvent,
+        mode: Arc<str>,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        let key = event_key(event);
+        self.seed(&key, Value::Button(false));
+        self.dispatch(&key, Value::Button(false), mode, now, out);
+    }
+
+    /// Runs the press of the buttons held now whose binding in `mode` sends its state at start
+    /// (only those action sequences, in the held layer).
+    fn send_start_states(&mut self, mode: &Arc<str>, now: Instant, out: &mut dyn Output) {
+        let mut held: Vec<(InputKey, usize)> = self
+            .buttons
+            .iter()
+            .filter(|&(k, &down)| down && !self.is_modifier(k))
+            .filter_map(|(k, _)| {
+                let set = *self.lookup.get(k)?.get(&**mode)?;
+                self.sets[set]
+                    .iter()
+                    .any(|c| c.send_state)
+                    .then(|| (k.clone(), set))
+            })
+            .collect();
+        held.sort_by(|a, b| (&a.0.device, a.0.id).cmp(&(&b.0.device, b.0.id)));
+        for (key, set) in held {
+            let src = Source {
+                key: key.clone(),
+                mode: mode.clone(),
+                no_auto_release: false,
+            };
+            let layer = self.event_layer(&key, Value::Button(true));
+            let selection = self.selection(set, &layer);
+            for ci in 0..self.sets[set].len() {
+                let c = &self.sets[set][ci];
+                if c.send_state && selection.runs(&c.layer) {
+                    self.run_config((set, ci), &src, Value::Button(true), now, out);
+                }
+            }
+        }
+    }
+
+    /// Lights, cursor motion and axis positions follow a mode change.
+    fn refresh_mode(&mut self, now: Instant, out: &mut dyn Output) {
         self.activate(out);
         // Stop cursor motion whose input is bound differently in the new mode.
         let (lookup, current) = (&self.lookup, self.modes.current().to_string());

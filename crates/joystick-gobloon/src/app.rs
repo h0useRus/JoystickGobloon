@@ -606,7 +606,7 @@ impl JoystickGobloonApp {
         self.activation.set_start_mode(app.mode.clone());
         self.sync_activation();
         self.vjoy_view.release();
-        match self.activation.reload() {
+        match self.activation.reload(true) {
             Ok(()) => {
                 self.switcher.applied(&app);
                 self.switched = Some((app.key(), program.clone(), file.clone()));
@@ -1666,7 +1666,7 @@ impl JoystickGobloonApp {
         self.sync_activation();
         // The vJoy tester must not hold a device the profile now needs.
         self.vjoy_view.release();
-        match self.activation.reload() {
+        match self.activation.reload(false) {
             Ok(()) => self.status = self.i18n.tr("status-active"),
             Err(e) => {
                 let text = self.i18n.trf("activate-error", &[("error", e.into())]);
@@ -1707,7 +1707,7 @@ impl JoystickGobloonApp {
         // Against the files as the running profile read them.
         if self.activation.script_files_changed() {
             log::info!("script file changed: reloading the profile");
-            if let Err(e) = self.activation.reload() {
+            if let Err(e) = self.activation.reload(false) {
                 let text = self.i18n.trf("activate-error", &[("error", e.into())]);
                 self.error(text);
             }

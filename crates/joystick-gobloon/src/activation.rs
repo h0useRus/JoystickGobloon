@@ -167,7 +167,8 @@ impl Activation {
 
     /// Hands the current profile to the running engine, which keeps its virtual devices (a game
     /// keeps them too); not running: nothing to do. On an error the old profile keeps running.
-    pub fn reload(&self) -> Result<(), String> {
+    /// `fresh`: another profile takes over (stop and start events run), not an edit.
+    pub fn reload(&self, fresh: bool) -> Result<(), String> {
         let mut inner = self.lock();
         let (Some(runner), Some((profile, name))) = (&inner.runner, &inner.profile) else {
             return Ok(());
@@ -177,7 +178,7 @@ impl Activation {
         let profile = &*profile;
         let devices = inner.input.devices();
         let aliases = crate::substitute_view::auto_aliases(profile, &devices);
-        runner.reload(profile, &aliases, &devices)?;
+        runner.reload(profile, &aliases, &devices, fresh)?;
         let name = name.clone();
         inner.file_errors = file_errors;
         inner.script_files = files;
