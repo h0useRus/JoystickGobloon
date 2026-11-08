@@ -375,6 +375,10 @@ mouse-time-to-max = Zeit bis zur Höchstgeschwindigkeit
 
 # Toggle, split, pause, run
 kind-smart-toggle = Intelligenter Umschalter
+kind-delay = Verzögerung
+edit-delay-wait = Wie lange nach dem Drücken
+edit-delay-held = Nur wenn noch gehalten
+edit-delay-held-tip = An: vor Ablauf losgelassen, läuft nichts (zum Auslösen halten). Aus: ein kurzer Druck führt die Aktionen nach Ablauf trotzdem aus, als kurzes Drücken.
 kind-split-axis = Achse teilen
 kind-pause-resume = Pausieren / fortsetzen
 kind-run-command = Befehl ausführen

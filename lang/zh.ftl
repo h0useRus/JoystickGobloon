@@ -363,6 +363,10 @@ mouse-time-to-max = 达到最高速度的时间
 
 # Toggle, split, pause, run
 kind-smart-toggle = 智能切换
+kind-delay = 延迟
+edit-delay-wait = 按下后多久
+edit-delay-held = 仅当仍按住时
+edit-delay-held-tip = 开启：时间到之前松开则不运行（按住以触发）。关闭：短按也会在时间到时以一次短按运行这些动作。
 kind-split-axis = 拆分轴
 kind-pause-resume = 暂停 / 继续
 kind-run-command = 运行命令

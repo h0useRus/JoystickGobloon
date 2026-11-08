@@ -375,6 +375,10 @@ mouse-time-to-max = Time to maximum speed
 
 # Toggle, split, pause, run
 kind-smart-toggle = Smart toggle
+kind-delay = Delay
+edit-delay-wait = How long after the press
+edit-delay-held = Only if still held
+edit-delay-held-tip = On: let go before the time is up and nothing runs (hold to activate). Off: a short press still runs the actions when the time is up, as a quick press.
 kind-split-axis = Split axis
 kind-pause-resume = Pause / resume
 kind-run-command = Run command

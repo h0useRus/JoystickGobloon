@@ -722,6 +722,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "description" => icon::NOTE,
         "macro" => icon::KEYBOARD,
         "smart-toggle" => icon::TOGGLE_RIGHT,
+        "delay" => icon::HOURGLASS_MEDIUM,
         "split-axis" => icon::ARROWS_SPLIT,
         "pause-resume" => icon::PLAY_PAUSE,
         "run-command" => icon::TERMINAL_WINDOW,
@@ -880,6 +881,7 @@ fn addable(
             "kind-smart-toggle",
             NewAction::SmartToggle,
         ));
+        list.push((icon::HOURGLASS_MEDIUM, "kind-delay", NewAction::Delay));
         list.push((
             icon::PLAY_PAUSE,
             "kind-pause-resume",
@@ -1620,6 +1622,40 @@ impl Editor<'_> {
                     );
                 }
                 ActionKind::MapToMouse(mouse) => self.mouse(ui, action, mouse),
+                ActionKind::Delay {
+                    seconds,
+                    while_held,
+                    ..
+                } => {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(icon::HOURGLASS_MEDIUM).size(style::ICON_SIZE))
+                            .on_hover_text(self.i18n.tr("edit-delay-wait"));
+                        let mut t = seconds as f32;
+                        let spin = style::Spin::new(&mut t)
+                            .range(0.0..=600.0)
+                            .step(0.05)
+                            .suffix(" s");
+                        if ui.add(spin).changed() {
+                            self.set(&action.id, "delay", "float", py_float(t));
+                        }
+                        let mut held = while_held;
+                        if ui
+                            .add(style::switch(&mut held, self.i18n.tr("edit-delay-held")))
+                            .on_hover_text(self.i18n.tr("edit-delay-held-tip"))
+                            .changed()
+                        {
+                            let v = if held { "True" } else { "False" };
+                            self.set(&action.id, "while-held", "bool", v);
+                        }
+                    });
+                    self.nested(
+                        ui,
+                        &action.id,
+                        &[("actions", icon::HOURGLASS_MEDIUM, "kind-delay")],
+                        InputType::Button,
+                        depth,
+                    );
+                }
                 ActionKind::SmartToggle { delay, .. } => {
                     self.seconds(ui, &action.id, "delay", "edit-delay", delay);
                     self.nested(

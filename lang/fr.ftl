@@ -375,6 +375,10 @@ mouse-time-to-max = Temps jusqu’à la vitesse maximale
 
 # Toggle, split, pause, run
 kind-smart-toggle = Bascule intelligente
+kind-delay = Délai
+edit-delay-wait = Combien de temps après l’appui
+edit-delay-held = Seulement si toujours maintenu
+edit-delay-held-tip = Activé : relâché avant la fin du délai, rien ne s’exécute (maintenir pour activer). Désactivé : un appui bref exécute quand même les actions à la fin du délai, comme un appui rapide.
 kind-split-axis = Diviser l’axe
 kind-pause-resume = Pause / reprise
 kind-run-command = Exécuter une commande

@@ -363,6 +363,10 @@ mouse-time-to-max = 최고 속도까지 걸리는 시간
 
 # Toggle, split, pause, run
 kind-smart-toggle = 스마트 토글
+kind-delay = 지연
+edit-delay-wait = 누른 뒤 얼마 후에
+edit-delay-held = 계속 누르고 있을 때만
+edit-delay-held-tip = 켜짐: 시간이 되기 전에 떼면 아무것도 실행되지 않습니다(길게 눌러 실행). 꺼짐: 짧게 눌러도 시간이 되면 동작이 짧은 누름으로 실행됩니다.
 kind-split-axis = 축 분할
 kind-pause-resume = 일시 중지 / 재개
 kind-run-command = 명령 실행

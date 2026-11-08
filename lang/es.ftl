@@ -375,6 +375,10 @@ mouse-time-to-max = Tiempo hasta la velocidad máxima
 
 # Toggle, split, pause, run
 kind-smart-toggle = Interruptor inteligente
+kind-delay = Retardo
+edit-delay-wait = Cuánto tiempo después de pulsar
+edit-delay-held = Solo si sigue pulsado
+edit-delay-held-tip = Activado: si se suelta antes de tiempo, no se ejecuta nada (mantener para activar). Desactivado: una pulsación corta ejecuta igualmente las acciones al cumplirse el tiempo, como una pulsación breve.
 kind-split-axis = Dividir eje
 kind-pause-resume = Pausar / reanudar
 kind-run-command = Ejecutar comando
