@@ -29,6 +29,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   = which inputs write each virtual output (used/conflict marks, wizard_view.rs + output_marks.rs in the GUI)
   events.rs = profile events (`EVENTS_GUID`, input type `event`: start/stop/mode enter/leave, Events tab), run by
   the engine's `profile_started`/`profile_stopping`/mode changes; `send-state` on a sequence = held button's press at start
+  combos.rs = key combinations (`<key-combos>`, keyboard input type `combo`, ids offset by COMBO_ID_BASE in the engine)
 - crates/gob-gremlin XML <-> Element <-> Profile: Gremlin R14+ import, written as `<profile version="14">` while
   Gremlin can read it, else `<profile app="Gobloon" version="1">`; lossless round-trip; `report()`; example `resave`
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
