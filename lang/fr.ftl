@@ -709,7 +709,11 @@ curve-handle = Poignée
 # Keyboard device
 keyboard-device = Clavier
 keyboard-tip = Touches du clavier comme entrées : liez des actions aux touches comme aux boutons d’un joystick
-keyboard-add = Lier une touche
+keyboard-add = Lier une touche ou une combinaison (touches appuyées ensemble)
+combo-n = Combinaison { $n }
+combo-tip = Combinaison de touches : active tant que toutes ses touches sont enfoncées ; les actions de chaque touche s’exécutent aussi. Enregistrez pour changer ses touches.
+combo-too-few = Une combinaison demande au moins deux touches
+combo-remove = Supprimer cette combinaison et ses actions
 keyboard-empty = Aucune touche liée pour l’instant : enregistrez-en une avec le bouton ci-dessus.
 voice-device = Voix
 voice-tip = Commandes vocales : dites une phrase en maintenant une entrée « appuyer pour parler » ; chaque commande agit comme un bouton

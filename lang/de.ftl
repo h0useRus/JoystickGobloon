@@ -709,7 +709,11 @@ curve-handle = Griff
 # Keyboard device
 keyboard-device = Tastatur
 keyboard-tip = Tastaturtasten als Eingaben: Aktionen an Tasten binden wie an Joystick-Tasten
-keyboard-add = Taste belegen
+keyboard-add = Taste oder Kombination belegen (zusammen gedrückte Tasten)
+combo-n = Kombination { $n }
+combo-tip = Tastenkombination: läuft, solange alle ihre Tasten gedrückt sind; die Aktionen der einzelnen Tasten laufen auch. Aufnehmen, um die Tasten zu ändern.
+combo-too-few = Eine Kombination braucht mindestens zwei Tasten
+combo-remove = Diese Kombination und ihre Aktionen entfernen
 keyboard-empty = Noch keine Tasten belegt: nehmen Sie mit der Schaltfläche oben eine auf.
 voice-device = Sprache
 voice-tip = Sprachbefehle: Sag einen Satz, während eine Push-to-Talk-Eingabe gehalten wird; jeder Befehl wirkt wie eine Taste

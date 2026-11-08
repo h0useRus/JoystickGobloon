@@ -709,7 +709,11 @@ curve-handle = Handle
 # Keyboard device
 keyboard-device = Keyboard
 keyboard-tip = Keyboard keys as inputs: bind actions to keys like to joystick buttons
-keyboard-add = Bind a key
+keyboard-add = Bind a key or a combination (keys pressed together)
+combo-n = Combination { $n }
+combo-tip = Key combination: runs while all of its keys are held; the keys' own actions run too. Record to change its keys.
+combo-too-few = A combination needs at least two keys
+combo-remove = Remove this combination and its actions
 keyboard-empty = No keys bound yet: record one with the button above.
 voice-device = Voice
 voice-tip = Voice commands: say a phrase while a push-to-talk input is held; each command acts like a button

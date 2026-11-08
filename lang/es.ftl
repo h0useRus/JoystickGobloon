@@ -709,7 +709,11 @@ curve-handle = Tirador
 # Keyboard device
 keyboard-device = Teclado
 keyboard-tip = Teclas como entradas: vincule acciones a teclas como a botones de joystick
-keyboard-add = Vincular una tecla
+keyboard-add = Vincular una tecla o una combinación (teclas pulsadas a la vez)
+combo-n = Combinación { $n }
+combo-tip = Combinación de teclas: se ejecuta mientras todas sus teclas están pulsadas; las acciones de cada tecla también se ejecutan. Graba para cambiar sus teclas.
+combo-too-few = Una combinación necesita al menos dos teclas
+combo-remove = Quitar esta combinación y sus acciones
 keyboard-empty = Aún no hay teclas vinculadas: grabe una con el botón de arriba.
 voice-device = Voz
 voice-tip = Comandos de voz: di una frase mientras mantienes una entrada de pulsar para hablar; cada comando actúa como un botón

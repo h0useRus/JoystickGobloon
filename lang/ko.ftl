@@ -697,7 +697,11 @@ curve-handle = 핸들
 # Keyboard device
 keyboard-device = 키보드
 keyboard-tip = 키보드 키를 입력으로: 조이스틱 버튼처럼 키에 동작을 바인딩
-keyboard-add = 키 바인딩
+keyboard-add = 키 또는 조합 바인딩 (함께 누른 키)
+combo-n = 조합 { $n }
+combo-tip = 키 조합: 모든 키를 누르고 있는 동안 실행되며, 각 키의 동작도 함께 실행됩니다. 녹화하여 키를 바꿉니다.
+combo-too-few = 조합에는 키가 두 개 이상 필요합니다
+combo-remove = 이 조합과 동작 제거
 keyboard-empty = 아직 바인딩된 키가 없습니다: 위 버튼으로 녹화하세요.
 voice-device = 음성
 voice-tip = 음성 명령: 눌러서 말하기 입력을 누르고 있는 동안 문구를 말하세요. 각 명령은 버튼처럼 동작합니다

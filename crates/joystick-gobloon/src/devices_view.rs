@@ -28,6 +28,8 @@ enum Kind {
     Hat,
     /// Keyboard key; the id is Gremlin's `extended << 8 | scan code`.
     Key,
+    /// Key combination; the id is the combination's.
+    Combo,
     /// Voice command; the id is the command's.
     Voice,
     /// Profile event; the id is [`gob_core::ProfileEvent::id`].
@@ -633,6 +635,13 @@ impl DevicesView {
                 }
             }
         }
+        // Key combinations, named by their keys.
+        if let (true, Some(p)) = (is_keyboard(tab), profile) {
+            for c in &p.profile.key_combos {
+                rows.entry((Kind::Combo, c.id)).or_insert(Bound::None);
+                labels.insert((Kind::Combo, c.id), combo_name(i18n, &c.keys));
+            }
+        }
         // Profile events, always all of them.
         if is_events(tab) {
             for e in gob_core::ProfileEvent::ALL {
@@ -888,16 +897,21 @@ impl DevicesView {
                 let field = egui::Id::unique("keyboard-add-key");
                 if let Some(keys) = crate::key_capture::keys_field(ui, field, &[], i18n) {
                     let mode = self.mode.clone().unwrap_or_default();
-                    for k in keys {
-                        ops.push(Op::Bind {
-                            device: gob_core::KEYBOARD_GUID.into(),
-                            name: i18n.tr("keyboard-device"),
-                            input_type: "key".into(),
-                            input_id: gob_core::key_input_id(k).to_string(),
-                            mode: mode.clone(),
-                            layer: Layer::base(),
-                            add: None,
-                        });
+                    // Keys recorded together are a combination; one key binds itself.
+                    if keys.len() > 1 {
+                        ops.push(Op::AddCombo { keys, mode });
+                    } else {
+                        for k in keys {
+                            ops.push(Op::Bind {
+                                device: gob_core::KEYBOARD_GUID.into(),
+                                name: i18n.tr("keyboard-device"),
+                                input_type: "key".into(),
+                                input_id: gob_core::key_input_id(k).to_string(),
+                                mode: mode.clone(),
+                                layer: Layer::base(),
+                                add: None,
+                            });
+                        }
                     }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1126,7 +1140,7 @@ impl DevicesView {
         let input_type = input_type_name(key.0);
         // Keys, voice commands and profile events act like buttons.
         let behavior = match key.0 {
-            Kind::Key | Kind::Voice | Kind::Event => InputType::Button,
+            Kind::Key | Kind::Combo | Kind::Voice | Kind::Event => InputType::Button,
             _ => InputType::parse(input_type),
         };
         let mode = self.mode.clone().unwrap_or_default();
@@ -1159,6 +1173,25 @@ impl DevicesView {
             && let Some(command) = p.profile.voice_command(key.1)
         {
             crate::voice_view::command_editor(ui, i18n, command, ops);
+        } else if let (Kind::Combo, Some(p)) = (key.0, profile)
+            && let Some(combo) = p.profile.key_combo(key.1)
+        {
+            // A combination's keys: record them again, or remove the combination.
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(key_glyph(key)).size(18.0))
+                    .on_hover_text(i18n.tr("combo-tip"));
+                let field = egui::Id::unique(("combo-keys", combo.id));
+                if let Some(keys) = crate::key_capture::keys_field(ui, field, &combo.keys, i18n) {
+                    if keys.len() > 1 {
+                        ops.push(Op::SetComboKeys { id: combo.id, keys });
+                    } else {
+                        self.status = Some(i18n.tr("combo-too-few"));
+                    }
+                }
+                if style::icon_button(ui, true, icon::TRASH, &i18n.tr("combo-remove")).clicked() {
+                    ops.push(Op::RemoveCombo(combo.id));
+                }
+            });
         } else {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(key_glyph(key)).size(18.0));
@@ -1398,7 +1431,7 @@ impl DevicesView {
                     // Keys and voice commands act like buttons, also in profiles that stored
                     // their own input type as the behavior.
                     editor.behavior = match key.0 {
-                        Kind::Key | Kind::Voice | Kind::Event => InputType::Button,
+                        Kind::Key | Kind::Combo | Kind::Voice | Kind::Event => InputType::Button,
                         _ => cfg.behavior(),
                     };
                     editor.container(ui, &cfg.root_action, "actions", 0);
@@ -1584,6 +1617,7 @@ fn input_type_name(kind: Kind) -> &'static str {
         Kind::Key => "key",
         Kind::Voice => gob_core::VOICE_INPUT_TYPE,
         Kind::Event => gob_core::EVENT_INPUT_TYPE,
+        Kind::Combo => gob_core::COMBO_INPUT_TYPE,
         Kind::Button | Kind::Other => "button",
     }
 }
@@ -1638,6 +1672,7 @@ fn input_name(i18n: &I18n, (kind, id): Key, label: Option<&str>) -> String {
         Kind::Hat => i18n.trf("vjoy-hat-n", &[("n", id.into())]),
         Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id), i18n),
         Kind::Voice => i18n.trf("voice-command-n", &[("n", id.into())]),
+        Kind::Combo => i18n.trf("combo-n", &[("n", id.into())]),
         Kind::Event => match gob_core::ProfileEvent::from_id(id) {
             Some(gob_core::ProfileEvent::Start) => i18n.tr("event-start"),
             Some(gob_core::ProfileEvent::Stop) => i18n.tr("event-stop"),
@@ -1758,6 +1793,7 @@ fn kind_glyph(kind: Kind) -> &'static str {
         Kind::Hat => icon::ARROWS_OUT_CARDINAL,
         Kind::Key => icon::KEYBOARD,
         Kind::Voice => icon::MICROPHONE,
+        Kind::Combo => icon::COMMAND,
         Kind::Event => icon::LIGHTNING,
         Kind::Other => icon::QUESTION,
     }
@@ -1816,7 +1852,7 @@ fn live_widget(ui: &mut egui::Ui, live: Option<&DeviceState>, (kind, id): Key) {
             );
         }
         // Keys have no live state shown here; their row lights up when pressed.
-        Kind::Key | Kind::Voice | Kind::Event | Kind::Other => {}
+        Kind::Key | Kind::Combo | Kind::Voice | Kind::Event | Kind::Other => {}
     }
 }
 
@@ -1849,6 +1885,7 @@ fn debug_expanded((kind, id): Key) -> bool {
         Kind::Hat => "hat",
         Kind::Key => "key",
         Kind::Voice => "voice",
+        Kind::Combo => "combo",
         Kind::Event => "event",
         Kind::Other => "other",
     };
@@ -1893,6 +1930,7 @@ fn type_kind(input_type: &str) -> Kind {
         InputType::Hat => Kind::Hat,
         InputType::Other if input_type.trim() == "key" => Kind::Key,
         InputType::Other if input_type.trim() == gob_core::VOICE_INPUT_TYPE => Kind::Voice,
+        InputType::Other if input_type.trim() == gob_core::COMBO_INPUT_TYPE => Kind::Combo,
         InputType::Other if input_type.trim() == gob_core::EVENT_INPUT_TYPE => Kind::Event,
         InputType::Other => Kind::Other,
     }
@@ -1921,6 +1959,14 @@ struct DownOwner {
     key: Key,
     /// "Button 3 (Throttle)", with the device and the layer when they are not this card's.
     name: String,
+}
+
+/// A key combination as the Keyboard tab names it: "Left Ctrl + F1".
+pub(crate) fn combo_name(i18n: &I18n, keys: &[gob_core::Key]) -> String {
+    keys.iter()
+        .map(|k| crate::key_capture::name(*k, i18n))
+        .collect::<Vec<_>>()
+        .join(" + ")
 }
 
 /// The label a card shows instead of the input's name: a logical input's, a voice command's

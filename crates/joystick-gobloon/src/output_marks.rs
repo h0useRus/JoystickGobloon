@@ -158,6 +158,8 @@ fn input_name(i18n: &I18n, input_type: &str, id: &str) -> String {
         "button" => i18n.trf("vjoy-button-n", &[("n", n.into())]),
         "hat" => i18n.trf("vjoy-hat-n", &[("n", n.into())]),
         "key" => crate::key_capture::name(gob_core::key_from_input_id(n), i18n),
+        gob_core::COMBO_INPUT_TYPE => i18n.trf("combo-n", &[("n", n.into())]),
+        gob_core::VOICE_INPUT_TYPE => i18n.trf("voice-command-n", &[("n", n.into())]),
         _ => id.to_string(),
     }
 }

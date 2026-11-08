@@ -697,7 +697,11 @@ curve-handle = 控制柄
 # Keyboard device
 keyboard-device = 键盘
 keyboard-tip = 将键盘按键作为输入：像绑定摇杆按钮一样为按键绑定动作
-keyboard-add = 绑定按键
+keyboard-add = 绑定按键或组合键（同时按下的按键）
+combo-n = 组合键 { $n }
+combo-tip = 组合键：在其所有按键都按住时运行；各按键自己的动作也会运行。重新录制以更改按键。
+combo-too-few = 组合键至少需要两个按键
+combo-remove = 删除此组合键及其动作
 keyboard-empty = 尚未绑定按键：用上方按钮录制一个。
 voice-device = 语音
 voice-tip = 语音命令：按住一键通输入时说出短语；每个命令都像一个按钮

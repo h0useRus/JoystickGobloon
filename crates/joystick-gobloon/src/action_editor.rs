@@ -291,6 +291,16 @@ pub enum Op {
         id: u32,
     },
     AddVoiceCommand,
+    /// Adds a combination of these keys (or finds it) and binds it in `mode`.
+    AddCombo {
+        keys: Vec<gob_core::Key>,
+        mode: String,
+    },
+    SetComboKeys {
+        id: u32,
+        keys: Vec<gob_core::Key>,
+    },
+    RemoveCombo(u32),
     /// Makes a voice command saying `phrase` run `action` itself in `mode` and `layer` (the
     /// card's); `id` is the command it goes to, which the page then opens.
     VoiceFromAction {
@@ -565,6 +575,21 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::AddVoiceCommand => {
             p.add_voice_command();
         }
+        Op::AddCombo { keys, mode } => {
+            if let Some(id) = p.add_key_combo(&keys) {
+                p.bind_layer(
+                    gob_core::KEYBOARD_GUID,
+                    gob_core::COMBO_INPUT_TYPE,
+                    &id.to_string(),
+                    &mode,
+                    &Layer::base(),
+                );
+            }
+        }
+        Op::SetComboKeys { id, keys } => {
+            p.set_combo_keys(id, &keys);
+        }
+        Op::RemoveCombo(id) => p.remove_key_combo(id),
         Op::VoiceFromAction {
             action,
             phrase,
