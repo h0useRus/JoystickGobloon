@@ -74,6 +74,7 @@ pub enum NewAction {
         input_type: InputType,
     },
     SmartToggle,
+    Delay,
     SplitAxis,
     PauseResume,
     RunCommand,
@@ -91,6 +92,7 @@ pub fn child_groups(kind: &str) -> &'static [&'static str] {
         "tempo" => &["short-actions", "long-actions"],
         "double-tap" => &["single-actions", "double-actions"],
         "smart-toggle" => &["actions"],
+        "delay" => &["actions"],
         "split-axis" => &["lower-actions", "upper-actions"],
         "axis-delta" => &["positive-actions", "negative-actions"],
         "condition" => &["true-actions", "false-actions"],
@@ -607,6 +609,15 @@ impl Action {
                 };
                 Self::build("map-to-mouse", items, "both")
             }
+            NewAction::Delay => Self::build(
+                "delay",
+                vec![
+                    group("actions", Vec::new()),
+                    prop("float", "delay", "0.5"),
+                    prop("bool", "while-held", "True"),
+                ],
+                "disallowed",
+            ),
             NewAction::SmartToggle => Self::build(
                 "smart-toggle",
                 vec![group("actions", Vec::new()), prop("float", "delay", "0.5")],

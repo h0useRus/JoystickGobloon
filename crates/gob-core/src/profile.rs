@@ -495,6 +495,7 @@ impl Profile {
                     || a.kind == crate::BUTTON_AXIS
                     || a.button_send().mode != crate::SendMode::Hold
                     || a.kind == "voice-input"
+                    || a.kind == "delay"
                     || a.items.iter().any(|i| {
                         matches!(i, Item::Group { tag, attrs, .. } if tag == "macro-action"
                             && attrs.iter().any(|(k, v)| k == "type" && (v == "gamepad" || v == "action")))

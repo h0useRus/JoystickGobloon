@@ -199,6 +199,14 @@ pub enum ActionKind<'a> {
     MapToKeyboard {
         keys: Vec<Key>,
     },
+    /// Runs the children `seconds` after the press (Joystick Gobloon only); `while_held`: only
+    /// if the input is still held then, else a short press still runs them as a quick press
+    /// and release.
+    Delay {
+        children: Vec<&'a str>,
+        seconds: f64,
+        while_held: bool,
+    },
     /// Short press latches the children on, hold acts momentarily.
     SmartToggle {
         children: Vec<&'a str>,
@@ -683,6 +691,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "light-led",
     "text-to-speech",
     "smart-toggle",
+    "delay",
     "split-axis",
     "pause-resume",
     "run-command",
@@ -967,6 +976,11 @@ impl Action {
             },
             "description" => ActionKind::Description {
                 text: self.str("description").unwrap_or_default(),
+            },
+            "delay" => ActionKind::Delay {
+                children: self.refs_in("actions"),
+                seconds: self.parse("delay").unwrap_or(0.5),
+                while_held: self.bool("while-held"),
             },
             "smart-toggle" => ActionKind::SmartToggle {
                 children: self.refs_in("actions"),
