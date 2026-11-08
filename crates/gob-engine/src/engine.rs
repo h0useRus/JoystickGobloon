@@ -2128,8 +2128,11 @@ impl Engine {
             self.refresh_mode(now, out);
         }
         self.fire_event(ProfileEvent::Enter, mode.clone(), now, out);
-        self.send_start_states(&mode, now, out);
+        // Enter actions may switch modes again: their events run, then held buttons send their
+        // state in the mode the profile is in.
         self.after_mode_change(&mode, now, out);
+        let mode = self.modes.shared();
+        self.send_start_states(&mode, now, out);
     }
 
     /// The profile is about to stop: the mode leave and stop events run in the current mode,
@@ -4176,15 +4179,19 @@ impl Engine {
                 held: true,
             },
         );
-        self.register(
-            &src.key,
-            ReleaseEntry {
-                mode: src.mode.clone(),
-                any_mode: true,
-                on_press: false,
-                action: ReleaseAction::DelayRelease(node),
-            },
-        );
+        // Inside a container that keeps the press latched (smart toggle), letting go of the
+        // input is not a release: the container sends its own.
+        if !src.no_auto_release {
+            self.register(
+                &src.key,
+                ReleaseEntry {
+                    mode: src.mode.clone(),
+                    any_mode: true,
+                    on_press: false,
+                    action: ReleaseAction::DelayRelease(node),
+                },
+            );
+        }
     }
 
     /// Let go before the time is up: cancelled while it needs the input held, else run as a
@@ -4229,7 +4236,12 @@ impl Engine {
             let src = state.src.clone();
             self.run_all(children, &src, Value::Button(true), now, out);
         } else if let Some(state) = self.delays.remove(&node) {
-            self.pulse(children, Value::Button(true), state.src, now, out);
+            // The input is up already: nothing may wait for its release (the pulse lets go).
+            let src = Source {
+                no_auto_release: true,
+                ..state.src
+            };
+            self.pulse(children, Value::Button(true), src, now, out);
         }
     }
 

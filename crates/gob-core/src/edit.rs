@@ -1071,10 +1071,9 @@ impl Profile {
         self.paste(&actions, &[id.to_string()]).pop()
     }
 
-    /// The actions `tops` and everything below them, cloned (each once, `tops` first): what
-    /// [`Profile::paste`] copies into this or another profile. Run-action targets are not
-    /// included: a copy runs the same action unless the target is inside the copied part.
-    /// Unknown ids are left out.
+    /// The actions `tops` and everything they use (below them, and what their run-action steps
+    /// run), cloned, each once, `tops` first: what [`Profile::paste`] copies into this or
+    /// another profile. Unknown ids are left out.
     pub fn subtree(&self, tops: &[String]) -> Vec<Action> {
         let index = self.action_index();
         let mut order: Vec<&str> = Vec::new();
@@ -1086,7 +1085,7 @@ impl Profile {
             let Some(a) = index.get(cur) else {
                 continue;
             };
-            stack.extend(a.child_ids().into_iter().rev());
+            stack.extend(a.reference_ids().into_iter().rev());
             order.push(cur);
         }
         order
@@ -1097,16 +1096,37 @@ impl Profile {
 
     /// Adds copies of `actions` (from [`Profile::subtree`], of this profile or another one)
     /// under new ids, references among them following; returns the new ids of `tops` (those
-    /// not among `actions` are left out). The copies are not in any list yet.
+    /// not among `actions` are left out). The copies are not in any list yet. An action only
+    /// run by a run-action step is copied only when this profile lacks it: otherwise the copy
+    /// runs the very same action, like the original.
     pub fn paste(&mut self, actions: &[Action], tops: &[String]) -> Vec<String> {
+        let given: HashMap<&str, &Action> = actions.iter().map(|a| (a.id.as_str(), a)).collect();
+        // What `tops` contain (children, not run-action targets) is always copied.
+        let mut inside: HashSet<&str> = HashSet::new();
+        let mut stack: Vec<&str> = tops.iter().map(String::as_str).collect();
+        while let Some(cur) = stack.pop() {
+            if let Some(a) = given.get(cur)
+                && inside.insert(cur)
+            {
+                stack.extend(a.child_ids());
+            }
+        }
+        let copied: Vec<&Action> = actions
+            .iter()
+            .filter(|a| inside.contains(a.id.as_str()) || self.action(&a.id).is_none())
+            .collect();
         let ids: HashMap<String, String> =
-            actions.iter().map(|a| (a.id.clone(), new_uuid())).collect();
-        self.library.extend(actions.iter().map(|a| {
-            let mut copy = a.clone();
-            copy.id = ids[&a.id].clone();
-            remap_refs(&mut copy.items, &ids);
-            copy
-        }));
+            copied.iter().map(|a| (a.id.clone(), new_uuid())).collect();
+        let copies: Vec<Action> = copied
+            .into_iter()
+            .map(|a| {
+                let mut copy = a.clone();
+                copy.id = ids[&a.id].clone();
+                remap_refs(&mut copy.items, &ids);
+                copy
+            })
+            .collect();
+        self.library.extend(copies);
         tops.iter().filter_map(|t| ids.get(t).cloned()).collect()
     }
 

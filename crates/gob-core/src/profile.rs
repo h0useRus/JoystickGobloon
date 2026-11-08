@@ -496,6 +496,13 @@ impl Profile {
                     || a.button_send().mode != crate::SendMode::Hold
                     || a.kind == "voice-input"
                     || a.kind == "delay"
+                    || (a.kind == "merge-axis"
+                        && a.str("operation").and_then(crate::MergeOp::parse).is_some_and(|o| {
+                            matches!(
+                                o,
+                                crate::MergeOp::Multiply | crate::MergeOp::Scale | crate::MergeOp::Trim
+                            )
+                        }))
                     || a.items.iter().any(|i| {
                         matches!(i, Item::Group { tag, attrs, .. } if tag == "macro-action"
                             && attrs.iter().any(|(k, v)| k == "type" && (v == "gamepad" || v == "action")))

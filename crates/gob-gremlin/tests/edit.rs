@@ -1021,3 +1021,58 @@ fn copied_actions_paste_into_another_profile() {
     assert_ne!(kids[0], desc);
     assert_eq!(dst.action(pasted[1]).unwrap().kind, "text-to-speech");
 }
+
+/// A copied macro that runs another action by a run-action step brings that action into a
+/// profile that lacks it; pasted where the action exists, it runs the very same one.
+#[test]
+fn pasted_run_action_targets_come_along_where_missing() {
+    let prop = |ty: &str, name: &str, value: &str| {
+        format!(r#"<property type="{ty}"><name>{name}</name><value>{value}</value></property>"#)
+    };
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs>
+        <input><device-id>{DEV}</device-id><input-type>button</input-type><mode>Default</mode>
+        <input-id>1</input-id><action-configuration><root-action>r1</root-action>
+        <behavior>button</behavior></action-configuration></input>
+        <input><device-id>{DEV}</device-id><input-type>button</input-type><mode>Default</mode>
+        <input-id>2</input-id><action-configuration><root-action>r2</root-action>
+        <behavior>button</behavior></action-configuration></input></inputs>
+        <settings/><library>
+        <action id="target" type="description">{}</action>
+        <action id="r1" type="root"><actions><action-id>target</action-id></actions></action>
+        <action id="mac" type="macro">{}<macro-action type="action">{}</macro-action></action>
+        <action id="r2" type="root"><actions><action-id>mac</action-id></actions></action>
+        </library><modes><mode>Default</mode></modes></profile>"#,
+        prop("string", "description", "the target"),
+        prop("string", "repeat-mode", "single"),
+        prop("string", "action-id", "target"),
+    );
+    let src = gob_gremlin::from_str(&xml).unwrap();
+    let tops = vec!["mac".to_string()];
+    let clip = src.subtree(&tops);
+    assert_eq!(clip.len(), 2, "the macro and the action it runs");
+
+    // Another profile: the target comes along under a new id, and the macro runs it.
+    let mut dst = Profile::default();
+    let root = dst.bind(DEV, "button", "5", "Default");
+    let pasted = dst.paste(&clip, &tops);
+    assert!(dst.add_ref(&root, "actions", &pasted[0]));
+    let dst = reload(&dst);
+    let mac = dst.action(&pasted[0]).unwrap();
+    let runs: Vec<&str> = mac.run_targets();
+    assert_eq!(runs.len(), 1);
+    assert_ne!(runs[0], "target");
+    assert_eq!(
+        dst.action(runs[0]).unwrap().kind,
+        "description",
+        "kept: run by the macro"
+    );
+
+    // The same profile: the macro is copied, the target is not.
+    let mut same = src.clone();
+    let before = same.library.len();
+    let copy = same.paste(&clip, &tops);
+    assert_eq!(same.library.len(), before + 1);
+    let runs: Vec<&str> = same.action(&copy[0]).unwrap().run_targets();
+    assert_eq!(runs, ["target"]);
+}

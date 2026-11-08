@@ -126,14 +126,7 @@ impl<'a> OutputMarks<'a> {
             let Some(b) = self.profile.inputs.get(u.binding) else {
                 continue;
             };
-            let device = if b.device_id.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID) {
-                i18n.tr("keyboard-device")
-            } else {
-                self.profile
-                    .device_name(&b.device_id)
-                    .unwrap_or(&b.device_id)
-                    .to_string()
-            };
+            let device = crate::devices_view::device_name(i18n, self.profile, &b.device_id);
             let input = input_name(i18n, &b.input_type, &b.input_id);
             lines.push(format!("  {device} · {input} · {}", b.mode));
         }
@@ -160,6 +153,7 @@ fn input_name(i18n: &I18n, input_type: &str, id: &str) -> String {
         "key" => crate::key_capture::name(gob_core::key_from_input_id(n), i18n),
         gob_core::COMBO_INPUT_TYPE => i18n.trf("combo-n", &[("n", n.into())]),
         gob_core::VOICE_INPUT_TYPE => i18n.trf("voice-command-n", &[("n", n.into())]),
+        gob_core::EVENT_INPUT_TYPE => crate::devices_view::event_name(i18n, n),
         _ => id.to_string(),
     }
 }

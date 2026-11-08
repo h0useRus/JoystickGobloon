@@ -98,3 +98,37 @@ fn a_short_press_runs_late_as_a_short_press_otherwise() {
     e.tick(ms(t0, 3800), &mut out);
     assert_eq!(out.0, [(1, true)]);
 }
+
+/// Inside a smart toggle a short press latches: letting go of the input does not cancel the
+/// Delay, its actions run when the time is up and stay on until the next press.
+#[test]
+fn latched_by_a_smart_toggle_it_still_runs() {
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs><input><device-id>{DEV}</device-id>
+        <input-type>button</input-type><mode>Default</mode><input-id>1</input-id>
+        <action-configuration><root-action>r</root-action><behavior>button</behavior>
+        </action-configuration></input></inputs>
+        <settings><startup-mode>Default</startup-mode></settings><library>
+        <action id="v" type="map-to-vjoy">{}{}{}{}{}</action>
+        <action id="d" type="delay"><actions><action-id>v</action-id></actions>{}{}{}</action>
+        <action id="t" type="smart-toggle"><actions><action-id>d</action-id></actions>{}{}</action>
+        <action id="r" type="root"><actions><action-id>t</action-id></actions></action>
+        </library><modes><mode>Default</mode></modes></profile>"#,
+        prop("int", "vjoy-device-id", "1"),
+        prop("int", "vjoy-input-id", "1"),
+        prop("input_type", "vjoy-input-type", "button"),
+        prop("bool", "button-inverted", "False"),
+        prop("activation-mode", "activation-mode", "both"),
+        prop("float", "delay", "0.5"),
+        prop("bool", "while-held", "True"),
+        prop("activation-mode", "activation-mode", "disallowed"),
+        prop("float", "delay", "0.5"),
+        prop("activation-mode", "activation-mode", "disallowed"),
+    );
+    let mut e = Engine::new(&gob_gremlin::from_str(&xml).unwrap(), &HashMap::new());
+    let (mut out, t0) = (Recorder::default(), Instant::now());
+    press(&mut e, true, t0, &mut out);
+    press(&mut e, false, ms(t0, 100), &mut out);
+    e.tick(ms(t0, 600), &mut out);
+    assert_eq!(out.0, [(1, true)], "latched on after the delay");
+}

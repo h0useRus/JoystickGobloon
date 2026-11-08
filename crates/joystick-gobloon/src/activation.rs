@@ -130,10 +130,13 @@ impl Activation {
         stopped
     }
 
-    /// Starts the engine on the current profile (stopping a running one first).
+    /// Starts the engine on the current profile. A running one hands over in its own thread
+    /// (its stop actions, then the start of this one), so the window never waits for it.
     pub fn start(&self) -> Result<(), String> {
+        if self.lock().runner.is_some() {
+            return self.reload(true);
+        }
         let mut inner = self.lock();
-        inner.runner = None;
         let Some((profile, name)) = &inner.profile else {
             return Err("no profile loaded".into());
         };

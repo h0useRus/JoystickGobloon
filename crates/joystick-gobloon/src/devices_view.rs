@@ -899,6 +899,9 @@ impl DevicesView {
                     let mode = self.mode.clone().unwrap_or_default();
                     // Keys recorded together are a combination; one key binds itself.
                     if keys.len() > 1 {
+                        if keys.len() > gob_core::MAX_COMBO_KEYS {
+                            self.status = Some(i18n.tr("combo-too-many"));
+                        }
                         ops.push(Op::AddCombo { keys, mode });
                     } else {
                         for k in keys {
@@ -1182,10 +1185,17 @@ impl DevicesView {
                     .on_hover_text(i18n.tr("combo-tip"));
                 let field = egui::Id::unique(("combo-keys", combo.id));
                 if let Some(keys) = crate::key_capture::keys_field(ui, field, &combo.keys, i18n) {
-                    if keys.len() > 1 {
-                        ops.push(Op::SetComboKeys { id: combo.id, keys });
-                    } else {
+                    let taken = p.profile.key_combo_with(&keys).filter(|c| c.id != combo.id);
+                    if keys.len() < 2 {
                         self.status = Some(i18n.tr("combo-too-few"));
+                    } else if let Some(other) = taken {
+                        let name = combo_name(i18n, &other.keys);
+                        self.status = Some(i18n.trf("combo-taken", &[("keys", name.into())]));
+                    } else {
+                        if keys.len() > gob_core::MAX_COMBO_KEYS {
+                            self.status = Some(i18n.tr("combo-too-many"));
+                        }
+                        ops.push(Op::SetComboKeys { id: combo.id, keys });
                     }
                 }
                 if style::icon_button(ui, true, icon::TRASH, &i18n.tr("combo-remove")).clicked() {
@@ -1673,13 +1683,7 @@ fn input_name(i18n: &I18n, (kind, id): Key, label: Option<&str>) -> String {
         Kind::Key => crate::key_capture::name(gob_core::key_from_input_id(id), i18n),
         Kind::Voice => i18n.trf("voice-command-n", &[("n", id.into())]),
         Kind::Combo => i18n.trf("combo-n", &[("n", id.into())]),
-        Kind::Event => match gob_core::ProfileEvent::from_id(id) {
-            Some(gob_core::ProfileEvent::Start) => i18n.tr("event-start"),
-            Some(gob_core::ProfileEvent::Stop) => i18n.tr("event-stop"),
-            Some(gob_core::ProfileEvent::Enter) => i18n.tr("event-enter"),
-            Some(gob_core::ProfileEvent::Leave) => i18n.tr("event-leave"),
-            None => id.to_string(),
-        },
+        Kind::Event => event_name(i18n, id),
         Kind::Other => id.to_string(),
     }
 }
@@ -1961,6 +1965,17 @@ struct DownOwner {
     name: String,
 }
 
+/// A profile event's name by its input id.
+pub(crate) fn event_name(i18n: &I18n, id: u32) -> String {
+    match gob_core::ProfileEvent::from_id(id) {
+        Some(gob_core::ProfileEvent::Start) => i18n.tr("event-start"),
+        Some(gob_core::ProfileEvent::Stop) => i18n.tr("event-stop"),
+        Some(gob_core::ProfileEvent::Enter) => i18n.tr("event-enter"),
+        Some(gob_core::ProfileEvent::Leave) => i18n.tr("event-leave"),
+        None => id.to_string(),
+    }
+}
+
 /// A key combination as the Keyboard tab names it: "Left Ctrl + F1".
 pub(crate) fn combo_name(i18n: &I18n, keys: &[gob_core::Key]) -> String {
     keys.iter()
@@ -2067,7 +2082,7 @@ fn down_owners(
 }
 
 /// A profile device's name as the tabs show it.
-fn device_name(i18n: &I18n, profile: &Profile, guid: &str) -> String {
+pub(crate) fn device_name(i18n: &I18n, profile: &Profile, guid: &str) -> String {
     if guid.eq_ignore_ascii_case(gob_core::KEYBOARD_GUID) {
         return i18n.tr("keyboard-device");
     }
