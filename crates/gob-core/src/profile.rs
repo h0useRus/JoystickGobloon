@@ -139,6 +139,9 @@ pub struct ActionConfig {
     /// Axis outputs keep their last value when this layer stops running instead of going back
     /// to rest.
     pub keep_value: bool,
+    /// A button held when the profile starts runs its press then, so a latching switch's
+    /// position reaches the game (`send-state="true"`).
+    pub send_state: bool,
     /// Unknown children, kept verbatim.
     pub extra: Vec<Element>,
 }
@@ -473,7 +476,11 @@ impl Profile {
                 .inputs
                 .iter()
                 .flat_map(|b| &b.configs)
-                .any(|c| c.additive || c.keep_value || !c.layer.is_base())
+                .any(|c| c.additive || c.keep_value || c.send_state || !c.layer.is_base())
+            || self
+                .inputs
+                .iter()
+                .any(|b| crate::is_event_binding(&b.device_id, &b.input_type))
             || self.library.iter().any(|a| {
                 a.kind == "light-led"
                     || a.kind == "map-to-gamepad"

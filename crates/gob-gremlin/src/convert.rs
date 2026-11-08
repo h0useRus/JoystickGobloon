@@ -344,6 +344,7 @@ fn config_from(e: &Element) -> ActionConfig {
         layer: Layer::parse(e.attr("layer").unwrap_or_default()),
         additive: e.attr("additive").is_some_and(|v| v == "true"),
         keep_value: e.attr("keep-value").is_some_and(|v| v == "true"),
+        send_state: e.attr("send-state").is_some_and(|v| v == "true"),
         extra: Vec::new(),
     };
     for c in e.elements() {
@@ -377,6 +378,9 @@ fn input_to(b: &InputBinding) -> Element {
         }
         if cfg.keep_value {
             el = el.with_attr("keep-value", "true");
+        }
+        if cfg.send_state {
+            el = el.with_attr("send-state", "true");
         }
         el
     });

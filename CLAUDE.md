@@ -27,6 +27,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `Action::button_send` = How to send of button outputs (`send-mode` hold/press/release/pulse/repeat/toggle)
   automap.rs = the new profile wizard's mapping (every input of a device onto one vJoy device); `Profile::output_usage`
   = which inputs write each virtual output (used/conflict marks, wizard_view.rs + output_marks.rs in the GUI)
+  events.rs = profile events (`EVENTS_GUID`, input type `event`: start/stop/mode enter/leave, Events tab), run by
+  the engine's `profile_started`/`profile_stopping`/mode changes; `send-state` on a sequence = held button's press at start
 - crates/gob-gremlin XML <-> Element <-> Profile: Gremlin R14+ import, written as `<profile version="14">` while
   Gremlin can read it, else `<profile app="Gobloon" version="1">`; lossless round-trip; `report()`; example `resave`
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
@@ -181,7 +183,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
   Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting,
-  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | logical,
+  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new

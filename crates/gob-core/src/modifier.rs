@@ -303,6 +303,22 @@ impl Profile {
         }
     }
 
+    /// Makes a button held when the profile starts run the press of one layer of an input in a
+    /// mode then (or not).
+    pub fn set_layer_send_state(
+        &mut self,
+        device_id: &str,
+        input_type: &str,
+        input_id: &str,
+        mode: &str,
+        layer: &Layer,
+        send: bool,
+    ) {
+        for c in self.layer_configs_mut(device_id, input_type, input_id, mode, layer) {
+            c.send_state = send;
+        }
+    }
+
     /// Removes a modifier and every configuration of a layer that needs it.
     pub fn remove_modifier(&mut self, name: &str) -> bool {
         let before = self.modifiers.len();
