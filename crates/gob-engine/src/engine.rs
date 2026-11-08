@@ -123,6 +123,11 @@ enum Node {
         children: Vec<NodeId>,
         delay: Duration,
     },
+    Delay {
+        children: Vec<NodeId>,
+        delay: Duration,
+        while_held: bool,
+    },
     Split {
         split: f32,
         lower: Vec<NodeId>,
@@ -383,6 +388,8 @@ enum TimerKind {
     VoiceRelease(u32),
     /// A profile event's button (by its id) goes up.
     EventRelease(u32),
+    /// A Delay's time is up.
+    DelayFire(NodeId),
     /// The action a run-action macro step pressed is released.
     RunRelease {
         node: NodeId,
@@ -427,6 +434,15 @@ fn ms(ms: u32) -> Duration {
 }
 
 #[derive(Debug)]
+/// A Delay waiting for its time or for its input to go up.
+struct DelayState {
+    /// Its time is not up yet.
+    timer: Option<u64>,
+    src: Source,
+    /// The input is still down.
+    held: bool,
+}
+
 struct Timer {
     id: u64,
     at: Instant,
@@ -439,6 +455,8 @@ enum ReleaseAction {
     GamepadButton(u32, GamepadControl),
     LeaveTemporary(String),
     TempoRelease(NodeId),
+    /// A Delay's input went up in another mode.
+    DelayRelease(NodeId),
     StopMacro(NodeId),
     TapRelease(NodeId),
     ReleaseKeys(NodeId),
@@ -624,6 +642,8 @@ pub struct Engine {
     voice_holds: HashMap<u32, Duration>,
     /// Release timer of each voice command whose button is down.
     voice_releases: HashMap<u32, u64>,
+    /// Delays pressed and not let go yet or not run yet.
+    delays: HashMap<NodeId, DelayState>,
     /// Release timer of each profile event (by id) whose button is down, with the mode it runs
     /// in.
     event_releases: HashMap<u32, (u64, Arc<str>)>,
@@ -756,6 +776,7 @@ impl Engine {
                 .map(|c| (c.id, Duration::from_secs_f64(c.hold.clamp(0.01, 10.0))))
                 .collect(),
             voice_releases: HashMap::new(),
+            delays: HashMap::new(),
             event_releases: HashMap::new(),
             mode_event_depth: 0,
             combos: Vec::new(),
@@ -1378,6 +1399,18 @@ impl Engine {
                     action: action_kind,
                     act: action.activation_mode(),
                     send: action.button_send(),
+                },
+                ActionKind::Delay {
+                    children,
+                    seconds,
+                    while_held,
+                } => Node::Delay {
+                    children: children
+                        .iter()
+                        .map(|c| self.compile(index, c, depth + 1))
+                        .collect(),
+                    delay: Duration::from_secs_f64(seconds.clamp(0.0, 600.0)),
+                    while_held,
                 },
                 ActionKind::SmartToggle { children, delay } => Node::SmartToggle {
                     children: children
@@ -2009,6 +2042,7 @@ impl Engine {
                     self.voice_releases.remove(&id);
                     self.process(&voice_key(id), Value::Button(false), now, out);
                 }
+                TimerKind::DelayFire(node) => self.delay_fire(node, now, out),
                 TimerKind::EventRelease(id) => {
                     if let (Some((_, mode)), Some(event)) =
                         (self.event_releases.remove(&id), ProfileEvent::from_id(id))
@@ -2123,6 +2157,7 @@ impl Engine {
                 matches!(
                     t.kind,
                     TimerKind::MacroStep(_)
+                        | TimerKind::DelayFire(_)
                         | TimerKind::PulseRelease { .. }
                         | TimerKind::SendUp(_)
                         | TimerKind::RunRelease { .. }
@@ -2479,6 +2514,11 @@ impl Engine {
             } => {
                 if let Value::Button(pressed) = *value {
                     self.smart_toggle(node, children, delay, src, pressed, now, out);
+                }
+            }
+            Node::Delay { delay, .. } => {
+                if let Value::Button(pressed) = *value {
+                    self.delay_event(node, delay, src, pressed, now, out);
                 }
             }
             Node::Split {
@@ -4110,6 +4150,89 @@ impl Engine {
         self.run_all(&all, src, value, now, out);
     }
 
+    /// A Delay's input went down (its time starts again) or up.
+    fn delay_event(
+        &mut self,
+        node: NodeId,
+        delay: Duration,
+        src: &Source,
+        pressed: bool,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        if !pressed {
+            self.delay_release(node, now, out);
+            return;
+        }
+        if let Some(timer) = self.delays.remove(&node).and_then(|d| d.timer) {
+            self.timers.retain(|t| t.id != timer);
+        }
+        let timer = self.add_timer(now + delay, TimerKind::DelayFire(node));
+        self.delays.insert(
+            node,
+            DelayState {
+                timer: Some(timer),
+                src: src.clone(),
+                held: true,
+            },
+        );
+        self.register(
+            &src.key,
+            ReleaseEntry {
+                mode: src.mode.clone(),
+                any_mode: true,
+                on_press: false,
+                action: ReleaseAction::DelayRelease(node),
+            },
+        );
+    }
+
+    /// Let go before the time is up: cancelled while it needs the input held, else run as a
+    /// short press when the time is up; after it: the children are let go.
+    fn delay_release(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
+        let Node::Delay {
+            ref children,
+            while_held,
+            ..
+        } = *self.nodes[node].clone()
+        else {
+            return;
+        };
+        let Some(state) = self.delays.get_mut(&node).filter(|d| d.held) else {
+            return;
+        };
+        match state.timer {
+            Some(timer) if while_held => {
+                self.timers.retain(|t| t.id != timer);
+                self.delays.remove(&node);
+            }
+            Some(_) => state.held = false,
+            None => {
+                if let Some(state) = self.delays.remove(&node) {
+                    self.run_all(children, &state.src, Value::Button(false), now, out);
+                }
+            }
+        }
+    }
+
+    /// A Delay's time is up: its children run (held: pressed until the input goes up; let go
+    /// already: a short press).
+    fn delay_fire(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
+        let Node::Delay { ref children, .. } = *self.nodes[node].clone() else {
+            return;
+        };
+        let Some(state) = self.delays.get_mut(&node) else {
+            return;
+        };
+        state.timer = None;
+        if state.held {
+            let src = state.src.clone();
+            self.run_all(children, &src, Value::Button(true), now, out);
+        } else if let Some(state) = self.delays.remove(&node) {
+            self.pulse(children, Value::Button(true), state.src, now, out);
+        }
+    }
+
     fn cancel_tempo_timer(&mut self, node: NodeId) {
         if let Some(id) = self.tempo.get_mut(&node).and_then(|s| s.timer.take()) {
             self.timers.retain(|t| t.id != id);
@@ -4199,6 +4322,7 @@ impl Engine {
                         run.queued = 0;
                     }
                 }
+                ReleaseAction::DelayRelease(node) => self.delay_release(node, now, out),
                 ReleaseAction::TempoRelease(node) => {
                     let phase = self.tempo.get(&node).map(|s| s.phase).unwrap_or_default();
                     if phase != Phase::Wait {
