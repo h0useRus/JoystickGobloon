@@ -81,7 +81,8 @@ impl Doc {
                     doc.els[id].span.end = to;
                     continue;
                 }
-                Event::Text(t) => XNode::Text(t.xml10_content().into_owned()),
+                // As written (line ends too); entities come as their own events.
+                Event::Text(_) => XNode::Text(text[from..to].to_string()),
                 Event::GeneralRef(r) => {
                     let mut buf = [0; 4];
                     let s = match r.resolve_char_ref().map_err(|e| e.to_string())? {
@@ -183,7 +184,7 @@ pub fn from_lua(doc: &Table) -> mlua::Result<String> {
 fn write_nodes(out: &mut String, doc: Option<&Doc>, nodes: &Table) -> mlua::Result<()> {
     for node in nodes.sequence_values::<Value>() {
         match node? {
-            Value::String(s) => out.push_str(&quick_xml::escape::partial_escape(&*s.to_str()?)),
+            Value::String(s) => escape_text(out, &s.to_str()?),
             Value::Table(t) => write_table(out, doc, &t)?,
             Value::Integer(i) => out.push_str(&i.to_string()),
             Value::Number(n) => out.push_str(&n.to_string()),
@@ -196,6 +197,18 @@ fn write_nodes(out: &mut String, doc: Option<&Doc>, nodes: &Table) -> mlua::Resu
         }
     }
     Ok(())
+}
+
+/// Text as XML: `&`, `<` and `>` escaped, everything else (line ends too) as it is.
+fn escape_text(out: &mut String, text: &str) {
+    for c in text.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            c => out.push(c),
+        }
+    }
 }
 
 fn original<'a>(doc: Option<&'a Doc>, t: &Table) -> mlua::Result<Option<&'a XEl>> {
@@ -402,5 +415,15 @@ mod tests {
     fn broken_xml_is_an_error() {
         assert!(Doc::parse("<a><b></a>").is_err());
         assert!(Doc::parse("<a>").is_err());
+    }
+
+    #[test]
+    fn line_ends_survive_changed_elements() {
+        let out = round(
+            "<a>\r\n <b x=\"1\"/>\r\n</a>\r\n",
+            r#"local doc = ...
+            doc.children[1].children[2].attrs.x = "2""#,
+        );
+        assert_eq!(out, "<a>\r\n <b x=\"2\"/>\r\n</a>\r\n");
     }
 }

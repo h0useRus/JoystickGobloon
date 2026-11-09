@@ -88,22 +88,35 @@ function xml.element(tag, attrs, order)
 	return { tag = tag, attrs = attrs or {}, order = order, children = {} }
 end
 
--- Adds `child` as the last element of `parent`, indented like its other children.
+-- Adds `child` as the last element of `parent`, indented like its other children. New elements
+-- remember their indentation, so children added to them later are indented one step deeper.
 function xml.append(parent, child)
 	local list = parent.children
 	local n = #list
-	local tail = if type(list[n]) == "string" then list[n] else nil
+	local tail = if type(list[n]) == "string" and string.match(list[n], "^%s*$") then list[n] else nil
+	local had_tail = tail ~= nil
 	local indent = nil
 	for i = n, 1, -1 do
-		if type(list[i]) == "table" and list[i].tag ~= nil and type(list[i - 1]) == "string" then
-			indent = list[i - 1]
+		if type(list[i]) == "table" and list[i].tag ~= nil then
+			if type(list[i - 1]) == "string" and string.match(list[i - 1], "^%s*$") then
+				indent = list[i - 1]
+			end
 			break
 		end
 	end
-	if indent == nil and tail ~= nil then
-		indent = tail .. "\t"
+	local step = parent._step
+	if indent == nil then
+		if tail ~= nil then
+			indent = tail .. (step or "	")
+		elseif parent._indent ~= nil then
+			indent = parent._indent .. (step or "	")
+			tail = parent._indent
+		end
 	end
-	if tail ~= nil then
+	if indent ~= nil and tail ~= nil and #indent > #tail and string.sub(indent, 1, #tail) == tail then
+		step = string.sub(indent, #tail + 1)
+	end
+	if had_tail then
 		table.remove(list)
 	end
 	if indent ~= nil then
@@ -113,6 +126,10 @@ function xml.append(parent, child)
 	if tail ~= nil then
 		table.insert(list, tail)
 	end
+	if type(child) == "table" then
+		child._indent = indent
+		child._step = step
+	end
 	return child
 end
 
@@ -121,6 +138,16 @@ function xml.remove(parent, child)
 	local list = parent.children
 	for i, c in list do
 		if c == child then
+			-- Remember the indentation step, for elements appended later.
+			local indent, tail = list[i - 1], list[#list]
+			if
+				type(indent) == "string"
+				and type(tail) == "string"
+				and #indent > #tail
+				and string.sub(indent, 1, #tail) == tail
+			then
+				parent._step = string.sub(indent, #tail + 1)
+			end
 			table.remove(list, i)
 			if type(list[i - 1]) == "string" and string.match(list[i - 1], "^%s*$") then
 				table.remove(list, i - 1)
