@@ -12,6 +12,7 @@ pub mod condition;
 pub mod curve;
 pub mod edit;
 pub mod events;
+pub mod game;
 pub mod logical;
 pub mod modifier;
 pub mod profile;
@@ -33,6 +34,7 @@ pub use edit::{NewAction, child_groups, new_uuid};
 pub use events::{
     EVENT_INPUT_TYPE, EVENTS_GUID, ProfileEvent, is_builtin_device, is_event_binding,
 };
+pub use game::{GameBind, GameBindings, GameDevice, GameOutput};
 pub use logical::{
     KEYBOARD_GUID, LOGICAL_DEVICE_GUID, LogicalInput, key_from_input_id, key_input_id,
 };

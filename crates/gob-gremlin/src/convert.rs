@@ -110,6 +110,10 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
                 p.key_combos = combos_from(section);
                 Section::KeyCombos
             }
+            "game-bindings" => {
+                p.game_bindings = games_from(section);
+                Section::GameBindings
+            }
             _ => {
                 p.extra.push(section.clone());
                 Section::Extra(p.extra.len() - 1)
@@ -135,6 +139,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
             Section::VirtualDevices => p.virtual_devices.is_empty(),
             Section::VoiceCommands => p.voice_commands.is_empty(),
             Section::KeyCombos => p.key_combos.is_empty(),
+            Section::GameBindings => p.game_bindings.is_empty(),
             _ => false,
         };
         if empty {
@@ -178,6 +183,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
             Section::VirtualDevices => virtual_to(&p.virtual_devices),
             Section::VoiceCommands => voice_to(&p.voice_commands),
             Section::KeyCombos => combos_to(&p.key_combos),
+            Section::GameBindings => games_to(&p.game_bindings),
             Section::Extra(i) => p.extra[i].clone(),
         });
     }
@@ -297,6 +303,77 @@ fn voice_to(commands: &[VoiceCommand]) -> Element {
             )
             .with_attr("id", c.id.to_string())
             .with_attr("hold", c.hold.to_string())
+        }),
+    )
+}
+
+/// `<game-bindings>`: `<game id="..." target="..." version="..."><device output="vjoy:1"
+/// game-device="js1"/><bind action="..." output="vjoy:1:button:5" invert="true"/></game>`;
+/// binds with an unknown output and games without an id are skipped.
+fn games_from(section: &Element) -> Vec<gob_core::GameBindings> {
+    let mut games: Vec<gob_core::GameBindings> = Vec::new();
+    for g in named(section, "game") {
+        let game = g.attr("id").unwrap_or_default().trim().to_string();
+        if game.is_empty() || games.iter().any(|o| o.game == game) {
+            continue;
+        }
+        let devices = named(g, "device")
+            .filter_map(|d| {
+                Some(gob_core::GameDevice {
+                    output: d.attr("output")?.trim().to_string(),
+                    game_device: d.attr("game-device")?.trim().to_string(),
+                })
+            })
+            .collect();
+        let binds = named(g, "bind")
+            .filter_map(|b| {
+                Some(gob_core::GameBind {
+                    action: b.attr("action")?.trim().to_string(),
+                    output: gob_core::GameOutput::parse(b.attr("output")?)?,
+                    invert: b.attr("invert").is_some_and(|v| v.trim() == "true"),
+                })
+            })
+            .collect();
+        games.push(gob_core::GameBindings {
+            game,
+            target: g.attr("target").unwrap_or_default().trim().to_string(),
+            version: g
+                .attr("version")
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty()),
+            devices,
+            binds,
+        });
+    }
+    games
+}
+
+fn games_to(games: &[gob_core::GameBindings]) -> Element {
+    container(
+        "game-bindings",
+        games.iter().map(|g| {
+            let devices = g.devices.iter().map(|d| {
+                Element::new("device")
+                    .with_attr("output", &d.output)
+                    .with_attr("game-device", &d.game_device)
+            });
+            let binds = g.binds.iter().map(|b| {
+                let el = Element::new("bind")
+                    .with_attr("action", &b.action)
+                    .with_attr("output", b.output.to_string());
+                if b.invert {
+                    el.with_attr("invert", "true")
+                } else {
+                    el
+                }
+            });
+            let mut el = container("game", devices.chain(binds))
+                .with_attr("id", &g.game)
+                .with_attr("target", &g.target);
+            if let Some(v) = &g.version {
+                el = el.with_attr("version", v);
+            }
+            el
         }),
     )
 }
