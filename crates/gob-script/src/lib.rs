@@ -607,8 +607,9 @@ fn host_call(lua: &Lua, args: MultiValue, api: &mut dyn ScriptApi) -> mlua::Resu
     }
 }
 
-/// A Lua error as the user should read it, with its line when there is one.
-fn script_error(script: &str, e: &mlua::Error) -> ScriptError {
+/// A Lua error as the user should read it, with its line when there is one. `script` is the chunk
+/// name the code was loaded with (without the leading `=`).
+pub fn script_error(script: &str, e: &mlua::Error) -> ScriptError {
     let text = match e {
         mlua::Error::CallbackError { cause, .. } => cause.to_string(),
         e => e.to_string(),
