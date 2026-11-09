@@ -181,6 +181,7 @@ impl Plugin {
                 .map_err(lua_error)?;
             host.set("log", log).map_err(lua_error)?;
         }
+        crate::helpers::register(&lua, &host).map_err(lua_error)?;
         lua.load(PRELUDE)
             .set_name("=prelude")
             .call::<()>(host.clone())
@@ -339,5 +340,31 @@ mod tests {
         }
         // Hooks cannot be replaced from outside the prelude's API.
         assert!(Plugin::with_code("test", "plugin.targets(1)", manifest()).is_err());
+    }
+
+    #[test]
+    fn helpers_reach_plugins() {
+        let p = Plugin::with_code(
+            "test",
+            r#"
+            plugin.targets(function(ctx)
+                local doc = xml.parse("<a>\n  <b k=\"1\"/>\n</a>")
+                local a = xml.root(doc)
+                xml.append(a, xml.element("c", {n = "2"}))
+                xml.find(a, "b", {k = "1"}).attrs.k = "3"
+                local j = json.parse('{"v": [1, 2]}')
+                local i = ini.parse("[s]\nk=v")
+                return {{
+                    id = xml.write(doc),
+                    name = tostring(#j.v) .. i.s.k .. tostring(version.compare("4.10", "4.9")),
+                }}
+            end)
+            "#,
+            manifest(),
+        )
+        .unwrap();
+        let t = p.targets(&Env::default()).unwrap().remove(0);
+        assert_eq!(t.id, "<a>\n  <b k=\"3\"/>\n  <c n=\"2\"/>\n</a>");
+        assert_eq!(t.name, "2v1");
     }
 }

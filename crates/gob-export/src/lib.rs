@@ -8,13 +8,16 @@
 //! game's files. Game names, formats and paths live only in the plugins.
 
 pub mod catalog;
+mod helpers;
 mod plugin;
 pub mod types;
 pub mod version;
+pub mod xml;
 
 use std::path::{Path, PathBuf};
 
 pub use catalog::{ActionKind, Catalog, Catalogs, Fit, GameAction, Rename, Renames};
+pub use helpers::parse_ini;
 pub use plugin::{
     API, CALL_BUDGET, CATALOG_DIR, CODE, Hook, LOAD_BUDGET, MANIFEST, Manifest, Plugin,
     PluginError, RENAMES,
