@@ -101,6 +101,11 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   (`<scripts>`: Lua code as CDATA or a file path, Gremlin's Python kept, variables in Gremlin's XML); the app reads
   external files on activation (activation.rs) and reloads when they change; Scripts page = scripts_view.rs, editor =
   gob-ui `CodeEditor`
+- crates/gob-export  game export (plans/GAME_EXPORT_PLAN.md): plugins = folders in `export/`: plugin.gob (TOML: id, name,
+  supported game versions), plugin.luau (hooks targets/version/read/write, each takes one context table; sandboxed
+  like gob-script, 2 s per call), catalog/<game version>.gob (the game's actions), renames.gob (ids changed between
+  versions); plugins only turn text into text, the host reads and writes the game's files. Game names, formats and
+  paths only in plugins; tests/plugins/sample = a made-up game for the tests
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
   profile's phrases; models.rs = small Vosk model per program language (URL + SHA-256), downloaded into
