@@ -2494,6 +2494,7 @@ dependencies = [
  "futures-util",
  "gob-core",
  "gob-engine",
+ "gob-export",
  "gob-gremlin",
  "gob-hide",
  "gob-i18n",
