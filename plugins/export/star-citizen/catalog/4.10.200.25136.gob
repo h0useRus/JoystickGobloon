@@ -579,24 +579,24 @@ name = "Dynamic Zoom Toggle (abs.)"
 [[action]]
 id = "spaceship_view/v_ads_hold"
 category = "Vehicles - View"
-name = "ui_v_ads_hold"
+name = "Precision Targeting - Hold"
 
 [[action]]
 id = "spaceship_view/v_ads_toggle"
 category = "Vehicles - View"
-name = "ui_v_ads_toggle"
+name = "Precision Targeting - Toggle On / Off"
 default = ["kb1_mouse2"]
 
 [[action]]
 id = "spaceship_view/v_ads_stable_max_zoom_hold"
 category = "Vehicles - View"
-name = "ui_v_ads_stable_max_zoom_hold"
+name = "Precision Targeting - Maximum Zoom (hold)"
 default = ["kb1_mouse2"]
 
 [[action]]
 id = "spaceship_view/v_ads_cycle_tracking"
 category = "Vehicles - View"
-name = "ui_v_ads_cycle_tracking"
+name = "Precision Targeting - Toggle Camera Tracking"
 default = ["kb1_ralt+mouse2"]
 
 [[action]]
@@ -3238,7 +3238,7 @@ name = "Dynamic Zoom Toggle (abs.)"
 [[action]]
 id = "vehicle_driver/v_boost"
 category = "Ground Vehicle - Movement"
-name = "ui_CIboost"
+name = "Boost"
 default = ["js1_button8", "kb1_lshift"]
 
 [[action]]

@@ -100,7 +100,7 @@ def localization(channel: Path) -> dict:
     for line in text.decode("utf-8-sig", "replace").splitlines():
         k, sep, v = line.partition("=")
         if sep:
-            out.setdefault(k.split(",")[0].strip(), v.strip())
+            out.setdefault(k.split(",")[0].strip().lower(), v.strip())
     return out
 
 
@@ -115,7 +115,8 @@ def actions(channel: Path):
     loc = localization(channel)
 
     def name(label):
-        return loc.get(label.lstrip("@"), label.lstrip("@")) if label else ""
+        # Keys differ in case between defaultProfile.xml and global.ini.
+        return loc.get(label.lstrip("@").lower(), label.lstrip("@")) if label else ""
 
     for m in profile.iter("actionmap"):
         group = name(m.get("UILabel", "")) or m.get("name")
