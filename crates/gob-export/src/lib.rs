@@ -9,6 +9,7 @@
 
 pub mod catalog;
 mod helpers;
+pub mod host;
 mod plugin;
 pub mod types;
 pub mod version;

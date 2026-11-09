@@ -1,5 +1,6 @@
 //! One plugin: its manifest, catalogs, renames and the Luau state running `plugin.luau`.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -12,9 +13,10 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::catalog::{Catalogs, Renames};
+
 use crate::types::{
-    Env, Files, ReadContext, ReadResult, Target, TargetsContext, VersionContext, WriteContext,
-    WriteResult,
+    Env, Files, OptionDecl, OptionValue, ReadContext, ReadResult, Target, TargetsContext,
+    VersionContext, WriteContext, WriteResult,
 };
 use crate::version::Range;
 
@@ -87,6 +89,7 @@ pub struct Plugin {
     pub catalogs: Catalogs,
     pub renames: Renames,
     lua: Lua,
+    host: Table,
     hooks: Table,
     /// Nanoseconds after `clock` at which the running call is stopped.
     deadline: Arc<AtomicU64>,
@@ -194,6 +197,7 @@ impl Plugin {
             catalogs: Catalogs::default(),
             renames: Renames::default(),
             lua,
+            host,
             hooks,
             deadline,
             clock,
@@ -207,6 +211,41 @@ impl Plugin {
 
     pub fn id(&self) -> &str {
         &self.manifest.id
+    }
+
+    /// The options the plugin declared, by key.
+    pub fn options(&self) -> Result<Vec<OptionDecl>, PluginError> {
+        let Some(decls) = self
+            .host
+            .raw_get::<Option<Table>>("options")
+            .map_err(|e| self.lua_error(&e))?
+        else {
+            return Ok(Vec::new());
+        };
+        let mut out = Vec::new();
+        for pair in decls.pairs::<String, Value>() {
+            let (key, value) = pair.map_err(|e| self.lua_error(&e))?;
+            let mut decl: OptionDecl = self
+                .lua
+                .from_value(value)
+                .map_err(|e| error(self.id(), format!("plugin.options '{key}': {e}")))?;
+            decl.key = key;
+            out.push(decl);
+        }
+        out.sort_by(|a, b| a.key.cmp(&b.key));
+        Ok(out)
+    }
+
+    /// `values` with every missing option at its default.
+    pub fn option_values(
+        &self,
+        values: &BTreeMap<String, OptionValue>,
+    ) -> Result<BTreeMap<String, OptionValue>, PluginError> {
+        let mut out = values.clone();
+        for decl in self.options()? {
+            out.entry(decl.key).or_insert(decl.default);
+        }
+        Ok(out)
     }
 
     pub fn has(&self, hook: Hook) -> bool {

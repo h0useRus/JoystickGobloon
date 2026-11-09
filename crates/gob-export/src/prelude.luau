@@ -30,6 +30,14 @@ plugin = {
 	log = function(text)
 		H.log(tostring(text))
 	end,
+	-- plugin.options { key = {kind = "bool" | "number" | "text", label = "...", default = ...} }:
+	-- a form the program shows; write hooks get the values in ctx.options.
+	options = function(decls)
+		if type(decls) ~= "table" then
+			error("plugin.options needs a table", 2)
+		end
+		H.options = decls
+	end,
 }
 
 -- XML that keeps the file's formatting: elements are {tag, attrs, children}, text is a string,

@@ -24,6 +24,9 @@ pub struct Target {
     /// The game's files the plugin reads and writes, by its own keys.
     #[serde(default)]
     pub files: BTreeMap<String, String>,
+    /// Folders the plugin may create new files in (`WriteResult::create`), by its own keys.
+    #[serde(default)]
+    pub dirs: BTreeMap<String, String>,
     /// The key in `files` of the file that tells the game version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version_file: Option<String>,
@@ -99,13 +102,52 @@ pub struct Change {
     pub to: Option<String>,
 }
 
+/// A file a write creates (or replaces) in one of the target's `dirs`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct NewFile {
+    /// The key in `Target::dirs`.
+    pub dir: String,
+    /// A file name, without folders.
+    pub name: String,
+    pub text: String,
+}
+
 /// New contents of the game's files, by the keys of `Target::files`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 pub struct WriteResult {
     #[serde(default)]
     pub files: BTreeMap<String, String>,
     #[serde(default)]
+    pub create: Vec<NewFile>,
+    #[serde(default)]
     pub changes: Vec<Change>,
+}
+
+/// A value of a plugin option.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum OptionValue {
+    Bool(bool),
+    Number(f64),
+    Text(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OptionKind {
+    Bool,
+    Number,
+    Text,
+}
+
+/// An option a plugin declares with `plugin.options`; the program shows it as a form.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct OptionDecl {
+    #[serde(default)]
+    pub key: String,
+    pub kind: OptionKind,
+    pub label: String,
+    pub default: OptionValue,
 }
 
 #[derive(Serialize)]
@@ -137,4 +179,6 @@ pub struct WriteContext<'a> {
     pub binds: &'a [Bind],
     /// The profile's name, for names the plugin gives new files.
     pub profile: &'a str,
+    /// Values of the plugin's options, by key; missing ones take their default.
+    pub options: &'a BTreeMap<String, OptionValue>,
 }

@@ -93,6 +93,7 @@ fn write_then_read_gives_the_same_binds() {
         devices: &[],
         binds: &binds,
         profile: "Test",
+        options: &Default::default(),
     };
     let written = p.write(&ctx).unwrap();
     assert_eq!(
