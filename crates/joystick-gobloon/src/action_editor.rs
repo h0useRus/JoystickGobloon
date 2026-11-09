@@ -380,6 +380,29 @@ pub enum Op {
         name: String,
         value: Option<gob_core::ScriptValue>,
     },
+    /// Game export: `output` drives the game action `action` of `game`.
+    GameBind {
+        game: String,
+        action: String,
+        output: gob_core::GameOutput,
+    },
+    /// Game export: unlinks `action` from `output` (`None`: from every output).
+    GameUnbind {
+        game: String,
+        action: String,
+        output: Option<gob_core::GameOutput>,
+    },
+    /// Game export: how the game numbers the virtual devices.
+    GameDevices {
+        game: String,
+        devices: Vec<gob_core::GameDevice>,
+    },
+    /// Game export: the target and game version last exported to.
+    GameExported {
+        game: String,
+        target: String,
+        version: Option<String>,
+    },
 }
 
 pub fn apply(p: &mut Profile, op: Op) {
@@ -618,6 +641,28 @@ pub fn apply(p: &mut Profile, op: Op) {
         | Op::PreviewSpeech(_)
         | Op::PreviewLight { .. }
         | Op::GoToVoice(_) => {}
+        Op::GameBind {
+            game,
+            action,
+            output,
+        } => {
+            p.bind_game_action(&game, &action, output);
+        }
+        Op::GameUnbind {
+            game,
+            action,
+            output,
+        } => p.unbind_game_action(&game, &action, output.as_ref()),
+        Op::GameDevices { game, devices } => p.set_game_devices(&game, devices),
+        Op::GameExported {
+            game,
+            target,
+            version,
+        } => {
+            let g = p.game_bindings_mut(&game);
+            g.target = target;
+            g.version = version;
+        }
         Op::SetCondition {
             action,
             index,

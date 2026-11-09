@@ -125,6 +125,9 @@ pub(crate) trait Desktop {
     fn foreground_program() -> Option<Program>;
     /// Running programs with a window the user can switch to.
     fn running_programs() -> Vec<Program>;
+    /// Folders game export plugins search for games: the drives on Windows; the home folder and
+    /// the Wine and Proton prefixes' drive_c on Linux.
+    fn game_roots() -> Vec<String>;
 }
 
 /// A running program, for switching profiles by program.
@@ -187,6 +190,10 @@ pub(crate) fn default_data_dir() -> Option<PathBuf> {
 
 pub(crate) fn documents_dir() -> Option<PathBuf> {
     Current::documents_dir()
+}
+
+pub(crate) fn game_roots() -> Vec<String> {
+    Current::game_roots()
 }
 
 pub(crate) fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {

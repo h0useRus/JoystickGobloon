@@ -24,6 +24,7 @@ enum Page {
     Viewer,
     Calibration,
     Scripts,
+    Game,
     Settings,
 }
 
@@ -53,6 +54,9 @@ pub struct JoystickGobloonApp {
     calibration_view: crate::calibration_view::CalibrationView,
     /// The calibration is shown in its own window.
     calibration_window: bool,
+    game_view: crate::game_view::GameView,
+    /// The game bindings are shown in their own window.
+    game_window: bool,
     /// Saved axis calibrations (also applied in the input service).
     calibrations: gob_input::Calibrations,
     hidhide_view: HidHideView,
@@ -267,6 +271,8 @@ impl JoystickGobloonApp {
             scripts_checked: std::time::Instant::now(),
             calibration_view: Default::default(),
             calibration_window: false,
+            game_view: Default::default(),
+            game_window: false,
             calibrations: Default::default(),
             hidhide_view: HidHideView::new(),
             hidhide_window: false,
@@ -347,6 +353,7 @@ impl JoystickGobloonApp {
             Ok("viewer") => app.page = Page::Viewer,
             Ok("calibration") => app.page = Page::Calibration,
             Ok("scripts") => app.page = Page::Scripts,
+            Ok("game") => app.page = Page::Game,
             Ok("wizard") => app.wizard = Some(crate::wizard_view::Wizard::new()),
             Ok("switch-unsaved") => app.ask_switch_unsaved = true,
             Ok("switch-stopped") => {
@@ -1364,6 +1371,38 @@ impl JoystickGobloonApp {
                 self.calibration_window = false;
             }
         }
+        if self.game_window {
+            let title = self.i18n.tr("nav-game");
+            let mut ops = Vec::new();
+            let mut status = None;
+            let vjoy = self.vjoy_view.device_list();
+            let (view, i18n) = (&mut self.game_view, &self.i18n);
+            let attach = match &self.profile {
+                Some(p) => {
+                    let name = p.file_name();
+                    let name = name.trim_end_matches(".xml");
+                    let game_ctx = crate::game_view::Context {
+                        profile: &p.profile,
+                        profile_name: name,
+                        devices: &devices,
+                        vjoy: &vjoy,
+                    };
+                    detached_window(ctx, "game", &title, BIG_WINDOW, |ui| {
+                        let out = view.show(ui, i18n, &game_ctx, &mut ops, true);
+                        status = status.take().or(out.status);
+                        out.toggle_window
+                    })
+                }
+                None => true,
+            };
+            if let Some(s) = status {
+                self.status = s;
+            }
+            self.apply_ops(ops);
+            if attach {
+                self.game_window = false;
+            }
+        }
         if self.hidhide_window {
             let (view, i18n, settings) = (&mut self.hidhide_view, &self.i18n, &mut self.settings);
             let title = i18n.tr("nav-hidhide");
@@ -1595,6 +1634,7 @@ impl JoystickGobloonApp {
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
                 (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
                 (Page::Scripts, icon::CODE, "nav-scripts"),
+                (Page::Game, icon::FLOW_ARROW, "nav-game"),
             ] {
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
@@ -2311,9 +2351,14 @@ impl eframe::App for JoystickGobloonApp {
         }
         // Detached windows stay on screen while the main window is only minimized.
         let live = !in_tray
-            && ((shown && matches!(self.page, Page::Devices | Page::Viewer | Page::Calibration))
+            && ((shown
+                && matches!(
+                    self.page,
+                    Page::Devices | Page::Viewer | Page::Calibration | Page::Game
+                ))
                 || self.viewer_window
-                || self.calibration_window);
+                || self.calibration_window
+                || self.game_window);
         self.live_input
             .store(live, std::sync::atomic::Ordering::Relaxed);
         // Always drained; events from before the window came back are stale and only dropped.
@@ -2528,6 +2573,44 @@ impl eframe::App for JoystickGobloonApp {
                     }
                     self.apply_calibration(out);
                 }
+                Page::Game if self.game_window => {
+                    empty_state(ui, icon::ARROW_SQUARE_OUT, &self.i18n.tr("game-in-window"));
+                    ui.vertical_centered(|ui| {
+                        let text = format!(
+                            "{}  {}",
+                            icon::ARROW_SQUARE_IN,
+                            self.i18n.tr("viewer-attach")
+                        );
+                        if ui.button(text).clicked() {
+                            self.game_window = false;
+                        }
+                    });
+                }
+                Page::Game => match &self.profile {
+                    None => empty_state(ui, icon::FLOW_ARROW, &self.i18n.tr("no-profile")),
+                    Some(p) => {
+                        let devices = self.input.devices();
+                        let vjoy = self.vjoy_view.device_list();
+                        let name = p.file_name();
+                        let game_ctx = crate::game_view::Context {
+                            profile: &p.profile,
+                            profile_name: name.trim_end_matches(".xml"),
+                            devices: &devices,
+                            vjoy: &vjoy,
+                        };
+                        let mut ops = Vec::new();
+                        let out = self
+                            .game_view
+                            .show(ui, &self.i18n, &game_ctx, &mut ops, false);
+                        if out.toggle_window {
+                            self.game_window = true;
+                        }
+                        if let Some(s) = out.status {
+                            self.status = s;
+                        }
+                        self.apply_ops(ops);
+                    }
+                },
                 Page::Scripts => match &self.profile {
                     None => empty_state(ui, icon::CODE, &self.i18n.tr("no-profile")),
                     Some(p) => {

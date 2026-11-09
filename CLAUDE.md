@@ -105,7 +105,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   supported game versions), plugin.luau (hooks targets/version/read/write, each takes one context table; sandboxed
   like gob-script, 2 s per call), catalog/<game version>.gob (the game's actions), renames.gob (ids changed between
   versions); plugins only turn text into text, the host reads and writes the game's files. Game names, formats and
-  paths only in plugins; tests/plugins/sample = a made-up game for the tests
+  paths only in plugins; tests/plugins/sample = a made-up game for the tests; example `export_check` (read-only run on the
+  real game files, `--roundtrip [--dump <dir>]`). Plugins: plugins/export/<id>/ (star-citizen: dev/catalog.py rebuilds
+  catalog/<version>.gob from a local install, only on the user's request). GUI: game_view.rs = Game bindings page (rail,
+  detaches like calibration): plugins run on a worker thread, wiring schematic + "As in the game" table, import, export dialog
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
   profile's phrases; models.rs = small Vosk model per program language (URL + SHA-256), downloaded into
@@ -188,8 +191,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting,
-  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical,
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting,
+  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical | game-list (Game page table),
+  `JOYSTICK_GOBLOON_GAME_IMPORT=1` takes the game's bindings into a profile without any on the Game page (debug only),
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new

@@ -324,6 +324,38 @@ impl super::Desktop for Desktop {
     fn running_programs() -> Vec<super::Program> {
         programs::running_programs()
     }
+
+    /// The home folder, ~/Games and the drive_c of Wine, Proton (Steam) and Lutris prefixes.
+    fn game_roots() -> Vec<String> {
+        let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+            return Vec::new();
+        };
+        let mut roots = vec![home.clone(), home.join("Games"), home.join(".wine/drive_c")];
+        let prefixes = |dir: PathBuf, tail: &str| -> Vec<PathBuf> {
+            std::fs::read_dir(dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path().join(tail))
+                .collect()
+        };
+        for steam in [
+            ".local/share/Steam",
+            ".steam/steam",
+            ".var/app/com.valvesoftware.Steam/data/Steam",
+        ] {
+            roots.extend(prefixes(
+                home.join(steam).join("steamapps/compatdata"),
+                "pfx/drive_c",
+            ));
+        }
+        roots.extend(prefixes(home.join("Games"), "drive_c"));
+        roots
+            .into_iter()
+            .filter(|r| r.is_dir())
+            .map(|r| r.to_string_lossy().into_owned())
+            .collect()
+    }
 }
 
 #[cfg(test)]

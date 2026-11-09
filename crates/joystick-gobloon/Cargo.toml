@@ -18,6 +18,7 @@ gob-hide.workspace = true
 gob-engine.workspace = true
 gob-voice.workspace = true
 gob-script.workspace = true
+gob-export.workspace = true
 gob-lighting.workspace = true
 gob-ui.workspace = true
 rfd.workspace = true
@@ -62,6 +63,7 @@ windows = { workspace = true, features = [
     "Win32_Security",
     "Win32_UI_Shell",
     "Win32_System_Com",
+    "Win32_Storage_FileSystem",
 ] }
 
 [build-dependencies]
