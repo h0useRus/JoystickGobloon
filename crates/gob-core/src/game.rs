@@ -23,14 +23,61 @@ const AXES: [&str; 8] = ["x", "y", "z", "rx", "ry", "rz", "slider", "dial"];
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GameOutput {
     Virtual(VirtualOutput),
+    /// One direction of a hat (or a gamepad's d-pad): games bind them one by one.
+    HatDirection(VirtualOutput, HatDirection),
     Key(crate::Key),
+}
+
+/// A hat direction games bind on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HatDirection {
+    Up,
+    Right,
+    Down,
+    Left,
+}
+
+impl HatDirection {
+    pub const ALL: [Self; 4] = [Self::Up, Self::Right, Self::Down, Self::Left];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Up => "up",
+            Self::Right => "right",
+            Self::Down => "down",
+            Self::Left => "left",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|d| d.name() == s)
+    }
 }
 
 impl GameOutput {
     /// Output ids: `vjoy:1:button:5`, `vjoy:1:axis:x`, `vjoy:1:hat:1`, `gamepad:1:a`,
     /// `logical:axis:12`, `key:0x2e` (extended keys `key:0x12e`).
     pub fn parse(s: &str) -> Option<Self> {
-        let parts: Vec<&str> = s.trim().split(':').collect();
+        let s = s.trim();
+        if let Some((base, dir)) = s.rsplit_once(':')
+            && let Some(dir) = HatDirection::parse(dir)
+        {
+            return match Self::parse(base)? {
+                Self::Virtual(
+                    o @ (VirtualOutput::Vjoy {
+                        input_type: InputType::Hat,
+                        ..
+                    }
+                    | VirtualOutput::Logical {
+                        input_type: InputType::Hat,
+                        ..
+                    }
+                    | VirtualOutput::Gamepad { .. }),
+                ) => Some(Self::HatDirection(o, dir)),
+                _ => None,
+            };
+        }
+        let parts: Vec<&str> = s.split(':').collect();
         let num = |p: &str| p.parse::<u32>().ok().filter(|n| *n > 0);
         let typed = |t: &str, id: &str| -> Option<(InputType, u32)> {
             match t {
@@ -84,12 +131,18 @@ impl GameOutput {
 
     /// The device part of the output id (`vjoy:1`, `gamepad:1`), for device links.
     pub fn device(&self) -> Option<String> {
+        match self.virtual_output()? {
+            VirtualOutput::Vjoy { device, .. } => Some(format!("vjoy:{device}")),
+            VirtualOutput::Gamepad { gamepad, .. } => Some(format!("gamepad:{gamepad}")),
+            VirtualOutput::Logical { .. } => None,
+        }
+    }
+
+    /// The virtual output behind it (the whole hat for a direction).
+    pub fn virtual_output(&self) -> Option<&VirtualOutput> {
         match self {
-            Self::Virtual(VirtualOutput::Vjoy { device, .. }) => Some(format!("vjoy:{device}")),
-            Self::Virtual(VirtualOutput::Gamepad { gamepad, .. }) => {
-                Some(format!("gamepad:{gamepad}"))
-            }
-            _ => None,
+            Self::Virtual(o) | Self::HatDirection(o, _) => Some(o),
+            Self::Key(_) => None,
         }
     }
 }
@@ -124,6 +177,9 @@ impl std::fmt::Display for GameOutput {
                     _ => "button",
                 };
                 write!(f, "logical:{t}:{id}")
+            }
+            Self::HatDirection(o, dir) => {
+                write!(f, "{}:{}", Self::Virtual(o.clone()), dir.name())
             }
             Self::Key(k) => write!(f, "key:0x{:x}", crate::key_input_id(*k)),
         }
@@ -254,6 +310,8 @@ mod tests {
             "vjoy:2:axis:x",
             "vjoy:2:axis:dial",
             "vjoy:1:hat:1",
+            "vjoy:1:hat:2:left",
+            "gamepad:1:dpad:up",
             "gamepad:1:left-x",
             "logical:axis:2",
             "key:0x2e",
@@ -273,6 +331,8 @@ mod tests {
             "key:46",
             "key:0x300",
             "x:1",
+            "vjoy:1:button:1:up",
+            "key:0x2e:up",
         ] {
             assert!(GameOutput::parse(bad).is_none(), "{bad}");
         }
