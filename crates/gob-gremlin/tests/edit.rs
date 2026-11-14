@@ -1076,3 +1076,44 @@ fn pasted_run_action_targets_come_along_where_missing() {
     let runs: Vec<&str> = same.action(&copy[0]).unwrap().run_targets();
     assert_eq!(runs, ["target"]);
 }
+
+#[test]
+fn logical_device_macro_steps_round_trip() {
+    use gob_core::{ActionKind, MacroStep, VirtualOutput};
+    let mut p = Profile::default();
+    let root = p.bind(DEV, "button", "1", "Default");
+    let m = p
+        .add_child(&root, "actions", gob_core::Action::new(&NewAction::Macro))
+        .unwrap();
+    let steps = [
+        MacroStep::LogicalButton {
+            id: 2,
+            pressed: true,
+        },
+        MacroStep::LogicalAxis {
+            id: 3,
+            value: 0.25,
+            relative: true,
+        },
+        MacroStep::LogicalHat {
+            id: 1,
+            direction: Some(9000),
+        },
+    ];
+    for (i, s) in steps.iter().enumerate() {
+        p.set_macro_step(&m, i, s);
+    }
+    let xml = gob_gremlin::to_string(&p);
+    assert!(xml.contains(r#"<macro-action type="logical-device">"#));
+    let back = gob_gremlin::from_str(&xml).unwrap();
+    let ActionKind::Macro { steps: read, .. } = back.action(&m).unwrap().kind() else {
+        panic!("not a macro");
+    };
+    assert_eq!(read, steps);
+    assert!(
+        gob_core::virtual_outputs(back.action(&m).unwrap()).contains(&VirtualOutput::Logical {
+            input_type: InputType::Axis,
+            id: 3,
+        })
+    );
+}

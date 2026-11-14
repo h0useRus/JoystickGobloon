@@ -85,6 +85,18 @@ pub fn virtual_outputs(action: &Action) -> Vec<VirtualOutput> {
                 gamepad,
                 control: "dpad".into(),
             },
+            MacroStep::LogicalButton { id, .. } => VirtualOutput::Logical {
+                input_type: InputType::Button,
+                id,
+            },
+            MacroStep::LogicalAxis { id, .. } => VirtualOutput::Logical {
+                input_type: InputType::Axis,
+                id,
+            },
+            MacroStep::LogicalHat { id, .. } => VirtualOutput::Logical {
+                input_type: InputType::Hat,
+                id,
+            },
             _ => continue,
         };
         if !outputs.contains(&output) {

@@ -3000,6 +3000,14 @@ impl Engine {
                 if should_execute(act, *value) {
                     self.macro_trigger(node, repeat, src, now, out);
                 }
+                // A macro run on press and release also runs on a release in another mode
+                // (a hold macro stops there instead).
+                if act == ActivationMode::Both
+                    && value.truthy()
+                    && !matches!(repeat, MacroRepeat::Hold { .. })
+                {
+                    self.register_rerun(node, src);
+                }
             }
             Node::Voice {
                 ref microphone,
@@ -3727,7 +3735,7 @@ impl Engine {
                 }
                 continue;
             }
-            self.macro_step(step, out);
+            self.macro_step(step, now, out);
         }
     }
 
@@ -3773,7 +3781,7 @@ impl Engine {
         }
     }
 
-    fn macro_step(&mut self, step: MacroStep, out: &mut dyn Output) {
+    fn macro_step(&mut self, step: MacroStep, now: Instant, out: &mut dyn Output) {
         let id = |n: u32| n.min(255) as u8;
         match step {
             MacroStep::Key {
@@ -3839,6 +3847,26 @@ impl Engine {
                 self.pad_axis(gamepad, c, (value as f32).clamp(low, 1.0), out);
             }
             MacroStep::GamepadDpad { gamepad, direction } => out.gamepad_dpad(gamepad, direction),
+            MacroStep::LogicalButton { id: n, pressed } => {
+                let key = InputKey::new(gob_core::LOGICAL_DEVICE_GUID, InputKind::Button, n);
+                self.feed_logical(&key, Value::Button(pressed), now, out);
+            }
+            MacroStep::LogicalAxis {
+                id: n,
+                value,
+                relative,
+            } => {
+                let key = InputKey::new(gob_core::LOGICAL_DEVICE_GUID, InputKind::Axis, n);
+                let mut v = value as f32;
+                if relative {
+                    v += self.axes.get(&key).copied().unwrap_or(0.0);
+                }
+                self.feed_logical(&key, Value::Axis(v.clamp(-1.0, 1.0)), now, out);
+            }
+            MacroStep::LogicalHat { id: n, direction } => {
+                let key = InputKey::new(gob_core::LOGICAL_DEVICE_GUID, InputKind::Hat, n);
+                self.feed_logical(&key, Value::Hat(direction), now, out);
+            }
             // Run-action steps run in `macro_advance`, which knows the macro's targets.
             MacroStep::Pause(_) | MacroStep::RunAction { .. } | MacroStep::Other => {}
         }
