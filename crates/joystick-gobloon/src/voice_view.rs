@@ -142,18 +142,16 @@ pub fn command_editor(
                 phrases.remove(i);
                 set(ops, phrases);
             }
+            // Matched by its text, not its command: the running profile may be another one,
+            // and the same text has the same unknown words whichever profile says it.
             let unknown = status
                 .into_iter()
-                .flat_map(|s| &s.unknown_words)
-                .find(|(command_id, p, _)| *command_id == id && p == phrase);
-            if let Some((_, _, words)) = unknown {
-                let tip = i18n.trf("voice-unknown-words", &[("words", words.join(", ").into())]);
-                ui.label(
-                    RichText::new(icon::WARNING)
-                        .size(style::ICON_SIZE)
-                        .color(ui.visuals().warn_fg_color),
-                )
-                .on_hover_text(tip);
+                .flat_map(|s| s.unknown_words.iter())
+                .find(|u| u.phrase == *phrase);
+            if let Some(u) = unknown {
+                let words = u.words.join(", ");
+                let tip = i18n.trf("voice-unknown-words", &[("words", words.into())]);
+                style::warn_mark(ui, icon::WARNING, &tip);
             }
         });
     }

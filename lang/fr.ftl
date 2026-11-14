@@ -456,6 +456,7 @@ edit-dual-second = Sortie du second axe
 edit-link-existing = Lier une action existante
 edit-copy-existing = Copier une action existante
 edit-shared = Action partagée : utilisée à { $count } endroits. Une modification ici les change tous.
+edit-shared-parent = Elle se trouve dans une action partagée : déliez d’abord celle-ci pour ne changer que cet endroit.
 edit-unlink = Délier : donner à cet endroit sa propre copie
 
 # Condition

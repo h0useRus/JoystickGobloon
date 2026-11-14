@@ -456,6 +456,7 @@ edit-dual-second = Salida del segundo eje
 edit-link-existing = Vincular una acción existente
 edit-copy-existing = Copiar una acción existente
 edit-shared = Acción compartida: se usa en { $count } lugares. Un cambio aquí los cambia todos.
+edit-shared-parent = Está dentro de una acción compartida: desvincula primero esa para cambiar solo este lugar.
 edit-unlink = Desvincular: dar a este lugar su propia copia
 
 # Condition

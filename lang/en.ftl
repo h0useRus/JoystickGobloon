@@ -456,6 +456,7 @@ edit-dual-second = Second axis output
 edit-link-existing = Link an existing action
 edit-copy-existing = Copy an existing action
 edit-shared = Shared action: used in { $count } places. A change here changes all of them.
+edit-shared-parent = It sits inside a shared action: unlink that one first to change only this place.
 edit-unlink = Unlink: give this place its own copy
 
 # Condition

@@ -444,6 +444,7 @@ edit-dual-second = 第二轴输出
 edit-link-existing = 链接现有动作
 edit-copy-existing = 复制现有动作
 edit-shared = 共享动作：在 { $count } 处使用。在此修改会同时改变所有位置。
+edit-shared-parent = 它位于一个共享动作内：要只改此处，请先取消那个动作的链接。
 edit-unlink = 取消链接：为此处创建独立副本
 
 # Condition

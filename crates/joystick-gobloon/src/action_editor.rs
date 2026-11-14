@@ -1012,10 +1012,9 @@ fn speakable(action: &Action) -> bool {
 }
 
 impl Editor<'_> {
-    /// An action card's voice command button: opens the command that runs the action, or makes
-    /// one saying the card's name (none without a name). Not on a voice command's own actions.
     /// A shared action (used in more than one place) shows a link and an Unlink button that
-    /// gives this place its own copy.
+    /// gives this place its own copy. Inside a shared parent the copy would go to every place
+    /// using the parent: no button then, the tooltip says to unlink the parent first.
     fn shared_mark(
         &mut self,
         ui: &mut egui::Ui,
@@ -1025,33 +1024,37 @@ impl Editor<'_> {
         id: &str,
     ) {
         let profile = self.profile;
-        let uses = self
-            .use_counts
-            .get_or_init(|| profile.use_counts())
-            .get(id)
-            .copied()
-            .unwrap_or(0);
+        let counts = self.use_counts.get_or_init(|| profile.use_counts());
+        let uses = counts.get(id).copied().unwrap_or(0);
         if uses < 2 {
             return;
         }
-        if style::icon_button(ui, true, icon::LINK_BREAK, &self.i18n.tr("edit-unlink")).clicked() {
+        let parent_shared = counts.get(parent).copied().unwrap_or(0) > 1;
+        if !parent_shared
+            && style::icon_button(ui, true, icon::LINK_BREAK, &self.i18n.tr("edit-unlink"))
+                .clicked()
+        {
             self.ops.push(Op::Unlink {
                 parent: parent.into(),
                 group: group.into(),
                 index,
             });
         }
-        let tip = self
+        let mut tip = self
             .i18n
             .trf("edit-shared", &[("count", (uses as i64).into())]);
-        ui.label(
-            RichText::new(icon::LINK)
-                .size(style::ICON_SIZE)
-                .color(ui.visuals().warn_fg_color),
-        )
-        .on_hover_text(tip);
+        if parent_shared {
+            tip = format!(
+                "{tip}
+{}",
+                self.i18n.tr("edit-shared-parent")
+            );
+        }
+        style::warn_mark(ui, icon::LINK, &tip);
     }
 
+    /// An action card's voice command button: opens the command that runs the action, or makes
+    /// one saying the card's name (none without a name). Not on a voice command's own actions.
     fn voice_button(&mut self, ui: &mut egui::Ui, action: &Action) {
         let Some((mode, _)) = self.place else {
             return;

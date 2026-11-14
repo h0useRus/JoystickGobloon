@@ -456,6 +456,7 @@ edit-dual-second = Ausgabe der zweiten Achse
 edit-link-existing = Vorhandene Aktion verknüpfen
 edit-copy-existing = Vorhandene Aktion kopieren
 edit-shared = Gemeinsame Aktion: an { $count } Stellen verwendet. Eine Änderung hier ändert alle.
+edit-shared-parent = Sie liegt in einer gemeinsamen Aktion: Trenne zuerst diese, um nur diese Stelle zu ändern.
 edit-unlink = Trennen: diese Stelle erhält eine eigene Kopie
 
 # Condition
