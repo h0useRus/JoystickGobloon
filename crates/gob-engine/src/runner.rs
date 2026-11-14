@@ -45,8 +45,8 @@ pub struct VoiceStatus {
     pub listening: bool,
     /// The last utterance.
     pub heard: Option<VoiceHeard>,
-    /// Phrases with words the speech model does not know: (command id, phrase, the words).
-    pub unknown_words: Vec<gob_voice::UnknownPhrase>,
+    /// Phrases with words the speech model does not know (shared: cloned with every status).
+    pub unknown_words: std::sync::Arc<[gob_voice::UnknownPhrase]>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -695,7 +695,7 @@ struct ServiceState {
     error: Option<String>,
     /// Microphones listening now.
     listening: HashSet<String>,
-    unknown_words: Vec<gob_voice::UnknownPhrase>,
+    unknown_words: std::sync::Arc<[gob_voice::UnknownPhrase]>,
 }
 
 impl ServiceState {
@@ -1172,10 +1172,14 @@ mod tests {
     #[test]
     fn unknown_words_reach_the_status() {
         let mut service = ServiceState::default();
-        let list = vec![(1, "zz me".to_string(), vec!["zz".to_string()])];
+        let list: std::sync::Arc<[_]> = std::sync::Arc::new([gob_voice::UnknownPhrase {
+            command: 1,
+            phrase: "zz me".into(),
+            words: vec!["zz".into()],
+        }]);
         service.handle(gob_voice::VoiceEvent::UnknownWords(list.clone()));
         assert_eq!(service.apply(VoiceStatus::default()).unknown_words, list);
-        service.handle(gob_voice::VoiceEvent::UnknownWords(Vec::new()));
+        service.handle(gob_voice::VoiceEvent::UnknownWords(std::sync::Arc::new([])));
         assert!(
             service
                 .apply(VoiceStatus::default())

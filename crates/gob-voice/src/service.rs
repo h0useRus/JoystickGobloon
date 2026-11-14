@@ -71,12 +71,19 @@ pub enum VoiceEvent {
         confidence: f32,
     },
     /// The phrases with words the speech model does not know (it never hears them), sent when
-    /// they change: (command id, phrase, the unknown words). Empty once none are left.
-    UnknownWords(Vec<UnknownPhrase>),
+    /// they change. Empty once none are left.
+    UnknownWords(Arc<[UnknownPhrase]>),
 }
 
-/// A phrase with words the speech model does not know: (command id, phrase, the words).
-pub type UnknownPhrase = (u32, String, Vec<String>);
+/// A phrase with words the speech model does not know.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownPhrase {
+    /// The id of the command saying it.
+    pub command: u32,
+    pub phrase: String,
+    /// Its words the model does not know, in lower case.
+    pub words: Vec<String>,
+}
 
 /// Something that turns audio into a phrase index; Vosk's recognizer, or a fake in tests.
 trait Recognize: Send {
@@ -235,7 +242,7 @@ impl VoiceService {
                         make,
                         open,
                         unknown,
-                        unknown_reported: Vec::new(),
+                        unknown_reported: Arc::new([]),
                         settings,
                         phrases: Arc::new(phrases),
                         events,
@@ -360,7 +367,7 @@ struct Worker {
     open: OpenMicrophone,
     unknown: FindUnknown,
     /// The phrases with unknown words last reported.
-    unknown_reported: Vec<UnknownPhrase>,
+    unknown_reported: Arc<[UnknownPhrase]>,
     settings: Settings,
     phrases: Phrases,
     events: Sender<VoiceEvent>,
@@ -400,17 +407,24 @@ impl Worker {
             .iter()
             .filter_map(|(id, phrase)| {
                 let words = (self.unknown)(phrase);
-                (!words.is_empty()).then(|| (*id, phrase.clone(), words))
+                (!words.is_empty()).then(|| UnknownPhrase {
+                    command: *id,
+                    phrase: phrase.clone(),
+                    words,
+                })
             })
             .collect();
-        if found == self.unknown_reported {
+        if *found == *self.unknown_reported {
             return;
         }
-        for (_, phrase, words) in found.iter().filter(|f| !self.unknown_reported.contains(f)) {
+        for u in found.iter().filter(|f| !self.unknown_reported.contains(f)) {
             log::warn!(
-                "voice: the speech model does not know {words:?}: phrase {phrase:?} will not be heard"
+                "voice: the speech model does not know {:?}: phrase {:?} will not be heard",
+                u.words,
+                u.phrase
             );
         }
+        let found: Arc<[UnknownPhrase]> = found.into();
         self.unknown_reported = found.clone();
         let _ = self.events.send(VoiceEvent::UnknownWords(found));
     }
@@ -967,7 +981,11 @@ mod tests {
         let reported = |list: &[(u32, &str, &str)]| {
             VoiceEvent::UnknownWords(
                 list.iter()
-                    .map(|(id, p, w)| (*id, p.to_string(), vec![w.to_string()]))
+                    .map(|(id, p, w)| UnknownPhrase {
+                        command: *id,
+                        phrase: p.to_string(),
+                        words: vec![w.to_string()],
+                    })
                     .collect(),
             )
         };
