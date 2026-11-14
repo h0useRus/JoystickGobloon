@@ -443,6 +443,9 @@ edit-dual-second = 두 번째 축 출력
 # Existing actions (Gremlin's reference action)
 edit-link-existing = 기존 동작 연결
 edit-copy-existing = 기존 동작 복사
+edit-shared = 공유 동작: { $count }곳에서 사용됩니다. 여기서 바꾸면 모두 바뀝니다.
+edit-shared-parent = 공유 동작 안에 있습니다: 이곳만 바꾸려면 먼저 그 동작의 연결을 해제하세요.
+edit-unlink = 연결 해제: 여기에 별도 복사본 만들기
 
 # Condition
 kind-condition = 조건
@@ -747,6 +750,7 @@ voice-listening = 듣는 중…
 voice-loading = 음성 모델을 불러오는 중…
 voice-heard = 인식됨 “{ $text }” ({ $confidence } %): { $command }
 voice-heard-unknown = 인식됨 “{ $text }” ({ $confidence } %): 명령 없음
+voice-unknown-words = 음성 모델이 { $words }을(를) 모릅니다: 이 문구는 절대 인식되지 않습니다. 다른 단어를 쓰거나 붙어 있는 단어를 두 단어로 나눠 쓰세요.
 voice-heard-nothing = 아무것도 들리지 않음
 status-voice = 음성 명령: 눌러서 말하기 입력을 누른 채 말하세요
 settings-voice = 음성

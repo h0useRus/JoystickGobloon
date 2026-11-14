@@ -443,6 +443,9 @@ edit-dual-second = 第二轴输出
 # Existing actions (Gremlin's reference action)
 edit-link-existing = 链接现有动作
 edit-copy-existing = 复制现有动作
+edit-shared = 共享动作：在 { $count } 处使用。在此修改会同时改变所有位置。
+edit-shared-parent = 它位于一个共享动作内：要只改此处，请先取消那个动作的链接。
+edit-unlink = 取消链接：为此处创建独立副本
 
 # Condition
 kind-condition = 条件
@@ -747,6 +750,7 @@ voice-listening = 正在聆听…
 voice-loading = 正在加载语音模型…
 voice-heard = 听到“{ $text }”（{ $confidence } %）：{ $command }
 voice-heard-unknown = 听到“{ $text }”（{ $confidence } %）：没有对应命令
+voice-unknown-words = 语音模型不认识 { $words }：永远听不到这个短语。请换用其他词语，或把连在一起的词分开写成两个词。
 voice-heard-nothing = 什么也没听到
 status-voice = 语音命令：按住一键通输入后说话
 settings-voice = 语音

@@ -455,6 +455,9 @@ edit-dual-second = Salida del segundo eje
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Vincular una acción existente
 edit-copy-existing = Copiar una acción existente
+edit-shared = Acción compartida: se usa en { $count } lugares. Un cambio aquí los cambia todos.
+edit-shared-parent = Está dentro de una acción compartida: desvincula primero esa para cambiar solo este lugar.
+edit-unlink = Desvincular: dar a este lugar su propia copia
 
 # Condition
 kind-condition = Condición
@@ -759,6 +762,7 @@ voice-listening = Escuchando…
 voice-loading = Cargando el modelo de voz…
 voice-heard = Oído «{ $text }» ({ $confidence } %): { $command }
 voice-heard-unknown = Oído «{ $text }» ({ $confidence } %): ningún comando
+voice-unknown-words = El modelo de voz no conoce { $words }: nunca oirá esta frase. Usa otras palabras o escribe el pronombre unido como palabra aparte (cubre me).
 voice-heard-nothing = No se oyó nada
 status-voice = Comandos de voz: mantén la entrada de pulsar para hablar para hablar
 settings-voice = Voz
