@@ -761,6 +761,7 @@ voice-listening = Écoute…
 voice-loading = Chargement du modèle vocal…
 voice-heard = Entendu « { $text } » ({ $confidence } %) : { $command }
 voice-heard-unknown = Entendu « { $text } » ({ $confidence } %) : aucune commande
+voice-unknown-words = Le modèle vocal ne connaît pas { $words } : il n’entend jamais cette phrase. Utilisez d’autres mots, ou écrivez un mot soudé à un autre en deux mots.
 voice-heard-nothing = Rien entendu
 status-voice = Commandes vocales : maintenez l'entrée « appuyer pour parler » pour parler
 settings-voice = Voix

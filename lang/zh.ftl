@@ -749,6 +749,7 @@ voice-listening = 正在聆听…
 voice-loading = 正在加载语音模型…
 voice-heard = 听到“{ $text }”（{ $confidence } %）：{ $command }
 voice-heard-unknown = 听到“{ $text }”（{ $confidence } %）：没有对应命令
+voice-unknown-words = 语音模型不认识 { $words }：永远听不到这个短语。请换用其他词语，或把连在一起的词分开写成两个词。
 voice-heard-nothing = 什么也没听到
 status-voice = 语音命令：按住一键通输入后说话
 settings-voice = 语音

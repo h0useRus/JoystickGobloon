@@ -106,8 +106,15 @@ pub fn status_icon(ui: &mut egui::Ui, i18n: &I18n, status: &VoiceStatus) {
 }
 
 /// A command's title with its delete button, its phrases (edited in place, an empty field adds
-/// one) and how long it holds its button.
-pub fn command_editor(ui: &mut egui::Ui, i18n: &I18n, command: &VoiceCommand, ops: &mut Vec<Op>) {
+/// one) and how long it holds its button. A phrase with words the running profile's speech model
+/// does not know (from `status`) carries a warning: it is never heard.
+pub fn command_editor(
+    ui: &mut egui::Ui,
+    i18n: &I18n,
+    command: &VoiceCommand,
+    status: Option<&VoiceStatus>,
+    ops: &mut Vec<Op>,
+) {
     let id = command.id;
     ui.horizontal(|ui| {
         ui.label(RichText::new(icon::MICROPHONE).size(18.0));
@@ -134,6 +141,19 @@ pub fn command_editor(ui: &mut egui::Ui, i18n: &I18n, command: &VoiceCommand, op
                 let mut phrases = command.phrases.clone();
                 phrases.remove(i);
                 set(ops, phrases);
+            }
+            let unknown = status
+                .into_iter()
+                .flat_map(|s| &s.unknown_words)
+                .find(|(command_id, p, _)| *command_id == id && p == phrase);
+            if let Some((_, _, words)) = unknown {
+                let tip = i18n.trf("voice-unknown-words", &[("words", words.join(", ").into())]);
+                ui.label(
+                    RichText::new(icon::WARNING)
+                        .size(style::ICON_SIZE)
+                        .color(ui.visuals().warn_fg_color),
+                )
+                .on_hover_text(tip);
             }
         });
     }

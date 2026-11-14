@@ -761,6 +761,7 @@ voice-listening = Escuchando…
 voice-loading = Cargando el modelo de voz…
 voice-heard = Oído «{ $text }» ({ $confidence } %): { $command }
 voice-heard-unknown = Oído «{ $text }» ({ $confidence } %): ningún comando
+voice-unknown-words = El modelo de voz no conoce { $words }: nunca oirá esta frase. Usa otras palabras o escribe el pronombre unido como palabra aparte (cubre me).
 voice-heard-nothing = No se oyó nada
 status-voice = Comandos de voz: mantén la entrada de pulsar para hablar para hablar
 settings-voice = Voz

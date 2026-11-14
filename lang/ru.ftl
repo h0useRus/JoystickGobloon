@@ -769,6 +769,7 @@ voice-listening = Слушаю…
 voice-loading = Загрузка речевой модели…
 voice-heard = Услышано «{ $text }» ({ $confidence } %): { $command }
 voice-heard-unknown = Услышано «{ $text }» ({ $confidence } %): нет такой команды
+voice-unknown-words = Речевая модель не знает слов { $words }: эту фразу она никогда не услышит. Возьмите другие слова или напишите слитное слово как два отдельных.
 voice-heard-nothing = Ничего не услышано
 status-voice = Голосовые команды: удерживайте вход голосового ввода и говорите
 settings-voice = Голос

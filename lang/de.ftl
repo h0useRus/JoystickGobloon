@@ -761,6 +761,7 @@ voice-listening = Hört zu…
 voice-loading = Sprachmodell wird geladen…
 voice-heard = Gehört „{ $text }“ ({ $confidence } %): { $command }
 voice-heard-unknown = Gehört „{ $text }“ ({ $confidence } %): kein Befehl
+voice-unknown-words = Das Sprachmodell kennt { $words } nicht: Es hört diesen Satz nie. Nimm andere Wörter oder schreibe ein zusammengesetztes Wort als zwei Wörter.
 voice-heard-nothing = Nichts gehört
 status-voice = Sprachbefehle: halte die Push-to-Talk-Eingabe, um zu sprechen
 settings-voice = Sprache
