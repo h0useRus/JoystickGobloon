@@ -1072,16 +1072,13 @@ impl Profile {
     }
 
     /// How many places use each action (linked with "Link an existing action", or by a Gremlin
-    /// profile): references from parents and input layers. Voice commands linking an action
-    /// (shown by their own mark) and run-action steps (they run it, not hold it) do not count.
+    /// profile, or by a voice command made from an action): references from parents and input
+    /// layers. Run-action steps do not count: they run an action, they do not hold it.
     pub fn use_counts(&self) -> HashMap<&str, usize> {
         let index = self.action_index();
         let mut counts: HashMap<&str, usize> = HashMap::new();
         let mut stack: Vec<&str> = Vec::new();
         for b in &self.inputs {
-            if crate::voice::is_voice_binding(&b.device_id, &b.input_type) {
-                continue;
-            }
             for c in &b.configs {
                 *counts.entry(c.root_action.as_str()).or_default() += 1;
                 stack.push(c.root_action.as_str());
@@ -1105,7 +1102,8 @@ impl Profile {
     }
 
     /// Gives `parent`'s `index`-th child in `group` its own copy (with everything below it), so
-    /// changes there no longer reach the other places that use it. Returns the copy's id.
+    /// changes there no longer reach the other places that use it. Returns the copy's id. When
+    /// `parent` is shared itself, every place using `parent` gets the copy: unlink `parent` first.
     pub fn unlink_child(&mut self, parent: &str, group: &str, index: usize) -> Option<String> {
         let id = {
             let refs = self.action(parent)?.group(group)?;
@@ -1453,18 +1451,18 @@ mod tests {
             .add_child(&tempo, "short-actions", Action::new(&vjoy))
             .unwrap();
         assert!(p.add_ref(&b, "actions", &tempo));
-        // A voice command running it is not a second place.
+        // A voice command running it is one more place.
         let voice = p.bind(crate::VOICE_GUID, crate::VOICE_INPUT_TYPE, "1", "Default");
         assert!(p.add_ref(&voice, "actions", &tempo));
 
         let counts = p.use_counts();
-        assert_eq!(counts.get(tempo.as_str()), Some(&2));
+        assert_eq!(counts.get(tempo.as_str()), Some(&3));
         assert_eq!(counts.get(short.as_str()), Some(&1));
         assert_eq!(counts.get(a.as_str()), Some(&1));
 
         let copy = p.unlink_child(&b, "actions", 0).unwrap();
         assert_ne!(copy, tempo);
-        assert_eq!(p.use_counts().get(tempo.as_str()), Some(&1));
+        assert_eq!(p.use_counts().get(tempo.as_str()), Some(&2));
         assert_eq!(p.use_counts().get(copy.as_str()), Some(&1));
         // The copy has its own outputs: a change there leaves the original alone.
         let copied_short = p.action(&copy).unwrap().child_ids()[0].to_string();
