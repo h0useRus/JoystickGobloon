@@ -9,7 +9,7 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-gob-i18n = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.4.0" }
+gob-i18n = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.4.1" }
 gob-core = { path = "crates/gob-core" }
 gob-gremlin = { path = "crates/gob-gremlin" }
 quick-xml = "0.42"
@@ -22,7 +22,7 @@ gob-hidhide = { path = "crates/gob-hidhide" }
 gob-hide = { path = "crates/gob-hide" }
 gob-engine = { path = "crates/gob-engine" }
 gob-lighting = { path = "crates/gob-lighting" }
-gob-ui = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.4.0" }
+gob-ui = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.4.1" }
 gob-system = { path = "crates/gob-system" }
 gob-voice = { path = "crates/gob-voice" }
 gob-script = { path = "crates/gob-script" }
