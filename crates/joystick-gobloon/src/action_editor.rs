@@ -223,6 +223,12 @@ pub enum Op {
         group: String,
         index: usize,
     },
+    /// Gives a shared child its own copy here (see [`gob_core::Profile::unlink_child`]).
+    Unlink {
+        parent: String,
+        group: String,
+        index: usize,
+    },
     Move {
         parent: String,
         group: String,
@@ -492,6 +498,13 @@ pub fn apply(p: &mut Profile, op: Op) {
             group,
             index,
         } => p.remove_child(&parent, &group, index),
+        Op::Unlink {
+            parent,
+            group,
+            index,
+        } => {
+            p.unlink_child(&parent, &group, index);
+        }
         Op::Move {
             parent,
             group,
@@ -970,6 +983,8 @@ pub struct Editor<'a> {
     pub curve_right_click_invert: bool,
     /// Actions voice commands run, with the command (built once per frame, when a card needs it).
     pub voice_links: std::cell::OnceCell<std::collections::HashMap<String, u32>>,
+    /// How many places use each action (built once per frame, when a card needs it).
+    pub use_counts: std::cell::OnceCell<std::collections::HashMap<&'a str, usize>>,
 }
 
 /// Whether one spoken press makes sense for the action, so its card offers a voice command:
@@ -997,6 +1012,47 @@ fn speakable(action: &Action) -> bool {
 }
 
 impl Editor<'_> {
+    /// A shared action (used in more than one place) shows a link and an Unlink button that
+    /// gives this place its own copy. Inside a shared parent the copy would go to every place
+    /// using the parent: no button then, the tooltip says to unlink the parent first.
+    fn shared_mark(
+        &mut self,
+        ui: &mut egui::Ui,
+        parent: &str,
+        group: &str,
+        index: usize,
+        id: &str,
+    ) {
+        let profile = self.profile;
+        let counts = self.use_counts.get_or_init(|| profile.use_counts());
+        let uses = counts.get(id).copied().unwrap_or(0);
+        if uses < 2 {
+            return;
+        }
+        let parent_shared = counts.get(parent).copied().unwrap_or(0) > 1;
+        if !parent_shared
+            && style::icon_button(ui, true, icon::LINK_BREAK, &self.i18n.tr("edit-unlink"))
+                .clicked()
+        {
+            self.ops.push(Op::Unlink {
+                parent: parent.into(),
+                group: group.into(),
+                index,
+            });
+        }
+        let mut tip = self
+            .i18n
+            .trf("edit-shared", &[("count", (uses as i64).into())]);
+        if parent_shared {
+            tip = format!(
+                "{tip}
+{}",
+                self.i18n.tr("edit-shared-parent")
+            );
+        }
+        style::warn_mark(ui, icon::LINK, &tip);
+    }
+
     /// An action card's voice command button: opens the command that runs the action, or makes
     /// one saying the card's name (none without a name). Not on a voice command's own actions.
     fn voice_button(&mut self, ui: &mut egui::Ui, action: &Action) {
@@ -1321,6 +1377,7 @@ impl Editor<'_> {
                         );
                     }
                     self.voice_button(ui, action);
+                    self.shared_mark(ui, parent, group, index, id);
                     let mut label = action
                         .label()
                         .filter(|l| *l != "None")

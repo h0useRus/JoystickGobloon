@@ -455,6 +455,9 @@ edit-dual-second = Ausgabe der zweiten Achse
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Vorhandene Aktion verknüpfen
 edit-copy-existing = Vorhandene Aktion kopieren
+edit-shared = Gemeinsame Aktion: an { $count } Stellen verwendet. Eine Änderung hier ändert alle.
+edit-shared-parent = Sie liegt in einer gemeinsamen Aktion: Trenne zuerst diese, um nur diese Stelle zu ändern.
+edit-unlink = Trennen: diese Stelle erhält eine eigene Kopie
 
 # Condition
 kind-condition = Bedingung
@@ -759,6 +762,7 @@ voice-listening = Hört zu…
 voice-loading = Sprachmodell wird geladen…
 voice-heard = Gehört „{ $text }“ ({ $confidence } %): { $command }
 voice-heard-unknown = Gehört „{ $text }“ ({ $confidence } %): kein Befehl
+voice-unknown-words = Das Sprachmodell kennt { $words } nicht: Es hört diesen Satz nie. Nimm andere Wörter oder schreibe ein zusammengesetztes Wort als zwei Wörter.
 voice-heard-nothing = Nichts gehört
 status-voice = Sprachbefehle: halte die Push-to-Talk-Eingabe, um zu sprechen
 settings-voice = Sprache

@@ -463,6 +463,9 @@ edit-dual-second = Выход второй оси
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Связать с существующим действием
 edit-copy-existing = Копировать существующее действие
+edit-shared = Общее действие: используется в { $count } местах. Изменение здесь меняет его везде.
+edit-shared-parent = Оно внутри общего действия: сначала отвяжите то, чтобы менять только это место.
+edit-unlink = Отвязать: сделать здесь отдельную копию
 
 # Condition
 kind-condition = Условие
@@ -767,6 +770,7 @@ voice-listening = Слушаю…
 voice-loading = Загрузка речевой модели…
 voice-heard = Услышано «{ $text }» ({ $confidence } %): { $command }
 voice-heard-unknown = Услышано «{ $text }» ({ $confidence } %): нет такой команды
+voice-unknown-words = Речевая модель не знает слов { $words }: эту фразу она никогда не услышит. Возьмите другие слова или напишите слитное слово как два отдельных.
 voice-heard-nothing = Ничего не услышано
 status-voice = Голосовые команды: удерживайте вход голосового ввода и говорите
 settings-voice = Голос

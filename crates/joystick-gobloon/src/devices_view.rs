@@ -1175,7 +1175,7 @@ impl DevicesView {
         if let (Kind::Voice, Some(p)) = (key.0, profile)
             && let Some(command) = p.profile.voice_command(key.1)
         {
-            crate::voice_view::command_editor(ui, i18n, command, ops);
+            crate::voice_view::command_editor(ui, i18n, command, self.voice.as_ref(), ops);
         } else if let (Kind::Combo, Some(p)) = (key.0, profile)
             && let Some(combo) = p.profile.key_combo(key.1)
         {
@@ -1429,6 +1429,7 @@ impl DevicesView {
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
                     voice_links: Default::default(),
+                    use_counts: Default::default(),
                 };
                 let first_op = editor.ops.len();
                 for (n, cfg) in configs.iter().enumerate() {
@@ -1491,6 +1492,7 @@ impl DevicesView {
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
                     voice_links: Default::default(),
+                    use_counts: Default::default(),
                 };
                 ui.horizontal(|ui| {
                     editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));

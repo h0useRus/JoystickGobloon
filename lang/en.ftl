@@ -455,6 +455,9 @@ edit-dual-second = Second axis output
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Link an existing action
 edit-copy-existing = Copy an existing action
+edit-shared = Shared action: used in { $count } places. A change here changes all of them.
+edit-shared-parent = It sits inside a shared action: unlink that one first to change only this place.
+edit-unlink = Unlink: give this place its own copy
 
 # Condition
 kind-condition = Condition
@@ -759,6 +762,7 @@ voice-listening = Listening…
 voice-loading = Loading the speech model…
 voice-heard = Heard “{ $text }” ({ $confidence } %): { $command }
 voice-heard-unknown = Heard “{ $text }” ({ $confidence } %): no command
+voice-unknown-words = The speech model does not know { $words }: it never hears this phrase. Use other words, or write a word stuck to another as two words.
 voice-heard-nothing = Heard nothing
 status-voice = Voice commands: hold the push-to-talk input to speak
 settings-voice = Voice

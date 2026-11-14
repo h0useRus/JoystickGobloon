@@ -1071,6 +1071,54 @@ impl Profile {
         self.paste(&actions, &[id.to_string()]).pop()
     }
 
+    /// How many places use each action (linked with "Link an existing action", or by a Gremlin
+    /// profile, or by a voice command made from an action): references from parents and input
+    /// layers. Run-action steps do not count: they run an action, they do not hold it.
+    pub fn use_counts(&self) -> HashMap<&str, usize> {
+        let index = self.action_index();
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        let mut stack: Vec<&str> = Vec::new();
+        for b in &self.inputs {
+            for c in &b.configs {
+                *counts.entry(c.root_action.as_str()).or_default() += 1;
+                stack.push(c.root_action.as_str());
+            }
+        }
+        // Each parent reached from an input counts its references once.
+        let mut seen: HashSet<&str> = HashSet::new();
+        while let Some(cur) = stack.pop() {
+            if !seen.insert(cur) {
+                continue;
+            }
+            let Some(a) = index.get(cur) else {
+                continue;
+            };
+            for child in a.child_ids() {
+                *counts.entry(child).or_default() += 1;
+                stack.push(child);
+            }
+        }
+        counts
+    }
+
+    /// Gives `parent`'s `index`-th child in `group` its own copy (with everything below it), so
+    /// changes there no longer reach the other places that use it. Returns the copy's id. When
+    /// `parent` is shared itself, every place using `parent` gets the copy: unlink `parent` first.
+    pub fn unlink_child(&mut self, parent: &str, group: &str, index: usize) -> Option<String> {
+        let id = {
+            let refs = self.action(parent)?.group(group)?;
+            match &refs[nth_ref(refs, index)?] {
+                Item::ActionRef(id) => id.clone(),
+                _ => return None,
+            }
+        };
+        let copy = self.duplicate(&id)?;
+        let refs = self.action_mut(parent)?.group_mut(group);
+        let pos = nth_ref(refs, index)?;
+        refs[pos] = Item::ActionRef(copy.clone());
+        Some(copy)
+    }
+
     /// The actions `tops` and everything they use (below them, and what their run-action steps
     /// run), cloned, each once, `tops` first: what [`Profile::paste`] copies into this or
     /// another profile. Unknown ids are left out.
@@ -1384,6 +1432,49 @@ mod tests {
         assert!(p.action(&button).is_none());
         p.remove_sequence(&axis);
         assert!(p.inputs.is_empty());
+    }
+
+    #[test]
+    fn a_shared_action_is_counted_and_unlinked() {
+        let mut p = Profile::default();
+        let a = p.bind("{DEV}", "button", "10", "Default");
+        let b = p.bind("{DEV}", "button", "11", "Default");
+        let tempo = p
+            .add_child(&a, "actions", Action::new(&NewAction::Tempo))
+            .unwrap();
+        let vjoy = NewAction::MapToVjoy {
+            input_type: InputType::Button,
+            device: 1,
+            input_id: 1,
+        };
+        let short = p
+            .add_child(&tempo, "short-actions", Action::new(&vjoy))
+            .unwrap();
+        assert!(p.add_ref(&b, "actions", &tempo));
+        // A voice command running it is one more place.
+        let voice = p.bind(crate::VOICE_GUID, crate::VOICE_INPUT_TYPE, "1", "Default");
+        assert!(p.add_ref(&voice, "actions", &tempo));
+
+        let counts = p.use_counts();
+        assert_eq!(counts.get(tempo.as_str()), Some(&3));
+        assert_eq!(counts.get(short.as_str()), Some(&1));
+        assert_eq!(counts.get(a.as_str()), Some(&1));
+
+        let copy = p.unlink_child(&b, "actions", 0).unwrap();
+        assert_ne!(copy, tempo);
+        assert_eq!(p.use_counts().get(tempo.as_str()), Some(&2));
+        assert_eq!(p.use_counts().get(copy.as_str()), Some(&1));
+        // The copy has its own outputs: a change there leaves the original alone.
+        let copied_short = p.action(&copy).unwrap().child_ids()[0].to_string();
+        assert_ne!(copied_short, short);
+        p.action_mut(&copied_short)
+            .unwrap()
+            .set("vjoy-input-id", "int", "5");
+        assert_ne!(
+            p.action(&short).unwrap().items,
+            p.action(&copied_short).unwrap().items
+        );
+        assert!(p.unlink_child(&b, "actions", 3).is_none());
     }
 
     #[test]
