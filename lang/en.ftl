@@ -455,6 +455,8 @@ edit-dual-second = Second axis output
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Link an existing action
 edit-copy-existing = Copy an existing action
+edit-shared = Shared action: used in { $count } places. A change here changes all of them.
+edit-unlink = Unlink: give this place its own copy
 
 # Condition
 kind-condition = Condition

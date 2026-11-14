@@ -443,6 +443,8 @@ edit-dual-second = 두 번째 축 출력
 # Existing actions (Gremlin's reference action)
 edit-link-existing = 기존 동작 연결
 edit-copy-existing = 기존 동작 복사
+edit-shared = 공유 동작: { $count }곳에서 사용됩니다. 여기서 바꾸면 모두 바뀝니다.
+edit-unlink = 연결 해제: 여기에 별도 복사본 만들기
 
 # Condition
 kind-condition = 조건

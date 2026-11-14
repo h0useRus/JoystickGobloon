@@ -1429,6 +1429,7 @@ impl DevicesView {
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
                     voice_links: Default::default(),
+                    use_counts: Default::default(),
                 };
                 let first_op = editor.ops.len();
                 for (n, cfg) in configs.iter().enumerate() {
@@ -1491,6 +1492,7 @@ impl DevicesView {
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
                     voice_links: Default::default(),
+                    use_counts: Default::default(),
                 };
                 ui.horizontal(|ui| {
                     editor.add_menu(ui, None, |kind| bind(Some(kind), &layer));

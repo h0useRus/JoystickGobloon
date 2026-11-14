@@ -455,6 +455,8 @@ edit-dual-second = Ausgabe der zweiten Achse
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Vorhandene Aktion verknüpfen
 edit-copy-existing = Vorhandene Aktion kopieren
+edit-shared = Gemeinsame Aktion: an { $count } Stellen verwendet. Eine Änderung hier ändert alle.
+edit-unlink = Trennen: diese Stelle erhält eine eigene Kopie
 
 # Condition
 kind-condition = Bedingung

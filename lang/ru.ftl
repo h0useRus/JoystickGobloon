@@ -463,6 +463,8 @@ edit-dual-second = Выход второй оси
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Связать с существующим действием
 edit-copy-existing = Копировать существующее действие
+edit-shared = Общее действие: используется в { $count } местах. Изменение здесь меняет его везде.
+edit-unlink = Отвязать: сделать здесь отдельную копию
 
 # Condition
 kind-condition = Условие

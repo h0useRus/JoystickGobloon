@@ -455,6 +455,8 @@ edit-dual-second = Salida del segundo eje
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Vincular una acción existente
 edit-copy-existing = Copiar una acción existente
+edit-shared = Acción compartida: se usa en { $count } lugares. Un cambio aquí los cambia todos.
+edit-unlink = Desvincular: dar a este lugar su propia copia
 
 # Condition
 kind-condition = Condición

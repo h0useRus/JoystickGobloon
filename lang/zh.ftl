@@ -443,6 +443,8 @@ edit-dual-second = 第二轴输出
 # Existing actions (Gremlin's reference action)
 edit-link-existing = 链接现有动作
 edit-copy-existing = 复制现有动作
+edit-shared = 共享动作：在 { $count } 处使用。在此修改会同时改变所有位置。
+edit-unlink = 取消链接：为此处创建独立副本
 
 # Condition
 kind-condition = 条件
