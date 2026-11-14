@@ -196,6 +196,8 @@ apps-mode-start = Mode de départ
 apps-mode-tip = Mode dans lequel le profil démarre pour ce programme
 apps-own-no-profile = Joystick Gobloon ne choisit jamais de profil pour lui-même
 apps-running-tip = Son profil est en cours
+apps-other = Tout autre programme
+apps-other-tip = Profil utilisé tant qu'aucun programme de cette liste ayant un profil n'est au premier plan : autres programmes et bureau. Si Joystick Gobloon lui-même est au premier plan ou s'il reste des modifications non enregistrées, le profil en cours reste
 
 # Engine
 action-activate = Activer le profil
@@ -579,6 +581,9 @@ macro-step-vjoy-hat = Chapeau du stick virtuel
 macro-step-pad-button = Bouton de manette
 macro-step-pad-axis = Stick ou gâchette de manette
 macro-step-pad-dpad = Croix directionnelle de manette
+macro-step-logical-button = Bouton du périphérique logique
+macro-step-logical-axis = Axe du périphérique logique
+macro-step-logical-hat = Chapeau du périphérique logique
 macro-step-run-action = Exécuter une action
 macro-run-pick = Choisir une action
 macro-run-missing = Action introuvable

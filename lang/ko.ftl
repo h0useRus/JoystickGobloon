@@ -196,6 +196,8 @@ apps-mode-start = 시작 모드
 apps-mode-tip = 이 프로그램에서 프로필이 시작하는 모드
 apps-own-no-profile = Joystick Gobloon은 자신의 프로필을 선택하지 않습니다
 apps-running-tip = 지금 이 프로그램의 프로필이 실행 중
+apps-other = 기타 모든 프로그램
+apps-other-tip = 이 목록에서 프로필이 있는 프로그램이 앞에 없을 때 실행되는 프로필입니다: 다른 프로그램과 바탕 화면. Joystick Gobloon 자체가 앞에 있거나 저장하지 않은 변경 사항이 있으면 현재 프로필이 유지됩니다
 
 # Engine
 action-activate = 프로필 활성화
@@ -567,6 +569,9 @@ macro-step-vjoy-hat = 가상 스틱 햇 스위치
 macro-step-pad-button = 게임패드 버튼
 macro-step-pad-axis = 게임패드 스틱 또는 트리거
 macro-step-pad-dpad = 게임패드 방향 패드
+macro-step-logical-button = 논리 장치 버튼
+macro-step-logical-axis = 논리 장치 축
+macro-step-logical-hat = 논리 장치 햇 스위치
 macro-step-run-action = 동작 실행
 macro-run-pick = 동작 선택
 macro-run-missing = 동작을 찾을 수 없음

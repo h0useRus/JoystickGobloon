@@ -239,6 +239,26 @@ impl Editor<'_> {
                 self.gamepad_step(ui, id, index, ControlKind::Dpad, gamepad, &mut control);
                 hat_directions(ui, self, direction);
             }
+            MacroStep::LogicalButton { id: input, pressed } => {
+                self.logical_step(ui, id, index, InputType::Button, input);
+                press_toggle(ui, self, pressed);
+            }
+            MacroStep::LogicalAxis {
+                id: input,
+                value,
+                relative,
+            } => {
+                self.logical_step(ui, id, index, InputType::Axis, input);
+                axis_value(ui, value, -1.0);
+                ui.add(style::switch(relative, self.i18n.tr("vjoy-relative")));
+            }
+            MacroStep::LogicalHat {
+                id: input,
+                direction,
+            } => {
+                self.logical_step(ui, id, index, InputType::Hat, input);
+                hat_directions(ui, self, direction);
+            }
             MacroStep::RunAction { action } => self.run_action_step(ui, id, index, action),
             MacroStep::Other => {
                 ui.label(RichText::new(self.i18n.tr("edit-not-editable")).weak());
@@ -302,6 +322,37 @@ impl Editor<'_> {
         if let Some(picked) = self.vjoy_target(ui, id, &salt, *device, ty, *output) {
             (*device, *output) = picked;
         }
+    }
+
+    /// Logical device input of type `ty` a step sets.
+    fn logical_step(
+        &self,
+        ui: &mut egui::Ui,
+        id: &str,
+        index: usize,
+        ty: InputType,
+        input: &mut u32,
+    ) {
+        let inputs: Vec<gob_core::LogicalInput> = self
+            .profile
+            .logical_inputs()
+            .into_iter()
+            .filter(|i| i.input_type == ty)
+            .collect();
+        ui.label(RichText::new(icon::CPU).size(style::ICON_SIZE))
+            .on_hover_text(self.i18n.tr("logical-device"));
+        let shown = inputs
+            .iter()
+            .find(|i| i.id == *input)
+            .map_or_else(|| format!("#{input} ?"), |i| i.label.clone());
+        egui::ComboBox::from_id_salt(("macro-logical", id, index))
+            .selected_text(shown)
+            .width(180.0)
+            .show_ui(ui, |ui| {
+                for i in &inputs {
+                    ui.selectable_value(input, i.id, i.label.clone());
+                }
+            });
     }
 
     /// Gamepad and control of a step: buttons for `ControlKind::Button`, sticks and triggers
@@ -398,6 +449,26 @@ impl Editor<'_> {
                         },
                     ]);
                 }
+                // Logical device steps once the profile has inputs of that type there.
+                let logical = self.profile.logical_inputs();
+                let first =
+                    |ty: InputType| logical.iter().find(|i| i.input_type == ty).map(|i| i.id);
+                if let Some(id) = first(InputType::Button) {
+                    choices.push(MacroStep::LogicalButton { id, pressed: true });
+                }
+                if let Some(id) = first(InputType::Axis) {
+                    choices.push(MacroStep::LogicalAxis {
+                        id,
+                        value: 0.0,
+                        relative: false,
+                    });
+                }
+                if let Some(id) = first(InputType::Hat) {
+                    choices.push(MacroStep::LogicalHat {
+                        id,
+                        direction: None,
+                    });
+                }
                 choices.push(MacroStep::RunAction {
                     action: String::new(),
                 });
@@ -468,6 +539,9 @@ fn step_icon(step: &MacroStep) -> &'static str {
         MacroStep::GamepadButton { .. }
         | MacroStep::GamepadAxis { .. }
         | MacroStep::GamepadDpad { .. } => icon::GAME_CONTROLLER,
+        MacroStep::LogicalButton { .. }
+        | MacroStep::LogicalAxis { .. }
+        | MacroStep::LogicalHat { .. } => icon::CPU,
         MacroStep::RunAction { .. } => icon::PERSON_SIMPLE_RUN,
         MacroStep::Other => icon::PUZZLE_PIECE,
     }
@@ -486,6 +560,9 @@ fn step_key(step: &MacroStep) -> &'static str {
         MacroStep::GamepadButton { .. } => "macro-step-pad-button",
         MacroStep::GamepadAxis { .. } => "macro-step-pad-axis",
         MacroStep::GamepadDpad { .. } => "macro-step-pad-dpad",
+        MacroStep::LogicalButton { .. } => "macro-step-logical-button",
+        MacroStep::LogicalAxis { .. } => "macro-step-logical-axis",
+        MacroStep::LogicalHat { .. } => "macro-step-logical-hat",
         MacroStep::RunAction { .. } => "macro-step-run-action",
         MacroStep::Other => "edit-not-editable",
     }

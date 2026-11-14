@@ -17,6 +17,8 @@ use crate::style::{self, icon};
 const HISTORY: f64 = 20.0;
 const SAMPLE_EVERY: Duration = Duration::from_millis(30);
 const REFRESH: Duration = Duration::from_millis(33);
+/// A button press or hat direction stays lit at least this long, so a quick tap shows.
+const MIN_LIT: Duration = Duration::from_millis(150);
 
 /// One colour per axis slot (X, Y, Z, Rx, Ry, Rz, Slider 1, Slider 2).
 const AXIS_COLORS: [Color32; 8] = [
@@ -71,6 +73,14 @@ pub struct ViewerView {
     history: HashMap<String, VecDeque<(f64, [f32; 8])>>,
     start: Option<Instant>,
     last_sample: Option<Instant>,
+    /// Per device and button or hat index: until when it stays lit, and the hat's direction.
+    lit: HashMap<(String, Lit), (Instant, Option<u16>)>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Lit {
+    Button(usize),
+    Hat(usize),
 }
 
 impl ViewerView {
@@ -160,11 +170,40 @@ impl ViewerView {
                     }
                     if shown.buttons && (d.info.buttons > 0 || d.info.hats > 0) {
                         section(ui, &format!("{name} · {}", i18n.tr("viewer-buttons")));
-                        buttons_and_hats(ui, &names, d);
+                        let (buttons, hats) = self.lit_state(d);
+                        buttons_and_hats(ui, &names, &buttons, &hats);
                     }
                 }
             });
         toggle
+    }
+
+    /// Buttons and hats as shown: what is down now, and what went up less than [`MIN_LIT`]
+    /// ago (a hat keeps its last direction that long).
+    fn lit_state(&mut self, d: &DeviceState) -> (Vec<bool>, Vec<Option<u16>>) {
+        let now = Instant::now();
+        let mut lit = |key: Lit, on: Option<u16>, down: bool| {
+            let k = (d.info.guid.clone(), key);
+            if down {
+                self.lit.insert(k, (now + MIN_LIT, on));
+                return (true, on);
+            }
+            match self.lit.get(&k) {
+                Some(&(until, last)) if until > now => (true, last),
+                Some(_) => {
+                    self.lit.remove(&k);
+                    (false, None)
+                }
+                None => (false, None),
+            }
+        };
+        let buttons = (d.buttons.iter().enumerate())
+            .map(|(i, &p)| lit(Lit::Button(i), None, p).0)
+            .collect();
+        let hats = (d.hats.iter().enumerate())
+            .map(|(i, &h)| lit(Lit::Hat(i), h, h.is_some()).1)
+            .collect();
+        (buttons, hats)
     }
 
     fn now(&mut self) -> f64 {
@@ -398,12 +437,12 @@ fn current_axes(ui: &mut egui::Ui, names: &Names, d: &DeviceState) {
     });
 }
 
-fn buttons_and_hats(ui: &mut egui::Ui, names: &Names, d: &DeviceState) {
+fn buttons_and_hats(ui: &mut egui::Ui, names: &Names, buttons: &[bool], hats: &[Option<u16>]) {
     let accent = style::accent(ui);
     ui.horizontal_top(|ui| {
         // 16 per row, like Gremlin.
         ui.vertical(|ui| {
-            for row in d.buttons.chunks(16).enumerate() {
+            for row in buttons.chunks(16).enumerate() {
                 ui.horizontal(|ui| {
                     for (i, &pressed) in row.1.iter().enumerate() {
                         let n = row.0 * 16 + i + 1;
@@ -445,7 +484,7 @@ fn buttons_and_hats(ui: &mut egui::Ui, names: &Names, d: &DeviceState) {
             }
         });
         ui.add_space(16.0);
-        for (n, &direction) in d.hats.iter().enumerate() {
+        for (n, &direction) in hats.iter().enumerate() {
             let r = hat_rose(ui, n + 1, direction, accent);
             if let Some(name) = names.hat(n as u32 + 1) {
                 r.on_hover_text(name);

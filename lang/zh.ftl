@@ -196,6 +196,8 @@ apps-mode-start = 启动模式
 apps-mode-tip = 此程序下配置文件启动时的模式
 apps-own-no-profile = Joystick Gobloon 从不为自身选择配置文件
 apps-running-tip = 正在运行它的配置文件
+apps-other = 任何其他程序
+apps-other-tip = 当前台没有此列表中带配置文件的程序时运行的配置文件：其他程序和桌面。若前台是 Joystick Gobloon 本身或有未保存的更改，则保持当前配置文件
 
 # Engine
 action-activate = 激活配置文件
@@ -567,6 +569,9 @@ macro-step-vjoy-hat = 虚拟摇杆苦力帽
 macro-step-pad-button = 手柄按钮
 macro-step-pad-axis = 手柄摇杆或扳机
 macro-step-pad-dpad = 手柄方向键
+macro-step-logical-button = 逻辑设备按钮
+macro-step-logical-axis = 逻辑设备轴
+macro-step-logical-hat = 逻辑设备苦力帽
 macro-step-run-action = 运行动作
 macro-run-pick = 选择动作
 macro-run-missing = 找不到动作
