@@ -468,6 +468,12 @@ enum ReleaseAction {
     HatButtons(NodeId),
     /// Releases a logical device button.
     Logical(InputKey),
+    /// Centers a logical device hat.
+    LogicalHat(InputKey),
+    /// Centers a vJoy hat.
+    VjoyHat(u32, u8),
+    /// Runs the node with the release its press waits for (chain, smart toggle).
+    Rerun(NodeId),
 }
 
 /// Runs when the physical input that registered it is released (Gremlin's ButtonReleaseActions).
@@ -496,6 +502,19 @@ enum VButton {
 }
 
 impl VButton {
+    fn is_down(&self) -> bool {
+        match self {
+            VButton::Axis { down, .. } | VButton::Hat { down, .. } => *down,
+        }
+    }
+
+    /// Forgets the last axis value: the next one carries no direction.
+    fn forget_last(&mut self) {
+        if let VButton::Axis { last, .. } = self {
+            *last = None;
+        }
+    }
+
     /// Button states produced by a raw axis or hat value (Gremlin's VirtualAxisButton/VirtualHatButton).
     fn feed(&mut self, value: Value) -> Vec<bool> {
         match (self, value) {
@@ -510,23 +529,21 @@ impl VButton {
                 Value::Axis(v),
             ) => {
                 let (lower, upper) = (*lower, *upper);
-                let Some(prev) = last.replace(v) else {
-                    *down = (lower..=upper).contains(&v);
-                    return Vec::new();
-                };
+                // The first value carries no direction, and a value already in range presses
+                // (Gremlin R16.1: entering a mode with the axis there turns the button on).
+                let prev = last.replace(v);
                 let mut states = Vec::new();
-                let crossed = (prev < lower && v > upper) || (prev > upper && v < lower);
+                let crossed =
+                    prev.is_some_and(|p| (p < lower && v > upper) || (p > upper && v < lower));
                 if crossed {
                     states.extend([true, false]);
                     *down = false;
                 }
                 // Gremlin labels increasing values "below" and decreasing ones "above".
-                let moving = if prev < v {
-                    AxisDirection::Below
-                } else if prev > v {
-                    AxisDirection::Above
-                } else {
-                    AxisDirection::Anywhere
+                let moving = match prev {
+                    Some(p) if p < v => AxisDirection::Below,
+                    Some(p) if p > v => AxisDirection::Above,
+                    _ => AxisDirection::Anywhere,
                 };
                 let valid = *direction == AxisDirection::Anywhere || moving == *direction;
                 let inside = (lower..=upper).contains(&v);
@@ -595,6 +612,8 @@ pub struct Engine {
     cycle: HashMap<NodeId, usize>,
     sets: Vec<Vec<Config>>,
     lookup: HashMap<InputKey, HashMap<String, usize>>,
+    /// Device id of virtual buttons' keys, shared so their events allocate nothing.
+    virtual_device: Arc<str>,
     modes: ModeStack,
     releases: HashMap<InputKey, Vec<ReleaseEntry>>,
     /// Entries [`Engine::process_release`] runs, kept to reuse their memory.
@@ -720,6 +739,8 @@ struct RelativeAxis {
     stopping: bool,
     last_update: Instant,
     last_step: Instant,
+    /// Input and mode moving it: a mode change that binds the input differently stops it.
+    source: Option<(InputKey, Arc<str>)>,
 }
 
 /// Relative axes advance in steps of this length (Gremlin's 10 ms thread).
@@ -743,6 +764,7 @@ impl Engine {
             cycle: HashMap::new(),
             sets: Vec::new(),
             lookup: HashMap::new(),
+            virtual_device: VIRTUAL_DEVICE.into(),
             modes: ModeStack::new(&start),
             releases: HashMap::new(),
             release_buffer: Vec::new(),
@@ -2250,13 +2272,30 @@ impl Engine {
     /// Lights, cursor motion and axis positions follow a mode change.
     fn refresh_mode(&mut self, now: Instant, out: &mut dyn Output) {
         self.activate(out);
-        // Stop cursor motion whose input is bound differently in the new mode.
+        // Stop cursor motion and relative axes whose input is bound differently in the new
+        // mode; the axis refresh below starts them again when their mode is back.
         let (lookup, current) = (&self.lookup, self.modes.current().to_string());
-        self.motion.retain(|(_, key), mode| {
+        let alike = |key: &InputKey, mode: &str| {
             lookup
                 .get(key)
-                .is_some_and(|m| m.get(&**mode).is_some() && m.get(&**mode) == m.get(&current))
-        });
+                .is_some_and(|m| m.get(mode).is_some() && m.get(mode) == m.get(&current))
+        };
+        self.motion.retain(|(_, key), mode| alike(key, mode));
+        for r in self
+            .relative
+            .values_mut()
+            .chain(self.logical_relative.values_mut())
+        {
+            if r.active
+                && r.source
+                    .as_ref()
+                    .is_some_and(|(key, mode)| !alike(key, mode))
+            {
+                r.active = false;
+                r.delta = 0.0;
+            }
+        }
+        self.forget_vbutton_values();
         let axes: Vec<(InputKey, f32)> = self.axes.iter().map(|(k, v)| (k.clone(), *v)).collect();
         for (key, v) in axes {
             let mode = self.modes.shared();
@@ -2277,6 +2316,12 @@ impl Engine {
             mode,
             no_auto_release: false,
         };
+        // A hat moved in another mode: what its last direction did there ends first, as if it
+        // was centered (Gremlin R16.1 hands it a center).
+        if let Value::Hat(Some(_)) = value {
+            self.fire_releases(key, false, true, now, out);
+        }
+        self.feed_foreign_vbuttons(key, value, &src.mode, now, out);
         let layer = self.event_layer(key, value);
         if let Some(&set) = self.lookup.get(key).and_then(|m| m.get(&*src.mode)) {
             let selection = self.selection(set, &layer);
@@ -2290,6 +2335,92 @@ impl Engine {
             Value::Button(pressed) => self.process_release(key, pressed, now, out),
             Value::Hat(None) => self.process_release(key, false, now, out),
             _ => {}
+        }
+    }
+
+    /// Virtual buttons of `key` bound in modes other than `mode` that are down, or whose
+    /// actions wait for their next edge, see the event too: they let go (or the waiting
+    /// actions end) there. Like Gremlin R16.1, which hands such buttons foreign events.
+    fn feed_foreign_vbuttons(
+        &mut self,
+        key: &InputKey,
+        value: Value,
+        mode: &str,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
+        if matches!(value, Value::Button(_)) {
+            return;
+        }
+        let Some(modes) = self.lookup.get(key) else {
+            return;
+        };
+        let native = modes.get(mode).copied();
+        // By index: the sets are few, and a list of them would allocate on every event.
+        for i in 0..modes.len() {
+            let Some(set) = self
+                .lookup
+                .get(key)
+                .and_then(|m| m.values().nth(i).copied())
+            else {
+                break;
+            };
+            if Some(set) == native {
+                continue;
+            }
+            for ci in 0..self.sets[set].len() {
+                if self.sets[set][ci].vbutton.is_none() {
+                    continue;
+                }
+                let vkey = InputKey {
+                    device: self.virtual_device.clone(),
+                    kind: InputKind::Button,
+                    id: self.sets[set][ci].virtual_id,
+                };
+                let waiting = self.releases.get(&vkey).is_some_and(|e| !e.is_empty());
+                let Some(vb) = self.sets[set][ci].vbutton.as_mut() else {
+                    continue;
+                };
+                if !(vb.is_down() || waiting) {
+                    continue;
+                }
+                for pressed in vb.feed(value) {
+                    self.fire_releases(&vkey, pressed, true, now, out);
+                }
+                let waiting = self.releases.get(&vkey).is_some_and(|e| !e.is_empty());
+                if let Some(vb) = self.sets[set][ci].vbutton.as_mut()
+                    && !(vb.is_down() || waiting)
+                {
+                    // No more events reach it until its mode is back: its last value is old then.
+                    vb.forget_last();
+                }
+            }
+        }
+    }
+
+    /// Axis buttons that neither are down nor have actions waiting forget their last value on
+    /// a mode change: the next one carries no direction (Gremlin R16.1).
+    fn forget_vbutton_values(&mut self) {
+        for set in 0..self.sets.len() {
+            for ci in 0..self.sets[set].len() {
+                let Some(vb) = self.sets[set][ci].vbutton.as_ref() else {
+                    continue;
+                };
+                if vb.is_down() {
+                    continue;
+                }
+                let vkey = InputKey {
+                    device: self.virtual_device.clone(),
+                    kind: InputKind::Button,
+                    id: self.sets[set][ci].virtual_id,
+                };
+                if self.releases.get(&vkey).is_some_and(|e| !e.is_empty()) {
+                    continue;
+                }
+                if let Some(vb) = self.sets[set][ci].vbutton.as_mut() {
+                    vb.forget_last();
+                }
+            }
         }
     }
 
@@ -2315,7 +2446,7 @@ impl Engine {
         };
         let vsrc = Source {
             key: InputKey {
-                device: VIRTUAL_DEVICE.into(),
+                device: self.virtual_device.clone(),
                 kind: InputKind::Button,
                 id: virtual_id,
             },
@@ -2374,7 +2505,9 @@ impl Engine {
                         stopping: false,
                         last_update: now,
                         last_step: now,
+                        source: None,
                     });
+                    r.source = Some((src.key.clone(), src.mode.clone()));
                     r.delta = v * speed * 0.001;
                     r.stopping = v.abs() < 0.05;
                     r.last_update = now;
@@ -2414,6 +2547,17 @@ impl Engine {
                     VjoyTarget::Hat(id) => {
                         if let Value::Hat(d) = *value {
                             out.hat(device, id, d);
+                            if d.is_some() && !src.no_auto_release {
+                                self.register(
+                                    &src.key,
+                                    ReleaseEntry {
+                                        mode: src.mode.clone(),
+                                        any_mode: false,
+                                        on_press: false,
+                                        action: ReleaseAction::VjoyHat(device, id),
+                                    },
+                                );
+                            }
                         }
                     }
                 }
@@ -2507,6 +2651,10 @@ impl Engine {
                 for &c in &chains[index] {
                     self.run(c, src, value, now, out, depth + 1);
                 }
+                if value.truthy() {
+                    // Released in another mode, the chain still moves on (Gremlin R16.1).
+                    self.register_rerun(node, src);
+                }
                 if !value.truthy() {
                     self.chains.entry(node).or_default().index = (index + 1) % chains.len();
                 }
@@ -2517,6 +2665,9 @@ impl Engine {
             } => {
                 if let Value::Button(pressed) = *value {
                     self.smart_toggle(node, children, delay, src, pressed, now, out);
+                    if pressed {
+                        self.register_rerun(node, src);
+                    }
                 }
             }
             Node::Delay { delay, .. } => {
@@ -2618,7 +2769,9 @@ impl Engine {
                                 stopping: false,
                                 last_update: now,
                                 last_step: now,
+                                source: None,
                             });
+                        r.source = Some((src.key.clone(), src.mode.clone()));
                         r.delta = v * speed * 0.001;
                         r.stopping = v.abs() < 0.05;
                         r.last_update = now;
@@ -2651,7 +2804,18 @@ impl Engine {
                         }
                     }
                     (InputKind::Hat, Value::Hat(d)) => {
-                        self.feed_logical(key, Value::Hat(d), now, out)
+                        self.feed_logical(key, Value::Hat(d), now, out);
+                        if d.is_some() && !src.no_auto_release {
+                            self.register(
+                                &src.key,
+                                ReleaseEntry {
+                                    mode: src.mode.clone(),
+                                    any_mode: false,
+                                    on_press: false,
+                                    action: ReleaseAction::LogicalHat(key.clone()),
+                                },
+                            );
+                        }
                     }
                     _ => {}
                 }
@@ -2725,7 +2889,16 @@ impl Engine {
                     })
                 };
                 let branch = match *value {
-                    Value::Axis(_) => truth(self, *value),
+                    Value::Axis(_) => {
+                        let b = truth(self, *value);
+                        // The branch left stops its motion (Gremlin R16.1 resets it).
+                        if let Some(prev) = self.cond_cache.insert(node, b)
+                            && prev != b
+                        {
+                            self.stop_motion(&branches[prev], 0);
+                        }
+                        b
+                    }
                     Value::Button(true) => {
                         let b = truth(self, *value);
                         self.cond_cache.insert(node, b);
@@ -3771,6 +3944,104 @@ impl Engine {
         }
     }
 
+    /// Stops relative axes and cursor motion the actions under `nodes` keep going (Gremlin's
+    /// `reset_functor_tree`).
+    fn stop_motion(&mut self, nodes: &[NodeId], depth: usize) {
+        if depth > MAX_DEPTH {
+            return;
+        }
+        for &node in nodes {
+            let shared = Arc::clone(&self.nodes[node]);
+            match *shared {
+                Node::Vjoy {
+                    device,
+                    target: VjoyTarget::Axis(id),
+                    relative: Some(_),
+                    ..
+                } => {
+                    if let Some(r) = self.relative.get_mut(&(device, id)) {
+                        r.active = false;
+                        r.delta = 0.0;
+                    }
+                }
+                Node::Logical {
+                    ref key,
+                    relative: Some(_),
+                    ..
+                } => {
+                    if let Some(r) = self.logical_relative.get_mut(key) {
+                        r.active = false;
+                        r.delta = 0.0;
+                    }
+                }
+                Node::Mouse { .. } => self.motion.retain(|(n, _), _| *n != node),
+                Node::Seq(ref c)
+                | Node::SmartToggle {
+                    children: ref c, ..
+                }
+                | Node::Delay {
+                    children: ref c, ..
+                }
+                | Node::Merge {
+                    children: ref c, ..
+                } => self.stop_motion(c, depth + 1),
+                Node::Split {
+                    ref lower,
+                    ref upper,
+                    ..
+                } => {
+                    self.stop_motion(lower, depth + 1);
+                    self.stop_motion(upper, depth + 1);
+                }
+                Node::Tempo {
+                    ref short,
+                    ref long,
+                    ..
+                } => {
+                    self.stop_motion(short, depth + 1);
+                    self.stop_motion(long, depth + 1);
+                }
+                Node::DoubleTap {
+                    ref single,
+                    ref double,
+                    ..
+                } => {
+                    self.stop_motion(single, depth + 1);
+                    self.stop_motion(double, depth + 1);
+                }
+                Node::AxisDelta {
+                    ref positive,
+                    ref negative,
+                    ..
+                } => {
+                    self.stop_motion(positive, depth + 1);
+                    self.stop_motion(negative, depth + 1);
+                }
+                Node::Chain { ref chains, .. } => {
+                    for c in chains {
+                        self.stop_motion(c, depth + 1);
+                    }
+                }
+                Node::HatButtons(ref dirs) => {
+                    for (_, c) in dirs {
+                        self.stop_motion(c, depth + 1);
+                    }
+                }
+                Node::Condition { ref branches, .. } => {
+                    for c in branches {
+                        self.stop_motion(c, depth + 1);
+                    }
+                }
+                Node::DualDeadzone { ref outputs, .. } => {
+                    for c in outputs {
+                        self.stop_motion(c, depth + 1);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn run_all(
         &mut self,
         nodes: &[NodeId],
@@ -4261,6 +4532,19 @@ impl Engine {
         self.next_timer
     }
 
+    /// `node` gets the release of the press it just saw when that comes in another mode.
+    fn register_rerun(&mut self, node: NodeId, src: &Source) {
+        self.register(
+            &src.key,
+            ReleaseEntry {
+                mode: src.mode.clone(),
+                any_mode: false,
+                on_press: false,
+                action: ReleaseAction::Rerun(node),
+            },
+        );
+    }
+
     fn register(&mut self, key: &InputKey, entry: ReleaseEntry) {
         let entries = self.releases.entry(key.clone()).or_default();
         // Gremlin keeps unfired entries forever; skip duplicates so the list stays bounded.
@@ -4276,6 +4560,20 @@ impl Engine {
         now: Instant,
         out: &mut dyn Output,
     ) {
+        self.fire_releases(key, pressed, false, now, out);
+    }
+
+    /// Runs the entries of `key` waiting for this edge: those registered in another mode, and
+    /// (unless `foreign_only`) those for any mode. The others of this edge were registered in
+    /// the current mode, whose own actions just saw the edge: they are dropped.
+    fn fire_releases(
+        &mut self,
+        key: &InputKey,
+        pressed: bool,
+        foreign_only: bool,
+        now: Instant,
+        out: &mut dyn Output,
+    ) {
         let Some(entries) = self.releases.get_mut(key).filter(|e| !e.is_empty()) else {
             return;
         };
@@ -4284,8 +4582,11 @@ impl Engine {
         // move into a buffer kept between events: a press and release allocate nothing.
         let mut fire = std::mem::take(&mut self.release_buffer);
         fire.extend(entries.extract_if(.., |e| {
-            (e.any_mode || e.mode != current) && pressed == e.on_press
+            pressed == e.on_press && (e.mode != current || (e.any_mode && !foreign_only))
         }));
+        if !foreign_only {
+            entries.retain(|e| e.on_press != pressed);
+        }
         for entry in fire.drain(..) {
             match entry.action {
                 ReleaseAction::VjoyButton(device, button) => {
@@ -4336,15 +4637,29 @@ impl Engine {
                 }
                 ReleaseAction::DelayRelease(node) => self.delay_release(node, now, out),
                 ReleaseAction::TempoRelease(node) => {
+                    // The release completes the press where it went: short or long ends as it
+                    // would have in the press's mode (Gremlin R16.1).
                     let phase = self.tempo.get(&node).map(|s| s.phase).unwrap_or_default();
                     if phase != Phase::Wait {
                         let src = Source {
                             key: key.clone(),
-                            mode: current.clone(),
+                            mode: entry.mode.clone(),
                             no_auto_release: false,
                         };
-                        self.tempo_reset(node, &src, Value::Button(false), now, out);
+                        self.tempo_event(node, &src, Value::Button(false), now, out);
                     }
+                }
+                ReleaseAction::Rerun(node) => {
+                    let src = Source {
+                        key: key.clone(),
+                        mode: entry.mode.clone(),
+                        no_auto_release: false,
+                    };
+                    self.run(node, &src, &mut Value::Button(false), now, out, 0);
+                }
+                ReleaseAction::VjoyHat(device, hat) => out.hat(device, hat, None),
+                ReleaseAction::LogicalHat(key) => {
+                    self.feed_logical(&key, Value::Hat(None), now, out)
                 }
             }
         }
@@ -4785,5 +5100,28 @@ mod tests {
         assert_eq!(vb.feed(Value::Axis(0.7)), [true]);
         assert!(vb.feed(Value::Axis(0.8)).is_empty());
         assert_eq!(vb.feed(Value::Axis(0.1)), [false]);
+        // Jumping over the range pulses.
+        assert_eq!(vb.feed(Value::Axis(1.0)).len(), 1);
+        assert_eq!(vb.feed(Value::Axis(0.0)), [false]);
+        assert!(vb.feed(Value::Axis(-1.0)).is_empty());
+        assert_eq!(vb.feed(Value::Axis(1.5)), [true, false]);
+        // A first value already in range presses.
+        vb.forget_last();
+        assert_eq!(vb.feed(Value::Axis(0.7)), [true]);
+    }
+
+    #[test]
+    fn directional_axis_button_waits_for_motion_after_forgetting() {
+        let mut vb = VButton::Axis {
+            lower: 0.5,
+            upper: 1.0,
+            direction: AxisDirection::Below,
+            last: None,
+            down: false,
+        };
+        // No direction yet: stays up until the axis moves up into the range.
+        assert!(vb.feed(Value::Axis(0.75)).is_empty());
+        assert_eq!(vb.feed(Value::Axis(0.8)), [true]);
+        assert_eq!(vb.feed(Value::Axis(0.7)), [false]);
     }
 }
