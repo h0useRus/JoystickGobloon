@@ -196,6 +196,8 @@ apps-mode-start = Modo inicial
 apps-mode-tip = Modo en el que empieza el perfil para este programa
 apps-own-no-profile = Joystick Gobloon nunca elige un perfil para sí mismo
 apps-running-tip = Su perfil se está ejecutando
+apps-other = Cualquier otro programa
+apps-other-tip = Perfil que se usa mientras no haya delante ningún programa de esta lista con perfil: otros programas y el escritorio. Si delante está el propio Joystick Gobloon o hay cambios sin guardar, se mantiene el perfil actual
 
 # Engine
 action-activate = Activar el perfil
