@@ -20,6 +20,7 @@ mod modes;
 mod motion;
 mod platform;
 mod runner;
+mod tap;
 
 pub use engine::Engine;
 pub use gob_script::ScriptError;
@@ -27,6 +28,7 @@ pub use gob_voice::VoiceConfig;
 pub use lighting::to_led;
 pub use media::{Media, SpeechQueue, SpeechRequest, voices};
 pub use runner::{Latency, Runner, RunnerStatus, VoiceHeard, VoiceStatus, wait_stopped};
+pub use tap::{OutputTap, Sent, Tapped};
 
 /// Values of the logical device's inputs that actions wrote, by input id.
 #[derive(Debug, Clone, Default, PartialEq)]

@@ -1386,6 +1386,7 @@ impl JoystickGobloonApp {
                         profile_name: name,
                         devices: &devices,
                         vjoy: &vjoy,
+                        sent: self.activation.outputs(),
                     };
                     detached_window(ctx, "game", &title, BIG_WINDOW, |ui| {
                         let out = view.show(ui, i18n, &game_ctx, &mut ops, true);
@@ -2597,6 +2598,7 @@ impl eframe::App for JoystickGobloonApp {
                             profile_name: name.trim_end_matches(".xml"),
                             devices: &devices,
                             vjoy: &vjoy,
+                            sent: self.activation.outputs(),
                         };
                         let mut ops = Vec::new();
                         let out = self

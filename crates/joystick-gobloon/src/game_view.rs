@@ -309,6 +309,8 @@ pub struct Context<'a> {
     pub profile_name: &'a str,
     pub devices: &'a [DeviceState],
     pub vjoy: &'a [gob_virtual::DeviceInfo],
+    /// What the profile sends while it runs.
+    pub sent: Option<gob_engine::OutputTap>,
 }
 
 impl GameView {
@@ -1922,7 +1924,35 @@ impl Live {
             })
             .collect();
         let mut outputs = vec![0.0f32; graph.outputs.len()];
+        // A running profile says what it really sends: modes, conditions and macros count.
+        // Outputs it cannot tell (the logical device) and a stopped profile go by the inputs.
+        let mut told = vec![false; graph.outputs.len()];
+        if let Some(sent) = &ctx.sent {
+            let now = std::time::Instant::now();
+            sent.read(|map| {
+                for (m, o) in graph.outputs.iter().enumerate() {
+                    let Some((key, direction)) = sent_key(o) else {
+                        continue;
+                    };
+                    told[m] = true;
+                    let Some(t) = map.get(&key) else {
+                        continue;
+                    };
+                    outputs[m] = match (direction, t.value) {
+                        (Some(d), gob_engine::Value::Hat(angle)) => match angle {
+                            Some(angle) if hat_has(angle, d) => 1.0,
+                            _ => 0.0,
+                        },
+                        (Some(_), _) => 0.0,
+                        (None, _) => t.lit(now),
+                    };
+                }
+            });
+        }
         for (l, m) in &graph.input_edges {
+            if told[*m] {
+                continue;
+            }
             let mut v = inputs[*l];
             if let GameOutput::HatDirection(_, d) = &graph.outputs[*m] {
                 v = match hats[*l] {
@@ -1936,13 +1966,44 @@ impl Live {
         for (m, r) in &graph.action_edges {
             actions[*r] = actions[*r].max(outputs[*m]);
         }
-        let any = inputs.iter().any(|v| *v > 0.0);
+        let any = inputs.iter().chain(&outputs).any(|v| *v > 0.0);
         Self {
             inputs,
             outputs,
             actions,
             any,
         }
+    }
+}
+
+/// Where the running profile's [`gob_engine::OutputTap`] has `o`, and the hat direction to look
+/// for there; `None` for outputs the tap does not carry.
+fn sent_key(o: &GameOutput) -> Option<(gob_engine::Sent, Option<HatDirection>)> {
+    use gob_engine::{InputKind, Sent};
+    let of = |v: &VirtualOutput| match v {
+        VirtualOutput::Vjoy {
+            device,
+            input_type,
+            id,
+        } => {
+            let kind = match input_type {
+                InputType::Axis => InputKind::Axis,
+                InputType::Button => InputKind::Button,
+                InputType::Hat => InputKind::Hat,
+                _ => return None,
+            };
+            Some(Sent::Joystick(*device, kind, *id))
+        }
+        VirtualOutput::Gamepad { gamepad, control } => gob_engine::GamepadControl::ALL
+            .into_iter()
+            .find(|c| c.name() == control)
+            .map(|c| Sent::Gamepad(*gamepad, c)),
+        VirtualOutput::Logical { .. } => None,
+    };
+    match o {
+        GameOutput::Virtual(v) => of(v).map(|k| (k, None)),
+        GameOutput::HatDirection(v, d) => of(v).map(|k| (k, Some(*d))),
+        GameOutput::Key(k) => Some((Sent::Key(k.scan_code, k.extended), None)),
     }
 }
 

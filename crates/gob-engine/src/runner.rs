@@ -108,6 +108,7 @@ pub struct Runner {
     thread: Option<JoinHandle<()>>,
     status: Arc<Mutex<RunnerStatus>>,
     logical: Arc<Mutex<LogicalValues>>,
+    outputs: crate::OutputTap,
     reload: Sender<Reload>,
 }
 
@@ -157,6 +158,9 @@ struct SystemOutput {
     /// value is unchanged.
     unsent: HashSet<(u32, InputKind, u32)>,
     failing_pads: HashSet<(u32, Option<GamepadControl>)>,
+    /// What the GUI sees of the outputs, and what this pass sent for it.
+    tap: crate::OutputTap,
+    sent: Vec<(crate::Sent, Value)>,
     media: crate::media::Media,
     lighting: crate::lighting::Lighting,
     load_profile: Option<String>,
@@ -208,6 +212,8 @@ impl SystemOutput {
             failing: HashSet::new(),
             unsent: HashSet::new(),
             failing_pads: HashSet::new(),
+            tap: Default::default(),
+            sent: Vec::new(),
             media: Default::default(),
             lighting,
             load_profile: None,
@@ -280,6 +286,15 @@ impl SystemOutput {
         for i in 0..self.pending_pads.len() {
             self.send_pad(i);
         }
+        self.publish();
+    }
+
+    /// Hands what was sent since the last call to the [`crate::OutputTap`].
+    fn publish(&mut self) {
+        if !self.sent.is_empty() {
+            self.tap.publish(&self.sent, Instant::now());
+            self.sent.clear();
+        }
     }
 
     /// Sends the queued writes of `pending[i]`; a refused one is logged when it starts failing
@@ -293,7 +308,7 @@ impl SystemOutput {
         let target = self.devices.get(&device);
         let batch = target.map(|d| d.write(writes));
         for &w in writes.iter() {
-            let key = write_key(device, w).0;
+            let (key, value) = write_key(device, w);
             // A refused batch: each write alone tells which ones the device took (those of the
             // batch it took are sent once more, which changes nothing).
             let ok = match batch {
@@ -302,8 +317,12 @@ impl SystemOutput {
             };
             if ok != Some(true) {
                 self.unsent.insert(key);
-            } else if !self.unsent.is_empty() {
-                self.unsent.remove(&key);
+            } else {
+                if !self.unsent.is_empty() {
+                    self.unsent.remove(&key);
+                }
+                self.sent
+                    .push((crate::Sent::Joystick(key.0, key.1, key.2), value));
             }
             log_refused(&mut self.failing, key, ok, || {
                 format!("virtual device {device}: writing {w:?}")
@@ -330,6 +349,15 @@ impl SystemOutput {
                 gob_virtual::PadWrite::Button(c, _) | gob_virtual::PadWrite::Axis(c, _) => Some(c),
                 gob_virtual::PadWrite::Dpad(_) => None,
             };
+            if ok == Some(true) {
+                let (control, value) = match w {
+                    gob_virtual::PadWrite::Button(c, p) => (c, Value::Button(p)),
+                    gob_virtual::PadWrite::Axis(c, v) => (c, Value::Axis(v)),
+                    gob_virtual::PadWrite::Dpad(d) => (GamepadControl::Dpad, Value::Hat(d)),
+                };
+                self.sent
+                    .push((crate::Sent::Gamepad(gamepad, control), value));
+            }
             log_refused(&mut self.failing_pads, (gamepad, control), ok, || {
                 let control = control.map_or("dpad", GamepadControl::name);
                 format!("virtual gamepad {gamepad}: writing {control}")
@@ -430,6 +458,11 @@ impl Output for SystemOutput {
         // Joystick writes queued before it go out first, in the profile's order.
         self.flush();
         crate::platform::injector().key(scan_code, extended, pressed);
+        self.sent.push((
+            crate::Sent::Key(scan_code, extended),
+            Value::Button(pressed),
+        ));
+        self.publish();
     }
 
     fn run_command(&mut self, executable: &str, arguments: &[String]) {
@@ -469,6 +502,7 @@ impl Runner {
             led_defaults.map(<[crate::Light]>::to_vec),
         );
         let mut out = SystemOutput::new(lighting, voice, voice_events);
+        let outputs = out.tap.clone();
         acquire(&engine, &mut out, virtual_devices.as_ref())?;
         feed_initial(&mut engine, &mut out, initial);
         set_up_voice(&engine, &mut out);
@@ -513,6 +547,7 @@ impl Runner {
             thread: Some(thread),
             status,
             logical,
+            outputs,
             reload,
         })
     }
@@ -568,6 +603,11 @@ impl Runner {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
+    }
+
+    /// What the profile last sent to the virtual devices and the keyboard.
+    pub fn outputs(&self) -> crate::OutputTap {
+        self.outputs.clone()
     }
 
     /// Current values of the logical device's inputs.
@@ -1022,6 +1062,43 @@ mod tests {
         assert_eq!(&*a.device, "aaaa-01");
         assert!(Arc::ptr_eq(&a.device, &b.device));
         assert_eq!(a, InputKey::new("aaaa-01", InputKind::Axis, 1));
+    }
+
+    #[test]
+    fn the_tap_shows_what_the_driver_took() {
+        let (mut out, _calls) = output();
+        let tap = out.tap.clone();
+        out.button(1, 3, true);
+        out.axis(1, 1, 0.5);
+        // Device 2 is not held: nothing of it was sent.
+        out.button(2, 1, true);
+        assert_eq!(
+            tap.get(crate::Sent::Joystick(1, InputKind::Button, 3)),
+            None
+        );
+        out.flush();
+        let value = |s| tap.get(s).map(|t| t.value);
+        assert_eq!(
+            value(crate::Sent::Joystick(1, InputKind::Button, 3)),
+            Some(Value::Button(true))
+        );
+        assert_eq!(
+            value(crate::Sent::Joystick(1, InputKind::Axis, 1)),
+            Some(Value::Axis(0.5))
+        );
+        assert_eq!(value(crate::Sent::Joystick(2, InputKind::Button, 1)), None);
+        let room = out.sent.capacity();
+        out.button(1, 3, false);
+        out.flush();
+        assert_eq!(
+            value(crate::Sent::Joystick(1, InputKind::Button, 3)),
+            Some(Value::Button(false))
+        );
+        assert_eq!(
+            out.sent.capacity(),
+            room,
+            "the buffer is kept between passes"
+        );
     }
 
     #[test]
