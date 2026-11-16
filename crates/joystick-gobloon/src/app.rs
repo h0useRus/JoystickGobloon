@@ -583,11 +583,11 @@ impl JoystickGobloonApp {
         let Some(path) = app.profile.clone() else {
             return;
         };
+        // Nothing readable in front (the desktop): the "any other program" entry chose.
         let program = self
             .front
             .as_ref()
-            .map(|p| p.name.clone())
-            .unwrap_or_default();
+            .map_or_else(|| self.i18n.tr("apps-other"), |p| p.name.clone());
         let file = path.file_name().map_or_else(
             || path.display().to_string(),
             |n| n.to_string_lossy().into_owned(),

@@ -630,7 +630,11 @@ struct Rig {
 
 impl Rig {
     fn new() -> Self {
-        let p = gob_gremlin::from_str(&profile()).unwrap();
+        Self::with(&profile())
+    }
+
+    fn with(profile: &str) -> Self {
+        let p = gob_gremlin::from_str(profile).unwrap();
         Self {
             engine: Engine::new(&p, &HashMap::new()),
             out: Recorder::default(),
@@ -2301,4 +2305,55 @@ fn a_replaced_engine_releases_its_voice_commands() {
     assert_eq!(e.next_deadline(), None, "no release timer left");
     e.tick(t0 + Duration::from_millis(300), &mut out);
     assert_eq!(out.0.len(), 2, "released once");
+}
+
+#[test]
+fn axis_condition_stops_relative_motion_of_the_branch_it_leaves() {
+    let library = [
+        root("r", &["cond"]),
+        act(
+            "cond",
+            "condition",
+            &format!(
+                "{}<condition>{}<comparator>{}{}{}</comparator></condition>                 <true-actions><action-id>rel</action-id></true-actions>",
+                prop("string", "logical-operator", "all"),
+                prop("string", "condition-type", "current_input"),
+                prop("string", "comparator-type", "range"),
+                prop("float", "lower-limit", "0.5"),
+                prop("float", "upper-limit", "1.0"),
+            ),
+        ),
+        act(
+            "rel",
+            "map-to-vjoy",
+            &format!(
+                "{}{}{}{}{}",
+                prop("int", "vjoy-device-id", "1"),
+                prop("int", "vjoy-input-id", "3"),
+                prop("input_type", "vjoy-input-type", "axis"),
+                prop("axis_mode", "axis-mode", "relative"),
+                prop("float", "axis-scaling", "1.0")
+            ),
+        ),
+    ]
+    .concat();
+    let p = format!(
+        r#"<profile version="14"><inputs>{}</inputs>
+        <settings><startup-mode>Default</startup-mode></settings><library>{library}</library>
+        <modes><mode>Default</mode></modes></profile>"#,
+        input("axis", 1, "Default", "r", "")
+    );
+    let mut r = Rig::with(&p);
+    r.axis_at(1, 0.8, 0);
+    r.tick(100);
+    assert!(
+        r.take().iter().any(|o| matches!(o, Out::Axis(3, _))),
+        "moves in range"
+    );
+    // Out of the range: the true branch is left and its axis stops.
+    r.axis_at(1, 0.2, 110);
+    r.tick(120);
+    r.take();
+    r.tick(400);
+    assert!(r.take().is_empty(), "keeps moving after leaving the branch");
 }

@@ -76,18 +76,25 @@ impl Watcher {
     }
 }
 
-/// The program of the Applications page whose profile the program in front asks for.
-/// `own`: Joystick Gobloon's file name, which never gets a profile.
+/// The program of the Applications page whose profile the program in front asks for; for any
+/// other program (or the desktop) the "any other program" entry when it has a profile.
+/// `own`: Joystick Gobloon's file name, which never gets a profile and keeps the running one.
 pub fn choose<'a>(
     front: Option<&Program>,
     apps: &'a [AppEntry],
     own: &str,
 ) -> Option<&'a AppEntry> {
-    let key = program_key(&front?.name);
+    let other = || apps.iter().find(|a| a.is_other() && a.profile.is_some());
+    let Some(front) = front else {
+        return other();
+    };
+    let key = program_key(&front.name);
     if key == program_key(own) {
         return None;
     }
-    apps.iter().find(|a| a.profile.is_some() && a.key() == key)
+    apps.iter()
+        .find(|a| !a.is_other() && a.profile.is_some() && a.key() == key)
+        .or_else(other)
 }
 
 /// Remembers which program chose the running profile, so it is applied once: coming back to
@@ -277,6 +284,45 @@ mod tests {
             "never itself"
         );
         assert!(choose(None, &apps, OWN).is_none(), "nothing in front");
+    }
+
+    #[test]
+    fn any_other_program_gets_the_default_profile() {
+        let mut apps = apps();
+        let mut other = AppEntry::other();
+        other.profile = Some(PathBuf::from("default.xml"));
+        apps.push(other);
+        let chosen = |name: Option<&str>| {
+            let front = name.map(program);
+            choose(front.as_ref(), &apps, OWN).and_then(|a| a.profile.clone())
+        };
+        assert_eq!(chosen(Some("One.exe")), Some(PathBuf::from("one.xml")));
+        assert_eq!(
+            chosen(Some("browser.exe")),
+            Some(PathBuf::from("default.xml"))
+        );
+        assert_eq!(
+            chosen(Some("radio.exe")),
+            Some(PathBuf::from("default.xml")),
+            "no profile"
+        );
+        assert_eq!(
+            chosen(None),
+            Some(PathBuf::from("default.xml")),
+            "the desktop"
+        );
+        assert_eq!(chosen(Some(OWN)), None, "itself keeps the running profile");
+        // Back from another program the game's profile runs again, and the other way round.
+        let mut switcher = Switcher::default();
+        let (one, browser) = (program("One.exe"), program("browser.exe"));
+        assert!(switcher.check(Some(&one), &apps, OWN).is_some());
+        assert!(switcher.check(Some(&browser), &apps, OWN).is_some());
+        assert!(
+            switcher
+                .check(Some(&program("mail.exe")), &apps, OWN)
+                .is_none()
+        );
+        assert!(switcher.check(Some(&one), &apps, OWN).is_some());
     }
 
     #[test]

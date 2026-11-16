@@ -17,6 +17,8 @@ use crate::style::{self, icon};
 const NAME_WIDTH: f32 = 220.0;
 const PROFILE_WIDTH: f32 = 190.0;
 const MODE_WIDTH: f32 = 150.0;
+/// Row index of the "any other program" entry in [`Edit`]s.
+const OTHER_ROW: usize = usize::MAX;
 
 pub struct AppsView {
     hh: Result<Arc<dyn Backend>, String>,
@@ -234,10 +236,6 @@ impl AppsView {
         }
         ui.add_space(6.0);
 
-        if self.list.apps.is_empty() {
-            crate::app::empty_state(ui, icon::APP_WINDOW, &i18n.tr("apps-empty"));
-            return;
-        }
         // Profiles to offer: the open one and the ones other programs use.
         let mut known: Vec<PathBuf> = current.map(Path::to_path_buf).into_iter().collect();
         for p in self.list.apps.iter().filter_map(|a| a.profile.clone()) {
@@ -252,10 +250,54 @@ impl AppsView {
                 self.modes_of(&profile);
             }
         }
+        // "Any other program" first: the profile for whatever the list does not name.
+        let other_index = self.list.apps.iter().position(AppEntry::is_other);
+        let other = other_index.map_or_else(AppEntry::other, |i| self.list.apps[i].clone());
+        if let Some(profile) = other.profile.clone() {
+            self.modes_of(&profile);
+        }
+        let other_modes = other
+            .profile
+            .as_ref()
+            .and_then(|p| self.modes.get(p))
+            .map_or(&[][..], Vec::as_slice);
+        let frame = egui::Frame::new()
+            .fill(if running == Some(other.key().as_str()) {
+                ui.visuals().selection.bg_fill.gamma_multiply(0.35)
+            } else {
+                egui::Color32::TRANSPARENT
+            })
+            .corner_radius(4)
+            .inner_margin(egui::Margin::symmetric(6, 2));
+        frame.show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if hiding || hides_from_all {
+                    // Where the eye of the other rows is.
+                    ui.add_space(ui.spacing().interact_size.y + ui.spacing().item_spacing.x);
+                }
+                row(
+                    ui,
+                    OTHER_ROW,
+                    &other,
+                    false,
+                    &known,
+                    other_modes,
+                    i18n,
+                    &mut edit,
+                );
+            });
+        });
+        ui.separator();
+        if !self.list.apps.iter().any(|a| !a.is_other()) {
+            crate::app::empty_state(ui, icon::APP_WINDOW, &i18n.tr("apps-empty"));
+        }
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
                 for (i, app) in self.list.apps.iter().enumerate() {
+                    if app.is_other() {
+                        continue;
+                    }
                     let is_running = running == Some(app.key().as_str());
                     let fill = if is_running {
                         ui.visuals().selection.bg_fill.gamma_multiply(0.35)
@@ -319,8 +361,12 @@ impl AppsView {
                 }
             }
             Some(Edit::Remove(path)) => self.remove(&path),
-            Some(Edit::Profile(i, profile)) => self.set_profile(i, profile),
+            Some(Edit::Profile(i, profile)) => {
+                let i = self.row_index(i);
+                self.set_profile(i, profile);
+            }
             Some(Edit::ChooseProfile(i)) => {
+                let i = self.row_index(i);
                 let mut dialog =
                     rfd::FileDialog::new().add_filter(i18n.tr("file-filter-gremlin"), &["xml"]);
                 if let Some(dir) = settings.profile_dir.as_ref().filter(|d| d.is_dir()) {
@@ -331,12 +377,26 @@ impl AppsView {
                 }
             }
             Some(Edit::Mode(i, mode)) => {
+                let i = self.row_index(i);
                 self.list.apps[i].mode = mode;
                 self.list.save();
             }
             None => {}
         }
         self.remove_dialog(ui.ctx(), i18n);
+    }
+
+    /// Index into the list of an [`Edit`]'s row; the "any other program" entry is added when
+    /// first changed.
+    fn row_index(&mut self, i: usize) -> usize {
+        if i != OTHER_ROW {
+            return i;
+        }
+        if let Some(i) = self.list.apps.iter().position(AppEntry::is_other) {
+            return i;
+        }
+        self.list.apps.push(AppEntry::other());
+        self.list.apps.len() - 1
     }
 
     fn set_profile(&mut self, i: usize, profile: Option<PathBuf>) {
@@ -431,13 +491,21 @@ fn row(
 ) {
     let path = &app.path;
     let h = ui.spacing().interact_size.y;
-    let exists = path.exists();
-    let full = path.display().to_string();
+    let other = app.is_other();
+    let exists = other || path.exists();
+    let full = if other {
+        i18n.tr("apps-other-tip")
+    } else {
+        path.display().to_string()
+    };
     let mut name = path
         .file_name()
         .map_or_else(|| full.clone(), |n| n.to_string_lossy().into_owned());
     if own {
         name = format!("{}  {name}", icon::STAR);
+    }
+    if other {
+        name = format!("{}  {}", icon::ASTERISK, i18n.tr("apps-other"));
     }
     let name = if exists {
         RichText::new(name)
@@ -472,7 +540,10 @@ fn row(
     let mode = app.mode.clone().unwrap_or_else(|| start.clone());
     // From the right: remove, mode, profile; the path gets what is left.
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if style::icon_button(ui, true, icon::TRASH, &i18n.tr("apps-remove")).clicked() {
+        if other {
+            // Where the remove button of the other rows is.
+            ui.add_space(h + ui.spacing().item_spacing.x);
+        } else if style::icon_button(ui, true, icon::TRASH, &i18n.tr("apps-remove")).clicked() {
             *edit = Some(Edit::Remove(path.to_path_buf()));
         }
         ui.add_enabled_ui(app.profile.is_some() && !modes.is_empty(), |ui| {
@@ -521,6 +592,8 @@ fn row(
                 });
             let tip = i18n.tr(if own {
                 "apps-own-no-profile"
+            } else if other {
+                "apps-other-tip"
             } else {
                 "apps-profile-tip"
             });

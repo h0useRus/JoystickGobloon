@@ -207,6 +207,43 @@ fn macro_step_xml(step: &crate::MacroStep) -> Option<(&'static str, Vec<Item>)> 
             ));
             ("vjoy", items)
         }
+        S::LogicalButton { id, pressed } => (
+            "logical-device",
+            vec![
+                prop("input_type", "input-type", "button"),
+                prop("int", "input-id", id.to_string()),
+                prop("bool", "value", b(pressed)),
+            ],
+        ),
+        S::LogicalAxis {
+            id,
+            value,
+            relative,
+        } => (
+            "logical-device",
+            vec![
+                prop("input_type", "input-type", "axis"),
+                prop("int", "input-id", id.to_string()),
+                prop("float", "value", format!("{value:?}")),
+                prop(
+                    "axis_mode",
+                    "axis-mode",
+                    if relative { "relative" } else { "absolute" },
+                ),
+            ],
+        ),
+        S::LogicalHat { id, direction } => (
+            "logical-device",
+            vec![
+                prop("input_type", "input-type", "hat"),
+                prop("int", "input-id", id.to_string()),
+                prop(
+                    "hat_direction",
+                    "value",
+                    crate::profile::hat_direction_name(direction),
+                ),
+            ],
+        ),
         S::GamepadButton {
             gamepad,
             ref control,

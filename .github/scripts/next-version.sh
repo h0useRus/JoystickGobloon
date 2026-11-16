@@ -4,6 +4,8 @@
 #   feat                          -> minor
 #   any other type                -> patch
 #   "type!:" or "BREAKING CHANGE:" -> major (minor while the version is 0.x)
+#   a "Release-As: X.Y.Z" footer    -> that version (the newest such footer wins), e.g. to keep
+#                                     a feature in a patch release when the minor is reserved
 #
 #   next-version.sh                 prints the next version, e.g. 0.6.0
 #   next-version.sh --check RANGE   fails if a commit in RANGE is not a Conventional Commit
@@ -49,6 +51,14 @@ elif grep -qE '^feat(\([^)]+\))?: ' <<< "$subjects"; then
 else
   bump=patch
   patch=$((patch + 1))
+fi
+
+# A version set by hand in a commit footer since the last release (git log lists newest first).
+pinned=$(grep -oE '^Release-As: *[0-9]+\.[0-9]+\.[0-9]+ *$' <<< "$bodies" | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+if [ -n "$pinned" ]; then
+  echo "$last + $(wc -l <<< "$subjects") commit(s), Release-As -> $pinned (else $bump -> $major.$minor.$patch)" >&2
+  echo "$pinned"
+  exit 0
 fi
 
 echo "$last + $(wc -l <<< "$subjects") commit(s), $bump -> $major.$minor.$patch" >&2
