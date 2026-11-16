@@ -108,7 +108,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   paths only in plugins; tests/plugins/sample = a made-up game for the tests; example `export_check` (read-only run on the
   real game files, `--roundtrip [--dump <dir>]`). Plugins: plugins/export/<id>/ (star-citizen: dev/catalog.py rebuilds
   catalog/<version>.gob from a local install, only on the user's request). GUI: game_view.rs = Game bindings page (rail,
-  detaches like calibration): plugins run on a worker thread, wiring schematic + "As in the game" table, import, export dialog
+  detaches like calibration): plugins run on a worker thread, wiring schematic (a lane per output) + "As in the game" table
+  (every action of the game), import, export dialog; lit live from the runner's `OutputTap` (gob-engine tap.rs). Releases put
+  plugins/export (without `dev/`) into `export/` next to the exe (installer, portable zip, AppImage)
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
   profile's phrases; models.rs = small Vosk model per program language (URL + SHA-256), downloaded into

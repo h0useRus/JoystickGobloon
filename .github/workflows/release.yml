@@ -194,6 +194,16 @@ jobs:
           Copy-Item "target\voice-zip\vosk-win64-0.3.45\*.dll" $dir
           if ((Get-ChildItem "$dir\*.dll").Count -ne 4) { Write-Error "expected 4 DLLs in $name"; exit 1 }
 
+      # Game export plugins (plugins/export/<game>) go into export/ next to the app, without
+      # their dev folders (tools that build the action lists).
+      - name: Game export plugins
+        shell: pwsh
+        run: |
+          robocopy plugins\export target\export /E /XD dev /NFL /NDL /NJH /NJS | Out-Null
+          if ($LASTEXITCODE -ge 8) { Write-Error "copying the export plugins failed"; exit 1 }
+          if (-not (Get-ChildItem target\export -Recurse -Filter plugin.luau)) { Write-Error "no export plugins found"; exit 1 }
+          $global:LASTEXITCODE = 0
+
       - name: Installer
         shell: pwsh
         run: |
@@ -239,6 +249,7 @@ jobs:
           Copy-Item target\release\JoystickGobloon.exe $dir
           Copy-Item target\voice\*.dll $dir
           Copy-Item lang\*.ftl "$dir\lang"
+          Copy-Item target\export $dir -Recurse
           Copy-Item LICENSE $dir
           Copy-Item assets\THIRD-PARTY-NOTICES.txt $dir
           # files.gob: the files of this version, which an update replaces (update.rs MANIFEST).
