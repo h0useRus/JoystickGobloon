@@ -960,6 +960,7 @@ game-click-to-link = 点击：所选输出控制此操作
 game-unbind = 解除与所有输出的关联
 game-unbind-one = 解除与此输出的关联
 game-found = 已找到，尚未关联
+game-bound-only = 仅显示配置文件驱动的操作
 game-not-in-catalog = 此游戏版本中没有
 game-no-outputs = 该配置文件尚未写入任何虚拟输出。
 game-devices = 游戏如何为虚拟摇杆编号

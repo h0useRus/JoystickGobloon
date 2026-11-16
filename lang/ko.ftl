@@ -960,6 +960,7 @@ game-click-to-link = 클릭: 고른 출력이 이 동작을 조종
 game-unbind = 모든 출력에서 연결 해제
 game-unbind-one = 이 출력에서 연결 해제
 game-found = 찾음, 아직 연결되지 않음
+game-bound-only = 프로필이 구동하는 동작만
 game-not-in-catalog = 이 게임 버전에는 없음
 game-no-outputs = 프로필이 아직 가상 출력을 쓰지 않습니다.
 game-devices = 게임이 가상 조이스틱에 붙이는 번호

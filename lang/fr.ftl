@@ -972,6 +972,7 @@ game-click-to-link = Clic : la sortie choisie pilote cette action
 game-unbind = Délier de toutes les sorties
 game-unbind-one = Délier de cette sortie
 game-found = Trouvées, pas encore liées
+game-bound-only = Seulement les actions que le profil pilote
 game-not-in-catalog = Absente de cette version du jeu
 game-no-outputs = Le profil n’écrit encore aucune sortie virtuelle.
 game-devices = Comment le jeu numérote les joysticks virtuels

@@ -283,6 +283,8 @@ pub struct GameView {
     search: String,
     picked: Option<GameOutput>,
     listening: bool,
+    /// The table leaves out the game actions no output drives.
+    bound_only: bool,
     /// When each game action was last lit.
     flash: HashMap<String, f64>,
     /// Game actions lit in the last frame.
@@ -531,6 +533,17 @@ impl GameView {
             if press.clicked() {
                 self.listening = !self.listening;
             }
+            if self.tab == Tab::List
+                && style::icon_toggle(
+                    ui,
+                    self.bound_only,
+                    icon::FUNNEL,
+                    &i18n.tr("game-bound-only"),
+                )
+                .clicked()
+            {
+                self.bound_only = !self.bound_only;
+            }
         });
         if self.listening {
             ui.label(RichText::new(i18n.tr("game-press-hint")).color(style::accent(ui)));
@@ -545,7 +558,10 @@ impl GameView {
             .catalog(ctx.profile)
             .map(|(c, _)| c)
             .unwrap_or_default();
-        let graph = Graph::build(ctx, i18n, &game, &catalog, &self.search);
+        // The table lists every action of the game, like the game's own screen; the schematic
+        // only what is wired.
+        let all = self.tab == Tab::List && !self.bound_only;
+        let graph = Graph::build(ctx, i18n, &game, &catalog, &self.search, all);
         let live = Live::read(ctx, &graph);
         if self.listening
             && let Some(o) = graph
@@ -1369,8 +1385,10 @@ impl GameView {
                             let name = RichText::new(&a.name);
                             let name = if lit > 0.0 {
                                 name.color(accent).strong()
-                            } else {
+                            } else if a.bound {
                                 name
+                            } else {
+                                name.weak()
                             };
                             let resp = ui.label(name).on_hover_text(&a.id);
                             // Scrolled to when it lights up, not while it stays lit.
@@ -1722,7 +1740,15 @@ struct Look {
 }
 
 impl Graph {
-    fn build(ctx: &Context, i18n: &I18n, game: &str, catalog: &Catalog, search: &str) -> Self {
+    /// `all`: every action of the catalog, not only the bound ones and a search's first finds.
+    fn build(
+        ctx: &Context,
+        i18n: &I18n,
+        game: &str,
+        catalog: &Catalog,
+        search: &str,
+        all: bool,
+    ) -> Self {
         let profile = ctx.profile;
         let usage = profile.output_usage(None);
         let binds = profile.game_bindings(game);
@@ -1807,15 +1833,23 @@ impl Graph {
             }
         }
         let search = search.trim().to_lowercase();
-        if !search.is_empty() {
+        if all || !search.is_empty() {
             actions.retain(|a| matches(a, &search));
+            let have: std::collections::HashSet<&str> =
+                actions.iter().map(|a| a.id.as_str()).collect();
             let extra: Vec<ActionNode> = catalog
                 .actions
                 .iter()
-                .filter(|a| !actions.iter().any(|x| x.id == a.id))
-                .map(|a| node(&a.id, false))
+                .filter(|a| !have.contains(a.id.as_str()))
+                .map(|a| ActionNode {
+                    id: a.id.clone(),
+                    name: a.name.clone(),
+                    category: a.category.clone(),
+                    bound: false,
+                    known: true,
+                })
                 .filter(|a| matches(a, &search))
-                .take(SEARCH_LIMIT)
+                .take(if all { usize::MAX } else { SEARCH_LIMIT })
                 .collect();
             actions.extend(extra);
         }

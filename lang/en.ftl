@@ -972,6 +972,7 @@ game-click-to-link = Click: the picked output drives this action
 game-unbind = Unlink from every output
 game-unbind-one = Unlink from this output
 game-found = Found, not linked yet
+game-bound-only = Only the actions the profile drives
 game-not-in-catalog = Not in this version of the game
 game-no-outputs = The profile writes no virtual outputs yet.
 game-devices = How the game numbers the virtual joysticks

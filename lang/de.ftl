@@ -972,6 +972,7 @@ game-click-to-link = Klick: der gewählte Ausgang steuert diese Aktion
 game-unbind = Von allen Ausgängen lösen
 game-unbind-one = Von diesem Ausgang lösen
 game-found = Gefunden, noch nicht verknüpft
+game-bound-only = Nur Aktionen, die das Profil steuert
 game-not-in-catalog = In dieser Spielversion nicht vorhanden
 game-no-outputs = Das Profil schreibt noch keine virtuellen Ausgänge.
 game-devices = Wie das Spiel die virtuellen Joysticks nummeriert
