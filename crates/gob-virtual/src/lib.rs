@@ -144,6 +144,33 @@ pub const VJOY_PRODUCT: u16 = 0xBEAD;
 /// Longest name in bytes (uinput keeps 79).
 pub const MAX_NAME: usize = 79;
 
+/// How games know a virtual joystick in their binding files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameIdentity {
+    /// The device name games see.
+    pub name: String,
+    /// The DirectInput product GUID, "{PPPPVVVV-0000-0000-0000-504944564944}": product id,
+    /// vendor id, then "PIDVID". Wine and Proton make it the same way.
+    pub product_guid: String,
+}
+
+/// How games know virtual joystick `id`. `name` and `product` are its own
+/// ([`DeviceInfo::name`], [`DeviceConfig::product`]); without a name it is a device of a
+/// backend that names them all alike (vJoy: one name and product id for every device).
+pub fn game_identity(id: u32, name: Option<&str>, product: Option<u16>) -> GameIdentity {
+    let (name, product) = match name {
+        Some(name) => (
+            name.to_string(),
+            product.unwrap_or(DeviceConfig::default_product(id)),
+        ),
+        None => ("vJoy Device".to_string(), VJOY_PRODUCT),
+    };
+    GameIdentity {
+        name,
+        product_guid: format!("{{{product:04X}{VENDOR:04X}-0000-0000-0000-504944564944}}"),
+    }
+}
+
 /// Whether `product` may be set by hand.
 pub fn product_allowed(product: u16) -> bool {
     PRODUCTS.contains(&product) && product != VJOY_PRODUCT
@@ -574,6 +601,21 @@ mod tests {
         assert_eq!(GamepadControl::parse("z"), None);
         assert_eq!(GamepadControl::Lt.kind(), ControlKind::Trigger);
         assert_eq!(GamepadControl::DpadUp.kind(), ControlKind::Button);
+    }
+
+    #[test]
+    fn games_know_devices_by_name_and_product() {
+        let vjoy = game_identity(2, None, Some(0xBE42));
+        assert_eq!(vjoy.name, "vJoy Device");
+        assert_eq!(
+            vjoy.product_guid, "{BEAD1234-0000-0000-0000-504944564944}",
+            "every vJoy device is alike"
+        );
+        let own = game_identity(2, Some("JoyGob 2"), None);
+        assert_eq!(own.name, "JoyGob 2");
+        assert_eq!(own.product_guid, "{BE021234-0000-0000-0000-504944564944}");
+        let set = game_identity(2, Some("Stick"), Some(0xBE42));
+        assert_eq!(set.product_guid, "{BE421234-0000-0000-0000-504944564944}");
     }
 
     #[test]

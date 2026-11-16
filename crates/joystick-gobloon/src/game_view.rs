@@ -1550,19 +1550,17 @@ fn our_devices(ctx: &Context) -> Vec<OurDevice> {
                 .joysticks
                 .iter()
                 .find(|j| j.id == id);
-            let name = ctx
-                .vjoy
-                .iter()
-                .find(|d| d.id == id)
-                .and_then(|d| d.name.clone())
-                .or_else(|| stored.and_then(|j| j.name.clone()))
-                .unwrap_or_else(|| "vJoy Device".into());
-            // DirectInput's product GUID: product id, vendor id, then "PIDVID".
-            let product = stored.and_then(|j| j.product).unwrap_or(0xBEAD);
+            // The device of this computer decides; one only the profile knows goes by what
+            // the profile keeps of it.
+            let name = match ctx.vjoy.iter().find(|d| d.id == id) {
+                Some(d) => d.name.as_deref(),
+                None => stored.and_then(|j| j.name.as_deref()),
+            };
+            let known = gob_virtual::game_identity(id, name, stored.and_then(|j| j.product));
             OurDevice {
                 output: format!("vjoy:{id}"),
-                name,
-                guid: format!("{{{product:04X}1234-0000-0000-0000-504944564944}}"),
+                name: known.name,
+                guid: known.product_guid,
             }
         })
         .collect()
