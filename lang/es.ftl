@@ -969,6 +969,7 @@ game-press-hint = Pulse un botón o mueva un eje del mando…
 game-pick-output-hint = Haga clic para elegir esta salida y luego en la acción del juego que debe controlar.
 game-pick-action-hint = Ahora haga clic en la acción del juego de esta salida (busque más con el buscador).
 game-click-to-link = Clic: la salida elegida controla esta acción
+game-link-press = Vincular: después pulsa el botón o mueve el eje que debe manejar esta acción
 game-unbind = Desvincular de todas las salidas
 game-unbind-one = Desvincular de esta salida
 game-found = Encontradas, aún sin vincular

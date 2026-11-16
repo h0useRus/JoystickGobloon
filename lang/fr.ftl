@@ -969,6 +969,7 @@ game-press-hint = Appuyez sur un bouton ou bougez un axe de la manette…
 game-pick-output-hint = Cliquez pour choisir cette sortie, puis sur l’action du jeu qu’elle doit piloter.
 game-pick-action-hint = Cliquez maintenant sur l’action du jeu de cette sortie (d’autres via la recherche).
 game-click-to-link = Clic : la sortie choisie pilote cette action
+game-link-press = Lier : appuyez ensuite sur le bouton ou bougez l'axe qui doit piloter cette action
 game-unbind = Délier de toutes les sorties
 game-unbind-one = Délier de cette sortie
 game-found = Trouvées, pas encore liées

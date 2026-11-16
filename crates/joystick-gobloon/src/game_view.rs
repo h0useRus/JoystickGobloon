@@ -283,6 +283,11 @@ pub struct GameView {
     search: String,
     picked: Option<GameOutput>,
     listening: bool,
+    /// The game action the next pressed output is linked to (the table's link button).
+    linking: Option<String>,
+    /// Inputs that were already on when listening began: they count once let go and moved
+    /// again. `None` until the first frame of listening.
+    held: Option<std::collections::HashSet<(String, String, String)>>,
     /// The table leaves out the game actions no output drives.
     bound_only: bool,
     /// When each game action was last lit.
@@ -532,6 +537,7 @@ impl GameView {
                 style::icon_toggle(ui, self.listening, icon::HAND_TAP, &i18n.tr("game-press"));
             if press.clicked() {
                 self.listening = !self.listening;
+                self.linking = None;
             }
             if self.tab == Tab::List
                 && style::icon_toggle(
@@ -563,17 +569,48 @@ impl GameView {
         let all = self.tab == Tab::List && !self.bound_only;
         let graph = Graph::build(ctx, i18n, &game, &catalog, &self.search, all);
         let live = Live::read(ctx, &graph);
-        if self.listening
-            && let Some(o) = graph
-                .inputs
-                .iter()
-                .enumerate()
-                .find(|(i, _)| live.inputs.get(*i).copied().unwrap_or(0.0) > 0.5)
-                .and_then(|(i, _)| graph.input_edges.iter().find(|(l, _)| *l == i))
-                .map(|(_, m)| graph.outputs[*m].clone())
-        {
-            self.picked = Some(o);
-            self.listening = false;
+        if self.listening {
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.listening = false;
+                self.linking = None;
+            }
+            let on = |i: usize| live.inputs.get(i).copied().unwrap_or(0.0) > 0.5;
+            // An axis resting off center or a held button is not a press: it counts once it
+            // was let go.
+            let held = self.held.get_or_insert_with(|| {
+                (0..graph.inputs.len())
+                    .filter(|i| on(*i))
+                    .map(|i| graph.inputs[i].key.clone())
+                    .collect()
+            });
+            held.retain(|key| {
+                graph
+                    .inputs
+                    .iter()
+                    .position(|n| &n.key == key)
+                    .is_some_and(on)
+            });
+            let pressed = (0..graph.inputs.len())
+                .find(|i| on(*i) && !held.contains(&graph.inputs[*i].key))
+                .and_then(|i| graph.input_edges.iter().find(|(l, _)| *l == i))
+                .map(|(_, m)| graph.outputs[*m].clone());
+            if let Some(o) = pressed {
+                match self.linking.take() {
+                    Some(action) => ops.push(Op::GameBind {
+                        game: game.clone(),
+                        action,
+                        output: o,
+                    }),
+                    None => self.picked = Some(o),
+                }
+                self.listening = false;
+            }
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(33));
+        }
+        if !self.listening {
+            self.held = None;
+            self.linking = None;
         }
         let now = ui.input(|i| i.time);
         self.lit.retain(|id| {
@@ -1421,21 +1458,30 @@ impl GameView {
                                         .collect::<Vec<_>>()
                                         .join(", "),
                                 );
-                                if let Some(o) = self.picked.clone()
-                                    && style::icon_button(
-                                        ui,
-                                        true,
-                                        icon::LINK,
-                                        &i18n.tr("game-click-to-link"),
-                                    )
+                                // Link: a picked output at once, else the output of the
+                                // control pressed next.
+                                let waiting = self.linking.as_deref() == Some(a.id.as_str());
+                                let tip = if self.picked.is_some() {
+                                    "game-click-to-link"
+                                } else {
+                                    "game-link-press"
+                                };
+                                if style::icon_toggle(ui, waiting, icon::LINK, &i18n.tr(tip))
                                     .clicked()
                                 {
-                                    ops.push(Op::GameBind {
-                                        game: game.to_string(),
-                                        action: a.id.clone(),
-                                        output: o,
-                                    });
-                                    self.picked = None;
+                                    if let Some(o) = self.picked.take() {
+                                        ops.push(Op::GameBind {
+                                            game: game.to_string(),
+                                            action: a.id.clone(),
+                                            output: o,
+                                        });
+                                    } else if waiting {
+                                        self.listening = false;
+                                    } else {
+                                        self.linking = Some(a.id.clone());
+                                        self.listening = true;
+                                        self.held = None;
+                                    }
                                 }
                                 if a.bound
                                     && style::icon_button(

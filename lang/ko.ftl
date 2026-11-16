@@ -957,6 +957,7 @@ game-press-hint = 컨트롤러의 버튼을 누르거나 축을 움직이세요�
 game-pick-output-hint = 클릭해 이 출력을 고른 뒤, 이 출력이 조종할 게임 동작을 클릭하세요.
 game-pick-action-hint = 이제 이 출력의 게임 동작을 클릭하세요(다른 동작은 검색으로).
 game-click-to-link = 클릭: 고른 출력이 이 동작을 조종
+game-link-press = 연결: 이 동작을 구동할 컨트롤러 버튼을 누르거나 축을 움직이세요
 game-unbind = 모든 출력에서 연결 해제
 game-unbind-one = 이 출력에서 연결 해제
 game-found = 찾음, 아직 연결되지 않음

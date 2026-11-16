@@ -969,6 +969,7 @@ game-press-hint = Drücken Sie eine Taste oder bewegen Sie eine Achse am Control
 game-pick-output-hint = Klicken, um diesen Ausgang zu wählen, dann die Spielaktion, die er steuern soll.
 game-pick-action-hint = Klicken Sie nun die Spielaktion für diesen Ausgang an (weitere über die Suche).
 game-click-to-link = Klick: der gewählte Ausgang steuert diese Aktion
+game-link-press = Verknüpfen: danach die Taste drücken oder die Achse bewegen, die diese Aktion steuern soll
 game-unbind = Von allen Ausgängen lösen
 game-unbind-one = Von diesem Ausgang lösen
 game-found = Gefunden, noch nicht verknüpft

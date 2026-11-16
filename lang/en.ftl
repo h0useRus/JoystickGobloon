@@ -969,6 +969,7 @@ game-press-hint = Press a button or move an axis on a controller…
 game-pick-output-hint = Click to pick this output, then click the game action it should drive.
 game-pick-action-hint = Now click the game action this output drives (find more with the search).
 game-click-to-link = Click: the picked output drives this action
+game-link-press = Link: then press the controller button or move the axis that should drive this action
 game-unbind = Unlink from every output
 game-unbind-one = Unlink from this output
 game-found = Found, not linked yet

@@ -957,6 +957,7 @@ game-press-hint = 按下控制器上的按钮或移动一个轴…
 game-pick-output-hint = 点击选择此输出，然后点击它应控制的游戏操作。
 game-pick-action-hint = 现在点击此输出对应的游戏操作（更多操作请搜索）。
 game-click-to-link = 点击：所选输出控制此操作
+game-link-press = 关联：然后按下要驱动此操作的控制器按钮或移动相应的轴
 game-unbind = 解除与所有输出的关联
 game-unbind-one = 解除与此输出的关联
 game-found = 已找到，尚未关联
