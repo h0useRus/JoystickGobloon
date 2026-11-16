@@ -435,7 +435,7 @@ impl MergeOp {
 }
 
 /// Mouse buttons as Gremlin names them in profiles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MouseButton {
     Left,
     Right,

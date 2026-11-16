@@ -11,6 +11,9 @@ fn game_bindings_round_trip() {
     p.bind_game_action("sample", "gear", out("vjoy:1:button:5"));
     p.bind_game_action("sample", "roll", out("vjoy:2:axis:x"));
     p.bind_game_action("sample", "eject", out("key:0x12e"));
+    p.bind_game_action("sample", "exit", out("key:0x2a+key:0x16"));
+    p.bind_game_action("sample", "fire", out("key:0x38+mouse:right"));
+    p.set_game_keys("sample", "lights", Some(Vec::new()));
     p.set_game_devices(
         "sample",
         vec![GameDevice {
@@ -32,6 +35,8 @@ fn game_bindings_round_trip() {
         text.contains("output=\"vjoy:2:axis:x\" invert=\"true\""),
         "{text}"
     );
+    assert!(text.contains("<clear action=\"lights\"/>"), "{text}");
+    assert!(text.contains("output=\"key:0x38+mouse:right\""), "{text}");
     assert!(text.contains("app=\"Gobloon\""), "{text}");
     let back = reload(&p);
     assert_eq!(back.game_bindings, p.game_bindings);

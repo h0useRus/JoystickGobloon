@@ -308,8 +308,8 @@ fn voice_to(commands: &[VoiceCommand]) -> Element {
 }
 
 /// `<game-bindings>`: `<game id="..." target="..." version="..."><device output="vjoy:1"
-/// game-device="js1"/><bind action="..." output="vjoy:1:button:5" invert="true"/></game>`;
-/// binds with an unknown output and games without an id are skipped.
+/// game-device="js1"/><bind action="..." output="vjoy:1:button:5" invert="true"/><clear
+/// action="..."/></game>`; binds with an unknown output and games without an id are skipped.
 fn games_from(section: &Element) -> Vec<gob_core::GameBindings> {
     let mut games: Vec<gob_core::GameBindings> = Vec::new();
     for g in named(section, "game") {
@@ -343,6 +343,9 @@ fn games_from(section: &Element) -> Vec<gob_core::GameBindings> {
                 .filter(|v| !v.is_empty()),
             devices,
             binds,
+            cleared: named(g, "clear")
+                .filter_map(|c| Some(c.attr("action")?.trim().to_string()))
+                .collect(),
         });
     }
     games
@@ -367,7 +370,11 @@ fn games_to(games: &[gob_core::GameBindings]) -> Element {
                     el
                 }
             });
-            let mut el = container("game", devices.chain(binds))
+            let cleared = g
+                .cleared
+                .iter()
+                .map(|a| Element::new("clear").with_attr("action", a));
+            let mut el = container("game", devices.chain(binds).chain(cleared))
                 .with_attr("id", &g.game)
                 .with_attr("target", &g.target);
             if let Some(v) = &g.version {

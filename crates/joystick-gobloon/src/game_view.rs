@@ -1649,11 +1649,24 @@ fn output_parts(i18n: &I18n, o: &GameOutput) -> (String, String) {
             let (device, what) = base(v);
             (device, format!("{what} {}", arrow(*d)))
         }
-        GameOutput::Key(k) => (
-            i18n.tr("keyboard-device"),
-            crate::key_capture::name(*k, i18n),
-        ),
+        GameOutput::Keys(c) => (i18n.tr("keyboard-device"), combo_name(i18n, c)),
     }
+}
+
+/// Keys and mouse buttons pressed together, as "Right Alt + Y".
+fn combo_name(i18n: &I18n, combo: &gob_core::Combo) -> String {
+    combo
+        .parts()
+        .iter()
+        .map(|p| match p {
+            gob_core::ComboPart::Key(k) => crate::key_capture::name(*k, i18n),
+            gob_core::ComboPart::Mouse(b) => i18n.tr(&format!(
+                "mouse-{}",
+                b.name().to_lowercase().replace(' ', "-")
+            )),
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
 }
 
 fn arrow(d: HatDirection) -> &'static str {
@@ -1939,7 +1952,7 @@ fn sort_key(o: &GameOutput) -> (u8, u32, u8, u32, u8, String) {
         GameOutput::HatDirection(VirtualOutput::Vjoy { device, id, .. }, d) => {
             (0, *device, 2, *id, *d as u8, String::new())
         }
-        GameOutput::Key(k) => (3, 0, 0, gob_core::key_input_id(*k), 0, String::new()),
+        GameOutput::Keys(c) => (3, 0, 0, 0, 0, c.to_string()),
         other => (2, 0, 0, 0, 0, other.to_string()),
     }
 }
@@ -2081,7 +2094,11 @@ fn sent_key(o: &GameOutput) -> Option<(gob_engine::Sent, Option<HatDirection>)> 
     match o {
         GameOutput::Virtual(v) => of(v).map(|k| (k, None)),
         GameOutput::HatDirection(v, d) => of(v).map(|k| (k, Some(*d))),
-        GameOutput::Key(k) => Some((Sent::Key(k.scan_code, k.extended), None)),
+        // A combination shows by its last key: the one pressed with the modifiers held.
+        GameOutput::Keys(c) => c.parts().iter().rev().find_map(|p| match p {
+            gob_core::ComboPart::Key(k) => Some((Sent::Key(k.scan_code, k.extended), None)),
+            gob_core::ComboPart::Mouse(_) => None,
+        }),
     }
 }
 
