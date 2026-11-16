@@ -1635,7 +1635,7 @@ impl JoystickGobloonApp {
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
                 (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
                 (Page::Scripts, icon::CODE, "nav-scripts"),
-                (Page::Game, icon::FLOW_ARROW, "nav-game"),
+                (Page::Game, icon::SWORD, "nav-game"),
             ] {
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
@@ -2588,7 +2588,7 @@ impl eframe::App for JoystickGobloonApp {
                     });
                 }
                 Page::Game => match &self.profile {
-                    None => empty_state(ui, icon::FLOW_ARROW, &self.i18n.tr("no-profile")),
+                    None => empty_state(ui, icon::SWORD, &self.i18n.tr("no-profile")),
                     Some(p) => {
                         let devices = self.input.devices();
                         let vjoy = self.vjoy_view.device_list();
