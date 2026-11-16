@@ -200,6 +200,8 @@ apps-mode-start = Стартовый режим
 apps-mode-tip = Режим, в котором профиль начинает работу для этой программы
 apps-own-no-profile = Joystick Gobloon не выбирает профиль для самого себя
 apps-running-tip = Сейчас работает её профиль
+apps-other = Любая другая программа
+apps-other-tip = Профиль, который работает, пока впереди нет программы из этого списка со своим профилем: другие программы и рабочий стол. Если впереди сам Joystick Gobloon или есть несохранённые изменения, текущий профиль остаётся
 
 # Engine
 action-activate = Активировать профиль
@@ -463,6 +465,9 @@ edit-dual-second = Выход второй оси
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Связать с существующим действием
 edit-copy-existing = Копировать существующее действие
+edit-shared = Общее действие: используется в { $count } местах. Изменение здесь меняет его везде.
+edit-shared-parent = Оно внутри общего действия: сначала отвяжите то, чтобы менять только это место.
+edit-unlink = Отвязать: сделать здесь отдельную копию
 
 # Condition
 kind-condition = Условие
@@ -584,6 +589,9 @@ macro-step-vjoy-hat = Хатка виртуального стика
 macro-step-pad-button = Кнопка геймпада
 macro-step-pad-axis = Стик или курок геймпада
 macro-step-pad-dpad = Крестовина геймпада
+macro-step-logical-button = Кнопка логического устройства
+macro-step-logical-axis = Ось логического устройства
+macro-step-logical-hat = Хатка логического устройства
 macro-step-run-action = Выполнить действие
 macro-run-pick = Выберите действие
 macro-run-missing = Действие не найдено
@@ -767,6 +775,7 @@ voice-listening = Слушаю…
 voice-loading = Загрузка речевой модели…
 voice-heard = Услышано «{ $text }» ({ $confidence } %): { $command }
 voice-heard-unknown = Услышано «{ $text }» ({ $confidence } %): нет такой команды
+voice-unknown-words = Речевая модель не знает слов { $words }: эту фразу она никогда не услышит. Возьмите другие слова или напишите слитное слово как два отдельных.
 voice-heard-nothing = Ничего не услышано
 status-voice = Голосовые команды: удерживайте вход голосового ввода и говорите
 settings-voice = Голос

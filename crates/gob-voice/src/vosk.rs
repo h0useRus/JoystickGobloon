@@ -178,8 +178,12 @@ impl Model {
 /// What grammar mode reports for speech outside the phrase list.
 const UNKNOWN: &str = "[unk]";
 
+/// The words of `text` in lower case. Punctuation and hyphens separate words (the models know
+/// no such words); apostrophes stay, as in "don't".
 fn words(text: &str) -> impl Iterator<Item = String> + '_ {
-    text.split_whitespace().map(str::to_lowercase)
+    text.split(|c: char| !(c.is_alphanumeric() || matches!(c, '\'' | '’')))
+        .filter(|w| !w.is_empty())
+        .map(|w| w.replace('’', "'").to_lowercase())
 }
 
 /// Lower case, single spaces: how Vosk spells its results.
@@ -315,6 +319,11 @@ mod tests {
     #[test]
     fn phrases_are_spelled_like_results() {
         assert_eq!(normalize("  Lower   the Gear "), "lower the gear");
+        assert_eq!(
+            normalize("Gear down! Auto-pilot, ¿sí?"),
+            "gear down auto pilot sí"
+        );
+        assert_eq!(normalize("Don’t stop"), "don't stop");
     }
 
     #[test]

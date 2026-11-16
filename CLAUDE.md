@@ -171,7 +171,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   to `main`.
 - Versions come from the commits (.github/scripts/next-version.sh): Conventional Commits since the latest
   final tag vX.Y.Z; feat -> minor, any other type -> patch, `type!:` / `BREAKING CHANGE:` -> major (minor
-  while 0.x). Never bump versions by hand; local builds show the latest git tag + commits since it
+  while 0.x); a `Release-As: X.Y.Z` commit footer pins the version (e.g. a feature in a patch release while
+  the minor is reserved; 0.16.0 = game export). Never bump versions by hand; local builds show the latest git tag + commits since it
   (`0.9.0-alpha.45+3.g728daf5`, joystick-gobloon build.rs), `[workspace.package] version` only without git.
   `bash .github/scripts/next-version.sh` prints the next version.
 - Releases (.github/workflows/release.yml): push to `main` publishes `v<version>`, push to `dev` a
@@ -182,6 +183,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) checks commit
   messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches,
   and clippy + tests on Linux (job `linux`).
+- Release notes = the text of the release request (PR dev -> main), copied to the release by release.yml (alpha
+  builds get GitHub's PR list). Write them for players, not developers: what changed for them and what to do,
+  in plain words; no commit lists, PR numbers, crate names or developer names; the user approves them first.
 - Discord: releases post through .github/scripts/discord-announce.ps1 to the DISCORD_WEBHOOK secret (alpha
   builds to DISCORD_WEBHOOK_ALPHA); no secret = no post. announce.yml re-posts a release by hand.
 - Rust version is pinned in rust-toolchain.toml (local and CI); bump it deliberately and fix new lints.

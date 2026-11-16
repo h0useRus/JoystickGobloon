@@ -554,7 +554,23 @@ pub enum MacroStep {
     RunAction {
         action: String,
     },
-    /// `joystick` and `logical-device` steps, not executed.
+    /// A logical device button (Gremlin's `logical-device` step).
+    LogicalButton {
+        id: u32,
+        pressed: bool,
+    },
+    /// A logical device axis; `relative` adds `value` to the current position.
+    LogicalAxis {
+        id: u32,
+        value: f64,
+        relative: bool,
+    },
+    /// A logical device hat; hundredths of a degree, `None` when centered.
+    LogicalHat {
+        id: u32,
+        direction: Option<u16>,
+    },
+    /// `joystick` steps, not executed.
     Other,
 }
 
@@ -1189,6 +1205,25 @@ fn macro_step(ty: &str, items: &[Item]) -> MacroStep {
                     control: control.to_string(),
                     value: num("value"),
                 }
+            }
+        }
+        "logical-device" => {
+            let id = num("input-id") as u32;
+            match InputType::parse(str("input-type").unwrap_or_default()) {
+                InputType::Button => MacroStep::LogicalButton {
+                    id,
+                    pressed: flag("value"),
+                },
+                InputType::Axis => MacroStep::LogicalAxis {
+                    id,
+                    value: num("value"),
+                    relative: str("axis-mode").is_some_and(|m| m.eq_ignore_ascii_case("relative")),
+                },
+                InputType::Hat => MacroStep::LogicalHat {
+                    id,
+                    direction: str("value").and_then(hat_direction),
+                },
+                InputType::Other => MacroStep::Other,
             }
         }
         "action" => MacroStep::RunAction {

@@ -196,6 +196,8 @@ apps-mode-start = 시작 모드
 apps-mode-tip = 이 프로그램에서 프로필이 시작하는 모드
 apps-own-no-profile = Joystick Gobloon은 자신의 프로필을 선택하지 않습니다
 apps-running-tip = 지금 이 프로그램의 프로필이 실행 중
+apps-other = 기타 모든 프로그램
+apps-other-tip = 이 목록에서 프로필이 있는 프로그램이 앞에 없을 때 실행되는 프로필입니다: 다른 프로그램과 바탕 화면. Joystick Gobloon 자체가 앞에 있거나 저장하지 않은 변경 사항이 있으면 현재 프로필이 유지됩니다
 
 # Engine
 action-activate = 프로필 활성화
@@ -443,6 +445,9 @@ edit-dual-second = 두 번째 축 출력
 # Existing actions (Gremlin's reference action)
 edit-link-existing = 기존 동작 연결
 edit-copy-existing = 기존 동작 복사
+edit-shared = 공유 동작: { $count }곳에서 사용됩니다. 여기서 바꾸면 모두 바뀝니다.
+edit-shared-parent = 공유 동작 안에 있습니다: 이곳만 바꾸려면 먼저 그 동작의 연결을 해제하세요.
+edit-unlink = 연결 해제: 여기에 별도 복사본 만들기
 
 # Condition
 kind-condition = 조건
@@ -564,6 +569,9 @@ macro-step-vjoy-hat = 가상 스틱 햇 스위치
 macro-step-pad-button = 게임패드 버튼
 macro-step-pad-axis = 게임패드 스틱 또는 트리거
 macro-step-pad-dpad = 게임패드 방향 패드
+macro-step-logical-button = 논리 장치 버튼
+macro-step-logical-axis = 논리 장치 축
+macro-step-logical-hat = 논리 장치 햇 스위치
 macro-step-run-action = 동작 실행
 macro-run-pick = 동작 선택
 macro-run-missing = 동작을 찾을 수 없음
@@ -747,6 +755,7 @@ voice-listening = 듣는 중…
 voice-loading = 음성 모델을 불러오는 중…
 voice-heard = 인식됨 “{ $text }” ({ $confidence } %): { $command }
 voice-heard-unknown = 인식됨 “{ $text }” ({ $confidence } %): 명령 없음
+voice-unknown-words = 음성 모델이 { $words }을(를) 모릅니다: 이 문구는 절대 인식되지 않습니다. 다른 단어를 쓰거나 붙어 있는 단어를 두 단어로 나눠 쓰세요.
 voice-heard-nothing = 아무것도 들리지 않음
 status-voice = 음성 명령: 눌러서 말하기 입력을 누른 채 말하세요
 settings-voice = 음성

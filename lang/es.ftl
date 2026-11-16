@@ -196,6 +196,8 @@ apps-mode-start = Modo inicial
 apps-mode-tip = Modo en el que empieza el perfil para este programa
 apps-own-no-profile = Joystick Gobloon nunca elige un perfil para sí mismo
 apps-running-tip = Su perfil se está ejecutando
+apps-other = Cualquier otro programa
+apps-other-tip = Perfil que se usa mientras no haya delante ningún programa de esta lista con perfil: otros programas y el escritorio. Si delante está el propio Joystick Gobloon o hay cambios sin guardar, se mantiene el perfil actual
 
 # Engine
 action-activate = Activar el perfil
@@ -455,6 +457,9 @@ edit-dual-second = Salida del segundo eje
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Vincular una acción existente
 edit-copy-existing = Copiar una acción existente
+edit-shared = Acción compartida: se usa en { $count } lugares. Un cambio aquí los cambia todos.
+edit-shared-parent = Está dentro de una acción compartida: desvincula primero esa para cambiar solo este lugar.
+edit-unlink = Desvincular: dar a este lugar su propia copia
 
 # Condition
 kind-condition = Condición
@@ -576,6 +581,9 @@ macro-step-vjoy-hat = Cruceta del stick virtual
 macro-step-pad-button = Botón del gamepad
 macro-step-pad-axis = Stick o gatillo del gamepad
 macro-step-pad-dpad = Cruceta del gamepad
+macro-step-logical-button = Botón del dispositivo lógico
+macro-step-logical-axis = Eje del dispositivo lógico
+macro-step-logical-hat = Cruceta del dispositivo lógico
 macro-step-run-action = Ejecutar acción
 macro-run-pick = Elige una acción
 macro-run-missing = Acción no encontrada
@@ -759,6 +767,7 @@ voice-listening = Escuchando…
 voice-loading = Cargando el modelo de voz…
 voice-heard = Oído «{ $text }» ({ $confidence } %): { $command }
 voice-heard-unknown = Oído «{ $text }» ({ $confidence } %): ningún comando
+voice-unknown-words = El modelo de voz no conoce { $words }: nunca oirá esta frase. Usa otras palabras o escribe el pronombre unido como palabra aparte (cubre me).
 voice-heard-nothing = No se oyó nada
 status-voice = Comandos de voz: mantén la entrada de pulsar para hablar para hablar
 settings-voice = Voz

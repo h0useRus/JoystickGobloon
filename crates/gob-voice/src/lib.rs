@@ -10,7 +10,7 @@ pub mod vosk;
 
 pub use audio::{Capture, MAX_GAIN, Microphone, SAMPLE_RATE, microphones};
 pub use models::ModelInfo;
-pub use service::{VoiceConfig, VoiceEvent, VoiceService};
+pub use service::{UnknownPhrase, VoiceConfig, VoiceEvent, VoiceService};
 pub use vosk::{Heard, Model, Recognizer, Vosk};
 
 /// Why voice input is not available.

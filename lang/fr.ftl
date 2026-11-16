@@ -196,6 +196,8 @@ apps-mode-start = Mode de départ
 apps-mode-tip = Mode dans lequel le profil démarre pour ce programme
 apps-own-no-profile = Joystick Gobloon ne choisit jamais de profil pour lui-même
 apps-running-tip = Son profil est en cours
+apps-other = Tout autre programme
+apps-other-tip = Profil utilisé tant qu'aucun programme de cette liste ayant un profil n'est au premier plan : autres programmes et bureau. Si Joystick Gobloon lui-même est au premier plan ou s'il reste des modifications non enregistrées, le profil en cours reste
 
 # Engine
 action-activate = Activer le profil
@@ -455,6 +457,9 @@ edit-dual-second = Sortie du second axe
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Lier une action existante
 edit-copy-existing = Copier une action existante
+edit-shared = Action partagée : utilisée à { $count } endroits. Une modification ici les change tous.
+edit-shared-parent = Elle se trouve dans une action partagée : déliez d’abord celle-ci pour ne changer que cet endroit.
+edit-unlink = Délier : donner à cet endroit sa propre copie
 
 # Condition
 kind-condition = Condition
@@ -576,6 +581,9 @@ macro-step-vjoy-hat = Chapeau du stick virtuel
 macro-step-pad-button = Bouton de manette
 macro-step-pad-axis = Stick ou gâchette de manette
 macro-step-pad-dpad = Croix directionnelle de manette
+macro-step-logical-button = Bouton du périphérique logique
+macro-step-logical-axis = Axe du périphérique logique
+macro-step-logical-hat = Chapeau du périphérique logique
 macro-step-run-action = Exécuter une action
 macro-run-pick = Choisir une action
 macro-run-missing = Action introuvable
@@ -759,6 +767,7 @@ voice-listening = Écoute…
 voice-loading = Chargement du modèle vocal…
 voice-heard = Entendu « { $text } » ({ $confidence } %) : { $command }
 voice-heard-unknown = Entendu « { $text } » ({ $confidence } %) : aucune commande
+voice-unknown-words = Le modèle vocal ne connaît pas { $words } : il n’entend jamais cette phrase. Utilisez d’autres mots, ou écrivez un mot soudé à un autre en deux mots.
 voice-heard-nothing = Rien entendu
 status-voice = Commandes vocales : maintenez l'entrée « appuyer pour parler » pour parler
 settings-voice = Voix

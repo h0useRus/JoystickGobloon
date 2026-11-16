@@ -131,6 +131,16 @@ impl AppEntry {
         }
     }
 
+    /// The "any other program" entry: its profile runs while no program of the page with a
+    /// profile is in front.
+    pub fn other() -> Self {
+        Self::new(PathBuf::from(OTHER_PROGRAMS))
+    }
+
+    pub fn is_other(&self) -> bool {
+        self.path.as_os_str() == OTHER_PROGRAMS
+    }
+
     /// What programs are matched by: the file name without case, so every copy of a game
     /// (other install folders, test builds) counts.
     pub fn key(&self) -> String {
@@ -139,6 +149,9 @@ impl AppEntry {
         program_key(path.rsplit(['\\', '/']).next().unwrap_or(&path))
     }
 }
+
+/// Path of the [`AppEntry::other`] entry in `apps.gob`.
+pub const OTHER_PROGRAMS: &str = "*";
 
 /// [`AppEntry::key`] of a program's file name.
 pub fn program_key(name: &str) -> String {

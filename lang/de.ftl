@@ -196,6 +196,8 @@ apps-mode-start = Startmodus
 apps-mode-tip = Modus, in dem das Profil für dieses Programm startet
 apps-own-no-profile = Joystick Gobloon wählt nie ein Profil für sich selbst
 apps-running-tip = Sein Profil läuft gerade
+apps-other = Jedes andere Programm
+apps-other-tip = Profil, das läuft, solange kein Programm dieser Liste mit eigenem Profil im Vordergrund ist: andere Programme und der Desktop. Ist Joystick Gobloon selbst im Vordergrund oder gibt es ungespeicherte Änderungen, bleibt das laufende Profil
 
 # Engine
 action-activate = Profil aktivieren
@@ -455,6 +457,9 @@ edit-dual-second = Ausgabe der zweiten Achse
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Vorhandene Aktion verknüpfen
 edit-copy-existing = Vorhandene Aktion kopieren
+edit-shared = Gemeinsame Aktion: an { $count } Stellen verwendet. Eine Änderung hier ändert alle.
+edit-shared-parent = Sie liegt in einer gemeinsamen Aktion: Trenne zuerst diese, um nur diese Stelle zu ändern.
+edit-unlink = Trennen: diese Stelle erhält eine eigene Kopie
 
 # Condition
 kind-condition = Bedingung
@@ -576,6 +581,9 @@ macro-step-vjoy-hat = Coolie-Hat des virtuellen Sticks
 macro-step-pad-button = Gamepad-Taste
 macro-step-pad-axis = Gamepad-Stick oder -Trigger
 macro-step-pad-dpad = Gamepad-Steuerkreuz
+macro-step-logical-button = Taste des logischen Geräts
+macro-step-logical-axis = Achse des logischen Geräts
+macro-step-logical-hat = Coolie-Hat des logischen Geräts
 macro-step-run-action = Aktion ausführen
 macro-run-pick = Aktion wählen
 macro-run-missing = Aktion nicht gefunden
@@ -759,6 +767,7 @@ voice-listening = Hört zu…
 voice-loading = Sprachmodell wird geladen…
 voice-heard = Gehört „{ $text }“ ({ $confidence } %): { $command }
 voice-heard-unknown = Gehört „{ $text }“ ({ $confidence } %): kein Befehl
+voice-unknown-words = Das Sprachmodell kennt { $words } nicht: Es hört diesen Satz nie. Nimm andere Wörter oder schreibe ein zusammengesetztes Wort als zwei Wörter.
 voice-heard-nothing = Nichts gehört
 status-voice = Sprachbefehle: halte die Push-to-Talk-Eingabe, um zu sprechen
 settings-voice = Sprache

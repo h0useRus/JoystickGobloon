@@ -196,6 +196,8 @@ apps-mode-start = Starting mode
 apps-mode-tip = Mode the profile starts in for this program
 apps-own-no-profile = Joystick Gobloon never chooses a profile for itself
 apps-running-tip = Its profile runs now
+apps-other = Any other program
+apps-other-tip = Profile that runs while no program on this list with a profile is in front: other programs and the desktop. Joystick Gobloon itself in front, or unsaved changes, keep the running profile
 
 # Engine
 action-activate = Activate the profile
@@ -455,6 +457,9 @@ edit-dual-second = Second axis output
 # Existing actions (Gremlin's reference action)
 edit-link-existing = Link an existing action
 edit-copy-existing = Copy an existing action
+edit-shared = Shared action: used in { $count } places. A change here changes all of them.
+edit-shared-parent = It sits inside a shared action: unlink that one first to change only this place.
+edit-unlink = Unlink: give this place its own copy
 
 # Condition
 kind-condition = Condition
@@ -576,6 +581,9 @@ macro-step-vjoy-hat = Virtual stick hat
 macro-step-pad-button = Gamepad button
 macro-step-pad-axis = Gamepad stick or trigger
 macro-step-pad-dpad = Gamepad d-pad
+macro-step-logical-button = Logical device button
+macro-step-logical-axis = Logical device axis
+macro-step-logical-hat = Logical device hat
 macro-step-run-action = Run action
 macro-run-pick = Pick an action
 macro-run-missing = Action not found
@@ -759,6 +767,7 @@ voice-listening = Listening…
 voice-loading = Loading the speech model…
 voice-heard = Heard “{ $text }” ({ $confidence } %): { $command }
 voice-heard-unknown = Heard “{ $text }” ({ $confidence } %): no command
+voice-unknown-words = The speech model does not know { $words }: it never hears this phrase. Use other words, or write a word stuck to another as two words.
 voice-heard-nothing = Heard nothing
 status-voice = Voice commands: hold the push-to-talk input to speak
 settings-voice = Voice
