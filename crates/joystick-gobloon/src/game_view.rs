@@ -25,6 +25,8 @@ use crate::style::{self, icon};
 
 /// Height of one node in the wiring schematic.
 const ROW: f32 = 28.0;
+/// Space between the schematic's columns, where the wires run.
+const GAP: f32 = 56.0;
 /// How long a game action stays lit after its input lets go, in seconds.
 const FLASH: f64 = 1.0;
 /// Catalog actions listed for a search.
@@ -1062,26 +1064,31 @@ impl GameView {
             crate::app::empty_state(ui, icon::FLOW_ARROW, &i18n.tr("game-no-outputs"));
             return;
         }
-        let accent = style::accent(ui);
-        let weak = ui.visuals().weak_text_color();
-        let text = ui.visuals().text_color();
+        let searching = !self.search.trim().is_empty();
+        let lanes = Lanes::build(graph, i18n, searching, self.picked.as_ref());
+        let look = Look {
+            accent: style::accent(ui),
+            weak: ui.visuals().weak_text_color(),
+            text: ui.visuals().text_color(),
+            fill: ui.visuals().faint_bg_color,
+            font: FontId::proportional(13.0),
+        };
         let line = ui.visuals().widgets.noninteractive.bg_stroke.color;
-        let fill = ui.visuals().faint_bg_color;
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
                 let width = ui.available_width();
-                let rows = graph.rows + 1;
-                let (rect, _) = ui
-                    .allocate_exact_size(Vec2::new(width, rows as f32 * ROW + ROW), Sense::hover());
-                let col_w = (width - 2.0 * 80.0) / 3.0;
+                let (rect, _) = ui.allocate_exact_size(
+                    Vec2::new(width, (lanes.rows + 1) as f32 * ROW),
+                    Sense::hover(),
+                );
+                let col_w = (width - 2.0 * GAP) / 3.0;
                 let xs = [
                     rect.left(),
-                    rect.left() + col_w + 80.0,
-                    rect.left() + 2.0 * (col_w + 80.0),
+                    rect.left() + col_w + GAP,
+                    rect.left() + 2.0 * (col_w + GAP),
                 ];
                 let painter = ui.painter_at(rect);
-                let font = FontId::proportional(13.0);
                 for (x, key) in
                     xs.iter()
                         .zip(["game-col-inputs", "game-col-outputs", "game-col-actions"])
@@ -1091,7 +1098,7 @@ impl GameView {
                         Align2::LEFT_CENTER,
                         i18n.tr(key),
                         FontId::proportional(12.0),
-                        weak,
+                        look.weak,
                     );
                 }
                 let node = |col: usize, row: usize| {
@@ -1100,158 +1107,207 @@ impl GameView {
                         Vec2::new(col_w, ROW - 4.0),
                     )
                 };
-                let glow = |v: f32| accent.gamma_multiply(v.clamp(0.0, 1.0));
-                // Wires first, under the nodes.
-                for (l, m) in &graph.input_edges {
-                    let on = live
-                        .inputs
-                        .get(*l)
-                        .copied()
-                        .unwrap_or(0.0)
-                        .min(live.outputs.get(*m).copied().unwrap_or(0.0));
-                    wire(
-                        &painter,
-                        node(0, graph.input_rows[*l]).right_center(),
-                        node(1, *m).left_center(),
-                        if on > 0.0 {
-                            Stroke::new(2.5, glow(0.4 + on))
-                        } else {
-                            Stroke::new(1.0, line)
-                        },
+                let visible = ui.clip_rect();
+                let stroke = |on: f32| {
+                    if on > 0.0 {
+                        Stroke::new(2.5, look.accent.gamma_multiply((0.4 + on).min(1.0)))
+                    } else {
+                        Stroke::new(1.0, line)
+                    }
+                };
+                for (row, name) in &lanes.headers {
+                    let r = node(0, *row);
+                    painter.text(
+                        Pos2::new(rect.left() + 2.0, r.center().y + 2.0),
+                        Align2::LEFT_CENTER,
+                        name,
+                        FontId::proportional(13.0),
+                        look.text,
                     );
+                    painter.hline(rect.x_range(), r.bottom(), Stroke::new(1.0, line));
                 }
-                for (m, r) in &graph.action_edges {
-                    let lit = live.outputs.get(*m).copied().unwrap_or(0.0);
-                    let fade = self.fade(&graph.actions[*r].id, now);
-                    let on = lit.max(fade);
-                    wire(
-                        &painter,
-                        node(1, *m).right_center(),
-                        node(2, graph.action_rows[*r]).left_center(),
-                        if on > 0.0 {
-                            Stroke::new(2.5, glow(0.4 + on))
-                        } else {
-                            Stroke::new(1.0, line)
-                        },
+                // Game actions the search found that no output drives yet.
+                for (row, r) in &lanes.loose {
+                    let at = node(2, *row);
+                    if at.intersects(visible) {
+                        let a = &graph.actions[*r];
+                        let v = self.fade(&a.id, now);
+                        self.action_node(ui, &painter, i18n, game, a, at, v, None, ops, &look);
+                    }
+                }
+                // One lane per output: its controllers left of it, its game actions right of
+                // it, so no wire leaves the lane.
+                for (n, lane) in lanes.lanes.iter().enumerate() {
+                    let m = lane.output;
+                    let o = &graph.outputs[m];
+                    let band = Rect::from_min_max(
+                        Pos2::new(rect.left(), node(0, lane.top).top() - 1.0),
+                        Pos2::new(
+                            rect.right(),
+                            node(0, lane.top + lane.height - 1).bottom() + 1.0,
+                        ),
                     );
-                }
-                // Nodes.
-                for (i, n) in graph.inputs.iter().enumerate() {
-                    let v = live.inputs.get(i).copied().unwrap_or(0.0);
-                    let r = node(0, graph.input_rows[i]);
-                    draw_node(
-                        &painter,
-                        r,
-                        &n.label,
-                        v,
-                        n.axis.then_some(v),
-                        accent,
-                        fill,
-                        text,
-                        &font,
-                    );
-                }
-                for (i, o) in graph.outputs.iter().enumerate() {
-                    let v = live.outputs.get(i).copied().unwrap_or(0.0);
-                    let r = node(1, i);
+                    if !band.intersects(visible) {
+                        continue;
+                    }
+                    if n % 2 == 1 {
+                        painter.rect_filled(band, 6.0, look.fill.gamma_multiply(0.45));
+                    }
+                    let at = node(1, lane.top);
+                    let lit = live.outputs.get(m).copied().unwrap_or(0.0);
+                    for (k, l) in lane.inputs.iter().enumerate() {
+                        let on = live.inputs.get(*l).copied().unwrap_or(0.0).min(lit);
+                        wire(
+                            &painter,
+                            node(0, lane.top + k).right_center(),
+                            at.left_center(),
+                            stroke(on),
+                        );
+                    }
+                    for (k, r) in lane.actions.iter().enumerate() {
+                        let on = lit.max(self.fade(&graph.actions[*r].id, now));
+                        wire(
+                            &painter,
+                            at.right_center(),
+                            node(2, lane.top + k).left_center(),
+                            stroke(on),
+                        );
+                    }
+                    for (k, l) in lane.inputs.iter().enumerate() {
+                        let i = &graph.inputs[*l];
+                        let v = live.inputs.get(*l).copied().unwrap_or(0.0);
+                        draw_node(
+                            &painter,
+                            node(0, lane.top + k),
+                            &i.label,
+                            v,
+                            i.axis.then_some(v),
+                            look.accent,
+                            look.fill,
+                            look.text,
+                            &look.font,
+                        );
+                    }
                     let picked = self.picked.as_ref() == Some(o);
                     draw_node(
                         &painter,
-                        r,
-                        &output_name(i18n, o),
-                        v,
+                        at,
+                        &output_parts(i18n, o).1,
+                        lit,
                         None,
-                        accent,
+                        look.accent,
                         if picked {
-                            accent.gamma_multiply(0.35)
+                            look.accent.gamma_multiply(0.35)
                         } else {
-                            fill
+                            look.fill
                         },
-                        text,
-                        &font,
+                        if lane.actions.is_empty() && lane.inputs.is_empty() {
+                            look.weak
+                        } else {
+                            look.text
+                        },
+                        &look.font,
                     );
-                    let resp = ui.interact(r, ui.scope_id().with(("game-out", i)), Sense::click());
+                    let resp = ui.interact(at, ui.scope_id().with(("game-out", m)), Sense::click());
                     if resp.clicked() {
                         self.picked = if picked { None } else { Some(o.clone()) };
                     }
-                    resp.on_hover_text(i18n.tr("game-pick-output-hint"));
-                }
-                for (i, a) in graph.actions.iter().enumerate() {
-                    let v = live
-                        .actions
-                        .get(i)
-                        .copied()
-                        .unwrap_or(0.0)
-                        .max(self.fade(&a.id, now));
-                    let r = node(2, graph.action_rows[i]);
-                    let label = if a.known {
-                        a.name.clone()
-                    } else {
-                        format!("{}  {}", icon::WARNING, a.name)
-                    };
-                    draw_node(
-                        &painter,
-                        r,
-                        &label,
-                        v,
-                        None,
-                        accent,
-                        fill,
-                        if a.bound { text } else { weak },
-                        &font,
-                    );
-                    let resp = ui.interact(r, ui.scope_id().with(("game-act", i)), Sense::click());
-                    let mut tip = if a.category.is_empty() {
-                        a.id.clone()
-                    } else {
-                        format!("{}\n{}", a.category, a.id)
-                    };
-                    if !a.known {
-                        tip.push('\n');
-                        tip.push_str(&i18n.tr("game-not-in-catalog"));
+                    resp.on_hover_text(format!(
+                        "{}\n{}",
+                        output_name(i18n, o),
+                        i18n.tr("game-pick-output-hint")
+                    ));
+                    for (k, r) in lane.actions.iter().enumerate() {
+                        let a = &graph.actions[*r];
+                        let v = lit.max(self.fade(&a.id, now));
+                        let at = node(2, lane.top + k);
+                        self.action_node(ui, &painter, i18n, game, a, at, v, Some(o), ops, &look);
                     }
-                    if let Some(o) = self.picked.clone() {
-                        tip.push('\n');
-                        tip.push_str(&i18n.tr("game-click-to-link"));
-                        if resp.clicked() {
-                            ops.push(Op::GameBind {
-                                game: game.to_string(),
-                                action: a.id.clone(),
-                                output: o,
-                            });
-                            self.picked = None;
-                        }
-                    }
-                    if a.bound {
-                        let bin = Rect::from_center_size(
-                            r.right_center() - Vec2::new(12.0, 0.0),
-                            Vec2::splat(18.0),
-                        );
-                        if resp.hovered() || ui.rect_contains_pointer(bin) {
-                            painter.text(
-                                bin.center(),
-                                Align2::CENTER_CENTER,
-                                icon::TRASH,
-                                FontId::proportional(13.0),
-                                weak,
-                            );
-                            let b = ui.interact(
-                                bin,
-                                ui.scope_id().with(("game-unbind", i)),
-                                Sense::click(),
-                            );
-                            if b.on_hover_text(i18n.tr("game-unbind")).clicked() {
-                                ops.push(Op::GameUnbind {
-                                    game: game.to_string(),
-                                    action: a.id.clone(),
-                                    output: None,
-                                });
-                            }
-                        }
-                    }
-                    resp.on_hover_text(tip);
                 }
             });
+    }
+
+    /// One game action of the schematic: a click links the picked output to it, the bin
+    /// unlinks it from `lane` (the output whose lane it is drawn in).
+    #[allow(clippy::too_many_arguments)]
+    fn action_node(
+        &mut self,
+        ui: &egui::Ui,
+        painter: &egui::Painter,
+        i18n: &I18n,
+        game: &str,
+        a: &ActionNode,
+        r: Rect,
+        lit: f32,
+        lane: Option<&GameOutput>,
+        ops: &mut Vec<Op>,
+        look: &Look,
+    ) {
+        let label = if a.known {
+            a.name.clone()
+        } else {
+            format!("{}  {}", icon::WARNING, a.name)
+        };
+        draw_node(
+            painter,
+            r,
+            &label,
+            lit,
+            None,
+            look.accent,
+            look.fill,
+            if a.bound { look.text } else { look.weak },
+            &look.font,
+        );
+        let salt = (lane.map(GameOutput::to_string), &a.id);
+        let resp = ui.interact(r, ui.scope_id().with(("game-act", &salt)), Sense::click());
+        let mut tip = if a.category.is_empty() {
+            format!("{}\n{}", a.name, a.id)
+        } else {
+            format!("{}\n{}\n{}", a.name, a.category, a.id)
+        };
+        if !a.known {
+            tip.push('\n');
+            tip.push_str(&i18n.tr("game-not-in-catalog"));
+        }
+        if let Some(o) = self.picked.clone() {
+            tip.push('\n');
+            tip.push_str(&i18n.tr("game-click-to-link"));
+            if resp.clicked() {
+                ops.push(Op::GameBind {
+                    game: game.to_string(),
+                    action: a.id.clone(),
+                    output: o,
+                });
+                self.picked = None;
+            }
+        }
+        if let Some(o) = lane {
+            let bin =
+                Rect::from_center_size(r.right_center() - Vec2::new(12.0, 0.0), Vec2::splat(18.0));
+            if resp.hovered() || ui.rect_contains_pointer(bin) {
+                painter.text(
+                    bin.center(),
+                    Align2::CENTER_CENTER,
+                    icon::TRASH,
+                    FontId::proportional(13.0),
+                    look.weak,
+                );
+                let b = ui.interact(
+                    bin,
+                    ui.scope_id().with(("game-unbind", &salt)),
+                    Sense::click(),
+                );
+                if b.on_hover_text(i18n.tr("game-unbind-one")).clicked() {
+                    ops.push(Op::GameUnbind {
+                        game: game.to_string(),
+                        action: a.id.clone(),
+                        output: Some(o.clone()),
+                    });
+                }
+            }
+        }
+        resp.on_hover_text(tip);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1494,6 +1550,13 @@ fn our_devices(ctx: &Context) -> Vec<OurDevice> {
 
 /// An output's name as the page shows it.
 fn output_name(i18n: &I18n, o: &GameOutput) -> String {
+    let (device, what) = output_parts(i18n, o);
+    format!("{device} · {what}")
+}
+
+/// An output's device and its name on that device: the schematic names the device once, above
+/// its outputs.
+fn output_parts(i18n: &I18n, o: &GameOutput) -> (String, String) {
     let base = |v: &VirtualOutput| match v {
         VirtualOutput::Vjoy {
             device,
@@ -1506,21 +1569,25 @@ fn output_name(i18n: &I18n, o: &GameOutput) -> String {
                 InputType::Hat => i18n.trf("vjoy-hat-n", &[("n", (*id).into())]),
                 _ => i18n.trf("vjoy-button-n", &[("n", (*id).into())]),
             };
-            format!("{dev} · {what}")
+            (dev, what)
         }
-        VirtualOutput::Gamepad { gamepad, control } => {
-            format!("{} {gamepad} · {control}", i18n.tr("game-gamepad"))
-        }
+        VirtualOutput::Gamepad { gamepad, control } => (
+            format!("{} {gamepad}", i18n.tr("game-gamepad")),
+            control.clone(),
+        ),
         VirtualOutput::Logical { input_type, id } => {
-            format!("{} · {:?} {id}", i18n.tr("game-logical"), input_type)
+            (i18n.tr("game-logical"), format!("{input_type:?} {id}"))
         }
     };
     match o {
         GameOutput::Virtual(v) => base(v),
-        GameOutput::HatDirection(v, d) => format!("{} {}", base(v), arrow(*d)),
-        GameOutput::Key(k) => i18n.trf(
-            "game-key",
-            &[("key", crate::key_capture::name(*k, i18n).into())],
+        GameOutput::HatDirection(v, d) => {
+            let (device, what) = base(v);
+            (device, format!("{what} {}", arrow(*d)))
+        }
+        GameOutput::Key(k) => (
+            i18n.tr("keyboard-device"),
+            crate::key_capture::name(*k, i18n),
         ),
     }
 }
@@ -1562,33 +1629,94 @@ struct Graph {
     input_edges: Vec<(usize, usize)>,
     /// (output, action) indices.
     action_edges: Vec<(usize, usize)>,
-    /// The row of each input and action: next to the first output they connect to.
-    input_rows: Vec<usize>,
-    action_rows: Vec<usize>,
+}
+
+/// One output of the schematic with what it connects: the controller inputs writing it and the
+/// game actions it drives share its rows.
+struct Lane {
+    output: usize,
+    top: usize,
+    height: usize,
+    inputs: Vec<usize>,
+    actions: Vec<usize>,
+}
+
+/// Rows of the schematic: a header per virtual device, then a lane per output.
+struct Lanes {
+    /// (row, text).
+    headers: Vec<(usize, String)>,
+    /// (row, action): actions a search found that no output drives.
+    loose: Vec<(usize, usize)>,
+    lanes: Vec<Lane>,
     rows: usize,
 }
 
-/// Rows for nodes wired to outputs: each as close as it gets to the first output it connects
-/// to, in that order, never two in one row.
-fn align(count: usize, edges: impl Iterator<Item = (usize, usize)>) -> Vec<usize> {
-    let mut want = vec![usize::MAX; count];
-    for (node, output) in edges {
-        want[node] = want[node].min(output);
+impl Lanes {
+    /// While `searching`, only the outputs driving a found action and the `picked` one stay.
+    fn build(graph: &Graph, i18n: &I18n, searching: bool, picked: Option<&GameOutput>) -> Self {
+        let mut row = 0;
+        let mut headers = Vec::new();
+        let mut loose = Vec::new();
+        let free =
+            (0..graph.actions.len()).filter(|r| !graph.action_edges.iter().any(|(_, a)| a == r));
+        for r in free {
+            if loose.is_empty() {
+                headers.push((row, i18n.tr("game-found")));
+                row += 1;
+            }
+            loose.push((row, r));
+            row += 1;
+        }
+        let mut lanes = Vec::new();
+        let mut device: Option<String> = None;
+        for (m, o) in graph.outputs.iter().enumerate() {
+            let actions: Vec<usize> = graph
+                .action_edges
+                .iter()
+                .filter(|(output, _)| *output == m)
+                .map(|(_, r)| *r)
+                .collect();
+            if searching && actions.is_empty() && picked != Some(o) {
+                continue;
+            }
+            let inputs: Vec<usize> = graph
+                .input_edges
+                .iter()
+                .filter(|(_, output)| *output == m)
+                .map(|(l, _)| *l)
+                .collect();
+            let name = output_parts(i18n, o).0;
+            if device.as_ref() != Some(&name) {
+                headers.push((row, name.clone()));
+                device = Some(name);
+                row += 1;
+            }
+            let height = inputs.len().max(actions.len()).max(1);
+            lanes.push(Lane {
+                output: m,
+                top: row,
+                height,
+                inputs,
+                actions,
+            });
+            row += height;
+        }
+        Self {
+            headers,
+            loose,
+            lanes,
+            rows: row,
+        }
     }
-    let mut order: Vec<usize> = (0..count).collect();
-    order.sort_by_key(|&i| (want[i], i));
-    let mut rows = vec![0; count];
-    let mut next = 0;
-    for i in order {
-        let row = if want[i] == usize::MAX {
-            next
-        } else {
-            want[i].max(next)
-        };
-        rows[i] = row;
-        next = row + 1;
-    }
-    rows
+}
+
+/// Colors and font of the schematic's nodes.
+struct Look {
+    accent: Color32,
+    weak: Color32,
+    text: Color32,
+    fill: Color32,
+    font: FontId,
 }
 
 impl Graph {
@@ -1700,24 +1828,12 @@ impl Graph {
                 }
             }
         }
-        let input_rows = align(inputs.len(), input_edges.iter().copied());
-        let action_rows = align(actions.len(), action_edges.iter().map(|(m, r)| (*r, *m)));
-        let rows = input_rows
-            .iter()
-            .chain(&action_rows)
-            .map(|r| r + 1)
-            .chain([outputs.len()])
-            .max()
-            .unwrap_or(0);
         Self {
             inputs,
             outputs,
             actions,
             input_edges,
             action_edges,
-            input_rows,
-            action_rows,
-            rows,
         }
     }
 }
