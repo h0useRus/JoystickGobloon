@@ -41,8 +41,22 @@ fn store(p: &Plugin, version: &str) -> Target {
     target(p, &format!("store{version}:C:/Users/h0use/"))
 }
 
-/// The target's profile files, named as globs name them.
+/// The fixture as the sim writes it, with LF line ends whatever the checkout made of them.
+fn lf(text: &str) -> String {
+    text.replace("\r\n", "\n")
+}
+
+/// The target's profile files, named as globs name them; LF line ends.
 fn files(profiles: &[(&str, &str)]) -> Files {
+    files_as_is(
+        &profiles
+            .iter()
+            .map(|(name, text)| (*name, lf(text)))
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn files_as_is(profiles: &[(&str, String)]) -> Files {
     profiles
         .iter()
         .map(|(name, text)| {
@@ -51,7 +65,7 @@ fn files(profiles: &[(&str, &str)]) -> Files {
                 format!("profile:{path}"),
                 GameFile {
                     path,
-                    text: Some(text.to_string()),
+                    text: Some(text.clone()),
                 },
             )
         })
@@ -254,13 +268,21 @@ fn writing_what_was_read_changes_nothing() {
             vec![("inputprofile_a", GENERAL), ("inputprofile_b", AIRPLANES)],
         ),
     ] {
-        let t = steam(&p, version);
-        let f = files(&profiles);
-        let r = read(&p, &t, version, &f);
-        let out = write(&p, &t, version, &f, &ours(1), &r.binds, &BTreeMap::new()).unwrap();
-        assert!(out.changes.is_empty(), "{version}: {:?}", out.changes);
-        for (key, text) in &out.files {
-            assert_eq!(Some(text), f[key].text.as_ref(), "{version}: {key}");
+        for eol in ["\n", "\r\n"] {
+            let t = steam(&p, version);
+            let f = files_as_is(
+                &profiles
+                    .iter()
+                    .map(|(name, text)| (*name, lf(text).replace('\n', eol)))
+                    .collect::<Vec<_>>(),
+            );
+            let r = read(&p, &t, version, &f);
+            assert!(!r.binds.is_empty());
+            let out = write(&p, &t, version, &f, &ours(1), &r.binds, &BTreeMap::new()).unwrap();
+            assert!(out.changes.is_empty(), "{version}: {:?}", out.changes);
+            for (key, text) in &out.files {
+                assert_eq!(Some(text), f[key].text.as_ref(), "{version}: {key}");
+            }
         }
     }
 }
@@ -292,7 +314,7 @@ fn writes_2024_bindings_in_place() {
     let general = "profile:C:/Steam/userdata/1/remote/inputprofile_a";
     let air = "profile:C:/Steam/userdata/1/remote/inputprofile_b";
     // The general profile did not change.
-    assert_eq!(out.files[general], GENERAL);
+    assert_eq!(out.files[general], lf(GENERAL));
     let text = &out.files[air];
     assert!(
         text.contains(
@@ -360,7 +382,6 @@ fn an_unbound_2024_action_closes_again() {
     // Nothing else changed.
     let before = "<Action ActionName=\"KEY_PC_MOVE_FORWARD\" ValueEvent=\"0.000000\" Delay=\"2.000000\" Flag=\"1\">\n\t\t\t<Primary>\n\t\t\t\t<KEY Information=\"Joystick Button 10\">9</KEY>\n\t\t\t</Primary>\n\t\t</Action>";
     let after = "<Action ActionName=\"KEY_PC_MOVE_FORWARD\" ValueEvent=\"0.000000\" Delay=\"0.000000\" Flag=\"2\"/>";
-    let lf = |s: &str| s.replace("\r\n", "\n");
     assert_eq!(lf(text), lf(GENERAL).replacen(before, after, 1));
 }
 
