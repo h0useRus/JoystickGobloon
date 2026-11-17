@@ -107,9 +107,14 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   versions); plugins only turn text into text, the host reads and writes the game's files. Game names, formats and
   paths only in plugins; tests/plugins/sample = a made-up game for the tests; example `export_check` (read-only run on the
   real game files, `--roundtrip [--dump <dir>]`). Plugins: plugins/export/<id>/ (star-citizen: dev/catalog.py rebuilds
-  catalog/<version>.gob from a local install, only on the user's request). GUI: game_view.rs = Game bindings page (rail,
-  detaches like calibration): plugins run on a worker thread, wiring schematic (a lane per output) + "As in the game" table
-  (every action of the game), import, export dialog; lit live from the runner's `OutputTap` (gob-engine tap.rs). Releases put
+  catalog/<version>.gob from a local install, only on the user's request). A binding's output (gob-core game.rs
+  `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
+  keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
+  plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,
+  detaches like calibration): worker.rs (plugins on a worker thread), state.rs (one state per action: the profile set
+  against the game's files), wiring.rs (schematic, a lane per output), table.rs ("As in the game": groups, chips), capture.rs
+  + bind.rs (press a key/mouse button/joystick control to bind or look up; warning listing where a control is used; mapping
+  an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs). Releases put
   plugins/export (without `dev/`) into `export/` next to the exe (installer, portable zip, AppImage)
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
@@ -200,6 +205,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting,
   select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical | game-list (Game page table),
   `JOYSTICK_GOBLOON_GAME_IMPORT=1` takes the game's bindings into a profile without any on the Game page (debug only),
+  `JOYSTICK_GOBLOON_GAME_DIALOG` = capture | conflict | choose | unmapped opens that dialog of the Game page with sample data,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
