@@ -1,8 +1,9 @@
--- Star Citizen: bindings of virtual joysticks and keys in actionmaps.xml (the active profile)
--- and layout_<name>_exported.xml files (loaded in the game through Control Profiles).
+-- Star Citizen: bindings of virtual joysticks, keyboard and mouse in actionmaps.xml (the active
+-- profile) and layout_<name>_exported.xml files (loaded in the game through Control Profiles).
 --
 -- Inputs as the game writes them: js<instance>_button<n>, js<n>_hat<h>_<up|right|down|left>,
--- js<n>_<x|y|z|rotx|roty|rotz|slider1|slider2>, kb1_<key>; "js1_ " (a space) unbinds.
+-- js<n>_<x|y|z|rotx|roty|rotz|slider1|slider2>, kb1_<key>, kb1_<key>+<key>, mo1_<button>;
+-- "js1_ " (a space) unbinds. A rebind on a device replaces the game's default on that device.
 -- Every vJoy device has the same product GUID, so the game tells them apart only by instance.
 
 local CHANNELS = { "LIVE", "PTU", "EPTU", "TECH-PREVIEW", "HOTFIX" }
@@ -46,6 +47,16 @@ local KEYS = {
 local KEY_NAMES = {}
 for name, id in KEYS do
 	KEY_NAMES[id] = name
+end
+
+-- Our mouse button names (output ids) <-> the game's.
+local MOUSE = {
+	left = "mouse1", right = "mouse2", middle = "mouse3", back = "mouse4", forward = "mouse5",
+	["wheel-up"] = "mwheel_up", ["wheel-down"] = "mwheel_down",
+}
+local MOUSE_BACK = {}
+for ours, game in MOUSE do
+	MOUSE_BACK[game] = ours
 end
 
 plugin.options({
@@ -109,11 +120,50 @@ end)
 -- ---- outputs <-> inputs ----------------------------------------------------------------------
 
 -- Our output id -> the game's input, through device links (output "vjoy:1" -> "js1").
+local function is_keys(output)
+	return string.match(output, "^key:") ~= nil or string.match(output, "^mouse:") ~= nil
+end
+
+-- Keys and mouse buttons pressed together -> "kb1_ralt+y", "mo1_mouse2", "kb1_lalt+mouse2".
+local function keys_input(output)
+	local names, mouse_only = {}, true
+	for _, part in string.split(output, "+") do
+		local key = string.match(part, "^key:0x(%x+)$")
+		local button = string.match(part, "^mouse:([%a%-]+)$")
+		local name = nil
+		if key then
+			name = KEY_NAMES[tonumber(key, 16)]
+			mouse_only = false
+		elseif button then
+			name = MOUSE[button]
+		end
+		if name == nil then
+			return nil
+		end
+		table.insert(names, name)
+	end
+	return (if mouse_only then "mo1_" else "kb1_") .. table.concat(names, "+")
+end
+
+-- The device of an input: "js2", "kb1", "mo1".
+local function device_of(input)
+	return string.match(input, "^(%a+%d+)_")
+end
+
+-- "kb1_u+lshift" and "kb1_lshift+u" are one input: the parts in one order.
+local function canon(input)
+	local dev, rest = string.match(input, "^(%a+%d+)_(.+)$")
+	if (dev ~= "kb1" and dev ~= "mo1") or string.find(rest, "+", 1, true) == nil then
+		return input
+	end
+	local parts = string.split(rest, "+")
+	table.sort(parts)
+	return dev .. "_" .. table.concat(parts, "+")
+end
+
 local function to_input(output, js_of)
-	local key = string.match(output, "^key:0x(%x+)$")
-	if key then
-		local name = KEY_NAMES[tonumber(key, 16)]
-		return if name then "kb1_" .. name else nil
+	if is_keys(output) then
+		return keys_input(output)
 	end
 	local device, rest = string.match(output, "^(vjoy:%d+):(.+)$")
 	local js = device and js_of[device]
@@ -137,10 +187,19 @@ end
 
 -- The game's input -> our output id; nil for devices that are not ours and for unbinds.
 local function from_input(input, output_of)
-	local key = string.match(input, "^kb1_([%w_]+)$")
-	if key then
-		local id = KEYS[key]
-		return if id then string.format("key:0x%x", id) else nil
+	local dev, keys = string.match(input, "^(%a+%d+)_(.+)$")
+	if dev == "kb1" or dev == "mo1" then
+		local parts = {}
+		for _, name in string.split(keys, "+") do
+			if KEYS[name] then
+				table.insert(parts, string.format("key:0x%x", KEYS[name]))
+			elseif MOUSE_BACK[name] then
+				table.insert(parts, "mouse:" .. MOUSE_BACK[name])
+			else
+				return nil
+			end
+		end
+		return table.concat(parts, "+")
 	end
 	local js, rest = string.match(input, "^(js%d+)_(.+)$")
 	local device = js and output_of[js]
@@ -230,13 +289,33 @@ plugin.read(function(ctx)
 			end
 		end
 	end
-	local binds = {}
+	-- The player's bindings; a rebind on the keyboard or mouse (an unbind too) replaces the
+	-- game's default there.
+	local binds, rebound = {}, {}
 	for _, map in xml.elements(profiles, "actionmap") do
 		for _, action in xml.elements(map, "action") do
+			local id = map.attrs.name .. "/" .. action.attrs.name
 			for _, rebind in xml.elements(action, "rebind") do
-				local output = from_input(rebind.attrs.input or "", output_of)
+				local input = rebind.attrs.input or ""
+				local dev = device_of(input)
+				if dev == "kb1" or dev == "mo1" then
+					rebound[id] = rebound[id] or {}
+					rebound[id][dev] = true
+				end
+				local output = from_input(input, output_of)
 				if output then
-					table.insert(binds, { action = map.attrs.name .. "/" .. action.attrs.name, output = output })
+					table.insert(binds, { action = id, output = output })
+				end
+			end
+		end
+	end
+	for _, a in ctx.catalog.actions do
+		for _, d in a.default or {} do
+			local dev = device_of(d)
+			if (dev == "kb1" or dev == "mo1") and not (rebound[a.id] and rebound[a.id][dev]) then
+				local output = from_input(d, output_of)
+				if output then
+					table.insert(binds, { action = a.id, output = output, default = true })
 				end
 			end
 		end
@@ -299,31 +378,60 @@ plugin.write(function(ctx)
 		product_of[d.output] = product(d)
 	end
 
-	-- What each action gets: our inputs, and unbinds of the game's defaults on js1.
-	-- Keys the profile sends are only shown: the player's keyboard layout stays theirs.
+	-- What each action gets: our joystick inputs, and the keyboard and mouse inputs of the
+	-- actions the profile holds them for (`keyed`; the other actions keep the game's).
+	local keyed = {}
+	for _, id in ctx.cleared or {} do
+		keyed[id] = true
+	end
 	local wanted = {}
 	for _, b in ctx.binds do
-		local input = if string.match(b.output, "^key:") then nil else to_input(b.output, js_of)
+		if is_keys(b.output) then
+			keyed[b.action] = true
+		end
+		local input = to_input(b.output, js_of)
 		if input then
 			wanted[b.action] = wanted[b.action] or {}
 			table.insert(wanted[b.action], input)
 		end
 	end
-	local real = {}
+	local real, bound_on = {}, {}
 	for id, inputs in wanted do
-		table.sort(inputs)
-		real[id] = table.concat(inputs, ", ")
+		local list = {}
+		bound_on[id] = {}
+		for _, input in inputs do
+			table.insert(list, canon(input))
+			bound_on[id][device_of(input) or ""] = true
+		end
+		table.sort(list)
+		real[id] = table.concat(list, ", ")
+	end
+	-- Unbinds where the game's own default would come back: on keyboard and mouse for the
+	-- actions held here, on js1 for every action when asked.
+	local defaults = {}
+	for _, a in ctx.catalog.actions do
+		for _, d in a.default or {} do
+			local dev = device_of(d)
+			if dev then
+				defaults[a.id] = defaults[a.id] or {}
+				defaults[a.id][dev] = defaults[a.id][dev] or {}
+				table.insert(defaults[a.id][dev], canon(d))
+			end
+		end
+	end
+	local function unbind(id, dev)
+		if defaults[id] and defaults[id][dev] and not (bound_on[id] and bound_on[id][dev]) then
+			wanted[id] = wanted[id] or {}
+			table.insert(wanted[id], dev .. "_ ")
+		end
+	end
+	for _, id in sorted_keys(keyed) do
+		unbind(id, "kb1")
+		unbind(id, "mo1")
 	end
 	if opts.clear_defaults and ours.js1 then
 		for _, a in ctx.catalog.actions do
-			if wanted[a.id] == nil then
-				for _, d in a.default or {} do
-					if string.match(d, "^js1_") then
-						wanted[a.id] = { "js1_ " }
-						break
-					end
-				end
-			end
+			unbind(a.id, "js1")
 		end
 	end
 
@@ -346,33 +454,46 @@ plugin.write(function(ctx)
 					table.insert(options, opt)
 				end
 			end
-			-- Drop every binding on our devices, remembering them; unbinds stay unless the action
-			-- gets an input on that device.
-			local bound_on = {}
+			-- Drop every binding on our devices, and on keyboard and mouse for the actions held
+			-- here, remembering them; unbinds stay unless the action gets an input on that device.
+			local want = {}
 			for id, inputs in wanted do
-				bound_on[id] = {}
+				want[id] = {}
 				for _, input in inputs do
-					bound_on[id][string.match(input, "^(js%d+)_") or ""] = true
+					want[id][canon(input)] = true
 				end
 			end
-			local old = {}
+			local old, in_file = {}, {}
 			for _, map in xml.elements(profiles, "actionmap") do
 				for _, action in xml.elements(map, "action") do
 					local id = map.attrs.name .. "/" .. action.attrs.name
 					for _, rebind in xml.elements(action, "rebind") do
 						local input = rebind.attrs.input or ""
-						local js = string.match(input, "^(js%d+)_")
-						if js and ours[js] then
+						local dev = device_of(input)
+						if dev and (ours[dev] or ((dev == "kb1" or dev == "mo1") and keyed[id])) then
+							in_file[id] = in_file[id] or {}
+							in_file[id][dev] = true
 							if not is_unbind(input) then
 								old[id] = old[id] or {}
-								table.insert(old[id], input)
+								table.insert(old[id], canon(input))
 								-- An input that stays keeps its element (activationMode, multiTap).
-								if not table.find(wanted[id] or {}, input) then
+								if not (want[id] and want[id][canon(input)]) then
 									xml.remove(action, rebind)
 								end
-							elseif bound_on[id] and bound_on[id][js] then
+							elseif bound_on[id] and bound_on[id][dev] then
 								xml.remove(action, rebind)
 							end
+						end
+					end
+				end
+			end
+			-- Before, a held action without a rebind on keyboard or mouse had the game's default.
+			for id in keyed do
+				for _, dev in { "kb1", "mo1" } do
+					if defaults[id] and defaults[id][dev] and not (in_file[id] and in_file[id][dev]) then
+						old[id] = old[id] or {}
+						for _, d in defaults[id][dev] do
+							table.insert(old[id], d)
 						end
 					end
 				end
@@ -385,8 +506,12 @@ plugin.write(function(ctx)
 						or xml.append(profiles, xml.element("actionmap", { name = map_name }))
 					local action = xml.find(map, "action", { name = action_name })
 						or xml.append(map, xml.element("action", { name = action_name }))
+					local have = {}
+					for _, rebind in xml.elements(action, "rebind") do
+						have[canon(rebind.attrs.input or "")] = true
+					end
 					for _, input in wanted[id] do
-						if xml.find(action, "rebind", { input = input }) == nil then
+						if not have[canon(input)] then
 							xml.append(action, xml.element("rebind", { input = input }))
 						end
 					end

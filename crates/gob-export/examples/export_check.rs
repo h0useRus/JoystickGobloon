@@ -88,7 +88,9 @@ fn main() {
             .count();
         println!("  {unknown} bound actions not in the catalog");
         if roundtrip {
-            roundtrip_write(&plugin, &ctx, &read.devices, &read.binds, dump.as_deref());
+            // The game's own defaults are not the profile's to write.
+            let binds: Vec<Bind> = read.binds.iter().filter(|b| !b.default).cloned().collect();
+            roundtrip_write(&plugin, &ctx, &read.devices, &binds, dump.as_deref());
         }
     }
 }
@@ -111,6 +113,7 @@ fn roundtrip_write(
             ours: ctx.ours,
             devices,
             binds,
+            cleared: &[],
             profile: "Roundtrip",
             options: &options,
         })

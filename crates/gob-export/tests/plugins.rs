@@ -78,11 +78,13 @@ fn write_then_read_gives_the_same_binds() {
             action: "gear".into(),
             output: "vjoy:1:button:5".into(),
             invert: false,
+            default: false,
         },
         Bind {
             action: "roll_axis".into(),
             output: "vjoy:1:axis:x".into(),
             invert: false,
+            default: false,
         },
     ];
     let ctx = WriteContext {
@@ -92,6 +94,7 @@ fn write_then_read_gives_the_same_binds() {
         ours: &[],
         devices: &[],
         binds: &binds,
+        cleared: &[],
         profile: "Test",
         options: &Default::default(),
     };

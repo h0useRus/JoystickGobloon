@@ -58,6 +58,7 @@ fn bind(action: &str, output: &str) -> Bind {
         action: action.into(),
         output: output.into(),
         invert: false,
+        default: false,
     }
 }
 
@@ -99,14 +100,26 @@ fn reads_our_devices_and_bindings() {
             game_device: "js1".into()
         }]
     );
+    let set: Vec<&Bind> = read.binds.iter().filter(|b| !b.default).collect();
     assert_eq!(
-        read.binds,
+        set,
         [
-            bind("seat_general/v_eject", "vjoy:1:button:47"),
-            bind("seat_general/v_emergency_exit", "key:0x148"),
-            bind("seat_general/v_emergency_exit", "vjoy:1:button:17"),
+            &bind("seat_general/v_eject", "vjoy:1:button:47"),
+            &bind("seat_general/v_emergency_exit", "key:0x148"),
+            &bind("seat_general/v_emergency_exit", "vjoy:1:button:17"),
         ]
     );
+    // The game's own keys where the player set none: eject has Right Alt + Y, the emergency
+    // exit's default gave way to the key set.
+    let default = |action: &str| -> Vec<&str> {
+        read.binds
+            .iter()
+            .filter(|b| b.default && b.action == action)
+            .map(|b| b.output.as_str())
+            .collect()
+    };
+    assert_eq!(default("seat_general/v_eject"), ["key:0x138+key:0x15"]);
+    assert!(default("seat_general/v_emergency_exit").is_empty());
     assert!(catalog.action("seat_general/v_eject").is_some());
 }
 
@@ -143,6 +156,7 @@ fn writes_actionmaps_and_a_layout() {
             ours: &ours(2),
             devices: &devices,
             binds: &binds,
+            cleared: &[],
             profile: "My profile",
             options: &options,
         })
@@ -154,7 +168,7 @@ fn writes_actionmaps_and_a_layout() {
         "{text}"
     );
     assert!(text.contains("<rebind input=\"kb1_up\"/>"), "{text}");
-    // Gone: the emergency exit button; the unbind on js1 stays.
+    // Gone: the emergency exit button (its key stays); the unbind on js1 stays.
     assert!(!text.contains("js1_button17"), "{text}");
     assert!(text.contains("<rebind input=\"js1_ \"/>"), "{text}");
     // New: js2's product, hat and axis bindings, indented like the rest.
@@ -180,7 +194,7 @@ fn writes_actionmaps_and_a_layout() {
     assert_eq!(
         kinds,
         [
-            (ChangeKind::Removed, "seat_general/v_emergency_exit"),
+            (ChangeKind::Changed, "seat_general/v_emergency_exit"),
             (ChangeKind::Added, "spaceship_movement/v_roll"),
             (ChangeKind::Added, "spaceship_movement/v_strafe_up"),
         ]
@@ -189,7 +203,7 @@ fn writes_actionmaps_and_a_layout() {
     assert_eq!(out.create[0].dir, "mappings");
     assert_eq!(out.create[0].name, "layout_My_profile_exported.xml");
     assert!(out.create[0].text.contains("<rebind input=\"js2_rotz\"/>"));
-    assert!(!out.create[0].text.contains("kb1_"));
+    assert!(out.create[0].text.contains("<rebind input=\"kb1_up\"/>"));
 
     // Reading what was written gives the same joystick bindings.
     let again = files_with(&t, text);
@@ -201,9 +215,112 @@ fn writes_actionmaps_and_a_layout() {
             ours: &ours(2),
         })
         .unwrap();
-    for b in binds.iter().filter(|b| !b.output.starts_with("key:")) {
+    for b in &binds {
         assert!(read.binds.contains(b), "{b:?} in {:?}", read.binds);
     }
+}
+
+#[test]
+fn writes_keys_and_mouse_only_for_the_actions_held() {
+    let p = plugin();
+    let t = target(&p);
+    let catalog = p.catalogs.pick(Some("4.10.197.2878")).unwrap().0;
+    let mut options = BTreeMap::new();
+    options.insert("clear_defaults".to_string(), OptionValue::Bool(false));
+    options.insert("layout".to_string(), OptionValue::Bool(false));
+    let options = p.option_values(&options).unwrap();
+    let files = files(&t, ACTIONMAPS);
+    let write = |files: &Files, binds: &[Bind], cleared: &[String]| {
+        p.write(&WriteContext {
+            target: &t,
+            files,
+            catalog,
+            ours: &ours(1),
+            devices: &[],
+            binds,
+            cleared,
+            profile: "p",
+            options: &options,
+        })
+        .unwrap()
+    };
+    let joystick = [
+        bind("seat_general/v_eject", "vjoy:1:button:47"),
+        bind("seat_general/v_emergency_exit", "vjoy:1:button:17"),
+    ];
+    // Nothing held: the keyboard binding in the file stays, nothing changes.
+    let out = write(&files, &joystick, &[]);
+    assert_eq!(out.files["actionmaps"], ACTIONMAPS);
+    assert!(out.changes.is_empty(), "{:?}", out.changes);
+
+    // Eject on Left Alt + right mouse button and on the wheel; the emergency exit without keys.
+    let mut binds = joystick.to_vec();
+    binds.push(bind("seat_general/v_eject", "key:0x38+mouse:right"));
+    binds.push(bind("seat_general/v_eject", "mouse:wheel-up"));
+    let cleared = ["seat_general/v_emergency_exit".to_string()];
+    let out = write(&files, &binds, &cleared);
+    let text = &out.files["actionmaps"];
+    assert!(
+        text.contains("<rebind input=\"kb1_lalt+mouse2\"/>"),
+        "{text}"
+    );
+    assert!(text.contains("<rebind input=\"mo1_mwheel_up\"/>"), "{text}");
+    assert!(!text.contains("kb1_up"), "{text}");
+    // The emergency exit's own key would come back: unbound.
+    assert!(text.contains("<rebind input=\"kb1_ \"/>"), "{text}");
+    let changes: Vec<_> = out
+        .changes
+        .iter()
+        .map(|c| {
+            (
+                c.kind,
+                c.action.as_str(),
+                c.from.as_deref(),
+                c.to.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        changes,
+        [
+            (
+                ChangeKind::Changed,
+                "seat_general/v_eject",
+                Some("js1_button47, kb1_ralt+y"),
+                Some("js1_button47, kb1_lalt+mouse2, mo1_mwheel_up")
+            ),
+            (
+                ChangeKind::Changed,
+                "seat_general/v_emergency_exit",
+                Some("js1_button17, kb1_up"),
+                Some("js1_button17")
+            ),
+        ]
+    );
+
+    // Read back: the same keys, none of them the game's default any more.
+    let written = files_with(&t, text);
+    let read = p
+        .read(&ReadContext {
+            target: &t,
+            files: &written,
+            catalog,
+            ours: &ours(1),
+        })
+        .unwrap();
+    for b in &binds {
+        assert!(read.binds.contains(b), "{b:?} in {:?}", read.binds);
+    }
+    assert!(
+        !read
+            .binds
+            .iter()
+            .any(|b| b.action == "seat_general/v_emergency_exit" && b.output.starts_with("key:"))
+    );
+    // Written again over its own result, nothing changes.
+    let again = write(&written, &binds, &cleared);
+    assert_eq!(&again.files["actionmaps"], text);
+    assert!(again.changes.is_empty(), "{:?}", again.changes);
 }
 
 #[test]
@@ -221,6 +338,7 @@ fn clears_the_game_defaults_on_js1() {
             ours: &ours(1),
             devices: &[],
             binds: &[],
+            cleared: &[],
             profile: "p",
             options: &options,
         })

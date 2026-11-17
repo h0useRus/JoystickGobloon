@@ -66,10 +66,14 @@ pub struct DeviceLink {
 pub struct Bind {
     /// The catalog's action id.
     pub action: String,
-    /// The output id, like "vjoy:1:button:5", "vjoy:2:axis:z" or "key:0x2e".
+    /// The output id, like "vjoy:1:button:5", "vjoy:2:axis:z", "key:0x2e", "mouse:left" or
+    /// keys and mouse buttons pressed together, "key:0x138+key:0x15".
     pub output: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub invert: bool,
+    /// Read from the game: its own default binding, not one the player set.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub default: bool,
 }
 
 /// What a plugin found in the game's files.
@@ -176,7 +180,11 @@ pub struct WriteContext<'a> {
     pub catalog: &'a Catalog,
     pub ours: &'a [OurDevice],
     pub devices: &'a [DeviceLink],
+    /// Bindings of the virtual devices, and the keyboard and mouse bindings of the actions the
+    /// profile holds them for; the other actions keep the game's keyboard and mouse bindings.
     pub binds: &'a [Bind],
+    /// Actions the profile leaves without any keyboard or mouse binding.
+    pub cleared: &'a [String],
     /// The profile's name, for names the plugin gives new files.
     pub profile: &'a str,
     /// Values of the plugin's options, by key; missing ones take their default.

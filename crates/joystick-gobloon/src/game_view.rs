@@ -67,6 +67,7 @@ enum Request {
         ours: Vec<OurDevice>,
         devices: Vec<DeviceLink>,
         binds: Vec<Bind>,
+        cleared: Vec<String>,
         profile: String,
         options: BTreeMap<String, OptionValue>,
     },
@@ -202,6 +203,7 @@ fn spawn_worker(ctx: egui::Context) -> (Sender<Request>, Receiver<Reply>) {
                         ours,
                         devices,
                         binds,
+                        cleared,
                         profile,
                         options,
                     } => {
@@ -228,6 +230,7 @@ fn spawn_worker(ctx: egui::Context) -> (Sender<Request>, Receiver<Reply>) {
                                     ours: &ours,
                                     devices: &devices,
                                     binds: &binds,
+                                    cleared: &cleared,
                                     profile: &profile,
                                     options: &options,
                                 })
@@ -854,7 +857,9 @@ impl GameView {
             return;
         };
         let n = match &self.in_game {
-            Some((p, read)) if *p == self.selected => read.binds.len(),
+            Some((p, read)) if *p == self.selected => {
+                read.binds.iter().filter(|b| !b.default).count()
+            }
             _ => 0,
         };
         if n == 0
@@ -917,6 +922,7 @@ impl GameView {
                         action: b.action.clone(),
                         output: b.output.to_string(),
                         invert: b.invert,
+                        default: false,
                     })
                     .collect()
             })
@@ -940,6 +946,7 @@ impl GameView {
             ours: our_devices(ctx),
             devices,
             binds,
+            cleared: g.map(|g| g.cleared.clone()).unwrap_or_default(),
             profile: ctx.profile_name.to_string(),
             options,
         });
@@ -1548,7 +1555,8 @@ fn status_text(i18n: &I18n, code: &str, plugin: Option<&PluginInfo>) -> String {
 fn import_ops(profile: &Profile, game: &str, read: &ReadResult, ops: &mut Vec<Op>) -> usize {
     let have = profile.game_bindings(game);
     let mut n = 0;
-    for b in &read.binds {
+    // The game's own default keys stay the game's.
+    for b in read.binds.iter().filter(|b| !b.default) {
         let Some(output) = GameOutput::parse(&b.output) else {
             continue;
         };

@@ -124,14 +124,15 @@ def actions(channel: Path):
             label = a.get("UILabel")
             if not label:
                 continue
-            if "mouse" in a.attrib and not any(
+            # Mouse motion alone (looking around) is nothing a button or stick axis binds.
+            if a.get("mouse", "").strip().startswith("maxis") and not any(
                 k in a.attrib for k in ("keyboard", "joystick", "gamepad")
             ):
                 continue
             default = []
-            for attr, prefix in (("joystick", "js1_"), ("keyboard", "kb1_")):
+            for attr, prefix in (("joystick", "js1_"), ("keyboard", "kb1_"), ("mouse", "mo1_")):
                 v = a.get(attr, "").strip()
-                if v:
+                if v and not (attr == "mouse" and v.startswith("maxis")):
                     default.append(prefix + v)
             yield {
                 "id": f"{m.get('name')}/{a.get('name')}",
