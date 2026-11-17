@@ -92,6 +92,14 @@ pub struct GameView {
     dialog: Option<bind::Dialog>,
     /// Text for the status bar.
     note: Option<String>,
+    /// The table was drawn already.
+    table_shown: bool,
+    /// Folders the user pointed at, searched for the game besides the usual places.
+    folders: Vec<String>,
+    /// The folder just chosen: its install is selected once the search is done.
+    chosen_folder: Option<String>,
+    /// A folder chosen this frame, for the app to keep in the settings.
+    new_folder: Option<String>,
     debug_done: bool,
     /// When each game action was last lit.
     flash: HashMap<String, f64>,
@@ -111,6 +119,8 @@ pub struct GameView {
 pub struct Output {
     pub toggle_window: bool,
     pub status: Option<String>,
+    /// A folder to search for games from now on (kept in the settings).
+    pub add_folder: Option<String>,
 }
 
 /// Everything the page reads from the app.
@@ -123,6 +133,8 @@ pub struct Context<'a> {
     pub sent: Option<gob_engine::OutputTap>,
     /// The mode the editor shows: a control mapped from this page is mapped in it.
     pub mode: &'a str,
+    /// Folders the user chose to search for games (from the settings).
+    pub folders: &'a [String],
 }
 
 impl GameView {
@@ -144,13 +156,44 @@ impl GameView {
         self.plugin().map(|p| p.manifest.id.clone())
     }
 
-    fn scan(&mut self) {
+    /// Looks for the games: in the usual places, and in the folders the user chose. A chosen
+    /// folder may be the game's own or the one holding it, so its parent is searched too.
+    fn scan(&mut self, ctx: &Context) {
         self.scanning = true;
+        for f in ctx.folders {
+            if !self.folders.contains(f) {
+                self.folders.push(f.clone());
+            }
+        }
+        let mut roots = crate::platform::game_roots();
+        for f in &self.folders {
+            let folder = std::path::Path::new(f);
+            for dir in [Some(folder), folder.parent()].into_iter().flatten() {
+                let root = slashed(&dir.to_string_lossy());
+                if !root.is_empty() && !roots.contains(&root) {
+                    roots.push(root);
+                }
+            }
+        }
         let env = gob_export::Env {
             platform: if cfg!(windows) { "windows" } else { "linux" }.into(),
-            roots: crate::platform::game_roots(),
+            roots,
         };
         self.send(Request::Scan { env });
+    }
+
+    /// Asks for the game's folder and searches it.
+    fn choose_folder(&mut self, ctx: &Context) {
+        let Some(dir) = rfd::FileDialog::new().pick_folder() else {
+            return;
+        };
+        let folder = dir.to_string_lossy().into_owned();
+        if !self.folders.contains(&folder) {
+            self.folders.push(folder.clone());
+            self.new_folder = Some(folder.clone());
+        }
+        self.chosen_folder = Some(folder);
+        self.scan(ctx);
     }
 
     /// The catalog for the selected target (or the profile's last export), and its fit.
@@ -189,11 +232,35 @@ impl GameView {
                     }
                     self.plugins = Some(plugins);
                     self.errors = errors;
-                    self.scan();
+                    self.scan(ctx);
                 }
                 Reply::Scanned(all) => {
                     self.scanning = false;
                     self.targets = all;
+                    // The install in the folder just chosen, of whichever game it is.
+                    let chosen = self.chosen_folder.take().and_then(|folder| {
+                        let folder = slashed(&folder).to_lowercase();
+                        let found = self.targets.iter().enumerate().find_map(|(p, list)| {
+                            list.iter()
+                                .position(|f| {
+                                    f.target.files.values().any(|file| {
+                                        slashed(file).to_lowercase().starts_with(&folder)
+                                    })
+                                })
+                                .map(|t| (p, t))
+                        });
+                        if found.is_none() {
+                            self.note = Some(format!("no-game:{folder}"));
+                        }
+                        found
+                    });
+                    if let Some((plugin, target)) = chosen {
+                        self.selected = plugin;
+                        self.target = target;
+                        self.in_game = None;
+                        self.read_game(ctx, false);
+                        continue;
+                    }
                     // The target last exported to, when it is still there.
                     let last = self
                         .game_id()
@@ -362,6 +429,23 @@ impl GameView {
                             ui.selectable_value(&mut self.filter, f, i18n.tr(f.key()));
                         }
                     });
+                // Every group folded or unfolded at once.
+                let (glyph, tip) = if self.folded.is_empty() {
+                    (icon::ARROWS_IN_LINE_VERTICAL, "game-fold-all")
+                } else {
+                    (icon::ARROWS_OUT_LINE_VERTICAL, "game-unfold-all")
+                };
+                if style::icon_button(ui, true, glyph, &i18n.tr(tip)).clicked() {
+                    if self.folded.is_empty() {
+                        let catalog = self.catalog(ctx.profile).map(|(c, _)| c);
+                        self.folded = catalog
+                            .iter()
+                            .flat_map(|c| c.actions.iter().map(|a| a.category.clone()))
+                            .collect();
+                    } else {
+                        self.folded.clear();
+                    }
+                }
             }
             if let Some(find) = &self.find {
                 ui.add_space(style::SPACE_M);
@@ -431,8 +515,14 @@ impl GameView {
         self.bind_dialog(ui, &scene, ops);
         self.export_dialog(ui, i18n, ctx, &game);
         if let Some(note) = self.note.take() {
-            out.status = Some(note);
+            out.status = Some(match note.strip_prefix("no-game:") {
+                Some(folder) => {
+                    i18n.trf("game-folder-none", &[("folder", folder.to_string().into())])
+                }
+                None => note,
+            });
         }
+        out.add_folder = self.new_folder.take();
         out
     }
 
@@ -563,7 +653,17 @@ impl GameView {
                 )
                 .clicked()
                 {
-                    self.scan();
+                    self.scan(ctx);
+                }
+                if style::icon_button(
+                    ui,
+                    !self.scanning,
+                    icon::FOLDER_OPEN,
+                    &i18n.tr("game-folder"),
+                )
+                .clicked()
+                {
+                    self.choose_folder(ctx);
                 }
             });
         });
@@ -685,6 +785,11 @@ impl GameView {
             .get(action)
             .map_or(0.0, |t| (1.0 - (now - t) / FLASH).max(0.0) as f32)
     }
+}
+
+/// A path with forward slashes and no slash at its end, as plugins write paths.
+fn slashed(path: &str) -> String {
+    path.replace('\\', "/").trim_end_matches('/').to_string()
 }
 
 /// The status bar text for a status code the worker replies left.

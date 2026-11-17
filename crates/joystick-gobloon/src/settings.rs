@@ -105,6 +105,10 @@ pub struct Settings {
     /// Default LED colors: device GUID -> LEDs, set when a profile that changed that
     /// device's LEDs stops (VKB keeps written colors until the stick restarts).
     pub leds: BTreeMap<String, DeviceLeds>,
+    /// Folders the user chose on the Game bindings page: searched for games besides the usual
+    /// places.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub game_folders: Vec<String>,
     /// Hidden option (not in the UI, written only when on): allow several running copies.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub multi_instance: bool,
@@ -336,6 +340,7 @@ impl Default for Settings {
             debounce: BTreeMap::new(),
             leds: BTreeMap::new(),
             experimental: false,
+            game_folders: Vec::new(),
             multi_instance: false,
         }
     }

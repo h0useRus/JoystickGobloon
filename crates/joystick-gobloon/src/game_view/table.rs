@@ -220,6 +220,8 @@ impl GameView {
         }
         Self::table_head(ui, i18n);
         // An action that lights up comes into view: once, not while it stays lit.
+        // What is lit when the table opens (an axis resting off center) moves nothing.
+        let opened = !std::mem::replace(&mut self.table_shown, true);
         let spacing = ui.spacing().item_spacing.y;
         let mut jump = None;
         for (n, line) in lines.iter().enumerate() {
@@ -227,6 +229,7 @@ impl GameView {
                 && live.actions.get(*r).copied().unwrap_or(0.0) > 0.0
                 && self.lit.insert(graph.actions[*r].id.clone())
                 && self.dialog.is_none()
+                && !opened
             {
                 jump = Some(n);
             }

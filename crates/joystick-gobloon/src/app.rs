@@ -1375,6 +1375,7 @@ impl JoystickGobloonApp {
             let title = self.i18n.tr("nav-game");
             let mut ops = Vec::new();
             let mut status = None;
+            let mut folder = None;
             let vjoy = self.vjoy_view.device_list();
             let (view, i18n) = (&mut self.game_view, &self.i18n);
             let attach = match &self.profile {
@@ -1389,10 +1390,12 @@ impl JoystickGobloonApp {
                         vjoy: &vjoy,
                         sent: self.activation.outputs(),
                         mode: &mode,
+                        folders: &self.settings.game_folders,
                     };
                     detached_window(ctx, "game", &title, BIG_WINDOW, |ui| {
                         let out = view.show(ui, i18n, &game_ctx, &mut ops, true);
                         status = status.take().or(out.status);
+                        folder = folder.take().or(out.add_folder);
                         out.toggle_window
                     })
                 }
@@ -1400,6 +1403,10 @@ impl JoystickGobloonApp {
             };
             if let Some(s) = status {
                 self.status = s;
+            }
+            if let Some(f) = folder {
+                self.settings.game_folders.push(f);
+                self.settings.save();
             }
             self.apply_ops(ops);
             if attach {
@@ -2608,6 +2615,7 @@ impl eframe::App for JoystickGobloonApp {
                             vjoy: &vjoy,
                             sent: self.activation.outputs(),
                             mode: &mode,
+                            folders: &self.settings.game_folders,
                         };
                         let mut ops = Vec::new();
                         let out = self
@@ -2618,6 +2626,10 @@ impl eframe::App for JoystickGobloonApp {
                         }
                         if let Some(s) = out.status {
                             self.status = s;
+                        }
+                        if let Some(f) = out.add_folder {
+                            self.settings.game_folders.push(f);
+                            self.settings.save();
                         }
                         self.apply_ops(ops);
                     }
