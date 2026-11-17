@@ -27,6 +27,12 @@ pub struct Target {
     /// Folders the plugin may create new files in (`WriteResult::create`), by its own keys.
     #[serde(default)]
     pub dirs: BTreeMap<String, String>,
+    /// Files whose names the game makes up, by a key and a pattern where `*` stands for any
+    /// part of one folder or file name ("C:/Steam/userdata/*/remote/profile_*"). The host
+    /// finds them when the plugin returns its targets and adds each to `files` as
+    /// "<key>:<path>"; the plugin then reads and writes them like its other files.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub globs: BTreeMap<String, String>,
     /// The key in `files` of the file that tells the game version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version_file: Option<String>,
