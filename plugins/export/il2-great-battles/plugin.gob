@@ -1,0 +1,5 @@
+id = "il2-great-battles"
+name = "IL-2 Sturmovik: Great Battles"
+version = "1.0.0"
+authors = ["Joystick Gobloon"]
+api = 1

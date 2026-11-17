@@ -107,7 +107,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   versions); plugins only turn text into text, the host reads and writes the game's files. Game names, formats and
   paths only in plugins; tests/plugins/sample = a made-up game for the tests; example `export_check` (read-only run on the
   real game files, `--roundtrip [--dump <dir>]`). Plugins: plugins/export/<id>/ (star-citizen: dev/catalog.py rebuilds
-  catalog/<version>.gob from a local install, only on the user's request). A binding's output (gob-core game.rs
+  catalog/<version>.gob from a local install, only on the user's request; il2-great-battles: data/input/global.actions,
+  device numbers from devices.txt, the game compiles current.map itself; an axis from two buttons = catalog actions
+  `<id>:inc`/`<id>:dec`; dev/catalog.py builds the catalog from key mapping files; the game is not installed here, tested
+  on a public key mapping file in crates/gob-export/tests/data). A binding's output (gob-core game.rs
   `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
   keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
   plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,
