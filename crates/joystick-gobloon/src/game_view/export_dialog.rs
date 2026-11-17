@@ -50,17 +50,7 @@ impl GameView {
                     .collect()
             })
             .unwrap_or_default();
-        let devices = g
-            .map(|g| {
-                g.devices
-                    .iter()
-                    .map(|d| DeviceLink {
-                        output: d.output.clone(),
-                        game_device: d.game_device.clone(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let devices = device_links(ctx, &game);
         let plugin = self.selected;
         self.send(Request::Preview {
             plugin,

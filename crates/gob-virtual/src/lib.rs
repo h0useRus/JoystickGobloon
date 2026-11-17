@@ -549,6 +549,18 @@ pub fn gamepad_inputs(device_name: &str) -> Option<GamepadInputs> {
     }
 }
 
+/// Which of `devices` (the backend's [`Backend::devices`]) the input device at `hid_path` is
+/// (gob-input's `DeviceInfo::hid_path`, of a device that is one of ours), where the path tells.
+pub fn joystick_of_input(hid_path: &str, devices: &[DeviceInfo]) -> Option<u32> {
+    #[cfg(windows)]
+    return windows::joystick_of_input(hid_path, devices);
+    #[cfg(not(windows))]
+    {
+        let _ = (hid_path, devices);
+        None
+    }
+}
+
 /// Before a system service that keeps the virtual devices is removed: copies their layouts into
 /// this program's own files, so the devices stay as they were without it. Nothing to do
 /// elsewhere.

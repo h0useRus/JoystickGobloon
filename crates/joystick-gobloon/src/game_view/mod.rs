@@ -175,9 +175,13 @@ impl GameView {
                 }
             }
         }
+        let documents = crate::platform::documents_dir()
+            .map(|d| format!("{}/", slashed(&d.to_string_lossy())))
+            .unwrap_or_default();
         let env = gob_export::Env {
             platform: if cfg!(windows) { "windows" } else { "linux" }.into(),
             roots,
+            documents,
         };
         self.send(Request::Scan { env });
     }
@@ -740,11 +744,16 @@ impl GameView {
         };
         self.importing = import;
         let plugin = self.selected;
+        let devices = self
+            .game_id()
+            .map(|game| device_links(ctx, &game))
+            .unwrap_or_default();
         self.send(Request::Read {
             plugin,
             target: found.target,
             version: found.version,
             ours: our_devices(ctx),
+            devices,
             import,
         });
     }
@@ -849,6 +858,22 @@ fn import_ops(profile: &Profile, game: &str, read: &ReadResult, ops: &mut Vec<Op
     n
 }
 
+/// The device links the profile keeps for `game`.
+fn device_links(ctx: &Context, game: &str) -> Vec<DeviceLink> {
+    ctx.profile
+        .game_bindings(game)
+        .map(|g| {
+            g.devices
+                .iter()
+                .map(|d| DeviceLink {
+                    output: d.output.clone(),
+                    game_device: d.game_device.clone(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// The profile's virtual joysticks as games see them.
 fn our_devices(ctx: &Context) -> Vec<OurDevice> {
     let mut ids: BTreeSet<u32> = ctx.vjoy.iter().map(|d| d.id).collect();
@@ -868,10 +893,22 @@ fn our_devices(ctx: &Context) -> Vec<OurDevice> {
                 None => stored.and_then(|j| j.name.as_deref()),
             };
             let known = gob_virtual::game_identity(id, name, stored.and_then(|j| j.product));
+            // The attached input device that is this one, for games keeping instance GUIDs.
+            let instance = ctx
+                .devices
+                .iter()
+                .find(|d| {
+                    d.info.is_own()
+                        && gob_virtual::joystick_of_input(&d.info.hid_path, ctx.vjoy) == Some(id)
+                })
+                .map_or(String::new(), |d| {
+                    format!("{{{}}}", d.info.guid.to_ascii_uppercase())
+                });
             OurDevice {
                 output: format!("vjoy:{id}"),
                 name: known.name,
                 guid: known.product_guid,
+                instance,
             }
         })
         .collect()

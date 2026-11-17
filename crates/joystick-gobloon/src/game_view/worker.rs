@@ -11,6 +11,7 @@ pub(super) enum Request {
         target: Target,
         version: Option<String>,
         ours: Vec<OurDevice>,
+        devices: Vec<DeviceLink>,
         /// Take what is read into the profile.
         import: bool,
     },
@@ -130,6 +131,7 @@ pub(super) fn spawn_worker(ctx: egui::Context) -> (Sender<Request>, Receiver<Rep
                         target,
                         version,
                         ours,
+                        devices,
                         import,
                     } => {
                         let result = (|| {
@@ -141,6 +143,7 @@ pub(super) fn spawn_worker(ctx: egui::Context) -> (Sender<Request>, Receiver<Rep
                                 files: &files,
                                 catalog: &catalog,
                                 ours: &ours,
+                                devices: &devices,
                             })
                             .map_err(|e| e.to_string())
                         })();

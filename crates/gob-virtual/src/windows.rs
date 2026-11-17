@@ -35,6 +35,21 @@ pub fn admin_entry(args: &[String]) -> Option<i32> {
     }
 }
 
+/// vJoy is one HID device with a top-level collection per configured device, in id order:
+/// DirectInput's path of device `devices[n]` ends its HID part in "&col<n + 1>".
+pub fn joystick_of_input(hid_path: &str, devices: &[DeviceInfo]) -> Option<u32> {
+    let path = hid_path.to_ascii_lowercase();
+    let at = path.find("&col")? + 4;
+    let digits: String = path[at..]
+        .chars()
+        .take_while(char::is_ascii_hexdigit)
+        .collect();
+    let n = usize::from_str_radix(&digits, 16).ok()?;
+    let mut ids: Vec<u32> = devices.iter().map(|d| d.id).collect();
+    ids.sort_unstable();
+    ids.get(n.checked_sub(1)?).copied()
+}
+
 struct VJoy(Arc<gob_vjoy::VJoy>);
 
 impl Backend for VJoy {
@@ -187,5 +202,31 @@ mod tests {
         c.effects[2] = true;
         c.discrete_hats = true;
         assert_eq!(to_vjoy(&from_vjoy(c.clone())), c);
+    }
+
+    #[test]
+    fn inputs_by_their_collection() {
+        let device = |id| DeviceInfo {
+            id,
+            status: Status::Free,
+            axes: Vec::new(),
+            buttons: 0,
+            cont_hats: 0,
+            disc_hats: 0,
+            name: None,
+        };
+        let devices = [device(1), device(3)];
+        let path = |col: &str| {
+            format!(
+                r"\\?\hid#hidclass&{col}#1&2d595ca7&0&0000#{{4d1e55b2-f16f-11cf-88cb-001111000030}}"
+            )
+        };
+        assert_eq!(joystick_of_input(&path("col01"), &devices), Some(1));
+        assert_eq!(joystick_of_input(&path("Col02"), &devices), Some(3));
+        assert_eq!(joystick_of_input(&path("col03"), &devices), None);
+        assert_eq!(
+            joystick_of_input(r"\\?\hid#vid_231d&pid_0200#x", &devices),
+            None
+        );
     }
 }
