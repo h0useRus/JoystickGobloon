@@ -23,14 +23,18 @@ use gob_input::DeviceState;
 use crate::action_editor::Op;
 use crate::style::{self, icon};
 
+mod bind;
+mod capture;
 mod export_dialog;
 mod graph;
+mod state;
 mod table;
 mod wiring;
 mod worker;
 
 use export_dialog::ExportDialog;
 use graph::{Graph, Live};
+use state::{InGame, State};
 use worker::{Reply, Request, spawn_worker};
 
 /// Height of one node in the wiring schematic.
@@ -74,21 +78,26 @@ pub struct GameView {
     scanning: bool,
     tab: Tab,
     search: String,
+    /// The schematic's picked output: the next game action clicked gets it.
     picked: Option<GameOutput>,
-    listening: bool,
-    /// The game action the next pressed output is linked to (the table's link button).
-    linking: Option<String>,
-    /// Inputs that were already on when listening began: they count once let go and moved
-    /// again. `None` until the first frame of listening.
-    held: Option<std::collections::HashSet<(String, String, String)>>,
-    /// The table leaves out the game actions no output drives.
-    bound_only: bool,
+    /// The table's selected game action: a pressed control goes to it.
+    chosen: Option<String>,
+    /// The control looked up by pressing: the table lists only the actions using it.
+    find: Option<GameOutput>,
+    filter: table::Filter,
+    /// Groups of the table folded away.
+    folded: std::collections::HashSet<String>,
+    /// The wait for a press and the dialogs after it.
+    dialog: Option<bind::Dialog>,
+    /// Text for the status bar.
+    note: Option<String>,
+    debug_done: bool,
     /// When each game action was last lit.
     flash: HashMap<String, f64>,
     /// Game actions lit in the last frame.
     lit: std::collections::HashSet<String>,
-    /// The bindings last read from the game: (plugin, result).
-    in_game: Option<(usize, ReadResult)>,
+    /// The bindings last read from the game.
+    in_game: Option<std::sync::Arc<InGame>>,
     importing: bool,
     /// The game or target changed: read the game again.
     reread: bool,
@@ -111,6 +120,8 @@ pub struct Context<'a> {
     pub vjoy: &'a [gob_virtual::DeviceInfo],
     /// What the profile sends while it runs.
     pub sent: Option<gob_engine::OutputTap>,
+    /// The mode the editor shows: a control mapped from this page is mapped in it.
+    pub mode: &'a str,
 }
 
 impl GameView {
@@ -218,7 +229,7 @@ impl GameView {
                                 let n = import_ops(ctx.profile, &game, &read, ops);
                                 self.status = Some(n.to_string());
                             }
-                            self.in_game = Some((plugin, read));
+                            self.in_game = Some(std::sync::Arc::new(InGame::new(plugin, &read)));
                         }
                         Err(e) => {
                             log::warn!("game export: reading the game failed: {e}");
@@ -326,27 +337,47 @@ impl GameView {
                     .desired_width(220.0),
             );
             ui.add_space(style::SPACE_M);
-            let press =
-                style::icon_toggle(ui, self.listening, icon::HAND_TAP, &i18n.tr("game-press"));
-            if press.clicked() {
-                self.listening = !self.listening;
-                self.linking = None;
-            }
-            if self.tab == Tab::List
-                && style::icon_toggle(
-                    ui,
-                    self.bound_only,
-                    icon::FUNNEL,
-                    &i18n.tr("game-bound-only"),
-                )
+            // A pressed control goes to the table's selected action; with none it is looked up.
+            let aim = if self.tab == Tab::List {
+                self.chosen.clone()
+            } else {
+                None
+            };
+            let tip = if aim.is_some() {
+                "game-press-bind"
+            } else {
+                "game-press-find"
+            };
+            if style::icon_toggle(ui, self.dialog.is_some(), icon::HAND_TAP, &i18n.tr(tip))
                 .clicked()
             {
-                self.bound_only = !self.bound_only;
+                self.press_for(aim, None);
+            }
+            if self.tab == Tab::List {
+                egui::ComboBox::from_id_salt("game-filter")
+                    .selected_text(format!("{}  {}", icon::FUNNEL, i18n.tr(self.filter.key())))
+                    .show_ui(ui, |ui| {
+                        for f in table::Filter::ALL {
+                            ui.selectable_value(&mut self.filter, f, i18n.tr(f.key()));
+                        }
+                    });
+            }
+            if let Some(find) = &self.find {
+                ui.add_space(style::SPACE_M);
+                ui.label(
+                    RichText::new(i18n.trf(
+                        "game-find-chip",
+                        &[("control", output_name(i18n, find).into())],
+                    ))
+                    .color(style::accent(ui)),
+                );
+                if style::icon_button(ui, true, icon::X, &i18n.tr("game-find-clear")).clicked() {
+                    self.find = None;
+                    self.picked = None;
+                }
             }
         });
-        if self.listening {
-            ui.label(RichText::new(i18n.tr("game-press-hint")).color(style::accent(ui)));
-        } else if self.picked.is_some() {
+        if self.tab == Tab::Wiring && self.picked.is_some() {
             ui.label(RichText::new(i18n.tr("game-pick-action-hint")).color(style::accent(ui)));
         }
         ui.add_space(style::SPACE_S);
@@ -357,54 +388,16 @@ impl GameView {
             .catalog(ctx.profile)
             .map(|(c, _)| c)
             .unwrap_or_default();
+        let in_game = self.in_game.clone().filter(|g| g.plugin == self.selected);
+        let state = State::build(
+            ctx.profile.game_bindings(&game),
+            in_game.as_ref().map(|g| g.binds.as_slice()),
+        );
         // The table lists every action of the game, like the game's own screen; the schematic
         // only what is wired.
-        let all = self.tab == Tab::List && !self.bound_only;
-        let graph = Graph::build(ctx, i18n, &game, &catalog, &self.search, all);
+        let all = self.tab == Tab::List;
+        let graph = Graph::build(ctx, i18n, &catalog, &self.search, all, &state);
         let live = Live::read(ctx, &graph);
-        if self.listening {
-            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                self.listening = false;
-                self.linking = None;
-            }
-            let on = |i: usize| live.inputs.get(i).copied().unwrap_or(0.0) > 0.5;
-            // An axis resting off center or a held button is not a press: it counts once it
-            // was let go.
-            let held = self.held.get_or_insert_with(|| {
-                (0..graph.inputs.len())
-                    .filter(|i| on(*i))
-                    .map(|i| graph.inputs[i].key.clone())
-                    .collect()
-            });
-            held.retain(|key| {
-                graph
-                    .inputs
-                    .iter()
-                    .position(|n| &n.key == key)
-                    .is_some_and(on)
-            });
-            let pressed = (0..graph.inputs.len())
-                .find(|i| on(*i) && !held.contains(&graph.inputs[*i].key))
-                .and_then(|i| graph.input_edges.iter().find(|(l, _)| *l == i))
-                .map(|(_, m)| graph.outputs[*m].clone());
-            if let Some(o) = pressed {
-                match self.linking.take() {
-                    Some(action) => ops.push(Op::GameBind {
-                        game: game.clone(),
-                        action,
-                        output: o,
-                    }),
-                    None => self.picked = Some(o),
-                }
-                self.listening = false;
-            }
-            ui.ctx()
-                .request_repaint_after(std::time::Duration::from_millis(33));
-        }
-        if !self.listening {
-            self.held = None;
-            self.linking = None;
-        }
         let now = ui.input(|i| i.time);
         self.lit.retain(|id| {
             graph
@@ -423,10 +416,22 @@ impl GameView {
                 .request_repaint_after(std::time::Duration::from_millis(33));
         }
         match self.tab {
-            Tab::Wiring => self.wiring(ui, i18n, &game, &graph, &live, now, ops),
-            Tab::List => self.list(ui, i18n, &game, &graph, &live, now, ops),
+            Tab::Wiring => self.wiring(ui, i18n, &game, &graph, &live, &state, now, ops),
+            Tab::List => self.table(ui, i18n, ctx, &game, &graph, &live, &state, now, ops),
         }
+        let scene = bind::Scene {
+            i18n,
+            ctx,
+            game: &game,
+            catalog: &catalog,
+            state: &state,
+        };
+        self.debug_dialog(&scene);
+        self.bind_dialog(ui, &scene, ops);
         self.export_dialog(ui, i18n, ctx, &game);
+        if let Some(note) = self.note.take() {
+            out.status = Some(note);
+        }
         out
     }
 
@@ -647,9 +652,7 @@ impl GameView {
             return;
         };
         let n = match &self.in_game {
-            Some((p, read)) if *p == self.selected => {
-                read.binds.iter().filter(|b| !b.default).count()
-            }
+            Some(g) if g.plugin == self.selected => g.on_devices(),
             _ => 0,
         };
         if n == 0
@@ -701,9 +704,9 @@ fn status_text(i18n: &I18n, code: &str, plugin: Option<&PluginInfo>) -> String {
 fn import_ops(profile: &Profile, game: &str, read: &ReadResult, ops: &mut Vec<Op>) -> usize {
     let have = profile.game_bindings(game);
     let mut n = 0;
-    // The game's own default keys stay the game's.
-    for b in read.binds.iter().filter(|b| !b.default) {
-        let Some(output) = GameOutput::parse(&b.output) else {
+    // Keyboard and mouse bindings stay the game's until they are changed here.
+    for b in &read.binds {
+        let Some(output) = GameOutput::parse(&b.output).filter(|o| o.combo().is_none()) else {
             continue;
         };
         if have.is_some_and(|g| {

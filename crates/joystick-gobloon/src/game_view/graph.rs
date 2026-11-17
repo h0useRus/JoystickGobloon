@@ -1,6 +1,7 @@
 //! What the page shows: controllers, the profile's outputs and the game's actions, how they
 //! connect, and what is lit now.
 
+use super::state::State;
 use super::*;
 
 pub(super) struct InputNode {
@@ -32,22 +33,21 @@ pub(super) struct Graph {
 }
 
 impl Graph {
-    /// `all`: every action of the catalog, not only the bound ones and a search's first finds.
+    /// `all`: every action of the catalog, not only the wired ones and a search's first finds.
     pub(super) fn build(
         ctx: &Context,
         i18n: &I18n,
-        game: &str,
         catalog: &Catalog,
         search: &str,
         all: bool,
+        state: &State,
     ) -> Self {
         let profile = ctx.profile;
-        let usage = profile.output_usage(None);
-        let binds = profile.game_bindings(game);
-        // Outputs: what the profile writes (hats as their directions) and the keys bound.
+        // Outputs: what the profile writes (hats as their directions), the keys and mouse
+        // buttons it sends, and what it binds without writing it.
         let mut outputs: Vec<GameOutput> = Vec::new();
         let mut sources: HashMap<GameOutput, Vec<usize>> = HashMap::new();
-        for (v, uses) in &usage {
+        for (v, uses) in &profile.output_usage(None) {
             let list: Vec<GameOutput> = match v {
                 VirtualOutput::Vjoy {
                     input_type: InputType::Hat,
@@ -67,13 +67,40 @@ impl Graph {
                 outputs.push(o);
             }
         }
-        if let Some(g) = binds {
-            for b in &g.binds {
-                if !outputs.contains(&b.output) {
-                    outputs.push(b.output.clone());
+        for (combo, uses) in profile.key_usage(None) {
+            let o = GameOutput::Keys(combo);
+            sources.insert(o.clone(), uses.iter().map(|u| u.binding).collect());
+            outputs.push(o);
+        }
+        let node = |id: &str| {
+            let a = catalog.action(id);
+            ActionNode {
+                id: id.to_string(),
+                name: a.map_or_else(|| id.to_string(), |a| a.name.clone()),
+                category: a.map_or_else(String::new, |a| a.category.clone()),
+                bound: state.of(id).iter().any(|b| b.mark.profile()),
+                known: a.is_some(),
+            }
+        };
+        // Actions: those the outputs drive, and the catalog's matches of a search.
+        let mut actions: Vec<ActionNode> = Vec::new();
+        let listed: std::collections::HashSet<&GameOutput> = outputs.iter().collect();
+        let mut extra: Vec<GameOutput> = Vec::new();
+        for (id, bindings) in state.all() {
+            let held = bindings.iter().any(|b| b.mark.profile());
+            let wired = bindings
+                .iter()
+                .any(|b| b.mark.in_effect() && listed.contains(b.output));
+            if held || wired {
+                actions.push(node(id));
+            }
+            for b in bindings.iter().filter(|b| b.mark.profile()) {
+                if !listed.contains(b.output) && !extra.contains(b.output) {
+                    extra.push(b.output.clone());
                 }
             }
         }
+        outputs.extend(extra);
         outputs.sort_by_key(sort_key);
         // Inputs: the bindings writing those outputs.
         let mut inputs: Vec<InputNode> = Vec::new();
@@ -104,55 +131,29 @@ impl Graph {
                 }
             }
         }
-        // Actions: those bound, and the catalog's matches of a search.
-        let mut actions: Vec<ActionNode> = Vec::new();
-        let mut action_edges = Vec::new();
-        let node = |id: &str, bound: bool| {
-            let a = catalog.action(id);
-            ActionNode {
-                id: id.to_string(),
-                name: a.map_or_else(|| id.to_string(), |a| a.name.clone()),
-                category: a.map_or_else(String::new, |a| a.category.clone()),
-                bound,
-                known: a.is_some(),
-            }
-        };
-        if let Some(g) = binds {
-            for b in &g.binds {
-                if !actions.iter().any(|a| a.id == b.action) {
-                    actions.push(node(&b.action, true));
-                }
-            }
-        }
         let search = search.trim().to_lowercase();
         if all || !search.is_empty() {
             actions.retain(|a| matches(a, &search));
             let have: std::collections::HashSet<&str> =
                 actions.iter().map(|a| a.id.as_str()).collect();
-            let extra: Vec<ActionNode> = catalog
+            let more: Vec<ActionNode> = catalog
                 .actions
                 .iter()
                 .filter(|a| !have.contains(a.id.as_str()))
-                .map(|a| ActionNode {
-                    id: a.id.clone(),
-                    name: a.name.clone(),
-                    category: a.category.clone(),
-                    bound: false,
-                    known: true,
-                })
+                .map(|a| node(&a.id))
                 .filter(|a| matches(a, &search))
                 .take(if all { usize::MAX } else { SEARCH_LIMIT })
                 .collect();
-            actions.extend(extra);
+            actions.extend(more);
         }
-        actions.sort_by(|a, b| (&a.category, &a.name).cmp(&(&b.category, &b.name)));
-        if let Some(g) = binds {
-            for b in &g.binds {
-                if let (Some(m), Some(r)) = (
-                    outputs.iter().position(|o| *o == b.output),
-                    actions.iter().position(|a| a.id == b.action),
-                ) {
-                    action_edges.push((m, r));
+        actions.sort_by(|a, b| (&a.category, &a.name, &a.id).cmp(&(&b.category, &b.name, &b.id)));
+        let at: HashMap<&GameOutput, usize> =
+            outputs.iter().enumerate().map(|(m, o)| (o, m)).collect();
+        let mut action_edges = Vec::new();
+        for (r, a) in actions.iter().enumerate() {
+            for b in state.of(&a.id).iter().filter(|b| b.mark.in_effect()) {
+                if let Some(m) = at.get(b.output) {
+                    action_edges.push((*m, r));
                 }
             }
         }
@@ -257,21 +258,10 @@ impl Live {
             let now = std::time::Instant::now();
             sent.read(|map| {
                 for (m, o) in graph.outputs.iter().enumerate() {
-                    let Some((key, direction)) = sent_key(o) else {
-                        continue;
-                    };
-                    told[m] = true;
-                    let Some(t) = map.get(&key) else {
-                        continue;
-                    };
-                    outputs[m] = match (direction, t.value) {
-                        (Some(d), gob_engine::Value::Hat(angle)) => match angle {
-                            Some(angle) if hat_has(angle, d) => 1.0,
-                            _ => 0.0,
-                        },
-                        (Some(_), _) => 0.0,
-                        (None, _) => t.lit(now),
-                    };
+                    if let Some(lit) = sent_lit(map, o, now) {
+                        told[m] = true;
+                        outputs[m] = lit;
+                    }
                 }
             });
         }
@@ -302,9 +292,14 @@ impl Live {
     }
 }
 
-/// Where the running profile's [`gob_engine::OutputTap`] has `o`, and the hat direction to look
-/// for there; `None` for outputs the tap does not carry.
-pub(super) fn sent_key(o: &GameOutput) -> Option<(gob_engine::Sent, Option<HatDirection>)> {
+/// How lit `o` is in what the running profile sent (`map`, the [`gob_engine::OutputTap`]);
+/// `None` for outputs the tap does not carry. A hat direction is lit while the hat points
+/// there; keys and mouse buttons pressed together are lit while all of them are.
+pub(super) fn sent_lit(
+    map: &HashMap<gob_engine::Sent, gob_engine::Tapped>,
+    o: &GameOutput,
+    now: std::time::Instant,
+) -> Option<f32> {
     use gob_engine::{InputKind, Sent};
     let of = |v: &VirtualOutput| match v {
         VirtualOutput::Vjoy {
@@ -326,14 +321,22 @@ pub(super) fn sent_key(o: &GameOutput) -> Option<(gob_engine::Sent, Option<HatDi
             .map(|c| Sent::Gamepad(*gamepad, c)),
         VirtualOutput::Logical { .. } => None,
     };
+    let lit = |key: Sent| map.get(&key).map_or(0.0, |t| t.lit(now));
     match o {
-        GameOutput::Virtual(v) => of(v).map(|k| (k, None)),
-        GameOutput::HatDirection(v, d) => of(v).map(|k| (k, Some(*d))),
-        // A combination shows by its last key: the one pressed with the modifiers held.
-        GameOutput::Keys(c) => c.parts().iter().rev().find_map(|p| match p {
-            gob_core::ComboPart::Key(k) => Some((Sent::Key(k.scan_code, k.extended), None)),
-            gob_core::ComboPart::Mouse(_) => None,
+        GameOutput::Virtual(v) => of(v).map(lit),
+        GameOutput::HatDirection(v, d) => of(v).map(|key| match map.get(&key).map(|t| t.value) {
+            Some(gob_engine::Value::Hat(Some(angle))) if hat_has(angle, *d) => 1.0,
+            _ => 0.0,
         }),
+        GameOutput::Keys(c) => Some(
+            c.parts()
+                .iter()
+                .map(|p| match p {
+                    gob_core::ComboPart::Key(k) => lit(Sent::Key(k.scan_code, k.extended)),
+                    gob_core::ComboPart::Mouse(b) => lit(Sent::Mouse(*b)),
+                })
+                .fold(1.0, f32::min),
+        ),
     }
 }
 

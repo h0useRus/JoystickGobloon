@@ -1,6 +1,8 @@
 //! The wiring schematic: a lane per output, its controllers left of it, its game actions right.
 
+use super::bind::{add_ops, remove_ops};
 use super::graph::ActionNode;
+use super::state::State;
 use super::*;
 
 impl GameView {
@@ -12,6 +14,7 @@ impl GameView {
         game: &str,
         graph: &Graph,
         live: &Live,
+        state: &State,
         now: f64,
         ops: &mut Vec<Op>,
     ) {
@@ -87,7 +90,9 @@ impl GameView {
                     if at.intersects(visible) {
                         let a = &graph.actions[*r];
                         let v = self.fade(&a.id, now);
-                        self.action_node(ui, &painter, i18n, game, a, at, v, None, ops, &look);
+                        self.action_node(
+                            ui, &painter, i18n, game, state, a, at, v, None, ops, &look,
+                        );
                     }
                 }
                 // One lane per output: its controllers left of it, its game actions right of
@@ -176,7 +181,19 @@ impl GameView {
                         let a = &graph.actions[*r];
                         let v = lit.max(self.fade(&a.id, now));
                         let at = node(2, lane.top + k);
-                        self.action_node(ui, &painter, i18n, game, a, at, v, Some(o), ops, &look);
+                        self.action_node(
+                            ui,
+                            &painter,
+                            i18n,
+                            game,
+                            state,
+                            a,
+                            at,
+                            v,
+                            Some(o),
+                            ops,
+                            &look,
+                        );
                     }
                 }
             });
@@ -191,6 +208,7 @@ impl GameView {
         painter: &egui::Painter,
         i18n: &I18n,
         game: &str,
+        state: &State,
         a: &ActionNode,
         r: Rect,
         lit: f32,
@@ -229,12 +247,9 @@ impl GameView {
             tip.push('\n');
             tip.push_str(&i18n.tr("game-click-to-link"));
             if resp.clicked() {
-                ops.push(Op::GameBind {
-                    game: game.to_string(),
-                    action: a.id.clone(),
-                    output: o,
-                });
+                add_ops(game, state, &a.id, &o, None, ops);
                 self.picked = None;
+                self.find = None;
             }
         }
         if let Some(o) = lane {
@@ -254,11 +269,7 @@ impl GameView {
                     Sense::click(),
                 );
                 if b.on_hover_text(i18n.tr("game-unbind-one")).clicked() {
-                    ops.push(Op::GameUnbind {
-                        game: game.to_string(),
-                        action: a.id.clone(),
-                        output: Some(o.clone()),
-                    });
+                    remove_ops(game, state, &a.id, o, ops);
                 }
             }
         }

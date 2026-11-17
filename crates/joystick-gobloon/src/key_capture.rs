@@ -293,6 +293,21 @@ fn window_keys(ui: &egui::Ui, rec: &mut Recording) -> Vec<Key> {
     })
 }
 
+/// What [`held`] keeps between frames.
+#[derive(Clone, Default)]
+pub(crate) struct KeyWatch(Recording);
+
+/// The keys held now: from the system where it tells them, else from the window's key events
+/// (`watch` keeps those between frames; Ctrl, Shift and Alt then count as the left ones).
+pub(crate) fn held(ui: &egui::Ui, watch: &mut KeyWatch) -> Vec<Key> {
+    crate::platform::held_keys().unwrap_or_else(|| window_keys(ui, &mut watch.0))
+}
+
+/// The keyboard button of [`keys_field`] alone: the key clicked on the on-screen keyboard.
+pub(crate) fn pick_key(ui: &mut egui::Ui, i18n: &I18n) -> Option<Key> {
+    keyboard(ui, &[], i18n).and_then(|keys| keys.first().copied())
+}
+
 /// A key that is down now and not one of `ignore`: from the system where it tells the held
 /// keys, else from this frame's key events (a key held before makes none).
 pub(crate) fn key_down(ui: &egui::Ui, ignore: &[Key]) -> Option<Key> {

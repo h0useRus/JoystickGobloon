@@ -1381,12 +1381,14 @@ impl JoystickGobloonApp {
                 Some(p) => {
                     let name = p.file_name();
                     let name = name.trim_end_matches(".xml");
+                    let mode = self.devices_view.mode(&p.profile);
                     let game_ctx = crate::game_view::Context {
                         profile: &p.profile,
                         profile_name: name,
                         devices: &devices,
                         vjoy: &vjoy,
                         sent: self.activation.outputs(),
+                        mode: &mode,
                     };
                     detached_window(ctx, "game", &title, BIG_WINDOW, |ui| {
                         let out = view.show(ui, i18n, &game_ctx, &mut ops, true);
@@ -2593,12 +2595,14 @@ impl eframe::App for JoystickGobloonApp {
                         let devices = self.input.devices();
                         let vjoy = self.vjoy_view.device_list();
                         let name = p.file_name();
+                        let mode = self.devices_view.mode(&p.profile);
                         let game_ctx = crate::game_view::Context {
                             profile: &p.profile,
                             profile_name: name.trim_end_matches(".xml"),
                             devices: &devices,
                             vjoy: &vjoy,
                             sent: self.activation.outputs(),
+                            mode: &mode,
                         };
                         let mut ops = Vec::new();
                         let out = self
