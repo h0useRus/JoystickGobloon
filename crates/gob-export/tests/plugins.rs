@@ -47,6 +47,7 @@ fn finds_targets_and_their_version() {
     let env = Env {
         platform: "windows".into(),
         roots: vec!["C:".into(), "D:".into()],
+        documents: String::new(),
     };
     let targets = p.targets(&env).unwrap();
     assert_eq!(targets.len(), 2);
@@ -68,6 +69,7 @@ fn write_then_read_gives_the_same_binds() {
         .targets(&Env {
             platform: "windows".into(),
             roots: vec!["C:".into()],
+            documents: String::new(),
         })
         .unwrap()
         .remove(0);
@@ -123,6 +125,7 @@ fn write_then_read_gives_the_same_binds() {
             files: &files(Some(&written.files["binds"]), None),
             catalog: &catalog,
             ours: &[],
+            devices: &[],
         })
         .unwrap();
     assert_eq!(read.binds, binds);

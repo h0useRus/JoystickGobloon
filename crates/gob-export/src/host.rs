@@ -30,32 +30,29 @@ pub fn read_files(target: &Target) -> Files {
 pub const GLOB_LIMIT: usize = 2000;
 /// Larger files are not binding files and are left out of glob results.
 pub const GLOB_MAX_SIZE: u64 = 8 << 20;
+/// How much of a found file is read to look for its `Target::glob_text`.
+pub const GLOB_PEEK: usize = 4096;
 
-/// The files matching `pattern`, sorted: `/` separates folders (`\` too), `*` matches any part
-/// of one name. Unreadable folders are skipped.
-pub fn glob(pattern: &str) -> Vec<String> {
+/// The files matching `pattern`, in folder order (names sorted in each folder): `/` separates
+/// folders (`\` too), `*` matches any part of one name. Unreadable folders, our own backup
+/// copies and files without `text` (when given) in their first [`GLOB_PEEK`] bytes are left
+/// out.
+pub fn glob(pattern: &str, text: Option<&str>) -> Vec<String> {
     let pattern = pattern.replace('\\', "/");
-    let (start, rest) = match pattern.find('*') {
-        Some(star) => {
-            let cut = pattern[..star].rfind('/').map_or(0, |i| i + 1);
-            (pattern[..cut].to_string(), pattern[cut..].to_string())
-        }
-        None => {
-            return if Path::new(&pattern).is_file() {
-                vec![pattern]
-            } else {
-                Vec::new()
-            };
-        }
+    let cut = match pattern.find('*') {
+        Some(star) => pattern[..star].rfind('/').map_or(0, |i| i + 1),
+        None => pattern.rfind('/').map_or(0, |i| i + 1),
     };
-    let parts: Vec<&str> = rest.split('/').filter(|p| !p.is_empty()).collect();
+    let parts: Vec<&str> = pattern[cut..]
+        .split('/')
+        .filter(|p| !p.is_empty())
+        .collect();
     let mut out = Vec::new();
-    walk(&start, &parts, &mut out);
-    out.sort();
+    walk(&pattern[..cut], &parts, text, &mut out);
     out
 }
 
-fn walk(dir: &str, parts: &[&str], out: &mut Vec<String>) {
+fn walk(dir: &str, parts: &[&str], text: Option<&str>, out: &mut Vec<String>) {
     let Some((first, rest)) = parts.split_first() else {
         return;
     };
@@ -66,11 +63,11 @@ fn walk(dir: &str, parts: &[&str], out: &mut Vec<String>) {
     if !first.contains('*') {
         let path = format!("{dir}{first}");
         if rest.is_empty() {
-            if is_small_file(Path::new(&path)) {
+            if wanted(&path, text) {
                 out.push(path);
             }
         } else {
-            walk(&format!("{path}/"), rest, out);
+            walk(&format!("{path}/"), rest, text, out);
         }
         return;
     }
@@ -89,17 +86,31 @@ fn walk(dir: &str, parts: &[&str], out: &mut Vec<String>) {
         }
         let path = format!("{dir}{name}");
         if rest.is_empty() {
-            if is_small_file(Path::new(&path)) {
+            if wanted(&path, text) {
                 out.push(path);
             }
         } else if Path::new(&path).is_dir() {
-            walk(&format!("{path}/"), rest, out);
+            walk(&format!("{path}/"), rest, text, out);
         }
     }
 }
 
-fn is_small_file(path: &Path) -> bool {
-    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() <= GLOB_MAX_SIZE)
+/// A small file that is not a backup copy [`apply`] made, with `text` near its start.
+fn wanted(path: &str, text: Option<&str>) -> bool {
+    use std::io::Read;
+    let name = path.rsplit('/').next().unwrap_or(path);
+    if name.to_ascii_lowercase().contains(".gobak-")
+        || !std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() <= GLOB_MAX_SIZE)
+    {
+        return false;
+    }
+    let Some(text) = text else {
+        return true;
+    };
+    let mut head = Vec::with_capacity(GLOB_PEEK);
+    std::fs::File::open(path)
+        .and_then(|f| f.take(GLOB_PEEK as u64).read_to_end(&mut head))
+        .is_ok_and(|_| String::from_utf8_lossy(&head).contains(text))
 }
 
 /// Whether `name` matches `pattern`, where `*` is any run of characters; letters compare
@@ -128,7 +139,8 @@ fn wildcard(pattern: &str, name: &str) -> bool {
 /// A target with the files of its globs added to `files`.
 pub fn expand(mut target: Target) -> Target {
     for (key, pattern) in &target.globs {
-        for path in glob(pattern) {
+        let text = target.glob_text.get(key).map(String::as_str);
+        for path in glob(pattern, text) {
             target.files.insert(format!("{key}:{path}"), path);
         }
     }
@@ -261,6 +273,7 @@ mod tests {
             files: BTreeMap::from([("binds".into(), s(&binds)), ("same".into(), s(&same))]),
             dirs: BTreeMap::from([("maps".into(), s(&dir.join("maps")))]),
             globs: BTreeMap::new(),
+            glob_text: BTreeMap::new(),
             version_file: None,
         };
         assert!(installed(&target));
@@ -323,10 +336,19 @@ mod tests {
             std::fs::create_dir_all(&remote).unwrap();
             std::fs::write(remote.join(format!("inputprofile_{user}")), "x").unwrap();
             std::fs::write(remote.join("UserCfg.opt"), "y").unwrap();
+            // Our own backup copies are not the game's files.
+            std::fs::write(
+                remote.join(format!("inputprofile_{user}.gobak-20261118-101500")),
+                "x",
+            )
+            .unwrap();
         }
         std::fs::create_dir_all(dir.join("userdata/333/other/remote")).unwrap();
         let base = dir.to_string_lossy().replace('\\', "/");
-        let found = glob(&format!("{base}/userdata/*/1250410/remote/inputprofile_*"));
+        let found = glob(
+            &format!("{base}/userdata/*/1250410/remote/inputprofile_*"),
+            None,
+        );
         assert_eq!(
             found,
             [
@@ -343,12 +365,41 @@ mod tests {
                 "p".into(),
                 format!("{base}/userdata/*/1250410/remote/inputprofile_*"),
             )]),
+            glob_text: BTreeMap::new(),
             version_file: None,
         });
         assert_eq!(target.files.len(), 2);
         assert_eq!(target.files[&format!("p:{}", found[0])], found[0]);
         assert!(installed(&target));
-        assert!(glob(&format!("{base}/nothing/*/x")).is_empty());
+        assert!(glob(&format!("{base}/nothing/*/x"), None).is_empty());
+        // A path without wildcards is a file like any other found.
+        let one = format!("{base}/userdata/111/1250410/remote/UserCfg.opt");
+        assert_eq!(glob(&one, None), std::slice::from_ref(&one));
+        assert!(glob(&format!("{base}/userdata/111/1250410/remote/none"), None).is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn globs_keep_files_with_their_text() {
+        let dir = std::env::temp_dir().join(format!("gob-export-text-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("saves")).unwrap();
+        std::fs::write(dir.join("saves/a"), "<Device Name=\"x\">").unwrap();
+        std::fs::write(dir.join("saves/b"), [0u8, 159, 146, 150]).unwrap();
+        let mut late = vec![b' '; GLOB_PEEK];
+        late.extend_from_slice(b"<Device");
+        std::fs::write(dir.join("saves/c"), late).unwrap();
+        let big = std::fs::File::create(dir.join("saves/d")).unwrap();
+        big.set_len(GLOB_MAX_SIZE + 1).unwrap();
+        drop(big);
+        let base = dir.to_string_lossy().replace('\\', "/");
+        let all = glob(&format!("{base}/saves/*"), None);
+        assert_eq!(all.len(), 3, "the large file is left out: {all:?}");
+        assert_eq!(
+            glob(&format!("{base}/saves/*"), Some("<Device")),
+            [format!("{base}/saves/a")]
+        );
+        assert!(glob(&format!("{base}/saves/d"), None).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

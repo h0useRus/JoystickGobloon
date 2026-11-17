@@ -20,6 +20,7 @@ fn target(p: &Plugin) -> Target {
     p.targets(&Env {
         platform: "windows".into(),
         roots: vec!["D:\\Games".into()],
+        documents: String::new(),
     })
     .unwrap()
     .into_iter()
@@ -46,6 +47,7 @@ fn ours(n: u32) -> Vec<OurDevice> {
             output: format!("vjoy:{i}"),
             name: "vJoy Device".into(),
             guid: "{BEAD1234-0000-0000-0000-504944564944}".into(),
+            instance: String::new(),
         })
         .collect()
 }
@@ -65,6 +67,7 @@ fn read(p: &Plugin, t: &Target, actions: &str) -> ReadResult {
         files: &files(t, Some(actions), Some(DEVICES)),
         catalog: p.catalogs.pick(None).unwrap().0,
         ours: &ours(2),
+        devices: &[],
     })
     .unwrap()
 }
@@ -115,6 +118,7 @@ fn finds_the_install_and_its_files() {
         .targets(&Env {
             platform: "windows".into(),
             roots: vec!["E:/IL2".into()],
+            documents: String::new(),
         })
         .unwrap();
     assert!(chosen.iter().any(|t| t.id == "E:/IL2"));

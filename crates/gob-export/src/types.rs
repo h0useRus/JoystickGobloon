@@ -14,6 +14,9 @@ pub struct Env {
     pub platform: String,
     /// Folders to search: drives on Windows, Wine/Proton prefixes on Linux.
     pub roots: Vec<String>,
+    /// The user's Documents folder, with `/` and a `/` at its end (wherever the user moved it);
+    /// empty when not known.
+    pub documents: String,
 }
 
 /// One install or channel of the game.
@@ -33,6 +36,10 @@ pub struct Target {
     /// "<key>:<path>"; the plugin then reads and writes them like its other files.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub globs: BTreeMap<String, String>,
+    /// Text the files of a glob (by the same key) must have near their start, in the first
+    /// [`crate::host::GLOB_PEEK`] bytes; others are left out without being read whole.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub glob_text: BTreeMap<String, String>,
     /// The key in `files` of the file that tells the game version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version_file: Option<String>,
@@ -58,6 +65,9 @@ pub struct OurDevice {
     pub name: String,
     /// The product GUID games see, "{XXXXXXXX-...}".
     pub guid: String,
+    /// The DirectInput instance GUID of the device on this computer, "{XXXXXXXX-...}"; empty
+    /// when not known (the device is not attached, or the system has no such GUIDs).
+    pub instance: String,
 }
 
 /// How the game numbers one of our devices ("vjoy:1" -> "js1").
@@ -177,6 +187,9 @@ pub struct ReadContext<'a> {
     pub files: &'a Files,
     pub catalog: &'a Catalog,
     pub ours: &'a [OurDevice],
+    /// The device links the profile keeps (typed by the user or read before); a plugin that
+    /// finds links itself lets these win.
+    pub devices: &'a [DeviceLink],
 }
 
 #[derive(Serialize)]

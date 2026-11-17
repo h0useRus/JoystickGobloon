@@ -16,13 +16,15 @@ end
 
 plugin = {
 	-- plugin.targets(function(ctx) -> {target, ...}): the game's installs or channels found.
-	-- ctx.env = {platform = "windows" | "linux", roots = {folder, ...}}.
+	-- ctx.env = {platform = "windows" | "linux", roots = {folder, ...}, documents = "C:/.../"}
+	-- (documents: the user's Documents folder, "" when not known).
 	targets = hook("targets"),
 	-- plugin.version(function(ctx) -> "1.2.3" | nil): the game version of ctx.target, from
 	-- ctx.files (key -> {path, text}; text is nil when the file is missing).
 	version = hook("version"),
 	-- plugin.read(function(ctx) -> {devices = {...}, binds = {...}}): the bindings already in the
-	-- game's files. ctx: target, files, catalog, ours (our virtual devices).
+	-- game's files. ctx: target, files, catalog, ours (our virtual devices: output, name, guid,
+	-- instance), devices (the links the profile keeps: {output, game_device}).
 	read = hook("read"),
 	-- plugin.write(function(ctx) -> {files = {key = text}, changes = {...}}): the game's files with
 	-- the profile's bindings. ctx: target, files, catalog, ours, devices, binds, profile.

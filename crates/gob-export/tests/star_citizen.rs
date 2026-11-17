@@ -16,6 +16,7 @@ fn target(p: &Plugin) -> Target {
     p.targets(&Env {
         platform: "windows".into(),
         roots: vec!["G:\\RSI\\StarCitizen".into()],
+        documents: String::new(),
     })
     .unwrap()
     .into_iter()
@@ -49,6 +50,7 @@ fn ours(n: u32) -> Vec<OurDevice> {
             output: format!("vjoy:{i}"),
             name: "vJoy Device".into(),
             guid: "{BEAD1234-0000-0000-0000-504944564944}".into(),
+            instance: String::new(),
         })
         .collect()
 }
@@ -91,6 +93,7 @@ fn reads_our_devices_and_bindings() {
             files: &files(&t, ACTIONMAPS),
             catalog,
             ours: &ours(2),
+            devices: &[],
         })
         .unwrap();
     assert_eq!(
@@ -213,6 +216,7 @@ fn writes_actionmaps_and_a_layout() {
             files: &again,
             catalog,
             ours: &ours(2),
+            devices: &[],
         })
         .unwrap();
     for b in &binds {
@@ -306,6 +310,7 @@ fn writes_keys_and_mouse_only_for_the_actions_held() {
             files: &written,
             catalog,
             ours: &ours(1),
+            devices: &[],
         })
         .unwrap();
     for b in &binds {

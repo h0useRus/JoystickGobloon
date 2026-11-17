@@ -37,11 +37,13 @@ fn main() {
             output: format!("vjoy:{n}"),
             name: "vJoy Device".into(),
             guid: "{BEAD1234-0000-0000-0000-504944564944}".into(),
+            instance: String::new(),
         })
         .collect();
     let env = Env {
         platform: if cfg!(windows) { "windows" } else { "linux" }.into(),
         roots: args[1..].to_vec(),
+        documents: String::new(),
     };
     let targets = plugin
         .targets(&env)
@@ -73,6 +75,7 @@ fn main() {
             files: &files,
             catalog,
             ours: &ours,
+            devices: &[],
         };
         let read = plugin.read(&ctx).unwrap_or_else(|e| fail(&e.to_string()));
         println!("  devices: {:?}", read.devices);
