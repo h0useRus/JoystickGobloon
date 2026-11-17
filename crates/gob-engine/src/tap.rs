@@ -1,5 +1,5 @@
 //! What the running profile really sent: the last value of every virtual joystick and gamepad
-//! output the driver took, and of every key. The engine thread fills it once per pass of its
+//! output the driver took, and of every key and mouse button. The engine thread fills it once per pass of its
 //! loop, without allocating once an output has been written; the GUI reads it to show what a
 //! press leads to.
 
@@ -22,6 +22,8 @@ pub enum Sent {
     Gamepad(u32, GamepadControl),
     /// Set 1 scan code, extended.
     Key(u16, bool),
+    /// A mouse button; a wheel notch is a short press of its wheel direction.
+    Mouse(gob_core::MouseButton),
 }
 
 /// The last value of an output.

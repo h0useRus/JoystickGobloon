@@ -446,12 +446,27 @@ impl Output for SystemOutput {
         // Joystick writes queued before it go out first, in the profile's order.
         self.flush();
         crate::platform::injector().mouse_button(button, pressed);
+        self.sent
+            .push((crate::Sent::Mouse(button), Value::Button(pressed)));
+        self.publish();
     }
 
     fn mouse_wheel(&mut self, notches: i32) {
         // Joystick writes queued before it go out first, in the profile's order.
         self.flush();
         crate::platform::injector().mouse_wheel(notches);
+        // A notch has no "held": it shows as a short press.
+        let button = if notches > 0 {
+            gob_core::MouseButton::WheelUp
+        } else {
+            gob_core::MouseButton::WheelDown
+        };
+        if notches != 0 {
+            let wheel = crate::Sent::Mouse(button);
+            self.sent.push((wheel, Value::Button(true)));
+            self.sent.push((wheel, Value::Button(false)));
+            self.publish();
+        }
     }
 
     fn key(&mut self, scan_code: u16, extended: bool, pressed: bool) {
