@@ -1,0 +1,833 @@
+//! The Game page: which game action each output of the profile drives, as a wiring schematic
+//! (controllers -> profile outputs -> game actions, lit live while inputs move) and as a table
+//! like the game's own binding screen; reading the bindings already in the game and exporting
+//! the profile's into the game's files through an export plugin (gob-export).
+//!
+//! Plugins load and run on a worker thread: a plugin hook may take up to two seconds and the
+//! window never waits for it.
+
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::PathBuf;
+use std::sync::mpsc::{Receiver, Sender, channel};
+
+use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Sense, Stroke, Vec2};
+use gob_core::{GameDevice, GameOutput, HatDirection, InputType, Profile, VirtualOutput};
+use gob_export::{
+    Bind, Catalog, Catalogs, ChangeKind, DeviceLink, Files, Fit, Manifest, OptionDecl, OptionKind,
+    OptionValue, Origin, OurDevice, ReadContext, ReadResult, Target, WriteContext, WriteResult,
+    host,
+};
+use gob_i18n::I18n;
+use gob_input::DeviceState;
+
+use crate::action_editor::Op;
+use crate::style::{self, icon};
+
+mod export_dialog;
+mod graph;
+mod table;
+mod wiring;
+mod worker;
+
+use export_dialog::ExportDialog;
+use graph::{Graph, Live};
+use worker::{Reply, Request, spawn_worker};
+
+/// Height of one node in the wiring schematic.
+const ROW: f32 = 28.0;
+/// Space between the schematic's columns, where the wires run.
+const GAP: f32 = 56.0;
+/// How long a game action stays lit after its input lets go, in seconds.
+const FLASH: f64 = 1.0;
+/// Catalog actions listed for a search.
+const SEARCH_LIMIT: usize = 60;
+
+/// What the GUI keeps of a plugin.
+#[derive(Clone)]
+struct PluginInfo {
+    manifest: Manifest,
+    catalogs: Catalogs,
+    options: Vec<OptionDecl>,
+}
+
+#[derive(Clone)]
+struct FoundTarget {
+    target: Target,
+    version: Option<String>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+enum Tab {
+    #[default]
+    Wiring,
+    List,
+}
+
+#[derive(Default)]
+pub struct GameView {
+    worker: Option<(Sender<Request>, Receiver<Reply>)>,
+    plugins: Option<Vec<PluginInfo>>,
+    errors: Vec<String>,
+    selected: usize,
+    targets: Vec<Vec<FoundTarget>>,
+    target: usize,
+    scanning: bool,
+    tab: Tab,
+    search: String,
+    picked: Option<GameOutput>,
+    listening: bool,
+    /// The game action the next pressed output is linked to (the table's link button).
+    linking: Option<String>,
+    /// Inputs that were already on when listening began: they count once let go and moved
+    /// again. `None` until the first frame of listening.
+    held: Option<std::collections::HashSet<(String, String, String)>>,
+    /// The table leaves out the game actions no output drives.
+    bound_only: bool,
+    /// When each game action was last lit.
+    flash: HashMap<String, f64>,
+    /// Game actions lit in the last frame.
+    lit: std::collections::HashSet<String>,
+    /// The bindings last read from the game: (plugin, result).
+    in_game: Option<(usize, ReadResult)>,
+    importing: bool,
+    /// The game or target changed: read the game again.
+    reread: bool,
+    export: Option<ExportDialog>,
+    status: Option<String>,
+}
+
+/// What the page asks of the app.
+#[derive(Default)]
+pub struct Output {
+    pub toggle_window: bool,
+    pub status: Option<String>,
+}
+
+/// Everything the page reads from the app.
+pub struct Context<'a> {
+    pub profile: &'a Profile,
+    pub profile_name: &'a str,
+    pub devices: &'a [DeviceState],
+    pub vjoy: &'a [gob_virtual::DeviceInfo],
+    /// What the profile sends while it runs.
+    pub sent: Option<gob_engine::OutputTap>,
+}
+
+impl GameView {
+    fn send(&mut self, req: Request) {
+        if let Some((tx, _)) = &self.worker {
+            let _ = tx.send(req);
+        }
+    }
+
+    fn plugin(&self) -> Option<&PluginInfo> {
+        self.plugins.as_ref()?.get(self.selected)
+    }
+
+    fn found(&self) -> Option<&FoundTarget> {
+        self.targets.get(self.selected)?.get(self.target)
+    }
+
+    fn game_id(&self) -> Option<String> {
+        self.plugin().map(|p| p.manifest.id.clone())
+    }
+
+    fn scan(&mut self) {
+        self.scanning = true;
+        let env = gob_export::Env {
+            platform: if cfg!(windows) { "windows" } else { "linux" }.into(),
+            roots: crate::platform::game_roots(),
+        };
+        self.send(Request::Scan { env });
+    }
+
+    /// The catalog for the selected target (or the profile's last export), and its fit.
+    fn catalog(&self, profile: &Profile) -> Option<(Catalog, Fit)> {
+        let plugin = self.plugin()?;
+        let version = self.found().and_then(|f| f.version.clone()).or_else(|| {
+            profile
+                .game_bindings(&plugin.manifest.id)
+                .and_then(|g| g.version.clone())
+        });
+        plugin
+            .catalogs
+            .pick(version.as_deref())
+            .map(|(c, f)| (c.clone(), f))
+    }
+
+    fn poll(&mut self, ctx: &Context, ops: &mut Vec<Op>) {
+        let Some((_, rx)) = &self.worker else {
+            return;
+        };
+        let replies: Vec<Reply> = rx.try_iter().collect();
+        for reply in replies {
+            match reply {
+                Reply::Loaded { plugins, errors } => {
+                    for e in &errors {
+                        log::warn!("game export plugin: {e}");
+                    }
+                    // The profile's game first, when it has one.
+                    if let Some(i) = ctx
+                        .profile
+                        .game_bindings
+                        .first()
+                        .and_then(|g| plugins.iter().position(|p| p.manifest.id == g.game))
+                    {
+                        self.selected = i;
+                    }
+                    self.plugins = Some(plugins);
+                    self.errors = errors;
+                    self.scan();
+                }
+                Reply::Scanned(all) => {
+                    self.scanning = false;
+                    self.targets = all;
+                    // The target last exported to, when it is still there.
+                    let last = self
+                        .game_id()
+                        .and_then(|g| ctx.profile.game_bindings(&g).map(|b| b.target.clone()));
+                    self.target = self
+                        .targets
+                        .get(self.selected)
+                        .and_then(|t| t.iter().position(|f| Some(&f.target.id) == last.as_ref()))
+                        .unwrap_or(0);
+                    self.read_game(ctx, false);
+                }
+                Reply::Read {
+                    plugin,
+                    import,
+                    result,
+                } => {
+                    self.importing = false;
+                    match result {
+                        Ok(read) => {
+                            let game = self
+                                .plugins
+                                .as_ref()
+                                .and_then(|p| p.get(plugin))
+                                .map(|p| p.manifest.id.clone());
+                            // Debug builds can take the game's bindings at start, for checks.
+                            let auto = cfg!(debug_assertions)
+                                && std::env::var_os("JOYSTICK_GOBLOON_GAME_IMPORT").is_some()
+                                && game
+                                    .as_ref()
+                                    .is_some_and(|g| ctx.profile.game_bindings(g).is_none());
+                            if (import || auto)
+                                && let Some(game) = game
+                            {
+                                let n = import_ops(ctx.profile, &game, &read, ops);
+                                self.status = Some(n.to_string());
+                            }
+                            self.in_game = Some((plugin, read));
+                        }
+                        Err(e) => {
+                            log::warn!("game export: reading the game failed: {e}");
+                            self.status = Some(format!("error:{e}"));
+                        }
+                    }
+                }
+                Reply::Preview(result) => {
+                    if let Some(d) = &mut self.export {
+                        d.busy = false;
+                        d.preview = Some(result);
+                    }
+                }
+                Reply::Written(result) => {
+                    self.export = None;
+                    match result {
+                        Ok(w) => {
+                            log::info!("game export: wrote {:?}, copies {:?}", w.files, w.backups);
+                            if let (Some(game), Some(found)) = (self.game_id(), self.found()) {
+                                ops.push(Op::GameExported {
+                                    game,
+                                    target: found.target.id.clone(),
+                                    version: found.version.clone(),
+                                });
+                            }
+                            self.status = Some(format!("written:{}", w.files.len()));
+                        }
+                        Err(e) => {
+                            log::error!("game export failed: {e}");
+                            self.status = Some(format!("error:{e}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        ctx: &Context,
+        ops: &mut Vec<Op>,
+        detached: bool,
+    ) -> Output {
+        let mut out = Output::default();
+        if self.worker.is_none() {
+            self.worker = Some(spawn_worker(ui.ctx().clone()));
+            // Debug builds open the table with JOYSTICK_GOBLOON_TAB=game-list, for checks.
+            if cfg!(debug_assertions)
+                && std::env::var("JOYSTICK_GOBLOON_TAB").is_ok_and(|t| t == "game-list")
+            {
+                self.tab = Tab::List;
+            }
+        }
+        self.poll(ctx, ops);
+        if let Some(s) = self.status.take() {
+            out.status = Some(status_text(i18n, &s, self.plugin()));
+        }
+        let Some(plugins) = self.plugins.clone() else {
+            crate::app::empty_state(ui, icon::HOURGLASS, &i18n.tr("game-loading"));
+            return out;
+        };
+        if plugins.is_empty() {
+            crate::app::empty_state(ui, icon::PLUGS, &i18n.tr("game-no-plugins"));
+            for e in &self.errors {
+                ui.label(RichText::new(e).weak());
+            }
+            return out;
+        }
+        out.toggle_window = self.header(ui, i18n, ctx, &plugins, detached);
+        if std::mem::take(&mut self.reread) {
+            self.read_game(ctx, false);
+        }
+        self.import_banner(ui, i18n, ctx);
+        ui.add_space(style::SPACE_S);
+        self.device_links(ui, i18n, ctx, ops);
+        ui.add_space(style::SPACE_S);
+        ui.horizontal(|ui| {
+            if style::tab(
+                ui,
+                self.tab == Tab::Wiring,
+                icon::FLOW_ARROW,
+                &i18n.tr("game-tab-wiring"),
+            )
+            .clicked()
+            {
+                self.tab = Tab::Wiring;
+            }
+            if style::tab(
+                ui,
+                self.tab == Tab::List,
+                icon::LIST_BULLETS,
+                &i18n.tr("game-tab-list"),
+            )
+            .clicked()
+            {
+                self.tab = Tab::List;
+            }
+            ui.add_space(style::SPACE_L);
+            ui.label(icon::MAGNIFYING_GLASS);
+            ui.add(
+                style::text_field(&mut self.search)
+                    .hint_text(i18n.tr("game-search"))
+                    .desired_width(220.0),
+            );
+            ui.add_space(style::SPACE_M);
+            let press =
+                style::icon_toggle(ui, self.listening, icon::HAND_TAP, &i18n.tr("game-press"));
+            if press.clicked() {
+                self.listening = !self.listening;
+                self.linking = None;
+            }
+            if self.tab == Tab::List
+                && style::icon_toggle(
+                    ui,
+                    self.bound_only,
+                    icon::FUNNEL,
+                    &i18n.tr("game-bound-only"),
+                )
+                .clicked()
+            {
+                self.bound_only = !self.bound_only;
+            }
+        });
+        if self.listening {
+            ui.label(RichText::new(i18n.tr("game-press-hint")).color(style::accent(ui)));
+        } else if self.picked.is_some() {
+            ui.label(RichText::new(i18n.tr("game-pick-action-hint")).color(style::accent(ui)));
+        }
+        ui.add_space(style::SPACE_S);
+        let Some(game) = self.game_id() else {
+            return out;
+        };
+        let catalog = self
+            .catalog(ctx.profile)
+            .map(|(c, _)| c)
+            .unwrap_or_default();
+        // The table lists every action of the game, like the game's own screen; the schematic
+        // only what is wired.
+        let all = self.tab == Tab::List && !self.bound_only;
+        let graph = Graph::build(ctx, i18n, &game, &catalog, &self.search, all);
+        let live = Live::read(ctx, &graph);
+        if self.listening {
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.listening = false;
+                self.linking = None;
+            }
+            let on = |i: usize| live.inputs.get(i).copied().unwrap_or(0.0) > 0.5;
+            // An axis resting off center or a held button is not a press: it counts once it
+            // was let go.
+            let held = self.held.get_or_insert_with(|| {
+                (0..graph.inputs.len())
+                    .filter(|i| on(*i))
+                    .map(|i| graph.inputs[i].key.clone())
+                    .collect()
+            });
+            held.retain(|key| {
+                graph
+                    .inputs
+                    .iter()
+                    .position(|n| &n.key == key)
+                    .is_some_and(on)
+            });
+            let pressed = (0..graph.inputs.len())
+                .find(|i| on(*i) && !held.contains(&graph.inputs[*i].key))
+                .and_then(|i| graph.input_edges.iter().find(|(l, _)| *l == i))
+                .map(|(_, m)| graph.outputs[*m].clone());
+            if let Some(o) = pressed {
+                match self.linking.take() {
+                    Some(action) => ops.push(Op::GameBind {
+                        game: game.clone(),
+                        action,
+                        output: o,
+                    }),
+                    None => self.picked = Some(o),
+                }
+                self.listening = false;
+            }
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(33));
+        }
+        if !self.listening {
+            self.held = None;
+            self.linking = None;
+        }
+        let now = ui.input(|i| i.time);
+        self.lit.retain(|id| {
+            graph
+                .actions
+                .iter()
+                .position(|a| &a.id == id)
+                .is_some_and(|r| live.actions.get(r).copied().unwrap_or(0.0) > 0.0)
+        });
+        for (r, a) in graph.actions.iter().enumerate() {
+            if live.actions.get(r).copied().unwrap_or(0.0) > 0.0 {
+                self.flash.insert(a.id.clone(), now);
+            }
+        }
+        if live.any || self.flash.values().any(|t| now - t < FLASH) {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(33));
+        }
+        match self.tab {
+            Tab::Wiring => self.wiring(ui, i18n, &game, &graph, &live, now, ops),
+            Tab::List => self.list(ui, i18n, &game, &graph, &live, now, ops),
+        }
+        self.export_dialog(ui, i18n, ctx, &game);
+        out
+    }
+
+    /// Game and install pickers, the game version, and the page's buttons; true to detach.
+    fn header(
+        &mut self,
+        ui: &mut egui::Ui,
+        i18n: &I18n,
+        ctx: &Context,
+        plugins: &[PluginInfo],
+        detached: bool,
+    ) -> bool {
+        let mut toggle = false;
+        ui.horizontal(|ui| {
+            let name = plugins
+                .get(self.selected)
+                .map_or(String::new(), |p| p.manifest.name.clone());
+            egui::ComboBox::from_id_salt("game-plugin")
+                .selected_text(format!("{}  {name}", icon::GAME_CONTROLLER))
+                .show_ui(ui, |ui| {
+                    for (i, p) in plugins.iter().enumerate() {
+                        if ui
+                            .selectable_label(self.selected == i, &p.manifest.name)
+                            .clicked()
+                        {
+                            self.selected = i;
+                            self.target = 0;
+                            self.picked = None;
+                            self.in_game = None;
+                            self.reread = true;
+                        }
+                    }
+                });
+            let targets = self.targets.get(self.selected).cloned().unwrap_or_default();
+            if self.scanning {
+                ui.spinner();
+                ui.label(RichText::new(i18n.tr("game-scanning")).weak());
+            } else if targets.is_empty() {
+                ui.label(
+                    RichText::new(i18n.trf("game-not-found", &[("game", name.clone().into())]))
+                        .weak(),
+                );
+            } else {
+                let text = |f: &FoundTarget| format!("{}  ·  {}", f.target.name, f.target.id);
+                egui::ComboBox::from_id_salt("game-target")
+                    .selected_text(targets.get(self.target).map(text).unwrap_or_default())
+                    .width(320.0)
+                    .show_ui(ui, |ui| {
+                        for (i, f) in targets.iter().enumerate() {
+                            if ui.selectable_label(self.target == i, text(f)).clicked() {
+                                self.target = i;
+                                self.in_game = None;
+                                self.reread = true;
+                            }
+                        }
+                    });
+                if let Some((catalog, fit)) = self.catalog(ctx.profile) {
+                    let version = targets
+                        .get(self.target)
+                        .and_then(|f| f.version.clone())
+                        .unwrap_or_else(|| "?".into());
+                    let warn = match fit {
+                        Fit::Exact => None,
+                        Fit::GameNewer => Some("game-catalog-older"),
+                        Fit::GameOlder => Some("game-catalog-newer"),
+                        Fit::Unknown => Some("game-catalog-unknown"),
+                    };
+                    let label = ui.label(
+                        RichText::new(i18n.trf(
+                            "game-version",
+                            &[
+                                ("version", version.into()),
+                                ("catalog", catalog.version.clone().into()),
+                            ],
+                        ))
+                        .weak(),
+                    );
+                    if let Some(key) = warn {
+                        ui.label(RichText::new(icon::WARNING).color(ui.visuals().warn_fg_color))
+                            .on_hover_text(i18n.tr(key));
+                    } else {
+                        label.on_hover_text(i18n.tr("game-catalog-exact"));
+                    }
+                }
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let glyph = if detached {
+                    icon::ARROW_SQUARE_IN
+                } else {
+                    icon::ARROW_SQUARE_OUT
+                };
+                let tip = if detached {
+                    "viewer-attach"
+                } else {
+                    "game-window"
+                };
+                if style::icon_button(ui, true, glyph, &i18n.tr(tip)).clicked() {
+                    toggle = true;
+                }
+                let has_target = !targets.is_empty();
+                if style::icon_button(
+                    ui,
+                    has_target && self.export.is_none(),
+                    icon::EXPORT,
+                    &i18n.tr("game-export"),
+                )
+                .clicked()
+                {
+                    self.open_export(ctx);
+                }
+                if self.importing {
+                    ui.spinner();
+                } else if style::icon_button(
+                    ui,
+                    has_target,
+                    icon::DOWNLOAD_SIMPLE,
+                    &i18n.tr("game-import"),
+                )
+                .clicked()
+                {
+                    self.read_game(ctx, true);
+                }
+                if style::icon_button(
+                    ui,
+                    !self.scanning,
+                    icon::ARROWS_CLOCKWISE,
+                    &i18n.tr("game-rescan"),
+                )
+                .clicked()
+                {
+                    self.scan();
+                }
+            });
+        });
+        toggle
+    }
+
+    /// How the game numbers the virtual joysticks: one small field per device.
+    fn device_links(&mut self, ui: &mut egui::Ui, i18n: &I18n, ctx: &Context, ops: &mut Vec<Op>) {
+        let Some(game) = self.game_id() else {
+            return;
+        };
+        let ours = our_devices(ctx);
+        if ours.is_empty() {
+            return;
+        }
+        let current: Vec<GameDevice> = ctx
+            .profile
+            .game_bindings(&game)
+            .map(|g| g.devices.clone())
+            .unwrap_or_default();
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(icon::LINK).weak())
+                .on_hover_text(i18n.tr("game-devices"));
+            let mut changed = None;
+            for d in &ours {
+                let n: u32 = d.output.trim_start_matches("vjoy:").parse().unwrap_or(0);
+                ui.label(i18n.trf("game-joystick-n", &[("n", n.into())]));
+                ui.label(RichText::new(icon::ARROW_RIGHT).weak());
+                let mut value = current
+                    .iter()
+                    .find(|g| g.output == d.output)
+                    .map(|g| g.game_device.clone())
+                    .unwrap_or_default();
+                let r = ui.add(
+                    style::text_field(&mut value)
+                        .desired_width(56.0)
+                        .hint_text("?"),
+                );
+                r.on_hover_text(i18n.tr("game-devices"));
+                if value
+                    != current
+                        .iter()
+                        .find(|g| g.output == d.output)
+                        .map(|g| g.game_device.clone())
+                        .unwrap_or_default()
+                {
+                    changed = Some((d.output.clone(), value));
+                }
+                ui.add_space(style::SPACE_M);
+            }
+            if let Some((output, value)) = changed {
+                let mut devices: Vec<GameDevice> =
+                    current.into_iter().filter(|g| g.output != output).collect();
+                let value = value.trim().to_string();
+                if !value.is_empty() {
+                    devices.push(GameDevice {
+                        output,
+                        game_device: value,
+                    });
+                }
+                devices.sort_by(|a, b| a.output.cmp(&b.output));
+                ops.push(Op::GameDevices { game, devices });
+            }
+        });
+    }
+
+    /// Reads the bindings in the game (shown as "In the game"); `import` takes them into the
+    /// profile too.
+    fn read_game(&mut self, ctx: &Context, import: bool) {
+        let Some(found) = self.found().cloned() else {
+            return;
+        };
+        self.importing = import;
+        let plugin = self.selected;
+        self.send(Request::Read {
+            plugin,
+            target: found.target,
+            version: found.version,
+            ours: our_devices(ctx),
+            import,
+        });
+    }
+
+    /// Offers the game's bindings when the profile has none for the game yet.
+    fn import_banner(&mut self, ui: &mut egui::Ui, i18n: &I18n, ctx: &Context) {
+        let Some(game) = self.game_id() else {
+            return;
+        };
+        let n = match &self.in_game {
+            Some((p, read)) if *p == self.selected => {
+                read.binds.iter().filter(|b| !b.default).count()
+            }
+            _ => 0,
+        };
+        if n == 0
+            || ctx
+                .profile
+                .game_bindings(&game)
+                .is_some_and(|g| !g.binds.is_empty())
+        {
+            return;
+        }
+        ui.add_space(style::SPACE_S);
+        egui::Frame::new()
+            .fill(style::accent(ui).gamma_multiply(0.15))
+            .corner_radius(6.0)
+            .inner_margin(egui::Margin::symmetric(12, 8))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(icon::DOWNLOAD_SIMPLE).color(style::accent(ui)));
+                    ui.label(i18n.trf("game-import-offer", &[("n", (n as i64).into())]));
+                    if ui.button(i18n.tr("game-import-take")).clicked() {
+                        self.read_game(ctx, true);
+                    }
+                });
+            });
+    }
+
+    fn fade(&self, action: &str, now: f64) -> f32 {
+        self.flash
+            .get(action)
+            .map_or(0.0, |t| (1.0 - (now - t) / FLASH).max(0.0) as f32)
+    }
+}
+
+/// The status bar text for a status code the worker replies left.
+fn status_text(i18n: &I18n, code: &str, plugin: Option<&PluginInfo>) -> String {
+    let game = plugin.map_or(String::new(), |p| p.manifest.name.clone());
+    if let Some(e) = code.strip_prefix("error:") {
+        return i18n.trf("game-export-error", &[("error", e.to_string().into())]);
+    }
+    if let Some(n) = code.strip_prefix("written:") {
+        let n: i64 = n.parse().unwrap_or(0);
+        return i18n.trf("game-exported", &[("game", game.into()), ("n", n.into())]);
+    }
+    let n: i64 = code.parse().unwrap_or(0);
+    i18n.trf("game-imported", &[("n", n.into())])
+}
+
+/// Edits that add what the game has and the profile lacks; the number of bindings added.
+fn import_ops(profile: &Profile, game: &str, read: &ReadResult, ops: &mut Vec<Op>) -> usize {
+    let have = profile.game_bindings(game);
+    let mut n = 0;
+    // The game's own default keys stay the game's.
+    for b in read.binds.iter().filter(|b| !b.default) {
+        let Some(output) = GameOutput::parse(&b.output) else {
+            continue;
+        };
+        if have.is_some_and(|g| {
+            g.binds
+                .iter()
+                .any(|x| x.action == b.action && x.output == output)
+        }) {
+            continue;
+        }
+        ops.push(Op::GameBind {
+            game: game.to_string(),
+            action: b.action.clone(),
+            output,
+        });
+        n += 1;
+    }
+    if !read.devices.is_empty() {
+        let mut devices: Vec<GameDevice> = have.map(|g| g.devices.clone()).unwrap_or_default();
+        for d in &read.devices {
+            devices.retain(|x| x.output != d.output);
+            devices.push(GameDevice {
+                output: d.output.clone(),
+                game_device: d.game_device.clone(),
+            });
+        }
+        devices.sort_by(|a, b| a.output.cmp(&b.output));
+        ops.push(Op::GameDevices {
+            game: game.to_string(),
+            devices,
+        });
+    }
+    n
+}
+
+/// The profile's virtual joysticks as games see them.
+fn our_devices(ctx: &Context) -> Vec<OurDevice> {
+    let mut ids: BTreeSet<u32> = ctx.vjoy.iter().map(|d| d.id).collect();
+    ids.extend(ctx.profile.virtual_devices.joysticks.iter().map(|j| j.id));
+    ids.into_iter()
+        .map(|id| {
+            let stored = ctx
+                .profile
+                .virtual_devices
+                .joysticks
+                .iter()
+                .find(|j| j.id == id);
+            // The device of this computer decides; one only the profile knows goes by what
+            // the profile keeps of it.
+            let name = match ctx.vjoy.iter().find(|d| d.id == id) {
+                Some(d) => d.name.as_deref(),
+                None => stored.and_then(|j| j.name.as_deref()),
+            };
+            let known = gob_virtual::game_identity(id, name, stored.and_then(|j| j.product));
+            OurDevice {
+                output: format!("vjoy:{id}"),
+                name: known.name,
+                guid: known.product_guid,
+            }
+        })
+        .collect()
+}
+
+/// An output's name as the page shows it.
+fn output_name(i18n: &I18n, o: &GameOutput) -> String {
+    let (device, what) = output_parts(i18n, o);
+    format!("{device} · {what}")
+}
+
+/// An output's device and its name on that device: the schematic names the device once, above
+/// its outputs.
+fn output_parts(i18n: &I18n, o: &GameOutput) -> (String, String) {
+    let base = |v: &VirtualOutput| match v {
+        VirtualOutput::Vjoy {
+            device,
+            input_type,
+            id,
+        } => {
+            let dev = i18n.trf("game-joystick-n", &[("n", (*device).into())]);
+            let what = match input_type {
+                InputType::Axis => crate::devices_view::axis_name(i18n, *id),
+                InputType::Hat => i18n.trf("vjoy-hat-n", &[("n", (*id).into())]),
+                _ => i18n.trf("vjoy-button-n", &[("n", (*id).into())]),
+            };
+            (dev, what)
+        }
+        VirtualOutput::Gamepad { gamepad, control } => (
+            format!("{} {gamepad}", i18n.tr("game-gamepad")),
+            control.clone(),
+        ),
+        VirtualOutput::Logical { input_type, id } => {
+            (i18n.tr("game-logical"), format!("{input_type:?} {id}"))
+        }
+    };
+    match o {
+        GameOutput::Virtual(v) => base(v),
+        GameOutput::HatDirection(v, d) => {
+            let (device, what) = base(v);
+            (device, format!("{what} {}", arrow(*d)))
+        }
+        GameOutput::Keys(c) => (i18n.tr("keyboard-device"), combo_name(i18n, c)),
+    }
+}
+
+/// Keys and mouse buttons pressed together, as "Right Alt + Y".
+fn combo_name(i18n: &I18n, combo: &gob_core::Combo) -> String {
+    combo
+        .parts()
+        .iter()
+        .map(|p| match p {
+            gob_core::ComboPart::Key(k) => crate::key_capture::name(*k, i18n),
+            gob_core::ComboPart::Mouse(b) => i18n.tr(&format!(
+                "mouse-{}",
+                b.name().to_lowercase().replace(' ', "-")
+            )),
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+fn arrow(d: HatDirection) -> &'static str {
+    match d {
+        HatDirection::Up => "↑",
+        HatDirection::Right => "→",
+        HatDirection::Down => "↓",
+        HatDirection::Left => "←",
+    }
+}
