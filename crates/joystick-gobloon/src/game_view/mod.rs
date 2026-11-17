@@ -697,9 +697,11 @@ impl GameView {
                     .find(|g| g.output == d.output)
                     .map(|g| g.game_device.clone())
                     .unwrap_or_default();
+                // Games name devices by a short number ("js1") or a whole GUID.
+                let width = (value.chars().count() as f32 * 7.5).clamp(56.0, 300.0);
                 let r = ui.add(
                     style::text_field(&mut value)
-                        .desired_width(56.0)
+                        .desired_width(width)
                         .hint_text("?"),
                 );
                 r.on_hover_text(i18n.tr("game-devices"));

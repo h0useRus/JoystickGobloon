@@ -185,7 +185,7 @@ impl super::Desktop for Desktop {
         const DRIVE_FIXED: u32 = 3;
         // SAFETY: no arguments; returns a bit mask of the drive letters.
         let mask = unsafe { GetLogicalDrives() };
-        (2..26u8)
+        let mut roots: Vec<String> = (2..26u8)
             .filter(|i| mask & (1 << i) != 0)
             .filter_map(|i| {
                 let root = format!("{}:\\", char::from(b'A' + i));
@@ -194,7 +194,16 @@ impl super::Desktop for Desktop {
                 let kind = unsafe { GetDriveTypeW(PCWSTR(wide.as_ptr())) };
                 matches!(kind, DRIVE_REMOVABLE | DRIVE_FIXED).then(|| root.replace('\\', "/"))
             })
-            .collect()
+            .collect();
+        // The user's own folder: games keep settings and saves under AppData and Documents.
+        if let Some(home) = std::env::var_os("USERPROFILE") {
+            let home = home.to_string_lossy().replace('\\', "/");
+            let home = format!("{}/", home.trim_end_matches('/'));
+            if home.len() > 1 && !roots.contains(&home) {
+                roots.push(home);
+            }
+        }
+        roots
     }
 
     /// The drivers' installers give access; nothing for the user to grant.
