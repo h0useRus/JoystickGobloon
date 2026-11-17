@@ -1637,11 +1637,16 @@ impl JoystickGobloonApp {
                 (Page::Viewer, icon::CHART_LINE, "nav-viewer"),
                 (Page::Calibration, icon::CROSSHAIR_SIMPLE, "nav-calibration"),
                 (Page::Scripts, icon::CODE, "nav-scripts"),
-                (Page::Game, icon::FADERS, "nav-game"),
             ] {
                 if style::nav_toggle(ui, self.page == page, glyph, &self.i18n.tr(key)).clicked() {
                     self.page = page;
                 }
+            }
+            // The Game page has its own drawn icon: the icon font has none like it.
+            if style::game_nav_toggle(ui, self.page == Page::Game, &self.i18n.tr("nav-game"))
+                .clicked()
+            {
+                self.page = Page::Game;
             }
         });
         ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
@@ -2590,7 +2595,7 @@ impl eframe::App for JoystickGobloonApp {
                     });
                 }
                 Page::Game => match &self.profile {
-                    None => empty_state(ui, icon::FADERS, &self.i18n.tr("no-profile")),
+                    None => empty_state(ui, icon::GAME_CONTROLLER, &self.i18n.tr("no-profile")),
                     Some(p) => {
                         let devices = self.input.devices();
                         let vjoy = self.vjoy_view.device_list();

@@ -62,9 +62,10 @@ struct FoundTarget {
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum Tab {
+    /// The game's actions as a table.
     #[default]
-    Wiring,
     List,
+    Wiring,
 }
 
 #[derive(Default)]
@@ -278,11 +279,11 @@ impl GameView {
         let mut out = Output::default();
         if self.worker.is_none() {
             self.worker = Some(spawn_worker(ui.ctx().clone()));
-            // Debug builds open the table with JOYSTICK_GOBLOON_TAB=game-list, for checks.
+            // Debug builds open the schematic with JOYSTICK_GOBLOON_TAB=game-wiring, for checks.
             if cfg!(debug_assertions)
-                && std::env::var("JOYSTICK_GOBLOON_TAB").is_ok_and(|t| t == "game-list")
+                && std::env::var("JOYSTICK_GOBLOON_TAB").is_ok_and(|t| t == "game-wiring")
             {
-                self.tab = Tab::List;
+                self.tab = Tab::Wiring;
             }
         }
         self.poll(ctx, ops);
@@ -311,16 +312,6 @@ impl GameView {
         ui.horizontal(|ui| {
             if style::tab(
                 ui,
-                self.tab == Tab::Wiring,
-                icon::FLOW_ARROW,
-                &i18n.tr("game-tab-wiring"),
-            )
-            .clicked()
-            {
-                self.tab = Tab::Wiring;
-            }
-            if style::tab(
-                ui,
                 self.tab == Tab::List,
                 icon::LIST_BULLETS,
                 &i18n.tr("game-tab-list"),
@@ -328,6 +319,16 @@ impl GameView {
             .clicked()
             {
                 self.tab = Tab::List;
+            }
+            if style::tab(
+                ui,
+                self.tab == Tab::Wiring,
+                icon::FLOW_ARROW,
+                &i18n.tr("game-tab-wiring"),
+            )
+            .clicked()
+            {
+                self.tab = Tab::Wiring;
             }
             ui.add_space(style::SPACE_L);
             ui.label(icon::MAGNIFYING_GLASS);
