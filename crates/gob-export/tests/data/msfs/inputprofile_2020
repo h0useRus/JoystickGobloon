@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Version Num="2728"/>
+<FriendlyName PlatformAvailability="1">vJoy Device Profil</FriendlyName>
+<Device DeviceName="vJoy Device" GUID="{DC899B70-5FB0-11EA-8003-444553540000}" ProductID="0" CompositeID="0">
+	<Axes>
+		<Axis AxisName="X" AxisSensitivy="-15" AxisSensitivyMinus="-15" AxisNeutral="0" AxisDeadZone="12" AxisOutDeadZone="0" AxisResponseRate="-1"/>
+		<Axis AxisName="Y" AxisSensitivy="-15" AxisSensitivyMinus="-15" AxisNeutral="0" AxisDeadZone="12" AxisOutDeadZone="0" AxisResponseRate="-1"/>
+		<Axis AxisName="Z" AxisSensitivy="0" AxisSensitivyMinus="0" AxisNeutral="0" AxisDeadZone="0" AxisOutDeadZone="0" AxisResponseRate="-1"/>
+		<Axis AxisName="rX" AxisSensitivy="-25" AxisSensitivyMinus="-25" AxisNeutral="0" AxisDeadZone="12" AxisOutDeadZone="0" AxisResponseRate="-1"/>
+		<Axis AxisName="rY" AxisSensitivy="-25" AxisSensitivyMinus="-25" AxisNeutral="0" AxisDeadZone="12" AxisOutDeadZone="0" AxisResponseRate="-1"/>
+		<Axis AxisName="rZ" AxisSensitivy="-25" AxisSensitivyMinus="-25" AxisNeutral="0" AxisDeadZone="25" AxisOutDeadZone="0" AxisResponseRate="-1"/>
+		<Axis AxisName="SliderX" AxisSensitivy="0" AxisSensitivyMinus="0" AxisNeutral="0" AxisDeadZone="0" AxisOutDeadZone="0" AxisResponseRate="-1"/>
+		<Axis AxisName="SliderY" AxisSensitivy="0" AxisSensitivyMinus="0" AxisNeutral="0" AxisDeadZone="0" AxisOutDeadZone="0" AxisResponseRate="-1"/>
+	</Axes>
+	<Context ContextName="COCKPIT_GLOBAL_CAMERA">
+		<Action ActionName="KEY_COCKPIT_FREELOOK_HRZ_SET" Flag="4">
+			<Primary>
+				<KEY Information="Joystick R-Axis X ">770</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_COCKPIT_FREELOOK_VRTC_SET" Flag="132">
+			<Primary>
+				<KEY Information="Joystick R-Axis Y ">786</KEY>
+			</Primary>
+		</Action>
+	</Context>
+	<Context ContextName="EXTERNAL_CAMERA">
+		<Action ActionName="KEY_CHASE_FREELOOK_HRZ_SET" Flag="132">
+			<Primary>
+				<KEY Information="Joystick R-Axis X ">770</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_CHASE_FREELOOK_VRTC_SET" Flag="132">
+			<Primary>
+				<KEY Information="Joystick R-Axis Y ">786</KEY>
+			</Primary>
+		</Action>
+	</Context>
+	<Context ContextName="PLANE">
+		<Action ActionName="KEY_AXIS_RUDDER_SET" Flag="4">
+			<Primary>
+				<KEY Information="Joystick R-Axis Z ">802</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_BRAKES_LEFT" Flag="2">
+			<Primary>
+				<KEY Information="Joystick Button 1">0</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_BRAKES_RIGHT" Flag="2">
+			<Primary>
+				<KEY Information="Joystick Button 2">1</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_MIXTURE_SET" Flag="4">
+			<Primary>
+				<KEY Information="Joystick Slider Y ">530</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_PROP_PITCH_AXIS_SET_EX1" Flag="4">
+			<Primary>
+				<KEY Information="Joystick Slider X ">514</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_PROPELLER_REVERSE_THRUST_TOGGLE" Flag="2">
+			<Primary>
+				<KEY Information="Joystick Button 4">3</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_ROTOR_LATERAL_TRIM_DEC" Flag="1">
+			<Primary>
+				<KEY Information="Joystick Button 9">8</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_ROTOR_LATERAL_TRIM_INC" Flag="1">
+			<Primary>
+				<KEY Information="Joystick Button 10">9</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_ROTOR_LONGITUDINAL_TRIM_DEC" Flag="1">
+			<Primary>
+				<KEY Information="Joystick Button 8">7</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_ROTOR_LONGITUDINAL_TRIM_INC" Flag="1">
+			<Primary>
+				<KEY Information="Joystick Button 7">6</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_ROTOR_TRIM_RESET" Flag="2">
+			<Primary>
+				<KEY Information="Joystick Button 6">5</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_THROTTLE_AXIS_SET_EX1" Flag="4">
+			<Primary>
+				<KEY Information="Joystick L-Axis Z ">1058</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_THROTTLE_REVERSE_THRUST_TOGGLE" Flag="2">
+			<Primary>
+				<KEY Information="Joystick Button 3">2</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_THROTTLE1_AXIS_SET_EX1" Flag="4">
+			<Primary>
+				<KEY Information="Joystick L-Axis Z ">1058</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_TOGGLE_AFTERBURNER" Flag="2">
+			<Primary>
+				<KEY Information="Joystick Button 5">4</KEY>
+			</Primary>
+		</Action>
+	</Context>
+	<Context ContextName="SLEW">
+		<Action ActionName="KEY_SLEW_AHEAD_MINUS" Flag="1">
+			<Primary>
+				<KEY Information="Joystick L-Axis Y+">1041</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_SLEW_AHEAD_PLUS" Flag="1">
+			<Primary>
+				<KEY Information="Joystick L-Axis Y-">1040</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_SLEW_ALTIT_MINUS" Flag="1">
+			<Primary>
+				<KEY Information="Joystick L-Axis Z+">1057</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_SLEW_ALTIT_PLUS" Flag="1">
+			<Primary>
+				<KEY Information="Joystick L-Axis Z-">1056</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_SLEW_HEADING_MINUS" Flag="1">
+			<Primary>
+				<KEY Information="Joystick R-Axis Z-">800</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_SLEW_HEADING_PLUS" Flag="1">
+			<Primary>
+				<KEY Information="Joystick R-Axis Z+">801</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_SLEW_LEFT" Flag="1">
+			<Primary>
+				<KEY Information="Joystick L-Axis X-">1024</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_SLEW_RIGHT" Flag="1">
+			<Primary>
+				<KEY Information="Joystick L-Axis X+">1025</KEY>
+			</Primary>
+		</Action>
+	</Context>
+	<Context ContextName="SURFACES">
+		<Action ActionName="KEY_AXIS_AILERONS_SET" Flag="4">
+			<Primary>
+				<KEY Information="Joystick L-Axis X ">1026</KEY>
+			</Primary>
+		</Action>
+		<Action ActionName="KEY_AXIS_ELEVATOR_SET" Flag="4">
+			<Primary>
+				<KEY Information="Joystick L-Axis Y ">1042</KEY>
+			</Primary>
+		</Action>
+	</Context>
+</Device>
+

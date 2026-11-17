@@ -110,7 +110,11 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   catalog/<version>.gob from a local install, only on the user's request; il2-great-battles: data/input/global.actions,
   device numbers from devices.txt, the game compiles current.map itself; an axis from two buttons = catalog actions
   `<id>:inc`/`<id>:dec`; dev/catalog.py builds the catalog from key mapping files; the game is not installed here, tested
-  on a public key mapping file in crates/gob-export/tests/data). A binding's output (gob-core game.rs
+  on a public key mapping file in crates/gob-export/tests/data; msfs: a control profile per device and aircraft kind,
+  Steam profiles (`<Steam>/userdata/*/<app>/remote/inputprofile_*`, found by the target's `globs`, which the host expands
+  into files `<key>:<path>`) updated in place, Microsoft Store cloud saves only read (2024: files to import written to
+  Documents/Joystick Gobloon), catalogs 2020/2024 from control profiles by dev/catalog.py, ids `CONTEXT/KEY_X` and 2024
+  category actions `AIRPLANE:CONTEXT/KEY_X`; no sim here, tested on public vJoy profiles). A binding's output (gob-core game.rs
   `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
   keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
   plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,
