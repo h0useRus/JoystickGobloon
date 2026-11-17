@@ -22,6 +22,7 @@ fn targets(p: &Plugin) -> Vec<Target> {
     p.targets(&Env {
         platform: "windows".into(),
         roots: vec!["C:/".into(), "C:\\Users\\h0use".into()],
+        documents: String::new(),
     })
     .unwrap()
 }
@@ -78,6 +79,7 @@ fn ours(n: u32) -> Vec<OurDevice> {
             output: format!("vjoy:{i}"),
             name: "vJoy Device".into(),
             guid: "{BEAD1234-0000-0000-0000-504944564944}".into(),
+            instance: String::new(),
         })
         .collect()
 }
@@ -96,11 +98,23 @@ fn catalog(p: &Plugin, version: &str) -> Catalog {
 }
 
 fn read(p: &Plugin, t: &Target, version: &str, files: &Files) -> ReadResult {
+    read_with(p, t, version, files, &ours(1), &[])
+}
+
+fn read_with(
+    p: &Plugin,
+    t: &Target,
+    version: &str,
+    files: &Files,
+    ours: &[OurDevice],
+    devices: &[DeviceLink],
+) -> ReadResult {
     p.read(&ReadContext {
         target: t,
         files,
         catalog: &catalog(p, version),
-        ours: &ours(1),
+        ours,
+        devices,
     })
     .unwrap()
 }
@@ -114,12 +128,26 @@ fn write(
     binds: &[Bind],
     options: &BTreeMap<String, OptionValue>,
 ) -> Result<WriteResult, PluginError> {
+    write_with(p, t, version, files, ours, &[], binds, options)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_with(
+    p: &Plugin,
+    t: &Target,
+    version: &str,
+    files: &Files,
+    ours: &[OurDevice],
+    devices: &[DeviceLink],
+    binds: &[Bind],
+    options: &BTreeMap<String, OptionValue>,
+) -> Result<WriteResult, PluginError> {
     p.write(&WriteContext {
         target: t,
         files,
         catalog: &catalog(p, version),
         ours,
-        devices: &[],
+        devices,
         binds,
         cleared: &[],
         profile: "Test",
@@ -160,6 +188,7 @@ fn finds_steam_and_store_installs() {
         .targets(&Env {
             platform: "linux".into(),
             roots: vec!["/home/h0use".into()],
+            documents: String::new(),
         })
         .unwrap();
     assert!(linux.iter().all(|t| t.id.starts_with("steam")));
@@ -180,6 +209,7 @@ fn the_host_finds_the_profiles() {
         .targets(&Env {
             platform: "windows".into(),
             roots: vec![dir.to_string_lossy().into_owned()],
+            documents: String::new(),
         })
         .unwrap();
     let installed: Vec<_> = all.into_iter().filter(host::installed).collect();
@@ -502,4 +532,162 @@ fn tells_what_is_missing() {
         )
         .is_ok()
     );
+}
+
+/// A second vJoy device's general profile: the fixture under another GUID.
+const GUID_2: &str = "{11111111-2222-11EF-8001-444553540000}";
+
+fn second() -> String {
+    lf(GENERAL).replace(GUID_2024, GUID_2)
+}
+
+fn with_instances(instances: &[&str]) -> Vec<OurDevice> {
+    let mut list = ours(instances.len() as u32);
+    for (o, i) in list.iter_mut().zip(instances) {
+        o.instance = i.to_string();
+    }
+    list
+}
+
+fn link(output: &str, game_device: &str) -> DeviceLink {
+    DeviceLink {
+        output: output.into(),
+        game_device: game_device.into(),
+    }
+}
+
+#[test]
+fn devices_alike_are_told_apart_by_their_instance() {
+    let p = plugin();
+    let t = steam(&p, "2024");
+    // File names sort the second device first.
+    let f = files_as_is(&[
+        ("inputprofile_0a", second()),
+        ("inputprofile_f0", lf(GENERAL)),
+    ]);
+    let r = read_with(
+        &p,
+        &t,
+        "2024",
+        &f,
+        &with_instances(&[&GUID_2024.to_lowercase(), GUID_2]),
+        &[],
+    );
+    assert_eq!(
+        r.devices,
+        [link("vjoy:1", GUID_2024), link("vjoy:2", GUID_2)]
+    );
+    assert!(r.binds.iter().any(|b| b.output.starts_with("vjoy:2:")));
+    // Without instances two devices of one name are not guessed.
+    let r = read_with(&p, &t, "2024", &f, &ours(2), &[]);
+    assert!(r.devices.is_empty(), "{:?}", r.devices);
+    assert!(r.binds.is_empty());
+    // One device of that name: its profile, whatever the name.
+    assert_eq!(
+        read(&p, &t, "2024", &files(&[("inputprofile_a", GENERAL)]))
+            .devices
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn links_the_profile_keeps_win() {
+    let p = plugin();
+    let t = steam(&p, "2024");
+    let f = files_as_is(&[
+        ("inputprofile_0a", second()),
+        ("inputprofile_f0", lf(GENERAL)),
+    ]);
+    let found = with_instances(&[GUID_2024, GUID_2]);
+    // The user swapped the devices: reading follows.
+    let kept = [link("vjoy:1", GUID_2), link("vjoy:2", GUID_2024)];
+    let r = read_with(&p, &t, "2024", &f, &found, &kept);
+    assert_eq!(
+        r.devices,
+        [link("vjoy:1", GUID_2), link("vjoy:2", GUID_2024)]
+    );
+    // One link typed: the other device keeps the one found.
+    let kept = [link("vjoy:3", GUID_2.trim_matches(['{', '}']))];
+    let mut three = with_instances(&[GUID_2024, GUID_2, ""]);
+    three[2].name = "Other".into();
+    let r = read_with(&p, &t, "2024", &f, &three, &kept);
+    assert_eq!(
+        r.devices,
+        [
+            link("vjoy:1", GUID_2024),
+            link("vjoy:3", GUID_2.trim_matches(['{', '}']))
+        ]
+    );
+    // Writing a found device next to a typed one works.
+    let binds = [
+        bind("AIRCRAFT/KEY_GEAR_TOGGLE", "vjoy:1:button:7"),
+        bind("AIRCRAFT/KEY_GEAR_TOGGLE", "vjoy:3:button:8"),
+    ];
+    let out = write_with(&p, &t, "2024", &f, &three, &kept, &binds, &BTreeMap::new()).unwrap();
+    let first = &out.files["profile:C:/Steam/userdata/1/remote/inputprofile_f0"];
+    let other = &out.files["profile:C:/Steam/userdata/1/remote/inputprofile_0a"];
+    assert!(first.contains("Joystick Button 7\">6<"));
+    assert!(other.contains("Joystick Button 8\">7<"));
+}
+
+#[test]
+fn more_than_two_bindings_change_nothing_the_second_time() {
+    let p = plugin();
+    let t = steam(&p, "2024");
+    let f = files(&[("inputprofile_a", GENERAL)]);
+    let mut binds = read(&p, &t, "2024", &f).binds;
+    for n in [20, 21, 22] {
+        binds.push(bind(
+            "AIRCRAFT/KEY_GEAR_TOGGLE",
+            &format!("vjoy:1:button:{n}"),
+        ));
+    }
+    let none = BTreeMap::new();
+    let out = write(&p, &t, "2024", &f, &ours(1), &binds, &none).unwrap();
+    assert_eq!(out.changes.len(), 1, "{:?}", out.changes);
+    let mut again = f.clone();
+    for (k, text) in &out.files {
+        again.get_mut(k).unwrap().text = Some(text.clone());
+    }
+    let out = write(&p, &t, "2024", &again, &ours(1), &binds, &none).unwrap();
+    assert!(out.changes.is_empty(), "{:?}", out.changes);
+}
+
+#[test]
+fn profiles_without_bindings_in_the_profile_stay() {
+    let p = plugin();
+    let t = steam(&p, "2024");
+    let f = files(&[("inputprofile_a", GENERAL), ("inputprofile_b", AIRPLANES)]);
+    // Only general actions: the airplanes profile keeps its vJoy bindings.
+    let binds = [bind("AIRCRAFT/KEY_GEAR_TOGGLE", "vjoy:1:button:7")];
+    let out = write(&p, &t, "2024", &f, &ours(1), &binds, &BTreeMap::new()).unwrap();
+    let air = "profile:C:/Steam/userdata/1/remote/inputprofile_b";
+    assert!(out.files.get(air).is_none_or(|t| *t == lf(AIRPLANES)));
+    assert!(
+        out.changes
+            .iter()
+            .all(|c| !c.action.starts_with("AIRPLANE:"))
+    );
+}
+
+#[test]
+fn files_to_import_go_to_the_documents_folder() {
+    let p = plugin();
+    let all = p
+        .targets(&Env {
+            platform: "windows".into(),
+            roots: vec!["C:/Users/h0use/".into()],
+            documents: "C:/Users/h0use/OneDrive/Documents/".into(),
+        })
+        .unwrap();
+    let st = all
+        .iter()
+        .find(|t| t.id == "store2024:C:/Users/h0use/")
+        .unwrap();
+    assert_eq!(
+        st.dirs["import"],
+        "C:/Users/h0use/OneDrive/Documents/Joystick Gobloon/Flight Simulator 2024"
+    );
+    assert_eq!(st.glob_text["profile"], "<Device");
 }

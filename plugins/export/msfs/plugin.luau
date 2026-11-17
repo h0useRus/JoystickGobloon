@@ -104,6 +104,7 @@ plugin.targets(function(ctx)
 					id = "steam" .. game.version .. ":" .. base,
 					name = game.version .. " (Steam)",
 					globs = { profile = base .. "userdata/*/" .. game.app .. "/remote/inputprofile_*" },
+					glob_text = { profile = "<Device" },
 				})
 			end
 			if ctx.env.platform == "windows" then
@@ -113,9 +114,15 @@ plugin.targets(function(ctx)
 					globs = {
 						profile = root .. "AppData/Local/Packages/" .. game.package .. "/SystemAppData/wgs/*/*/*",
 					},
+					-- The other saves of the sim are left unread.
+					glob_text = { profile = "<Device" },
 				}
 				if game.import then
-					t.dirs = { import = root .. "Documents/Joystick Gobloon/" .. game.import }
+					local documents = ctx.env.documents or ""
+					if documents == "" then
+						documents = root .. "Documents/"
+					end
+					t.dirs = { import = slash(documents) .. "Joystick Gobloon/" .. game.import }
 				end
 				add(t)
 			end
@@ -197,43 +204,78 @@ local function profiles_of(ctx)
 	return list
 end
 
--- Our virtual joysticks in the profiles: by name, each new GUID to the next of ours with that name.
+-- A GUID as the profiles compare it: lowercase, in braces; "" for none.
+local function norm_guid(s)
+	local guid = lower(string.match(s or "", "^%s*(.-)%s*$"))
+	if guid ~= "" and string.sub(guid, 1, 1) ~= "{" then
+		guid = "{" .. guid .. "}"
+	end
+	return guid
+end
+
+-- Our virtual joysticks in the profiles (output -> the profile's GUID as written): by the
+-- instance GUID the device has on this computer, else by name where the name tells one device
+-- (all vJoy devices share theirs).
 local function found_links(profiles, ours)
-	local links, used, taken = {}, {}, {}
-	for _, p in profiles do
-		local guid = lower(p.guid)
-		if guid ~= "" and not taken[guid] then
-			for _, o in ours do
-				if not used[o.output] and lower(o.name) == lower(p.name) then
-					used[o.output] = true
-					taken[guid] = true
-					table.insert(links, { output = o.output, game_device = p.guid })
+	local found, taken = {}, {}
+	for _, o in ours do
+		local instance = norm_guid(o.instance)
+		if instance ~= "" then
+			for _, p in profiles do
+				if norm_guid(p.guid) == instance then
+					found[o.output] = p.guid
+					taken[instance] = true
 					break
 				end
 			end
 		end
 	end
-	return links
-end
-
--- Device links: those given, else those found; output -> lowercase GUID and back.
-local function links_of(ctx, profiles)
-	local given = ctx.devices or {}
-	if #given == 0 then
-		given = found_links(profiles, ctx.ours)
-	end
-	local guid_of, output_of = {}, {}
-	for _, l in given do
-		local guid = lower(string.match(l.game_device, "^%s*(.-)%s*$"))
-		if guid ~= "" then
-			if string.sub(guid, 1, 1) ~= "{" then
-				guid = "{" .. guid .. "}"
-			end
-			guid_of[l.output] = guid
-			output_of[guid] = l.output
+	local named, guids = {}, {}
+	for _, o in ours do
+		if found[o.output] == nil and norm_guid(o.instance) == "" then
+			local name = lower(o.name)
+			named[name] = named[name] or {}
+			table.insert(named[name], o.output)
 		end
 	end
-	return guid_of, output_of
+	for _, p in profiles do
+		local guid, name = norm_guid(p.guid), lower(p.name)
+		if guid ~= "" and not taken[guid] then
+			guids[name] = guids[name] or {}
+			guids[name][guid] = p.guid
+		end
+	end
+	for name, outputs in named do
+		local list = guids[name] or {}
+		local keys = sorted_keys(list)
+		if #outputs == 1 and #keys == 1 then
+			found[outputs[1]] = list[keys[1]]
+		end
+	end
+	return found
+end
+
+-- Device links: those the profile keeps win over those found. Returns output -> GUID
+-- (normalized) and the links as {output, game_device}, sorted by output.
+local function links_of(ctx, profiles)
+	local shown = found_links(profiles, ctx.ours)
+	for _, l in ctx.devices or {} do
+		local guid = norm_guid(l.game_device)
+		if guid ~= "" then
+			for output, g in shown do
+				if norm_guid(g) == guid and output ~= l.output then
+					shown[output] = nil
+				end
+			end
+			shown[l.output] = string.match(l.game_device, "^%s*(.-)%s*$")
+		end
+	end
+	local guid_of, links = {}, {}
+	for _, output in sorted_keys(shown) do
+		guid_of[output] = norm_guid(shown[output])
+		table.insert(links, { output = output, game_device = shown[output] })
+	end
+	return guid_of, links
 end
 
 -- ---- KEYs <-> outputs --------------------------------------------------------------------------
@@ -310,14 +352,14 @@ end
 
 plugin.read(function(ctx)
 	local profiles = profiles_of(ctx)
-	local links = found_links(profiles, ctx.ours)
+	local guid_of, links = links_of(ctx, profiles)
 	local output_of = {}
-	for _, l in links do
-		output_of[lower(l.game_device)] = l.output
+	for output, guid in guid_of do
+		output_of[guid] = output
 	end
 	local binds, seen = {}, {}
 	for _, p in profiles do
-		local device = output_of[lower(p.guid)]
+		local device = output_of[norm_guid(p.guid)]
 		if device then
 			for _, c in xml.elements(p.device, "Context") do
 				for _, a in xml.elements(c, "Action") do
@@ -384,6 +426,16 @@ local function apply(p, context, a, list)
 			end
 		end
 	end
+	-- The sim holds two bindings per action, slots of its own ones included: the rest is not
+	-- written, nor compared.
+	local room, kept = 2 - #foreign, {}
+	for i, w in list do
+		if i <= room then
+			table.insert(kept, w)
+		end
+	end
+	local dropped = #list - #kept
+	list = kept
 	local was, now = {}, {}
 	for _, b in before do
 		table.insert(was, b.what)
@@ -422,13 +474,12 @@ local function apply(p, context, a, list)
 			table.insert(free, name)
 		end
 	end
+	if dropped > 0 then
+		plugin.log(id_of(p, context.attrs.ContextName, a.attrs.ActionName) .. ": the sim takes two bindings per action; " .. dropped .. " not written")
+	end
 	local written = {}
 	for i, w in list do
 		local name = free[i]
-		if name == nil then
-			plugin.log(id_of(p, context.attrs.ContextName, a.attrs.ActionName) .. ": the sim takes two bindings per action; the others are not written")
-			break
-		end
 		local code, info = encode(w.what)
 		local slot = xml.append(a, xml.element(name))
 		local key = xml.append(slot, xml.element("KEY", { Information = info }))
@@ -582,15 +633,16 @@ plugin.write(function(ctx)
 	local files, create, changes, covered, seen = {}, {}, {}, {}, {}
 	local names = {}
 	for _, p in profiles do
-		local guid = lower(p.guid)
+		local guid = norm_guid(p.guid)
 		local ours = false
 		for _, g in guid_of do
 			ours = ours or g == guid
 		end
-		if ours and (preset == "" or lower(p.preset) == preset) then
-			local k = guid .. "|" .. p.category
+		local k = guid .. "|" .. p.category
+		-- A device or aircraft kind the profile has nothing for keeps the sim's bindings.
+		if ours and wanted[k] and (preset == "" or lower(p.preset) == preset) then
 			covered[k] = true
-			local text, list = rewrite(p, wanted[k] or {})
+			local text, list = rewrite(p, wanted[k])
 			for _, c in list do
 				local s = c.kind .. c.action .. (c.from or "") .. (c.to or "")
 				if not seen[s] then

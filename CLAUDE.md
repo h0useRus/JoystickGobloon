@@ -112,8 +112,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `<id>:inc`/`<id>:dec`; dev/catalog.py builds the catalog from key mapping files; the game is not installed here, tested
   on a public key mapping file in crates/gob-export/tests/data; msfs: a control profile per device and aircraft kind,
   Steam profiles (`<Steam>/userdata/*/<app>/remote/inputprofile_*`, found by the target's `globs`, which the host expands
-  into files `<key>:<path>`) updated in place, Microsoft Store cloud saves only read (2024: files to import written to
-  Documents/Joystick Gobloon), catalogs 2020/2024 from control profiles by dev/catalog.py, ids `CONTEXT/KEY_X` and 2024
+  into files `<key>:<path>`, `glob_text` = text near their start, our .gobak copies skipped) updated in place, Microsoft
+  Store cloud saves only read (2024: files to import written to Documents/Joystick Gobloon), a profile's device = the
+  DirectInput instance GUID (`OurDevice::instance`; vJoy: HID path `&colNN` = NN-th configured device, gob-virtual
+  `joystick_of_input`), by name only when one device has it; links the profile keeps win, catalogs 2020/2024 from control profiles by dev/catalog.py, ids `CONTEXT/KEY_X` and 2024
   category actions `AIRPLANE:CONTEXT/KEY_X`; no sim here, tested on public vJoy profiles). A binding's output (gob-core game.rs
   `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
   keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
