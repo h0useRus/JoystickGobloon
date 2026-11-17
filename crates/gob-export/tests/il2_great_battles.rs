@@ -218,7 +218,12 @@ fn writes_joystick_bindings_and_keeps_the_rest() {
         line("gear", "joy2_b0", 0, ""),
         line("gear", "joy0_pov0_180", 0, ""),
     ]
-    .join("\n");
+    // The file's own line ends: a checkout may have turned them into CR LF.
+    .join(if ACTIONS.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    });
     assert!(text.contains(&gear), "{text}");
     // The trim keeps its keys and loses the buttons.
     assert!(text.contains("key_rcontrol+key_down/key_rcontrol+key_up"));
