@@ -1242,17 +1242,26 @@ impl JoystickGobloonApp {
     }
 
     /// A new profile with every controller automapped onto the virtual joystick the wizard
-    /// chose for it.
+    /// chose for it; controllers sharing one fill it in the wizard's order.
     fn create_from_wizard(&mut self, plan: crate::wizard_view::Plan) {
         self.new_profile();
         let Some(loaded) = &mut self.profile else {
             return;
         };
+        let mut used: std::collections::HashMap<u32, gob_core::InputLayout> =
+            std::collections::HashMap::new();
         for m in &plan.maps {
-            loaded
-                .profile
-                .automap(&m.device, &m.device_name, &m.from, m.vjoy, &m.to, "Default");
-            let missing = m.from.missing_in(&m.to);
+            let taken = used.entry(m.vjoy).or_default();
+            let missing = m.from.missing_in(&m.to.without(taken));
+            loaded.profile.automap(
+                &m.device,
+                &m.device_name,
+                &m.from,
+                m.vjoy,
+                &m.to,
+                taken,
+                "Default",
+            );
             log::info!(
                 "wizard: {} -> vJoy {}, unmapped: {} axes, {} buttons, {} hats",
                 m.device,
