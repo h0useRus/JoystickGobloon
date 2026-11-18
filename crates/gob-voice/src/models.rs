@@ -8,14 +8,12 @@
 //! plans/SPEECH_PLAN.md "S0 results"): the program shows them so the user can choose.
 
 use std::fs;
-use std::io::{self, Read, Seek, Write};
+use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
-
-use sha2::{Digest, Sha256};
+use std::sync::atomic::AtomicBool;
 
 use crate::Error;
+use crate::download::{self, Archive};
 
 const BASE_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/";
 
@@ -60,8 +58,13 @@ pub struct ModelInfo {
 }
 
 impl ModelInfo {
-    pub fn url(&self) -> String {
-        format!("{BASE_URL}{}.tar.bz2", self.name)
+    pub fn archive(&self) -> Archive {
+        Archive {
+            name: self.name,
+            url: format!("{BASE_URL}{}.tar.bz2", self.name),
+            bytes: self.bytes,
+            sha256: self.sha256,
+        }
     }
 }
 
@@ -191,10 +194,7 @@ pub fn installed(dir: &Path, model: &ModelInfo) -> Option<PathBuf> {
 
 /// Deletes the model's folder in `dir` (nothing when it is not there).
 pub fn remove(dir: &Path, model: &ModelInfo) -> io::Result<()> {
-    match fs::remove_dir_all(dir.join(model.name)) {
-        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
-        _ => Ok(()),
-    }
+    download::remove(dir, model.name)
 }
 
 /// Deletes the speech models of the program's earlier speech engine (Vosk: `vosk-model-*`
@@ -223,134 +223,7 @@ pub fn install(
     progress: &mut dyn FnMut(u64, u64),
     cancel: &AtomicBool,
 ) -> Result<PathBuf, Error> {
-    let tls = ureq::tls::TlsConfig::builder()
-        .provider(ureq::tls::TlsProvider::NativeTls)
-        .root_certs(ureq::tls::RootCerts::PlatformVerifier)
-        .build();
-    let agent = ureq::Agent::config_builder()
-        .tls_config(tls)
-        .timeout_connect(Some(Duration::from_secs(30)))
-        .timeout_recv_response(Some(Duration::from_secs(60)))
-        // The whole body: generous, so slow lines still get there, but a stalled one ends.
-        .timeout_recv_body(Some(Duration::from_secs(60 * 60)))
-        .build()
-        .new_agent();
-    let url = model.url();
-    let mut response = agent
-        .get(&url)
-        .call()
-        .map_err(|e| Error::Download(format!("{url}: {e}")))?;
-    let total = response.body().content_length().unwrap_or(model.bytes);
-    let reader = response
-        .body_mut()
-        .with_config()
-        .limit(model.bytes + model.bytes / 2)
-        .reader();
-    install_from(reader, total, dir, model, progress, cancel)
-}
-
-/// [`install`] from any source of the archive's bytes.
-fn install_from(
-    mut source: impl Read,
-    total: u64,
-    dir: &Path,
-    model: &ModelInfo,
-    progress: &mut dyn FnMut(u64, u64),
-    cancel: &AtomicBool,
-) -> Result<PathBuf, Error> {
-    let io_error = |e: io::Error| Error::Download(e.to_string());
-    fs::create_dir_all(dir).map_err(io_error)?;
-    let archive = dir.join(format!("{}.tar.bz2.part", model.name));
-    let unpacked = dir.join(format!("{}.part", model.name));
-    let result = (|| {
-        let mut file = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&archive)
-            .map_err(io_error)?;
-        let mut hash = Sha256::new();
-        let mut buf = vec![0; 64 * 1024];
-        let mut done = 0u64;
-        progress(0, total);
-        loop {
-            if cancel.load(Ordering::Relaxed) {
-                return Err(Error::Cancelled);
-            }
-            let n = match source.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => n,
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(io_error(e)),
-            };
-            hash.update(&buf[..n]);
-            file.write_all(&buf[..n]).map_err(io_error)?;
-            done += n as u64;
-            progress(done, total.max(done));
-        }
-        let got = hex(&hash.finalize());
-        if !got.eq_ignore_ascii_case(model.sha256) {
-            return Err(Error::Download(format!(
-                "{}: SHA-256 {got}, expected {}",
-                model.name, model.sha256
-            )));
-        }
-        file.rewind().map_err(io_error)?;
-        let _ = fs::remove_dir_all(&unpacked);
-        unpack(file, &unpacked, cancel)?;
-        // The archive holds the model in a folder of its own name; take that, or the whole of it.
-        let inner = unpacked.join(model.name);
-        let root = if inner.is_dir() {
-            inner
-        } else {
-            unpacked.clone()
-        };
-        if !is_model(&root) {
-            return Err(Error::Model(format!(
-                "{}: no speech model in the archive",
-                model.name
-            )));
-        }
-        let path = dir.join(model.name);
-        let _ = fs::remove_dir_all(&path);
-        fs::rename(&root, &path).map_err(io_error)?;
-        Ok(path)
-    })();
-    let _ = fs::remove_file(&archive);
-    let _ = fs::remove_dir_all(&unpacked);
-    match &result {
-        Ok(path) => log::info!("speech model installed: {}", path.display()),
-        Err(Error::Cancelled) => log::info!("{}: download cancelled", model.name),
-        Err(e) => log::error!("{}: {e}", model.name),
-    }
-    result
-}
-
-/// Unpacks a .tar.bz2 into `to`, refusing entries that would land outside it and leaving out the
-/// sample recordings (`test_wavs/`) the archives carry.
-fn unpack(file: impl Read + Seek, to: &Path, cancel: &AtomicBool) -> Result<(), Error> {
-    let bad = |e: io::Error| Error::Download(format!("archive: {e}"));
-    fs::create_dir_all(to).map_err(bad)?;
-    let mut archive = tar::Archive::new(bzip2::read::BzDecoder::new(io::BufReader::new(file)));
-    for entry in archive.entries().map_err(bad)? {
-        if cancel.load(Ordering::Relaxed) {
-            return Err(Error::Cancelled);
-        }
-        let mut entry = entry.map_err(bad)?;
-        let path = entry.path().map_err(bad)?.into_owned();
-        if path.components().any(|c| c.as_os_str() == "test_wavs") {
-            continue;
-        }
-        // unpack_in refuses (returns false for) paths that leave `to`.
-        if !entry.unpack_in(to).map_err(bad)? {
-            return Err(Error::Download(format!(
-                "archive: unsafe path {}",
-                path.display()
-            )));
-        }
-    }
-    Ok(())
+    download::install(dir, &model.archive(), is_model, progress, cancel)
 }
 
 /// Whether `dir` holds a speech model sherpa-onnx can load (its token list and model files).
@@ -358,15 +231,14 @@ fn is_model(dir: &Path) -> bool {
     dir.is_dir() && crate::sherpa::ModelSpec::detect(dir, "", 1).is_ok()
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::io::{Cursor, Write};
+
+    use sha2::{Digest, Sha256};
 
     use super::*;
+    use crate::download::hex;
 
     /// A .tar.bz2 with the given (path, content) entries.
     fn archive_of(entries: &[(&str, &str)]) -> Vec<u8> {
@@ -441,11 +313,12 @@ mod tests {
         cancel: bool,
     ) -> (Result<PathBuf, Error>, Vec<(u64, u64)>) {
         let mut steps = Vec::new();
-        let result = install_from(
+        let result = download::install_from(
             Cursor::new(bytes),
             bytes.len() as u64,
             dir,
-            model,
+            &model.archive(),
+            is_model,
             &mut |done, total| steps.push((done, total)),
             &AtomicBool::new(cancel),
         );

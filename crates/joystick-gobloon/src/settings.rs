@@ -83,6 +83,9 @@ pub struct Settings {
     pub voice_language: String,
     /// Speech model size: "small" (less memory) or "large" (more accurate).
     pub voice_model_size: String,
+    /// The natural voice that speaks text to speech actions without a voice of their own (its
+    /// name as listed); empty = the system's voice.
+    pub tts_voice: String,
     /// Microphone gain of voice commands (1.0 = as recorded).
     pub voice_gain: f32,
     /// Voice commands heard less sure than this (0..1) count as not recognized.
@@ -333,6 +336,7 @@ impl Default for Settings {
             warn_gremlin_format: true,
             voice_language: String::new(),
             voice_model_size: "small".into(),
+            tts_voice: String::new(),
             voice_gain: 1.0,
             voice_min_confidence: 0.5,
             voice_keep_open: true,

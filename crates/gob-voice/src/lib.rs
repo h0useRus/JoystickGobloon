@@ -3,11 +3,13 @@
 //! (`matcher`), and the speech models per language downloaded on demand (`models`).
 
 pub mod audio;
+pub mod download;
 pub mod matcher;
 pub mod models;
 mod platform;
 mod service;
 pub mod sherpa;
+pub mod tts;
 
 pub use audio::{Capture, MAX_GAIN, Microphone, SAMPLE_RATE, microphones};
 pub use matcher::Heard;

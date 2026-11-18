@@ -7,6 +7,6 @@ mod unix;
 mod windows;
 
 #[cfg(not(windows))]
-pub(crate) use unix::{SHERPA_LIBRARY, load, lower_priority, native_path};
+pub(crate) use unix::{SHERPA_LIBRARY, load, lower_priority, native_path, tts_library};
 #[cfg(windows)]
-pub(crate) use windows::{SHERPA_LIBRARY, load, lower_priority, native_path};
+pub(crate) use windows::{SHERPA_LIBRARY, load, lower_priority, native_path, tts_library};

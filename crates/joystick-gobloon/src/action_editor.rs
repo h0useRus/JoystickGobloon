@@ -3208,7 +3208,7 @@ impl Editor<'_> {
                             name: "voice".into(),
                         });
                     }
-                    for v in voices {
+                    for v in &voices {
                         if ui.selectable_label(voice == Some(v.as_str()), v).clicked() {
                             self.set(&id, "voice", "string", v.clone());
                         }

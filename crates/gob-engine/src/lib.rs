@@ -26,7 +26,7 @@ pub use engine::Engine;
 pub use gob_script::ScriptError;
 pub use gob_voice::VoiceConfig;
 pub use lighting::to_led;
-pub use media::{Media, SpeechQueue, SpeechRequest, voices};
+pub use media::{Media, NaturalVoices, SpeechQueue, SpeechRequest, set_natural_voices, voices};
 pub use runner::{Latency, Runner, RunnerStatus, VoiceHeard, VoiceStatus, wait_stopped};
 pub use tap::{OutputTap, Sent, Tapped};
 

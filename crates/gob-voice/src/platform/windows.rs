@@ -12,6 +12,17 @@ use windows::core::PCWSTR;
 /// sherpa-onnx's C API in its Windows release; onnxruntime.dll lies next to it.
 pub(crate) const SHERPA_LIBRARY: &str = "sherpa-onnx-c-api.dll";
 
+/// sherpa-onnx with text to speech (its last build with espeak-ng, GPL 3): downloaded on
+/// request, not shipped.
+pub(crate) fn tts_library() -> crate::download::Archive {
+    crate::download::Archive {
+        name: "sherpa-onnx-v1.13.8-win-x64-shared-MT-Release-lib",
+        url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-x64-shared-MT-Release-lib.tar.bz2".into(),
+        bytes: 8_032_957,
+        sha256: "b8eedf41bd6d3779218887b48367bb7a3ece5aaa7667f01f69ee823a12b0a9e7",
+    }
+}
+
 /// Loads the library; a full path finds the DLLs next to it, not only next to the exe.
 pub(crate) fn load(path: &Path) -> Result<libloading::Library, libloading::Error> {
     let flags = if path.is_absolute() {
