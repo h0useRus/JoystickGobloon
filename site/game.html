@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game bindings: export a profile to the game | Joystick Gobloon</title>
+  <meta name="description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024 and IL-2 Sturmovik: Great Battles.">
+  <link rel="canonical" href="https://h0userus.github.io/joystick-gobloon/game.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Joystick Gobloon">
+  <meta property="og:title" content="Game bindings: export a profile to the game | Joystick Gobloon">
+  <meta property="og:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024 and IL-2 Sturmovik: Great Battles.">
+  <meta property="og:url" content="https://h0userus.github.io/joystick-gobloon/game.html">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Game bindings: export a profile to the game | Joystick Gobloon">
+  <meta name="twitter:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024 and IL-2 Sturmovik: Great Battles.">
+  <meta name="twitter:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
+  <meta name="author" content="Denis Ibragimov">
+  <meta name="theme-color" content="#131209">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "Game bindings: your profile, bound in the game",
+      "description": "Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024 and IL-2 Sturmovik: Great Battles.",
+      "url": "https://h0userus.github.io/joystick-gobloon/game.html",
+      "inLanguage": "en",
+      "image": "https://h0userus.github.io/joystick-gobloon/img/og.jpg",
+      "author": {
+        "@type": "Person",
+        "name": "Denis Ibragimov",
+        "url": "https://github.com/h0useRus"
+      },
+      "about": {
+        "@id": "https://h0userus.github.io/joystick-gobloon/#app"
+      },
+      "isPartOf": {
+        "@id": "https://h0userus.github.io/joystick-gobloon/#website"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Joystick Gobloon",
+          "item": "https://h0userus.github.io/joystick-gobloon/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Games",
+          "item": "https://h0userus.github.io/joystick-gobloon/game.html"
+        }
+      ]
+    }
+  ]
+}
+  </script>
+  <script>document.documentElement.classList.remove("no-js")</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <nav class="nav" aria-label="Main">
+    <a class="brand" href="index.html" aria-label="Joystick Gobloon home">
+      <img src="img/icon.svg" alt="" width="24" height="24">
+      Joystick Gobloon
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html#how">How it works</a></li>
+      <li><a href="start.html">Get started</a></li>
+      <li><a href="learn.html">Learning</a></li>
+      <li><a href="emulation.html">Emulation</a></li>
+      <li><a href="voice.html">Voice</a></li>
+      <li><a href="scripts.html">Scripts</a></li>
+      <li><a href="game.html" aria-current="page">Games</a></li>
+      <li><a href="index.html#platforms">Windows and Linux</a></li>
+      <li><a href="index.html#faq">FAQ</a></li>
+    </ul>
+    <a class="btn btn-primary btn-sm nav-cta" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
+      <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+      <span></span><span></span>
+    </button>
+  </nav>
+
+  <div class="menu" id="menu" aria-hidden="true">
+    <ul>
+      <li style="--i:0"><a href="index.html#features">Features</a></li>
+      <li style="--i:1"><a href="index.html#how">How it works</a></li>
+      <li style="--i:2"><a href="start.html">Get started</a></li>
+      <li style="--i:3"><a href="learn.html">Learning</a></li>
+      <li style="--i:4"><a href="emulation.html">Emulation</a></li>
+      <li style="--i:5"><a href="voice.html">Voice</a></li>
+      <li style="--i:6"><a href="scripts.html">Scripts</a></li>
+      <li style="--i:7"><a href="game.html" aria-current="page">Games</a></li>
+      <li style="--i:8"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:9"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:10"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+    </ul>
+  </div>
+
+  <main id="main">
+    <header class="learn-hero">
+      <div class="wrap">
+        <p class="kicker">Games</p>
+        <h1 class="gradient">Your profile,<br>bound in the game</h1>
+        <p class="sub">A profile turns your sticks into virtual joystick buttons and axes; the game still has to be told which of them lowers the gear. The Game bindings page does that part too: it reads the game's own bindings, shows the whole path from your stick to the game's action, and writes the bindings into the game's files.</p>
+      </div>
+    </header>
+
+    <div class="wrap learn">
+      <aside class="toc" aria-label="On this page">
+        <details>
+          <summary>On this page<i class="ph-bold ph-caret-down" aria-hidden="true"></i></summary>
+          <ul>
+          <li><a class="toc-group" href="#idea">The idea</a><ul>
+            <li><a href="#how-it-works">How it works</a></li>
+            <li><a href="#games">Supported games</a></li>
+            <li><a href="#safe">Your files are kept</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#setup">Step by step</a><ul>
+            <li><a href="#find">1. Find the game</a></li>
+            <li><a href="#devices">2. Joystick numbers</a></li>
+            <li><a href="#read">3. Read the game's bindings</a></li>
+            <li><a href="#bind">4. Bind</a></li>
+            <li><a href="#export">5. Export</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#page">The page</a><ul>
+            <li><a href="#table">In game</a></li>
+            <li><a href="#wiring">Wiring</a></li>
+            <li><a href="#press">Press a control</a></li>
+            <li><a href="#keys">Keyboard and mouse</a></li>
+            <li><a href="#versions">Game versions</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#per-game">Per game</a><ul>
+            <li><a href="#star-citizen">Star Citizen</a></li>
+            <li><a href="#msfs">Microsoft Flight Simulator</a></li>
+            <li><a href="#il2">IL-2 Sturmovik: Great Battles</a></li>
+            <li><a href="#linux">On Linux</a></li>
+          </ul></li>
+          </ul>
+        </details>
+      </aside>
+
+      <div class="learn-body">
+        <section class="learn-group" id="idea" aria-labelledby="idea-title">
+          <h2 id="idea-title">The idea</h2>
+          <article class="learn-action" id="how-it-works">
+            <h3><i class="ph ph-sword" aria-hidden="true"></i>How it works</h3>
+            <p>Every binding has two halves. Your profile maps a stick button to a virtual output, say button 5 of virtual joystick 1; the game maps that output to one of its actions. Usually the second half is done in the game's own menu, one action at a time, and starts over when you change the profile.</p>
+            <p>The <span class="term">Game bindings</span> page in the left rail keeps both halves in one place. The profile remembers which game action each virtual output drives, and an export writes those links into the game's files. Change the profile, export again, and the game follows.</p>
+            <figure class="shot"><img src="img/game.png" loading="lazy" width="1102" height="732" alt="Game bindings page for Star Citizen LIVE, game version 4.10.200: joystick 1 is js1 and joystick 2 is js2 in the game; the In game tab lists the salvage actions with the joystick buttons and keys that drive them and the stick button each comes from"></figure>
+          </article>
+          <article class="learn-action" id="games">
+            <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Supported games</h3>
+            <ul>
+              <li><strong>Star Citizen</strong> 4.10 and newer, LIVE, PTU and the other channels: joystick, keyboard and mouse bindings.</li>
+              <li><strong>Microsoft Flight Simulator</strong> 2020 and 2024: joystick bindings of the sim's control profiles.</li>
+              <li><strong>IL-2 Sturmovik: Great Battles</strong>: joystick, keyboard and mouse bindings, axes from two buttons included.</li>
+            </ul>
+            <p>Each game is a plugin in the <code>export</code> folder next to the program, with the game's list of actions for each version it knows. Microsoft Flight Simulator and IL-2 were made from bindings files people have shared, not tested in the games themselves yet: if something comes out wrong, a <a href="https://github.com/h0useRus/JoystickGobloon/issues">bug report</a> with the game's file helps a lot.</p>
+          </article>
+          <article class="learn-action" id="safe">
+            <h3><i class="ph ph-floppy-disk" aria-hidden="true"></i>Your files are kept</h3>
+            <p>Before anything is written, the export lists every change. Each file it replaces is kept next to it as a copy named like <code>actionmaps.xml.gobak-20261118-093000</code>, so a change you do not like is undone by renaming the copy back. Only the bindings of the actions you changed are touched; the rest of the game's file stays as it was.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="setup" aria-labelledby="setup-title">
+          <h2 id="setup-title">Step by step</h2>
+          <article class="learn-action" id="find">
+            <h3><i class="ph ph-magnifying-glass" aria-hidden="true"></i>1. Find the game</h3>
+            <p>Open <span class="term">Game bindings</span> in the left rail and choose the game at the top left. The program looks for it in the usual places; when it finds more than one copy (Star Citizen's LIVE and PTU, a Steam and a Microsoft Store sim), the second list picks one. Next to it are the game's version and the version of its list of actions.</p>
+            <p>Installed somewhere else? The folder button at the top right points the program at the game's folder; it is remembered. The arrows look again, for example after an update of the game.</p>
+          </article>
+          <article class="learn-action" id="devices">
+            <h3><i class="ph ph-link" aria-hidden="true"></i>2. Joystick numbers</h3>
+            <p>A game numbers the joysticks it sees in its own way, so the line below the game says which of its numbers each virtual joystick has: <span class="term">Joystick 1 → js1</span>. It is filled in from the game's files; change it when the game lists your virtual joysticks in another order, for example because a physical stick is not hidden.</p>
+          </article>
+          <article class="learn-action" id="read">
+            <h3><i class="ph ph-download-simple" aria-hidden="true"></i>3. Read the game's bindings</h3>
+            <p>When the game already has bindings for your virtual joysticks, the page offers to <span class="term">Take them into the profile</span>; the download button at the top right does the same at any time. From then on the profile knows them, and the next export keeps them.</p>
+          </article>
+          <article class="learn-action" id="bind">
+            <h3><i class="ph ph-plugs-connected" aria-hidden="true"></i>4. Bind</h3>
+            <p>Find the game's action in the <a href="#table">In game</a> list (the search box helps), click the plus that shows when you point at its row, and press the control that should drive it: a stick button, a hat, a moved axis, a key or a key combination, or a mouse button. A stick button is followed through your profile to the virtual output it writes, and that output is bound.</p>
+            <p>A binding that is in the profile but not in the game yet is marked as new; one the game has but the profile no longer does is marked for removal, and a click keeps it after all.</p>
+          </article>
+          <article class="learn-action" id="export">
+            <h3><i class="ph ph-export" aria-hidden="true"></i>5. Export</h3>
+            <p>Click the export button at the top right. The dialog lists what is added, changed and removed and the files it will write, with the game's own options (for Star Citizen, the layout file and its name). <span class="term">Write</span> saves them, and the status bar says how many files were written. Then load the bindings in the game as its section below says.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="page" aria-labelledby="page-title">
+          <h2 id="page-title">The page</h2>
+          <article class="learn-action" id="table">
+            <h3><i class="ph ph-list" aria-hidden="true"></i>In game</h3>
+            <p>Every action of the game, in the game's own groups (fold them with the arrows, or all at once with the button at the end of the toolbar). Each row shows the joystick controls and the keys or mouse buttons that drive the action, and under <span class="term">From</span> the stick button or key in your profile that sets it off. Actions bound nowhere are grayed. Click a binding to change or clear it.</p>
+            <p>The filter narrows the list to the actions <span class="term">Bound in the profile</span>, those <span class="term">Not exported yet</span>, or <span class="term">Shared controls</span>: one control driving several actions, which games often allow, but which is easy to do by mistake. A shared binding has an orange outline.</p>
+          </article>
+          <article class="learn-action" id="wiring">
+            <h3><i class="ph ph-flow-arrow" aria-hidden="true"></i>Wiring</h3>
+            <p>The same links as a schematic: your controllers on the left, the profile's virtual outputs in the middle, the game's actions on the right, one lane for each output. While the profile is active, a pressed button or a moved axis lights its whole lane, so you can see which game action it would set off without starting the game. Click an output, then a game action, to link them; the search shows only the outputs with matching actions.</p>
+            <figure class="shot"><img src="img/game-wiring.png" loading="lazy" width="1102" height="732" alt="Wiring tab: the axes and buttons of the left stick, the virtual joystick outputs they write and the Star Citizen actions each output drives; the Z axis lane is lit up to Increase / Decrease Mining Laser Power and Absolute Beam Spacing"></figure>
+          </article>
+          <article class="learn-action" id="press">
+            <h3><i class="ph ph-hand-pointing" aria-hidden="true"></i>Press a control</h3>
+            <p>The hand button in the toolbar waits for a press. With an action selected in the list, the control you press is bound to it; with none, the list shows only the actions that control drives, which answers "what does this button do in the game?".</p>
+            <figure class="shot"><img src="img/game-capture.png" loading="lazy" width="518" height="286" alt="Press a control: waiting for a key, a key combination, a mouse button or a joystick button, hat or axis to bind to Make a screenshot"></figure>
+            <p>When the control already drives other actions, the program lists them, the game's defaults included: <span class="term">Replace</span> takes it away from them, <span class="term">Add anyway</span> keeps both. A stick button that writes several outputs asks which one the game should listen to. A stick button the profile does not map yet can be mapped to a free output of a virtual joystick and bound in one go.</p>
+            <figure class="shot"><img src="img/game-conflict.png" loading="lazy" width="578" height="312" alt="Already in use: Joystick 1 Button 5 is already used by three actions, one of them a game default, with the buttons Replace, Add anyway and Cancel"></figure>
+          </article>
+          <article class="learn-action" id="keys">
+            <h3><i class="ph ph-keyboard" aria-hidden="true"></i>Keyboard and mouse</h3>
+            <p>Keys and mouse buttons stay as the game has them, defaults included, until you change an action's keys here. From then on the profile keeps that action's keys, and the export writes them. The round arrow next to an action's keys (<span class="term">Keyboard and mouse as the game has them</span>) gives them back to the game. Microsoft Flight Simulator keeps its keyboard bindings in files of another kind, so only its joystick bindings are written.</p>
+          </article>
+          <article class="learn-action" id="versions">
+            <h3><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>Game versions</h3>
+            <p>Games add, rename and drop actions with their updates. The plugin picks the list of actions of the version you have; for a newer game the newest list is used and a note says that the latest actions are missing. Renamed actions are carried over by themselves, and actions the game no longer has are marked <span class="term">Not in this version of the game</span> and left out of the export.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="per-game" aria-labelledby="per-game-title">
+          <h2 id="per-game-title">Per game</h2>
+          <article class="learn-action" id="star-citizen">
+            <h3><i class="ph ph-planet" aria-hidden="true"></i>Star Citizen</h3>
+            <p>The bindings are read from the game's <code>actionmaps.xml</code> (in <code>user\client\0\Profiles\default</code> of the channel). The export can update that file, write a layout file, or both:</p>
+            <ul>
+              <li><strong>Layout file</strong>: <code>controls\mappings\layout_&lt;name&gt;_exported.xml</code>, named after the profile unless you name it. Load it in the game under Options, Keybindings, Control Profiles. The game never changes it.</li>
+              <li><strong>actionmaps.xml</strong>: the bindings the game uses at its next start. Close the game first: it writes this file when it quits and would put its old bindings back.</li>
+              <li><strong>Unbind the game's own joystick bindings on js1</strong> (on by default): the game binds many actions of joystick 1 by default; with this option, an action your profile binds elsewhere loses that default, so one button does not set off two things.</li>
+            </ul>
+          </article>
+          <article class="learn-action" id="msfs">
+            <h3><i class="ph ph-airplane" aria-hidden="true"></i>Microsoft Flight Simulator</h3>
+            <p>The sim keeps a control profile for each device (in 2024 also one for each aircraft kind). Each virtual joystick's profiles are read; set the sim's profile name in the export dialog to write just that one.</p>
+            <ul>
+              <li><strong>Steam</strong>: the profiles are updated in place. Close the sim first, and start it again for the change to show.</li>
+              <li><strong>Microsoft Store 2024</strong>: the sim keeps its profiles in cloud saves that other programs cannot change, so the export writes files to import into <code>Documents\Joystick Gobloon\Flight Simulator 2024</code>. In the sim: Controls, the virtual joystick, Import.</li>
+              <li><strong>Microsoft Store 2020</strong>: bindings can be read, but the sim offers no way to bring them back in.</li>
+            </ul>
+          </article>
+          <article class="learn-action" id="il2">
+            <h3><i class="ph ph-airplane-tilt" aria-hidden="true"></i>IL-2 Sturmovik: Great Battles</h3>
+            <p>The bindings live in <code>data\input\global.actions</code> of the game's folder, and the game's joystick numbers in <code>devices.txt</code> next to it (read, never written). The game turns them into its own key map at every start, so exporting while it is closed is enough. An axis made of two buttons, such as trim, is bound as two actions marked (+) and (−).</p>
+          </article>
+          <article class="learn-action" id="linux">
+            <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
+            <p>Games run under Proton or Wine keep their files in a Windows folder tree of their own. The program looks in the Steam prefixes, <code>~/Games</code> and <code>~/.wine</code>; for a game installed elsewhere (Lutris, a second Steam library), point it at the game's folder with the folder button. The virtual joysticks are the ones the game sees under Proton.</p>
+          </article>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div>
+          <a class="brand" href="index.html"><img src="img/icon.svg" alt="" width="24" height="24"> Joystick Gobloon</a>
+          <p>Built on <a href="https://github.com/nefarius/HidHide">HidHide</a> by Nefarius and <a href="https://github.com/shauleiz/vJoy">vJoy</a> by Shaul Eizikovich.</p>
+        </div>
+        <div>
+          <h3>Project</h3>
+          <ul>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/releases">Releases</a></li>
+            <li><a href="start.html">Get started</a></li>
+            <li><a href="learn.html">Learning</a></li>
+            <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="voice.html">Voice</a></li>
+            <li><a href="scripts.html">Scripts</a></li>
+            <li><a href="game.html">Games</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
+            <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>
+            <li><a href="https://www.paypal.com/paypalme/h0userus" rel="noopener">Donate with PayPal</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Legal</h3>
+          <ul>
+            <li><a href="privacy.html">Privacy</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/LICENSE">License and terms (MIT)</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/docs/CODE_SIGNING.md">Code signing policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="copyright">© 2026 Denis Ibragimov. Joystick Gobloon is released under the MIT license.</p>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>
