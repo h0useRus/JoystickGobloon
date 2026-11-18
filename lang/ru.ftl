@@ -764,6 +764,7 @@ voice-phrase-add = Добавить фразу
 voice-no-phrases = Фраз пока нет: эту команду нельзя услышать.
 voice-add-group = Группа
 voice-add-group-tip = Группа команд: её фраза говорится перед фразой команды, сразу или сначала отдельно
+voice-add-group-picked = Поместить выбранные команды и группы ({ $n }) в новую группу
 voice-group-n = Группа { $n }
 voice-group-fold = Свернуть группу
 voice-group-unfold = Развернуть группу

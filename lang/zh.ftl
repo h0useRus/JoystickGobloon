@@ -744,6 +744,7 @@ voice-phrase-add = 添加短语
 voice-no-phrases = 还没有短语：无法听到此命令。
 voice-add-group = 组
 voice-add-group-tip = 命令组：先说组的短语再说命令的短语，可一口气说完，也可先单独说组
+voice-add-group-picked = 将选中的 { $n } 个命令和组放入新组
 voice-group-n = 组 { $n }
 voice-group-fold = 折叠此组
 voice-group-unfold = 展开此组

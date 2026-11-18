@@ -472,3 +472,22 @@ fn voice_links_look_inside_containers() {
     assert_eq!(p.voice_command_running(&tempo), Some(2));
     assert_eq!(p.voice_command_for_phrase("gear down"), Err(2));
 }
+
+/// Selected commands and groups go into a new group made where the first of them was.
+#[test]
+fn selected_nodes_into_a_new_group() {
+    let mut p = gob_gremlin::from_str(GROUPS).unwrap();
+    // 4 is inside 3: it moves with it, not on its own.
+    let g = p.group_voice_nodes(&[6, 3, 4]).unwrap();
+    let tree: Vec<(usize, u32)> = p.voice_tree().into_iter().map(|(d, c)| (d, c.id)).collect();
+    assert_eq!(
+        tree,
+        [(0, 1), (0, 2), (1, g), (2, 3), (3, 4), (3, 5), (2, 6)]
+    );
+    assert!(p.voice_command(g).unwrap().group);
+    assert_eq!(p.group_voice_nodes(&[99]), None);
+    // Top-level commands make a top-level group.
+    let g2 = p.group_voice_nodes(&[1]).unwrap();
+    assert_eq!(p.voice_command(g2).unwrap().parent, None);
+    assert_eq!(p.voice_command(1).unwrap().parent, Some(g2));
+}

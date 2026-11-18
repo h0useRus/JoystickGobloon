@@ -188,6 +188,32 @@ impl Profile {
         true
     }
 
+    /// Puts `ids` into a new group, made where the first of them (in tree order) is: in its group,
+    /// at its place. Ones inside another of `ids` move with it. Returns the new group's id;
+    /// `None` when none of `ids` exists.
+    pub fn group_voice_nodes(&mut self, ids: &[u32]) -> Option<u32> {
+        let tree: Vec<u32> = self.voice_tree().into_iter().map(|(_, c)| c.id).collect();
+        let mut moving: Vec<u32> = tree.iter().copied().filter(|id| ids.contains(id)).collect();
+        let inside: Vec<u32> = moving
+            .iter()
+            .flat_map(|id| self.voice_descendants(*id))
+            .collect();
+        moving.retain(|id| !inside.contains(id));
+        let first = *moving.first()?;
+        let parent = self.voice_command(first)?.parent;
+        let group = self.add_voice_node(parent, true);
+        // The new group takes the first one's place.
+        let new = self.voice_commands.pop()?;
+        let at = self.voice_commands.iter().position(|c| c.id == first)?;
+        self.voice_commands.insert(at, new);
+        for id in moving {
+            if let Some(c) = self.voice_commands.iter_mut().find(|c| c.id == id) {
+                c.parent = Some(group);
+            }
+        }
+        Some(group)
+    }
+
     /// Copies group `id` with everything in it (phrases and hold times, not their actions:
     /// those usually differ) into the same group. Returns the copy's id.
     pub fn duplicate_voice_group(&mut self, id: u32) -> Option<u32> {

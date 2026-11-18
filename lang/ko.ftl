@@ -744,6 +744,7 @@ voice-phrase-add = 문구 추가
 voice-no-phrases = 아직 문구가 없습니다. 이 명령은 들을 수 없습니다.
 voice-add-group = 그룹
 voice-add-group-tip = 명령 그룹: 명령 문구 앞에 그룹 문구를 말합니다. 한 번에 또는 먼저 따로
+voice-add-group-picked = 선택한 명령과 그룹 { $n }개를 새 그룹에 넣기
 voice-group-n = 그룹 { $n }
 voice-group-fold = 이 그룹 접기
 voice-group-unfold = 이 그룹 펼치기

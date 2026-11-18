@@ -50,6 +50,11 @@ pub struct DevicesView {
     voice_folded: std::collections::HashSet<u32>,
     /// The profile's voice groups, for this frame's cards.
     voice_groups: std::collections::HashSet<u32>,
+    /// Voice commands and groups picked together (Ctrl or Shift click): "+ Group" puts them in a
+    /// new group.
+    voice_picked: Vec<u32>,
+    /// Where a Shift click's range starts.
+    voice_anchor: Option<u32>,
     /// The virtual devices' names, for the chips of their mappings.
     vjoy_names: HashMap<u32, String>,
     /// The user picked the tab; otherwise a connected device is preferred.
@@ -732,12 +737,21 @@ impl DevicesView {
                                     .collect()
                             })
                             .unwrap_or_default();
+                        // Picked ones that are gone or folded away are no longer picked.
+                        if is_voice(tab) {
+                            self.voice_picked
+                                .retain(|id| order.iter().any(|(k, _)| *k == (Kind::Voice, *id)));
+                        }
+                        let visible: Vec<Key> = order.iter().map(|(k, _)| *k).collect();
                         for (key, depth) in order {
                             let Some(&bound) = rows.get(&key) else {
                                 continue;
                             };
                             let label = labels.get(&key).map(String::as_str);
-                            let is_sel = selected == Some(key);
+                            let is_sel = selected == Some(key)
+                                || (key.0 == Kind::Voice
+                                    && is_voice(tab)
+                                    && self.voice_picked.contains(&key.1));
                             let marker = profile
                                 .and_then(|p| card_marker(i18n, &p.profile, tab, key, bound));
                             let down = downs.get(&key).map_or(&[][..], Vec::as_slice);
@@ -756,6 +770,10 @@ impl DevicesView {
                                 .inner;
                             match clicked {
                                 Some(CardClick::Select) => {
+                                    if key.0 == Kind::Voice && is_voice(tab) {
+                                        let held = ui.input(|i| i.modifiers);
+                                        self.pick_voice(key.1, held, &visible, selected);
+                                    }
                                     self.selected_input.insert(tab.guid.to_string(), key);
                                 }
                                 Some(CardClick::Owner(device, key)) => jump = Some((device, key)),
@@ -925,6 +943,9 @@ impl DevicesView {
             .filter(|k| k.0 == Kind::Voice)
             .and_then(|k| profile.voice_command(k.1))
             .and_then(|c| if c.group { Some(c.id) } else { c.parent });
+        // What is made next gets the lowest free id: select it once it is there.
+        let made = (Kind::Voice, profile.next_voice_command_id());
+        let picked = self.voice_picked.len() >= 2;
         ui.horizontal(|ui| {
             let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add"));
             if ui.button(add).clicked() {
@@ -932,23 +953,84 @@ impl DevicesView {
                     parent,
                     group: false,
                 });
+                self.select_voice(made);
             }
             let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add-group"));
-            if ui
-                .button(add)
-                .on_hover_text(i18n.tr("voice-add-group-tip"))
-                .clicked()
-            {
-                ops.push(Op::AddVoiceNode {
-                    parent,
-                    group: true,
-                });
+            let tip = if picked {
+                i18n.trf(
+                    "voice-add-group-picked",
+                    &[("n", self.voice_picked.len().into())],
+                )
+            } else {
+                i18n.tr("voice-add-group-tip")
+            };
+            if ui.button(add).on_hover_text(tip).clicked() {
+                if picked {
+                    ops.push(Op::GroupVoiceNodes(self.voice_picked.clone()));
+                } else {
+                    ops.push(Op::AddVoiceNode {
+                        parent,
+                        group: true,
+                    });
+                }
+                self.select_voice(made);
             }
         });
         if profile.voice_commands.is_empty() {
             ui.label(RichText::new(i18n.tr("voice-empty")).weak());
         }
         ui.separator();
+    }
+
+    /// Selects voice command or group `key` alone (the next frame finds it in the list).
+    fn select_voice(&mut self, key: Key) {
+        self.selected_input
+            .insert(gob_core::VOICE_GUID.to_string(), key);
+        self.voice_picked = vec![key.1];
+        self.voice_anchor = Some(key.1);
+    }
+
+    /// A click on voice command or group `id`: alone, Ctrl toggles it among the picked, Shift
+    /// picks the range from the last plain or Ctrl click (in the list as shown).
+    fn pick_voice(
+        &mut self,
+        id: u32,
+        held: egui::Modifiers,
+        visible: &[Key],
+        selected: Option<Key>,
+    ) {
+        let ids: Vec<u32> = visible
+            .iter()
+            .filter(|k| k.0 == Kind::Voice)
+            .map(|k| k.1)
+            .collect();
+        // The one shown on the right counts as picked when Ctrl or Shift starts a selection.
+        if self.voice_picked.is_empty()
+            && let Some((Kind::Voice, shown)) = selected
+        {
+            self.voice_picked.push(shown);
+            self.voice_anchor.get_or_insert(shown);
+        }
+        if held.shift {
+            let anchor = self.voice_anchor.unwrap_or(id);
+            let (a, b) = (
+                ids.iter().position(|i| *i == anchor),
+                ids.iter().position(|i| *i == id),
+            );
+            if let (Some(a), Some(b)) = (a, b) {
+                self.voice_picked = ids[a.min(b)..=a.max(b)].to_vec();
+            }
+        } else if held.command {
+            if let Some(pos) = self.voice_picked.iter().position(|i| *i == id) {
+                self.voice_picked.remove(pos);
+            } else {
+                self.voice_picked.push(id);
+            }
+            self.voice_anchor = Some(id);
+        } else {
+            self.voice_picked = vec![id];
+            self.voice_anchor = Some(id);
+        }
     }
 
     fn list_tools(
