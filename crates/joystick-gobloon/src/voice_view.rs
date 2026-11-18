@@ -56,10 +56,17 @@ fn heard_text(i18n: &I18n, profile: &Profile, heard: &VoiceHeard) -> String {
     let confidence = (heard.confidence * 100.0).round() as u32;
     match heard.command {
         Some(id) => {
-            let name = profile
-                .voice_command(id)
-                .and_then(|c| c.phrases.first().cloned())
-                .unwrap_or_else(|| i18n.trf("voice-command-n", &[("n", id.into())]));
+            // A group shows its whole phrase and that it waits for more.
+            let name = match profile.voice_command(id) {
+                Some(c) if c.group => format!("{} …", profile.voice_full_phrase(id)),
+                Some(_) => profile.voice_full_phrase(id),
+                None => String::new(),
+            };
+            let name = if name.trim().is_empty() {
+                i18n.trf("voice-command-n", &[("n", id.into())])
+            } else {
+                name
+            };
             i18n.trf(
                 "voice-heard",
                 &[
@@ -105,17 +112,38 @@ pub fn status_icon(ui: &mut egui::Ui, i18n: &I18n, status: &VoiceStatus) {
         .on_hover_text(tip);
 }
 
-/// A command's title with its delete button, its phrases (edited in place, an empty field adds
-/// one) and how long it holds its button.
-pub fn command_editor(ui: &mut egui::Ui, i18n: &I18n, command: &VoiceCommand, ops: &mut Vec<Op>) {
+/// A command's or group's title with its delete button, the group it is in, its phrases (edited
+/// in place, an empty field adds one), the whole phrase said for it and how long it holds its
+/// button.
+pub fn command_editor(
+    ui: &mut egui::Ui,
+    i18n: &I18n,
+    profile: &Profile,
+    command: &VoiceCommand,
+    ops: &mut Vec<Op>,
+) {
     let id = command.id;
     ui.horizontal(|ui| {
-        ui.label(RichText::new(icon::MICROPHONE).size(18.0));
-        ui.heading(i18n.trf("voice-command-n", &[("n", id.into())]));
-        if style::icon_button(ui, true, icon::TRASH, &i18n.tr("voice-remove")).clicked() {
-            ops.push(Op::RemoveVoiceCommand(id));
+        if command.group {
+            ui.label(RichText::new(icon::FOLDER_SIMPLE).size(18.0));
+            ui.heading(i18n.trf("voice-group-n", &[("n", id.into())]));
+            let copy = i18n.tr("voice-group-duplicate");
+            if style::icon_button(ui, true, icon::COPY, &copy).clicked() {
+                ops.push(Op::DuplicateVoiceGroup(id));
+            }
+            let remove = i18n.tr("voice-group-remove");
+            if style::icon_button(ui, true, icon::TRASH, &remove).clicked() {
+                ops.push(Op::RemoveVoiceCommand(id));
+            }
+        } else {
+            ui.label(RichText::new(icon::MICROPHONE).size(18.0));
+            ui.heading(i18n.trf("voice-command-n", &[("n", id.into())]));
+            if style::icon_button(ui, true, icon::TRASH, &i18n.tr("voice-remove")).clicked() {
+                ops.push(Op::RemoveVoiceCommand(id));
+            }
         }
     });
+    group_picker(ui, i18n, profile, command, ops);
     ui.label(RichText::new(i18n.tr("voice-phrases")).weak());
     let set = |ops: &mut Vec<Op>, phrases: Vec<String>| {
         ops.push(Op::SetVoicePhrases { id, phrases });
@@ -149,6 +177,12 @@ pub fn command_editor(ui: &mut egui::Ui, i18n: &I18n, command: &VoiceCommand, op
     }
     if command.phrases.is_empty() {
         ui.label(RichText::new(i18n.tr("voice-no-phrases")).weak());
+    } else if command.parent.is_some() {
+        let whole = profile.voice_full_phrase(id);
+        ui.label(RichText::new(i18n.trf("voice-whole-phrase", &[("phrase", whole.into())])).weak());
+    }
+    if command.group {
+        ui.label(RichText::new(i18n.tr("voice-group-hint")).weak());
     }
     ui.horizontal(|ui| {
         ui.label(RichText::new(icon::CLOCK_COUNTDOWN).size(style::ICON_SIZE))
@@ -164,6 +198,57 @@ pub fn command_editor(ui: &mut egui::Ui, i18n: &I18n, command: &VoiceCommand, op
         }
     });
     ui.add_space(4.0);
+}
+
+/// The group a command or group is in: the top level or any group it may move into (not itself
+/// or one inside it).
+fn group_picker(
+    ui: &mut egui::Ui,
+    i18n: &I18n,
+    profile: &Profile,
+    command: &VoiceCommand,
+    ops: &mut Vec<Op>,
+) {
+    let groups: Vec<(u32, String)> = profile
+        .voice_tree()
+        .into_iter()
+        .filter(|(_, c)| c.group && c.id != command.id)
+        .filter(|(_, c)| !profile.voice_descendants(command.id).contains(&c.id))
+        .map(|(_, c)| (c.id, profile.voice_full_phrase(c.id)))
+        .collect();
+    if groups.is_empty() && command.parent.is_none() {
+        return;
+    }
+    let name = |g: Option<u32>| match g {
+        None => i18n.tr("voice-group-top"),
+        Some(g) => {
+            let whole = profile.voice_full_phrase(g);
+            if whole.is_empty() {
+                i18n.trf("voice-group-n", &[("n", g.into())])
+            } else {
+                whole
+            }
+        }
+    };
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(icon::FOLDER_SIMPLE).size(style::ICON_SIZE))
+            .on_hover_text(i18n.tr("voice-group-in"));
+        egui::ComboBox::from_id_salt(("voice-group", command.id))
+            .selected_text(name(command.parent))
+            .show_ui(ui, |ui| {
+                let picks = std::iter::once(None).chain(groups.iter().map(|(g, _)| Some(*g)));
+                for g in picks {
+                    if ui.selectable_label(command.parent == g, name(g)).clicked()
+                        && command.parent != g
+                    {
+                        ops.push(Op::SetVoiceParent {
+                            id: command.id,
+                            parent: g,
+                        });
+                    }
+                }
+            });
+    });
 }
 
 /// A phrase field whose edit lives in egui memory until Enter or focus loss; returns the text

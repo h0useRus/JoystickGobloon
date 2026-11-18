@@ -894,6 +894,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         }
         let now = Instant::now();
         engine.tick(now, &mut out);
+        // A voice group opened or closed: listen for what is in it, or for everything again.
+        if engine.take_voice_phrases_changed()
+            && let Some(voice) = &out.voice
+        {
+            voice.set_phrases(engine.voice_phrases().to_vec());
+        }
         out.flush();
         // Latency ends when the outputs are written.
         for read in &reads {

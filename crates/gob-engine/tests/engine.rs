@@ -2357,3 +2357,36 @@ fn axis_condition_stops_relative_motion_of_the_branch_it_leaves() {
     r.tick(400);
     assert!(r.take().is_empty(), "keeps moving after leaving the branch");
 }
+
+/// Saying a voice group opens it: only what is in it is listened for until a command in it is
+/// heard or the group closes by itself.
+#[test]
+fn a_voice_group_opens_and_closes() {
+    let xml = r#"<profile app="Gobloon" version="1"><inputs/><settings/><library/>
+        <modes><mode>Default</mode></modes>
+        <voice-commands><command id="1"><phrase>lights on</phrase></command>
+        <group id="2"><phrase>radio</phrase>
+            <command id="3"><phrase>attack</phrase></command></group>
+        </voice-commands></profile>"#;
+    let p = gob_gremlin::from_str(xml).unwrap();
+    let mut e = Engine::new(&p, &HashMap::new());
+    let (mut out, t0) = (Recorder::default(), Instant::now());
+    let top = e.voice_phrases().to_vec();
+    assert!(top.contains(&(3, "radio attack".to_string())));
+    assert!(!e.take_voice_phrases_changed());
+    e.voice_command(2, t0, &mut out);
+    assert_eq!(e.voice_group(), Some(2));
+    assert!(e.take_voice_phrases_changed());
+    assert_eq!(e.voice_phrases(), [(3, "attack".to_string())]);
+    // A command in it closes the group.
+    e.voice_command(3, ms(t0, 500), &mut out);
+    assert_eq!(e.voice_group(), None);
+    assert!(e.take_voice_phrases_changed());
+    assert_eq!(e.voice_phrases(), top);
+    // Left open, it closes by itself.
+    e.voice_command(2, ms(t0, 1000), &mut out);
+    assert!(e.take_voice_phrases_changed());
+    e.tick(ms(t0, 1000) + gob_engine::VOICE_GROUP_OPEN, &mut out);
+    assert_eq!(e.voice_group(), None);
+    assert!(e.take_voice_phrases_changed());
+}

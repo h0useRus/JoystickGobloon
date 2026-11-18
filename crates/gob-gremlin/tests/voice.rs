@@ -199,7 +199,11 @@ fn phrases_are_cleaned_up() {
     p.set_voice_phrases(other, &["stop".into()]);
     assert_eq!(
         p.voice_phrases(),
-        [(id, "Fire"), (id, "fire"), (other, "stop")]
+        [
+            (id, "Fire".to_string()),
+            (id, "fire".to_string()),
+            (other, "stop".to_string())
+        ]
     );
 }
 
@@ -218,9 +222,9 @@ fn reads_hand_edited_commands() {
     </profile>"#;
     let p = gob_gremlin::from_str(text).unwrap();
     let command = |id, phrases: &[&str], hold| VoiceCommand {
-        id,
         phrases: phrases.iter().map(|s| s.to_string()).collect(),
         hold,
+        ..VoiceCommand::new(id)
     };
     assert_eq!(
         p.voice_commands,
@@ -230,6 +234,126 @@ fn reads_hand_edited_commands() {
             command(4, &["gear"], 0.25),
         ]
     );
+}
+
+const GROUPS: &str = r#"<profile app="Gobloon" version="1">
+        <voice-commands>
+            <command id="1" hold="0.1"><phrase>lights on</phrase></command>
+            <group id="2" hold="0.1"><phrase>radio</phrase><phrase>comms</phrase>
+                <group id="3" hold="0.1"><phrase>wing a</phrase>
+                    <command id="4" hold="0.2"><phrase>attack</phrase></command>
+                    <command id="5" hold="0.1"><phrase>defend</phrase></command>
+                </group>
+                <command id="6" hold="0.1"><phrase>silence</phrase></command>
+            </group>
+        </voice-commands>
+    </profile>"#;
+
+/// Groups nest commands and groups; they read back as written.
+#[test]
+fn groups_round_trip() {
+    let p = gob_gremlin::from_str(GROUPS).unwrap();
+    let tree: Vec<(usize, u32, bool)> = p
+        .voice_tree()
+        .into_iter()
+        .map(|(d, c)| (d, c.id, c.group))
+        .collect();
+    assert_eq!(
+        tree,
+        [
+            (0, 1, false),
+            (0, 2, true),
+            (1, 3, true),
+            (2, 4, false),
+            (2, 5, false),
+            (1, 6, false)
+        ]
+    );
+    assert_eq!(p.voice_command(4).unwrap().hold, 0.2);
+    let again = gob_gremlin::from_str(&gob_gremlin::to_string(&p)).unwrap();
+    assert_eq!(again.voice_commands, p.voice_commands);
+}
+
+/// A profile without groups is written as before groups existed.
+#[test]
+fn commands_without_groups_are_written_as_before() {
+    let text = r#"<profile app="Gobloon" version="1">
+        <voice-commands>
+            <command id="1" hold="0.1"><phrase>lights on</phrase></command>
+            <command id="2" hold="0.25"><phrase>gear</phrase><phrase>gear down</phrase></command>
+        </voice-commands>
+    </profile>"#;
+    let p = gob_gremlin::from_str(text).unwrap();
+    assert!(
+        p.voice_commands
+            .iter()
+            .all(|c| c.parent.is_none() && !c.group)
+    );
+    let written = gob_gremlin::to_string(&p);
+    assert!(!written.contains("<group"), "{written}");
+    assert!(
+        written.contains(r#"<command id="2" hold="0.25">"#),
+        "{written}"
+    );
+}
+
+/// Every command and group is said with its groups' phrases before its own; an open group
+/// listens only for what is in it.
+#[test]
+fn group_phrases_and_scopes() {
+    let p = gob_gremlin::from_str(GROUPS).unwrap();
+    let said = |list: Vec<(u32, String)>| -> Vec<(u32, String)> { list };
+    let all = said(p.voice_phrases());
+    for (id, phrase) in [
+        (1, "lights on"),
+        (2, "radio"),
+        (2, "comms"),
+        (3, "radio wing a"),
+        (4, "radio wing a attack"),
+        (4, "comms wing a attack"),
+        (5, "radio wing a defend"),
+        (6, "comms silence"),
+    ] {
+        assert!(all.contains(&(id, phrase.to_string())), "{phrase}: {all:?}");
+    }
+    assert_eq!(all.len(), 11);
+    assert_eq!(
+        p.voice_phrases_in(Some(3)),
+        [(4, "attack".to_string()), (5, "defend".to_string())]
+    );
+    let radio = p.voice_phrases_in(Some(2));
+    assert!(radio.contains(&(4, "wing a attack".to_string())));
+    assert!(!radio.iter().any(|(id, _)| *id == 1 || *id == 2));
+    assert_eq!(p.voice_full_phrase(4), "radio wing a attack");
+}
+
+#[test]
+fn groups_move_copy_and_go() {
+    let mut p = gob_gremlin::from_str(GROUPS).unwrap();
+    // Not into itself or what is inside it, nor into a command.
+    assert!(!p.set_voice_parent(2, Some(3)));
+    assert!(!p.set_voice_parent(2, Some(2)));
+    assert!(!p.set_voice_parent(1, Some(4)));
+    assert!(p.set_voice_parent(1, Some(3)));
+    assert_eq!(p.voice_full_phrase(1), "radio wing a lights on");
+    assert!(p.set_voice_parent(1, None));
+    // A copy of wing a, with its own ids, in radio.
+    let copy = p.duplicate_voice_group(3).unwrap();
+    assert_eq!(p.voice_command(copy).unwrap().parent, Some(2));
+    let inside: Vec<Vec<String>> = p
+        .voice_descendants(copy)
+        .iter()
+        .map(|id| p.voice_command(*id).unwrap().phrases.clone())
+        .collect();
+    assert_eq!(
+        inside,
+        [vec!["attack".to_string()], vec!["defend".to_string()]]
+    );
+    // Removing a group removes what is in it.
+    let in_radio = p.voice_descendants(2);
+    p.remove_voice_command(2);
+    assert!(in_radio.iter().all(|id| p.voice_command(*id).is_none()));
+    assert_eq!(p.voice_commands.len(), 1);
 }
 
 /// A voice command made from an action card runs that very action, survives a save, and is

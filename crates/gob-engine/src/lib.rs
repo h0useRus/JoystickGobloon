@@ -22,7 +22,7 @@ mod platform;
 mod runner;
 mod tap;
 
-pub use engine::Engine;
+pub use engine::{Engine, VOICE_GROUP_OPEN};
 pub use gob_script::ScriptError;
 pub use gob_voice::VoiceConfig;
 pub use lighting::to_led;

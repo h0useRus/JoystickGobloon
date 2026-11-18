@@ -273,6 +273,10 @@ struct AxisState {
 /// How often moving button-axis axes are written.
 const AXIS_STEP: Duration = Duration::from_millis(5);
 
+/// How long a voice group stays open after it was said: time to press again and say what is in
+/// it.
+pub const VOICE_GROUP_OPEN: Duration = Duration::from_secs(6);
+
 #[derive(Debug, Clone)]
 enum CondSource {
     Current,
@@ -386,6 +390,8 @@ enum TimerKind {
     },
     /// A recognized voice command's button goes up.
     VoiceRelease(u32),
+    /// An open voice group closes: nothing more was said in it.
+    VoiceScope,
     /// A profile event's button (by its id) goes up.
     EventRelease(u32),
     /// A Delay's time is up.
@@ -678,8 +684,14 @@ pub struct Engine {
     event_released: bool,
     /// The profile is stopping: no more events run (its stop actions may still change modes).
     stopping: bool,
-    /// Every phrase of the profile's voice commands with the command's id.
+    /// Every phrase of the profile's voice commands and groups with its id, said from the top.
     voice_phrases: Vec<(u32, String)>,
+    /// What each voice group listens for while it is open.
+    voice_scopes: HashMap<u32, Vec<(u32, String)>>,
+    /// The open voice group and the timer that closes it.
+    voice_scope: Option<(u32, u64)>,
+    /// The phrases to listen for changed (a group opened or closed) since the runner last asked.
+    voice_scope_changed: bool,
     /// Profile's `macro-default-delay` in seconds.
     macro_delay: f64,
     /// Last value written to each vJoy axis, for relative macro steps.
@@ -806,11 +818,15 @@ impl Engine {
             event_chain: 0,
             event_released: false,
             stopping: false,
-            voice_phrases: profile
-                .voice_phrases()
-                .into_iter()
-                .map(|(id, p)| (id, p.to_string()))
+            voice_phrases: profile.voice_phrases(),
+            voice_scopes: profile
+                .voice_commands
+                .iter()
+                .filter(|c| c.group)
+                .map(|c| (c.id, profile.voice_phrases_in(Some(c.id))))
                 .collect(),
+            voice_scope: None,
+            voice_scope_changed: false,
             macro_delay: profile
                 .settings
                 .child_text("macro-default-delay")
@@ -1657,6 +1673,30 @@ impl Engine {
         }
         let timer = self.add_timer(now + hold, TimerKind::VoiceRelease(id));
         self.voice_releases.insert(id, timer);
+        // A group opens for a while: then only what is in it is listened for. A command closes
+        // the open group.
+        let old = self.voice_scope.take();
+        if let Some((_, timer)) = old {
+            self.timers.retain(|t| t.id != timer);
+        }
+        if self.voice_scopes.contains_key(&id) {
+            let timer = self.add_timer(now + VOICE_GROUP_OPEN, TimerKind::VoiceScope);
+            self.voice_scope = Some((id, timer));
+        }
+        if old.map(|o| o.0) != self.voice_scope.map(|s| s.0) {
+            self.voice_scope_changed = true;
+        }
+    }
+
+    /// The open voice group, if any.
+    pub fn voice_group(&self) -> Option<u32> {
+        self.voice_scope.map(|s| s.0)
+    }
+
+    /// Whether the phrases to listen for ([`Engine::voice_phrases`]) changed since the last call:
+    /// a voice group opened or closed.
+    pub fn take_voice_phrases_changed(&mut self) -> bool {
+        std::mem::take(&mut self.voice_scope_changed)
     }
 
     /// The microphones voice-input actions listen on (empty = the default one), each once.
@@ -1672,9 +1712,12 @@ impl Engine {
         found
     }
 
-    /// The phrases to listen for, each with its command's id.
+    /// The phrases to listen for now, each with its command's or group's id: what is in the open
+    /// voice group, else everything said from the top.
     pub fn voice_phrases(&self) -> &[(u32, String)] {
-        &self.voice_phrases
+        self.voice_scope
+            .and_then(|(g, _)| self.voice_scopes.get(&g))
+            .unwrap_or(&self.voice_phrases)
     }
 
     /// Before this engine is replaced: stops listening on every microphone, as if each
@@ -2063,6 +2106,11 @@ impl Engine {
                 TimerKind::VoiceRelease(id) => {
                     self.voice_releases.remove(&id);
                     self.process(&voice_key(id), Value::Button(false), now, out);
+                }
+                TimerKind::VoiceScope => {
+                    if self.voice_scope.take().is_some() {
+                        self.voice_scope_changed = true;
+                    }
                 }
                 TimerKind::DelayFire(node) => self.delay_fire(node, now, out),
                 TimerKind::EventRelease(id) => {

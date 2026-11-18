@@ -40,9 +40,16 @@ enum Kind {
 /// Input kind and its 1-based id, as in Gremlin profiles.
 type Key = (Kind, u32);
 
+/// How far each level of voice groups is indented on the Voice tab.
+const VOICE_INDENT: f32 = 18.0;
+
 #[derive(Default)]
 pub struct DevicesView {
     selected: Option<String>,
+    /// Voice groups folded away on the Voice tab.
+    voice_folded: std::collections::HashSet<u32>,
+    /// The profile's voice groups, for this frame's cards.
+    voice_groups: std::collections::HashSet<u32>,
     /// The virtual devices' names, for the chips of their mappings.
     vjoy_names: HashMap<u32, String>,
     /// The user picked the tab; otherwise a connected device is preferred.
@@ -693,15 +700,61 @@ impl DevicesView {
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
                     .show(ui, |ui| {
-                        for (&key, &bound) in &rows {
+                        let order: Vec<(Key, usize)> = match (is_voice(tab), profile) {
+                            (true, Some(p)) => {
+                                let mut hidden_below: Option<usize> = None;
+                                let mut order = Vec::new();
+                                for (depth, c) in p.profile.voice_tree() {
+                                    if hidden_below.is_some_and(|d| depth > d) {
+                                        continue;
+                                    }
+                                    hidden_below = (c.group && self.voice_folded.contains(&c.id))
+                                        .then_some(depth);
+                                    order.push(((Kind::Voice, c.id), depth));
+                                }
+                                // Bindings of commands that are gone are still listed.
+                                for key in rows.keys() {
+                                    if !order.iter().any(|(k, _)| k == key) {
+                                        order.push((*key, 0));
+                                    }
+                                }
+                                order
+                            }
+                            _ => rows.keys().map(|k| (*k, 0)).collect(),
+                        };
+                        self.voice_groups = profile
+                            .map(|p| {
+                                p.profile
+                                    .voice_commands
+                                    .iter()
+                                    .filter(|c| c.group)
+                                    .map(|c| c.id)
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        for (key, depth) in order {
+                            let Some(&bound) = rows.get(&key) else {
+                                continue;
+                            };
                             let label = labels.get(&key).map(String::as_str);
                             let is_sel = selected == Some(key);
                             let marker = profile
                                 .and_then(|p| card_marker(i18n, &p.profile, tab, key, bound));
                             let down = downs.get(&key).map_or(&[][..], Vec::as_slice);
-                            match self.card(
-                                ui, i18n, tab, key, bound, &index, label, is_sel, marker, down,
-                            ) {
+                            let indent = Margin {
+                                left: (depth as f32 * VOICE_INDENT) as i8,
+                                ..Margin::ZERO
+                            };
+                            let clicked = egui::Frame::new()
+                                .inner_margin(indent)
+                                .show(ui, |ui| {
+                                    self.card(
+                                        ui, i18n, tab, key, bound, &index, label, is_sel, marker,
+                                        down,
+                                    )
+                                })
+                                .inner;
+                            match clicked {
                                 Some(CardClick::Select) => {
                                     self.selected_input.insert(tab.guid.to_string(), key);
                                 }
@@ -865,10 +918,33 @@ impl DevicesView {
                 self.mode = Some(b.mode.clone());
             }
         }
-        let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add"));
-        if ui.button(add).clicked() {
-            ops.push(Op::AddVoiceCommand);
-        }
+        // New ones go into the selected group, or next to the selected command.
+        let parent = self
+            .selected_input
+            .get(gob_core::VOICE_GUID)
+            .filter(|k| k.0 == Kind::Voice)
+            .and_then(|k| profile.voice_command(k.1))
+            .and_then(|c| if c.group { Some(c.id) } else { c.parent });
+        ui.horizontal(|ui| {
+            let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add"));
+            if ui.button(add).clicked() {
+                ops.push(Op::AddVoiceNode {
+                    parent,
+                    group: false,
+                });
+            }
+            let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add-group"));
+            if ui
+                .button(add)
+                .on_hover_text(i18n.tr("voice-add-group-tip"))
+                .clicked()
+            {
+                ops.push(Op::AddVoiceNode {
+                    parent,
+                    group: true,
+                });
+            }
+        });
         if profile.voice_commands.is_empty() {
             ui.label(RichText::new(i18n.tr("voice-empty")).weak());
         }
@@ -1023,7 +1099,26 @@ impl DevicesView {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(key_glyph(key)).size(15.0));
+                    if key.0 == Kind::Voice && self.voice_groups.contains(&key.1) {
+                        let folded = self.voice_folded.contains(&key.1);
+                        let (caret, tip) = if folded {
+                            (icon::CARET_RIGHT, "voice-group-unfold")
+                        } else {
+                            (icon::CARET_DOWN, "voice-group-fold")
+                        };
+                        let arrow = ui
+                            .add(
+                                egui::Label::new(RichText::new(caret).size(15.0))
+                                    .sense(egui::Sense::click()),
+                            )
+                            .on_hover_text(i18n.tr(tip));
+                        if arrow.clicked() && !self.voice_folded.remove(&key.1) {
+                            self.voice_folded.insert(key.1);
+                        }
+                        ui.label(RichText::new(icon::FOLDER_SIMPLE).size(15.0));
+                    } else {
+                        ui.label(RichText::new(key_glyph(key)).size(15.0));
+                    }
                     // Fixed-width name column so the live bars line up.
                     let name = input_name(i18n, key, label);
                     let used = ui.label(RichText::new(name).strong()).rect.width();
@@ -1185,7 +1280,7 @@ impl DevicesView {
         if let (Kind::Voice, Some(p)) = (key.0, profile)
             && let Some(command) = p.profile.voice_command(key.1)
         {
-            crate::voice_view::command_editor(ui, i18n, command, ops);
+            crate::voice_view::command_editor(ui, i18n, &p.profile, command, ops);
         } else if let (Kind::Combo, Some(p)) = (key.0, profile)
             && let Some(combo) = p.profile.key_combo(key.1)
         {
