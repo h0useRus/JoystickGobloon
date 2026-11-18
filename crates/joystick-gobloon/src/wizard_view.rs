@@ -1,5 +1,6 @@
 //! New profile wizard, one screen: a name and which virtual joystick each attached controller
-//! maps to; "Create" automaps every input (gob-core's `automap`).
+//! maps to; "Create" automaps every input (gob-core's `automap`). Controllers sharing a virtual
+//! joystick fill it in list order.
 
 use eframe::egui::{self, RichText};
 use gob_core::InputLayout;
@@ -128,6 +129,9 @@ impl Wizard {
         let vjoy_name = |v: &gob_virtual::DeviceInfo| crate::vjoy_view::device_name(i18n, v);
         // What does not fit, per row: shown as ⚠ there and in words under the list.
         let mut warnings = Vec::new();
+        // Per virtual joystick: what the rows above took (gob-core `automap`'s `used`).
+        let mut used: std::collections::HashMap<u32, InputLayout> =
+            std::collections::HashMap::new();
         egui::Grid::new("wizard-devices")
             .num_columns(4)
             .spacing([style::SPACE_M, style::SPACE_S])
@@ -142,12 +146,6 @@ impl Wizard {
                         ui.label(RichText::new(counts(&from)).small().weak());
                     });
                     ui.label(RichText::new(icon::ARROW_RIGHT).size(style::ICON_SIZE));
-                    let taken: Vec<u32> = self
-                        .targets
-                        .iter()
-                        .filter(|(g, _)| *g != d.info.guid)
-                        .filter_map(|(_, t)| *t)
-                        .collect();
                     let Some((_, target)) =
                         self.targets.iter_mut().find(|(g, _)| *g == d.info.guid)
                     else {
@@ -164,20 +162,13 @@ impl Wizard {
                             .show_ui(ui, |ui| {
                                 ui.selectable_value(target, None, &none);
                                 for v in vjoy {
-                                    // Each virtual joystick takes one controller: two would
-                                    // fight over its outputs.
                                     let text = format!(
                                         "{}  {}    {}",
                                         icon::JOYSTICK,
                                         vjoy_name(v),
                                         counts(&vjoy_layout(v))
                                     );
-                                    let free = !taken.contains(&v.id);
-                                    ui.add_enabled_ui(free, |ui| {
-                                        ui.selectable_value(target, Some(v.id), text)
-                                    })
-                                    .inner
-                                    .on_disabled_hover_text(i18n.tr("wizard-taken"));
+                                    ui.selectable_value(target, Some(v.id), text);
                                 }
                             });
                         if let Some(v) = chosen {
@@ -185,7 +176,10 @@ impl Wizard {
                         }
                     });
                     let missing = chosen
-                        .map(|v| (v, fewer(i18n, &from.missing_in(&vjoy_layout(v)))))
+                        .map(|v| {
+                            let taken = used.entry(v.id).or_default();
+                            (v, fewer(i18n, &from.take(&vjoy_layout(v), taken)))
+                        })
                         .filter(|(_, m)| !m.is_empty());
                     match missing {
                         Some((v, missing)) => {
@@ -229,14 +223,14 @@ impl Wizard {
         let create = clicked == Some(0);
         (create && ready).then(|| Plan {
             name: self.name.trim().to_string(),
-            maps: self
-                .targets
+            // In list order, the order the rows above fill shared virtual joysticks in.
+            maps: physical
                 .iter()
-                .filter_map(|(g, t)| {
-                    let d = physical.iter().find(|d| &d.info.guid == g)?;
+                .filter_map(|d| {
+                    let (_, t) = self.targets.iter().find(|(g, _)| *g == d.info.guid)?;
                     let v = vjoy.iter().find(|v| Some(v.id) == *t)?;
                     Some(Mapping {
-                        device: g.clone(),
+                        device: d.info.guid.clone(),
                         device_name: d.info.name.clone(),
                         from: layout_of(d),
                         vjoy: v.id,
