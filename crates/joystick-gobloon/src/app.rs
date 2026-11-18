@@ -1251,15 +1251,13 @@ impl JoystickGobloonApp {
         let mut used: std::collections::HashMap<u32, gob_core::InputLayout> =
             std::collections::HashMap::new();
         for m in &plan.maps {
-            let taken = used.entry(m.vjoy).or_default();
-            let missing = m.from.missing_in(&m.to.without(taken));
-            loaded.profile.automap(
+            let missing = loaded.profile.automap(
                 &m.device,
                 &m.device_name,
                 &m.from,
                 m.vjoy,
                 &m.to,
-                taken,
+                used.entry(m.vjoy).or_default(),
                 "Default",
             );
             log::info!(

@@ -130,7 +130,8 @@ impl Wizard {
         // What does not fit, per row: shown as ⚠ there and in words under the list.
         let mut warnings = Vec::new();
         // Per virtual joystick: what the rows above took (gob-core `automap`'s `used`).
-        let mut used: Vec<(u32, InputLayout)> = Vec::new();
+        let mut used: std::collections::HashMap<u32, InputLayout> =
+            std::collections::HashMap::new();
         egui::Grid::new("wizard-devices")
             .num_columns(4)
             .spacing([style::SPACE_M, style::SPACE_S])
@@ -176,25 +177,8 @@ impl Wizard {
                     });
                     let missing = chosen
                         .map(|v| {
-                            let to = vjoy_layout(v);
-                            let taken = match used.iter_mut().find(|(id, _)| *id == v.id) {
-                                Some((_, t)) => t,
-                                None => {
-                                    used.push((v.id, InputLayout::default()));
-                                    &mut used.last_mut().expect("just pushed").1
-                                }
-                            };
-                            let left = to.without(taken);
-                            let missing = from.missing_in(&left);
-                            // What this row takes, as automap counts it.
-                            taken.axes.extend(
-                                gob_core::automap::axis_targets(&from.axes, &left.axes)
-                                    .into_iter()
-                                    .filter_map(|(_, t)| t),
-                            );
-                            taken.buttons += from.buttons.min(left.buttons);
-                            taken.hats += from.hats.min(left.hats);
-                            (v, fewer(i18n, &missing))
+                            let taken = used.entry(v.id).or_default();
+                            (v, fewer(i18n, &from.take(&vjoy_layout(v), taken)))
                         })
                         .filter(|(_, m)| !m.is_empty());
                     match missing {
@@ -239,14 +223,14 @@ impl Wizard {
         let create = clicked == Some(0);
         (create && ready).then(|| Plan {
             name: self.name.trim().to_string(),
-            maps: self
-                .targets
+            // In list order, the order the rows above fill shared virtual joysticks in.
+            maps: physical
                 .iter()
-                .filter_map(|(g, t)| {
-                    let d = physical.iter().find(|d| &d.info.guid == g)?;
+                .filter_map(|d| {
+                    let (_, t) = self.targets.iter().find(|(g, _)| *g == d.info.guid)?;
                     let v = vjoy.iter().find(|v| Some(v.id) == *t)?;
                     Some(Mapping {
-                        device: g.clone(),
+                        device: d.info.guid.clone(),
                         device_name: d.info.name.clone(),
                         from: layout_of(d),
                         vjoy: v.id,

@@ -38,6 +38,20 @@ impl Layout {
         }
     }
 
+    /// Takes room for `self` on `to` past `used` (what earlier controllers took), as
+    /// [`Profile::automap`] does: adds what it takes to `used` and returns what does not fit.
+    pub fn take(&self, to: &Layout, used: &mut Layout) -> Layout {
+        let free = to.without(used);
+        used.axes.extend(
+            axis_targets(&self.axes, &free.axes)
+                .into_iter()
+                .filter_map(|(_, t)| t),
+        );
+        used.buttons += self.buttons.min(free.buttons);
+        used.hats += self.hats.min(free.hats);
+        self.missing_in(&free)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.axes.is_empty() && self.buttons == 0 && self.hats == 0
     }
@@ -65,8 +79,8 @@ impl Profile {
     /// Binds every input of physical device `device` (`from`) in `mode` to a Map to vJoy onto
     /// vJoy device `vjoy` (`to`) past what `used` says earlier controllers took on it: axes as
     /// [`axis_targets`] says over the free ones, buttons and hats numbered on from the last used
-    /// one. Inputs left without room stay unbound; what this device takes is added to `used`.
-    /// The device joins the profile's device list.
+    /// one. Inputs left without room stay unbound and are returned; what this device takes is
+    /// added to `used` ([`Layout::take`]). The device joins the profile's device list.
     #[allow(clippy::too_many_arguments)]
     pub fn automap(
         &mut self,
@@ -77,7 +91,7 @@ impl Profile {
         to: &Layout,
         used: &mut Layout,
         mode: &str,
-    ) {
+    ) -> Layout {
         if !self
             .devices
             .iter()
@@ -103,22 +117,20 @@ impl Profile {
             p.add_child(&root, "actions", action);
         };
         let free = to.without(used);
+        let (first_button, first_hat) = (used.buttons, used.hats);
+        let missing = from.take(to, used);
         for (axis, target) in axis_targets(&from.axes, &free.axes) {
             if let Some(target) = target {
                 map(self, InputType::Axis, axis.into(), target.into());
-                used.axes.push(target);
             }
         }
-        let buttons = from.buttons.min(free.buttons);
-        for n in 1..=buttons {
-            map(self, InputType::Button, n, used.buttons + n);
+        for n in 1..=from.buttons - missing.buttons {
+            map(self, InputType::Button, n, first_button + n);
         }
-        used.buttons += buttons;
-        let hats = from.hats.min(free.hats);
-        for n in 1..=hats {
-            map(self, InputType::Hat, n, used.hats + n);
+        for n in 1..=from.hats - missing.hats {
+            map(self, InputType::Hat, n, first_hat + n);
         }
-        used.hats += hats;
+        missing
     }
 }
 
@@ -215,9 +227,10 @@ mod tests {
         };
         let mut p = Profile::default();
         let mut used = Layout::default();
-        for d in ["a", "b", "c"] {
-            p.automap(d, d, &small, 1, &to, &mut used, "Default");
-        }
+        let missing: Vec<Layout> = ["a", "b", "c"]
+            .into_iter()
+            .map(|d| p.automap(d, d, &small, 1, &to, &mut used, "Default"))
+            .collect();
         let a = targets(&p, "a");
         let b = targets(&p, "b");
         let c = targets(&p, "c");
@@ -235,19 +248,27 @@ mod tests {
         assert!(c.contains(&(InputType::Button, 10, 50)));
         assert!(!c.contains(&(InputType::Button, 11, 51)), "no room past 50");
         assert!(p.output_usage(None).values().all(|u| u.len() == 1));
-        // What the wizard warns about for the third box.
-        let left_for_c = Layout {
-            axes: vec![5, 6],
-            buttons: 10,
-            hats: 0,
-        };
+        // What the wizard warns about: the same as `take` without a profile.
+        assert!(missing[0].is_empty());
         assert_eq!(
-            small.missing_in(&left_for_c),
+            missing[1],
+            Layout {
+                axes: vec![],
+                buttons: 0,
+                hats: 1
+            }
+        );
+        assert_eq!(
+            missing[2],
             Layout {
                 axes: vec![],
                 buttons: 10,
-                hats: 1,
+                hats: 1
             }
         );
+        let mut dry = Layout::default();
+        let dry_missing: Vec<Layout> = (0..3).map(|_| small.take(&to, &mut dry)).collect();
+        assert_eq!(dry_missing, missing);
+        assert_eq!(dry, used);
     }
 }
