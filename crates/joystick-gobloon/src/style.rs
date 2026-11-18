@@ -146,3 +146,55 @@ pub fn eye(ui: &egui::Ui, hidden: bool, active: bool) -> (&'static str, Color32)
     };
     (glyph, color)
 }
+
+/// The rail button of the Game bindings page: a gamepad wired to three contacts, drawn here
+/// because the icon font has nothing like it. Sized and coloured like [`nav_toggle`].
+pub fn game_nav_toggle(ui: &mut egui::Ui, selected: bool, tooltip: &str) -> egui::Response {
+    let response = nav_toggle(ui, selected, " ", tooltip);
+    let color = if selected {
+        accent(ui)
+    } else {
+        ui.style().interact(&response).fg_stroke.color
+    };
+    game_icon(
+        ui.painter(),
+        response.rect.center(),
+        LARGE_ICON_SIZE + 4.0,
+        color,
+    );
+    response
+}
+
+/// The Game bindings icon, `size` wide and high around `center`.
+fn game_icon(painter: &egui::Painter, center: egui::Pos2, size: f32, color: Color32) {
+    use egui::{Pos2, Rect, Stroke};
+    // Drawn on a 24 x 24 grid.
+    let unit = size / 24.0;
+    let at = |x: f32, y: f32| center + Vec2::new(x - 12.0, y - 12.0) * unit;
+    let stroke = Stroke::new((1.6 * unit).max(1.2), color);
+    // The gamepad, with its d-pad and two buttons.
+    painter.rect_stroke(
+        Rect::from_min_max(at(2.0, 12.5), at(22.0, 21.5)),
+        4.0 * unit,
+        stroke,
+        egui::StrokeKind::Middle,
+    );
+    painter.line_segment([at(5.6, 17.0), at(9.4, 17.0)], stroke);
+    painter.line_segment([at(7.5, 15.1), at(7.5, 18.9)], stroke);
+    painter.circle_filled(at(15.4, 18.0), 1.1 * unit, color);
+    painter.circle_filled(at(18.2, 16.0), 1.1 * unit, color);
+    // The wires up to their contacts.
+    let wire = |points: &[Pos2], contact: Pos2| {
+        painter.add(egui::Shape::line(points.to_vec(), stroke));
+        painter.circle_stroke(contact, 1.6 * unit, stroke);
+    };
+    wire(&[at(12.0, 12.5), at(12.0, 6.6)], at(12.0, 5.0));
+    wire(
+        &[at(8.0, 12.5), at(8.0, 9.8), at(5.0, 9.8), at(5.0, 5.6)],
+        at(5.0, 4.0),
+    );
+    wire(
+        &[at(16.0, 12.5), at(16.0, 9.8), at(19.0, 9.8), at(19.0, 5.6)],
+        at(19.0, 4.0),
+    );
+}

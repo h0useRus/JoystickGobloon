@@ -386,6 +386,45 @@ pub enum Op {
         name: String,
         value: Option<gob_core::ScriptValue>,
     },
+    /// Game export: `output` drives the game action `action` of `game`.
+    GameBind {
+        game: String,
+        action: String,
+        output: gob_core::GameOutput,
+    },
+    /// Game export: unlinks `action` from `output` (`None`: from every output).
+    GameUnbind {
+        game: String,
+        action: String,
+        output: Option<gob_core::GameOutput>,
+    },
+    /// Game export: the keyboard and mouse bindings of `action`; `Some` makes them the
+    /// profile's (an empty list: none at all), `None` leaves them to the game.
+    GameKeys {
+        game: String,
+        action: String,
+        keys: Option<Vec<gob_core::Combo>>,
+    },
+    /// Game export: a Map to vJoy from a physical input onto `output`, in `mode`.
+    GameMap {
+        device: String,
+        device_name: String,
+        input_type: InputType,
+        input_id: u32,
+        mode: String,
+        output: VirtualOutput,
+    },
+    /// Game export: how the game numbers the virtual devices.
+    GameDevices {
+        game: String,
+        devices: Vec<gob_core::GameDevice>,
+    },
+    /// Game export: the target and game version last exported to.
+    GameExported {
+        game: String,
+        target: String,
+        version: Option<String>,
+    },
 }
 
 pub fn apply(p: &mut Profile, op: Op) {
@@ -631,6 +670,63 @@ pub fn apply(p: &mut Profile, op: Op) {
         | Op::PreviewSpeech(_)
         | Op::PreviewLight { .. }
         | Op::GoToVoice(_) => {}
+        Op::GameBind {
+            game,
+            action,
+            output,
+        } => {
+            p.bind_game_action(&game, &action, output);
+        }
+        Op::GameUnbind {
+            game,
+            action,
+            output,
+        } => p.unbind_game_action(&game, &action, output.as_ref()),
+        Op::GameKeys { game, action, keys } => p.set_game_keys(&game, &action, keys),
+        Op::GameMap {
+            device,
+            device_name,
+            input_type,
+            input_id,
+            mode,
+            output,
+        } => {
+            if let VirtualOutput::Vjoy {
+                device: vjoy,
+                input_type: output_type,
+                id,
+            } = output
+            {
+                if !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(&device)) {
+                    p.devices.push(gob_core::Device {
+                        id: device.clone(),
+                        name: device_name,
+                    });
+                }
+                let kind = match input_type {
+                    InputType::Axis => "axis",
+                    InputType::Hat => "hat",
+                    _ => "button",
+                };
+                let root = p.bind(&device, kind, &input_id.to_string(), &mode);
+                let action = gob_core::Action::new(&NewAction::MapToVjoy {
+                    input_type: output_type,
+                    device: vjoy,
+                    input_id: id,
+                });
+                p.add_child(&root, "actions", action);
+            }
+        }
+        Op::GameDevices { game, devices } => p.set_game_devices(&game, devices),
+        Op::GameExported {
+            game,
+            target,
+            version,
+        } => {
+            let g = p.game_bindings_mut(&game);
+            g.target = target;
+            g.version = version;
+        }
         Op::SetCondition {
             action,
             index,

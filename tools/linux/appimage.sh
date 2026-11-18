@@ -6,7 +6,7 @@
 #
 # The AppImage carries the program, SystemGobloon next to it (the program installs it as a
 # service from there), the speech library for voice commands (libvosk, next to the program
-# where it looks first), its extra languages and the desktop entry; GTK, the
+# where it looks first), its extra languages, the game export plugins and the desktop entry; GTK, the
 # AppIndicator and the X11/Wayland libraries come from the system (every desktop has them),
 # except BUNDLED: the window library loads them at run time, and systems with GTK may not
 # have them (the AppImage catalog's test machine does not).
@@ -58,6 +58,10 @@ for lib in $BUNDLED; do
 done
 # Languages beyond the embedded ones load from <exe>/lang/.
 cp "$SRC"/lang/*.ftl "$APPDIR/usr/bin/lang/"
+# Game export plugins load from <exe>/export/; their dev folders (tools that build the action
+# lists) stay out.
+cp -r "$SRC/plugins/export" "$APPDIR/usr/bin/export"
+find "$APPDIR/usr/bin/export" -type d -name dev -prune -exec rm -rf {} +
 cp "$SRC/LICENSE" "$APPDIR/usr/bin/"
 cp "$SRC/assets/THIRD-PARTY-NOTICES.txt" "$APPDIR/usr/bin/"
 cp "$SRC/assets/icon/JoystickGobloon-256.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/joystick-gobloon.png"

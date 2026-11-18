@@ -81,6 +81,11 @@ impl Activation {
         self.lock().runner.is_some()
     }
 
+    /// What the running profile sends to the virtual devices and the keyboard.
+    pub fn outputs(&self) -> Option<gob_engine::OutputTap> {
+        self.lock().runner.as_ref().map(gob_engine::Runner::outputs)
+    }
+
     /// The profile's folder, for its external script files.
     pub fn set_profile_folder(&self, folder: Option<std::path::PathBuf>) {
         self.lock().folder = folder;

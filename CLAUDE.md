@@ -101,6 +101,30 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   (`<scripts>`: Lua code as CDATA or a file path, Gremlin's Python kept, variables in Gremlin's XML); the app reads
   external files on activation (activation.rs) and reloads when they change; Scripts page = scripts_view.rs, editor =
   gob-ui `CodeEditor`
+- crates/gob-export  game export (plans/GAME_EXPORT_PLAN.md): plugins = folders in `export/`: plugin.gob (TOML: id, name,
+  supported game versions), plugin.luau (hooks targets/version/read/write, each takes one context table; sandboxed
+  like gob-script, 2 s per call), catalog/<game version>.gob (the game's actions), renames.gob (ids changed between
+  versions); plugins only turn text into text, the host reads and writes the game's files. Game names, formats and
+  paths only in plugins; tests/plugins/sample = a made-up game for the tests; example `export_check` (read-only run on the
+  real game files, `--roundtrip [--dump <dir>]`). Plugins: plugins/export/<id>/ (star-citizen: dev/catalog.py rebuilds
+  catalog/<version>.gob from a local install, only on the user's request; il2-great-battles: data/input/global.actions,
+  device numbers from devices.txt, the game compiles current.map itself; an axis from two buttons = catalog actions
+  `<id>:inc`/`<id>:dec`; dev/catalog.py builds the catalog from key mapping files; the game is not installed here, tested
+  on a public key mapping file in crates/gob-export/tests/data; msfs: a control profile per device and aircraft kind,
+  Steam profiles (`<Steam>/userdata/*/<app>/remote/inputprofile_*`, found by the target's `globs`, which the host expands
+  into files `<key>:<path>`, `glob_text` = text near their start, our .gobak copies skipped) updated in place, Microsoft
+  Store cloud saves only read (2024: files to import written to Documents/Joystick Gobloon), a profile's device = the
+  DirectInput instance GUID (`OurDevice::instance`; vJoy: HID path `&colNN` = NN-th configured device, gob-virtual
+  `joystick_of_input`), by name only when one device has it; links the profile keeps win, catalogs 2020/2024 from control profiles by dev/catalog.py, ids `CONTEXT/KEY_X` and 2024
+  category actions `AIRPLANE:CONTEXT/KEY_X`; no sim here, tested on public vJoy profiles). A binding's output (gob-core game.rs
+  `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
+  keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
+  plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,
+  detaches like calibration): worker.rs (plugins on a worker thread), state.rs (one state per action: the profile set
+  against the game's files), wiring.rs (schematic, a lane per output), table.rs ("As in the game": groups, chips), capture.rs
+  + bind.rs (press a key/mouse button/joystick control to bind or look up; warning listing where a control is used; mapping
+  an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs). Releases put
+  plugins/export (without `dev/`) into `export/` next to the exe (installer, portable zip, AppImage)
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
   profile's phrases; models.rs = small Vosk model per program language (URL + SHA-256), downloaded into
@@ -187,8 +211,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting,
-  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical,
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting,
+  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical | game-wiring (Game page schematic; the table is its first tab),
+  `JOYSTICK_GOBLOON_GAME_IMPORT=1` takes the game's bindings into a profile without any on the Game page (debug only),
+  `JOYSTICK_GOBLOON_GAME_DIALOG` = capture | conflict | choose | unmapped opens that dialog of the Game page with sample data,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new

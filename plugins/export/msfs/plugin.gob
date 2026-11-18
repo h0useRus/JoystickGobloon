@@ -1,0 +1,9 @@
+id = "msfs"
+name = "Microsoft Flight Simulator"
+version = "1.0.0"
+authors = ["Joystick Gobloon"]
+api = 1
+
+[game]
+min = "2020"
+max = "2024"

@@ -142,7 +142,7 @@ impl<'a> OutputMarks<'a> {
 }
 
 /// A physical input's name as the Devices page shows it.
-fn input_name(i18n: &I18n, input_type: &str, id: &str) -> String {
+pub(crate) fn input_name(i18n: &I18n, input_type: &str, id: &str) -> String {
     let Ok(n) = id.trim().parse::<u32>() else {
         return id.to_string();
     };

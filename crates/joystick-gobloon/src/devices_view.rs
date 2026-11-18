@@ -265,6 +265,16 @@ impl DevicesView {
         self.scroll_to = Some((guid.to_string(), key));
     }
 
+    /// The mode the page shows; before it was shown, the profile's startup or first mode.
+    pub fn mode(&self, profile: &Profile) -> String {
+        self.mode
+            .clone()
+            .filter(|m| profile.modes.iter().any(|x| &x.name == m))
+            .or_else(|| profile.startup_mode())
+            .or_else(|| profile.modes.first().map(|m| m.name.clone()))
+            .unwrap_or_default()
+    }
+
     /// Forget the selected mode, e.g. after loading another profile.
     pub fn reset_mode(&mut self) {
         self.mode = None;

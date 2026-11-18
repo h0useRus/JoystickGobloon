@@ -160,4 +160,8 @@ impl super::Desktop for Desktop {
     fn running_programs() -> Vec<super::Program> {
         Vec::new()
     }
+
+    fn game_roots() -> Vec<String> {
+        Vec::new()
+    }
 }
