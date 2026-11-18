@@ -7,7 +7,7 @@
 //! Only the Piper (VITS) part of the config is spelled out; the other models' configs are kept
 //! zeroed, as large as in `c-api.h` of [`VERSION`] (a test pins the sizes).
 
-use std::ffi::{CStr, CString, c_char, c_float};
+use std::ffi::{CString, c_char, c_float};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -15,6 +15,7 @@ use libloading::Library;
 
 use crate::Error;
 use crate::download::{self, Archive};
+use crate::sherpa::{symbol, text};
 
 /// The sherpa-onnx version of the voice library, whose C structs this file mirrors.
 pub const VERSION: &str = "1.13.8";
@@ -95,7 +96,7 @@ impl Voice {
         // SAFETY: the types match c-api.h; the pointers stay valid while `_lib` is loaded.
         let api = unsafe {
             let version: VersionStr = symbol(&lib, b"SherpaOnnxGetVersionStr\0")?;
-            let version = CStr::from_ptr(version()).to_string_lossy().into_owned();
+            let version = text(version());
             if version != VERSION {
                 return Err(Error::Library(format!(
                     "sherpa-onnx {version} found, {VERSION} needed for voices"
@@ -192,15 +193,6 @@ impl Drop for Voice {
     }
 }
 
-/// # Safety
-/// `T` must be the function pointer type of `name`.
-unsafe fn symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, Error> {
-    // SAFETY: the caller names the right type.
-    unsafe { lib.get::<T>(name) }
-        .map(|s| *s)
-        .map_err(|e| Error::Library(e.to_string()))
-}
-
 /// The files of an unpacked Piper voice.
 struct VoiceFiles {
     model: PathBuf,
@@ -228,7 +220,7 @@ impl VoiceFiles {
 /// A Piper voice to download (only voices whose recordings may be used freely: CC0 or CC BY).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VoiceInfo {
-    /// Piper's name, `de_DE-thorsten-medium`.
+    /// sherpa-onnx's name for it, `vits-piper-de_DE-thorsten-medium`: its archive and folder.
     pub id: &'static str,
     /// The program's language code (`lang/*.ftl`).
     pub language: &'static str,
@@ -248,12 +240,7 @@ impl VoiceInfo {
     }
 
     fn folder(&self) -> &'static str {
-        // The archive's (and folder's) name is the id with sherpa-onnx's prefix.
-        VOICE_FOLDERS
-            .iter()
-            .find(|(id, _)| *id == self.id)
-            .map(|(_, f)| *f)
-            .expect("every voice has its folder")
+        self.id
     }
 
     pub fn archive(&self) -> Archive {
@@ -270,7 +257,7 @@ impl VoiceInfo {
 /// voice's model card). Korean has no Piper voice.
 pub const VOICES: &[VoiceInfo] = &[
     VoiceInfo {
-        id: "en_GB-cori-medium",
+        id: "vits-piper-en_GB-cori-medium",
         language: "en",
         name: "Cori",
         license: "CC BY 4.0",
@@ -278,7 +265,7 @@ pub const VOICES: &[VoiceInfo] = &[
         sha256: "49c9a5361bbdd95d7ca9687c4de11e5908481f65e7c7c368960df79949fdac2b",
     },
     VoiceInfo {
-        id: "en_US-libritts_r-medium",
+        id: "vits-piper-en_US-libritts_r-medium",
         language: "en",
         name: "LibriTTS",
         license: "CC BY 4.0",
@@ -286,7 +273,7 @@ pub const VOICES: &[VoiceInfo] = &[
         sha256: "10dc268f3e371696d721486123e2705a9fc1faa113491979fde4d88dba1f1b1c",
     },
     VoiceInfo {
-        id: "de_DE-thorsten-medium",
+        id: "vits-piper-de_DE-thorsten-medium",
         language: "de",
         name: "Thorsten",
         license: "CC0",
@@ -294,7 +281,7 @@ pub const VOICES: &[VoiceInfo] = &[
         sha256: "50487d9c95fdf2191f31d2588569381063ba1591dcd4c7d4bdd30f12b2191714",
     },
     VoiceInfo {
-        id: "es_ES-davefx-medium",
+        id: "vits-piper-es_ES-davefx-medium",
         language: "es",
         name: "Davefx",
         license: "CC0",
@@ -302,7 +289,7 @@ pub const VOICES: &[VoiceInfo] = &[
         sha256: "a3f6beb54a9cb893279f72978a22f807a4d9fc9c7848157b524d5cc7b7f58b22",
     },
     VoiceInfo {
-        id: "es_ES-sharvard-medium",
+        id: "vits-piper-es_ES-sharvard-medium",
         language: "es",
         name: "Sharvard",
         license: "CC BY 3.0",
@@ -310,7 +297,7 @@ pub const VOICES: &[VoiceInfo] = &[
         sha256: "b30a7a83df0518f0ee1c7039506648cade99f1f9b498fc49ed2ced2e2536bb5a",
     },
     VoiceInfo {
-        id: "fr_FR-siwis-medium",
+        id: "vits-piper-fr_FR-siwis-medium",
         language: "fr",
         name: "Siwis",
         license: "CC BY 4.0",
@@ -318,7 +305,7 @@ pub const VOICES: &[VoiceInfo] = &[
         sha256: "375909aa30842b3a4efa10b1beb1d761af792960ae6873b4d53889f96c66195b",
     },
     VoiceInfo {
-        id: "ru_RU-denis-medium",
+        id: "vits-piper-ru_RU-denis-medium",
         language: "ru",
         name: "Denis",
         license: "CC0",
@@ -326,7 +313,7 @@ pub const VOICES: &[VoiceInfo] = &[
         sha256: "efa4c18e0b5e32b81d1b6df36b9d312831e5d545200e27848ef926a4cd930300",
     },
     VoiceInfo {
-        id: "ru_RU-dmitri-medium",
+        id: "vits-piper-ru_RU-dmitri-medium",
         language: "ru",
         name: "Dmitri",
         license: "CC0",
@@ -334,28 +321,13 @@ pub const VOICES: &[VoiceInfo] = &[
         sha256: "c86d0803737de13d441923ff3b3f309482fab8d7af3ec85949942809eb9a3660",
     },
     VoiceInfo {
-        id: "zh_CN-chaowen-medium",
+        id: "vits-piper-zh_CN-chaowen-medium",
         language: "zh",
         name: "Chaowen",
         license: "CC0",
         bytes: 60_443_846,
         sha256: "1b69bdcf10bb6331c7f8a7591940febeb175c6bb86caa3802d96531f8e4ad211",
     },
-];
-
-const VOICE_FOLDERS: &[(&str, &str)] = &[
-    ("en_GB-cori-medium", "vits-piper-en_GB-cori-medium"),
-    (
-        "en_US-libritts_r-medium",
-        "vits-piper-en_US-libritts_r-medium",
-    ),
-    ("de_DE-thorsten-medium", "vits-piper-de_DE-thorsten-medium"),
-    ("es_ES-davefx-medium", "vits-piper-es_ES-davefx-medium"),
-    ("es_ES-sharvard-medium", "vits-piper-es_ES-sharvard-medium"),
-    ("fr_FR-siwis-medium", "vits-piper-fr_FR-siwis-medium"),
-    ("ru_RU-denis-medium", "vits-piper-ru_RU-denis-medium"),
-    ("ru_RU-dmitri-medium", "vits-piper-ru_RU-dmitri-medium"),
-    ("zh_CN-chaowen-medium", "vits-piper-zh_CN-chaowen-medium"),
 ];
 
 /// The folder voices and the voice library are kept in, under the program's voice folder.
@@ -440,9 +412,8 @@ mod tests {
         for v in VOICES {
             assert_eq!(v.sha256.len(), 64, "{}", v.id);
             assert!(v.archive().url.ends_with(".tar.bz2"), "{}", v.id);
-            assert!(v.archive().name.ends_with(v.id), "{}", v.id);
+            assert!(v.id.starts_with("vits-piper-"), "{}", v.id);
         }
-        assert_eq!(VOICES.len(), VOICE_FOLDERS.len());
         let library = library();
         assert_eq!(library.sha256.len(), 64);
         assert!(library.url.contains(VERSION));

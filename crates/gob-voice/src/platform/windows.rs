@@ -45,8 +45,19 @@ pub(crate) fn native_path(path: &Path) -> Option<CString> {
     }
     let wide: Vec<u16> = path.as_os_str().encode_wide().collect();
     match short_name(&wide) {
-        Some(short) => CString::new(String::from_utf16(&short).ok()?).ok(),
-        None => CString::new(text).ok(),
+        Some(short) if short.iter().all(|&c| c < 0x80) => {
+            CString::new(String::from_utf16(&short).ok()?).ok()
+        }
+        _ => {
+            // Model files would open (UTF-8), text files next to them not (the ANSI code page):
+            // no narrow form of this path works for both.
+            log::error!(
+                "voice: {} has characters outside ASCII and no 8.3 short name; sherpa-onnx \
+                 cannot open files there. Use a data folder with an ASCII path.",
+                path.display()
+            );
+            CString::new(text).ok()
+        }
     }
 }
 

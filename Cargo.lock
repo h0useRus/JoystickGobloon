@@ -2100,6 +2100,7 @@ version = "0.6.0"
 dependencies = [
  "bzip2",
  "cpal",
+ "libc",
  "libloading 0.9.0",
  "log",
  "serde",

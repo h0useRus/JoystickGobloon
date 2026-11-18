@@ -87,7 +87,8 @@ fn main() {
             let name = file.file_name().unwrap().to_string_lossy().to_string();
             let line: Option<usize> = name.split('-').nth(1).and_then(|n| n.parse().ok());
             let Some(text) = hear(&file) else { continue };
-            let found = matcher::best(&text, &list).filter(|&(_, c)| c >= MIN_CONFIDENCE);
+            let found =
+                matcher::best(&text, &commands(&list)).filter(|&(_, c)| c >= MIN_CONFIDENCE);
             let shown = found.map_or("-".to_string(), |(i, c)| format!("{} ({c:.2})", list[i]));
             if name.starts_with("phrases-") {
                 total += 1;
@@ -159,7 +160,7 @@ fn talk(model: &gob_voice::sherpa::Model, list: &[String], gain: f32) {
         let t = Instant::now();
         let text = r.finish();
         let decode = t.elapsed();
-        let found = matcher::best(&text, list);
+        let found = matcher::best(&text, &commands(list));
         let shown = match found {
             Some((i, c)) if c >= MIN_CONFIDENCE => format!("-> {} ({c:.2})", list[i]),
             Some((i, c)) => format!("-> nothing (closest {} at {c:.2})", list[i]),
@@ -172,6 +173,11 @@ fn talk(model: &gob_voice::sherpa::Model, list: &[String], gain: f32) {
         );
         println!("Enter for the next phrase, q quits");
     }
+}
+
+/// Each phrase a command of its own, as the matcher takes them.
+fn commands(list: &[String]) -> Vec<(u32, String)> {
+    (0u32..).zip(list.iter().cloned()).collect()
 }
 
 fn lines(path: &Path) -> Vec<String> {

@@ -43,21 +43,99 @@ pub fn install(
         .tls_config(tls)
         .timeout_connect(Some(Duration::from_secs(30)))
         .timeout_recv_response(Some(Duration::from_secs(60)))
-        // The whole body: generous, so slow lines still get there, but a stalled one ends.
-        .timeout_recv_body(Some(Duration::from_secs(60 * 60)))
         .build()
         .new_agent();
-    let mut response = agent
+    let response = agent
         .get(&archive.url)
         .call()
         .map_err(|e| Error::Download(format!("{}: {e}", archive.url)))?;
     let total = response.body().content_length().unwrap_or(archive.bytes);
     let reader = response
-        .body_mut()
-        .with_config()
+        .into_body()
+        .into_with_config()
         .limit(archive.bytes + archive.bytes / 2)
         .reader();
-    install_from(reader, total, dir, archive, usable, progress, cancel)
+    install_from(
+        Watched::new(reader, cancel),
+        total,
+        dir,
+        archive,
+        usable,
+        progress,
+        cancel,
+    )
+}
+
+/// No data this long: the connection stalled.
+const STALL: Duration = Duration::from_secs(60);
+
+/// Reads `source` on a thread of its own, so a stalled connection ends after [`STALL`] and a
+/// cancel is seen at once, however slow the line (a limit on the whole body would fail big
+/// downloads on slow lines instead). A read left hanging ends with the connection.
+struct Watched<'a> {
+    chunks: std::sync::mpsc::Receiver<io::Result<Vec<u8>>>,
+    rest: Vec<u8>,
+    at: usize,
+    cancel: &'a AtomicBool,
+}
+
+impl<'a> Watched<'a> {
+    fn new(mut source: impl Read + Send + 'static, cancel: &'a AtomicBool) -> Self {
+        let (tx, chunks) = std::sync::mpsc::sync_channel(4);
+        std::thread::spawn(move || {
+            loop {
+                let mut buf = vec![0; 64 * 1024];
+                let chunk = match source.read(&mut buf) {
+                    Ok(n) => {
+                        buf.truncate(n);
+                        Ok(buf)
+                    }
+                    Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(e) => Err(e),
+                };
+                let end = !matches!(&chunk, Ok(b) if !b.is_empty());
+                if tx.send(chunk).is_err() || end {
+                    return;
+                }
+            }
+        });
+        Self {
+            chunks,
+            rest: Vec::new(),
+            at: 0,
+            cancel,
+        }
+    }
+}
+
+impl Read for Watched<'_> {
+    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        if self.at == self.rest.len() {
+            let waited = std::time::Instant::now();
+            self.rest = loop {
+                if self.cancel.load(Ordering::Relaxed) {
+                    return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
+                }
+                match self.chunks.recv_timeout(Duration::from_millis(250)) {
+                    Ok(chunk) => break chunk?,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        if waited.elapsed() >= STALL {
+                            return Err(io::Error::new(
+                                io::ErrorKind::TimedOut,
+                                "no data for a minute: the connection stalled",
+                            ));
+                        }
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Ok(0),
+                }
+            };
+            self.at = 0;
+        }
+        let n = out.len().min(self.rest.len() - self.at);
+        out[..n].copy_from_slice(&self.rest[self.at..self.at + n]);
+        self.at += n;
+        Ok(n)
+    }
 }
 
 /// [`install`] from any source of the archive's bytes.

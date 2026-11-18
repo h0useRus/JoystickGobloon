@@ -480,7 +480,7 @@ impl Sherpa {
 
 /// # Safety
 /// `T` must be the function pointer type of `name`.
-unsafe fn symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, Error> {
+pub(crate) unsafe fn symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, Error> {
     // SAFETY: the caller names the right type.
     unsafe { lib.get::<T>(name) }
         .map(|s| *s)
@@ -489,7 +489,7 @@ unsafe fn symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, Error> {
 
 /// # Safety
 /// `p` is null or a zero-terminated string.
-unsafe fn text(p: *const c_char) -> String {
+pub(crate) unsafe fn text(p: *const c_char) -> String {
     if p.is_null() {
         return String::new();
     }

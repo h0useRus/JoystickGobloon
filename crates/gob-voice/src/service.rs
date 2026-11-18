@@ -36,6 +36,10 @@ const STABLE: Duration = Duration::from_secs(30);
 /// Less audio than this (16 kHz samples, 0.15 s) is a slip of the button, not an utterance.
 const MIN_SAMPLES: usize = 2_400;
 
+/// The most audio one utterance keeps (30 s): a button held down by mistake must not fill the
+/// memory or keep the voice thread busy decoding minutes of audio; a command is said well within.
+const MAX_SAMPLES: usize = 30 * 16_000;
+
 /// Audio kept from before listening starts on an open microphone (0.3 s), so a word started
 /// just before the press is heard whole.
 const PRE_ROLL: usize = 4_800;
@@ -87,7 +91,7 @@ trait Recognize: Send {
 /// sherpa-onnx's recognizer with the phrases its text is matched against.
 struct PhraseRecognizer {
     recognizer: crate::sherpa::Recognizer,
-    phrases: Vec<String>,
+    phrases: Phrases,
 }
 
 impl Recognize for PhraseRecognizer {
@@ -144,7 +148,7 @@ impl Mic for Opened {
 }
 
 /// Makes a recognizer for the phrases.
-type MakeRecognizer = Box<dyn FnMut(&[String]) -> Result<Box<dyn Recognize>, Error> + Send>;
+type MakeRecognizer = Box<dyn FnMut(&Phrases) -> Result<Box<dyn Recognize>, Error> + Send>;
 /// What the voice thread sets up: recognizers and microphones.
 type Setup = (MakeRecognizer, OpenMicrophone);
 /// Opens a microphone with a gain; it sends its samples to the sink until the result is dropped.
@@ -197,7 +201,7 @@ impl VoiceService {
             let make: MakeRecognizer = Box::new(move |phrases| {
                 Ok(Box::new(PhraseRecognizer {
                     recognizer: model.recognizer(),
-                    phrases: phrases.to_vec(),
+                    phrases: phrases.clone(),
                 }) as Box<dyn Recognize>)
             });
             // Chosen microphones already reported missing: said once, not on every reopen.
@@ -347,10 +351,15 @@ impl OpenMic {
         while let Ok(s) = self.audio.try_recv() {
             match &mut self.utterance {
                 Some(u) => {
+                    let room = MAX_SAMPLES.saturating_sub(u.samples);
+                    if room == 0 {
+                        continue;
+                    }
+                    let s = &s[..s.len().min(room)];
                     u.samples += s.len();
                     let peak = s.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
                     u.peak = u.peak.max(peak);
-                    u.recognizer.feed(&s);
+                    u.recognizer.feed(s);
                 }
                 None => {
                     self.recent.extend(&s);
@@ -601,8 +610,7 @@ impl Worker {
         {
             return;
         }
-        let texts: Vec<String> = self.phrases.iter().map(|(_, p)| p.clone()).collect();
-        let mut recognizer = match (self.make)(&texts) {
+        let mut recognizer = match (self.make)(&self.phrases) {
             Ok(r) => r,
             Err(e) => {
                 log::error!("voice: {e}");

@@ -1,7 +1,7 @@
 //! Which phrase a recognized text means. The recognizer writes down whatever it hears; this picks
 //! the closest phrase of the profile by letters (so "lights of" still finds "lights on" or "lights
 //! off", and a different word ending still finds its phrase) and says how sure that is: close to
-//! one phrase and clearly further from the others.
+//! one phrase and clearly further from the phrases of other commands.
 
 /// The result of one utterance.
 #[derive(Debug, Clone, PartialEq)]
@@ -14,8 +14,8 @@ pub struct Heard {
     pub confidence: f32,
 }
 
-/// What `text` (the recognizer's) means among `phrases`.
-pub fn hear(text: &str, phrases: &[String]) -> Heard {
+/// What `text` (the recognizer's) means among `phrases`: (command, phrase).
+pub fn hear(text: &str, phrases: &[(u32, String)]) -> Heard {
     let found = best(text, phrases);
     Heard {
         phrase: found.map(|f| f.0),
@@ -24,23 +24,36 @@ pub fn hear(text: &str, phrases: &[String]) -> Heard {
     }
 }
 
-/// The phrase `text` means: its index in `phrases` and a confidence 0.0..=1.0; `None` when
-/// there is no text or no phrase.
-pub fn best(text: &str, phrases: &[String]) -> Option<(usize, f32)> {
+/// The phrase `text` means: its index in `phrases` (command, phrase) and a confidence
+/// 0.0..=1.0; `None` when there is no text or no phrase. Only phrases of other commands count as
+/// rivals: a command's own phrases, or the same phrase twice, do not make it less sure.
+pub fn best(text: &str, phrases: &[(u32, String)]) -> Option<(usize, f32)> {
     let heard = normalize(text);
     if heard.is_empty() {
         return None;
     }
-    let mut scores: Vec<(usize, f32)> = phrases
+    let mut scores: Vec<(usize, u32, f32)> = phrases
         .iter()
         .enumerate()
-        .map(|(i, p)| (i, similarity(&heard, &normalize(p))))
+        .map(|(i, (command, p))| (i, *command, score(&heard, &normalize(p))))
         .collect();
-    scores.sort_by(|a, b| b.1.total_cmp(&a.1));
-    let &(index, top) = scores.first()?;
-    let runner_up = scores.get(1).map_or(0.0, |s| s.1);
+    scores.sort_by(|a, b| b.2.total_cmp(&a.2));
+    let &(index, command, top) = scores.first()?;
+    let runner_up = scores.iter().find(|s| s.1 != command).map_or(0.0, |s| s.2);
     Some((index, top * clarity(top - runner_up)))
 }
+
+/// How well `heard` matches `phrase`: their similarity, stricter for a short phrase. One wrong
+/// letter of a four-letter word ("five" for "fire") is too far to be sure, while a long phrase
+/// keeps its plain similarity (so a different word ending still passes).
+fn score(heard: &str, phrase: &str) -> f32 {
+    let length = phrase.chars().count().max(1) as f32;
+    let strictness = (SHORT / length).clamp(1.0, 3.0);
+    similarity(heard, phrase).powf(strictness)
+}
+
+/// Phrases shorter than this many characters are scored more strictly (see [`score`]).
+const SHORT: f32 = 12.0;
 
 /// How far ahead of the next phrase the best one must be to keep its whole score: a smaller lead
 /// lowers it, down to half for a tie (two phrases heard equally well).
@@ -100,8 +113,12 @@ fn distance(a: &[char], b: &[char]) -> usize {
 mod tests {
     use super::*;
 
-    fn phrases(list: &[&str]) -> Vec<String> {
-        list.iter().map(|s| s.to_string()).collect()
+    /// Each phrase a command of its own.
+    fn phrases(list: &[&str]) -> Vec<(u32, String)> {
+        list.iter()
+            .enumerate()
+            .map(|(i, s)| (i as u32, s.to_string()))
+            .collect()
     }
 
     #[test]
@@ -151,6 +168,29 @@ mod tests {
     fn nothing_heard_or_no_phrases() {
         assert_eq!(best("", &phrases(&["eject"])), None);
         assert_eq!(best("eject", &[]), None);
+    }
+
+    #[test]
+    fn phrases_of_one_command_are_no_rivals() {
+        let p = vec![
+            (1, "lights on".to_string()),
+            (1, "light on".to_string()),
+            (2, "gear down".to_string()),
+        ];
+        let (i, c) = best("lights on", &p).unwrap();
+        assert_eq!(i, 0);
+        assert!(c > 0.95, "{c}");
+        // The same phrase in two commands is a tie.
+        let p = vec![(1, "eject".to_string()), (2, "eject".to_string())];
+        assert!(best("eject", &p).unwrap().1 <= 0.5);
+    }
+
+    #[test]
+    fn one_letter_off_a_short_word_is_unsure() {
+        let p = phrases(&["fire"]);
+        let (_, c) = best("five", &p).unwrap();
+        assert!(c < 0.5, "{c}");
+        assert!(best("fire", &p).unwrap().1 > 0.95);
     }
 
     #[test]
