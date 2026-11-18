@@ -10,6 +10,9 @@ use windows::core::{BOOL, PCSTR, PCWSTR};
 /// The name in Vosk's Windows release; its MinGW runtime DLLs lie next to it.
 pub(crate) const LIBRARY: &str = "libvosk.dll";
 
+/// sherpa-onnx's C API in its Windows release; onnxruntime.dll lies next to it.
+pub(crate) const SHERPA_LIBRARY: &str = "sherpa-onnx-c-api.dll";
+
 /// Loads the library; a full path finds the DLLs next to it, not only next to the exe.
 pub(crate) fn load(path: &Path) -> Result<libloading::Library, libloading::Error> {
     let flags = if path.is_absolute() {

@@ -7,6 +7,6 @@ mod unix;
 mod windows;
 
 #[cfg(not(windows))]
-pub(crate) use unix::{LIBRARY, load, native_path};
+pub(crate) use unix::{LIBRARY, SHERPA_LIBRARY, load, native_path};
 #[cfg(windows)]
-pub(crate) use windows::{LIBRARY, load, native_path};
+pub(crate) use windows::{LIBRARY, SHERPA_LIBRARY, load, native_path};

@@ -3,9 +3,11 @@
 //! models per language downloaded on demand (`models`).
 
 pub mod audio;
+pub mod matcher;
 pub mod models;
 mod platform;
 mod service;
+pub mod sherpa;
 pub mod vosk;
 
 pub use audio::{Capture, MAX_GAIN, Microphone, SAMPLE_RATE, microphones};
