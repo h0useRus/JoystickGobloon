@@ -1185,7 +1185,7 @@ impl DevicesView {
         if let (Kind::Voice, Some(p)) = (key.0, profile)
             && let Some(command) = p.profile.voice_command(key.1)
         {
-            crate::voice_view::command_editor(ui, i18n, command, self.voice.as_ref(), ops);
+            crate::voice_view::command_editor(ui, i18n, command, ops);
         } else if let (Kind::Combo, Some(p)) = (key.0, profile)
             && let Some(combo) = p.profile.key_combo(key.1)
         {

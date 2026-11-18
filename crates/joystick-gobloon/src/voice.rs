@@ -1,6 +1,6 @@
-//! Voice commands in the program: where libvosk and the speech models live (libvosk next to the
-//! exe or in `<data folder>/voice`, models downloaded into `<data folder>/voice` by gob-voice's
-//! `models`), and the Voice tab of the settings.
+//! Voice commands in the program: where sherpa-onnx and the speech models live (the library next
+//! to the exe or in `<data folder>/voice`, models downloaded into `<data folder>/voice` by
+//! gob-voice's `models`), and the Voice tab of the settings.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,17 +12,18 @@ use eframe::egui::{self, RichText};
 use gob_engine::VoiceConfig;
 use gob_i18n::I18n;
 use gob_voice::ModelInfo;
+use gob_voice::models::Size;
 
 use crate::settings::Settings;
 use crate::settings_view::section_title;
 use crate::style::{self, icon};
 
-/// The folder of the speech models (and of libvosk when it is not next to the exe).
+/// The folder of the speech models (and of sherpa-onnx when it is not next to the exe).
 pub fn dir() -> Option<PathBuf> {
     crate::settings::data_dir().map(|d| d.join("voice"))
 }
 
-/// Folders libvosk is looked for in.
+/// Folders sherpa-onnx is looked for in.
 fn library_dirs() -> Vec<PathBuf> {
     let exe_dir = std::env::current_exe()
         .ok()
@@ -39,12 +40,20 @@ fn language(settings: &Settings) -> &str {
     }
 }
 
+/// The speech model size chosen in the settings.
+fn size(settings: &Settings) -> Size {
+    Size::parse(&settings.voice_model_size)
+}
+
 /// How voice commands run with these settings; `None` while the model of their language is not
 /// installed (voice-input actions then do nothing).
 pub fn config(settings: &Settings) -> Option<VoiceConfig> {
     let dir = dir()?;
+    // Models of the earlier speech engine are of no use: gone once per run.
+    static CLEANED: std::sync::Once = std::sync::Once::new();
+    CLEANED.call_once(|| gob_voice::models::remove_old(&dir));
     let language = language(settings);
-    let Some(model) = gob_voice::models::for_language(language) else {
+    let Some(model) = gob_voice::models::pick(language, size(settings)) else {
         log::info!("voice commands: no speech model for {language}");
         return None;
     };
@@ -59,6 +68,11 @@ pub fn config(settings: &Settings) -> Option<VoiceConfig> {
     Some(VoiceConfig {
         library_dirs: library_dirs(),
         model: path,
+        language: language
+            .split(['-', '_'])
+            .next()
+            .unwrap_or(language)
+            .to_lowercase(),
         gain: settings.voice_gain,
         min_confidence: settings.voice_min_confidence,
         keep_open: settings.voice_keep_open,
@@ -105,10 +119,10 @@ pub fn microphones(ctx: &egui::Context, fresh: bool) -> Option<Arc<Vec<gob_voice
     list.microphones.clone()
 }
 
-/// Whether libvosk loads, checked once per run.
+/// Whether sherpa-onnx loads, checked once per run.
 fn library_available() -> bool {
     static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *AVAILABLE.get_or_init(|| match gob_voice::Vosk::load(&library_dirs()) {
+    *AVAILABLE.get_or_init(|| match gob_voice::Sherpa::load(&library_dirs()) {
         Ok(_) => true,
         Err(e) => {
             log::warn!("voice commands: {e}");
@@ -206,15 +220,47 @@ impl VoicePanel {
                         }
                     };
                     pick(ui, "", same);
-                    for m in gob_voice::models::MODELS {
-                        pick(ui, m.language, language_name(m.language));
+                    for code in gob_voice::models::languages() {
+                        pick(ui, code, language_name(code));
                     }
                 });
         });
+        let language = language(settings).to_string();
+        let models = gob_voice::models::for_language(&language);
+        if !models.is_empty() {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icon::GAUGE).size(style::ICON_SIZE))
+                    .on_hover_text(i18n.tr("settings-voice-size"));
+                let text = |m: &ModelInfo| {
+                    let key = match m.size {
+                        Size::Small => "settings-voice-size-small",
+                        Size::Large => "settings-voice-size-large",
+                    };
+                    i18n.trf(key, &[("memory", m.memory_mb.into())])
+                };
+                let chosen = gob_voice::models::pick(&language, size(settings));
+                let current = chosen.map(text).unwrap_or_default();
+                if models.len() == 1 {
+                    ui.label(current)
+                        .on_hover_text(i18n.tr("settings-voice-size-only"));
+                    return;
+                }
+                egui::ComboBox::from_id_salt("voice-size")
+                    .selected_text(current)
+                    .show_ui(ui, |ui| {
+                        for m in &models {
+                            let selected = chosen.is_some_and(|c| c.size == m.size);
+                            if ui.selectable_label(selected, text(m)).clicked() && !selected {
+                                settings.voice_model_size = m.size.key().to_string();
+                                changed = true;
+                            }
+                        }
+                    });
+            });
+        }
 
         let Some(dir) = dir() else { return changed };
-        let language = language(settings).to_string();
-        let Some(model) = gob_voice::models::for_language(&language) else {
+        let Some(model) = gob_voice::models::pick(&language, size(settings)) else {
             let text = i18n.trf(
                 "settings-voice-no-model",
                 &[("language", language_name(&language).into())],
@@ -223,7 +269,7 @@ impl VoicePanel {
             return changed;
         };
         changed |= self.poll_download(ui.ctx());
-        let megabytes = model.size.div_ceil(1_000_000);
+        let megabytes = model.bytes.div_ceil(1_000_000);
         ui.horizontal(
             |ui| match (&self.download, gob_voice::models::installed(&dir, model)) {
                 (Some(d), _) => {
@@ -292,7 +338,7 @@ impl VoicePanel {
     }
 
     fn start_download(&mut self, ctx: &egui::Context, dir: PathBuf, model: &'static ModelInfo) {
-        let progress = Arc::new(Mutex::new((0, model.size)));
+        let progress = Arc::new(Mutex::new((0, model.bytes)));
         let cancel = Arc::new(AtomicBool::new(false));
         let (tx, done) = std::sync::mpsc::channel();
         let (p, c, ctx) = (progress.clone(), cancel.clone(), ctx.clone());

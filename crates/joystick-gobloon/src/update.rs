@@ -654,10 +654,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(new.join("lang")).unwrap();
         std::fs::create_dir_all(old.join("lang")).unwrap();
-        for name in ["libvosk.dll", "LICENSE", "NEW.txt", "lang/de.ftl"] {
+        for name in ["sherpa-onnx-c-api.dll", "LICENSE", "NEW.txt", "lang/de.ftl"] {
             std::fs::write(new.join(name), "new").unwrap();
         }
-        for name in ["libvosk.dll", "LICENSE", "lang/de.ftl"] {
+        for name in ["sherpa-onnx-c-api.dll", "LICENSE", "lang/de.ftl"] {
             std::fs::write(old.join(name), "old").unwrap();
         }
         // The language files copy after the others; one fails, as when it cannot be written.
@@ -678,10 +678,10 @@ mod tests {
         left.sort_unstable();
         assert_eq!(
             left,
-            ["LICENSE", "de.ftl", "libvosk.dll"],
+            ["LICENSE", "de.ftl", "sherpa-onnx-c-api.dll"],
             "nothing new, nothing aside"
         );
-        for name in ["libvosk.dll", "LICENSE", "lang/de.ftl"] {
+        for name in ["sherpa-onnx-c-api.dll", "LICENSE", "lang/de.ftl"] {
             assert_eq!(
                 std::fs::read_to_string(old.join(name)).unwrap(),
                 "old",
@@ -701,7 +701,7 @@ mod tests {
         let exe = crate::platform::exe_name();
         for (name, text) in [
             (exe, "new exe"),
-            ("libvosk.dll", "speech"),
+            ("sherpa-onnx-c-api.dll", "speech"),
             ("LICENSE", "license"),
             ("lang/de.ftl", "de"),
         ] {
@@ -711,7 +711,7 @@ mod tests {
         copy_portable(&new, &old).unwrap();
         for (name, text) in [
             (exe, "new exe"),
-            ("libvosk.dll", "speech"),
+            ("sherpa-onnx-c-api.dll", "speech"),
             ("LICENSE", "license"),
             ("lang/de.ftl", "de"),
         ] {
@@ -735,7 +735,7 @@ mod tests {
         std::fs::write(
             new.join(MANIFEST),
             format!(
-                "files = [\"{exe}\", \"libvosk.dll\", \"lang/de.ftl\", \"voice/model.txt\"]
+                "files = [\"{exe}\", \"sherpa-onnx-c-api.dll\", \"lang/de.ftl\", \"voice/model.txt\"]
 "
             ),
         )
@@ -743,7 +743,7 @@ mod tests {
         std::fs::create_dir_all(new.join("voice")).unwrap();
         for name in [
             exe,
-            "libvosk.dll",
+            "sherpa-onnx-c-api.dll",
             "lang/de.ftl",
             "voice/model.txt",
             "stray.txt",
@@ -762,7 +762,12 @@ mod tests {
             std::fs::write(old.join(name), "old").unwrap();
         }
         copy_portable(&new, &old).unwrap();
-        for name in [exe, "libvosk.dll", "lang/de.ftl", "voice/model.txt"] {
+        for name in [
+            exe,
+            "sherpa-onnx-c-api.dll",
+            "lang/de.ftl",
+            "voice/model.txt",
+        ] {
             assert_eq!(
                 std::fs::read_to_string(old.join(name)).unwrap(),
                 "new",

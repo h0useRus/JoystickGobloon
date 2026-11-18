@@ -81,6 +81,8 @@ pub struct Settings {
     pub warn_gremlin_format: bool,
     /// Language voice commands are spoken in (a speech model's); empty = the program's.
     pub voice_language: String,
+    /// Speech model size: "small" (less memory) or "large" (more accurate).
+    pub voice_model_size: String,
     /// Microphone gain of voice commands (1.0 = as recorded).
     pub voice_gain: f32,
     /// Voice commands heard less sure than this (0..1) count as not recognized.
@@ -330,6 +332,7 @@ impl Default for Settings {
             curve_right_click_invert: true,
             warn_gremlin_format: true,
             voice_language: String::new(),
+            voice_model_size: "small".into(),
             voice_gain: 1.0,
             voice_min_confidence: 0.5,
             voice_keep_open: true,

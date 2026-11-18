@@ -3,12 +3,11 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
 use libloading::os::windows::{LOAD_WITH_ALTERED_SEARCH_PATH, Library};
-use windows::Win32::Globalization::{GetACP, WC_NO_BEST_FIT_CHARS, WideCharToMultiByte};
 use windows::Win32::Storage::FileSystem::GetShortPathNameW;
-use windows::core::{BOOL, PCSTR, PCWSTR};
-
-/// The name in Vosk's Windows release; its MinGW runtime DLLs lie next to it.
-pub(crate) const LIBRARY: &str = "libvosk.dll";
+use windows::Win32::System::Threading::{
+    GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
+};
+use windows::core::PCWSTR;
 
 /// sherpa-onnx's C API in its Windows release; onnxruntime.dll lies next to it.
 pub(crate) const SHERPA_LIBRARY: &str = "sherpa-onnx-c-api.dll";
@@ -20,46 +19,32 @@ pub(crate) fn load(path: &Path) -> Result<libloading::Library, libloading::Error
     } else {
         0
     };
-    // SAFETY: libvosk runs no code on load that could break the program.
+    // SAFETY: sherpa-onnx and ONNX Runtime run no code on load that could break the program.
     unsafe { Library::load_with_flags(path, flags) }.map(Into::into)
 }
 
-/// The path as libvosk opens files: its MinGW build takes narrow paths in the system's ANSI
-/// code page. A path that does not fit in it (a Chinese user name on a Western system) goes as
-/// its 8.3 short name; `None` when there is none either.
+/// The path as sherpa-onnx opens files: narrow strings, read as UTF-8 on the way to ONNX
+/// Runtime's wide paths. A path with characters outside ASCII goes as its 8.3 short name, which
+/// is ASCII whatever the library assumes; the path itself when there is none (most volumes have
+/// short names).
 pub(crate) fn native_path(path: &Path) -> Option<CString> {
+    let text = path.to_str()?;
+    if text.is_ascii() {
+        return CString::new(text).ok();
+    }
     let wide: Vec<u16> = path.as_os_str().encode_wide().collect();
-    ansi(&wide).or_else(|| ansi(&short_name(&wide)?))
+    match short_name(&wide) {
+        Some(short) => CString::new(String::from_utf16(&short).ok()?).ok(),
+        None => CString::new(text).ok(),
+    }
 }
 
-/// `wide` in the ANSI code page; `None` when a character has no exact match there.
-fn ansi(wide: &[u16]) -> Option<CString> {
-    if wide.is_empty() {
-        return None;
+/// Decoding a phrase must not take the CPU from the game: the voice thread runs below normal.
+pub(crate) fn lower_priority() {
+    // SAFETY: the pseudo handle of the calling thread.
+    if let Err(e) = unsafe { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL) } {
+        log::debug!("voice thread priority: {e}");
     }
-    // SAFETY: GetACP has no preconditions.
-    let code_page = unsafe { GetACP() };
-    let convert = |out: Option<&mut [u8]>, lossy: &mut BOOL| {
-        // SAFETY: valid slices; `lossy` outlives the call.
-        unsafe {
-            WideCharToMultiByte(
-                code_page,
-                WC_NO_BEST_FIT_CHARS,
-                wide,
-                out,
-                PCSTR::null(),
-                Some(lossy),
-            )
-        }
-    };
-    let mut lossy = BOOL(0);
-    let len = usize::try_from(convert(None, &mut lossy)).ok()?;
-    let mut bytes = vec![0u8; len];
-    let written = convert(Some(&mut bytes), &mut lossy);
-    if written <= 0 || lossy.as_bool() {
-        return None;
-    }
-    CString::new(bytes).ok()
 }
 
 /// The 8.3 short name of an existing path (`wide` without a terminating zero).

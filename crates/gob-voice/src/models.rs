@@ -1,7 +1,11 @@
-//! Speech models per language: Vosk's small models, downloaded once from alphacephei.com into a
-//! folder the caller chooses (the program's data folder). Every download is checked against the
-//! SHA-256 pinned here before it is unpacked, and a model counts as installed only when its files
-//! are there, so a broken or half-done download is never used.
+//! Speech models per language: sherpa-onnx models from its GitHub releases, a small and (for most
+//! languages) a large one, downloaded once into a folder the caller chooses (the program's data
+//! folder). Every download is checked against the SHA-256 pinned here before it is unpacked, and
+//! a model counts as installed only when its files are there, so a broken or half-done download
+//! is never used. German, Spanish and French share one multilingual model.
+//!
+//! The memory figures are what the model needed on a test PC while decoding (the whole process,
+//! plans/SPEECH_PLAN.md "S0 results"): the program shows them so the user can choose.
 
 use std::fs;
 use std::io::{self, Read, Seek, Write};
@@ -13,79 +17,170 @@ use sha2::{Digest, Sha256};
 
 use crate::Error;
 
-const BASE_URL: &str = "https://alphacephei.com/vosk/models/";
+const BASE_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/";
+
+/// Small: less memory, a little less accurate. Large: more accurate, more memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Size {
+    Small,
+    Large,
+}
+
+impl Size {
+    /// As settings store it.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Small => "small",
+            Self::Large => "large",
+        }
+    }
+
+    /// From settings; anything else is small.
+    pub fn parse(key: &str) -> Self {
+        match key {
+            "large" => Self::Large,
+            _ => Self::Small,
+        }
+    }
+}
 
 /// A speech model to download.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModelInfo {
-    /// The program's language code (`lang/*.ftl`) the model recognizes.
-    pub language: &'static str,
-    /// The name of the zip (without `.zip`) and of the folder it unpacks to.
+    /// The program's language codes (`lang/*.ftl`) the model recognizes.
+    pub languages: &'static [&'static str],
+    pub size: Size,
+    /// The name of the archive (without `.tar.bz2`) and of the folder it unpacks to.
     pub name: &'static str,
     /// Download size in bytes.
-    pub size: u64,
+    pub bytes: u64,
     pub sha256: &'static str,
+    /// Memory while recognizing, in MB (see the module notes).
+    pub memory_mb: u32,
 }
 
 impl ModelInfo {
     pub fn url(&self) -> String {
-        format!("{BASE_URL}{}.zip", self.name)
+        format!("{BASE_URL}{}.tar.bz2", self.name)
     }
 }
 
-/// The models, one per language of the program (checked 2026-11-01: each zip holds
-/// `<name>/am/final.mdl` and `<name>/conf/model.conf`).
+const EUROPEAN: &[&str] = &["de", "es", "fr"];
+
+/// The models (checked 2026-11-18: sizes and SHA-256 of the release assets; each archive holds
+/// its files in a folder of its own name).
 pub const MODELS: &[ModelInfo] = &[
     ModelInfo {
-        language: "en",
-        name: "vosk-model-small-en-us-0.15",
-        size: 41_205_931,
-        sha256: "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498",
+        languages: &["en"],
+        size: Size::Small,
+        name: "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
+        bytes: 29_858_559,
+        sha256: "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d",
+        memory_mb: 140,
     },
     ModelInfo {
-        language: "de",
-        name: "vosk-model-small-de-0.15",
-        size: 46_499_967,
-        sha256: "b7e53c90b1f0a38456f4cd62b366ecd58803cd97cd42b06438e2c131713d5e43",
+        languages: &["en"],
+        size: Size::Large,
+        name: "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8",
+        bytes: 108_035_095,
+        sha256: "f628312e9fdf8686374cb01a69425c41732529d540860311f16f37cbc32cfe9b",
+        memory_mb: 340,
     },
     ModelInfo {
-        language: "es",
-        name: "vosk-model-small-es-0.42",
-        size: 39_817_833,
-        sha256: "09b239888f633ef2f0b4e09736e3d9936acfd810bc65d53fad45261762c6511f",
+        languages: &["ru"],
+        size: Size::Small,
+        name: "sherpa-onnx-zipformer-ru-int8-2025-04-20",
+        bytes: 60_239_942,
+        sha256: "d6a651569aacc9a177259fa54705dd76acae23f6a4d62ea6797bd220d4b57163",
+        memory_mb: 260,
     },
     ModelInfo {
-        language: "fr",
-        name: "vosk-model-small-fr-0.22",
-        size: 42_233_323,
-        sha256: "cabf6180e177eb9b3a9a9d43a437bd5e549f3a7d09525e5d69a3fed787be12ad",
+        languages: &["ru"],
+        size: Size::Large,
+        name: "sherpa-onnx-nemo-transducer-giga-am-v3-russian-2025-12-16",
+        bytes: 167_388_020,
+        sha256: "20a439491904b839f35eb8efaa3d99cbfaaad0c6dcba22d06ff218bb0056772d",
+        memory_mb: 500,
     },
     ModelInfo {
-        language: "ko",
-        name: "vosk-model-small-ko-0.22",
-        size: 86_914_329,
-        sha256: "eea36124087fed26c59996a4761519458e3bd185e8ea9d9865ad8760c4a1d989",
+        languages: EUROPEAN,
+        size: Size::Small,
+        name: "sherpa-onnx-nemo-fast-conformer-transducer-be-de-en-es-fr-hr-it-pl-ru-uk-20k-int8",
+        bytes: 106_546_673,
+        sha256: "06072bad277f0f4c29cc866d7c62b0e47936da39afafeae453faa925025ccad6",
+        memory_mb: 340,
     },
     ModelInfo {
-        language: "ru",
-        name: "vosk-model-small-ru-0.22",
-        size: 46_236_750,
-        sha256: "961d5ff98a17f4aa6de69864d0aa71fa5bac682301d2b5d17a3f24c5c99a46d4",
+        languages: EUROPEAN,
+        size: Size::Large,
+        name: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
+        bytes: 487_211_443,
+        sha256: "1495e91b59d7fc53ddca91f3431758ec99f8fa253fdb0e1e851be0f72b14b0f9",
+        memory_mb: 1370,
     },
     ModelInfo {
-        language: "zh",
-        name: "vosk-model-small-cn-0.22",
-        size: 43_898_754,
-        sha256: "3af8b0e7e0f835ae9d414ce5df580237a3cfb08d586c9fbbb0f7ff29ad5b14ba",
+        languages: &["zh"],
+        size: Size::Small,
+        name: "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
+        bytes: 99_905_420,
+        sha256: "6495d4240f66bcdd2bbbbfefaa687c463150d467854001270934e88940b733c1",
+        memory_mb: 345,
+    },
+    ModelInfo {
+        languages: &["zh"],
+        size: Size::Large,
+        name: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09",
+        bytes: 165_783_878,
+        sha256: "7305f7905bfcf77fa0b39388a313f3da35c68d971661a65475b56fb2162c8e63",
+        memory_mb: 410,
+    },
+    ModelInfo {
+        languages: &["ko"],
+        size: Size::Small,
+        name: "sherpa-onnx-moonshine-tiny-ko-quantized-2026-02-27",
+        bytes: 49_153_415,
+        sha256: "d3b6c5390a7859c9ef20ff4f20b0766fcbad1dc06c0f509fe4840a3a302112dc",
+        memory_mb: 200,
     },
 ];
 
-/// The model for a language code (`en`, `de`, ...; a region like `en-GB` is ignored).
-pub fn for_language(language: &str) -> Option<&'static ModelInfo> {
-    let base = language.split(['-', '_']).next().unwrap_or(language);
-    MODELS
+/// `en-GB` → `en`.
+fn base(language: &str) -> &str {
+    language.split(['-', '_']).next().unwrap_or(language)
+}
+
+/// The languages that have a model, each once, in [`MODELS`] order.
+pub fn languages() -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = Vec::new();
+    for m in MODELS {
+        for l in m.languages {
+            if !out.contains(l) {
+                out.push(l);
+            }
+        }
+    }
+    out
+}
+
+/// The models of a language code (`en`, `de`...; a region like `en-GB` is ignored), small first.
+pub fn for_language(language: &str) -> Vec<&'static ModelInfo> {
+    let base = base(language);
+    let mut found: Vec<&ModelInfo> = MODELS
         .iter()
-        .find(|m| m.language.eq_ignore_ascii_case(base))
+        .filter(|m| m.languages.iter().any(|l| l.eq_ignore_ascii_case(base)))
+        .collect();
+    found.sort_by_key(|m| m.size == Size::Large);
+    found
+}
+
+/// The model of that size for the language; the small one when it has no other.
+pub fn pick(language: &str, size: Size) -> Option<&'static ModelInfo> {
+    let models = for_language(language);
+    models
+        .iter()
+        .find(|m| m.size == size)
+        .or(models.first())
+        .copied()
 }
 
 /// The model's folder in `dir` when it is installed there.
@@ -99,6 +194,23 @@ pub fn remove(dir: &Path, model: &ModelInfo) -> io::Result<()> {
     match fs::remove_dir_all(dir.join(model.name)) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
         _ => Ok(()),
+    }
+}
+
+/// Deletes the speech models of the program's earlier speech engine (Vosk: `vosk-model-*`
+/// folders) from `dir`; they are of no use any more.
+pub fn remove_old(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if name.starts_with("vosk-model-") && e.path().is_dir() {
+            match fs::remove_dir_all(e.path()) {
+                Ok(()) => log::info!("removed the old speech model {name}"),
+                Err(err) => log::warn!("removing the old speech model {name}: {err}"),
+            }
+        }
     }
 }
 
@@ -120,7 +232,7 @@ pub fn install(
         .timeout_connect(Some(Duration::from_secs(30)))
         .timeout_recv_response(Some(Duration::from_secs(60)))
         // The whole body: generous, so slow lines still get there, but a stalled one ends.
-        .timeout_recv_body(Some(Duration::from_secs(30 * 60)))
+        .timeout_recv_body(Some(Duration::from_secs(60 * 60)))
         .build()
         .new_agent();
     let url = model.url();
@@ -128,16 +240,16 @@ pub fn install(
         .get(&url)
         .call()
         .map_err(|e| Error::Download(format!("{url}: {e}")))?;
-    let total = response.body().content_length().unwrap_or(model.size);
+    let total = response.body().content_length().unwrap_or(model.bytes);
     let reader = response
         .body_mut()
         .with_config()
-        .limit(model.size + model.size / 2)
+        .limit(model.bytes + model.bytes / 2)
         .reader();
     install_from(reader, total, dir, model, progress, cancel)
 }
 
-/// [`install`] from any source of the zip's bytes.
+/// [`install`] from any source of the archive's bytes.
 fn install_from(
     mut source: impl Read,
     total: u64,
@@ -148,7 +260,7 @@ fn install_from(
 ) -> Result<PathBuf, Error> {
     let io_error = |e: io::Error| Error::Download(e.to_string());
     fs::create_dir_all(dir).map_err(io_error)?;
-    let zip = dir.join(format!("{}.zip.part", model.name));
+    let archive = dir.join(format!("{}.tar.bz2.part", model.name));
     let unpacked = dir.join(format!("{}.part", model.name));
     let result = (|| {
         let mut file = fs::OpenOptions::new()
@@ -156,7 +268,7 @@ fn install_from(
             .write(true)
             .create(true)
             .truncate(true)
-            .open(&zip)
+            .open(&archive)
             .map_err(io_error)?;
         let mut hash = Sha256::new();
         let mut buf = vec![0; 64 * 1024];
@@ -186,8 +298,8 @@ fn install_from(
         }
         file.rewind().map_err(io_error)?;
         let _ = fs::remove_dir_all(&unpacked);
-        unpack(file, &unpacked)?;
-        // The zip holds the model in a folder of its own name; take that, or the whole zip.
+        unpack(file, &unpacked, cancel)?;
+        // The archive holds the model in a folder of its own name; take that, or the whole of it.
         let inner = unpacked.join(model.name);
         let root = if inner.is_dir() {
             inner
@@ -196,7 +308,7 @@ fn install_from(
         };
         if !is_model(&root) {
             return Err(Error::Model(format!(
-                "{}: no speech model in the zip",
+                "{}: no speech model in the archive",
                 model.name
             )));
         }
@@ -205,45 +317,45 @@ fn install_from(
         fs::rename(&root, &path).map_err(io_error)?;
         Ok(path)
     })();
-    let _ = fs::remove_file(&zip);
+    let _ = fs::remove_file(&archive);
     let _ = fs::remove_dir_all(&unpacked);
     match &result {
         Ok(path) => log::info!("speech model installed: {}", path.display()),
+        Err(Error::Cancelled) => log::info!("{}: download cancelled", model.name),
         Err(e) => log::error!("{}: {e}", model.name),
     }
     result
 }
 
-/// Unpacks a zip into `to`, refusing entries that would land outside it.
-fn unpack(file: impl Read + Seek, to: &Path) -> Result<(), Error> {
-    let bad = |e: zip::result::ZipError| Error::Download(format!("zip: {e}"));
-    let io_error = |e: io::Error| Error::Download(e.to_string());
-    let mut archive = zip::ZipArchive::new(file).map_err(bad)?;
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(bad)?;
-        let Some(name) = entry.enclosed_name() else {
-            return Err(Error::Download(format!(
-                "zip: unsafe path {}",
-                String::from_utf8_lossy(entry.name_raw())
-            )));
-        };
-        let path = to.join(name);
-        if entry.is_dir() {
-            fs::create_dir_all(&path).map_err(io_error)?;
+/// Unpacks a .tar.bz2 into `to`, refusing entries that would land outside it and leaving out the
+/// sample recordings (`test_wavs/`) the archives carry.
+fn unpack(file: impl Read + Seek, to: &Path, cancel: &AtomicBool) -> Result<(), Error> {
+    let bad = |e: io::Error| Error::Download(format!("archive: {e}"));
+    fs::create_dir_all(to).map_err(bad)?;
+    let mut archive = tar::Archive::new(bzip2::read::BzDecoder::new(io::BufReader::new(file)));
+    for entry in archive.entries().map_err(bad)? {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(Error::Cancelled);
+        }
+        let mut entry = entry.map_err(bad)?;
+        let path = entry.path().map_err(bad)?.into_owned();
+        if path.components().any(|c| c.as_os_str() == "test_wavs") {
             continue;
         }
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(io_error)?;
+        // unpack_in refuses (returns false for) paths that leave `to`.
+        if !entry.unpack_in(to).map_err(bad)? {
+            return Err(Error::Download(format!(
+                "archive: unsafe path {}",
+                path.display()
+            )));
         }
-        let mut out = fs::File::create(&path).map_err(io_error)?;
-        io::copy(&mut entry, &mut out).map_err(io_error)?;
     }
     Ok(())
 }
 
-/// Whether `dir` holds a Vosk model: its acoustic model and its configuration.
+/// Whether `dir` holds a speech model sherpa-onnx can load (its token list and model files).
 fn is_model(dir: &Path) -> bool {
-    dir.join("am").join("final.mdl").is_file() && dir.join("conf").join("model.conf").is_file()
+    dir.is_dir() && crate::sherpa::ModelSpec::detect(dir, "", 1).is_ok()
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -254,27 +366,56 @@ fn hex(bytes: &[u8]) -> String {
 mod tests {
     use std::io::Cursor;
 
-    use zip::write::SimpleFileOptions;
-
     use super::*;
 
-    /// A zip with the given (path, content) entries.
-    fn zip_of(entries: &[(&str, &str)]) -> Vec<u8> {
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    /// A .tar.bz2 with the given (path, content) entries.
+    fn archive_of(entries: &[(&str, &str)]) -> Vec<u8> {
+        let mut tar = tar::Builder::new(Vec::new());
         for (path, content) in entries {
-            zip.start_file(*path, SimpleFileOptions::default()).unwrap();
-            zip.write_all(content.as_bytes()).unwrap();
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            tar.append_data(&mut header, path, content.as_bytes())
+                .unwrap();
         }
-        zip.finish().unwrap().into_inner()
+        let tar = tar.into_inner().unwrap();
+        let mut bz = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::fast());
+        bz.write_all(&tar).unwrap();
+        bz.finish().unwrap()
+    }
+
+    /// A tar entry whose name leaves the folder (`Builder` refuses to write one).
+    fn archive_with_escape() -> Vec<u8> {
+        let mut tar = tar::Builder::new(Vec::new());
+        for (path, content) in MODEL_FILES {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_cksum();
+            tar.append_data(&mut header, path, content.as_bytes())
+                .unwrap();
+        }
+        let mut header = tar::Header::new_old();
+        let name = b"../escaped.txt";
+        header.as_old_mut().name[..name.len()].copy_from_slice(name);
+        header.set_size(7);
+        header.set_cksum();
+        tar.append(&header, &b"outside"[..]).unwrap();
+        let tar = tar.into_inner().unwrap();
+        let mut bz = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::fast());
+        bz.write_all(&tar).unwrap();
+        bz.finish().unwrap()
     }
 
     fn fake_model(bytes: &[u8]) -> ModelInfo {
         let hash = hex(&Sha256::digest(bytes));
         ModelInfo {
-            language: "xx",
+            languages: &["xx"],
+            size: Size::Small,
             name: "test-model",
-            size: bytes.len() as u64,
+            bytes: bytes.len() as u64,
             sha256: Box::leak(hash.into_boxed_str()),
+            memory_mb: 1,
         }
     }
 
@@ -284,10 +425,13 @@ mod tests {
         dir
     }
 
+    /// A transducer as sherpa-onnx's releases lay it out.
     const MODEL_FILES: &[(&str, &str)] = &[
-        ("test-model/am/final.mdl", "acoustic"),
-        ("test-model/conf/model.conf", "--sample-frequency=16000"),
-        ("test-model/graph/words.txt", "hello 1"),
+        ("test-model/encoder.int8.onnx", "e"),
+        ("test-model/decoder.int8.onnx", "d"),
+        ("test-model/joiner.int8.onnx", "j"),
+        ("test-model/tokens.txt", "<blk> 0"),
+        ("test-model/test_wavs/0.wav", "RIFF"),
     ];
 
     fn run(
@@ -308,7 +452,7 @@ mod tests {
         (result, steps)
     }
 
-    /// Only the model's folder is left: no zip, no half-unpacked folder.
+    /// What is left in `dir`: only the model's folder, no archive, no half-unpacked folder.
     fn left_in(dir: &Path) -> Vec<String> {
         let mut names: Vec<String> = fs::read_dir(dir)
             .map(|d| {
@@ -322,9 +466,9 @@ mod tests {
     }
 
     #[test]
-    fn installs_a_checked_model() {
+    fn installs_a_checked_model_without_its_samples() {
         let dir = temp_dir("install");
-        let bytes = zip_of(MODEL_FILES);
+        let bytes = archive_of(MODEL_FILES);
         let model = fake_model(&bytes);
         assert_eq!(installed(&dir, &model), None);
         let (result, steps) = run(&bytes, &model, &dir, false);
@@ -332,9 +476,10 @@ mod tests {
         assert_eq!(path, dir.join("test-model"));
         assert_eq!(installed(&dir, &model), Some(path.clone()));
         assert_eq!(
-            fs::read_to_string(path.join("graph/words.txt")).unwrap(),
-            "hello 1"
+            fs::read_to_string(path.join("tokens.txt")).unwrap(),
+            "<blk> 0"
         );
+        assert!(!path.join("test_wavs").exists(), "samples left out");
         assert_eq!(steps.first(), Some(&(0, bytes.len() as u64)));
         assert_eq!(
             steps.last(),
@@ -350,13 +495,13 @@ mod tests {
     }
 
     #[test]
-    fn a_zip_without_the_model_folder_works_too() {
+    fn an_archive_without_the_model_folder_works_too() {
         let dir = temp_dir("flat");
         let entries: Vec<_> = MODEL_FILES
             .iter()
             .map(|(p, c)| (p.trim_start_matches("test-model/"), *c))
             .collect();
-        let bytes = zip_of(&entries);
+        let bytes = archive_of(&entries);
         let model = fake_model(&bytes);
         assert!(run(&bytes, &model, &dir, false).0.is_ok());
         assert!(installed(&dir, &model).is_some());
@@ -366,7 +511,7 @@ mod tests {
     #[test]
     fn a_wrong_hash_is_refused() {
         let dir = temp_dir("hash");
-        let bytes = zip_of(MODEL_FILES);
+        let bytes = archive_of(MODEL_FILES);
         let model = ModelInfo {
             sha256: "00",
             ..fake_model(&bytes)
@@ -384,7 +529,7 @@ mod tests {
     #[test]
     fn cancelling_leaves_nothing() {
         let dir = temp_dir("cancel");
-        let bytes = zip_of(MODEL_FILES);
+        let bytes = archive_of(MODEL_FILES);
         let model = fake_model(&bytes);
         let (result, _) = run(&bytes, &model, &dir, true);
         assert!(matches!(result, Err(Error::Cancelled)), "{result:?}");
@@ -393,9 +538,9 @@ mod tests {
     }
 
     #[test]
-    fn a_zip_without_a_model_is_refused() {
+    fn an_archive_without_a_model_is_refused() {
         let dir = temp_dir("empty");
-        let bytes = zip_of(&[("test-model/README", "not a model")]);
+        let bytes = archive_of(&[("test-model/README", "not a model")]);
         let model = fake_model(&bytes);
         let (result, _) = run(&bytes, &model, &dir, false);
         assert!(matches!(result, Err(Error::Model(_))), "{result:?}");
@@ -406,9 +551,7 @@ mod tests {
     #[test]
     fn paths_out_of_the_folder_are_refused() {
         let dir = temp_dir("slip");
-        let mut entries = MODEL_FILES.to_vec();
-        entries.push(("../escaped.txt", "outside"));
-        let bytes = zip_of(&entries);
+        let bytes = archive_with_escape();
         let model = fake_model(&bytes);
         let (result, _) = run(&bytes, &model, &dir, false);
         assert!(
@@ -421,17 +564,30 @@ mod tests {
     }
 
     #[test]
-    fn a_model_for_every_language() {
+    fn old_vosk_models_are_removed() {
+        let dir = temp_dir("old");
+        fs::create_dir_all(dir.join("vosk-model-small-en-us-0.15/am")).unwrap();
+        fs::create_dir_all(dir.join("sherpa-onnx-keep")).unwrap();
+        remove_old(&dir);
+        assert_eq!(left_in(&dir), ["sherpa-onnx-keep"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn models_for_every_language() {
         assert_eq!(
-            for_language("en").unwrap().name,
-            "vosk-model-small-en-us-0.15"
+            pick("en", Size::Small).unwrap().name,
+            "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27"
         );
-        assert_eq!(for_language("en-GB"), for_language("en"));
-        assert_eq!(for_language("zh").unwrap().name, "vosk-model-small-cn-0.22");
-        assert_eq!(for_language("xx"), None);
+        assert_eq!(pick("en-GB", Size::Large), pick("en", Size::Large));
+        assert_eq!(pick("de", Size::Small), pick("fr", Size::Small), "shared");
+        // Korean has only a small model: large falls back to it.
+        assert_eq!(pick("ko", Size::Large), pick("ko", Size::Small));
+        assert_eq!(pick("xx", Size::Small), None);
         // The program's languages (lang/*.ftl).
         for lang in ["en", "de", "es", "fr", "ko", "ru", "zh"] {
-            assert!(for_language(lang).is_some(), "{lang}");
+            assert!(pick(lang, Size::Small).is_some(), "{lang}");
+            assert!(languages().contains(&lang), "{lang}");
         }
         for m in MODELS {
             assert_eq!(m.sha256.len(), 64, "{}", m.name);
@@ -440,16 +596,25 @@ mod tests {
                 "{}",
                 m.name
             );
-            assert_eq!(for_language(m.language), Some(m), "one model per language");
+            for l in m.languages {
+                assert_eq!(
+                    for_language(l).iter().filter(|o| o.size == m.size).count(),
+                    1,
+                    "one {:?} model for {l}",
+                    m.size
+                );
+            }
         }
+        assert_eq!(Size::parse(Size::Large.key()), Size::Large);
+        assert_eq!(Size::parse("anything"), Size::Small);
     }
 
-    /// Network: downloads the English model (about 40 MB) and installs it.
+    /// Network: downloads the small English model (about 30 MB) and installs it.
     #[test]
     #[ignore]
-    fn downloads_the_english_model() {
+    fn downloads_the_small_english_model() {
         let dir = temp_dir("download");
-        let model = for_language("en").unwrap();
+        let model = pick("en", Size::Small).unwrap();
         let mut last = (0, 0);
         let path = install(
             &dir,
@@ -458,7 +623,7 @@ mod tests {
             &AtomicBool::new(false),
         )
         .unwrap();
-        assert_eq!(last, (model.size, model.size));
+        assert_eq!(last, (model.bytes, model.bytes));
         assert_eq!(installed(&dir, model), Some(path));
         let _ = fs::remove_dir_all(&dir);
     }

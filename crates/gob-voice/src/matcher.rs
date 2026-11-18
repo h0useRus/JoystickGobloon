@@ -3,6 +3,27 @@
 //! off", and a different word ending still finds its phrase) and says how sure that is: close to
 //! one phrase and clearly further from the others.
 
+/// The result of one utterance.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Heard {
+    /// Index into the phrases; `None` = nothing heard or no phrases.
+    pub phrase: Option<usize>,
+    /// What was heard, empty for silence.
+    pub text: String,
+    /// How sure the match is, 0.0..=1.0 (see [`best`]).
+    pub confidence: f32,
+}
+
+/// What `text` (the recognizer's) means among `phrases`.
+pub fn hear(text: &str, phrases: &[String]) -> Heard {
+    let found = best(text, phrases);
+    Heard {
+        phrase: found.map(|f| f.0),
+        text: text.to_string(),
+        confidence: found.map_or(0.0, |f| f.1),
+    }
+}
+
 /// The phrase `text` means: its index in `phrases` and a confidence 0.0..=1.0; `None` when
 /// there is no text or no phrase.
 pub fn best(text: &str, phrases: &[String]) -> Option<(usize, f32)> {
