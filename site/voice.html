@@ -167,18 +167,18 @@
           <article class="learn-action" id="how-it-works">
             <h3><i class="ph ph-microphone" aria-hidden="true"></i>How it works</h3>
             <p>A voice command is a button of its own, on the <span class="term">Voice</span> tab of the Devices page, with one or more phrases that set it off. The microphone listens only while you hold a push-to-talk input: a stick button, a key or a gamepad button with the <a href="learn.html#voice-input">Voice input</a> action. When you let go, what you said is matched against the profile's phrases, and the command it belongs to presses its button for a moment, so its actions run like any button's.</p>
-            <p>Only the profile's own phrases are listened for. That makes recognition quick (a few milliseconds after you let go) and keeps other words from being taken for commands.</p>
+            <p>What you said is written out as text and compared with the profile's own phrases; the closest one wins, and speech close to none of them does nothing. Recognition takes a fraction of a second after you let go.</p>
           </article>
           <article class="learn-action" id="privacy">
             <h3><i class="ph ph-lock-simple" aria-hidden="true"></i>Offline and private</h3>
-            <p>Speech is recognized on your computer by the <a href="https://alphacephei.com/vosk/">Vosk</a> speech library: nothing you say leaves it, and nothing is recorded. The microphone is heard only while the push-to-talk input is held. The one download is the speech model of your language, once, when you ask for it.</p>
+            <p>Speech is recognized on your computer by the <a href="https://github.com/k2-fsa/sherpa-onnx">sherpa-onnx</a> speech library: nothing you say leaves it, and nothing is recorded. The microphone is heard only while the push-to-talk input is held. The one download is the speech model of your language, once, when you ask for it.</p>
           </article>
           <article class="learn-action" id="requirements">
             <h3><i class="ph ph-list-checks" aria-hidden="true"></i>What you need</h3>
             <ul>
               <li>Joystick Gobloon 0.12 or newer on Windows or Linux. The speech library comes with the installer, the portable zip and the AppImage.</li>
               <li>A microphone: a headset, a desk microphone or a webcam's. On Windows, allow desktop apps to use the microphone in Privacy settings.</li>
-              <li>The speech model of the language you speak, about 40 MB (Korean about 85 MB). There are models for English, German, Spanish, French, Korean, Russian and Chinese.</li>
+              <li>The speech model of the language you speak: a small one (30-110 MB to download, 140-350 MB of memory while a profile with voice commands is active) or a large, more accurate one (110-490 MB, 340-1400 MB of memory). There are models for English, German, Spanish, French, Korean (small only), Russian and Chinese.</li>
             </ul>
           </article>
         </section>
@@ -187,9 +187,9 @@
           <h2 id="setup-title">Setting it up</h2>
           <article class="learn-action" id="language">
             <h3><i class="ph ph-translate" aria-hidden="true"></i>1. Speech model</h3>
-            <p>Open <span class="term">Settings</span>, <span class="term">Voice</span>. Commands are spoken in the program's language unless you choose another one in the list (<span class="term">Same as the program</span> is the default), so you can keep the program in one language and speak another. Click <span class="term">Download the speech model</span>; the progress bar shows the download, which is checked and unpacked by itself. <span class="term">Speech model installed</span> means it is ready; the bin removes it again.</p>
+            <p>Open <span class="term">Settings</span>, <span class="term">Voice</span>. Commands are spoken in the program's language unless you choose another one in the list (<span class="term">Same as the program</span> is the default), so you can keep the program in one language and speak another. <span class="term">Model size</span> chooses between the small model and the large, more accurate one; each shows the memory it needs. Small is enough for most commands; take the large one for a strong accent or a noisy room if the computer has memory to spare. Click <span class="term">Download the speech model</span>; the progress bar shows the download, which is checked and unpacked by itself. <span class="term">Speech model installed</span> means it is ready; the bin removes it again.</p>
             <p>Models are kept in the <code>voice</code> folder of the program's data folder: <code>%APPDATA%\JoystickGobloon\voice</code> on Windows, <code>~/.config/JoystickGobloon/voice</code> on Linux, or next to the program for a portable copy with its own settings.</p>
-            <figure class="shot"><img src="img/voice-settings.png" loading="lazy" width="1102" height="732" alt="Settings, Voice: the speech model in the program's language is installed, the microphone volume at 100 %, the microphone test, Keep the microphone open switched on and the least confidence at 50 %"></figure>
+            <figure class="shot"><img src="img/voice-settings.png" loading="lazy" width="1102" height="732" alt="Settings, Voice: English, the small speech model (about 140 MB of memory) installed, the microphone volume at 100 %, the microphone test, Keep the microphone open switched on, the least confidence at 50 %, and below, Natural voices with the voice library and two English voices installed"></figure>
           </article>
           <article class="learn-action" id="microphone">
             <h3><i class="ph ph-speaker-high" aria-hidden="true"></i>2. Microphone check</h3>
@@ -254,7 +254,7 @@
             <ul>
               <li>Two or three words are recognized more surely than one short word: "gear down" rather than "gear".</li>
               <li>Phrases that sound alike in different commands get mixed up: make them differ from the first word.</li>
-              <li>Use everyday words of the model's language; names, abbreviations and rare word forms it does not know are not heard. While the profile is active, a warning sign next to a phrase names the words the model does not know. A word with a pronoun stuck to it is often one of them: write the pronoun as a word of its own (Spanish "cubre me" for "cúbreme"); said quickly, it sounds the same.</li>
+              <li>Use everyday words of the model's language. Names and abbreviations are written out the way they sound, so a phrase spelled the same way ("ils" rather than "ILS") is matched more surely.</li>
               <li>Give a command a second phrase for the way you say it in a hurry.</li>
               <li>Press, then speak, then let go: a press shorter than about 0.15 s is taken for a slip and hears nothing.</li>
             </ul>
@@ -276,7 +276,7 @@
               <li><strong>Nothing happens when I speak</strong>: check that the profile is active and the push-to-talk input has the Voice input action (the Voice tab names it). Watch the status bar while you hold it.</li>
               <li><strong>"Heard nothing"</strong>: the microphone is muted, too quiet, blocked by the system's privacy settings, or another one listens. Test it in Settings, Voice and check the microphone in the Voice input action.</li>
               <li><strong>The first word is lost</strong>: keep <a href="#keep-open">Keep the microphone open</a> on, and start speaking a moment after the press.</li>
-              <li><strong>A phrase is never heard</strong>: look for the warning sign next to it on the Voice tab while the profile is active; the model does not know one of its words. See <a href="#good-phrases">Good phrases</a>.</li>
+              <li><strong>A phrase is never heard</strong>: look at what the status bar says was heard, and add that as a second phrase, or choose words that sound clearer. See <a href="#good-phrases">Good phrases</a>.</li>
               <li><strong>Wrong or no command</strong>: the bar of the microphone test should reach about the middle. Adjust the volume, choose clearer phrases, or lower the least confidence.</li>
               <li><strong>Other speech sets off commands</strong>: raise the least confidence.</li>
               <li><strong>Changed a setting and nothing changed</strong>: voice settings apply the next time a profile is activated.</li>
