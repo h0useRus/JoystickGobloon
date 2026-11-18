@@ -125,7 +125,7 @@ Name: "vjoy"; Description: "{cm:InstallVJoy}"; GroupDescription: "{cm:Drivers}";
 
 [Files]
 Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
-; The speech library for voice commands (libvosk and its MinGW runtime; release.yml fetches it).
+; The speech library for voice commands (sherpa-onnx and ONNX Runtime; release.yml fetches it).
 Source: "..\target\voice\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\lang\*.ftl"; DestDir: "{app}\lang"; Flags: ignoreversion
 ; Game export plugins (release.yml copies plugins\export there, without the dev folders).

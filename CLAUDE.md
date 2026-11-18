@@ -126,12 +126,17 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs). Releases put
   plugins/export (without `dev/`) into `export/` next to the exe (installer, portable zip, AppImage)
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
-  and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
-  profile's phrases; models.rs = small Vosk model per program language (URL + SHA-256), downloaded into
-  `<data dir>/voice`; service.rs = `VoiceService` thread (keeps the profile's microphones open by default: some
-  are silent 1-2 s after opening). Profile side: gob-core voice.rs (`VOICE_GUID`, input type `voice`,
-  `<voice-commands>`, action `voice-input`); engine `Output::voice_listen` + `Engine::voice_command`.
-  Example `voice_check` (`--meter` mic test, `--models <dir> --lang`, `--wav`)
+  and level; sherpa.rs = sherpa-onnx 2.0.1 C API loaded at run time (libloading; the app runs without it; its
+  `#[repr(C)]` structs mirror that version's c-api.h, a test pins sizes/offsets: bump the library and the
+  structs together), offline recognizer: audio kept while the button is held, decoded once on release,
+  `ModelSpec::detect` reads the model kind from file names; matcher.rs = text -> phrase by character edit
+  distance, confidence lowered when two phrases are close; models.rs = small and large sherpa-onnx model per
+  language (de/es/fr share one; ko small only; URL + SHA-256 + memory MB from plans/SPEECH_PLAN.md S0),
+  .tar.bz2 downloaded into `<data dir>/voice`, old `vosk-model-*` folders removed; service.rs = `VoiceService`
+  thread below normal priority (keeps the profile's microphones open by default: some are silent 1-2 s after
+  opening). Profile side: gob-core voice.rs (`VOICE_GUID`, input type `voice`, `<voice-commands>`, action
+  `voice-input`); engine `Output::voice_listen` + `Engine::voice_command`. Example `speech_bench` (load time,
+  memory, RTF and phrase accuracy of a model on WAVs, or `--listen` push to talk on the microphone)
 - plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
   on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
@@ -195,7 +200,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss), a
   portable zip and a Linux AppImage (job `appimage`, tools/linux/appimage.sh; it updates itself in place). The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; installer and portable zip
-  carry libvosk 0.3.45 (libvosk.dll + 3 MinGW DLLs next to the exe), the AppImage libvosk.so in usr/bin (both pinned); uninstall runs `JoystickGobloon.exe
+  carry sherpa-onnx 2.0.1 without TTS (sherpa-onnx-c-api.dll + onnxruntime.dll + onnxruntime_providers_shared.dll next to
+  the exe), the AppImage libsherpa-onnx-c-api.so + libonnxruntime.so in usr/bin (both pinned); uninstall runs `JoystickGobloon.exe
   --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) checks commit
   messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches,
   and clippy + tests on Linux (job `linux`).
