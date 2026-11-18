@@ -214,9 +214,9 @@
             <ol class="numbered">
               <li><strong>Name the profile</strong>, for example <span class="term">My flight setup</span>. The field has the focus when the wizard opens.</li>
               <li><strong>Check each controller row.</strong> Every attached controller has a row with its name and the number of axes, buttons and hats it has. On the right is the virtual joystick it maps to: the wizard already picked the next free one for each controller, in order, so the first stick gets the first virtual joystick, the second stick the second, and so on.</li>
-              <li><strong>Change a pick</strong> from the list if needed. It shows each virtual joystick with its axes, buttons and hats. A virtual joystick takes only one controller: those another controller already uses are grayed out, because two controllers would fight over the same outputs.</li>
+              <li><strong>Change a pick</strong> from the list if needed. It shows each virtual joystick with its axes, buttons and hats. Several controllers may share one virtual joystick, handy when a game sees only a few devices: they fill it one after another, in the order of the list. With two boxes of 2 axes and 20 buttons each, the first gets X, Y and buttons 1 to 20, the second Z, Rx and buttons 21 to 40.</li>
               <li><strong>Leave a controller out</strong> with <span class="term">Not mapped</span>, for example pedals or a throttle you want to set up by hand later.</li>
-              <li><strong>Read the warnings.</strong> A warning sign shows when a virtual joystick has fewer inputs than its controller, and a line below the list says what will not be mapped, such as <span class="term">1 button</span>. Make that virtual joystick bigger on the Virtual joysticks page, or accept it and map those inputs yourself.</li>
+              <li><strong>Read the warnings.</strong> A warning sign shows when a virtual joystick has fewer inputs than its controller (or fewer than the controllers above it left free), and a line below the list says what will not be mapped, such as <span class="term">1 button</span>. Make that virtual joystick bigger on the Virtual joysticks page, or accept it and map those inputs yourself.</li>
               <li><strong>Press Create.</strong> It is available once the profile has a name and at least one controller is mapped.</li>
             </ol>
           </article>
@@ -226,7 +226,7 @@
             <p>A new profile with one mode, <span class="term">Default</span>, in which every input of every mapped controller has a <a href="learn.html#map-to-vjoy">Map to virtual stick</a> onto its virtual joystick:</p>
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Axes</strong> go to the same axis where the virtual joystick has it: X to X, Slider to Slider. The other axes take the virtual joystick's remaining axes in order.</span></li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Buttons and hats</strong> keep their numbers: button 5 to button 5, hat 1 to hat 1.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Buttons and hats</strong> keep their numbers: button 5 to button 5, hat 1 to hat 1. A controller that shares its virtual joystick with ones above it numbers on from where they stopped, and its axes take the axes still free.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>What does not fit</strong> stays unbound, so nothing is lost: add it later by hand.</span></li>
             </ul>
             <p>The status bar says <span class="term">Profile created</span>. The profile is not saved yet: press <span class="term">Save</span> in the toolbar and pick a file.</p>
@@ -281,10 +281,8 @@
               <dd>Create them on the Virtual joysticks page first (<a href="#create-virtual">Create them</a>), then open the wizard again.</dd>
               <dt>Create stays gray</dt>
               <dd>Type a profile name and map at least one controller to a virtual joystick.</dd>
-              <dt>A virtual joystick is grayed out in the list</dt>
-              <dd>Another controller already maps to it. Pick a different one, or set the other controller to Not mapped.</dd>
               <dt>Some inputs will not be mapped</dt>
-              <dd>The virtual joystick is smaller than the stick. Add axes, buttons or hats to it on the Virtual joysticks page, then open the wizard again.</dd>
+              <dd>The virtual joystick is smaller than the stick, or other controllers on it took the rest. Add axes, buttons or hats to it on the Virtual joysticks page, then open the wizard again.</dd>
             </dl>
           </article>
         </section>
