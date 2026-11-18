@@ -197,19 +197,34 @@ pub fn remove(dir: &Path, model: &ModelInfo) -> io::Result<()> {
     download::remove(dir, model.name)
 }
 
-/// Deletes the speech models of the program's earlier speech engine (Vosk: `vosk-model-*`
-/// folders) from `dir`; they are of no use any more.
+/// The library files of the program's earlier speech engine (Vosk and its MinGW runtime).
+const OLD_LIBRARY: &[&str] = &[
+    "libvosk.dll",
+    "libvosk.so",
+    "libstdc++-6.dll",
+    "libgcc_s_seh-1.dll",
+    "libwinpthread-1.dll",
+];
+
+/// Deletes what the program's earlier speech engine left in `dir` (Vosk: `vosk-model-*`
+/// folders and its library); none of it is of use any more.
 pub fn remove_old(dir: &Path) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     for e in entries.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
-        if name.starts_with("vosk-model-") && e.path().is_dir() {
-            match fs::remove_dir_all(e.path()) {
-                Ok(()) => log::info!("removed the old speech model {name}"),
-                Err(err) => log::warn!("removing the old speech model {name}: {err}"),
-            }
+        let path = e.path();
+        let result = if name.starts_with("vosk-model-") && path.is_dir() {
+            fs::remove_dir_all(&path)
+        } else if OLD_LIBRARY.contains(&name.as_str()) && path.is_file() {
+            fs::remove_file(&path)
+        } else {
+            continue;
+        };
+        match result {
+            Ok(()) => log::info!("removed the old speech engine's {name}"),
+            Err(err) => log::warn!("removing the old speech engine's {name}: {err}"),
         }
     }
 }
@@ -441,6 +456,8 @@ mod tests {
         let dir = temp_dir("old");
         fs::create_dir_all(dir.join("vosk-model-small-en-us-0.15/am")).unwrap();
         fs::create_dir_all(dir.join("sherpa-onnx-keep")).unwrap();
+        fs::write(dir.join("libvosk.dll"), "old").unwrap();
+        fs::write(dir.join("libwinpthread-1.dll"), "old").unwrap();
         remove_old(&dir);
         assert_eq!(left_in(&dir), ["sherpa-onnx-keep"]);
         let _ = fs::remove_dir_all(&dir);

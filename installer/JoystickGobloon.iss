@@ -137,6 +137,13 @@ Source: "..\assets\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignorevers
 Source: "..\target\installer\deps\{#HidHideSetup}"; Flags: dontcopy
 Source: "..\target\installer\deps\{#VJoySetup}"; Flags: dontcopy
 
+[InstallDelete]
+; The speech library of versions before 1.0 (Vosk and its MinGW runtime): replaced by sherpa-onnx.
+Type: files; Name: "{app}\libvosk.dll"
+Type: files; Name: "{app}\libstdc++-6.dll"
+Type: files; Name: "{app}\libgcc_s_seh-1.dll"
+Type: files; Name: "{app}\libwinpthread-1.dll"
+
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
