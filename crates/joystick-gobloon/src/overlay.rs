@@ -490,6 +490,8 @@ fn draw(root: &mut egui::Ui, shared: &Shared) {
         .clone();
     let panel = egui::Frame::NONE.fill(Color32::TRANSPARENT);
     egui::CentralPanel::default().frame(panel).show(root, |ui| {
+        // Nothing on it reacts to the mouse but the drag while it is placed.
+        ui.style_mut().interaction.selectable_labels = false;
         // While placed: a border in the text color, visible on any background. Its width is
         // kept while playing (unseen), so the overlay has the same size in both.
         let stroke = if frame.calibrating {
@@ -511,7 +513,7 @@ fn draw(root: &mut egui::Ui, shared: &Shared) {
                             .size(frame.font_size)
                             .color(frame.text);
                         let text = if l.strong { text.strong() } else { text };
-                        ui.add(egui::Label::new(text).extend());
+                        ui.add(egui::Label::new(text).extend().selectable(false));
                     });
                 }
             });
