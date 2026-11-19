@@ -1,6 +1,7 @@
-//! Voice commands in the program: where sherpa-onnx and the speech models live (the library next
-//! to the exe or in `<data folder>/voice`, models downloaded into `<data folder>/voice` by
-//! gob-voice's `models`), and the Voice tab of the settings.
+//! Voice commands in the program: where the speech libraries (libvosk, sherpa-onnx) and models
+//! live (the libraries next to the exe or in `<data folder>/voice`, models of both engines
+//! downloaded into `<data folder>/voice` by gob-voice's `models` and kept there), and the Voice
+//! tab of the settings.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,9 +12,9 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, RichText};
 use gob_engine::VoiceConfig;
 use gob_i18n::I18n;
-use gob_voice::ModelInfo;
 use gob_voice::models::Size;
 use gob_voice::tts::VoiceInfo;
+use gob_voice::{Engine, ModelInfo};
 
 use crate::settings::Settings;
 use crate::settings_view::section_title;
@@ -24,7 +25,7 @@ pub fn dir() -> Option<PathBuf> {
     crate::settings::data_dir().map(|d| d.join("voice"))
 }
 
-/// Folders sherpa-onnx is looked for in.
+/// Folders the speech libraries are looked for in.
 fn library_dirs() -> Vec<PathBuf> {
     let exe_dir = std::env::current_exe()
         .ok()
@@ -41,6 +42,11 @@ fn language(settings: &Settings) -> &str {
     }
 }
 
+/// The speech recognizer chosen in the settings.
+fn engine(settings: &Settings) -> Engine {
+    Engine::parse(&settings.voice_engine)
+}
+
 /// The speech model size chosen in the settings.
 fn size(settings: &Settings) -> Size {
     Size::parse(&settings.voice_model_size)
@@ -52,12 +58,13 @@ pub fn config(settings: &Settings) -> Option<VoiceConfig> {
     // Called on start and after every voice setting: the natural voices follow too.
     apply_natural_voices(settings);
     let dir = dir()?;
-    // Models of the earlier speech engine are of no use: gone once per run.
-    static CLEANED: std::sync::Once = std::sync::Once::new();
-    CLEANED.call_once(|| gob_voice::models::remove_old(&dir));
+    let engine = engine(settings);
     let language = language(settings);
-    let Some(model) = gob_voice::models::pick(language, size(settings)) else {
-        log::info!("voice commands: no speech model for {language}");
+    let Some(model) = gob_voice::models::pick(engine, language, size(settings)) else {
+        log::info!(
+            "voice commands: no {} speech model for {language}",
+            engine.name()
+        );
         return None;
     };
     let Some(path) = gob_voice::models::installed(&dir, model) else {
@@ -69,6 +76,7 @@ pub fn config(settings: &Settings) -> Option<VoiceConfig> {
         return None;
     };
     Some(VoiceConfig {
+        engine,
         library_dirs: library_dirs(),
         model: path,
         language: language
@@ -122,16 +130,25 @@ pub fn microphones(ctx: &egui::Context, fresh: bool) -> Option<Arc<Vec<gob_voice
     list.microphones.clone()
 }
 
-/// Whether sherpa-onnx loads, checked once per run.
-fn library_available() -> bool {
-    static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *AVAILABLE.get_or_init(|| match gob_voice::Sherpa::load(&library_dirs()) {
-        Ok(_) => true,
+/// Whether the speech library of `engine` loads, checked once per run.
+fn library_available(engine: Engine) -> bool {
+    static VOSK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    static SHERPA: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let check = |loaded: Result<(), gob_voice::Error>| match loaded {
+        Ok(()) => true,
         Err(e) => {
             log::warn!("voice commands: {e}");
             false
         }
-    })
+    };
+    match engine {
+        Engine::Vosk => {
+            *VOSK.get_or_init(|| check(gob_voice::Vosk::load(&library_dirs()).map(|_| ())))
+        }
+        Engine::Sherpa => {
+            *SHERPA.get_or_init(|| check(gob_voice::Sherpa::load(&library_dirs()).map(|_| ())))
+        }
+    }
 }
 
 /// Tells the engine which natural voices are installed and which one is the default.
@@ -239,6 +256,35 @@ impl VoicePanel {
                 .find(|(c, _)| c == code)
                 .map_or_else(|| code.to_string(), |(_, name)| name.clone())
         };
+        let engine_tip = |e: Engine| match e {
+            Engine::Vosk => i18n.tr("settings-voice-engine-vosk"),
+            Engine::Sherpa => i18n.tr("settings-voice-engine-sherpa"),
+        };
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::EAR).size(style::ICON_SIZE))
+                .on_hover_text(i18n.tr("settings-voice-engine"));
+            let current = engine(settings);
+            egui::ComboBox::from_id_salt("voice-engine")
+                .selected_text(current.name())
+                .show_ui(ui, |ui| {
+                    for e in Engine::ALL {
+                        // Models of the other engine stay installed: switching back needs no
+                        // download.
+                        if ui
+                            .selectable_label(e == current, e.name())
+                            .on_hover_text(engine_tip(e))
+                            .clicked()
+                            && e != current
+                        {
+                            settings.voice_engine = e.key().to_string();
+                            changed = true;
+                        }
+                    }
+                })
+                .response
+                .on_hover_text(engine_tip(current));
+        });
+        let engine = engine(settings);
         ui.horizontal(|ui| {
             ui.label(RichText::new(icon::GLOBE).size(style::ICON_SIZE))
                 .on_hover_text(i18n.tr("settings-voice-language"));
@@ -262,13 +308,13 @@ impl VoicePanel {
                         }
                     };
                     pick(ui, "", same);
-                    for code in gob_voice::models::languages() {
+                    for code in gob_voice::models::languages(engine) {
                         pick(ui, code, language_name(code));
                     }
                 });
         });
         let language = language(settings).to_string();
-        let models = gob_voice::models::for_language(&language);
+        let models = gob_voice::models::for_language(engine, &language);
         if !models.is_empty() {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::GAUGE).size(style::ICON_SIZE))
@@ -280,7 +326,7 @@ impl VoicePanel {
                     };
                     i18n.trf(key, &[("memory", m.memory_mb.into())])
                 };
-                let chosen = gob_voice::models::pick(&language, size(settings));
+                let chosen = gob_voice::models::pick(engine, &language, size(settings));
                 let current = chosen.map(text).unwrap_or_default();
                 if models.len() == 1 {
                     ui.label(current)
@@ -302,7 +348,7 @@ impl VoicePanel {
         }
 
         let Some(dir) = dir() else { return changed };
-        let Some(model) = gob_voice::models::pick(&language, size(settings)) else {
+        let Some(model) = gob_voice::models::pick(engine, &language, size(settings)) else {
             let text = i18n.trf(
                 "settings-voice-no-model",
                 &[("language", language_name(&language).into())],
@@ -356,7 +402,7 @@ impl VoicePanel {
             );
             ui.label(RichText::new(text).color(ui.visuals().warn_fg_color));
         }
-        if !library_available() {
+        if !library_available(engine) {
             let text = format!(
                 "{}  {}",
                 icon::WARNING,

@@ -1,4 +1,4 @@
-//! Downloads of speech models, voices and the voice library: a .tar.bz2 from a URL, checked
+//! Downloads of speech models, voices and the voice library: a .tar.bz2 or .zip from a URL, checked
 //! against the SHA-256 pinned by the caller before it is unpacked, kept only when the caller's
 //! check finds what it needs in it, so a broken or half-done download is never used.
 
@@ -12,10 +12,10 @@ use sha2::{Digest, Sha256};
 
 use crate::Error;
 
-/// A .tar.bz2 to download.
+/// A .tar.bz2 or .zip (by the URL's ending) to download.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Archive {
-    /// The archive's name without `.tar.bz2`, and the folder it is unpacked to.
+    /// The archive's name without `.tar.bz2` or `.zip`, and the folder it is unpacked to.
     pub name: &'static str,
     /// Where it is downloaded from (the whole URL).
     pub url: String,
@@ -150,7 +150,7 @@ pub(crate) fn install_from(
 ) -> Result<PathBuf, Error> {
     let io_error = |e: io::Error| Error::Download(e.to_string());
     fs::create_dir_all(dir).map_err(io_error)?;
-    let part = dir.join(format!("{}.tar.bz2.part", archive.name));
+    let part = dir.join(format!("{}.download.part", archive.name));
     let unpacked = dir.join(format!("{}.part", archive.name));
     let result = (|| {
         let mut file = fs::OpenOptions::new()
@@ -188,7 +188,11 @@ pub(crate) fn install_from(
         }
         file.rewind().map_err(io_error)?;
         let _ = fs::remove_dir_all(&unpacked);
-        unpack(file, &unpacked, cancel)?;
+        if archive.url.ends_with(".zip") {
+            unpack_zip(file, &unpacked, cancel)?;
+        } else {
+            unpack(file, &unpacked, cancel)?;
+        }
         // The archive holds its files in a folder of its own name; take that, or the whole of it.
         let inner = unpacked.join(archive.name);
         let root = if inner.is_dir() {
@@ -247,6 +251,36 @@ fn unpack(file: impl Read + Seek, to: &Path, cancel: &AtomicBool) -> Result<(), 
                 path.display()
             )));
         }
+    }
+    Ok(())
+}
+
+/// Unpacks a .zip into `to`, refusing entries that would land outside it.
+fn unpack_zip(file: impl Read + Seek, to: &Path, cancel: &AtomicBool) -> Result<(), Error> {
+    let bad = |e: zip::result::ZipError| Error::Download(format!("zip: {e}"));
+    let io_error = |e: io::Error| Error::Download(e.to_string());
+    let mut archive = zip::ZipArchive::new(file).map_err(bad)?;
+    for i in 0..archive.len() {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(Error::Cancelled);
+        }
+        let mut entry = archive.by_index(i).map_err(bad)?;
+        let Some(name) = entry.enclosed_name() else {
+            return Err(Error::Download(format!(
+                "zip: unsafe path {}",
+                String::from_utf8_lossy(entry.name_raw())
+            )));
+        };
+        let path = to.join(name);
+        if entry.is_dir() {
+            fs::create_dir_all(&path).map_err(io_error)?;
+            continue;
+        }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(io_error)?;
+        }
+        let mut out = fs::File::create(&path).map_err(io_error)?;
+        io::copy(&mut entry, &mut out).map_err(io_error)?;
     }
     Ok(())
 }

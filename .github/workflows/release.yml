@@ -178,12 +178,25 @@ jobs:
           $got = (Get-FileHash "$dir\$name" -Algorithm SHA256).Hash
           if ($got -ne $hash) { Write-Error "$name hash $got, expected $hash"; exit 1 }
 
-      # Voice commands: sherpa-onnx 2.0.1 (its build without text to speech, static C runtime)
-      # and its ONNX Runtime next to the app, pinned by hash like the drivers. gob-voice's
-      # sherpa.rs mirrors this version's C structs: change both together.
-      - name: Speech library
+      # Voice commands, either engine (chosen in the settings), next to the app, pinned by hash
+      # like the drivers: Vosk 0.3.45's libvosk.dll and its MinGW runtime (the last Vosk release
+      # with built libraries), and sherpa-onnx 2.0.1 (its build without text to speech, static C
+      # runtime) with its ONNX Runtime. gob-voice's sherpa.rs mirrors this sherpa-onnx version's
+      # C structs: change both together.
+      - name: Speech libraries
         shell: pwsh
         run: |
+          $name = "vosk-win64-0.3.45.zip"
+          $hash = "F1DCC9CCA460630F81EA8F71794F69C80BED6556D2A4E6237B5785E1D2DFF34B"
+          $dir = "target\voice"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Invoke-WebRequest "https://github.com/alphacep/vosk-api/releases/download/v0.3.45/$name" -OutFile "target\$name"
+          $got = (Get-FileHash "target\$name" -Algorithm SHA256).Hash
+          if ($got -ne $hash) { Write-Error "$name hash $got, expected $hash"; exit 1 }
+          Expand-Archive "target\$name" "target\voice-zip" -Force
+          Copy-Item "target\voice-zip\vosk-win64-0.3.45\*.dll" $dir
+          if ((Get-ChildItem "$dir\*.dll").Count -ne 4) { Write-Error "expected 4 DLLs in $name"; exit 1 }
+
           $base = "sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts-lib"
           $name = "$base.tar.bz2"
           $hash = "21DA6A8B92D63CA02AD41DBFC120012343AAAEC2E5E02B14819C6B4F38004509"
@@ -198,7 +211,7 @@ jobs:
           foreach ($dll in "sherpa-onnx-c-api.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll") {
             Copy-Item "target\voice-archive\$base\lib\$dll" $dir
           }
-          if ((Get-ChildItem "$dir\*.dll").Count -ne 3) { Write-Error "expected 3 DLLs in $name"; exit 1 }
+          if ((Get-ChildItem "$dir\*.dll").Count -ne 7) { Write-Error "expected 3 DLLs in $name next to Vosk's 4"; exit 1 }
 
       # Game export plugins (plugins/export/<game>) go into export/ next to the app, without
       # their dev folders (tools that build the action lists).

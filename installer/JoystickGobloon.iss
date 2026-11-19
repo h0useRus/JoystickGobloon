@@ -125,7 +125,8 @@ Name: "vjoy"; Description: "{cm:InstallVJoy}"; GroupDescription: "{cm:Drivers}";
 
 [Files]
 Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
-; The speech library for voice commands (sherpa-onnx and ONNX Runtime; release.yml fetches it).
+; The speech libraries for voice commands (Vosk with its MinGW runtime, sherpa-onnx with ONNX
+; Runtime; release.yml fetches them).
 Source: "..\target\voice\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\lang\*.ftl"; DestDir: "{app}\lang"; Flags: ignoreversion
 ; Game export plugins (release.yml copies plugins\export there, without the dev folders).
@@ -136,13 +137,6 @@ Source: "..\assets\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignorevers
 ; uninstalled themselves.
 Source: "..\target\installer\deps\{#HidHideSetup}"; Flags: dontcopy
 Source: "..\target\installer\deps\{#VJoySetup}"; Flags: dontcopy
-
-[InstallDelete]
-; The speech library of versions before 1.0 (Vosk and its MinGW runtime): replaced by sherpa-onnx.
-Type: files; Name: "{app}\libvosk.dll"
-Type: files; Name: "{app}\libstdc++-6.dll"
-Type: files; Name: "{app}\libgcc_s_seh-1.dll"
-Type: files; Name: "{app}\libwinpthread-1.dll"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"

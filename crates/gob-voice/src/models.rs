@@ -1,13 +1,13 @@
-//! Speech models per language: sherpa-onnx models from its GitHub releases, a small and (for most
-//! languages) a large one, downloaded once into a folder the caller chooses (the program's data
-//! folder). Every download is checked against the SHA-256 pinned here before it is unpacked, and
+//! Speech models per engine and language: Vosk's small models from alphacephei.com (one per
+//! language) and sherpa-onnx models from its GitHub releases (a small and, for most languages, a
+//! large one), downloaded once into a folder the caller chooses (the program's data folder). Every download is checked against the SHA-256 pinned here before it is unpacked, and
 //! a model counts as installed only when its files are there, so a broken or half-done download
-//! is never used. German, Spanish and French share one multilingual model.
+//! is never used. German, Spanish and French share one multilingual sherpa-onnx model. Models of
+//! both engines can be installed side by side; choosing the other engine removes nothing.
 //!
 //! The memory figures are what the model needed on a test PC while decoding (the whole process,
 //! plans/SPEECH_PLAN.md "S0 results"): the program shows them so the user can choose.
 
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -16,6 +16,45 @@ use crate::Error;
 use crate::download::{self, Archive};
 
 const BASE_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/";
+const VOSK_URL: &str = "https://alphacephei.com/vosk/models/";
+
+/// The speech recognizer voice commands use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Engine {
+    /// Vosk in grammar mode: hears only the profile's phrases (or nothing), so a short command
+    /// said with an accent or on a quiet microphone still lands on the right phrase.
+    Vosk,
+    /// sherpa-onnx: writes down any speech, which the matcher then compares with the phrases.
+    Sherpa,
+}
+
+impl Engine {
+    pub const ALL: [Self; 2] = [Self::Vosk, Self::Sherpa];
+
+    /// As settings store it.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Vosk => "vosk",
+            Self::Sherpa => "sherpa",
+        }
+    }
+
+    /// From settings; anything else is Vosk.
+    pub fn parse(key: &str) -> Self {
+        match key {
+            "sherpa" => Self::Sherpa,
+            _ => Self::Vosk,
+        }
+    }
+
+    /// Its name (a product name, not translated).
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Vosk => "Vosk",
+            Self::Sherpa => "sherpa-onnx",
+        }
+    }
+}
 
 /// Small: less memory, a little less accurate. Large: more accurate, more memory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -45,6 +84,7 @@ impl Size {
 /// A speech model to download.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModelInfo {
+    pub engine: Engine,
     /// The program's language codes (`lang/*.ftl`) the model recognizes.
     pub languages: &'static [&'static str],
     pub size: Size,
@@ -61,7 +101,10 @@ impl ModelInfo {
     pub fn archive(&self) -> Archive {
         Archive {
             name: self.name,
-            url: format!("{BASE_URL}{}.tar.bz2", self.name),
+            url: match self.engine {
+                Engine::Vosk => format!("{VOSK_URL}{}.zip", self.name),
+                Engine::Sherpa => format!("{BASE_URL}{}.tar.bz2", self.name),
+            },
             bytes: self.bytes,
             sha256: self.sha256,
         }
@@ -70,10 +113,76 @@ impl ModelInfo {
 
 const EUROPEAN: &[&str] = &["de", "es", "fr"];
 
-/// The models (checked 2026-11-18: sizes and SHA-256 of the release assets; each archive holds
+/// The models. Vosk (checked 2026-11-01: each zip holds `<name>/am/final.mdl` and
+/// `<name>/conf/model.conf`; memory measured for English, the others estimated from their size);
+/// sherpa-onnx (checked 2026-11-18: sizes and SHA-256 of the release assets; each archive holds
 /// its files in a folder of its own name).
 pub const MODELS: &[ModelInfo] = &[
     ModelInfo {
+        engine: Engine::Vosk,
+        languages: &["en"],
+        size: Size::Small,
+        name: "vosk-model-small-en-us-0.15",
+        bytes: 41_205_931,
+        sha256: "30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498",
+        memory_mb: 130,
+    },
+    ModelInfo {
+        engine: Engine::Vosk,
+        languages: &["de"],
+        size: Size::Small,
+        name: "vosk-model-small-de-0.15",
+        bytes: 46_499_967,
+        sha256: "b7e53c90b1f0a38456f4cd62b366ecd58803cd97cd42b06438e2c131713d5e43",
+        memory_mb: 130,
+    },
+    ModelInfo {
+        engine: Engine::Vosk,
+        languages: &["es"],
+        size: Size::Small,
+        name: "vosk-model-small-es-0.42",
+        bytes: 39_817_833,
+        sha256: "09b239888f633ef2f0b4e09736e3d9936acfd810bc65d53fad45261762c6511f",
+        memory_mb: 130,
+    },
+    ModelInfo {
+        engine: Engine::Vosk,
+        languages: &["fr"],
+        size: Size::Small,
+        name: "vosk-model-small-fr-0.22",
+        bytes: 42_233_323,
+        sha256: "cabf6180e177eb9b3a9a9d43a437bd5e549f3a7d09525e5d69a3fed787be12ad",
+        memory_mb: 130,
+    },
+    ModelInfo {
+        engine: Engine::Vosk,
+        languages: &["ko"],
+        size: Size::Small,
+        name: "vosk-model-small-ko-0.22",
+        bytes: 86_914_329,
+        sha256: "eea36124087fed26c59996a4761519458e3bd185e8ea9d9865ad8760c4a1d989",
+        memory_mb: 220,
+    },
+    ModelInfo {
+        engine: Engine::Vosk,
+        languages: &["ru"],
+        size: Size::Small,
+        name: "vosk-model-small-ru-0.22",
+        bytes: 46_236_750,
+        sha256: "961d5ff98a17f4aa6de69864d0aa71fa5bac682301d2b5d17a3f24c5c99a46d4",
+        memory_mb: 130,
+    },
+    ModelInfo {
+        engine: Engine::Vosk,
+        languages: &["zh"],
+        size: Size::Small,
+        name: "vosk-model-small-cn-0.22",
+        bytes: 43_898_754,
+        sha256: "3af8b0e7e0f835ae9d414ce5df580237a3cfb08d586c9fbbb0f7ff29ad5b14ba",
+        memory_mb: 130,
+    },
+    ModelInfo {
+        engine: Engine::Sherpa,
         languages: &["en"],
         size: Size::Small,
         name: "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
@@ -82,6 +191,7 @@ pub const MODELS: &[ModelInfo] = &[
         memory_mb: 140,
     },
     ModelInfo {
+        engine: Engine::Sherpa,
         languages: &["en"],
         size: Size::Large,
         name: "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8",
@@ -90,6 +200,7 @@ pub const MODELS: &[ModelInfo] = &[
         memory_mb: 340,
     },
     ModelInfo {
+        engine: Engine::Sherpa,
         languages: &["ru"],
         size: Size::Small,
         name: "sherpa-onnx-zipformer-ru-int8-2025-04-20",
@@ -98,6 +209,7 @@ pub const MODELS: &[ModelInfo] = &[
         memory_mb: 260,
     },
     ModelInfo {
+        engine: Engine::Sherpa,
         languages: &["ru"],
         size: Size::Large,
         name: "sherpa-onnx-nemo-transducer-giga-am-v3-russian-2025-12-16",
@@ -106,6 +218,7 @@ pub const MODELS: &[ModelInfo] = &[
         memory_mb: 500,
     },
     ModelInfo {
+        engine: Engine::Sherpa,
         languages: EUROPEAN,
         size: Size::Small,
         name: "sherpa-onnx-nemo-fast-conformer-transducer-be-de-en-es-fr-hr-it-pl-ru-uk-20k-int8",
@@ -114,6 +227,7 @@ pub const MODELS: &[ModelInfo] = &[
         memory_mb: 340,
     },
     ModelInfo {
+        engine: Engine::Sherpa,
         languages: EUROPEAN,
         size: Size::Large,
         name: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
@@ -122,6 +236,7 @@ pub const MODELS: &[ModelInfo] = &[
         memory_mb: 1370,
     },
     ModelInfo {
+        engine: Engine::Sherpa,
         languages: &["zh"],
         size: Size::Small,
         name: "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
@@ -130,6 +245,7 @@ pub const MODELS: &[ModelInfo] = &[
         memory_mb: 345,
     },
     ModelInfo {
+        engine: Engine::Sherpa,
         languages: &["zh"],
         size: Size::Large,
         name: "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09",
@@ -138,6 +254,7 @@ pub const MODELS: &[ModelInfo] = &[
         memory_mb: 410,
     },
     ModelInfo {
+        engine: Engine::Sherpa,
         languages: &["ko"],
         size: Size::Small,
         name: "sherpa-onnx-moonshine-tiny-ko-quantized-2026-02-27",
@@ -152,10 +269,10 @@ fn base(language: &str) -> &str {
     language.split(['-', '_']).next().unwrap_or(language)
 }
 
-/// The languages that have a model, each once, in [`MODELS`] order.
-pub fn languages() -> Vec<&'static str> {
+/// The languages `engine` has a model for, each once, in [`MODELS`] order.
+pub fn languages(engine: Engine) -> Vec<&'static str> {
     let mut out: Vec<&'static str> = Vec::new();
-    for m in MODELS {
+    for m in MODELS.iter().filter(|m| m.engine == engine) {
         for l in m.languages {
             if !out.contains(l) {
                 out.push(l);
@@ -165,20 +282,22 @@ pub fn languages() -> Vec<&'static str> {
     out
 }
 
-/// The models of a language code (`en`, `de`...; a region like `en-GB` is ignored), small first.
-pub fn for_language(language: &str) -> Vec<&'static ModelInfo> {
+/// `engine`'s models of a language code (`en`, `de`...; a region like `en-GB` is ignored), small
+/// first.
+pub fn for_language(engine: Engine, language: &str) -> Vec<&'static ModelInfo> {
     let base = base(language);
     let mut found: Vec<&ModelInfo> = MODELS
         .iter()
+        .filter(|m| m.engine == engine)
         .filter(|m| m.languages.iter().any(|l| l.eq_ignore_ascii_case(base)))
         .collect();
     found.sort_by_key(|m| m.size == Size::Large);
     found
 }
 
-/// The model of that size for the language; the small one when it has no other.
-pub fn pick(language: &str, size: Size) -> Option<&'static ModelInfo> {
-    let models = for_language(language);
+/// `engine`'s model of that size for the language; the small one when it has no other.
+pub fn pick(engine: Engine, language: &str, size: Size) -> Option<&'static ModelInfo> {
+    let models = for_language(engine, language);
     models
         .iter()
         .find(|m| m.size == size)
@@ -189,44 +308,12 @@ pub fn pick(language: &str, size: Size) -> Option<&'static ModelInfo> {
 /// The model's folder in `dir` when it is installed there.
 pub fn installed(dir: &Path, model: &ModelInfo) -> Option<PathBuf> {
     let path = dir.join(model.name);
-    is_model(&path).then_some(path)
+    usable(model.engine)(&path).then_some(path)
 }
 
 /// Deletes the model's folder in `dir` (nothing when it is not there).
 pub fn remove(dir: &Path, model: &ModelInfo) -> io::Result<()> {
     download::remove(dir, model.name)
-}
-
-/// The library files of the program's earlier speech engine (Vosk and its MinGW runtime).
-const OLD_LIBRARY: &[&str] = &[
-    "libvosk.dll",
-    "libvosk.so",
-    "libstdc++-6.dll",
-    "libgcc_s_seh-1.dll",
-    "libwinpthread-1.dll",
-];
-
-/// Deletes what the program's earlier speech engine left in `dir` (Vosk: `vosk-model-*`
-/// folders and its library); none of it is of use any more.
-pub fn remove_old(dir: &Path) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for e in entries.flatten() {
-        let name = e.file_name().to_string_lossy().into_owned();
-        let path = e.path();
-        let result = if name.starts_with("vosk-model-") && path.is_dir() {
-            fs::remove_dir_all(&path)
-        } else if OLD_LIBRARY.contains(&name.as_str()) && path.is_file() {
-            fs::remove_file(&path)
-        } else {
-            continue;
-        };
-        match result {
-            Ok(()) => log::info!("removed the old speech engine's {name}"),
-            Err(err) => log::warn!("removing the old speech engine's {name}: {err}"),
-        }
-    }
 }
 
 /// Downloads the model into `dir`, checks it and unpacks it; returns its folder. `progress` gets
@@ -238,7 +325,21 @@ pub fn install(
     progress: &mut dyn FnMut(u64, u64),
     cancel: &AtomicBool,
 ) -> Result<PathBuf, Error> {
-    download::install(dir, &model.archive(), is_model, progress, cancel)
+    download::install(
+        dir,
+        &model.archive(),
+        usable(model.engine),
+        progress,
+        cancel,
+    )
+}
+
+/// How to tell that a folder holds a model of `engine`.
+fn usable(engine: Engine) -> fn(&Path) -> bool {
+    match engine {
+        Engine::Vosk => is_vosk_model,
+        Engine::Sherpa => is_model,
+    }
 }
 
 /// Whether `dir` holds a speech model sherpa-onnx can load (its token list and model files).
@@ -246,8 +347,14 @@ fn is_model(dir: &Path) -> bool {
     dir.is_dir() && crate::sherpa::ModelSpec::detect(dir, "", 1).is_ok()
 }
 
+/// Whether `dir` holds a Vosk model: its acoustic model and its configuration.
+fn is_vosk_model(dir: &Path) -> bool {
+    dir.join("am").join("final.mdl").is_file() && dir.join("conf").join("model.conf").is_file()
+}
+
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::io::{Cursor, Write};
 
     use sha2::{Digest, Sha256};
@@ -297,6 +404,7 @@ mod tests {
     fn fake_model(bytes: &[u8]) -> ModelInfo {
         let hash = hex(&Sha256::digest(bytes));
         ModelInfo {
+            engine: Engine::Sherpa,
             languages: &["xx"],
             size: Size::Small,
             name: "test-model",
@@ -333,7 +441,7 @@ mod tests {
             bytes.len() as u64,
             dir,
             &model.archive(),
-            is_model,
+            usable(model.engine),
             &mut |done, total| steps.push((done, total)),
             &AtomicBool::new(cancel),
         );
@@ -451,34 +559,111 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// A .zip with the given (path, content) entries.
+    fn zip_of(entries: &[(&str, &str)]) -> Vec<u8> {
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (path, content) in entries {
+            zip.start_file(*path, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(content.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap().into_inner()
+    }
+
+    /// Vosk's models are zips holding `am/` and `conf/` in a folder of their own name.
     #[test]
-    fn old_vosk_models_are_removed() {
-        let dir = temp_dir("old");
-        fs::create_dir_all(dir.join("vosk-model-small-en-us-0.15/am")).unwrap();
-        fs::create_dir_all(dir.join("sherpa-onnx-keep")).unwrap();
-        fs::write(dir.join("libvosk.dll"), "old").unwrap();
-        fs::write(dir.join("libwinpthread-1.dll"), "old").unwrap();
-        remove_old(&dir);
-        assert_eq!(left_in(&dir), ["sherpa-onnx-keep"]);
+    fn installs_a_vosk_zip() {
+        let dir = temp_dir("vosk");
+        let files = [
+            ("test-model/am/final.mdl", "am"),
+            ("test-model/conf/model.conf", "conf"),
+            ("test-model/graph/words.txt", "gear"),
+        ];
+        let bytes = zip_of(&files);
+        let model = ModelInfo {
+            engine: Engine::Vosk,
+            ..fake_model(&bytes)
+        };
+        assert!(model.archive().url.ends_with("test-model.zip"));
+        let path = run(&bytes, &model, &dir, false).0.unwrap();
+        assert_eq!(installed(&dir, &model), Some(path.clone()));
+        assert_eq!(
+            fs::read_to_string(path.join("conf/model.conf")).unwrap(),
+            "conf"
+        );
+        assert_eq!(left_in(&dir), ["test-model"]);
+        // A sherpa-onnx model is not a Vosk one, and the other way round.
+        let sherpa = ModelInfo {
+            engine: Engine::Sherpa,
+            ..model
+        };
+        assert_eq!(installed(&dir, &sherpa), None);
+        let _ = fs::remove_dir_all(&dir);
+
+        // A zip without the model's files, or with a path out of the folder, is refused.
+        let dir = temp_dir("vosk-bad");
+        let bytes = zip_of(&[("test-model/README", "no model")]);
+        let bad = ModelInfo {
+            engine: Engine::Vosk,
+            ..fake_model(&bytes)
+        };
+        assert!(matches!(
+            run(&bytes, &bad, &dir, false).0,
+            Err(Error::Model(_))
+        ));
+        let bytes = zip_of(&[("../escaped.txt", "outside")]);
+        let bad = ModelInfo {
+            engine: Engine::Vosk,
+            ..fake_model(&bytes)
+        };
+        let result = run(&bytes, &bad, &dir, false).0;
+        assert!(
+            matches!(&result, Err(Error::Download(e)) if e.contains("unsafe")),
+            "{result:?}"
+        );
+        assert!(left_in(&dir).is_empty(), "{:?}", left_in(&dir));
         let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn models_for_every_language() {
+        use Engine::{Sherpa, Vosk};
         assert_eq!(
-            pick("en", Size::Small).unwrap().name,
+            pick(Sherpa, "en", Size::Small).unwrap().name,
             "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27"
         );
-        assert_eq!(pick("en-GB", Size::Large), pick("en", Size::Large));
-        assert_eq!(pick("de", Size::Small), pick("fr", Size::Small), "shared");
-        // Korean has only a small model: large falls back to it.
-        assert_eq!(pick("ko", Size::Large), pick("ko", Size::Small));
-        assert_eq!(pick("xx", Size::Small), None);
-        // The program's languages (lang/*.ftl).
-        for lang in ["en", "de", "es", "fr", "ko", "ru", "zh"] {
-            assert!(pick(lang, Size::Small).is_some(), "{lang}");
-            assert!(languages().contains(&lang), "{lang}");
+        assert_eq!(
+            pick(Vosk, "en", Size::Small).unwrap().name,
+            "vosk-model-small-en-us-0.15"
+        );
+        // Vosk has only small models: large falls back to them.
+        assert_eq!(pick(Vosk, "en", Size::Large), pick(Vosk, "en", Size::Small));
+        assert_eq!(
+            pick(Sherpa, "en-GB", Size::Large),
+            pick(Sherpa, "en", Size::Large)
+        );
+        assert_eq!(
+            pick(Sherpa, "de", Size::Small),
+            pick(Sherpa, "fr", Size::Small),
+            "shared"
+        );
+        assert_ne!(pick(Vosk, "de", Size::Small), pick(Vosk, "fr", Size::Small));
+        // Korean has only a small sherpa-onnx model: large falls back to it.
+        assert_eq!(
+            pick(Sherpa, "ko", Size::Large),
+            pick(Sherpa, "ko", Size::Small)
+        );
+        assert_eq!(pick(Sherpa, "xx", Size::Small), None);
+        // The program's languages (lang/*.ftl), on both engines.
+        for engine in Engine::ALL {
+            for lang in ["en", "de", "es", "fr", "ko", "ru", "zh"] {
+                let m = pick(engine, lang, Size::Small);
+                assert!(m.is_some_and(|m| m.engine == engine), "{engine:?} {lang}");
+                assert!(languages(engine).contains(&lang), "{engine:?} {lang}");
+            }
+            assert_eq!(Engine::parse(engine.key()), engine);
         }
+        assert_eq!(Engine::parse("anything"), Engine::Vosk);
         for m in MODELS {
             assert_eq!(m.sha256.len(), 64, "{}", m.name);
             assert!(
@@ -488,9 +673,13 @@ mod tests {
             );
             for l in m.languages {
                 assert_eq!(
-                    for_language(l).iter().filter(|o| o.size == m.size).count(),
+                    for_language(m.engine, l)
+                        .iter()
+                        .filter(|o| o.size == m.size)
+                        .count(),
                     1,
-                    "one {:?} model for {l}",
+                    "one {:?} {:?} model for {l}",
+                    m.engine,
                     m.size
                 );
             }
@@ -504,7 +693,7 @@ mod tests {
     #[ignore]
     fn downloads_the_small_english_model() {
         let dir = temp_dir("download");
-        let model = pick("en", Size::Small).unwrap();
+        let model = pick(Engine::Sherpa, "en", Size::Small).unwrap();
         let mut last = (0, 0);
         let path = install(
             &dir,

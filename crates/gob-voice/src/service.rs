@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use crate::matcher::{self, Heard};
 use crate::sherpa::{ModelSpec, Sherpa};
-use crate::{Capture, Error};
+use crate::{Capture, Engine, Error};
 
 /// How often the thread looks for commands while audio comes in.
 const POLL: Duration = Duration::from_millis(10);
@@ -47,9 +47,11 @@ const PRE_ROLL: usize = 4_800;
 /// What the service needs to run.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoiceConfig {
-    /// Folders to look for sherpa-onnx in, before the system's library path.
+    /// The speech recognizer: Vosk or sherpa-onnx.
+    pub engine: Engine,
+    /// Folders to look for the engine's library in, before the system's library path.
     pub library_dirs: Vec<PathBuf>,
-    /// The speech model's folder.
+    /// The speech model's folder (a model of `engine`).
     pub model: PathBuf,
     /// The language spoken (`en`, `de`...), for models that take one.
     pub language: String,
@@ -81,8 +83,8 @@ pub enum VoiceEvent {
     },
 }
 
-/// Something that turns audio into a phrase index; sherpa-onnx and the matcher, or a fake in
-/// tests.
+/// Something that turns audio into a phrase index: Vosk with the phrases as its grammar,
+/// sherpa-onnx and the matcher, or a fake in tests.
 trait Recognize: Send {
     fn feed(&mut self, samples: &[i16]);
     fn finish(&mut self) -> Heard;
@@ -101,6 +103,53 @@ impl Recognize for PhraseRecognizer {
 
     fn finish(&mut self) -> Heard {
         matcher::hear(&self.recognizer.finish(), &self.phrases)
+    }
+}
+
+/// Vosk's recognizers: each listens for the phrases only. A phrase with a word the model does not
+/// know can never be heard: logged once.
+fn vosk_recognizers(config: &VoiceConfig) -> Result<MakeRecognizer, Error> {
+    let model = crate::Vosk::load(&config.library_dirs)?.model(&config.model)?;
+    let mut reported: HashSet<String> = HashSet::new();
+    Ok(Box::new(move |phrases: &Phrases| {
+        for (_, phrase) in phrases.iter() {
+            let unknown = model.unknown_words(phrase);
+            if !unknown.is_empty() && reported.insert(phrase.clone()) {
+                log::warn!(
+                    "voice: the speech model does not know {unknown:?}: phrase {phrase:?} will not be heard"
+                );
+            }
+        }
+        let texts: Vec<String> = phrases.iter().map(|(_, p)| p.clone()).collect();
+        Ok(Box::new(VoskRecognizer(model.recognizer(&texts)?)) as Box<dyn Recognize>)
+    }))
+}
+
+/// sherpa-onnx's recognizers, their text matched against the phrases.
+fn sherpa_recognizers(config: &VoiceConfig) -> Result<MakeRecognizer, Error> {
+    let sherpa = Sherpa::load(&config.library_dirs)?;
+    // One thread per decode: a phrase decodes in a fraction of its length, and the game keeps
+    // the other cores.
+    let spec = ModelSpec::detect(&config.model, &config.language, 1)?;
+    let model = sherpa.model(&spec)?;
+    Ok(Box::new(move |phrases: &Phrases| {
+        Ok(Box::new(PhraseRecognizer {
+            recognizer: model.recognizer(),
+            phrases: phrases.clone(),
+        }) as Box<dyn Recognize>)
+    }))
+}
+
+/// Vosk's recognizer: its result is already an index into the phrases it was made with.
+struct VoskRecognizer(crate::vosk::Recognizer);
+
+impl Recognize for VoskRecognizer {
+    fn feed(&mut self, samples: &[i16]) {
+        self.0.feed(samples);
+    }
+
+    fn finish(&mut self) -> Heard {
+        self.0.finish()
     }
 }
 
@@ -187,23 +236,17 @@ impl VoiceService {
             keep_open: config.keep_open,
         };
         let setup = move || -> Result<Setup, Error> {
-            let sherpa = Sherpa::load(&config.library_dirs)?;
             let started = std::time::Instant::now();
-            // One thread per decode: a phrase decodes in a fraction of its length, and the game
-            // keeps the other cores.
-            let spec = ModelSpec::detect(&config.model, &config.language, 1)?;
-            let model = sherpa.model(&spec)?;
+            let make: MakeRecognizer = match config.engine {
+                Engine::Vosk => vosk_recognizers(&config)?,
+                Engine::Sherpa => sherpa_recognizers(&config)?,
+            };
             log::info!(
-                "voice: speech model {} loaded in {:?}",
+                "voice: {} speech model {} loaded in {:?}",
+                config.engine.name(),
                 config.model.display(),
                 started.elapsed()
             );
-            let make: MakeRecognizer = Box::new(move |phrases| {
-                Ok(Box::new(PhraseRecognizer {
-                    recognizer: model.recognizer(),
-                    phrases: phrases.clone(),
-                }) as Box<dyn Recognize>)
-            });
             // Chosen microphones already reported missing: said once, not on every reopen.
             let mut reported = HashSet::new();
             let open: OpenMicrophone = Box::new(move |microphone, gain, sink| {

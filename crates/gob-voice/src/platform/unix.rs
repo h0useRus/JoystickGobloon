@@ -5,6 +5,9 @@ use std::path::Path;
 /// sherpa-onnx's C API in its Linux release; libonnxruntime.so lies next to it.
 pub(crate) const SHERPA_LIBRARY: &str = "libsherpa-onnx-c-api.so";
 
+/// The name in Vosk's Linux release.
+pub(crate) const VOSK_LIBRARY: &str = "libvosk.so";
+
 /// sherpa-onnx with text to speech (its last build with espeak-ng, GPL 3): downloaded on
 /// request, not shipped.
 pub(crate) fn tts_library() -> crate::download::Archive {
@@ -17,7 +20,8 @@ pub(crate) fn tts_library() -> crate::download::Archive {
 }
 
 pub(crate) fn load(path: &Path) -> Result<libloading::Library, libloading::Error> {
-    // SAFETY: sherpa-onnx and ONNX Runtime run no code on load that could break the program.
+    // SAFETY: sherpa-onnx, ONNX Runtime and libvosk run no code on load that could break the
+    // program.
     unsafe { libloading::Library::new(path) }
 }
 

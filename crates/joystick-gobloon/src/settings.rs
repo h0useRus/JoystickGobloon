@@ -79,6 +79,9 @@ pub struct Settings {
     pub curve_right_click_invert: bool,
     /// Ask before saving makes a profile Joystick Gremlin cannot open.
     pub warn_gremlin_format: bool,
+    /// Speech recognizer of voice commands: "vosk" (listens only for the phrases) or "sherpa"
+    /// (sherpa-onnx, writes down any speech).
+    pub voice_engine: String,
     /// Language voice commands are spoken in (a speech model's); empty = the program's.
     pub voice_language: String,
     /// Speech model size: "small" (less memory) or "large" (more accurate).
@@ -334,6 +337,7 @@ impl Default for Settings {
             monotonic_curves: true,
             curve_right_click_invert: true,
             warn_gremlin_format: true,
+            voice_engine: "vosk".into(),
             voice_language: String::new(),
             voice_model_size: "small".into(),
             tts_voice: String::new(),

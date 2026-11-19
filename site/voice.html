@@ -174,14 +174,14 @@
           </article>
           <article class="learn-action" id="privacy">
             <h3><i class="ph ph-lock-simple" aria-hidden="true"></i>Offline and private</h3>
-            <p>Speech is recognized on your computer by the <a href="https://github.com/k2-fsa/sherpa-onnx">sherpa-onnx</a> speech library: nothing you say leaves it, and nothing is recorded. The microphone is heard only while the push-to-talk input is held. The one download is the speech model of your language, once, when you ask for it.</p>
+            <p>Speech is recognized on your computer, by <a href="https://alphacephei.com/vosk/">Vosk</a> or <a href="https://github.com/k2-fsa/sherpa-onnx">sherpa-onnx</a> (you choose): nothing you say leaves it, and nothing is recorded. The microphone is heard only while the push-to-talk input is held. The one download is the speech model of your language, once, when you ask for it.</p>
           </article>
           <article class="learn-action" id="requirements">
             <h3><i class="ph ph-list-checks" aria-hidden="true"></i>What you need</h3>
             <ul>
               <li>Joystick Gobloon 0.12 or newer on Windows or Linux. The speech library comes with the installer, the portable zip and the AppImage.</li>
               <li>A microphone: a headset, a desk microphone or a webcam's. On Windows, allow desktop apps to use the microphone in Privacy settings.</li>
-              <li>The speech model of the language you speak: a small one (30-110 MB to download, 140-350 MB of memory while a profile with voice commands is active) or a large, more accurate one (110-490 MB, 340-1400 MB of memory). There are models for English, German, Spanish, French, Korean (small only), Russian and Chinese.</li>
+              <li>The speech model of the language you speak, for the recognizer you choose. Vosk: one model per language (40-90 MB to download, about 130 MB of memory while a profile with voice commands is active). sherpa-onnx: a small one (30-110 MB, 140-350 MB of memory) or a large one (110-490 MB, 340-1400 MB of memory). Both have models for English, German, Spanish, French, Korean, Russian and Chinese.</li>
             </ul>
           </article>
         </section>
@@ -190,7 +190,8 @@
           <h2 id="setup-title">Setting it up</h2>
           <article class="learn-action" id="language">
             <h3><i class="ph ph-translate" aria-hidden="true"></i>1. Speech model</h3>
-            <p>Open <span class="term">Settings</span>, <span class="term">Voice</span>. Commands are spoken in the program's language unless you choose another one in the list (<span class="term">Same as the program</span> is the default), so you can keep the program in one language and speak another. <span class="term">Model size</span> chooses between the small model and the large, more accurate one; each shows the memory it needs. Small is enough for most commands; take the large one for a strong accent or a noisy room if the computer has memory to spare. Click <span class="term">Download the speech model</span>; the progress bar shows the download, which is checked and unpacked by itself. <span class="term">Speech model installed</span> means it is ready; the bin removes it again.</p>
+            <p>Open <span class="term">Settings</span>, <span class="term">Voice</span>. First choose the <span class="term">Speech recognizer</span>: <strong>Vosk</strong> (the default) listens only for the phrases of your commands, so a short command still lands on the right phrase with an accent, a quiet headset or some noise; <strong>sherpa-onnx</strong> writes down whatever is said and then finds the command it sounds like, which suits clear speech and longer phrases. Each shows its own models below; models you downloaded for the other one stay installed, so you can switch back and forth and compare.</p>
+            <p>Commands are spoken in the program's language unless you choose another one in the list (<span class="term">Same as the program</span> is the default), so you can keep the program in one language and speak another. With sherpa-onnx, <span class="term">Model size</span> chooses between the small model and the large, more accurate one; each shows the memory it needs (Vosk has one model per language). Click <span class="term">Download the speech model</span>; the progress bar shows the download, which is checked and unpacked by itself. <span class="term">Speech model installed</span> means it is ready; the bin removes it again.</p>
             <p>Models are kept in the <code>voice</code> folder of the program's data folder: <code>%APPDATA%\JoystickGobloon\voice</code> on Windows, <code>~/.config/JoystickGobloon/voice</code> on Linux, or next to the program for a portable copy with its own settings.</p>
             <figure class="shot"><img src="img/voice-settings.png" loading="lazy" width="1102" height="732" alt="Settings, Voice: English, the small speech model (about 140 MB of memory) installed, the microphone volume at 100 %, the microphone test, Keep the microphone open switched on, the least confidence at 50 %, and below, Natural voices with the voice library and two English voices installed"></figure>
           </article>
