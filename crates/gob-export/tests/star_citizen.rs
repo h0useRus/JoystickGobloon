@@ -17,6 +17,7 @@ fn target(p: &Plugin) -> Target {
         platform: "windows".into(),
         roots: vec!["G:\\RSI\\StarCitizen".into()],
         documents: String::new(),
+        local_app_data: String::new(),
     })
     .unwrap()
     .into_iter()

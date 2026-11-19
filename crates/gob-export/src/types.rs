@@ -17,6 +17,9 @@ pub struct Env {
     /// The user's Documents folder, with `/` and a `/` at its end (wherever the user moved it);
     /// empty when not known.
     pub documents: String,
+    /// The user's local application data folder (`%LOCALAPPDATA%` on Windows), written like
+    /// `documents`; empty when not known (on Linux games keep theirs in the Wine prefixes).
+    pub local_app_data: String,
 }
 
 /// One install or channel of the game.

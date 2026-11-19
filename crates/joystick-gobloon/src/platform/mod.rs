@@ -32,6 +32,9 @@ pub(crate) trait Desktop {
     fn default_data_dir() -> Option<PathBuf>;
     /// The user's documents folder, where the profile file dialogs start the first time.
     fn documents_dir() -> Option<PathBuf>;
+    /// The user's local application data folder (%LOCALAPPDATA%), where some games keep their
+    /// settings; `None` where there is no such folder.
+    fn local_app_data_dir() -> Option<PathBuf>;
     /// Font files with Chinese and Korean glyphs: (egui font name, file).
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)>;
     /// Opens a text file (the log) in the system's editor.
@@ -194,6 +197,10 @@ pub(crate) fn default_data_dir() -> Option<PathBuf> {
 
 pub(crate) fn documents_dir() -> Option<PathBuf> {
     Current::documents_dir()
+}
+
+pub(crate) fn local_app_data_dir() -> Option<PathBuf> {
+    Current::local_app_data_dir()
 }
 
 pub(crate) fn game_roots() -> Vec<String> {

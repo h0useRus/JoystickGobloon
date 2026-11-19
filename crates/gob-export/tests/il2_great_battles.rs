@@ -21,6 +21,7 @@ fn target(p: &Plugin) -> Target {
         platform: "windows".into(),
         roots: vec!["D:\\Games".into()],
         documents: String::new(),
+        local_app_data: String::new(),
     })
     .unwrap()
     .into_iter()
@@ -119,6 +120,7 @@ fn finds_the_install_and_its_files() {
             platform: "windows".into(),
             roots: vec!["E:/IL2".into()],
             documents: String::new(),
+            local_app_data: String::new(),
         })
         .unwrap();
     assert!(chosen.iter().any(|t| t.id == "E:/IL2"));

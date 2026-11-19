@@ -181,10 +181,14 @@ impl GameView {
         let documents = crate::platform::documents_dir()
             .map(|d| format!("{}/", slashed(&d.to_string_lossy())))
             .unwrap_or_default();
+        let local_app_data = crate::platform::local_app_data_dir()
+            .map(|d| format!("{}/", slashed(&d.to_string_lossy())))
+            .unwrap_or_default();
         let env = gob_export::Env {
             platform: if cfg!(windows) { "windows" } else { "linux" }.into(),
             roots,
             documents,
+            local_app_data,
         };
         self.send(Request::Scan { env });
     }

@@ -23,6 +23,7 @@ fn targets(p: &Plugin) -> Vec<Target> {
         platform: "windows".into(),
         roots: vec!["C:/".into(), "C:\\Users\\h0use".into()],
         documents: String::new(),
+        local_app_data: String::new(),
     })
     .unwrap()
 }
@@ -189,6 +190,7 @@ fn finds_steam_and_store_installs() {
             platform: "linux".into(),
             roots: vec!["/home/h0use".into()],
             documents: String::new(),
+            local_app_data: String::new(),
         })
         .unwrap();
     assert!(linux.iter().all(|t| t.id.starts_with("steam")));
@@ -210,6 +212,7 @@ fn the_host_finds_the_profiles() {
             platform: "windows".into(),
             roots: vec![dir.to_string_lossy().into_owned()],
             documents: String::new(),
+            local_app_data: String::new(),
         })
         .unwrap();
     let installed: Vec<_> = all.into_iter().filter(host::installed).collect();
@@ -679,6 +682,7 @@ fn files_to_import_go_to_the_documents_folder() {
             platform: "windows".into(),
             roots: vec!["C:/Users/h0use/".into()],
             documents: "C:/Users/h0use/OneDrive/Documents/".into(),
+            local_app_data: String::new(),
         })
         .unwrap();
     let st = all

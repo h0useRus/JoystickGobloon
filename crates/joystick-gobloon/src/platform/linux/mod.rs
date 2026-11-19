@@ -80,6 +80,11 @@ impl super::Desktop for Desktop {
         Some(documents.unwrap_or(home))
     }
 
+    /// Games keep their settings in the Wine prefixes, which the export plugins search.
+    fn local_app_data_dir() -> Option<PathBuf> {
+        None
+    }
+
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
         fonts::cjk()
     }

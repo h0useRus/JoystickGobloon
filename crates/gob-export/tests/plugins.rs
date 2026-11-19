@@ -48,6 +48,7 @@ fn finds_targets_and_their_version() {
         platform: "windows".into(),
         roots: vec!["C:".into(), "D:".into()],
         documents: String::new(),
+        local_app_data: String::new(),
     };
     let targets = p.targets(&env).unwrap();
     assert_eq!(targets.len(), 2);
@@ -70,6 +71,7 @@ fn write_then_read_gives_the_same_binds() {
             platform: "windows".into(),
             roots: vec!["C:".into()],
             documents: String::new(),
+            local_app_data: String::new(),
         })
         .unwrap()
         .remove(0);

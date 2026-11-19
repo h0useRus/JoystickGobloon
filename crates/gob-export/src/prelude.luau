@@ -16,8 +16,9 @@ end
 
 plugin = {
 	-- plugin.targets(function(ctx) -> {target, ...}): the game's installs or channels found.
-	-- ctx.env = {platform = "windows" | "linux", roots = {folder, ...}, documents = "C:/.../"}
-	-- (documents: the user's Documents folder, "" when not known).
+	-- ctx.env = {platform = "windows" | "linux", roots = {folder, ...}, documents = "C:/.../",
+	-- local_app_data = "C:/.../"} (the user's Documents and local application data folders, ""
+	-- when not known).
 	targets = hook("targets"),
 	-- plugin.version(function(ctx) -> "1.2.3" | nil): the game version of ctx.target, from
 	-- ctx.files (key -> {path, text}; text is nil when the file is missing).

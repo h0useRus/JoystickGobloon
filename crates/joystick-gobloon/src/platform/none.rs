@@ -20,6 +20,11 @@ impl super::Desktop for Desktop {
         std::env::var_os("HOME").map(PathBuf::from)
     }
 
+    /// Games keep their settings in the Wine prefixes, which the export plugins search.
+    fn local_app_data_dir() -> Option<PathBuf> {
+        None
+    }
+
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
         Vec::new()
     }
