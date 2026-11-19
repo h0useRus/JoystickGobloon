@@ -1295,6 +1295,9 @@ impl DevicesView {
         let inherited = matches!(bound, Bound::Inherited(_));
         // Where each down chip is: a click there shows the input the action belongs to.
         let mut down_chips: Vec<(Rect, usize)> = Vec::new();
+        // Where a group's fold arrow is: found the same way, the card covers it.
+        let mut fold_arrow: Option<Rect> = None;
+        let mut fold_tip: Option<String> = None;
         let response = egui::Frame::new()
             .fill(fill)
             .stroke(stroke)
@@ -1310,15 +1313,9 @@ impl DevicesView {
                         } else {
                             (icon::CARET_DOWN, "voice-group-fold")
                         };
-                        let arrow = ui
-                            .add(
-                                egui::Label::new(RichText::new(caret).size(15.0))
-                                    .sense(egui::Sense::click()),
-                            )
-                            .on_hover_text(i18n.tr(tip));
-                        if arrow.clicked() && !self.voice_folded.remove(&key.1) {
-                            self.voice_folded.insert(key.1);
-                        }
+                        let arrow = ui.label(RichText::new(caret).size(15.0));
+                        fold_arrow = Some(arrow.rect.expand(2.0));
+                        fold_tip = Some(i18n.tr(tip));
                         ui.label(RichText::new(icon::FOLDER_SIMPLE).size(15.0));
                     } else {
                         ui.label(RichText::new(key_glyph(key)).size(15.0));
@@ -1413,10 +1410,23 @@ impl DevicesView {
             ui.ctx().request_repaint();
         }
         ui.add_space(2.0);
+        let at = ui.ctx().input(|i| i.pointer.interact_pos());
+        let on_arrow = fold_arrow.is_some_and(|r| at.is_some_and(|p| r.contains(p)));
+        let response = match fold_tip {
+            Some(tip) if on_arrow => response
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(tip),
+            _ => response,
+        };
         if !response.clicked() {
             return None;
         }
-        let at = ui.ctx().input(|i| i.pointer.interact_pos());
+        if on_arrow {
+            if !self.voice_folded.remove(&key.1) {
+                self.voice_folded.insert(key.1);
+            }
+            return None;
+        }
         let owner = down_chips
             .iter()
             .find(|(rect, _)| at.is_some_and(|p| rect.contains(p)))
