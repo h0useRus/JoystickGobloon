@@ -560,3 +560,28 @@ fn moved_nodes_keep_their_actions() {
     assert_eq!(p.move_voice_nodes(&[6], None), [6]);
     assert_eq!(p.voice_command(6).unwrap().parent, None);
 }
+
+/// Groups in a loop and groups deeper than any limit are written too: nothing is lost on save.
+#[test]
+fn loops_and_deep_groups_survive_saving() {
+    let mut p = gob_gremlin::from_str(GROUPS).unwrap();
+    // 2 holds 3; now 2 is in 3 too.
+    p.voice_commands
+        .iter_mut()
+        .find(|c| c.id == 2)
+        .unwrap()
+        .parent = Some(3);
+    let mut parent = None;
+    for _ in 0..20 {
+        parent = Some(p.add_voice_node(parent, true));
+    }
+    let leaf = p.add_voice_node(parent, false);
+    let again = gob_gremlin::from_str(&gob_gremlin::to_string(&p)).unwrap();
+    let mut ids: Vec<u32> = again.voice_commands.iter().map(|c| c.id).collect();
+    ids.sort();
+    let mut want: Vec<u32> = p.voice_commands.iter().map(|c| c.id).collect();
+    want.sort();
+    assert_eq!(ids, want);
+    assert_eq!(again.voice_groups_of(leaf).len(), 20);
+    assert_eq!(again.voice_command(4).unwrap().parent, Some(3));
+}

@@ -181,7 +181,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
                 }),
             ),
             Section::VirtualDevices => virtual_to(&p.virtual_devices),
-            Section::VoiceCommands => voice_to(&p.voice_commands),
+            Section::VoiceCommands => voice_to(p),
             Section::KeyCombos => combos_to(&p.key_combos),
             Section::GameBindings => games_to(&p.game_bindings),
             Section::Extra(i) => p.extra[i].clone(),
@@ -308,18 +308,12 @@ fn voice_from(section: &Element) -> Vec<VoiceCommand> {
     commands
 }
 
-fn voice_to(commands: &[VoiceCommand]) -> Element {
-    fn write(commands: &[VoiceCommand], c: &VoiceCommand, depth: usize) -> Element {
+/// `<voice-commands>` in tree order: every command and group once, whatever its parent says (one
+/// whose group is gone, or whose groups make a loop, at the top level, as [`Profile::voice_tree`]
+/// lists them), at any depth.
+fn voice_to(p: &Profile) -> Element {
+    fn node(c: &VoiceCommand, inner: Vec<Element>) -> Element {
         let phrases = c.phrases.iter().map(|p| Element::with_text("phrase", p));
-        let inner: Vec<Element> = if c.group && depth < 16 {
-            commands
-                .iter()
-                .filter(|o| o.parent == Some(c.id))
-                .map(|o| write(commands, o, depth + 1))
-                .collect()
-        } else {
-            Vec::new()
-        };
         container(
             if c.group { "group" } else { "command" },
             phrases.chain(inner),
@@ -327,15 +321,22 @@ fn voice_to(commands: &[VoiceCommand]) -> Element {
         .with_attr("id", c.id.to_string())
         .with_attr("hold", c.hold.to_string())
     }
-    // A command whose group is gone is kept at the top level.
-    let top = commands.iter().filter(|c| {
-        c.parent
-            .is_none_or(|g| !commands.iter().any(|o| o.id == g && o.group))
-    });
-    container(
-        "voice-commands",
-        top.map(|c| write(commands, c, 0)).collect::<Vec<_>>(),
-    )
+    // The elements at `depth` from `tree[*at..]`, each with what follows it one level deeper.
+    fn level(tree: &[(usize, &VoiceCommand)], at: &mut usize, depth: usize) -> Vec<Element> {
+        let mut out = Vec::new();
+        while let Some(&(d, c)) = tree.get(*at) {
+            if d < depth {
+                break;
+            }
+            *at += 1;
+            let inner = level(tree, at, d + 1);
+            out.push(node(c, inner));
+        }
+        out
+    }
+    let tree = p.voice_tree();
+    let mut at = 0;
+    container("voice-commands", level(&tree, &mut at, 0))
 }
 
 /// `<game-bindings>`: `<game id="..." target="..." version="..."><device output="vjoy:1"
