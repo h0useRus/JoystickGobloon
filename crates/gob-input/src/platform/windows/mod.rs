@@ -52,6 +52,7 @@ impl Drop for Platform {
 impl super::Backend for Platform {
     type Found = DIDEVICEINSTANCEW;
     type Device = Controller;
+    const SCAN_ON_THREAD: bool = true;
 
     fn new() -> Option<Self> {
         let di = dinput::DirectInput::new().ok()?;

@@ -15,6 +15,10 @@ pub type Calibrations = std::collections::HashMap<(String, u8), Calibration>;
 
 /// Re-enumerate devices this often to catch hot-plugging.
 const RESCAN: Duration = Duration::from_secs(2);
+
+/// A device that was found but did not open is tried again this often, not on every scan
+/// (opening can be slow too).
+const REOPEN: Duration = Duration::from_secs(30);
 const EVENT_BUFFER: usize = 4096;
 /// Range and default of [`InputService::set_poll_interval`].
 pub const MIN_POLL_INTERVAL: Duration = Duration::from_millis(1);
@@ -308,6 +312,42 @@ struct Shared<'a> {
     polling: &'a AtomicBool,
 }
 
+/// Attached devices with their ids, as [`crate::platform::Backend::attached`] lists them.
+type Attached<P> = Vec<(String, <P as crate::platform::Backend>::Found)>;
+
+/// Looks for attached devices every [`RESCAN`] on a thread of its own, with a backend of its own,
+/// and sends what it found; it ends with the input thread (the receiver dropped). `None` when
+/// the thread did not start (the input thread then looks itself).
+fn spawn_scanner<P: crate::platform::Backend>() -> Option<std::sync::mpsc::Receiver<Attached<P>>> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let spawned = std::thread::Builder::new()
+        .name("input-scan".into())
+        .spawn(move || {
+            let Some(platform) = P::new() else {
+                return;
+            };
+            loop {
+                std::thread::sleep(RESCAN);
+                let at = Instant::now();
+                let attached = platform.attached();
+                let took = at.elapsed();
+                if took > Duration::from_millis(100) {
+                    log::debug!("looking for controllers took {} ms", took.as_millis());
+                }
+                if tx.send(attached).is_err() {
+                    return;
+                }
+            }
+        });
+    match spawned {
+        Ok(_) => Some(rx),
+        Err(e) => {
+            log::warn!("input: the device scan thread did not start ({e}): scanning in place");
+            None
+        }
+    }
+}
+
 /// The input thread: finds, opens and reads controllers through this platform's backend.
 fn run(shared: &Shared, on_change: &dyn Fn()) {
     use crate::platform::{Backend, Device, Platform};
@@ -317,6 +357,15 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
         return;
     };
     let mut devices: Vec<<Platform as Backend>::Device> = Vec::new();
+    // The attached devices: looked up here, or sent by the scanning thread.
+    let scans = if Platform::SCAN_ON_THREAD {
+        spawn_scanner::<Platform>()
+    } else {
+        None
+    };
+    let mut attached = platform.attached();
+    // Devices that did not open, and when they may be tried again.
+    let mut failed: HashMap<String, Instant> = HashMap::new();
     let mut next_scan = Instant::now();
     // The first scan, and the one after a device was lost, always reports the device list.
     let mut announce = true;
@@ -336,25 +385,40 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
             devices.clear();
             next_scan = Instant::now();
         }
-        if Instant::now() >= next_scan {
+        let mut rescan = Instant::now() >= next_scan;
+        match &scans {
+            Some(rx) => {
+                if let Some(list) = rx.try_iter().last() {
+                    attached = list;
+                    rescan = true;
+                }
+            }
+            None if rescan => attached = platform.attached(),
+            None => {}
+        }
+        if rescan {
             next_scan = Instant::now() + RESCAN;
-            let attached = platform.attached();
+            let now = Instant::now();
+            failed.retain(|id, retry| *retry > now && attached.iter().any(|(a, _)| a == id));
             let before = devices.len();
             devices.retain(|d| attached.iter().any(|(id, _)| *id == d.state().info.guid));
             filters.retain(|id, _| devices.iter().any(|d| d.state().info.guid == *id));
             for (id, found) in &attached {
-                if !devices.iter().any(|d| d.state().info.guid == *id)
-                    && let Some(mut dev) = platform.open(found, events)
-                {
-                    dev.set_calibrations(&cal);
-                    let mut filter = Filtered::new(dev.state());
-                    filter.configure(&cal, debounce.get(id).copied().unwrap_or(0));
-                    filters.insert(id.clone(), filter);
-                    if Platform::EXCLUSIVE {
-                        dev.set_exclusive(crate::exclusive::wanted(id));
-                    }
-                    devices.push(dev);
+                if devices.iter().any(|d| d.state().info.guid == *id) || failed.contains_key(id) {
+                    continue;
                 }
+                let Some(mut dev) = platform.open(found, events) else {
+                    failed.insert(id.clone(), now + REOPEN);
+                    continue;
+                };
+                dev.set_calibrations(&cal);
+                let mut filter = Filtered::new(dev.state());
+                filter.configure(&cal, debounce.get(id).copied().unwrap_or(0));
+                filters.insert(id.clone(), filter);
+                if Platform::EXCLUSIVE {
+                    dev.set_exclusive(crate::exclusive::wanted(id));
+                }
+                devices.push(dev);
             }
             if devices.len() != before || announce {
                 announce = false;
