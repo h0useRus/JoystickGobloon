@@ -18,6 +18,7 @@ pub enum SettingsTab {
     Appearance,
     General,
     Voice,
+    Overlay,
     Lighting,
     About,
 }
@@ -39,6 +40,8 @@ pub enum Change {
     LedDefaults,
     /// Voice settings changed, or a speech model was installed or removed.
     Voice,
+    /// Overlay settings changed.
+    Overlay,
 }
 
 /// What the attached controllers tell the settings pages.
@@ -51,6 +54,8 @@ pub struct Attached<'a> {
     pub system_part: &'a mut crate::system_part_view::SystemPartView,
     /// The Voice tab's download and microphone test.
     pub voice: &'a mut crate::voice::VoicePanel,
+    /// The overlay, placed from its tab.
+    pub overlay: &'a mut crate::overlay::Overlay,
 }
 
 pub fn show(
@@ -78,6 +83,11 @@ pub fn show(
                 "settings-general",
             ),
             (SettingsTab::Voice, icon::MICROPHONE, "settings-voice"),
+            (
+                SettingsTab::Overlay,
+                icon::PICTURE_IN_PICTURE,
+                "settings-overlay",
+            ),
             (SettingsTab::Lighting, icon::LIGHTBULB, "settings-lighting"),
             (SettingsTab::About, icon::INFO, "settings-about"),
         ] {
@@ -95,6 +105,9 @@ pub fn show(
     if *tab != SettingsTab::Voice {
         attached.voice.hide();
     }
+    if *tab != SettingsTab::Overlay {
+        attached.overlay.calibrating = false;
+    }
     match tab {
         SettingsTab::Appearance => {
             let change = appearance(ui, i18n, settings);
@@ -110,6 +123,8 @@ pub fn show(
             .voice
             .show(ui, i18n, settings)
             .then_some(Change::Voice),
+        SettingsTab::Overlay => crate::overlay::settings_tab(ui, i18n, settings, attached.overlay)
+            .then_some(Change::Overlay),
         SettingsTab::Lighting => lighting(ui, i18n, settings, attached.led_devices),
         SettingsTab::About => {
             about(ui, i18n, logo, updater);

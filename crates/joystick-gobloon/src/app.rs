@@ -68,6 +68,8 @@ pub struct JoystickGobloonApp {
     system_part: crate::system_part_view::SystemPartView,
     /// The settings' Voice tab: speech model download and microphone test.
     voice_panel: crate::voice::VoicePanel,
+    /// The game overlay (Settings, Overlay).
+    overlay: crate::overlay::Overlay,
     /// Running profile, if activated.
     /// New releases from GitHub (About page, check on start).
     updater: crate::update::Updater,
@@ -280,6 +282,7 @@ impl JoystickGobloonApp {
             device_access: crate::device_access::DeviceAccess::new(),
             system_part: crate::system_part_view::SystemPartView::new(),
             voice_panel: Default::default(),
+            overlay: crate::overlay::Overlay::new(),
             activation,
             was_active: false,
             switching: false,
@@ -386,6 +389,11 @@ impl JoystickGobloonApp {
             Ok("voice") => {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::Voice;
+            }
+            Ok("overlay") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::Overlay;
+                app.overlay.calibrating = true;
             }
             _ => {}
         }
@@ -2184,6 +2192,7 @@ impl JoystickGobloonApp {
                 self.activation
                     .set_voice(crate::voice::config(&self.settings));
             }
+            Change::Overlay => {}
         }
         self.settings.save();
     }
@@ -2192,8 +2201,28 @@ impl JoystickGobloonApp {
 impl eframe::App for JoystickGobloonApp {
     /// Runs every frame, and also while the window is in the tray or minimized (eframe then
     /// draws nothing and skips [`Self::ui`]).
+    /// Fully transparent: the overlay window needs it, and the main window's panels paint all
+    /// of it.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0; 4]
+    }
+
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
+        // The overlay follows the running profile, also while this window is in the tray.
+        let status = self.activation.status();
+        let recording = crate::key_capture::recording(ctx);
+        if let Some(pos) = self.overlay.update(
+            ctx,
+            &self.i18n,
+            &self.settings,
+            status.as_ref(),
+            self.profile.as_ref().map(|p| &p.profile),
+            recording,
+        ) {
+            // Saved when placing is done.
+            self.settings.overlay_pos = Some(pos);
+        }
         self.watch_scripts();
         self.switch_by_program();
         // Started or stopped from the tray menu (maybe while the window was hidden).
@@ -2680,6 +2709,7 @@ impl eframe::App for JoystickGobloonApp {
                             polls_devices: self.input.polls_devices(),
                             system_part: &mut self.system_part,
                             voice: &mut self.voice_panel,
+                            overlay: &mut self.overlay,
                         },
                     );
                     if let Some(change) = change {

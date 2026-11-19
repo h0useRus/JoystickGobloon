@@ -99,6 +99,23 @@ pub struct Settings {
     /// Keep the microphones of voice commands open while a profile runs (some are silent for a
     /// moment after they open); only what is said while listening is recognized.
     pub voice_keep_open: bool,
+    /// The game overlay is on (its key combination shows and hides it while playing).
+    pub overlay_on: bool,
+    /// The overlay's top left on the screen (points); `None` = not placed yet.
+    pub overlay_pos: Option<[f32; 2]>,
+    /// What the overlay shows: mode and layer, the last pressed binding's description, the
+    /// latency, the recognized voice command, every voice command.
+    pub overlay_mode: bool,
+    pub overlay_action: bool,
+    pub overlay_latency: bool,
+    pub overlay_voice: bool,
+    pub overlay_commands: bool,
+    /// Overlay text and background colors (RGBA, not premultiplied).
+    pub overlay_text_color: [u8; 4],
+    pub overlay_background: [u8; 4],
+    pub overlay_font_size: f32,
+    /// The keys that show and hide the overlay: set 1 scan codes, 0x100 = E0 prefix.
+    pub overlay_keys: Vec<u16>,
     /// What the log file records.
     pub log_level: LogLevel,
     /// Main window size (logical points) when it was last resized; the next start opens it so.
@@ -348,6 +365,17 @@ impl Default for Settings {
             voice_gain: 1.0,
             voice_min_confidence: 0.5,
             voice_keep_open: true,
+            overlay_on: false,
+            overlay_pos: None,
+            overlay_mode: true,
+            overlay_action: true,
+            overlay_latency: false,
+            overlay_voice: true,
+            overlay_commands: false,
+            overlay_text_color: [255, 255, 255, 255],
+            overlay_background: [0, 0, 0, 160],
+            overlay_font_size: 16.0,
+            overlay_keys: crate::overlay::DEFAULT_KEYS.to_vec(),
             log_level: LogLevel::default(),
             window_size: DEFAULT_WINDOW_SIZE,
             window_maximized: false,
