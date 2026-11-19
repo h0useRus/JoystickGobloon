@@ -511,7 +511,7 @@ fn profile() -> String {
             "zones",
             "axis-zones",
             &format!(
-                "{}<zone-0>{}<action-id>vzone</action-id></zone-0>                 <zone-1>{}{}<action-id>vzone</action-id></zone-1>",
+                "{}<zone-0>{}<action-id>vzone</action-id></zone-0><zone-1>{}{}<action-id>vzone</action-id></zone-1>",
                 prop("string", "points", "0.8"),
                 prop("string", "output", "rescale"),
                 prop("string", "output", "fixed"),

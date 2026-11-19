@@ -2802,20 +2802,29 @@ impl Engine {
                 if let Value::Axis(v) = *value {
                     let v = f64::from(v);
                     let n = gob_core::zones::zone_of(points, v);
-                    // The zone left gets the edge it was left at, so its outputs do not stay
-                    // somewhere in the middle (a fixed zone keeps its value).
+                    // The zone left, and any the axis jumped over, get the edge it passed them
+                    // at, so their outputs do not stay somewhere in the middle (a fixed zone
+                    // keeps its value).
                     let was = self.zone_last.insert(node, n);
-                    if let Some(old) = was.filter(|&o| o != n)
-                        && let Some((output, nodes)) = zones.get(old)
-                        && !matches!(output, gob_core::ZoneOutput::Fixed(_))
-                    {
-                        let lo = if old == 0 { -1.0 } else { points[old - 1] };
-                        let hi = points.get(old).copied().unwrap_or(1.0);
-                        let edge = if n > old { hi } else { lo };
-                        let mut left =
-                            Value::Axis(gob_core::zones::output(points, old, *output, edge) as f32);
-                        for &c in nodes {
-                            self.run(c, src, &mut left, now, out, depth + 1);
+                    if let Some(old) = was.filter(|&o| o != n) {
+                        let up = n > old;
+                        let passed = if up { old..n } else { n + 1..old + 1 };
+                        for z in passed {
+                            let Some((output, nodes)) = zones.get(z) else {
+                                continue;
+                            };
+                            if matches!(output, gob_core::ZoneOutput::Fixed(_)) {
+                                continue;
+                            }
+                            let lo = if z == 0 { -1.0 } else { points[z - 1] };
+                            let hi = points.get(z).copied().unwrap_or(1.0);
+                            let edge = if up { hi } else { lo };
+                            let mut left = Value::Axis(gob_core::zones::output(
+                                points, z, *output, edge,
+                            ) as f32);
+                            for &c in nodes {
+                                self.run(c, src, &mut left, now, out, depth + 1);
+                            }
                         }
                     }
                     if let Some((output, nodes)) = zones.get(n) {

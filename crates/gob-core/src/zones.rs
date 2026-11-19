@@ -65,7 +65,9 @@ pub fn parse_points(s: &str) -> Vec<f64> {
     points.sort_by(f64::total_cmp);
     let mut out: Vec<f64> = Vec::new();
     for p in points {
-        if out.last().is_none_or(|&l| p - l >= MIN_GAP) && out.len() < MAX_POINTS {
+        // A hair of slack: points written with three decimals at exactly MIN_GAP apart can
+        // read back a little closer.
+        if out.last().is_none_or(|&l| p - l >= MIN_GAP - 1e-9) && out.len() < MAX_POINTS {
             out.push(p);
         }
     }
@@ -158,7 +160,8 @@ fn zone_props(output: ZoneOutput) -> Vec<Item> {
         items.push(Item::Property(Property {
             ty: "float".into(),
             name: "value".into(),
-            value: format!("{v:?}"),
+            // Four decimals: the editor's f32 field would otherwise leave long tails in the file.
+            value: format!("{:?}", (v * 1e4).round() / 1e4),
         }));
     }
     items
@@ -202,8 +205,13 @@ impl Profile {
         points.push((last + 1.0) / 2.0);
         a.set("points", "string", format_points(&points));
         let tag = group_tag(points.len());
-        a.group_mut(&tag).clear();
-        a.group_mut(&tag).extend(zone_props(ZoneOutput::Rescale));
+        let group = a.group_mut(&tag);
+        let stale = group.iter().any(|i| matches!(i, Item::ActionRef(_)));
+        group.clear();
+        group.extend(zone_props(ZoneOutput::Rescale));
+        if stale {
+            self.collect_garbage();
+        }
     }
 
     /// Removes point `index`: the zone above it goes, with its actions; the zones above that move
@@ -308,6 +316,21 @@ mod tests {
         assert_eq!(points, vec![0.9, 0.95]);
         assert_eq!(zones[1].output, ZoneOutput::Fixed(0.25));
         assert_eq!(zones[2].children, vec![top.as_str()]);
+    }
+
+    #[test]
+    fn point_moved_onto_its_neighbour_stays() {
+        use crate::edit::NewAction;
+        let mut p = Profile::default();
+        let root = p.bind("dev", "axis", "1", "Default");
+        let z = p
+            .add_child(&root, "actions", Action::new(&NewAction::AxisZones))
+            .unwrap();
+        p.action_mut(&z)
+            .unwrap()
+            .set("points", "string", "-0.947 0.500");
+        p.set_zone_point(&z, 1, -2.0);
+        assert_eq!(super::zones(p.action(&z).unwrap()).0, vec![-0.947, -0.937]);
     }
 
     #[test]

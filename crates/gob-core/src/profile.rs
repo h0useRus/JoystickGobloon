@@ -511,6 +511,7 @@ impl Profile {
                 a.kind == "light-led"
                     || a.kind == "map-to-gamepad"
                     || a.kind == crate::BUTTON_AXIS
+                    || a.kind == crate::AXIS_ZONES
                     || a.button_send().mode != crate::SendMode::Hold
                     || a.kind == "voice-input"
                     || a.kind == "delay"
