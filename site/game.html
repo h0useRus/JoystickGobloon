@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Game bindings: export a profile to the game | Joystick Gobloon</title>
-  <meta name="description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024 and IL-2 Sturmovik: Great Battles.">
+  <meta name="description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous and X4: Foundations.">
   <link rel="canonical" href="https://h0userus.github.io/joystick-gobloon/game.html">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Joystick Gobloon">
   <meta property="og:title" content="Game bindings: export a profile to the game | Joystick Gobloon">
-  <meta property="og:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024 and IL-2 Sturmovik: Great Battles.">
+  <meta property="og:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous and X4: Foundations.">
   <meta property="og:url" content="https://h0userus.github.io/joystick-gobloon/game.html">
   <meta property="og:locale" content="en_US">
   <meta property="og:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
@@ -18,7 +18,7 @@
   <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Game bindings: export a profile to the game | Joystick Gobloon">
-  <meta name="twitter:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024 and IL-2 Sturmovik: Great Battles.">
+  <meta name="twitter:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous and X4: Foundations.">
   <meta name="twitter:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
   <meta name="author" content="Denis Ibragimov">
   <meta name="theme-color" content="#131209">
@@ -37,7 +37,7 @@
     {
       "@type": "TechArticle",
       "headline": "Game bindings: your profile, bound in the game",
-      "description": "Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024 and IL-2 Sturmovik: Great Battles.",
+      "description": "Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous and X4: Foundations.",
       "url": "https://h0userus.github.io/joystick-gobloon/game.html",
       "inLanguage": "en",
       "image": "https://h0userus.github.io/joystick-gobloon/img/og.jpg",
@@ -156,6 +156,8 @@
             <li><a href="#star-citizen">Star Citizen</a></li>
             <li><a href="#msfs">Microsoft Flight Simulator</a></li>
             <li><a href="#il2">IL-2 Sturmovik: Great Battles</a></li>
+            <li><a href="#elite">Elite Dangerous</a></li>
+            <li><a href="#x4">X4: Foundations</a></li>
             <li><a href="#linux">On Linux</a></li>
           </ul></li>
           </ul>
@@ -177,8 +179,10 @@
               <li><strong>Star Citizen</strong> 4.10 and newer, LIVE, PTU and the other channels: joystick, keyboard and mouse bindings.</li>
               <li><strong>Microsoft Flight Simulator</strong> 2020 and 2024: joystick bindings of the sim's control profiles.</li>
               <li><strong>IL-2 Sturmovik: Great Battles</strong>: joystick, keyboard and mouse bindings, axes from two buttons included.</li>
+              <li><strong>Elite Dangerous</strong> (4.x, Odyssey and Horizons): joystick, keyboard and mouse bindings of your own preset.</li>
+              <li><strong>X4: Foundations</strong>: joystick and keyboard bindings.</li>
             </ul>
-            <p>Each game is a plugin in the <code>export</code> folder next to the program, with the game's list of actions for each version it knows. Microsoft Flight Simulator and IL-2 were made from bindings files people have shared, not tested in the games themselves yet: if something comes out wrong, a <a href="https://github.com/h0useRus/JoystickGobloon/issues">bug report</a> with the game's file helps a lot.</p>
+            <p>Each game is a plugin in the <code>export</code> folder next to the program, with the game's list of actions for each version it knows. Microsoft Flight Simulator, IL-2, Elite Dangerous and X4 were made from bindings files people have shared, not tested in the games themselves yet: if something comes out wrong, a <a href="https://github.com/h0useRus/JoystickGobloon/issues">bug report</a> with the game's file helps a lot.</p>
           </article>
           <article class="learn-action" id="safe">
             <h3><i class="ph ph-floppy-disk" aria-hidden="true"></i>Your files are kept</h3>
@@ -264,6 +268,15 @@
           <article class="learn-action" id="il2">
             <h3><i class="ph ph-airplane-tilt" aria-hidden="true"></i>IL-2 Sturmovik: Great Battles</h3>
             <p>The bindings live in <code>data\input\global.actions</code> of the game's folder, and the game's joystick numbers in <code>devices.txt</code> next to it (read, never written). The game turns them into its own key map at every start, so exporting while it is closed is enough. An axis made of two buttons, such as trim, is bound as two actions marked (+) and (−).</p>
+          </article>
+          <article class="learn-action" id="elite">
+            <h3><i class="ph ph-rocket-launch" aria-hidden="true"></i>Elite Dangerous</h3>
+            <p>The game keeps your bindings in a preset of your own, <code>%LOCALAPPDATA%\Frontier Developments\Elite Dangerous\Options\Bindings\Custom.4.2.binds</code>, and writes it only when you save in Options &rsaquo; Controls. If the game still uses one of its built-in presets for ship controls, change one control there and save once: then there is a preset of your own to fill. Each action has two places for a button (or one for an axis): the export puts the profile's input into the place it already has, else into a free one, and keeps the game's other inputs. Half axes used as buttons and buttons held together with another stick's button stay as they are.</p>
+            <p>The game names a controller by its USB ids, and every vJoy device has the same ones, so it tells them apart by number: <code>1234BEAD</code> is the first vJoy device, <code>1234BEAD:1</code> the second and so on. The program fills them in that order; if the game numbers them the other way round, type the right ones above the table. Export while the game is closed, or at least not in Options &rsaquo; Controls.</p>
+          </article>
+          <article class="learn-action" id="x4">
+            <h3><i class="ph ph-planet" aria-hidden="true"></i>X4: Foundations</h3>
+            <p>The bindings live in <code>Documents\Egosoft\X4\&lt;your account number&gt;\inputmap.xml</code>. X4 knows up to eight joysticks by slot: pick the virtual joysticks once in the game under Settings &rsaquo; Controls &rsaquo; Manage controllers/joysticks, and the program finds their slots in <code>config.xml</code> next to it. Otherwise type them above the table (<code>joy1</code> to <code>joy8</code>). The game reads one hat per joystick and 64 buttons; keys can be held together with Shift and Ctrl. Axis inversion and the dead zone are the game's settings and stay as they are. X4 writes these files when you leave it, so export while it is not running.</p>
           </article>
           <article class="learn-action" id="linux">
             <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>

@@ -119,7 +119,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Store cloud saves only read (2024: files to import written to Documents/Joystick Gobloon), a profile's device = the
   DirectInput instance GUID (`OurDevice::instance`; vJoy: HID path `&colNN` = NN-th configured device, gob-virtual
   `joystick_of_input`), by name only when one device has it; links the profile keeps win, catalogs 2020/2024 from control profiles by dev/catalog.py, ids `CONTEXT/KEY_X` and 2024
-  category actions `AIRPLANE:CONTEXT/KEY_X`; no sim here, tested on public vJoy profiles). A binding's output (gob-core game.rs
+  category actions `AIRPLANE:CONTEXT/KEY_X`; no sim here, tested on public vJoy profiles; elite-dangerous: the
+  active Ship preset of Options/Bindings/StartPreset.4.start (`local_app_data` in Env), vJoy = `1234BEAD[:DeviceIndex]`,
+  built-in presets never written; x4-foundations: Documents/Egosoft/X4/<account>/inputmap.xml, slots joy1-8 pinned by
+  instance GUID in config.xml, buttons 1-11 Xbox names; both untested in the games, round-trip checked on public files). A binding's output (gob-core game.rs
   `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
   keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
   plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,

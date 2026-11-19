@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inputmap version="196" id="3">
+  <config>
+    <param name="invert_steering_pitch" value="true"/>
+    <param name="deadzone" value="0"/>
+  </config>
+  <!-- input actions -->
+  <action id="INPUT_ACTION_TOGGLE_AUTOPILOT" source="INPUT_SOURCE_JOYBUTTONS" code="INPUT_XBUTTON_14"/>
+  <action id="INPUT_ACTION_TOGGLE_AUTOPILOT" source="INPUT_SOURCE_KEYBOARD" code="INPUT_KEYCODE_A_SHIFT"/>
+  <action id="INPUT_ACTION_TOGGLE_TRAVEL_MODE" source="INPUT_SOURCE_JOYBUTTONS_2" code="INPUT_XBUTTON_BACK"/>
+  <action id="INPUT_ACTION_DEPLOY_COUNTERMEASURE" source="INPUT_SOURCE_JOYBUTTONS" code="INPUT_XBUTTON_DPAD_UP_LEFT"/>
+  <!-- input states -->
+  <state id="INPUT_STATE_FIRE_PRIMARY_WEAPON" source="INPUT_SOURCE_JOYBUTTONS" code="INPUT_XBUTTON_A"/>
+  <state id="INPUT_STATE_BOOST" source="INPUT_SOURCE_JOYAXES" code="INPUT_JOYAXIS_SLIDER1" sgn="1"/>
+  <state id="INPUT_STATE_MATCH_SPEED" source="INPUT_SOURCE_KEYBOARD" toggle="1" code="INPUT_KEYCODE_X_SHIFT"/>
+  <!-- input ranges -->
+  <range id="INPUT_RANGE_STEERING_PRIMARY" source="INPUT_SOURCE_JOYAXES" code="INPUT_JOYAXIS_X"/>
+  <range id="INPUT_RANGE_THROTTLE" source="INPUT_SOURCE_JOYAXES_2" code="INPUT_JOYAXIS_Z"/>
+</inputmap>
