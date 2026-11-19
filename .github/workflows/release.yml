@@ -264,6 +264,8 @@ jobs:
         shell: pwsh
         run: |
           $dir = "target\portable\JoystickGobloon"
+          # The cached target folder may hold the last run's copy: start from an empty one.
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
           New-Item -ItemType Directory -Force "$dir\lang" | Out-Null
           Copy-Item target\release\JoystickGobloon.exe $dir
           Copy-Item target\voice\*.dll $dir
