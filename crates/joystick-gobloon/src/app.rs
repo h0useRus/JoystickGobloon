@@ -110,6 +110,11 @@ pub struct JoystickGobloonApp {
     gremlin_dont_ask: bool,
     /// Time of a single click on the device hiding eye, waiting to see if a second one follows.
     cloak_click: Option<f64>,
+    /// Memory and CPU the program uses and when they were read (egui time): the status bar
+    /// reads them every [`USAGE_EVERY`] seconds while the window is shown.
+    usage: Option<(f64, Option<crate::platform::Usage>)>,
+    /// CPU share between the last two readings, percent of all cores.
+    cpu_percent: Option<f64>,
     /// Asking whether to switch device hiding to this state.
     cloak_confirm: Option<bool>,
     /// The user already agreed to close without saving.
@@ -306,6 +311,8 @@ impl JoystickGobloonApp {
             gremlin_warning: None,
             gremlin_dont_ask: false,
             cloak_click: None,
+            usage: None,
+            cpu_percent: None,
             cloak_confirm: None,
             allow_close: false,
             was_minimized: false,
@@ -2198,6 +2205,11 @@ impl JoystickGobloonApp {
     }
 }
 
+/// Seconds between readings of the memory and CPU the program uses (status bar). Each one
+/// redraws the main window, which costs far more than the reading: rare enough to be
+/// negligible, often enough to follow a change.
+const USAGE_EVERY: f64 = 5.0;
+
 impl eframe::App for JoystickGobloonApp {
     /// Runs every frame, and also while the window is in the tray or minimized (eframe then
     /// draws nothing and skips [`Self::ui`]).
@@ -2524,6 +2536,33 @@ impl eframe::App for JoystickGobloonApp {
                         ));
                     }
                     ui.separator();
+                }
+                // Read only while this window is drawn; its redraw costs more than the reading.
+                let now = ui.input(|i| i.time);
+                if self.usage.is_none_or(|(at, _)| now - at >= USAGE_EVERY) {
+                    let fresh = crate::platform::usage();
+                    if let (Some((at, Some(before))), Some(after)) = (self.usage, fresh) {
+                        let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+                        let used = after.cpu_time.saturating_sub(before.cpu_time);
+                        let seconds = (now - at).max(0.001);
+                        self.cpu_percent =
+                            Some(used.as_secs_f64() / seconds / cores as f64 * 100.0);
+                    }
+                    self.usage = Some((now, fresh));
+                }
+                if let Some((_, Some(usage))) = self.usage {
+                    let mb = usage.memory.div_ceil(1_048_576);
+                    let cpu = self
+                        .cpu_percent
+                        .map_or_else(|| "-".to_string(), |c| format!("{c:.1}"));
+                    let text = format!("{}  {mb} MB  \u{b7}  {cpu} % CPU", icon::MEMORY);
+                    let tip = self
+                        .i18n
+                        .trf("status-usage", &[("mb", mb.into()), ("cpu", cpu.into())]);
+                    ui.label(RichText::new(text).size(12.0)).on_hover_text(tip);
+                    ui.separator();
+                    // Woken only when nothing else redrew the window in the meantime.
+                    ctx.request_repaint_after(std::time::Duration::from_secs_f64(USAGE_EVERY));
                 }
                 ui.label(RichText::new(&self.status).size(12.0).weak());
             });

@@ -128,6 +128,10 @@ pub(crate) trait Desktop {
     /// Folders game export plugins search for games: the drives on Windows; the home folder and
     /// the Wine and Proton prefixes' drive_c on Linux.
     fn game_roots() -> Vec<String>;
+    /// What the program uses now: memory (its working set: RAM, not swapped out) and the CPU
+    /// time of all its threads so far; `None` where the system does not tell. Cheap system
+    /// calls, no sampling thread.
+    fn usage() -> Option<Usage>;
 }
 
 /// A running program, for switching profiles by program.
@@ -194,6 +198,18 @@ pub(crate) fn documents_dir() -> Option<PathBuf> {
 
 pub(crate) fn game_roots() -> Vec<String> {
     Current::game_roots()
+}
+
+pub(crate) fn usage() -> Option<Usage> {
+    Current::usage()
+}
+
+/// See [`Desktop::usage`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Usage {
+    /// Bytes.
+    pub memory: u64,
+    pub cpu_time: Duration,
 }
 
 pub(crate) fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {

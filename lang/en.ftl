@@ -395,6 +395,7 @@ run-arguments = Arguments
 run-browse = Choose program
 status-paused = Profile paused
 status-latency = Latency from reading a controller to the virtual output, last second: average { $average } ms, max { $max } ms. The controller's own delay is not included.
+status-usage = What Joystick Gobloon uses now: { $mb } MB of RAM, { $cpu } % of the processor (all cores, last 5 seconds)
 
 # Double tap, chain
 kind-double-tap = Double tap

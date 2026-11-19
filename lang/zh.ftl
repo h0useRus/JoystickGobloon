@@ -383,6 +383,7 @@ run-arguments = 参数
 run-browse = 选择程序
 status-paused = 配置文件已暂停
 status-latency = 从读取控制器到虚拟输出的延迟（最近一秒）：平均 { $average } ms，最大 { $max } ms。不含控制器自身的延迟。
+status-usage = Joystick Gobloon 当前占用：内存 { $mb } MB，处理器 { $cpu } %（所有核心，最近 5 秒）
 
 # Double tap, chain
 kind-double-tap = 双击

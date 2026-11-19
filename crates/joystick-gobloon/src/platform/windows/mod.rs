@@ -176,6 +176,32 @@ impl super::Desktop for Desktop {
         programs::running_programs()
     }
 
+    fn usage() -> Option<super::Usage> {
+        use windows::Win32::Foundation::FILETIME;
+        use windows::Win32::System::ProcessStatus::{
+            GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+        };
+        use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
+        let mut counters = PROCESS_MEMORY_COUNTERS {
+            cb: size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+            ..Default::default()
+        };
+        let mut times = [FILETIME::default(); 4];
+        // SAFETY: the pseudo handle of this process and buffers of the sizes given.
+        unsafe {
+            let process = GetCurrentProcess();
+            GetProcessMemoryInfo(process, &mut counters, counters.cb).ok()?;
+            let [created, exited, kernel, user] = &mut times;
+            GetProcessTimes(process, created, exited, kernel, user).ok()?;
+        }
+        // 100 ns units.
+        let ticks = |t: FILETIME| (u64::from(t.dwHighDateTime) << 32) | u64::from(t.dwLowDateTime);
+        Some(super::Usage {
+            memory: counters.WorkingSetSize as u64,
+            cpu_time: Duration::from_nanos((ticks(times[2]) + ticks(times[3])) * 100),
+        })
+    }
+
     /// Fixed and removable drives (C: to Z:); network and optical drives are skipped, so the
     /// search never waits on them.
     fn game_roots() -> Vec<String> {

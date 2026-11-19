@@ -325,6 +325,29 @@ impl super::Desktop for Desktop {
         programs::running_programs()
     }
 
+    /// VmRSS of /proc/self/status (kB) and utime + stime of /proc/self/stat (clock ticks,
+    /// 100 per second on every Linux the program runs on).
+    fn usage() -> Option<super::Usage> {
+        let status = std::fs::read_to_string("/proc/self/status").ok()?;
+        let kb: u64 = status
+            .lines()
+            .find_map(|l| l.strip_prefix("VmRSS:"))?
+            .split_whitespace()
+            .next()?
+            .parse()
+            .ok()?;
+        let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+        // After the command name in parentheses (which may hold spaces) come the state (field
+        // 3), ..., utime (14) and stime (15).
+        let fields: Vec<&str> = stat.rsplit_once(')')?.1.split_whitespace().collect();
+        let ticks = |n: usize| fields.get(n)?.parse::<u64>().ok();
+        let cpu = ticks(11)? + ticks(12)?;
+        Some(super::Usage {
+            memory: kb * 1024,
+            cpu_time: Duration::from_millis(cpu * 10),
+        })
+    }
+
     /// The home folder, ~/Games and the drive_c of Wine, Proton (Steam) and Lutris prefixes.
     fn game_roots() -> Vec<String> {
         let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {

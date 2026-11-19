@@ -164,4 +164,8 @@ impl super::Desktop for Desktop {
     fn game_roots() -> Vec<String> {
         Vec::new()
     }
+
+    fn usage() -> Option<super::Usage> {
+        None
+    }
 }

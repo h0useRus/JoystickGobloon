@@ -383,6 +383,7 @@ run-arguments = 인수
 run-browse = 프로그램 선택
 status-paused = 프로필 일시 중지됨
 status-latency = 컨트롤러를 읽은 뒤 가상 출력까지의 지연, 최근 1초: 평균 { $average } ms, 최대 { $max } ms. 컨트롤러 자체의 지연은 포함되지 않습니다.
+status-usage = 지금 Joystick Gobloon이 사용하는 자원: RAM { $mb } MB, 프로세서 { $cpu } % (모든 코어, 최근 5초)
 
 # Double tap, chain
 kind-double-tap = 더블 탭
