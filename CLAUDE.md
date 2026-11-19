@@ -228,7 +228,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting | overlay (Settings > Overlay, placing it),
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | modes (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting | overlay (Settings > Overlay, placing it),
   select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical | game-wiring (Game page schematic; the table is its first tab),
   `JOYSTICK_GOBLOON_GAME_IMPORT=1` takes the game's bindings into a profile without any on the Game page (debug only),
   `JOYSTICK_GOBLOON_GAME_DIALOG` = capture | conflict | choose | unmapped opens that dialog of the Game page with sample data,
