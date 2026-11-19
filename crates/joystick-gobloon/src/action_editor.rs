@@ -309,6 +309,17 @@ pub enum Op {
     DuplicateVoiceGroup(u32),
     /// Puts voice commands and groups into a new group made where the first of them is.
     GroupVoiceNodes(Vec<u32>),
+    /// Copies voice commands and groups (without actions) into group `parent` (`None` = the top
+    /// level).
+    CopyVoiceNodes {
+        ids: Vec<u32>,
+        parent: Option<u32>,
+    },
+    /// Moves voice commands and groups, with their actions, into group `parent`.
+    MoveVoiceNodes {
+        ids: Vec<u32>,
+        parent: Option<u32>,
+    },
     /// Adds a combination of these keys (or finds it) and binds it in `mode`.
     AddCombo {
         keys: Vec<gob_core::Key>,
@@ -647,6 +658,12 @@ pub fn apply(p: &mut Profile, op: Op) {
         }
         Op::GroupVoiceNodes(ids) => {
             p.group_voice_nodes(&ids);
+        }
+        Op::CopyVoiceNodes { ids, parent } => {
+            p.copy_voice_nodes(&ids, parent);
+        }
+        Op::MoveVoiceNodes { ids, parent } => {
+            p.move_voice_nodes(&ids, parent);
         }
         Op::AddCombo { keys, mode } => {
             if let Some(id) = p.add_key_combo(&keys) {

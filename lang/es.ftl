@@ -757,6 +757,7 @@ voice-no-phrases = Aún no hay frases: este comando no se puede oír.
 voice-add-group = Grupo
 voice-add-group-tip = Un grupo de comandos: di su frase antes de la de ellos, de una vez o primero sola
 voice-add-group-picked = Poner los { $n } comandos y grupos seleccionados en un grupo nuevo
+voice-clip-text = Comandos de voz de Joystick Gobloon: { $commands }
 voice-group-n = Grupo { $n }
 voice-group-fold = Plegar este grupo
 voice-group-unfold = Desplegar este grupo

@@ -192,13 +192,7 @@ impl Profile {
     /// at its place. Ones inside another of `ids` move with it. Returns the new group's id;
     /// `None` when none of `ids` exists.
     pub fn group_voice_nodes(&mut self, ids: &[u32]) -> Option<u32> {
-        let tree: Vec<u32> = self.voice_tree().into_iter().map(|(_, c)| c.id).collect();
-        let mut moving: Vec<u32> = tree.iter().copied().filter(|id| ids.contains(id)).collect();
-        let inside: Vec<u32> = moving
-            .iter()
-            .flat_map(|id| self.voice_descendants(*id))
-            .collect();
-        moving.retain(|id| !inside.contains(id));
+        let moving = self.voice_tops(ids);
         let first = *moving.first()?;
         let parent = self.voice_command(first)?.parent;
         let group = self.add_voice_node(parent, true);
@@ -214,28 +208,76 @@ impl Profile {
         Some(group)
     }
 
+    /// Those of `ids` that exist and are not inside another of them, in tree order: a group
+    /// stands for everything in it.
+    fn voice_tops(&self, ids: &[u32]) -> Vec<u32> {
+        let tree: Vec<u32> = self.voice_tree().into_iter().map(|(_, c)| c.id).collect();
+        let mut tops: Vec<u32> = tree.into_iter().filter(|id| ids.contains(id)).collect();
+        let inside: Vec<u32> = tops
+            .iter()
+            .flat_map(|id| self.voice_descendants(*id))
+            .collect();
+        tops.retain(|id| !inside.contains(id));
+        tops
+    }
+
     /// Copies group `id` with everything in it (phrases and hold times, not their actions:
     /// those usually differ) into the same group. Returns the copy's id.
     pub fn duplicate_voice_group(&mut self, id: u32) -> Option<u32> {
-        let group = self.voice_command(id).filter(|c| c.group)?.clone();
-        let nodes: Vec<VoiceCommand> = std::iter::once(group)
-            .chain(
-                self.voice_descendants(id)
-                    .into_iter()
-                    .filter_map(|d| self.voice_command(d).cloned()),
-            )
+        let parent = self.voice_command(id).filter(|c| c.group)?.parent;
+        self.copy_voice_nodes(&[id], parent).first().copied()
+    }
+
+    /// Copies `ids` (a group with everything in it; phrases and hold times, not actions) to the
+    /// end of group `parent` (`None` or not a group = the top level). Returns the copies' ids,
+    /// one per copied command or group of `ids` not inside another of them.
+    pub fn copy_voice_nodes(&mut self, ids: &[u32], parent: Option<u32>) -> Vec<u32> {
+        let parent = parent.filter(|p| self.voice_command(*p).is_some_and(|c| c.group));
+        // All taken before any copy is made: a group may be copied into itself.
+        let copies: Vec<Vec<VoiceCommand>> = self
+            .voice_tops(ids)
+            .into_iter()
+            .map(|top| {
+                std::iter::once(top)
+                    .chain(self.voice_descendants(top))
+                    .filter_map(|d| self.voice_command(d).cloned())
+                    .collect()
+            })
             .collect();
-        let mut new_ids = std::collections::HashMap::new();
-        for (i, mut node) in nodes.into_iter().enumerate() {
-            let new = self.next_voice_command_id();
-            new_ids.insert(node.id, new);
-            node.id = new;
-            if i > 0 {
-                node.parent = node.parent.and_then(|p| new_ids.get(&p).copied());
+        let mut made = Vec::new();
+        for nodes in copies {
+            let mut new_ids = std::collections::HashMap::new();
+            for (i, mut node) in nodes.into_iter().enumerate() {
+                let new = self.next_voice_command_id();
+                new_ids.insert(node.id, new);
+                node.id = new;
+                node.parent = if i == 0 {
+                    made.push(new);
+                    parent
+                } else {
+                    node.parent.and_then(|p| new_ids.get(&p).copied())
+                };
+                self.voice_commands.push(node);
             }
-            self.voice_commands.push(node);
         }
-        new_ids.get(&id).copied()
+        if !made.is_empty() {
+            self.add_section(crate::profile::Section::VoiceCommands);
+        }
+        made
+    }
+
+    /// Moves `ids` (a group with everything in it) to the end of group `parent` (`None` = the
+    /// top level), with their actions. One that is `parent` or holds it stays. Returns the
+    /// moved ones; none when `parent` is no group.
+    pub fn move_voice_nodes(&mut self, ids: &[u32], parent: Option<u32>) -> Vec<u32> {
+        let mut moved = Vec::new();
+        for id in self.voice_tops(ids) {
+            // What is in a group goes with it: only the group itself changes its parent.
+            if self.set_voice_parent(id, parent) {
+                moved.push(id);
+            }
+        }
+        moved
     }
 
     /// Replaces a command's phrases: trimmed, inner spaces collapsed, empty and repeated ones

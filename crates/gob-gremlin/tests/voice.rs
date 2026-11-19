@@ -491,3 +491,72 @@ fn selected_nodes_into_a_new_group() {
     assert_eq!(p.voice_command(g2).unwrap().parent, None);
     assert_eq!(p.voice_command(1).unwrap().parent, Some(g2));
 }
+
+/// Whether command `id` has a binding (its actions).
+fn voice_bound(p: &gob_core::Profile, id: u32) -> bool {
+    p.inputs
+        .iter()
+        .any(|b| b.device_id == gob_core::VOICE_GUID && b.input_id == id.to_string())
+}
+
+/// Copied commands and groups go to the end of the target group with new ids and no actions;
+/// a group may be copied into itself.
+#[test]
+fn copied_nodes_have_no_actions() {
+    let mut p = gob_gremlin::from_str(GROUPS).unwrap();
+    p.bind_layer(
+        gob_core::VOICE_GUID,
+        gob_core::VOICE_INPUT_TYPE,
+        "4",
+        "Default",
+        &gob_core::Layer::base(),
+    );
+    // 4 is inside 3: copied with it, not twice.
+    let made = p.copy_voice_nodes(&[4, 3, 1], Some(3));
+    // In tree order: 1 (now 7), then 3 (now 8, with 9 and 10).
+    assert_eq!(made, [7, 8]);
+    let tree: Vec<(usize, u32)> = p.voice_tree().into_iter().map(|(d, c)| (d, c.id)).collect();
+    assert_eq!(
+        tree,
+        [
+            (0, 1),
+            (0, 2),
+            (1, 3),
+            (2, 4),
+            (2, 5),
+            (2, 7),
+            (2, 8),
+            (3, 9),
+            (3, 10),
+            (1, 6)
+        ]
+    );
+    assert_eq!(p.voice_command(9).unwrap().phrases, ["attack"]);
+    assert_eq!(p.voice_command(9).unwrap().hold, 0.2);
+    assert!(voice_bound(&p, 4));
+    assert!(!voice_bound(&p, 9));
+    // A command is no group to copy into: the top level then.
+    assert_eq!(p.copy_voice_nodes(&[5], Some(1)), [11]);
+    assert_eq!(p.voice_command(11).unwrap().parent, None);
+}
+
+/// Moved commands and groups keep their ids and actions; one cannot go into itself.
+#[test]
+fn moved_nodes_keep_their_actions() {
+    let mut p = gob_gremlin::from_str(GROUPS).unwrap();
+    p.bind_layer(
+        gob_core::VOICE_GUID,
+        gob_core::VOICE_INPUT_TYPE,
+        "4",
+        "Default",
+        &gob_core::Layer::base(),
+    );
+    assert_eq!(p.move_voice_nodes(&[4, 1], Some(2)), [1, 4]);
+    let tree: Vec<(usize, u32)> = p.voice_tree().into_iter().map(|(d, c)| (d, c.id)).collect();
+    assert_eq!(tree, [(0, 2), (1, 3), (2, 5), (1, 6), (1, 1), (1, 4)]);
+    assert!(voice_bound(&p, 4));
+    // 2 holds 3: it stays; 6 goes.
+    assert_eq!(p.move_voice_nodes(&[2], Some(3)), Vec::<u32>::new());
+    assert_eq!(p.move_voice_nodes(&[6], None), [6]);
+    assert_eq!(p.voice_command(6).unwrap().parent, None);
+}

@@ -55,6 +55,8 @@ pub struct DevicesView {
     voice_picked: Vec<u32>,
     /// Where a Shift click's range starts.
     voice_anchor: Option<u32>,
+    /// Voice commands and groups taken with Ctrl+C or Ctrl+X, for Ctrl+V.
+    voice_clip: Option<VoiceClip>,
     /// The virtual devices' names, for the chips of their mappings.
     vjoy_names: HashMap<u32, String>,
     /// The user picked the tab; otherwise a connected device is preferred.
@@ -287,9 +289,11 @@ impl DevicesView {
             .unwrap_or_default()
     }
 
-    /// Forget the selected mode, e.g. after loading another profile.
+    /// Forget the selected mode (and copied voice commands), e.g. after loading another
+    /// profile.
     pub fn reset_mode(&mut self) {
         self.mode = None;
+        self.voice_clip = None;
     }
 
     pub fn show(
@@ -943,6 +947,7 @@ impl DevicesView {
             .filter(|k| k.0 == Kind::Voice)
             .and_then(|k| profile.voice_command(k.1))
             .and_then(|c| if c.group { Some(c.id) } else { c.parent });
+        self.voice_clipboard(ui, i18n, profile, parent, ops);
         // What is made next gets the lowest free id: select it once it is there.
         let made = (Kind::Voice, profile.next_voice_command_id());
         let picked = self.voice_picked.len() >= 2;
@@ -980,6 +985,99 @@ impl DevicesView {
             ui.label(RichText::new(i18n.tr("voice-empty")).weak());
         }
         ui.separator();
+    }
+
+    /// Ctrl+C or Ctrl+X takes the selected voice commands and groups, Ctrl+V puts them into
+    /// group `parent` (the selected one): copies without actions, or the cut ones moved with
+    /// theirs. Not while a text field takes these keys; Ctrl+V of copied actions still pastes
+    /// those.
+    fn voice_clipboard(
+        &mut self,
+        ui: &egui::Ui,
+        i18n: &I18n,
+        profile: &Profile,
+        parent: Option<u32>,
+        ops: &mut Vec<Op>,
+    ) {
+        if ui.ctx().text_edit_focused() {
+            return;
+        }
+        let marker = self
+            .voice_clip
+            .as_ref()
+            .map(|c| c.marker.trim().to_string());
+        // Taken from the frame's events: the input editor's Ctrl+C would copy actions instead.
+        let (take, paste) = ui.input_mut(|i| {
+            let mut take = None;
+            let mut paste = false;
+            i.events.retain(|e| match e {
+                egui::Event::Copy => {
+                    take = Some(false);
+                    false
+                }
+                egui::Event::Cut => {
+                    take = Some(true);
+                    false
+                }
+                egui::Event::Paste(text) if marker.as_deref() == Some(text.trim()) => {
+                    paste = true;
+                    false
+                }
+                _ => true,
+            });
+            (take, paste)
+        });
+        if let Some(cut) = take {
+            let shown = self
+                .selected_input
+                .get(gob_core::VOICE_GUID)
+                .filter(|k| k.0 == Kind::Voice)
+                .map(|k| k.1);
+            let ids: Vec<u32> = if self.voice_picked.is_empty() {
+                shown.into_iter().collect()
+            } else {
+                self.voice_picked.clone()
+            };
+            let ids: Vec<u32> = profile
+                .voice_tree()
+                .into_iter()
+                .map(|(_, c)| c.id)
+                .filter(|id| ids.contains(id))
+                .collect();
+            if !ids.is_empty() {
+                let names: Vec<String> = ids
+                    .iter()
+                    .filter_map(|id| profile.voice_command(*id))
+                    .map(|c| {
+                        c.phrases
+                            .first()
+                            .cloned()
+                            .unwrap_or_else(|| format!("#{}", c.id))
+                    })
+                    .collect();
+                let marker = i18n.trf("voice-clip-text", &[("commands", names.join(", ").into())]);
+                ui.ctx().copy_text(marker.clone());
+                log::debug!(
+                    "{} voice commands: {}",
+                    if cut { "cut" } else { "copied" },
+                    names.join(", ")
+                );
+                self.voice_clip = Some(VoiceClip { ids, cut, marker });
+            }
+        }
+        if paste && let Some(clip) = &self.voice_clip {
+            let ids = clip.ids.clone();
+            if clip.cut {
+                ops.push(Op::MoveVoiceNodes { ids, parent });
+                // Moved once; a second Ctrl+V has nothing left to move.
+                self.voice_clip = None;
+            } else {
+                ops.push(Op::CopyVoiceNodes { ids, parent });
+            }
+            if let Some(g) = parent {
+                self.voice_folded.remove(&g);
+            }
+        }
     }
 
     /// Selects voice command or group `key` alone (the next frame finds it in the list).
@@ -2087,6 +2185,16 @@ fn debug_expanded((kind, id): Key) -> bool {
 
 fn is_keyboard(tab: &Tab) -> bool {
     tab.guid == gob_core::KEYBOARD_GUID
+}
+
+/// Voice commands and groups taken by Ctrl+C or Ctrl+X ([`DevicesView::voice_clipboard`]).
+struct VoiceClip {
+    /// In tree order.
+    ids: Vec<u32>,
+    /// Ctrl+X: Ctrl+V moves them with their actions; else it copies them without.
+    cut: bool,
+    /// Put on the system clipboard; Ctrl+V pastes them while it is still there.
+    marker: String,
 }
 
 fn is_voice(tab: &Tab) -> bool {
