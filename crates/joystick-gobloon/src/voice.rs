@@ -151,8 +151,18 @@ fn library_available(engine: Engine) -> bool {
     }
 }
 
-/// Tells the engine which natural voices are installed and which one is the default.
+/// Whether text to speech uses Piper voices (else the system's voice).
+fn piper(settings: &Settings) -> bool {
+    settings.tts_engine == "piper"
+}
+
+/// Tells the engine which natural voices are installed and which one is the default; none with
+/// the system's voice chosen, so every action speaks with it.
 pub fn apply_natural_voices(settings: &Settings) {
+    if !piper(settings) {
+        gob_engine::set_natural_voices(gob_engine::NaturalVoices::default());
+        return;
+    }
     let tts = dir().map(|d| gob_voice::tts::dir(&d));
     let library = tts.as_deref().and_then(gob_voice::tts::library_installed);
     let voices: Vec<(String, PathBuf)> = tts
@@ -164,7 +174,11 @@ pub fn apply_natural_voices(settings: &Settings) {
                 .collect()
         })
         .unwrap_or_default();
-    let default = Some(settings.tts_voice.clone()).filter(|v| voices.iter().any(|(n, _)| n == v));
+    let default = voices
+        .iter()
+        .find(|(n, _)| *n == settings.tts_voice)
+        .or(voices.first())
+        .map(|(n, _)| n.clone());
     gob_engine::set_natural_voices(gob_engine::NaturalVoices {
         library,
         voices,
@@ -486,12 +500,36 @@ impl VoicePanel {
     /// voices, and which one speaks text to speech without a voice of its own.
     fn natural_section(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
         section_title(ui, icon::USER_SOUND, &i18n.tr("settings-tts"));
+        let mut changed = false;
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::SPEAKER_HIGH).size(style::ICON_SIZE))
+                .on_hover_text(i18n.tr("settings-tts-engine"));
+            let system = i18n.tr("settings-tts-engine-system");
+            egui::ComboBox::from_id_salt("tts-engine")
+                .selected_text(if piper(settings) { "Piper" } else { &system })
+                .show_ui(ui, |ui| {
+                    // Piper's voices stay installed with the system's voice chosen.
+                    for (key, name) in [("system", system.as_str()), ("piper", "Piper")] {
+                        if ui
+                            .selectable_label(settings.tts_engine == key, name)
+                            .clicked()
+                            && settings.tts_engine != key
+                        {
+                            settings.tts_engine = key.to_string();
+                            changed = true;
+                        }
+                    }
+                });
+        });
+        if !piper(settings) {
+            ui.label(RichText::new(i18n.tr("settings-tts-system-hint")).weak());
+            return changed;
+        }
         ui.label(RichText::new(i18n.tr("settings-tts-hint")).weak());
         ui.add_space(4.0);
         let Some(tts) = dir().map(|d| gob_voice::tts::dir(&d)) else {
-            return false;
+            return changed;
         };
-        let mut changed = false;
         let busy = self.download.is_some();
         let library = gob_voice::tts::library_installed(&tts);
         let archive = gob_voice::tts::library();
@@ -613,38 +651,33 @@ impl VoicePanel {
                 .filter(|v| gob_voice::tts::installed(&tts, v).is_some())
                 .map(|v| v.display_name())
                 .collect();
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(icon::USER_SOUND).size(style::ICON_SIZE))
-                    .on_hover_text(i18n.tr("settings-tts-default"));
-                let system = i18n.tr("settings-tts-default-system");
-                let current = if installed.contains(&settings.tts_voice) {
-                    settings.tts_voice.clone()
-                } else {
-                    system.clone()
-                };
-                egui::ComboBox::from_id_salt("tts-default")
-                    .selected_text(current)
-                    .show_ui(ui, |ui| {
-                        if ui
-                            .selectable_label(settings.tts_voice.is_empty(), &system)
-                            .clicked()
-                            && !settings.tts_voice.is_empty()
-                        {
-                            settings.tts_voice.clear();
-                            changed = true;
-                        }
-                        for name in &installed {
-                            if ui
-                                .selectable_label(settings.tts_voice == *name, name)
-                                .clicked()
-                                && settings.tts_voice != *name
-                            {
-                                settings.tts_voice = name.clone();
-                                changed = true;
+            // The voice of actions without one: the chosen one, else the first installed (the
+            // system's voice only while none is).
+            let current = installed
+                .iter()
+                .find(|n| **n == settings.tts_voice)
+                .or(installed.first())
+                .cloned();
+            if let Some(current) = current {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(icon::USER_SOUND).size(style::ICON_SIZE))
+                        .on_hover_text(i18n.tr("settings-tts-default"));
+                    egui::ComboBox::from_id_salt("tts-default")
+                        .selected_text(&current)
+                        .show_ui(ui, |ui| {
+                            for name in &installed {
+                                if ui.selectable_label(current == *name, name).clicked()
+                                    && current != *name
+                                {
+                                    settings.tts_voice = name.clone();
+                                    changed = true;
+                                }
                             }
-                        }
-                    });
-            });
+                        });
+                });
+            } else {
+                ui.label(RichText::new(i18n.tr("settings-tts-no-voice")).weak());
+            }
         }
         if let Some((what, e)) = &self.error
             && *what != Target::Model

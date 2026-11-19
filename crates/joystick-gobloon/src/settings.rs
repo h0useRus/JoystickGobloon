@@ -86,8 +86,11 @@ pub struct Settings {
     pub voice_language: String,
     /// Speech model size: "small" (less memory) or "large" (more accurate).
     pub voice_model_size: String,
-    /// The natural voice that speaks text to speech actions without a voice of their own (its
-    /// name as listed); empty = the system's voice.
+    /// Who speaks text to speech actions: "system" (the system's voice, for every action) or
+    /// "piper" (Piper voices downloaded in the settings).
+    pub tts_engine: String,
+    /// The Piper voice that speaks text to speech actions without a voice of their own (its
+    /// name as listed); empty or not installed = the first installed one.
     pub tts_voice: String,
     /// Microphone gain of voice commands (1.0 = as recorded).
     pub voice_gain: f32,
@@ -338,6 +341,7 @@ impl Default for Settings {
             curve_right_click_invert: true,
             warn_gremlin_format: true,
             voice_engine: "vosk".into(),
+            tts_engine: "system".into(),
             voice_language: String::new(),
             voice_model_size: "small".into(),
             tts_voice: String::new(),
