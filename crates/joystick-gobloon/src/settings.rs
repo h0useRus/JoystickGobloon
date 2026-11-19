@@ -372,8 +372,9 @@ impl Default for Settings {
             overlay_latency: false,
             overlay_voice: true,
             overlay_commands: false,
-            overlay_text_color: [255, 255, 255, 255],
-            overlay_background: [0, 0, 0, 160],
+            // Joystick Gobloon's green on its dark panel color, as in the program.
+            overlay_text_color: [0x8c, 0xc8, 0x2c, 0xff],
+            overlay_background: [0x1b, 0x1d, 0x22, 0xcc],
             overlay_font_size: 16.0,
             overlay_keys: crate::overlay::DEFAULT_KEYS.to_vec(),
             log_level: LogLevel::default(),
