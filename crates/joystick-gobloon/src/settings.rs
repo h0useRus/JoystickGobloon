@@ -116,6 +116,8 @@ pub struct Settings {
     pub overlay_text_color: [u8; 4],
     pub overlay_background: [u8; 4],
     pub overlay_font_size: f32,
+    /// The whole overlay's opacity, text and background (0.1..1).
+    pub overlay_opacity: f32,
     /// The keys that show and hide the overlay: set 1 scan codes, 0x100 = E0 prefix.
     pub overlay_keys: Vec<u16>,
     /// What the log file records.
@@ -379,6 +381,7 @@ impl Default for Settings {
             overlay_text_color: [0x8c, 0xc8, 0x2c, 0xff],
             overlay_background: [0x1b, 0x1d, 0x22, 0xcc],
             overlay_font_size: 16.0,
+            overlay_opacity: 1.0,
             overlay_keys: crate::overlay::DEFAULT_KEYS.to_vec(),
             log_level: LogLevel::default(),
             window_size: DEFAULT_WINDOW_SIZE,

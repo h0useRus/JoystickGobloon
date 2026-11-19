@@ -834,6 +834,7 @@ settings-overlay-look = 모양
 settings-overlay-text = 글자 색
 settings-overlay-background = 배경
 settings-overlay-size = 글꼴 크기
+settings-overlay-opacity = 불투명도
 overlay-drag = 끌어서 배치한 다음 설정에서 완료를 누르세요
 overlay-sample-mode = 기본  ·  M1
 overlay-sample-action = 착륙 장치

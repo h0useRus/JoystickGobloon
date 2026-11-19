@@ -854,6 +854,7 @@ settings-overlay-look = Вид
 settings-overlay-text = Цвет текста
 settings-overlay-background = Фон
 settings-overlay-size = Размер шрифта
+settings-overlay-opacity = Непрозрачность
 overlay-drag = Перетащите его на место, затем нажмите «Готово» в настройках
 overlay-sample-mode = Default  ·  M1
 overlay-sample-action = Шасси

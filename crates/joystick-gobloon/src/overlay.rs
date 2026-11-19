@@ -84,7 +84,6 @@ struct Frame {
     font_size: f32,
     /// Being placed: draggable, with a border.
     calibrating: bool,
-    hint: String,
 }
 
 /// Shared between the main window, the overlay window and the key thread.
@@ -202,13 +201,13 @@ impl Overlay {
         if !shown {
             return placed;
         }
+        let opacity = settings.overlay_opacity.clamp(0.1, 1.0);
         let frame = Frame {
             lines,
-            text: color(settings.overlay_text_color),
-            background: color(settings.overlay_background),
+            text: color(settings.overlay_text_color).gamma_multiply(opacity),
+            background: color(settings.overlay_background).gamma_multiply(opacity),
             font_size: settings.overlay_font_size.clamp(8.0, 72.0),
             calibrating: self.calibrating,
-            hint: i18n.tr("overlay-drag"),
         };
         let changed = {
             let mut f = self.shared.frame.lock().unwrap_or_else(|e| e.into_inner());
@@ -290,6 +289,11 @@ pub fn settings_tab(
         // The place is kept when it is done.
         changed |= !overlay.calibrating;
     }
+    if overlay.calibrating {
+        // Here, not on the overlay: it keeps the size it has while playing.
+        let hint = format!("{}  {}", icon::ARROWS_OUT_CARDINAL, i18n.tr("overlay-drag"));
+        ui.label(RichText::new(hint).weak());
+    }
 
     ui.add_space(18.0);
     section_title(ui, icon::LIST_CHECKS, &i18n.tr("settings-overlay-show"));
@@ -334,6 +338,14 @@ pub fn settings_tab(
             changed = true;
         }
         ui.label(i18n.tr("settings-overlay-size"));
+    });
+    ui.horizontal(|ui| {
+        let mut percent = (settings.overlay_opacity.clamp(0.1, 1.0) * 100.0).round() as u16;
+        if style::slider(ui, &mut percent, 10..=100, 1.0, " %").changed() {
+            settings.overlay_opacity = f32::from(percent) / 100.0;
+            changed = true;
+        }
+        ui.label(i18n.tr("settings-overlay-opacity"));
     });
     changed
 }
@@ -478,11 +490,12 @@ fn draw(root: &mut egui::Ui, shared: &Shared) {
         .clone();
     let panel = egui::Frame::NONE.fill(Color32::TRANSPARENT);
     egui::CentralPanel::default().frame(panel).show(root, |ui| {
-        // While placed: a border in the text color, visible on any background.
+        // While placed: a border in the text color, visible on any background. Its width is
+        // kept while playing (unseen), so the overlay has the same size in both.
         let stroke = if frame.calibrating {
             egui::Stroke::new(2.0, frame.text.gamma_multiply(0.8))
         } else {
-            egui::Stroke::NONE
+            egui::Stroke::new(2.0, Color32::TRANSPARENT)
         };
         let inner = egui::Frame::new()
             .fill(frame.background)
@@ -500,13 +513,6 @@ fn draw(root: &mut egui::Ui, shared: &Shared) {
                         let text = if l.strong { text.strong() } else { text };
                         ui.add(egui::Label::new(text).extend());
                     });
-                }
-                if frame.calibrating {
-                    let hint =
-                        RichText::new(format!("{}  {}", icon::ARROWS_OUT_CARDINAL, frame.hint))
-                            .size((frame.font_size * 0.75).max(10.0))
-                            .color(frame.text.gamma_multiply(0.7));
-                    ui.add(egui::Label::new(hint).extend());
                 }
             });
         let rect = inner.response.rect;

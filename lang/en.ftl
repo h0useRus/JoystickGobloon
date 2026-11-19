@@ -846,6 +846,7 @@ settings-overlay-look = Look
 settings-overlay-text = Text color
 settings-overlay-background = Background
 settings-overlay-size = Font size
+settings-overlay-opacity = Opacity
 overlay-drag = Drag to place it, then click Done in the settings
 overlay-sample-mode = Default  ·  M1
 overlay-sample-action = Landing gear

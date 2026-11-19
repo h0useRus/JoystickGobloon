@@ -846,6 +846,7 @@ settings-overlay-look = Apparence
 settings-overlay-text = Couleur du texte
 settings-overlay-background = Fond
 settings-overlay-size = Taille du texte
+settings-overlay-opacity = Opacité
 overlay-drag = Faites-la glisser pour la placer, puis cliquez sur Terminé dans les paramètres
 overlay-sample-mode = Défaut  ·  M1
 overlay-sample-action = Train d’atterrissage

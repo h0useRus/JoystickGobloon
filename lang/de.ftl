@@ -846,6 +846,7 @@ settings-overlay-look = Aussehen
 settings-overlay-text = Textfarbe
 settings-overlay-background = Hintergrund
 settings-overlay-size = Schriftgröße
+settings-overlay-opacity = Deckkraft
 overlay-drag = Zum Platzieren ziehen, dann in den Einstellungen auf Fertig klicken
 overlay-sample-mode = Standard  ·  M1
 overlay-sample-action = Fahrwerk

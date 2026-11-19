@@ -834,6 +834,7 @@ settings-overlay-look = 外观
 settings-overlay-text = 文字颜色
 settings-overlay-background = 背景
 settings-overlay-size = 字号
+settings-overlay-opacity = 不透明度
 overlay-drag = 拖动以放置，然后在设置中点击完成
 overlay-sample-mode = 默认  ·  M1
 overlay-sample-action = 起落架
