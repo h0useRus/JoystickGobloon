@@ -77,6 +77,8 @@ pub struct Settings {
     pub monotonic_curves: bool,
     /// Response curve editor: a right click on empty space inverts the curve.
     pub curve_right_click_invert: bool,
+    /// Response curves the user saved as presets, offered in every curve editor.
+    pub curve_presets: Vec<SavedCurve>,
     /// Ask before saving makes a profile Joystick Gremlin cannot open.
     pub warn_gremlin_format: bool,
     /// Speech recognizer of voice commands: "vosk" (listens only for the phrases) or "sherpa"
@@ -192,6 +194,16 @@ pub const OTHER_PROGRAMS: &str = "*";
 /// [`AppEntry::key`] of a program's file name.
 pub fn program_key(name: &str) -> String {
     name.to_lowercase()
+}
+
+/// A response curve saved as a preset: its type, symmetric editing and points.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SavedCurve {
+    pub name: String,
+    pub curve_type: String,
+    pub symmetric: bool,
+    pub points: Vec<[f64; 2]>,
 }
 
 /// Programs on the Applications page, in `apps.gob` next to the settings.
@@ -360,6 +372,7 @@ impl Default for Settings {
             check_updates: true,
             monotonic_curves: true,
             curve_right_click_invert: true,
+            curve_presets: Vec::new(),
             warn_gremlin_format: true,
             voice_engine: "vosk".into(),
             tts_engine: "system".into(),

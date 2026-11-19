@@ -20,6 +20,7 @@ pub mod script;
 pub mod two_axis;
 pub mod voice;
 pub mod xml;
+pub mod zones;
 
 pub use action::{
     Action, ActionKind, ActivationMode, ButtonSend, InputType, Item, Key, LedBlend, LedMode,
@@ -51,3 +52,4 @@ pub use voice::{
     is_voice_binding,
 };
 pub use xml::{Element, Node};
+pub use zones::{AXIS_ZONES, AxisZone, ZoneOutput};

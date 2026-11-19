@@ -97,6 +97,8 @@ pub struct DevicesView {
     pub monotonic_curves: bool,
     /// A right click on empty space of a curve chart inverts it (setting), filled by the app.
     pub curve_right_click_invert: bool,
+    /// The user's saved curve presets (from the settings).
+    pub curve_presets: Vec<crate::settings::SavedCurve>,
     /// The profile's logical device with its live values, filled by the app for each frame.
     pub logical: Option<DeviceState>,
     /// Voice commands of the running profile, filled by the app for each frame.
@@ -1755,6 +1757,7 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
+                    curve_presets: &self.curve_presets,
                     voice_links: Default::default(),
                     use_counts: Default::default(),
                 };
@@ -1818,6 +1821,7 @@ impl DevicesView {
                     experimental: self.experimental,
                     monotonic_curves: self.monotonic_curves,
                     curve_right_click_invert: self.curve_right_click_invert,
+                    curve_presets: &self.curve_presets,
                     voice_links: Default::default(),
                     use_counts: Default::default(),
                 };

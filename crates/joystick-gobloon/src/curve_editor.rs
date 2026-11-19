@@ -79,6 +79,56 @@ impl Editor<'_> {
                         ui.close();
                     }
                 }
+                ui.separator();
+                // The user's own presets, then saving this curve as one.
+                for saved in self.curve_presets {
+                    let mut apply = false;
+                    let mut delete = false;
+                    ui.horizontal(|ui| {
+                        apply = ui.button(&saved.name).clicked();
+                        let tip = self.i18n.tr("curve-preset-delete");
+                        delete = style::icon_button(ui, true, icon::TRASH, &tip).clicked();
+                    });
+                    if apply {
+                        let k = CurveType::parse(&saved.curve_type);
+                        if k != kind {
+                            self.set(&id, "curve-type", "string", k.name());
+                        }
+                        if saved.symmetric != symmetric {
+                            let v = if saved.symmetric { "True" } else { "False" };
+                            self.set(&id, "symmetric", "bool", v);
+                        }
+                        let pts: Vec<(f64, f64)> =
+                            saved.points.iter().map(|p| (p[0], p[1])).collect();
+                        self.set_points(&id, &pts);
+                        ui.data_mut(|d| d.insert_temp(sel_id, 0usize));
+                        ui.close();
+                    }
+                    if delete {
+                        self.ops.push(Op::DeleteCurvePreset(saved.name.clone()));
+                    }
+                }
+                let name_id = ui.make_persistent_id("curve-preset-name");
+                let mut name: String = ui.data(|d| d.get_temp(name_id)).unwrap_or_default();
+                ui.horizontal(|ui| {
+                    let field = style::text_field(&mut name)
+                        .hint_text(self.i18n.tr("curve-preset-name"))
+                        .desired_width(140.0);
+                    ui.add(field);
+                    let ok = !name.trim().is_empty();
+                    let tip = self.i18n.tr("curve-preset-save");
+                    if style::icon_button(ui, ok, icon::FLOPPY_DISK, &tip).clicked() {
+                        self.ops
+                            .push(Op::SaveCurvePreset(crate::settings::SavedCurve {
+                                name: name.trim().to_string(),
+                                curve_type: kind.name().to_string(),
+                                symmetric,
+                                points: points.iter().map(|&(x, y)| [x, y]).collect(),
+                            }));
+                        name.clear();
+                    }
+                });
+                ui.data_mut(|d| d.insert_temp(name_id, name));
             })
             .response
             .on_hover_text(self.i18n.tr("curve-preset-tip"));

@@ -133,6 +133,11 @@ enum Node {
         lower: Vec<NodeId>,
         upper: Vec<NodeId>,
     },
+    /// Axis zones: the points, and each zone's output with its children.
+    Zones {
+        points: Vec<f64>,
+        zones: Vec<(gob_core::ZoneOutput, Vec<NodeId>)>,
+    },
     Pause(PauseOp),
     Run {
         executable: String,
@@ -707,6 +712,8 @@ pub struct Engine {
     compiled_lights: Vec<Light>,
     /// The description of the last binding whose input was pressed and had one.
     last_action: Option<Arc<str>>,
+    /// The zone each axis-zones action's axis was in last.
+    zone_last: HashMap<NodeId, usize>,
     /// The layer the held modifiers choose, kept when a modifier changes (read every pass).
     layer_now: Layer,
     /// Modifier inputs and their names; they only choose layers, their bindings do not run.
@@ -850,6 +857,7 @@ impl Engine {
             modifiers: Vec::new(),
             pressed_layers: HashMap::new(),
             last_action: None,
+            zone_last: HashMap::new(),
             layer_now: Layer::base(),
             button_axes: HashMap::new(),
             axis_writes: Vec::new(),
@@ -1487,6 +1495,20 @@ impl Engine {
                         .iter()
                         .map(|c| self.compile(index, c, depth + 1))
                         .collect(),
+                },
+                ActionKind::AxisZones { points, zones } => Node::Zones {
+                    zones: zones
+                        .iter()
+                        .map(|z| {
+                            let children = z
+                                .children
+                                .iter()
+                                .map(|c| self.compile(index, c, depth + 1))
+                                .collect();
+                            (z.output, children)
+                        })
+                        .collect(),
+                    points,
                 },
                 ActionKind::PauseResume { operation } => Node::Pause(match operation.trim() {
                     "Resume" => PauseOp::Resume,
@@ -2770,6 +2792,47 @@ impl Engine {
                     *value = Value::Axis(scaled);
                     for &n in nodes {
                         self.run(n, src, value, now, out, depth + 1);
+                    }
+                }
+            }
+            Node::Zones {
+                ref points,
+                ref zones,
+            } => {
+                if let Value::Axis(v) = *value {
+                    let v = f64::from(v);
+                    let n = gob_core::zones::zone_of(points, v);
+                    // The zone left, and any the axis jumped over, get the edge it passed them
+                    // at, so their outputs do not stay somewhere in the middle (a fixed zone
+                    // keeps its value).
+                    let was = self.zone_last.insert(node, n);
+                    if let Some(old) = was.filter(|&o| o != n) {
+                        let up = n > old;
+                        let passed = if up { old..n } else { n + 1..old + 1 };
+                        for z in passed {
+                            let Some((output, nodes)) = zones.get(z) else {
+                                continue;
+                            };
+                            if matches!(output, gob_core::ZoneOutput::Fixed(_)) {
+                                continue;
+                            }
+                            let lo = if z == 0 { -1.0 } else { points[z - 1] };
+                            let hi = points.get(z).copied().unwrap_or(1.0);
+                            let edge = if up { hi } else { lo };
+                            let mut left = Value::Axis(gob_core::zones::output(
+                                points, z, *output, edge,
+                            ) as f32);
+                            for &c in nodes {
+                                self.run(c, src, &mut left, now, out, depth + 1);
+                            }
+                        }
+                    }
+                    if let Some((output, nodes)) = zones.get(n) {
+                        let out_v = gob_core::zones::output(points, n, *output, v);
+                        *value = Value::Axis(out_v as f32);
+                        for &c in nodes {
+                            self.run(c, src, value, now, out, depth + 1);
+                        }
                     }
                 }
             }
@@ -4101,6 +4164,11 @@ impl Engine {
                 } => {
                     self.stop_motion(lower, depth + 1);
                     self.stop_motion(upper, depth + 1);
+                }
+                Node::Zones { ref zones, .. } => {
+                    for (_, c) in zones {
+                        self.stop_motion(c, depth + 1);
+                    }
                 }
                 Node::Tempo {
                     ref short,
