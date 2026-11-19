@@ -1,15 +1,24 @@
 //! Measures a sherpa-onnx speech model the way voice commands use it: load time, memory, decode
 //! time per utterance (real-time factor) and how often the phrase matcher picks the right phrase.
 //!
-//! speech_bench --lib <dir> --model <dir> [--lang <code>] [--threads <n>] --phrases <dir>
+//! speech_bench --lib <dir> --model <dir> [--lang <code>] [--threads <n>] --phrases <dir> [--gain <percent>]
 //!     <dir> holds phrases.txt and other.txt (one per line) and 16 kHz mono 16-bit WAV files named
 //!     phrases-NN-*.wav / other-NN-*.wav (NN = line, from 00): each phrase file should match its
 //!     line, each other file (speech that is no command) should match nothing.
 //! speech_bench --lib <dir> --model <dir> [--lang <code>] [--threads <n>] --wavs <dir>
 //!     prints what it hears in every WAV file of <dir> (e.g. the model's test_wavs).
 //! speech_bench --lib <dir> --model <dir> [--lang <code>] [--threads <n>] --listen <phrases.txt> [--gain <percent>]
+//!     [--vosk-lib <dir> --vosk-model <dir>] [--save <dir>]
 //!     push to talk on the default microphone, kept open like the app does: Enter starts a
 //!     phrase, Enter again ends it; prints what was heard and the phrase it matches. q quits.
+//!     With a Vosk model (grammar mode, how 0.15 worked) "1" + Enter starts a phrase for Vosk,
+//!     "2" + Enter for the sherpa-onnx model (as plain Enter), "3" + Enter for both on the same
+//!     audio. --save keeps every phrase as NNN.wav (as recorded, before the gain) in <dir>.
+//! speech_bench --record <dir> [--rounds <n>]
+//!     records test files for --phrases on the default microphone (no model needed): shows each
+//!     line of <dir>/phrases.txt and <dir>/other.txt in turn, n rounds (3), and saves what was
+//!     said as phrases-NN-rK.wav / other-NN-rK.wav, as recorded (no gain) with the 0.3 s before
+//!     Enter like the app. Enter starts, Enter ends, s + Enter skips, q + Enter quits.
 //!
 //! Prints one summary line at the end: load s | memory MB after load / peak | mean RTF | right
 //! phrases | rejected other speech. Memory is the whole process (working set).
@@ -22,6 +31,10 @@ use std::time::Instant;
 use gob_voice::sherpa::{ModelSpec, Sherpa};
 use gob_voice::{Capture, SAMPLE_RATE, matcher};
 
+mod common {
+    pub mod vosk;
+}
+
 /// Below this confidence a phrase counts as not recognized (the app's default).
 const MIN_CONFIDENCE: f32 = 0.5;
 
@@ -29,6 +42,8 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let (mut lib, mut model, mut phrases, mut wavs, mut listen) = (None, None, None, None, None);
     let (mut lang, mut threads, mut gain) = (String::new(), 1, 1.0);
+    let (mut record, mut rounds) = (None, 3);
+    let (mut vosk_lib, mut vosk_model, mut save) = (None::<PathBuf>, None::<PathBuf>, None);
     while let Some(a) = args.next() {
         let mut value = || {
             args.next()
@@ -42,9 +57,18 @@ fn main() {
             "--phrases" => phrases = Some(PathBuf::from(value())),
             "--wavs" => wavs = Some(PathBuf::from(value())),
             "--listen" => listen = Some(PathBuf::from(value())),
+            "--vosk-lib" => vosk_lib = Some(PathBuf::from(value())),
+            "--vosk-model" => vosk_model = Some(PathBuf::from(value())),
+            "--save" => save = Some(PathBuf::from(value())),
+            "--record" => record = Some(PathBuf::from(value())),
+            "--rounds" => rounds = value().parse().unwrap_or_else(|e| fail(e)),
             "--gain" => gain = value().parse::<f32>().unwrap_or_else(|e| fail(e)) / 100.0,
             _ => fail(format!("unknown argument {a}")),
         }
+    }
+    if let Some(dir) = record {
+        record_phrases(&dir, rounds);
+        return;
     }
     let (Some(lib), Some(model)) = (lib, model) else {
         fail("--lib and --model are needed");
@@ -63,13 +87,27 @@ fn main() {
     );
 
     if let Some(list) = listen {
-        talk(&loaded, &lines(&list), gain);
+        let list = lines(&list);
+        let vosk = match (vosk_lib, vosk_model) {
+            (Some(l), Some(m)) => {
+                Some(common::vosk::Vosk::load(&l, &m, &list).unwrap_or_else(|e| fail(e)))
+            }
+            (None, None) => None,
+            _ => fail("--vosk-lib and --vosk-model go together"),
+        };
+        if let Some(dir) = &save {
+            std::fs::create_dir_all(dir).unwrap_or_else(|e| fail(e));
+        }
+        talk(&loaded, vosk.as_ref(), &list, gain, save.as_deref());
         return;
     }
 
     let mut rtf = Vec::new();
     let mut hear = |file: &Path| -> Option<String> {
-        let samples = read_wav(file)?;
+        let samples: Vec<i16> = read_wav(file)?
+            .iter()
+            .map(|&s| (f32::from(s) * gain).clamp(-32768.0, 32767.0) as i16)
+            .collect();
         let mut r = loaded.recognizer();
         r.feed(&samples);
         let t = Instant::now();
@@ -130,49 +168,178 @@ fn main() {
     );
 }
 
-/// Push to talk with Enter on the default microphone, which stays open between phrases.
-fn talk(model: &gob_voice::sherpa::Model, list: &[String], gain: f32) {
+/// Push to talk with Enter on the default microphone, which stays open between phrases; with
+/// `vosk`, "1" picks Vosk, "2" the sherpa-onnx model, "3" both.
+fn talk(
+    model: &gob_voice::sherpa::Model,
+    vosk: Option<&common::vosk::Vosk>,
+    list: &[String],
+    gain: f32,
+    save: Option<&Path>,
+) {
+    // Raw audio: the gain is applied here, so a saved file is as recorded.
     let (tx, rx) = mpsc::channel::<Vec<i16>>();
-    let capture = Capture::open(None, gain, move |s| {
+    let capture = Capture::open(None, 1.0, move |s| {
         let _ = tx.send(s.to_vec());
     })
     .unwrap_or_else(|e| fail(e));
     println!(
-        "{}: Enter starts a phrase, Enter again ends it, q quits. Phrases: {}",
+        "{}, gain {:.0} %. Phrases: {}",
         capture.name(),
+        gain * 100.0,
         list.join(" | ")
     );
+    let prompt = if vosk.is_some() {
+        "1 + Enter = Vosk, 2 + Enter (or Enter) = sherpa-onnx, 3 + Enter = both; Enter ends the phrase; q quits"
+    } else {
+        "Enter starts a phrase, Enter again ends it; q quits"
+    };
+    println!("{prompt}");
+    const PRE_ROLL: usize = SAMPLE_RATE as usize * 3 / 10;
     let mut input = std::io::stdin().lock().lines();
+    let mut take = 0;
     loop {
         let Some(Ok(line)) = input.next() else { return };
-        if line.trim() == "q" {
-            return;
-        }
-        // What came in before the press (kept open, nobody listening) is dropped.
-        while rx.try_recv().is_ok() {}
-        println!("listening... (Enter ends the phrase)");
-        let Some(Ok(_)) = input.next() else { return };
-        let samples: Vec<i16> = rx.try_iter().flatten().collect();
-        let seconds = samples.len() as f32 / SAMPLE_RATE as f32;
-        let peak = samples.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
-        let mut r = model.recognizer();
-        r.feed(&samples);
-        let t = Instant::now();
-        let text = r.finish();
-        let decode = t.elapsed();
-        let found = matcher::best(&text, &commands(list));
-        let shown = match found {
-            Some((i, c)) if c >= MIN_CONFIDENCE => format!("-> {} ({c:.2})", list[i]),
-            Some((i, c)) => format!("-> nothing (closest {} at {c:.2})", list[i]),
-            None => "-> nothing".to_string(),
+        let (use_vosk, use_sherpa) = match (line.trim(), vosk.is_some()) {
+            ("q", _) => return,
+            ("1", true) => (true, false),
+            ("3", true) => (true, true),
+            _ => (false, true),
         };
+        // What came in before the press: its last 0.3 s, like the app.
+        let before: Vec<i16> = rx.try_iter().flatten().collect();
+        let mut raw = before[before.len().saturating_sub(PRE_ROLL)..].to_vec();
+        let engines = match (use_vosk, use_sherpa) {
+            (true, true) => "Vosk + sherpa-onnx",
+            (true, false) => "Vosk",
+            _ => "sherpa-onnx",
+        };
+        println!("listening for {engines}... (Enter ends the phrase)");
+        let Some(Ok(_)) = input.next() else { return };
+        raw.extend(rx.try_iter().flatten());
+        take += 1;
+        if let Some(dir) = save {
+            let _ = write_wav(&dir.join(format!("{take:03}.wav")), &raw);
+        }
+        let samples: Vec<i16> = raw
+            .iter()
+            .map(|&s| (f32::from(s) * gain).clamp(-32768.0, 32767.0) as i16)
+            .collect();
+        let peak = samples.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
         println!(
-            "{seconds:.1} s, loudest {:.2}, decoded in {} ms: heard {text:?} {shown}",
-            f32::from(peak) / f32::from(i16::MAX),
-            decode.as_millis()
+            "#{take}: {:.1} s, loudest {:.2}",
+            samples.len() as f32 / SAMPLE_RATE as f32,
+            f32::from(peak) / f32::from(i16::MAX)
         );
-        println!("Enter for the next phrase, q quits");
+        if use_vosk && let Some(v) = vosk {
+            let t = Instant::now();
+            let (text, confidence) = v.hear(&samples);
+            let shown = v
+                .phrase(&text, confidence, MIN_CONFIDENCE)
+                .map_or_else(|| "nothing".to_string(), |i| list[i].clone());
+            println!(
+                "  Vosk        ({:>3} ms): heard {text:?} ({confidence:.2}) -> {shown}",
+                t.elapsed().as_millis()
+            );
+        }
+        if use_sherpa {
+            let mut r = model.recognizer();
+            r.feed(&samples);
+            let t = Instant::now();
+            let text = r.finish();
+            let shown = match matcher::best(&text, &commands(list)) {
+                Some((i, c)) if c >= MIN_CONFIDENCE => format!("{} ({c:.2})", list[i]),
+                Some((i, c)) => format!("nothing (closest {} at {c:.2})", list[i]),
+                None => "nothing".to_string(),
+            };
+            println!(
+                "  sherpa-onnx ({:>3} ms): heard {text:?} -> {shown}",
+                t.elapsed().as_millis()
+            );
+        }
+        println!("{prompt}");
     }
+}
+
+/// `--record`: prompts every line of phrases.txt and other.txt `rounds` times and saves the audio.
+fn record_phrases(dir: &Path, rounds: u32) {
+    let sets = [
+        ("phrases", lines(&dir.join("phrases.txt"))),
+        ("other", lines(&dir.join("other.txt"))),
+    ];
+    let (tx, rx) = mpsc::channel::<Vec<i16>>();
+    let capture = Capture::open(None, 1.0, move |s| {
+        let _ = tx.send(s.to_vec());
+    })
+    .unwrap_or_else(|e| fail(e));
+    println!(
+        "{}: say each line shown. Enter starts, Enter ends, s skips, q quits.",
+        capture.name()
+    );
+    const PRE_ROLL: usize = SAMPLE_RATE as usize * 3 / 10;
+    let mut input = std::io::stdin().lock().lines();
+    let mut saved = 0;
+    for round in 1..=rounds {
+        for (prefix, list) in &sets {
+            for (n, line) in list.iter().enumerate() {
+                println!(
+                    "
+[{round}/{rounds}] say: {line:?}   (Enter starts)"
+                );
+                let Some(Ok(cmd)) = input.next() else { return };
+                match cmd.trim() {
+                    "q" => {
+                        println!("{saved} files saved in {}", dir.display());
+                        return;
+                    }
+                    "s" => continue,
+                    _ => {}
+                }
+                let before: Vec<i16> = rx.try_iter().flatten().collect();
+                let mut samples = before[before.len().saturating_sub(PRE_ROLL)..].to_vec();
+                println!("  recording... (Enter ends)");
+                let Some(Ok(_)) = input.next() else { return };
+                samples.extend(rx.try_iter().flatten());
+                let peak = samples.iter().map(|s| s.unsigned_abs()).max().unwrap_or(0);
+                let file = dir.join(format!("{prefix}-{n:02}-r{round}.wav"));
+                write_wav(&file, &samples).unwrap_or_else(|e| fail(e));
+                saved += 1;
+                println!(
+                    "  {:.1} s, loudest {:.2} -> {}",
+                    samples.len() as f32 / SAMPLE_RATE as f32,
+                    f32::from(peak) / f32::from(i16::MAX),
+                    file.file_name().unwrap().to_string_lossy()
+                );
+            }
+        }
+    }
+    println!(
+        "
+done: {saved} files saved in {}",
+        dir.display()
+    );
+}
+
+/// Writes 16 kHz mono 16-bit PCM.
+fn write_wav(path: &Path, samples: &[i16]) -> std::io::Result<()> {
+    let data = (samples.len() * 2) as u32;
+    let mut out = Vec::with_capacity(44 + data as usize);
+    out.extend(b"RIFF");
+    out.extend((36 + data).to_le_bytes());
+    out.extend(b"WAVEfmt ");
+    out.extend(16u32.to_le_bytes());
+    out.extend(1u16.to_le_bytes());
+    out.extend(1u16.to_le_bytes());
+    out.extend(SAMPLE_RATE.to_le_bytes());
+    out.extend((SAMPLE_RATE * 2).to_le_bytes());
+    out.extend(2u16.to_le_bytes());
+    out.extend(16u16.to_le_bytes());
+    out.extend(b"data");
+    out.extend(data.to_le_bytes());
+    for s in samples {
+        out.extend(s.to_le_bytes());
+    }
+    std::fs::write(path, out)
 }
 
 /// Each phrase a command of its own, as the matcher takes them.
