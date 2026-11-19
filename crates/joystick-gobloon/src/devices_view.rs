@@ -951,6 +951,29 @@ impl DevicesView {
         // What is made next gets the lowest free id: select it once it is there.
         let made = (Kind::Voice, profile.next_voice_command_id());
         let picked = self.voice_picked.len() >= 2;
+        // Alt+G: a new group holding the selected ones, else what Ctrl+C or Ctrl+X took (copied
+        // or moved into it), else an empty one.
+        let alt_g = egui::KeyboardShortcut::new(egui::Modifiers::ALT, egui::Key::G);
+        if !ui.ctx().text_edit_focused() && ui.input_mut(|i| i.consume_shortcut(&alt_g)) {
+            if picked {
+                ops.push(Op::GroupVoiceNodes(self.voice_picked.clone()));
+            } else {
+                ops.push(Op::AddVoiceNode {
+                    parent,
+                    group: true,
+                });
+                if let Some(clip) = &self.voice_clip {
+                    let (ids, parent) = (clip.ids.clone(), Some(made.1));
+                    if clip.cut {
+                        ops.push(Op::MoveVoiceNodes { ids, parent });
+                        self.voice_clip = None;
+                    } else {
+                        ops.push(Op::CopyVoiceNodes { ids, parent });
+                    }
+                }
+            }
+            self.select_voice(made);
+        }
         ui.horizontal(|ui| {
             let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add"));
             if ui.button(add).clicked() {
@@ -969,6 +992,7 @@ impl DevicesView {
             } else {
                 i18n.tr("voice-add-group-tip")
             };
+            let tip = format!("{tip} (Alt+G)");
             if ui.button(add).on_hover_text(tip).clicked() {
                 if picked {
                     ops.push(Op::GroupVoiceNodes(self.voice_picked.clone()));
