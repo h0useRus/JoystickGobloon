@@ -1011,7 +1011,8 @@ impl DevicesView {
         ui.separator();
     }
 
-    /// Ctrl+C or Ctrl+X takes the selected voice commands and groups, Ctrl+V puts them into
+    /// Ctrl+C or Ctrl+X (pointer over the list, or several selected) takes the selected voice
+    /// commands and groups, Ctrl+V puts them into
     /// group `parent` (the selected one): copies without actions, or the cut ones moved with
     /// theirs. Not while a text field takes these keys; Ctrl+V of copied actions still pastes
     /// those.
@@ -1030,16 +1031,23 @@ impl DevicesView {
             .voice_clip
             .as_ref()
             .map(|c| c.marker.trim().to_string());
-        // Taken from the frame's events: the input editor's Ctrl+C would copy actions instead.
+        // Ctrl+C and Ctrl+X take the commands with the pointer over their list, or several of
+        // them selected; else they stay the input editor's (copying its actions). Taken from
+        // the frame's events, so the editor does not act on them too.
+        let over_list = ui
+            .ctx()
+            .pointer_hover_pos()
+            .is_some_and(|p| ui.clip_rect().contains(p));
+        let takes = over_list || self.voice_picked.len() >= 2;
         let (take, paste) = ui.input_mut(|i| {
             let mut take = None;
             let mut paste = false;
             i.events.retain(|e| match e {
-                egui::Event::Copy => {
+                egui::Event::Copy if takes => {
                     take = Some(false);
                     false
                 }
-                egui::Event::Cut => {
+                egui::Event::Cut if takes => {
                     take = Some(true);
                     false
                 }

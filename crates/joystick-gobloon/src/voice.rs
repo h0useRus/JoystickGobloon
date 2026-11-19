@@ -225,9 +225,23 @@ struct Opening {
     done: Receiver<Result<gob_voice::Capture, String>>,
 }
 
+/// How long what is installed on disk is trusted before it is looked up again (each look lists
+/// folders; the tab is drawn many times a second while a download runs).
+const DISK_RECHECK: Duration = Duration::from_secs(3);
+
+/// What the Voice tab found installed, by model, library or voice; forgotten after
+/// [`DISK_RECHECK`] or an install or removal.
+#[derive(Default)]
+struct DiskCache {
+    at: Option<Instant>,
+    found: std::collections::HashMap<String, Option<PathBuf>>,
+}
+
 /// State of the Voice settings tab between frames.
 #[derive(Default)]
 pub struct VoicePanel {
+    /// What is installed, looked up at most every few seconds rather than every frame.
+    disk: std::cell::RefCell<DiskCache>,
     download: Option<Download>,
     /// The last download's error, and what it was.
     error: Option<(Target, String)>,
@@ -251,11 +265,34 @@ impl VoicePanel {
     /// A slider counts once it is let go, not on every step of a drag.
     pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
         let mut changed = self.poll_download(ui.ctx());
+        if changed {
+            self.disk.get_mut().found.clear();
+        }
         changed |= self.model_section(ui, i18n, settings);
         ui.add_space(18.0);
         changed |= self.microphone_section(ui, i18n, settings);
         ui.add_space(18.0);
-        self.natural_section(ui, i18n, settings) || changed
+        changed |= self.natural_section(ui, i18n, settings);
+        if changed {
+            // Something was installed or removed (or a setting changed): look again.
+            self.disk.get_mut().found.clear();
+        }
+        changed
+    }
+
+    /// `probe`'s answer for `key`, kept for [`DISK_RECHECK`].
+    fn on_disk(&self, key: &str, probe: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+        let mut cache = self.disk.borrow_mut();
+        if cache.at.is_none_or(|t| t.elapsed() >= DISK_RECHECK) {
+            cache.found.clear();
+            cache.at = Some(Instant::now());
+        }
+        if let Some(found) = cache.found.get(key) {
+            return found.clone();
+        }
+        let found = probe();
+        cache.found.insert(key.to_string(), found.clone());
+        found
     }
 
     fn model_section(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
@@ -375,7 +412,7 @@ impl VoicePanel {
         ui.horizontal(|ui| {
             match (
                 self.downloading(Target::Model),
-                gob_voice::models::installed(&dir, model),
+                self.on_disk(model.name, || gob_voice::models::installed(&dir, model)),
             ) {
                 (Some(d), _) => progress_bar(ui, i18n, d),
                 (None, Some(_)) => {
@@ -531,7 +568,7 @@ impl VoicePanel {
             return changed;
         };
         let busy = self.download.is_some();
-        let library = gob_voice::tts::library_installed(&tts);
+        let library = self.on_disk("tts-library", || gob_voice::tts::library_installed(&tts));
         let archive = gob_voice::tts::library();
         let megabytes = archive.bytes.div_ceil(1_000_000);
         ui.horizontal(
@@ -597,7 +634,7 @@ impl VoicePanel {
                         ui.horizontal(|ui| {
                             match (
                                 self.downloading(Target::Voice(v)),
-                                gob_voice::tts::installed(&tts, v),
+                                self.on_disk(v.id, || gob_voice::tts::installed(&tts, v)),
                             ) {
                                 (Some(d), _) => progress_bar(ui, i18n, d),
                                 (None, Some(_)) => {
@@ -648,7 +685,10 @@ impl VoicePanel {
             ui.add_space(4.0);
             let installed: Vec<String> = gob_voice::tts::VOICES
                 .iter()
-                .filter(|v| gob_voice::tts::installed(&tts, v).is_some())
+                .filter(|v| {
+                    self.on_disk(v.id, || gob_voice::tts::installed(&tts, v))
+                        .is_some()
+                })
                 .map(|v| v.display_name())
                 .collect();
             // The voice of actions without one: the chosen one, else the first installed (the
@@ -873,7 +913,6 @@ impl VoicePanel {
     }
 }
 
-/// A slider's value is final: changed without a drag (a click, the arrows, typing) or let go.
 /// A download's progress bar with its cancel button.
 fn progress_bar(ui: &mut egui::Ui, i18n: &I18n, d: &Download) {
     let (done, total) = *d.progress.lock().unwrap_or_else(|e| e.into_inner());
@@ -896,6 +935,7 @@ fn progress_bar(ui: &mut egui::Ui, i18n: &I18n, d: &Download) {
     }
 }
 
+/// A slider's value is final: changed without a drag (a click, the arrows, typing) or let go.
 fn settled(r: &egui::Response) -> bool {
     (r.changed() && !r.dragged()) || r.drag_stopped()
 }

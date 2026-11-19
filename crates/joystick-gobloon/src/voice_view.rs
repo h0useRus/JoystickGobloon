@@ -209,11 +209,13 @@ fn group_picker(
     command: &VoiceCommand,
     ops: &mut Vec<Op>,
 ) {
+    // A command cannot go into itself or into what is in it.
+    let inside = profile.voice_descendants(command.id);
     let groups: Vec<(u32, String)> = profile
         .voice_tree()
         .into_iter()
         .filter(|(_, c)| c.group && c.id != command.id)
-        .filter(|(_, c)| !profile.voice_descendants(command.id).contains(&c.id))
+        .filter(|(_, c)| !inside.contains(&c.id))
         .map(|(_, c)| (c.id, profile.voice_full_phrase(c.id)))
         .collect();
     if groups.is_empty() && command.parent.is_none() {

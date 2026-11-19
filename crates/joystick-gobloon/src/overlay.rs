@@ -10,7 +10,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, RichText};
 use gob_core::{Key, Profile};
@@ -22,6 +22,9 @@ use crate::style::icon;
 
 /// Where the overlay starts before it is placed: near the top left of the main screen.
 const DEFAULT_POS: [f32; 2] = [40.0, 40.0];
+
+/// How long after the key thread could not start it is tried again.
+const KEY_RETRY: Duration = Duration::from_secs(5);
 
 /// How often the key combination is looked for.
 const KEY_POLL: Duration = Duration::from_millis(25);
@@ -100,6 +103,14 @@ struct Shared {
 pub struct Overlay {
     shared: Arc<Shared>,
     key_thread: bool,
+    /// When the key thread could not start last (it is tried again a while later), and whether
+    /// that was logged.
+    key_tried: Option<Instant>,
+    key_warned: bool,
+    /// The key combination last handed to the key thread.
+    keys: Vec<u16>,
+    /// The voice command lines, made again only when the profile's commands change.
+    commands: CommandLines,
     /// Being placed (Settings, Overlay, Calibrate).
     pub calibrating: bool,
     /// [`Self::calibrating`] in the last frame: placing ended when it goes off.
@@ -111,6 +122,10 @@ impl Overlay {
         Self {
             shared: Arc::default(),
             key_thread: false,
+            key_tried: None,
+            key_warned: false,
+            keys: Vec::new(),
+            commands: CommandLines::default(),
             calibrating: false,
             was_calibrating: false,
         }
@@ -130,18 +145,30 @@ impl Overlay {
         usage: Option<crate::usage::Reading>,
         recording_keys: bool,
     ) -> Option<[f32; 2]> {
-        let keys: Vec<Key> = settings
-            .overlay_keys
-            .iter()
-            .map(|&c| key_from_code(c))
-            .collect();
-        *self.shared.keys.lock().unwrap_or_else(|e| e.into_inner()) = keys;
+        if self.keys != settings.overlay_keys {
+            self.keys.clone_from(&settings.overlay_keys);
+            let keys: Vec<Key> = self.keys.iter().map(|&c| key_from_code(c)).collect();
+            *self.shared.keys.lock().unwrap_or_else(|e| e.into_inner()) = keys;
+        }
         // Not while the combination itself is being recorded in the settings.
         self.shared
             .listening
             .store(settings.overlay_on && !recording_keys, Ordering::Relaxed);
-        if settings.overlay_on && !self.key_thread {
-            self.key_thread = spawn_key_thread(ctx.clone(), self.shared.clone());
+        // The key state may come later (Linux: once the program may read the keyboard).
+        if settings.overlay_on
+            && !self.key_thread
+            && self.key_tried.is_none_or(|t| t.elapsed() >= KEY_RETRY)
+        {
+            match spawn_key_thread(ctx.clone(), self.shared.clone()) {
+                Ok(()) => self.key_thread = true,
+                Err(e) => {
+                    if !self.key_warned {
+                        log::warn!("overlay: {e}; its key combination works once it can");
+                        self.key_warned = true;
+                    }
+                    self.key_tried = Some(Instant::now());
+                }
+            }
         }
 
         let position = || {
@@ -168,7 +195,8 @@ impl Overlay {
         let lines = if self.calibrating && status.is_none() {
             sample_lines(i18n, settings)
         } else {
-            status.map_or_else(Vec::new, |s| lines(settings, s, profile, usage))
+            let commands = &mut self.commands;
+            status.map_or_else(Vec::new, |s| lines(settings, s, profile, usage, commands))
         };
         let shown = self.calibrating || (settings.overlay_on && !hidden && !lines.is_empty());
         if !shown {
@@ -320,6 +348,7 @@ fn lines(
     status: &RunnerStatus,
     profile: Option<&Profile>,
     usage: Option<crate::usage::Reading>,
+    commands: &mut CommandLines,
 ) -> Vec<Line> {
     let line = |glyph, text: String| Line {
         glyph,
@@ -367,23 +396,42 @@ fn lines(
     if settings.overlay_commands
         && let Some(p) = profile
     {
-        for (depth, c) in p.voice_tree() {
-            let Some(phrase) = c.phrases.first() else {
-                continue;
-            };
-            out.push(Line {
-                glyph: if c.group {
-                    icon::FOLDER_SIMPLE
-                } else {
-                    icon::CHAT_CIRCLE
-                },
-                text: phrase.clone(),
-                depth,
-                strong: c.group,
-            });
-        }
+        out.extend_from_slice(commands.of(p));
     }
     out
+}
+
+/// Every voice command of a profile as overlay lines, indented by group; kept with the commands
+/// they were made from (the tree is costly to walk every frame).
+#[derive(Default)]
+struct CommandLines {
+    from: Vec<gob_core::VoiceCommand>,
+    lines: Vec<Line>,
+}
+
+impl CommandLines {
+    fn of(&mut self, p: &Profile) -> &[Line] {
+        if self.from != p.voice_commands {
+            self.from.clone_from(&p.voice_commands);
+            self.lines = p
+                .voice_tree()
+                .into_iter()
+                .filter_map(|(depth, c)| {
+                    Some(Line {
+                        glyph: if c.group {
+                            icon::FOLDER_SIMPLE
+                        } else {
+                            icon::CHAT_CIRCLE
+                        },
+                        text: c.phrases.first()?.clone(),
+                        depth,
+                        strong: c.group,
+                    })
+                })
+                .collect();
+        }
+        &self.lines
+    }
 }
 
 /// What the chosen lines look like, while the overlay is placed with no profile running.
@@ -482,12 +530,11 @@ fn draw(root: &mut egui::Ui, shared: &Shared) {
 }
 
 /// Watches the key combination on a thread of its own (the game has the focus, so the
-/// window gets no key events); each press flips the overlay. False when the system does not
-/// tell which keys are held.
-fn spawn_key_thread(ctx: egui::Context, shared: Arc<Shared>) -> bool {
+/// window gets no key events); each press flips the overlay. An error when the system does not
+/// tell which keys are held (yet) or the thread did not start.
+fn spawn_key_thread(ctx: egui::Context, shared: Arc<Shared>) -> Result<(), String> {
     if crate::platform::held_keys().is_none() {
-        log::warn!("overlay: the system does not tell which keys are held: no key combination");
-        return true;
+        return Err("the system does not tell which keys are held".into());
     }
     let spawned = std::thread::Builder::new()
         .name("overlay-keys".into())
@@ -515,10 +562,9 @@ fn spawn_key_thread(ctx: egui::Context, shared: Arc<Shared>) -> bool {
                 down = now;
             }
         });
-    if let Err(e) = &spawned {
-        log::error!("overlay: key thread: {e}");
-    }
-    true
+    spawned
+        .map(|_| ())
+        .map_err(|e| format!("its key thread did not start: {e}"))
 }
 
 #[cfg(test)]

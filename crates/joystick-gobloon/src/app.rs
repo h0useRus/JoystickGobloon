@@ -2212,6 +2212,17 @@ impl eframe::App for JoystickGobloonApp {
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
+        // Placing the overlay ends when its tab is not shown: another page, or the window
+        // hidden or minimized (otherwise it would stay on screen catching clicks).
+        let minimized = ctx.input(|i| i.viewport().minimized).unwrap_or(false);
+        let in_tray = self.main_window.is_some_and(crate::platform::in_tray);
+        if self.page != Page::Settings
+            || self.settings_tab != SettingsTab::Overlay
+            || minimized
+            || in_tray
+        {
+            self.overlay.calibrating = false;
+        }
         // The overlay follows the running profile, also while this window is in the tray.
         let status = self.activation.status();
         let recording = crate::key_capture::recording(ctx);
