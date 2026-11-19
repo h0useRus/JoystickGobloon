@@ -24,10 +24,14 @@ pub(crate) use windows::{Platform, joystick_ids, keyboard};
 /// A platform's way to find, open and wait for controllers.
 pub(crate) trait Backend: Sized {
     /// What [`Backend::attached`] found, to open it.
-    type Found;
+    type Found: Send + 'static;
     type Device: Device;
     /// Devices can be read exclusively ([`Device::set_exclusive`], crate::exclusive).
     const EXCLUSIVE: bool = false;
+    /// [`Backend::attached`] can take long (DirectInput's enumeration: tens to hundreds of
+    /// milliseconds with some devices): a backend of its own looks on another thread, so reading
+    /// the controllers never waits for it.
+    const SCAN_ON_THREAD: bool = false;
 
     /// `None` when the platform's input API is not available.
     fn new() -> Option<Self>;
