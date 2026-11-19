@@ -1,0 +1,9 @@
+id = "elite-dangerous"
+name = "Elite Dangerous"
+version = "1.0.0"
+authors = ["Joystick Gobloon"]
+api = 1
+
+[game]
+min = "4.0"
+max = "4.*"
