@@ -79,8 +79,19 @@ pub struct Settings {
     pub curve_right_click_invert: bool,
     /// Ask before saving makes a profile Joystick Gremlin cannot open.
     pub warn_gremlin_format: bool,
+    /// Speech recognizer of voice commands: "vosk" (listens only for the phrases) or "sherpa"
+    /// (sherpa-onnx, writes down any speech).
+    pub voice_engine: String,
     /// Language voice commands are spoken in (a speech model's); empty = the program's.
     pub voice_language: String,
+    /// Speech model size: "small" (less memory) or "large" (more accurate).
+    pub voice_model_size: String,
+    /// Who speaks text to speech actions: "system" (the system's voice, for every action) or
+    /// "piper" (Piper voices downloaded in the settings).
+    pub tts_engine: String,
+    /// The Piper voice that speaks text to speech actions without a voice of their own (its
+    /// name as listed); empty or not installed = the first installed one.
+    pub tts_voice: String,
     /// Microphone gain of voice commands (1.0 = as recorded).
     pub voice_gain: f32,
     /// Voice commands heard less sure than this (0..1) count as not recognized.
@@ -88,6 +99,27 @@ pub struct Settings {
     /// Keep the microphones of voice commands open while a profile runs (some are silent for a
     /// moment after they open); only what is said while listening is recognized.
     pub voice_keep_open: bool,
+    /// The game overlay is on (its key combination shows and hides it while playing).
+    pub overlay_on: bool,
+    /// The overlay's top left on the screen (points); `None` = not placed yet.
+    pub overlay_pos: Option<[f32; 2]>,
+    /// What the overlay shows: mode and layer, the last pressed binding's description, the
+    /// latency, the recognized voice command, every voice command.
+    pub overlay_mode: bool,
+    pub overlay_action: bool,
+    pub overlay_latency: bool,
+    /// Memory and CPU Joystick Gobloon uses.
+    pub overlay_usage: bool,
+    pub overlay_voice: bool,
+    pub overlay_commands: bool,
+    /// Overlay text and background colors (RGBA, not premultiplied).
+    pub overlay_text_color: [u8; 4],
+    pub overlay_background: [u8; 4],
+    pub overlay_font_size: f32,
+    /// The whole overlay's opacity, text and background (0.1..1).
+    pub overlay_opacity: f32,
+    /// The keys that show and hide the overlay: set 1 scan codes, 0x100 = E0 prefix.
+    pub overlay_keys: Vec<u16>,
     /// What the log file records.
     pub log_level: LogLevel,
     /// Main window size (logical points) when it was last resized; the next start opens it so.
@@ -329,10 +361,28 @@ impl Default for Settings {
             monotonic_curves: true,
             curve_right_click_invert: true,
             warn_gremlin_format: true,
+            voice_engine: "vosk".into(),
+            tts_engine: "system".into(),
             voice_language: String::new(),
+            voice_model_size: "small".into(),
+            tts_voice: String::new(),
             voice_gain: 1.0,
             voice_min_confidence: 0.5,
             voice_keep_open: true,
+            overlay_on: false,
+            overlay_pos: None,
+            overlay_mode: true,
+            overlay_action: true,
+            overlay_latency: false,
+            overlay_usage: false,
+            overlay_voice: true,
+            overlay_commands: false,
+            // Joystick Gobloon's green on its dark panel color, as in the program.
+            overlay_text_color: [0x8c, 0xc8, 0x2c, 0xff],
+            overlay_background: [0x1b, 0x1d, 0x22, 0xcc],
+            overlay_font_size: 16.0,
+            overlay_opacity: 1.0,
+            overlay_keys: crate::overlay::DEFAULT_KEYS.to_vec(),
             log_level: LogLevel::default(),
             window_size: DEFAULT_WINDOW_SIZE,
             window_maximized: false,

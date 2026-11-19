@@ -21,6 +21,10 @@ const LATENCY_WINDOW: Duration = Duration::from_secs(1);
 #[derive(Debug, Clone, Default)]
 pub struct RunnerStatus {
     pub mode: String,
+    /// The layer the held modifiers choose (`M1+M2`); empty for the base layer.
+    pub layer: String,
+    /// The description of the last binding whose input was pressed and had one.
+    pub last_action: Option<String>,
     pub paused: bool,
     /// Profile file a load-profile action asked for; the GUI takes it.
     pub load_profile: Option<String>,
@@ -45,8 +49,6 @@ pub struct VoiceStatus {
     pub listening: bool,
     /// The last utterance.
     pub heard: Option<VoiceHeard>,
-    /// Phrases with words the speech model does not know (shared: cloned with every status).
-    pub unknown_words: std::sync::Arc<[gob_voice::UnknownPhrase]>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -531,6 +533,8 @@ impl Runner {
 
         let status = Arc::new(Mutex::new(RunnerStatus {
             mode: engine.current_mode().to_string(),
+            layer: String::new(),
+            last_action: None,
             paused: false,
             load_profile: None,
             latency: None,
@@ -750,7 +754,6 @@ struct ServiceState {
     error: Option<String>,
     /// Microphones listening now.
     listening: HashSet<String>,
-    unknown_words: std::sync::Arc<[gob_voice::UnknownPhrase]>,
 }
 
 impl ServiceState {
@@ -775,7 +778,6 @@ impl ServiceState {
             } => {
                 self.listening.remove(&microphone);
             }
-            VoiceEvent::UnknownWords(list) => self.unknown_words = list,
             VoiceEvent::Heard {
                 command,
                 text,
@@ -797,7 +799,6 @@ impl ServiceState {
             ready: self.ready,
             error: self.error.clone(),
             listening: !self.listening.is_empty(),
-            unknown_words: self.unknown_words.clone(),
             ..status
         }
     }
@@ -831,6 +832,8 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
     // A fine timer is on: outputs move on their own.
     let mut fine = false;
     let mut service = ServiceState::default();
+    // The layer the status shows (its text is made only when it changes).
+    let mut shown_layer = gob_core::Layer::default();
     let mut voice_status = status
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -899,6 +902,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         }
         let now = Instant::now();
         engine.tick(now, &mut out);
+        // A voice group opened or closed: listen for what is in it, or for everything again.
+        if engine.take_voice_phrases_changed()
+            && let Some(voice) = &out.voice
+        {
+            voice.set_phrases(engine.voice_phrases().to_vec());
+        }
         out.flush();
         // Latency ends when the outputs are written.
         for read in &reads {
@@ -917,7 +926,15 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             s.script_errors.extend(script_errors);
             on_change();
         }
+        // Compared with the last layer shown, without making text: allocates only on a change.
+        let layer_changed = engine.current_layer() != &shown_layer;
+        if layer_changed {
+            shown_layer = engine.current_layer().clone();
+        }
+        let action_changed = s.last_action.as_deref() != engine.last_action();
         if s.mode != engine.current_mode()
+            || layer_changed
+            || action_changed
             || s.paused != engine.is_paused()
             || load.is_some()
             || latency.is_some_and(|l| s.latency != Some(l))
@@ -925,6 +942,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             || s.voice != voice_status
         {
             s.mode = engine.current_mode().to_string();
+            if layer_changed {
+                s.layer = shown_layer.to_string();
+            }
+            if action_changed {
+                s.last_action = engine.last_action().map(String::from);
+            }
             s.paused = engine.is_paused();
             s.voice = voice_status.clone();
             if load.is_some() {
@@ -1259,25 +1282,6 @@ mod tests {
         assert!(service.apply(VoiceStatus::default()).listening);
         service.handle(listening("right", false));
         assert!(!service.apply(VoiceStatus::default()).listening);
-    }
-
-    #[test]
-    fn unknown_words_reach_the_status() {
-        let mut service = ServiceState::default();
-        let list: std::sync::Arc<[_]> = std::sync::Arc::new([gob_voice::UnknownPhrase {
-            command: 1,
-            phrase: "zz me".into(),
-            words: vec!["zz".into()],
-        }]);
-        service.handle(gob_voice::VoiceEvent::UnknownWords(list.clone()));
-        assert_eq!(service.apply(VoiceStatus::default()).unknown_words, list);
-        service.handle(gob_voice::VoiceEvent::UnknownWords(std::sync::Arc::new([])));
-        assert!(
-            service
-                .apply(VoiceStatus::default())
-                .unknown_words
-                .is_empty()
-        );
     }
 
     #[test]

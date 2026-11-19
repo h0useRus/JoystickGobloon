@@ -40,9 +40,23 @@ enum Kind {
 /// Input kind and its 1-based id, as in Gremlin profiles.
 type Key = (Kind, u32);
 
+/// How far each level of voice groups is indented on the Voice tab.
+const VOICE_INDENT: f32 = 18.0;
+
 #[derive(Default)]
 pub struct DevicesView {
     selected: Option<String>,
+    /// Voice groups folded away on the Voice tab.
+    voice_folded: std::collections::HashSet<u32>,
+    /// The profile's voice groups, for this frame's cards.
+    voice_groups: std::collections::HashSet<u32>,
+    /// Voice commands and groups picked together (Ctrl or Shift click): "+ Group" puts them in a
+    /// new group.
+    voice_picked: Vec<u32>,
+    /// Where a Shift click's range starts.
+    voice_anchor: Option<u32>,
+    /// Voice commands and groups taken with Ctrl+C or Ctrl+X, for Ctrl+V.
+    voice_clip: Option<VoiceClip>,
     /// The virtual devices' names, for the chips of their mappings.
     vjoy_names: HashMap<u32, String>,
     /// The user picked the tab; otherwise a connected device is preferred.
@@ -275,9 +289,11 @@ impl DevicesView {
             .unwrap_or_default()
     }
 
-    /// Forget the selected mode, e.g. after loading another profile.
+    /// Forget the selected mode (and copied voice commands), e.g. after loading another
+    /// profile.
     pub fn reset_mode(&mut self) {
         self.mode = None;
+        self.voice_clip = None;
     }
 
     pub fn show(
@@ -693,16 +709,75 @@ impl DevicesView {
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
                     .show(ui, |ui| {
-                        for (&key, &bound) in &rows {
+                        let order: Vec<(Key, usize)> = match (is_voice(tab), profile) {
+                            (true, Some(p)) => {
+                                let mut hidden_below: Option<usize> = None;
+                                let mut order = Vec::new();
+                                for (depth, c) in p.profile.voice_tree() {
+                                    if hidden_below.is_some_and(|d| depth > d) {
+                                        continue;
+                                    }
+                                    hidden_below = (c.group && self.voice_folded.contains(&c.id))
+                                        .then_some(depth);
+                                    order.push(((Kind::Voice, c.id), depth));
+                                }
+                                // Bindings of commands that are gone are still listed.
+                                for key in rows.keys() {
+                                    if !order.iter().any(|(k, _)| k == key) {
+                                        order.push((*key, 0));
+                                    }
+                                }
+                                order
+                            }
+                            _ => rows.keys().map(|k| (*k, 0)).collect(),
+                        };
+                        self.voice_groups = profile
+                            .map(|p| {
+                                p.profile
+                                    .voice_commands
+                                    .iter()
+                                    .filter(|c| c.group)
+                                    .map(|c| c.id)
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        // Picked ones that are gone or folded away are no longer picked.
+                        if is_voice(tab) {
+                            self.voice_picked
+                                .retain(|id| order.iter().any(|(k, _)| *k == (Kind::Voice, *id)));
+                        }
+                        let visible: Vec<Key> = order.iter().map(|(k, _)| *k).collect();
+                        for (key, depth) in order {
+                            let Some(&bound) = rows.get(&key) else {
+                                continue;
+                            };
                             let label = labels.get(&key).map(String::as_str);
-                            let is_sel = selected == Some(key);
+                            let is_sel = selected == Some(key)
+                                || (key.0 == Kind::Voice
+                                    && is_voice(tab)
+                                    && self.voice_picked.contains(&key.1));
                             let marker = profile
                                 .and_then(|p| card_marker(i18n, &p.profile, tab, key, bound));
                             let down = downs.get(&key).map_or(&[][..], Vec::as_slice);
-                            match self.card(
-                                ui, i18n, tab, key, bound, &index, label, is_sel, marker, down,
-                            ) {
+                            let indent = Margin {
+                                left: (depth as f32 * VOICE_INDENT) as i8,
+                                ..Margin::ZERO
+                            };
+                            let clicked = egui::Frame::new()
+                                .inner_margin(indent)
+                                .show(ui, |ui| {
+                                    self.card(
+                                        ui, i18n, tab, key, bound, &index, label, is_sel, marker,
+                                        down,
+                                    )
+                                })
+                                .inner;
+                            match clicked {
                                 Some(CardClick::Select) => {
+                                    if key.0 == Kind::Voice && is_voice(tab) {
+                                        let held = ui.input(|i| i.modifiers);
+                                        self.pick_voice(key.1, held, &visible, selected);
+                                    }
                                     self.selected_input.insert(tab.guid.to_string(), key);
                                 }
                                 Some(CardClick::Owner(device, key)) => jump = Some((device, key)),
@@ -865,14 +940,227 @@ impl DevicesView {
                 self.mode = Some(b.mode.clone());
             }
         }
-        let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add"));
-        if ui.button(add).clicked() {
-            ops.push(Op::AddVoiceCommand);
+        // New ones go into the selected group, or next to the selected command.
+        let parent = self
+            .selected_input
+            .get(gob_core::VOICE_GUID)
+            .filter(|k| k.0 == Kind::Voice)
+            .and_then(|k| profile.voice_command(k.1))
+            .and_then(|c| if c.group { Some(c.id) } else { c.parent });
+        self.voice_clipboard(ui, i18n, profile, parent, ops);
+        // What is made next gets the lowest free id: select it once it is there.
+        let made = (Kind::Voice, profile.next_voice_command_id());
+        let picked = self.voice_picked.len() >= 2;
+        // Ctrl+G: a new group holding the selected ones, else what Ctrl+C or Ctrl+X took (copied
+        // or moved into it), else an empty one.
+        let ctrl_g = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::G);
+        if !ui.ctx().text_edit_focused() && ui.input_mut(|i| i.consume_shortcut(&ctrl_g)) {
+            if picked {
+                ops.push(Op::GroupVoiceNodes(self.voice_picked.clone()));
+            } else {
+                ops.push(Op::AddVoiceNode {
+                    parent,
+                    group: true,
+                });
+                if let Some(clip) = &self.voice_clip {
+                    let (ids, parent) = (clip.ids.clone(), Some(made.1));
+                    if clip.cut {
+                        ops.push(Op::MoveVoiceNodes { ids, parent });
+                        self.voice_clip = None;
+                    } else {
+                        ops.push(Op::CopyVoiceNodes { ids, parent });
+                    }
+                }
+            }
+            self.select_voice(made);
         }
+        ui.horizontal(|ui| {
+            let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add"));
+            if ui.button(add).clicked() {
+                ops.push(Op::AddVoiceNode {
+                    parent,
+                    group: false,
+                });
+                self.select_voice(made);
+            }
+            let add = format!("{} {}", icon::PLUS, i18n.tr("voice-add-group"));
+            let tip = if picked {
+                i18n.trf(
+                    "voice-add-group-picked",
+                    &[("n", self.voice_picked.len().into())],
+                )
+            } else {
+                i18n.tr("voice-add-group-tip")
+            };
+            let tip = format!("{tip} (Ctrl+G)");
+            if ui.button(add).on_hover_text(tip).clicked() {
+                if picked {
+                    ops.push(Op::GroupVoiceNodes(self.voice_picked.clone()));
+                } else {
+                    ops.push(Op::AddVoiceNode {
+                        parent,
+                        group: true,
+                    });
+                }
+                self.select_voice(made);
+            }
+        });
         if profile.voice_commands.is_empty() {
             ui.label(RichText::new(i18n.tr("voice-empty")).weak());
         }
         ui.separator();
+    }
+
+    /// Ctrl+C or Ctrl+X (pointer over the list, or several selected) takes the selected voice
+    /// commands and groups, Ctrl+V puts them into
+    /// group `parent` (the selected one): copies without actions, or the cut ones moved with
+    /// theirs. Not while a text field takes these keys; Ctrl+V of copied actions still pastes
+    /// those.
+    fn voice_clipboard(
+        &mut self,
+        ui: &egui::Ui,
+        i18n: &I18n,
+        profile: &Profile,
+        parent: Option<u32>,
+        ops: &mut Vec<Op>,
+    ) {
+        if ui.ctx().text_edit_focused() {
+            return;
+        }
+        let marker = self
+            .voice_clip
+            .as_ref()
+            .map(|c| c.marker.trim().to_string());
+        // Ctrl+C and Ctrl+X take the commands with the pointer over their list, or several of
+        // them selected; else they stay the input editor's (copying its actions). Taken from
+        // the frame's events, so the editor does not act on them too.
+        let over_list = ui
+            .ctx()
+            .pointer_hover_pos()
+            .is_some_and(|p| ui.clip_rect().contains(p));
+        let takes = over_list || self.voice_picked.len() >= 2;
+        let (take, paste) = ui.input_mut(|i| {
+            let mut take = None;
+            let mut paste = false;
+            i.events.retain(|e| match e {
+                egui::Event::Copy if takes => {
+                    take = Some(false);
+                    false
+                }
+                egui::Event::Cut if takes => {
+                    take = Some(true);
+                    false
+                }
+                egui::Event::Paste(text) if marker.as_deref() == Some(text.trim()) => {
+                    paste = true;
+                    false
+                }
+                _ => true,
+            });
+            (take, paste)
+        });
+        if let Some(cut) = take {
+            let shown = self
+                .selected_input
+                .get(gob_core::VOICE_GUID)
+                .filter(|k| k.0 == Kind::Voice)
+                .map(|k| k.1);
+            let ids: Vec<u32> = if self.voice_picked.is_empty() {
+                shown.into_iter().collect()
+            } else {
+                self.voice_picked.clone()
+            };
+            let ids: Vec<u32> = profile
+                .voice_tree()
+                .into_iter()
+                .map(|(_, c)| c.id)
+                .filter(|id| ids.contains(id))
+                .collect();
+            if !ids.is_empty() {
+                let names: Vec<String> = ids
+                    .iter()
+                    .filter_map(|id| profile.voice_command(*id))
+                    .map(|c| {
+                        c.phrases
+                            .first()
+                            .cloned()
+                            .unwrap_or_else(|| format!("#{}", c.id))
+                    })
+                    .collect();
+                let marker = i18n.trf("voice-clip-text", &[("commands", names.join(", ").into())]);
+                ui.ctx().copy_text(marker.clone());
+                log::debug!(
+                    "{} voice commands: {}",
+                    if cut { "cut" } else { "copied" },
+                    names.join(", ")
+                );
+                self.voice_clip = Some(VoiceClip { ids, cut, marker });
+            }
+        }
+        if paste && let Some(clip) = &self.voice_clip {
+            let ids = clip.ids.clone();
+            if clip.cut {
+                ops.push(Op::MoveVoiceNodes { ids, parent });
+                // Moved once; a second Ctrl+V has nothing left to move.
+                self.voice_clip = None;
+            } else {
+                ops.push(Op::CopyVoiceNodes { ids, parent });
+            }
+            if let Some(g) = parent {
+                self.voice_folded.remove(&g);
+            }
+        }
+    }
+
+    /// Selects voice command or group `key` alone (the next frame finds it in the list).
+    fn select_voice(&mut self, key: Key) {
+        self.selected_input
+            .insert(gob_core::VOICE_GUID.to_string(), key);
+        self.voice_picked = vec![key.1];
+        self.voice_anchor = Some(key.1);
+    }
+
+    /// A click on voice command or group `id`: alone, Ctrl toggles it among the picked, Shift
+    /// picks the range from the last plain or Ctrl click (in the list as shown).
+    fn pick_voice(
+        &mut self,
+        id: u32,
+        held: egui::Modifiers,
+        visible: &[Key],
+        selected: Option<Key>,
+    ) {
+        let ids: Vec<u32> = visible
+            .iter()
+            .filter(|k| k.0 == Kind::Voice)
+            .map(|k| k.1)
+            .collect();
+        // The one shown on the right counts as picked when Ctrl or Shift starts a selection.
+        if self.voice_picked.is_empty()
+            && let Some((Kind::Voice, shown)) = selected
+        {
+            self.voice_picked.push(shown);
+            self.voice_anchor.get_or_insert(shown);
+        }
+        if held.shift {
+            let anchor = self.voice_anchor.unwrap_or(id);
+            let (a, b) = (
+                ids.iter().position(|i| *i == anchor),
+                ids.iter().position(|i| *i == id),
+            );
+            if let (Some(a), Some(b)) = (a, b) {
+                self.voice_picked = ids[a.min(b)..=a.max(b)].to_vec();
+            }
+        } else if held.command {
+            if let Some(pos) = self.voice_picked.iter().position(|i| *i == id) {
+                self.voice_picked.remove(pos);
+            } else {
+                self.voice_picked.push(id);
+            }
+            self.voice_anchor = Some(id);
+        } else {
+            self.voice_picked = vec![id];
+            self.voice_anchor = Some(id);
+        }
     }
 
     fn list_tools(
@@ -1015,6 +1303,9 @@ impl DevicesView {
         let inherited = matches!(bound, Bound::Inherited(_));
         // Where each down chip is: a click there shows the input the action belongs to.
         let mut down_chips: Vec<(Rect, usize)> = Vec::new();
+        // Where a group's fold arrow is: found the same way, the card covers it.
+        let mut fold_arrow: Option<Rect> = None;
+        let mut fold_tip: Option<String> = None;
         let response = egui::Frame::new()
             .fill(fill)
             .stroke(stroke)
@@ -1023,7 +1314,20 @@ impl DevicesView {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(key_glyph(key)).size(15.0));
+                    if key.0 == Kind::Voice && self.voice_groups.contains(&key.1) {
+                        let folded = self.voice_folded.contains(&key.1);
+                        let (caret, tip) = if folded {
+                            (icon::CARET_RIGHT, "voice-group-unfold")
+                        } else {
+                            (icon::CARET_DOWN, "voice-group-fold")
+                        };
+                        let arrow = ui.label(RichText::new(caret).size(15.0));
+                        fold_arrow = Some(arrow.rect.expand(2.0));
+                        fold_tip = Some(i18n.tr(tip));
+                        ui.label(RichText::new(icon::FOLDER_SIMPLE).size(15.0));
+                    } else {
+                        ui.label(RichText::new(key_glyph(key)).size(15.0));
+                    }
                     // Fixed-width name column so the live bars line up.
                     let name = input_name(i18n, key, label);
                     let used = ui.label(RichText::new(name).strong()).rect.width();
@@ -1114,10 +1418,23 @@ impl DevicesView {
             ui.ctx().request_repaint();
         }
         ui.add_space(2.0);
+        let at = ui.ctx().input(|i| i.pointer.interact_pos());
+        let on_arrow = fold_arrow.is_some_and(|r| at.is_some_and(|p| r.contains(p)));
+        let response = match fold_tip {
+            Some(tip) if on_arrow => response
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(tip),
+            _ => response,
+        };
         if !response.clicked() {
             return None;
         }
-        let at = ui.ctx().input(|i| i.pointer.interact_pos());
+        if on_arrow {
+            if !self.voice_folded.remove(&key.1) {
+                self.voice_folded.insert(key.1);
+            }
+            return None;
+        }
         let owner = down_chips
             .iter()
             .find(|(rect, _)| at.is_some_and(|p| rect.contains(p)))
@@ -1185,7 +1502,7 @@ impl DevicesView {
         if let (Kind::Voice, Some(p)) = (key.0, profile)
             && let Some(command) = p.profile.voice_command(key.1)
         {
-            crate::voice_view::command_editor(ui, i18n, command, self.voice.as_ref(), ops);
+            crate::voice_view::command_editor(ui, i18n, &p.profile, command, ops);
         } else if let (Kind::Combo, Some(p)) = (key.0, profile)
             && let Some(combo) = p.profile.key_combo(key.1)
         {
@@ -1910,6 +2227,16 @@ fn debug_expanded((kind, id): Key) -> bool {
 
 fn is_keyboard(tab: &Tab) -> bool {
     tab.guid == gob_core::KEYBOARD_GUID
+}
+
+/// Voice commands and groups taken by Ctrl+C or Ctrl+X ([`DevicesView::voice_clipboard`]).
+struct VoiceClip {
+    /// In tree order.
+    ids: Vec<u32>,
+    /// Ctrl+X: Ctrl+V moves them with their actions; else it copies them without.
+    cut: bool,
+    /// Put on the system clipboard; Ctrl+V pastes them while it is still there.
+    marker: String,
 }
 
 fn is_voice(tab: &Tab) -> bool {

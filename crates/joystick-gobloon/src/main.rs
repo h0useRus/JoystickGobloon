@@ -20,6 +20,7 @@ mod macro_editor;
 mod modes_view;
 mod modifiers_view;
 mod output_marks;
+mod overlay;
 mod platform;
 mod profile_view;
 mod program_switch;
@@ -31,6 +32,7 @@ mod substitute_view;
 mod system_part_view;
 mod tray;
 mod update;
+mod usage;
 mod viewer_view;
 mod virtual_setup;
 mod vjoy_config_view;
@@ -103,6 +105,9 @@ fn main() -> eframe::Result {
             .with_app_id(APP_ID)
             .with_inner_size(settings.window_size())
             .with_min_inner_size(settings::MIN_WINDOW_SIZE)
+            // Child windows take the root's GL config: the overlay needs one with alpha. The
+            // main window's panels cover all of it.
+            .with_transparent(true)
             .with_maximized(settings.window_maximized)
             .with_icon(
                 eframe::icon_data::from_png_bytes(include_bytes!(

@@ -91,6 +91,7 @@
       <li><a href="emulation.html">Emulation</a></li>
       <li><a href="voice.html">Voice</a></li>
       <li><a href="scripts.html">Scripts</a></li>
+      <li><a href="game.html">Games</a></li>
       <li><a href="index.html#platforms">Windows and Linux</a></li>
       <li><a href="index.html#faq">FAQ</a></li>
     </ul>
@@ -111,9 +112,10 @@
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
       <li style="--i:5"><a href="voice.html">Voice</a></li>
       <li style="--i:6"><a href="scripts.html">Scripts</a></li>
-      <li style="--i:7"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:8"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:9"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:7"><a href="game.html">Games</a></li>
+      <li style="--i:8"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:9"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:10"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -200,6 +202,7 @@
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Shared actions.</strong> A linked action shows a chain link next to its title: it is the same action in every place that uses it, so a change in one changes them all. Profiles from Joystick Gremlin can have such links too. The broken link button next to it gives this place its own copy, and the other places keep the original.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Voice command.</strong> A named button-like action (a vJoy button, a key, a macro and the like) has a microphone with a plus next to its bin: it makes a voice command that says the name and runs that action. With an arrow instead, the action already has one, and a click goes to it. See <a href="voice.html#from-action">Voice commands</a>.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Scripts.</strong> When actions are not enough, a few lines of Lua on the Scripts page do the rest, next to the actions: see <a href="scripts.html">Scripts</a>.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Game bindings.</strong> The Game bindings page tells the game which virtual output drives which of its actions and writes it into the game's files: see <a href="game.html">Games</a>.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Keys and key combinations.</strong> On the <span class="term">Keyboard</span> tab, record a key to bind it like a button. Keys pressed together while recording become a combination (up to five keys, for example Ctrl + F1): it goes down when the last of its keys does, in any order, and up when one is let go. The keys' own actions run as well. Record again in its title to change its keys.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Copy and paste.</strong> The copy icon on an action card copies that action with everything inside it; the one next to the bin at the top copies all actions of the input (or press Ctrl+C). A clipboard button then shows next to each add button: it pastes copies, also on another device or in another profile, on inputs of the same kind (axis actions onto axes, button actions onto buttons, keys and the like). Ctrl+V pastes onto the input shown.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Numbers.</strong> Type a value, click the arrows, or turn the mouse wheel over the field; Shift moves it ten steps at a time.</span></li>
@@ -235,7 +238,7 @@
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Layers, containers and conditions work as on any button. Enter actions that change the mode again run that mode's events too.</span></li>
             </ul>
             <p>A stick button can also <strong>send its state at start</strong>: turn on the switch above its actions, and if the button is held when the profile starts, its press runs right then. A latching switch that is already on reaches the game without flipping it off and on again.</p>
-            <figure class="shot"><img src="img/events.png" loading="lazy" width="1242" height="922" alt="Events tab: Profile start, Profile stop, Mode enter and Mode leave; Mode enter selected, saying the mode's name and pressing a virtual stick button"></figure>
+            <figure class="shot"><img src="img/events.png" loading="lazy" width="1102" height="732" alt="Events tab: Profile start, Profile stop, Mode enter and Mode leave; Mode enter selected, saying the mode's name and pressing a virtual stick button"></figure>
           </article>
         </section>
 
@@ -251,7 +254,7 @@
             <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</h3>
             <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted; for a button, <a href="#how-to-send">How to send</a> sets how it follows the input.</p>
             <p><strong>Picking the control works like <a href="#map-to-vjoy">Map to virtual stick</a>.</strong> A new one starts on the gamepad you picked last and its first free control. The grid button next to the lists shows the controls of every gamepad at once, and a click picks one. Controls other inputs already use are marked the same way.</p>
-            <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release, held while the input is"></figure>
+            <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release, held while the input is; on Windows a note says gamepad 1 does not exist yet"></figure>
           </article>
           <article class="learn-action" id="map-to-keyboard">
             <h3><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</h3>
@@ -465,7 +468,8 @@
           </article>
           <article class="learn-action" id="text-to-speech">
             <h3><i class="ph ph-chat-text" aria-hidden="true"></i>Text to speech</h3>
-            <p>Speaks a text with a voice of the system. <code>${current_mode}</code> becomes the name of the active mode. Speed, volume and pitch can be set; the new text can wait for the current one or interrupt it.</p>
+            <p>Speaks a text with a voice of the system or a natural voice. <code>${current_mode}</code> becomes the name of the active mode. Speed, volume and pitch can be set; the new text can wait for the current one or interrupt it.</p>
+            <p>Natural (Piper) voices sound like a person reading. Get them in <span class="term">Settings</span>, <span class="term">Voice</span>, <span class="term">Text to speech</span>: choose <span class="term">Piper</span> instead of <span class="term">The system's voice</span>, download the voice library once (about 8 MB on Windows, 10 MB on Linux), then a voice for each language you want (60-80 MB each; English, German, Spanish, French, Russian and Chinese). They are listed first in the action's voice list, named with their language, and one of them speaks for every action without a voice of its own. Switching back to <span class="term">The system's voice</span> makes every action speak with the system's voice and keeps the downloaded voices. Pitch does not change a natural voice. A voice takes about 100 MB of memory while it is in use and is let go after five quiet minutes. The voice library contains espeak-ng, which is under the GNU GPL 3, so it is a download of its own rather than part of the installer.</p>
             <figure class="shot"><img src="img/actions/text-to-speech.png" loading="lazy" alt="Text to speech saying the mode name"></figure>
           </article>
           <article class="learn-action" id="voice-input">
@@ -504,6 +508,7 @@
             <li><a href="emulation.html">Emulation</a></li>
             <li><a href="voice.html">Voice</a></li>
             <li><a href="scripts.html">Scripts</a></li>
+            <li><a href="game.html">Games</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>

@@ -1,4 +1,5 @@
-//! [`VoiceService`]: voice commands on a thread of their own. It loads the speech model, opens a
+//! [`VoiceService`]: voice commands on a thread of their own (below normal priority). It loads the
+//! speech model (sherpa-onnx), opens a
 //! microphone while it is told to listen (or keeps the profile's microphones open, see
 //! [`VoiceConfig::keep_open`]), feeds the recognizer and reports each utterance when listening
 //! stops. Nothing on the caller's thread waits for audio or the model. A kept-open microphone
@@ -12,7 +13,9 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crate::{Capture, Error, Heard, Recognizer, Vosk};
+use crate::matcher::{self, Heard};
+use crate::sherpa::{ModelSpec, Sherpa};
+use crate::{Capture, Engine, Error};
 
 /// How often the thread looks for commands while audio comes in.
 const POLL: Duration = Duration::from_millis(10);
@@ -33,6 +36,10 @@ const STABLE: Duration = Duration::from_secs(30);
 /// Less audio than this (16 kHz samples, 0.15 s) is a slip of the button, not an utterance.
 const MIN_SAMPLES: usize = 2_400;
 
+/// The most audio one utterance keeps (30 s): a button held down by mistake must not fill the
+/// memory or keep the voice thread busy decoding minutes of audio; a command is said well within.
+const MAX_SAMPLES: usize = 30 * 16_000;
+
 /// Audio kept from before listening starts on an open microphone (0.3 s), so a word started
 /// just before the press is heard whole.
 const PRE_ROLL: usize = 4_800;
@@ -40,10 +47,14 @@ const PRE_ROLL: usize = 4_800;
 /// What the service needs to run.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoiceConfig {
-    /// Folders to look for libvosk in, before the system's library path.
+    /// The speech recognizer: Vosk or sherpa-onnx.
+    pub engine: Engine,
+    /// Folders to look for the engine's library in, before the system's library path.
     pub library_dirs: Vec<PathBuf>,
-    /// The speech model's folder.
+    /// The speech model's folder (a model of `engine`).
     pub model: PathBuf,
+    /// The language spoken (`en`, `de`...), for models that take one.
+    pub language: String,
     /// Microphone gain (see [`Capture::set_gain`]).
     pub gain: f32,
     /// Utterances heard with a lower confidence (0.0..=1.0) count as not recognized.
@@ -70,34 +81,75 @@ pub enum VoiceEvent {
         text: String,
         confidence: f32,
     },
-    /// The phrases with words the speech model does not know (it never hears them), sent when
-    /// they change. Empty once none are left.
-    UnknownWords(Arc<[UnknownPhrase]>),
 }
 
-/// A phrase with words the speech model does not know.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnknownPhrase {
-    /// The id of the command saying it.
-    pub command: u32,
-    pub phrase: String,
-    /// Its words the model does not know, in lower case.
-    pub words: Vec<String>,
-}
-
-/// Something that turns audio into a phrase index; Vosk's recognizer, or a fake in tests.
+/// Something that turns audio into a phrase index: Vosk with the phrases as its grammar,
+/// sherpa-onnx and the matcher, or a fake in tests.
 trait Recognize: Send {
     fn feed(&mut self, samples: &[i16]);
     fn finish(&mut self) -> Heard;
 }
 
-impl Recognize for Recognizer {
+/// sherpa-onnx's recognizer with the phrases its text is matched against.
+struct PhraseRecognizer {
+    recognizer: crate::sherpa::Recognizer,
+    phrases: Phrases,
+}
+
+impl Recognize for PhraseRecognizer {
     fn feed(&mut self, samples: &[i16]) {
-        Recognizer::feed(self, samples);
+        self.recognizer.feed(samples);
     }
 
     fn finish(&mut self) -> Heard {
-        Recognizer::finish(self)
+        matcher::hear(&self.recognizer.finish(), &self.phrases)
+    }
+}
+
+/// Vosk's recognizers: each listens for the phrases only. A phrase with a word the model does not
+/// know can never be heard: logged once.
+fn vosk_recognizers(config: &VoiceConfig) -> Result<MakeRecognizer, Error> {
+    let model = crate::Vosk::load(&config.library_dirs)?.model(&config.model)?;
+    let mut reported: HashSet<String> = HashSet::new();
+    Ok(Box::new(move |phrases: &Phrases| {
+        for (_, phrase) in phrases.iter() {
+            let unknown = model.unknown_words(phrase);
+            if !unknown.is_empty() && reported.insert(phrase.clone()) {
+                log::warn!(
+                    "voice: the speech model does not know {unknown:?}: phrase {phrase:?} will not be heard"
+                );
+            }
+        }
+        let texts: Vec<String> = phrases.iter().map(|(_, p)| p.clone()).collect();
+        Ok(Box::new(VoskRecognizer(model.recognizer(&texts)?)) as Box<dyn Recognize>)
+    }))
+}
+
+/// sherpa-onnx's recognizers, their text matched against the phrases.
+fn sherpa_recognizers(config: &VoiceConfig) -> Result<MakeRecognizer, Error> {
+    let sherpa = Sherpa::load(&config.library_dirs)?;
+    // One thread per decode: a phrase decodes in a fraction of its length, and the game keeps
+    // the other cores.
+    let spec = ModelSpec::detect(&config.model, &config.language, 1)?;
+    let model = sherpa.model(&spec)?;
+    Ok(Box::new(move |phrases: &Phrases| {
+        Ok(Box::new(PhraseRecognizer {
+            recognizer: model.recognizer(),
+            phrases: phrases.clone(),
+        }) as Box<dyn Recognize>)
+    }))
+}
+
+/// Vosk's recognizer: its result is already an index into the phrases it was made with.
+struct VoskRecognizer(crate::vosk::Recognizer);
+
+impl Recognize for VoskRecognizer {
+    fn feed(&mut self, samples: &[i16]) {
+        self.0.feed(samples);
+    }
+
+    fn finish(&mut self) -> Heard {
+        self.0.finish()
     }
 }
 
@@ -145,11 +197,9 @@ impl Mic for Opened {
 }
 
 /// Makes a recognizer for the phrases.
-type MakeRecognizer = Box<dyn FnMut(&[String]) -> Result<Box<dyn Recognize>, Error> + Send>;
-/// The words of a phrase the speech model does not know.
-type FindUnknown = Box<dyn Fn(&str) -> Vec<String> + Send>;
-/// What the voice thread sets up: recognizers, microphones and the vocabulary check.
-type Setup = (MakeRecognizer, OpenMicrophone, FindUnknown);
+type MakeRecognizer = Box<dyn FnMut(&Phrases) -> Result<Box<dyn Recognize>, Error> + Send>;
+/// What the voice thread sets up: recognizers and microphones.
+type Setup = (MakeRecognizer, OpenMicrophone);
 /// Opens a microphone with a gain; it sends its samples to the sink until the result is dropped.
 type OpenMicrophone =
     Box<dyn FnMut(&str, f32, Box<dyn FnMut(&[i16]) + Send>) -> Result<Box<dyn Mic>, Error> + Send>;
@@ -168,12 +218,12 @@ type Phrases = Arc<Vec<(u32, String)>>;
 pub struct VoiceService {
     requests: Option<Sender<Request>>,
     thread: Option<JoinHandle<()>>,
-    /// libvosk and the model are loaded (or failed to): the thread then ends quickly.
+    /// sherpa-onnx and the model are loaded (or failed to): the thread then ends quickly.
     set_up: Arc<AtomicBool>,
 }
 
 impl VoiceService {
-    /// Starts the thread, which loads libvosk and the model (reported as [`VoiceEvent::Ready`]
+    /// Starts the thread, which loads sherpa-onnx and the model (reported as [`VoiceEvent::Ready`]
     /// or [`VoiceEvent::Failed`]) and then listens for `phrases`: (command id, phrase).
     pub fn start(
         config: VoiceConfig,
@@ -186,20 +236,17 @@ impl VoiceService {
             keep_open: config.keep_open,
         };
         let setup = move || -> Result<Setup, Error> {
-            let vosk = Vosk::load(&config.library_dirs)?;
             let started = std::time::Instant::now();
-            let model = vosk.model(&config.model)?;
+            let make: MakeRecognizer = match config.engine {
+                Engine::Vosk => vosk_recognizers(&config)?,
+                Engine::Sherpa => sherpa_recognizers(&config)?,
+            };
             log::info!(
-                "voice: speech model {} loaded in {:?}",
+                "voice: {} speech model {} loaded in {:?}",
+                config.engine.name(),
                 config.model.display(),
                 started.elapsed()
             );
-            let known = model.clone();
-            let unknown: FindUnknown = Box::new(move |phrase| known.unknown_words(phrase));
-            let make: MakeRecognizer = Box::new(move |phrases| {
-                let r = model.recognizer(phrases)?;
-                Ok(Box::new(r) as Box<dyn Recognize>)
-            });
             // Chosen microphones already reported missing: said once, not on every reopen.
             let mut reported = HashSet::new();
             let open: OpenMicrophone = Box::new(move |microphone, gain, sink| {
@@ -218,7 +265,7 @@ impl VoiceService {
                     looked: Instant::now(),
                 }) as Box<dyn Mic>)
             });
-            Ok((make, open, unknown))
+            Ok((make, open))
         };
         Self::spawn(setup, settings, phrases, events)
     }
@@ -234,30 +281,30 @@ impl VoiceService {
         let done = set_up.clone();
         let thread = std::thread::Builder::new()
             .name("gob-voice".into())
-            .spawn(move || match setup() {
-                Ok((make, open, unknown)) => {
-                    done.store(true, Ordering::Release);
-                    let _ = events.send(VoiceEvent::Ready);
-                    let mut worker = Worker {
-                        make,
-                        open,
-                        unknown,
-                        unknown_reported: Arc::new([]),
-                        settings,
-                        phrases: Arc::new(phrases),
-                        events,
-                        mics: HashMap::new(),
-                        warm: Vec::new(),
-                        retry: HashMap::new(),
-                        checked: Instant::now(),
-                    };
-                    worker.check_words();
-                    worker.run(&inbox);
-                }
-                Err(e) => {
-                    done.store(true, Ordering::Release);
-                    log::error!("voice commands off: {e}");
-                    let _ = events.send(VoiceEvent::Failed(e.to_string()));
+            .spawn(move || {
+                crate::platform::lower_priority();
+                match setup() {
+                    Ok((make, open)) => {
+                        done.store(true, Ordering::Release);
+                        let _ = events.send(VoiceEvent::Ready);
+                        let worker = Worker {
+                            make,
+                            open,
+                            settings,
+                            phrases: Arc::new(phrases),
+                            events,
+                            mics: HashMap::new(),
+                            warm: Vec::new(),
+                            retry: HashMap::new(),
+                            checked: Instant::now(),
+                        };
+                        worker.run(&inbox);
+                    }
+                    Err(e) => {
+                        done.store(true, Ordering::Release);
+                        log::error!("voice commands off: {e}");
+                        let _ = events.send(VoiceEvent::Failed(e.to_string()));
+                    }
                 }
             })
             .ok();
@@ -347,10 +394,15 @@ impl OpenMic {
         while let Ok(s) = self.audio.try_recv() {
             match &mut self.utterance {
                 Some(u) => {
+                    let room = MAX_SAMPLES.saturating_sub(u.samples);
+                    if room == 0 {
+                        continue;
+                    }
+                    let s = &s[..s.len().min(room)];
                     u.samples += s.len();
                     let peak = s.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
                     u.peak = u.peak.max(peak);
-                    u.recognizer.feed(&s);
+                    u.recognizer.feed(s);
                 }
                 None => {
                     self.recent.extend(&s);
@@ -365,9 +417,6 @@ impl OpenMic {
 struct Worker {
     make: MakeRecognizer,
     open: OpenMicrophone,
-    unknown: FindUnknown,
-    /// The phrases with unknown words last reported.
-    unknown_reported: Arc<[UnknownPhrase]>,
     settings: Settings,
     phrases: Phrases,
     events: Sender<VoiceEvent>,
@@ -400,35 +449,6 @@ impl Retry {
 }
 
 impl Worker {
-    /// Reports the phrases with words the model does not know, when they changed.
-    fn check_words(&mut self) {
-        let found: Vec<UnknownPhrase> = self
-            .phrases
-            .iter()
-            .filter_map(|(id, phrase)| {
-                let words = (self.unknown)(phrase);
-                (!words.is_empty()).then(|| UnknownPhrase {
-                    command: *id,
-                    phrase: phrase.clone(),
-                    words,
-                })
-            })
-            .collect();
-        if *found == *self.unknown_reported {
-            return;
-        }
-        for u in found.iter().filter(|f| !self.unknown_reported.contains(f)) {
-            log::warn!(
-                "voice: the speech model does not know {:?}: phrase {:?} will not be heard",
-                u.words,
-                u.phrase
-            );
-        }
-        let found: Arc<[UnknownPhrase]> = found.into();
-        self.unknown_reported = found.clone();
-        let _ = self.events.send(VoiceEvent::UnknownWords(found));
-    }
-
     fn run(mut self, inbox: &Receiver<Request>) {
         loop {
             // Nothing open: sleep until a request (or the next retry of a kept-open microphone);
@@ -469,10 +489,7 @@ impl Worker {
                 microphone,
                 on: false,
             } => self.stop(&microphone),
-            Request::Phrases(phrases) => {
-                self.phrases = Arc::new(phrases);
-                self.check_words();
-            }
+            Request::Phrases(phrases) => self.phrases = Arc::new(phrases),
             Request::Gain(gain) => self.settings.gain = gain,
             Request::Microphones(microphones) => {
                 self.warm = if self.settings.keep_open {
@@ -636,8 +653,7 @@ impl Worker {
         {
             return;
         }
-        let texts: Vec<String> = self.phrases.iter().map(|(_, p)| p.clone()).collect();
-        let mut recognizer = match (self.make)(&texts) {
+        let mut recognizer = match (self.make)(&self.phrases) {
             Ok(r) => r,
             Err(e) => {
                 log::error!("voice: {e}");
@@ -799,14 +815,6 @@ mod tests {
             let refused: Unplugged = Arc::default();
             let (h, a, f) = (reports.clone(), attempts.clone(), refused.clone());
             let setup = move || -> Result<Setup, Error> {
-                // Words with "zz" stand for words the model does not know.
-                let unknown: FindUnknown = Box::new(|phrase| {
-                    phrase
-                        .split_whitespace()
-                        .filter(|w| w.contains("zz"))
-                        .map(String::from)
-                        .collect()
-                });
                 let make: MakeRecognizer =
                     Box::new(|_| Ok(Box::new(Fake { said: None }) as Box<dyn Recognize>));
                 let open: OpenMicrophone = Box::new(move |microphone, gain, sink| {
@@ -822,7 +830,7 @@ mod tests {
                     let mic = FakeMic(microphone.to_string(), s.clone(), u.clone(), h.clone());
                     Ok(Box::new(mic) as Box<dyn Mic>)
                 });
-                Ok((make, open, unknown))
+                Ok((make, open))
             };
             let phrases = phrases.iter().map(|(id, p)| (*id, p.to_string())).collect();
             let settings = Settings {
@@ -973,28 +981,6 @@ mod tests {
         rig.service.set_gain(0.5);
         assert_eq!(rig.utterance("", 2, 100), heard(Some(6), 2, 1.0));
         assert_eq!(*rig.gains.lock().unwrap(), [0.5]);
-    }
-
-    #[test]
-    fn phrases_with_unknown_words_are_reported_when_they_change() {
-        let rig = Rig::new(&[(1, "cover me"), (2, "zzcover me")]);
-        let reported = |list: &[(u32, &str, &str)]| {
-            VoiceEvent::UnknownWords(
-                list.iter()
-                    .map(|(id, p, w)| UnknownPhrase {
-                        command: *id,
-                        phrase: p.to_string(),
-                        words: vec![w.to_string()],
-                    })
-                    .collect(),
-            )
-        };
-        assert_eq!(rig.next(), reported(&[(2, "zzcover me", "zzcover")]));
-        // The same unknown phrases again: nothing new to say.
-        rig.service
-            .set_phrases(vec![(2, "zzcover me".into()), (3, "help".into())]);
-        rig.service.set_phrases(vec![(3, "help".into())]);
-        assert_eq!(rig.next(), reported(&[]));
     }
 
     #[test]

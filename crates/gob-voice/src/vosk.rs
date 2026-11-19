@@ -1,6 +1,7 @@
 //! Offline recognition with Vosk in grammar mode: the recognizer listens only for the given
-//! phrases (plus `[unk]` for anything else), which keeps it accurate and stops it firing on other
-//! speech. libvosk is loaded at run time through its C API.
+//! phrases (plus `[unk]` for anything else), which keeps short commands accurate even with an
+//! accent or a quiet microphone and stops it firing on other speech. libvosk is loaded at run
+//! time through its C API (Vosk 0.3.45, the last release with built libraries).
 
 use std::ffi::{CStr, CString, c_char, c_float, c_int, c_short, c_void};
 use std::path::{Path, PathBuf};
@@ -9,8 +10,8 @@ use std::sync::Arc;
 use libloading::Library;
 use serde::Deserialize;
 
-use crate::Error;
 use crate::audio::SAMPLE_RATE;
+use crate::{Error, Heard};
 
 type ModelNew = unsafe extern "C" fn(*const c_char) -> *mut c_void;
 type ModelFree = unsafe extern "C" fn(*mut c_void);
@@ -46,7 +47,7 @@ impl Vosk {
     pub fn load(dirs: &[PathBuf]) -> Result<Self, Error> {
         let lib = dirs
             .iter()
-            .map(|d| d.join(crate::platform::LIBRARY))
+            .map(|d| d.join(crate::platform::VOSK_LIBRARY))
             .filter(|p| p.is_file())
             .find_map(|p| match crate::platform::load(&p) {
                 Ok(lib) => Some(lib),
@@ -57,7 +58,7 @@ impl Vosk {
             });
         let lib = match lib {
             Some(lib) => lib,
-            None => crate::platform::load(Path::new(crate::platform::LIBRARY))
+            None => crate::platform::load(Path::new(crate::platform::VOSK_LIBRARY))
                 .map_err(|e| Error::Library(e.to_string()))?,
         };
         // SAFETY: the types match vosk_api.h; the pointers stay valid while `_lib` is loaded.
@@ -189,17 +190,6 @@ fn words(text: &str) -> impl Iterator<Item = String> + '_ {
 /// Lower case, single spaces: how Vosk spells its results.
 fn normalize(phrase: &str) -> String {
     words(phrase).collect::<Vec<_>>().join(" ")
-}
-
-/// The result of one utterance.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Heard {
-    /// Index into the phrases the recognizer was made with; `None` = not one of them.
-    pub phrase: Option<usize>,
-    /// What was heard, empty for silence.
-    pub text: String,
-    /// The lowest word confidence, 0.0..=1.0.
-    pub confidence: f32,
 }
 
 /// Recognizes one utterance at a time: [`feed`](Self::feed) audio while the user speaks,

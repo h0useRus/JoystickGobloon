@@ -68,6 +68,8 @@ pub struct JoystickGobloonApp {
     system_part: crate::system_part_view::SystemPartView,
     /// The settings' Voice tab: speech model download and microphone test.
     voice_panel: crate::voice::VoicePanel,
+    /// The game overlay (Settings, Overlay).
+    overlay: crate::overlay::Overlay,
     /// Running profile, if activated.
     /// New releases from GitHub (About page, check on start).
     updater: crate::update::Updater,
@@ -108,6 +110,8 @@ pub struct JoystickGobloonApp {
     gremlin_dont_ask: bool,
     /// Time of a single click on the device hiding eye, waiting to see if a second one follows.
     cloak_click: Option<f64>,
+    /// Memory and CPU the program uses, for the status bar and the overlay.
+    usage: crate::usage::UsageMeter,
     /// Asking whether to switch device hiding to this state.
     cloak_confirm: Option<bool>,
     /// The user already agreed to close without saving.
@@ -280,6 +284,7 @@ impl JoystickGobloonApp {
             device_access: crate::device_access::DeviceAccess::new(),
             system_part: crate::system_part_view::SystemPartView::new(),
             voice_panel: Default::default(),
+            overlay: crate::overlay::Overlay::new(),
             activation,
             was_active: false,
             switching: false,
@@ -303,6 +308,7 @@ impl JoystickGobloonApp {
             gremlin_warning: None,
             gremlin_dont_ask: false,
             cloak_click: None,
+            usage: Default::default(),
             cloak_confirm: None,
             allow_close: false,
             was_minimized: false,
@@ -348,6 +354,7 @@ impl JoystickGobloonApp {
         match std::env::var("JOYSTICK_GOBLOON_START_PAGE").as_deref() {
             Ok("hidhide") => app.hidhide_window = true,
             Ok("modifiers") => app.show_modifiers = true,
+            Ok("modes") => app.show_modes = true,
             Ok("apps") => app.page = Page::Apps,
             Ok("vjoy") => app.page = Page::VJoy,
             Ok("viewer") => app.page = Page::Viewer,
@@ -386,6 +393,11 @@ impl JoystickGobloonApp {
             Ok("voice") => {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::Voice;
+            }
+            Ok("overlay") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::Overlay;
+                app.overlay.calibrating = true;
             }
             _ => {}
         }
@@ -2184,6 +2196,7 @@ impl JoystickGobloonApp {
                 self.activation
                     .set_voice(crate::voice::config(&self.settings));
             }
+            Change::Overlay => {}
         }
         self.settings.save();
     }
@@ -2192,8 +2205,48 @@ impl JoystickGobloonApp {
 impl eframe::App for JoystickGobloonApp {
     /// Runs every frame, and also while the window is in the tray or minimized (eframe then
     /// draws nothing and skips [`Self::ui`]).
+    /// Fully transparent: the overlay window needs it, and the main window's panels paint all
+    /// of it.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0; 4]
+    }
+
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
+        // Placing the overlay ends when its tab is not shown: another page, or the window
+        // hidden or minimized (otherwise it would stay on screen catching clicks).
+        let minimized = ctx.input(|i| i.viewport().minimized).unwrap_or(false);
+        let in_tray = self.main_window.is_some_and(crate::platform::in_tray);
+        if self.page != Page::Settings
+            || self.settings_tab != SettingsTab::Overlay
+            || minimized
+            || in_tray
+        {
+            self.overlay.calibrating = false;
+        }
+        // The overlay follows the running profile, also while this window is in the tray.
+        let status = self.activation.status();
+        let recording = crate::key_capture::recording(ctx);
+        // Memory and CPU for the overlay: read here, so it follows them in the tray too.
+        let usage = (self.settings.overlay_on && self.settings.overlay_usage)
+            .then(|| self.usage.read())
+            .flatten();
+        if usage.is_some() {
+            ctx.request_repaint_after(crate::usage::EVERY);
+        }
+        if let Some(pos) = self.overlay.update(
+            ctx,
+            &self.i18n,
+            &self.settings,
+            status.as_ref(),
+            self.profile.as_ref().map(|p| &p.profile),
+            usage,
+            recording,
+        ) {
+            // Placing is done.
+            self.settings.overlay_pos = Some(pos);
+            self.settings.save();
+        }
         self.watch_scripts();
         self.switch_by_program();
         // Started or stopped from the tray menu (maybe while the window was hidden).
@@ -2495,6 +2548,18 @@ impl eframe::App for JoystickGobloonApp {
                     }
                     ui.separator();
                 }
+                // Read only while this window is drawn; its redraw costs more than the reading.
+                if let Some(r) = self.usage.read() {
+                    let text = format!("{}  {}", icon::MEMORY, r.text());
+                    let tip = self.i18n.trf(
+                        "status-usage",
+                        &[("mb", r.mb.into()), ("cpu", r.cpu_text().into())],
+                    );
+                    ui.label(RichText::new(text).size(12.0)).on_hover_text(tip);
+                    ui.separator();
+                    // Woken only when nothing else redrew the window in the meantime.
+                    ctx.request_repaint_after(crate::usage::EVERY);
+                }
                 ui.label(RichText::new(&self.status).size(12.0).weak());
             });
         });
@@ -2680,6 +2745,7 @@ impl eframe::App for JoystickGobloonApp {
                             polls_devices: self.input.polls_devices(),
                             system_part: &mut self.system_part,
                             voice: &mut self.voice_panel,
+                            overlay: &mut self.overlay,
                         },
                     );
                     if let Some(change) = change {

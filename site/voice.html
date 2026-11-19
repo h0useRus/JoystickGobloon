@@ -91,6 +91,7 @@
       <li><a href="emulation.html">Emulation</a></li>
       <li><a href="voice.html" aria-current="page">Voice</a></li>
       <li><a href="scripts.html">Scripts</a></li>
+      <li><a href="game.html">Games</a></li>
       <li><a href="index.html#platforms">Windows and Linux</a></li>
       <li><a href="index.html#faq">FAQ</a></li>
     </ul>
@@ -111,9 +112,10 @@
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
       <li style="--i:5"><a href="voice.html" aria-current="page">Voice</a></li>
       <li style="--i:6"><a href="scripts.html">Scripts</a></li>
-      <li style="--i:7"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:8"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:9"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:7"><a href="game.html">Games</a></li>
+      <li style="--i:8"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:9"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:10"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -146,6 +148,7 @@
             <li><a href="#speak">6. Speak</a></li>
           </ul></li>
           <li><a class="toc-group" href="#further">Going further</a><ul>
+            <li><a href="#groups">Groups of commands</a></li>
             <li><a href="#several-microphones">Several microphones</a></li>
             <li><a href="#modes">Modes and modifiers</a></li>
             <li><a href="#hold-time">Hold time</a></li>
@@ -167,18 +170,18 @@
           <article class="learn-action" id="how-it-works">
             <h3><i class="ph ph-microphone" aria-hidden="true"></i>How it works</h3>
             <p>A voice command is a button of its own, on the <span class="term">Voice</span> tab of the Devices page, with one or more phrases that set it off. The microphone listens only while you hold a push-to-talk input: a stick button, a key or a gamepad button with the <a href="learn.html#voice-input">Voice input</a> action. When you let go, what you said is matched against the profile's phrases, and the command it belongs to presses its button for a moment, so its actions run like any button's.</p>
-            <p>Only the profile's own phrases are listened for. That makes recognition quick (a few milliseconds after you let go) and keeps other words from being taken for commands.</p>
+            <p>What you said is written out as text and compared with the profile's own phrases; the closest one wins, and speech close to none of them does nothing. Recognition takes a fraction of a second after you let go.</p>
           </article>
           <article class="learn-action" id="privacy">
             <h3><i class="ph ph-lock-simple" aria-hidden="true"></i>Offline and private</h3>
-            <p>Speech is recognized on your computer by the <a href="https://alphacephei.com/vosk/">Vosk</a> speech library: nothing you say leaves it, and nothing is recorded. The microphone is heard only while the push-to-talk input is held. The one download is the speech model of your language, once, when you ask for it.</p>
+            <p>Speech is recognized on your computer, by <a href="https://alphacephei.com/vosk/">Vosk</a> or <a href="https://github.com/k2-fsa/sherpa-onnx">sherpa-onnx</a> (you choose): nothing you say leaves it, and nothing is recorded. The microphone is heard only while the push-to-talk input is held. The one download is the speech model of your language, once, when you ask for it.</p>
           </article>
           <article class="learn-action" id="requirements">
             <h3><i class="ph ph-list-checks" aria-hidden="true"></i>What you need</h3>
             <ul>
               <li>Joystick Gobloon 0.12 or newer on Windows or Linux. The speech library comes with the installer, the portable zip and the AppImage.</li>
               <li>A microphone: a headset, a desk microphone or a webcam's. On Windows, allow desktop apps to use the microphone in Privacy settings.</li>
-              <li>The speech model of the language you speak, about 40 MB (Korean about 85 MB). There are models for English, German, Spanish, French, Korean, Russian and Chinese.</li>
+              <li>The speech model of the language you speak, for the recognizer you choose. Vosk: one model per language (40-90 MB to download, about 130 MB of memory while a profile with voice commands is active). sherpa-onnx: a small one (30-110 MB, 140-350 MB of memory) or a large one (110-490 MB, 340-1400 MB of memory). Both have models for English, German, Spanish, French, Korean, Russian and Chinese.</li>
             </ul>
           </article>
         </section>
@@ -187,9 +190,10 @@
           <h2 id="setup-title">Setting it up</h2>
           <article class="learn-action" id="language">
             <h3><i class="ph ph-translate" aria-hidden="true"></i>1. Speech model</h3>
-            <p>Open <span class="term">Settings</span>, <span class="term">Voice</span>. Commands are spoken in the program's language unless you choose another one in the list (<span class="term">Same as the program</span> is the default), so you can keep the program in one language and speak another. Click <span class="term">Download the speech model</span>; the progress bar shows the download, which is checked and unpacked by itself. <span class="term">Speech model installed</span> means it is ready; the bin removes it again.</p>
+            <p>Open <span class="term">Settings</span>, <span class="term">Voice</span>. First choose the <span class="term">Speech recognizer</span>: <strong>Vosk</strong> (the default) listens only for the phrases of your commands, so a short command still lands on the right phrase with an accent, a quiet headset or some noise; <strong>sherpa-onnx</strong> writes down whatever is said and then finds the command it sounds like, which suits clear speech and longer phrases. Each shows its own models below; models you downloaded for the other one stay installed, so you can switch back and forth and compare.</p>
+            <p>Commands are spoken in the program's language unless you choose another one in the list (<span class="term">Same as the program</span> is the default), so you can keep the program in one language and speak another. With sherpa-onnx, <span class="term">Model size</span> chooses between the small model and the large, more accurate one; each shows the memory it needs (Vosk has one model per language). Click <span class="term">Download the speech model</span>; the progress bar shows the download, which is checked and unpacked by itself. <span class="term">Speech model installed</span> means it is ready; the bin removes it again.</p>
             <p>Models are kept in the <code>voice</code> folder of the program's data folder: <code>%APPDATA%\JoystickGobloon\voice</code> on Windows, <code>~/.config/JoystickGobloon/voice</code> on Linux, or next to the program for a portable copy with its own settings.</p>
-            <figure class="shot"><img src="img/voice-settings.png" loading="lazy" width="1102" height="732" alt="Settings, Voice: the speech model in the program's language is installed, the microphone volume at 100 %, the microphone test, Keep the microphone open switched on and the least confidence at 50 %"></figure>
+            <figure class="shot"><img src="img/voice-settings.png" loading="lazy" width="1102" height="732" alt="Settings, Voice: the Vosk recognizer, English, its small model (about 130 MB of memory) installed, the microphone volume at 200 %, the microphone test, Keep the microphone open switched on, the least confidence at 50 %, and below, Text to speech set to Piper with the voice library installed"></figure>
           </article>
           <article class="learn-action" id="microphone">
             <h3><i class="ph ph-speaker-high" aria-hidden="true"></i>2. Microphone check</h3>
@@ -205,7 +209,7 @@
           <article class="learn-action" id="commands">
             <h3><i class="ph ph-list-plus" aria-hidden="true"></i>4. Commands and phrases</h3>
             <p>Open the <span class="term">Voice</span> tab on the Devices page. The line at the top names the push-to-talk input (click it to go there); without one, a note says how to add it. Click <span class="term">+ Command</span> and type its phrases under <span class="term">Say any of these phrases</span>: any of them sets the command off, so give it the words you would naturally use. The number below the phrases is the <a href="#hold-time">hold time</a>.</p>
-            <figure class="shot"><img src="img/voice.png" loading="lazy" width="1102" height="732" alt="Voice tab: listens while Button 5 of the stick is held, two commands, lights on and gear down; lights on has the phrases lights on and lights, holds its button 0.10 s and presses virtual stick button 12"></figure>
+            <figure class="shot"><img src="img/voice.png" loading="lazy" width="1102" height="732" alt="Voice tab: listens while Button 4 of the right stick is held; the groups gear and engines hold the commands up, down, on and off; gear up, said in one go as gear up, holds its button 0.10 s and presses virtual stick button 60"></figure>
           </article>
           <article class="learn-action" id="command-actions">
             <h3><i class="ph ph-joystick" aria-hidden="true"></i>5. What a command does</h3>
@@ -215,7 +219,7 @@
             <h3><i class="ph ph-microphone" aria-hidden="true"></i>From an action card</h3>
             <p>An action you already set up on a stick button or a key can get its voice command in one click. Give the action card a name in its title, then click the microphone with a plus next to its bin: a new command saying that name opens on the Voice tab. It runs the very same action, not a copy, so a change to the card changes both. It works in the card's mode, on the base layer even when the card is on a modifier's layer: no modifier has to be held while you speak (the command's own layer buttons can still put it on one). Cards inside a Short / long press have the button too, so "target next" and "target previous" can each be said.</p>
             <p>The microphone shows on actions one spoken press makes sense for: buttons of a virtual stick or gamepad, keys, mouse buttons, macros, chains, mode changes and the like; not on axes, Short / long press, Double tap, Condition or a temporary mode change, which would end as soon as the command lets go. It is grayed out until the card has a name, and while another command already says that name and runs something else: rename the card then. When the action already has a command (also inside a Short / long press or another container there), the microphone carries an arrow instead, and a click goes to that command. A command whose link to the action you removed keeps its phrase: the plus links the action to it again.</p>
-            <figure class="shot"><img src="img/voice-from-action.png" loading="lazy" alt="A Short / long press on F2 with the named cards Target next and Target previous, each with a microphone-and-plus button next to its arrows and bin"></figure>
+            <figure class="shot"><img src="img/voice-from-action.png" loading="lazy" alt="A Short / long press on F2 with the named cards Target next and Target previous, each with a microphone-and-plus button next to its copy button, arrows and bin"></figure>
           </article>
           <article class="learn-action" id="speak">
             <h3><i class="ph ph-waveform" aria-hidden="true"></i>6. Speak</h3>
@@ -225,6 +229,30 @@
 
         <section class="learn-group" id="further" aria-labelledby="further-title">
           <h2 id="further-title">Going further</h2>
+          <article class="learn-action" id="groups">
+            <h3><i class="ph ph-folder-simple" aria-hidden="true"></i>Groups of commands</h3>
+            <p>Many commands are easier to keep, and to say, in groups: "radio", and in it "wing a" and "wing b", each with "attack" and "defend". The list on the Voice tab shows them as a tree.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Add a group</strong>: <span class="term">+ Group</span> next to <span class="term">+ Command</span>. New commands and groups go into the selected group (or into the group of the selected command), and the new one is selected.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Select several</strong>: Ctrl+click adds or removes one command or group, Shift+click selects everything between the last one and this one. A plain click selects only that one again.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Put commands into a new group</strong>: select them, then click <span class="term">+ Group</span>. The new group takes the place of the first one, with all of them in it.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Move one command</strong>: the folder list in its editor moves it to another group or back to the top level.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Fold a group</strong>: the arrow on it hides what is inside, a second click shows it again.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Copy a group</strong>: the copy button on it makes a copy with its commands and phrases, without their actions (they usually differ).</span></li>
+            </ul>
+            <p>Keyboard shortcuts on the Voice tab (not while you type in a text field):</p>
+            <dl class="trouble">
+              <dt>Ctrl+C</dt>
+              <dd>Takes the selected commands and groups for copying. It works with the mouse pointer over the list, or with two or more selected; with the pointer over the action editor, Ctrl+C copies the shown command's actions as everywhere else.</dd>
+              <dt>Ctrl+X</dt>
+              <dd>Takes them for moving, under the same conditions. They stay where they are until you paste.</dd>
+              <dt>Ctrl+V</dt>
+              <dd>Puts what Ctrl+C or Ctrl+X took into the selected group, at its end; with a command selected, into that command's group. After Ctrl+C it makes copies with their phrases and hold times but without actions, and you can paste again for more copies. After Ctrl+X it moves them with their actions. A group goes with everything in it, and a group cannot move into itself. When actions were copied last, Ctrl+V pastes those onto the shown command instead.</dd>
+              <dt>Ctrl+G</dt>
+              <dd>Makes a new group and selects it. With two or more selected, they go into it (the same as <span class="term">+ Group</span>). Else, after Ctrl+C or Ctrl+X, what they took is copied or moved into it. Else the group is empty.</dd>
+            </dl>
+            <p>A command in a group is said with the group's phrase first. Say it all at once ("radio wing a attack"), or one step at a time: "radio" alone opens the group for a few seconds, and then only what is in it is heard, so "wing a", then "attack", each with its own press. Other words do nothing while a group is open. A group is an input like a command, so its actions run when it opens: a <a href="learn.html#text-to-speech">Text to speech</a> answer ("Radio?") tells you it is listening. The editor shows the whole phrase of every command in a group.</p>
+          </article>
           <article class="learn-action" id="several-microphones">
             <h3><i class="ph ph-microphone-stage" aria-hidden="true"></i>Several microphones</h3>
             <p>Each Voice input action has its own microphone, so two push-to-talk buttons can listen on two microphones, for example a headset and a desk microphone. Both hear the same commands.</p>
@@ -254,7 +282,7 @@
             <ul>
               <li>Two or three words are recognized more surely than one short word: "gear down" rather than "gear".</li>
               <li>Phrases that sound alike in different commands get mixed up: make them differ from the first word.</li>
-              <li>Use everyday words of the model's language; names, abbreviations and rare word forms it does not know are not heard. While the profile is active, a warning sign next to a phrase names the words the model does not know. A word with a pronoun stuck to it is often one of them: write the pronoun as a word of its own (Spanish "cubre me" for "cúbreme"); said quickly, it sounds the same.</li>
+              <li>Use everyday words of the model's language. Names and abbreviations are written out the way they sound, so a phrase spelled the same way ("ils" rather than "ILS") is matched more surely.</li>
               <li>Give a command a second phrase for the way you say it in a hurry.</li>
               <li>Press, then speak, then let go: a press shorter than about 0.15 s is taken for a slip and hears nothing.</li>
             </ul>
@@ -276,7 +304,7 @@
               <li><strong>Nothing happens when I speak</strong>: check that the profile is active and the push-to-talk input has the Voice input action (the Voice tab names it). Watch the status bar while you hold it.</li>
               <li><strong>"Heard nothing"</strong>: the microphone is muted, too quiet, blocked by the system's privacy settings, or another one listens. Test it in Settings, Voice and check the microphone in the Voice input action.</li>
               <li><strong>The first word is lost</strong>: keep <a href="#keep-open">Keep the microphone open</a> on, and start speaking a moment after the press.</li>
-              <li><strong>A phrase is never heard</strong>: look for the warning sign next to it on the Voice tab while the profile is active; the model does not know one of its words. See <a href="#good-phrases">Good phrases</a>.</li>
+              <li><strong>A phrase is never heard</strong>: look at what the status bar says was heard, and add that as a second phrase, or choose words that sound clearer. See <a href="#good-phrases">Good phrases</a>.</li>
               <li><strong>Wrong or no command</strong>: the bar of the microphone test should reach about the middle. Adjust the volume, choose clearer phrases, or lower the least confidence.</li>
               <li><strong>Other speech sets off commands</strong>: raise the least confidence.</li>
               <li><strong>Changed a setting and nothing changed</strong>: voice settings apply the next time a profile is activated.</li>
@@ -305,6 +333,7 @@
             <li><a href="emulation.html">Emulation</a></li>
             <li><a href="voice.html">Voice</a></li>
             <li><a href="scripts.html">Scripts</a></li>
+            <li><a href="game.html">Games</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>

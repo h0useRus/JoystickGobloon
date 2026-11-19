@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <joysticks>
+    <joystick num="0">{42cec570-0a3f-11f0-80-0b-44-45-53-54-00-00}</joystick>
+    <joystick num="1">{f7a76e70-61eb-11f1-80-01-44-45-53-54-00-00}</joystick>
+    <joystick disabled="1">{11111111-2222-3333-44-55-66-77-88-99-aa-bb}</joystick>
+  </joysticks>
+</config>

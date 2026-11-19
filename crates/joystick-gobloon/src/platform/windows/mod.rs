@@ -23,17 +23,11 @@ impl super::Desktop for Desktop {
 
     /// The Documents known folder (wherever the user moved it, e.g. into OneDrive).
     fn documents_dir() -> Option<PathBuf> {
-        use windows::Win32::System::Com::CoTaskMemFree;
-        use windows::Win32::UI::Shell::{
-            FOLDERID_Documents, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
-        };
-        // SAFETY: the returned string is read once, then freed with CoTaskMemFree as documented.
-        unsafe {
-            let path = SHGetKnownFolderPath(&FOLDERID_Documents, KF_FLAG_DEFAULT, None).ok()?;
-            let dir = path.to_string().ok().map(PathBuf::from);
-            CoTaskMemFree(Some(path.as_ptr().cast()));
-            dir
-        }
+        known_folder(&windows::Win32::UI::Shell::FOLDERID_Documents)
+    }
+
+    fn local_app_data_dir() -> Option<PathBuf> {
+        known_folder(&windows::Win32::UI::Shell::FOLDERID_LocalAppData)
     }
 
     /// Fonts every Windows 10/11 has: Microsoft YaHei, Malgun Gothic.
@@ -176,6 +170,32 @@ impl super::Desktop for Desktop {
         programs::running_programs()
     }
 
+    fn usage() -> Option<super::Usage> {
+        use windows::Win32::Foundation::FILETIME;
+        use windows::Win32::System::ProcessStatus::{
+            GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+        };
+        use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
+        let mut counters = PROCESS_MEMORY_COUNTERS {
+            cb: size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+            ..Default::default()
+        };
+        let mut times = [FILETIME::default(); 4];
+        // SAFETY: the pseudo handle of this process and buffers of the sizes given.
+        unsafe {
+            let process = GetCurrentProcess();
+            GetProcessMemoryInfo(process, &mut counters, counters.cb).ok()?;
+            let [created, exited, kernel, user] = &mut times;
+            GetProcessTimes(process, created, exited, kernel, user).ok()?;
+        }
+        // 100 ns units.
+        let ticks = |t: FILETIME| (u64::from(t.dwHighDateTime) << 32) | u64::from(t.dwLowDateTime);
+        Some(super::Usage {
+            memory: counters.WorkingSetSize as u64,
+            cpu_time: Duration::from_nanos((ticks(times[2]) + ticks(times[3])) * 100),
+        })
+    }
+
     /// Fixed and removable drives (C: to Z:); network and optical drives are skipped, so the
     /// search never waits on them.
     fn game_roots() -> Vec<String> {
@@ -231,5 +251,18 @@ impl super::Desktop for Desktop {
 
     fn remove_system_part() -> Result<(), String> {
         Err("not supported on Windows yet".into())
+    }
+}
+
+/// A known folder's path (Documents, local application data: wherever the user moved it).
+fn known_folder(id: &windows::core::GUID) -> Option<PathBuf> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{KF_FLAG_DEFAULT, SHGetKnownFolderPath};
+    // SAFETY: the returned string is read once, then freed with CoTaskMemFree as documented.
+    unsafe {
+        let path = SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, None).ok()?;
+        let dir = path.to_string().ok().map(PathBuf::from);
+        CoTaskMemFree(Some(path.as_ptr().cast()));
+        dir
     }
 }

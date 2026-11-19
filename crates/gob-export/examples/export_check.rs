@@ -44,6 +44,7 @@ fn main() {
         platform: if cfg!(windows) { "windows" } else { "linux" }.into(),
         roots: args[1..].to_vec(),
         documents: String::new(),
+        local_app_data: String::new(),
     };
     let targets = plugin
         .targets(&env)

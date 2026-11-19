@@ -100,6 +100,9 @@ pub struct GameView {
     chosen_folder: Option<String>,
     /// A folder chosen this frame, for the app to keep in the settings.
     new_folder: Option<String>,
+    /// The first search after loading may move to a game that was found: the profile names
+    /// none and no game was picked yet.
+    pick_found: bool,
     debug_done: bool,
     /// When each game action was last lit.
     flash: HashMap<String, f64>,
@@ -178,10 +181,14 @@ impl GameView {
         let documents = crate::platform::documents_dir()
             .map(|d| format!("{}/", slashed(&d.to_string_lossy())))
             .unwrap_or_default();
+        let local_app_data = crate::platform::local_app_data_dir()
+            .map(|d| format!("{}/", slashed(&d.to_string_lossy())))
+            .unwrap_or_default();
         let env = gob_export::Env {
             platform: if cfg!(windows) { "windows" } else { "linux" }.into(),
             roots,
             documents,
+            local_app_data,
         };
         self.send(Request::Scan { env });
     }
@@ -233,6 +240,8 @@ impl GameView {
                         .and_then(|g| plugins.iter().position(|p| p.manifest.id == g.game))
                     {
                         self.selected = i;
+                    } else {
+                        self.pick_found = true;
                     }
                     self.plugins = Some(plugins);
                     self.errors = errors;
@@ -258,6 +267,13 @@ impl GameView {
                         }
                         found
                     });
+                    // Without a game of its own, the profile opens on a game found here.
+                    if std::mem::take(&mut self.pick_found)
+                        && self.targets.get(self.selected).is_none_or(|t| t.is_empty())
+                        && let Some(found) = self.targets.iter().position(|t| !t.is_empty())
+                    {
+                        self.selected = found;
+                    }
                     if let Some((plugin, target)) = chosen {
                         self.selected = plugin;
                         self.target = target;
@@ -553,6 +569,7 @@ impl GameView {
                             .clicked()
                         {
                             self.selected = i;
+                            self.pick_found = false;
                             self.target = 0;
                             self.picked = None;
                             self.in_game = None;

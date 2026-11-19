@@ -181,7 +181,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
                 }),
             ),
             Section::VirtualDevices => virtual_to(&p.virtual_devices),
-            Section::VoiceCommands => voice_to(&p.voice_commands),
+            Section::VoiceCommands => voice_to(p),
             Section::KeyCombos => combos_to(&p.key_combos),
             Section::GameBindings => games_to(&p.game_bindings),
             Section::Extra(i) => p.extra[i].clone(),
@@ -266,45 +266,77 @@ fn virtual_to(v: &VirtualDevices) -> Element {
     container("virtual-devices", joysticks.chain(gamepads))
 }
 
-/// `<voice-commands>`: `<command id="1" hold="0.1"><phrase>lights on</phrase>...</command>`;
-/// commands without a valid id are skipped, a missing or bad hold is the default.
+/// `<voice-commands>`: `<command id="1" hold="0.1"><phrase>lights on</phrase>...</command>`,
+/// and `<group id="2" hold="0.1"><phrase>radio</phrase><command .../><group .../></group>` around
+/// commands and groups; ones without a valid id are skipped (with what is in them), a missing or
+/// bad hold is the default.
 fn voice_from(section: &Element) -> Vec<VoiceCommand> {
-    let mut commands: Vec<VoiceCommand> = Vec::new();
-    for c in named(section, "command") {
-        let Some(id) = c.attr("id").and_then(|v| v.trim().parse().ok()) else {
-            continue;
-        };
-        if id == 0 || commands.iter().any(|o| o.id == id) {
-            continue;
+    fn read(parent_el: &Element, parent: Option<u32>, commands: &mut Vec<VoiceCommand>) {
+        for c in parent_el.elements() {
+            let group = match c.name.as_str() {
+                "command" => false,
+                "group" => true,
+                _ => continue,
+            };
+            let Some(id) = c.attr("id").and_then(|v| v.trim().parse().ok()) else {
+                continue;
+            };
+            if id == 0 || commands.iter().any(|o| o.id == id) {
+                continue;
+            }
+            commands.push(VoiceCommand {
+                id,
+                phrases: named(c, "phrase")
+                    .map(|p| p.text().split_whitespace().collect::<Vec<_>>().join(" "))
+                    .filter(|p| !p.is_empty())
+                    .collect(),
+                hold: c
+                    .attr("hold")
+                    .and_then(|v| v.trim().parse::<f64>().ok())
+                    .filter(|h| h.is_finite() && *h > 0.0)
+                    .unwrap_or(gob_core::DEFAULT_VOICE_HOLD),
+                parent,
+                group,
+            });
+            if group {
+                read(c, Some(id), commands);
+            }
         }
-        commands.push(VoiceCommand {
-            id,
-            phrases: named(c, "phrase")
-                .map(|p| p.text().split_whitespace().collect::<Vec<_>>().join(" "))
-                .filter(|p| !p.is_empty())
-                .collect(),
-            hold: c
-                .attr("hold")
-                .and_then(|v| v.trim().parse::<f64>().ok())
-                .filter(|h| h.is_finite() && *h > 0.0)
-                .unwrap_or(gob_core::DEFAULT_VOICE_HOLD),
-        });
     }
+    let mut commands = Vec::new();
+    read(section, None, &mut commands);
     commands
 }
 
-fn voice_to(commands: &[VoiceCommand]) -> Element {
-    container(
-        "voice-commands",
-        commands.iter().map(|c| {
-            container(
-                "command",
-                c.phrases.iter().map(|p| Element::with_text("phrase", p)),
-            )
-            .with_attr("id", c.id.to_string())
-            .with_attr("hold", c.hold.to_string())
-        }),
-    )
+/// `<voice-commands>` in tree order: every command and group once, whatever its parent says (one
+/// whose group is gone, or whose groups make a loop, at the top level, as [`Profile::voice_tree`]
+/// lists them), at any depth.
+fn voice_to(p: &Profile) -> Element {
+    fn node(c: &VoiceCommand, inner: Vec<Element>) -> Element {
+        let phrases = c.phrases.iter().map(|p| Element::with_text("phrase", p));
+        container(
+            if c.group { "group" } else { "command" },
+            phrases.chain(inner),
+        )
+        .with_attr("id", c.id.to_string())
+        .with_attr("hold", c.hold.to_string())
+    }
+    // The elements at `depth` from `tree[*at..]`, each with what follows it one level deeper.
+    fn level(tree: &[(usize, &VoiceCommand)], at: &mut usize, depth: usize) -> Vec<Element> {
+        let mut out = Vec::new();
+        while let Some(&(d, c)) = tree.get(*at) {
+            if d < depth {
+                break;
+            }
+            *at += 1;
+            let inner = level(tree, at, d + 1);
+            out.push(node(c, inner));
+        }
+        out
+    }
+    let tree = p.voice_tree();
+    let mut at = 0;
+    container("voice-commands", level(&tree, &mut at, 0))
 }
 
 /// `<game-bindings>`: `<game id="..." target="..." version="..."><device output="vjoy:1"
