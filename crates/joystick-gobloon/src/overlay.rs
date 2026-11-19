@@ -102,6 +102,8 @@ pub struct Overlay {
     key_thread: bool,
     /// Being placed (Settings, Overlay, Calibrate).
     pub calibrating: bool,
+    /// [`Self::calibrating`] in the last frame: placing ended when it goes off.
+    was_calibrating: bool,
 }
 
 impl Overlay {
@@ -110,11 +112,13 @@ impl Overlay {
             shared: Arc::default(),
             key_thread: false,
             calibrating: false,
+            was_calibrating: false,
         }
     }
 
     /// Shows, updates or closes the overlay window; called every frame from `logic`. Returns
-    /// the overlay's new position while it is dragged into place.
+    /// where it was dragged once placing ends (Done, or another tab). While it is dragged the
+    /// window's position is left to the system: setting it from here too would fight the drag.
     pub fn update(
         &mut self,
         ctx: &egui::Context,
@@ -138,6 +142,26 @@ impl Overlay {
             self.key_thread = spawn_key_thread(ctx.clone(), self.shared.clone());
         }
 
+        let position = || {
+            self.shared
+                .position
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take()
+        };
+        let placed = match (self.was_calibrating, self.calibrating) {
+            (true, false) => position()
+                .map(|p| [p.x.round(), p.y.round()])
+                .filter(|p| Some(*p) != settings.overlay_pos),
+            (false, true) => {
+                // No position from an earlier placing.
+                position();
+                None
+            }
+            _ => None,
+        };
+        self.was_calibrating = self.calibrating;
+
         let hidden = self.shared.hidden.load(Ordering::Relaxed);
         let lines = if self.calibrating && status.is_none() {
             sample_lines(i18n, settings)
@@ -146,7 +170,7 @@ impl Overlay {
         };
         let shown = self.calibrating || (settings.overlay_on && !hidden && !lines.is_empty());
         if !shown {
-            return None;
+            return placed;
         }
         let frame = Frame {
             lines,
@@ -183,17 +207,7 @@ impl Overlay {
             draw(ui, &shared);
         });
 
-        if !self.calibrating {
-            return None;
-        }
-        let moved = *self
-            .shared
-            .position
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        moved
-            .map(|p| [p.x.round(), p.y.round()])
-            .filter(|p| Some(*p) != settings.overlay_pos)
+        placed
     }
 }
 

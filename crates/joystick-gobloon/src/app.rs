@@ -2220,8 +2220,9 @@ impl eframe::App for JoystickGobloonApp {
             self.profile.as_ref().map(|p| &p.profile),
             recording,
         ) {
-            // Saved when placing is done.
+            // Placing is done.
             self.settings.overlay_pos = Some(pos);
+            self.settings.save();
         }
         self.watch_scripts();
         self.switch_by_program();
