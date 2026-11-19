@@ -832,6 +832,8 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
     // A fine timer is on: outputs move on their own.
     let mut fine = false;
     let mut service = ServiceState::default();
+    // The layer the status shows (its text is made only when it changes).
+    let mut shown_layer = gob_core::Layer::default();
     let mut voice_status = status
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -924,13 +926,11 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             s.script_errors.extend(script_errors);
             on_change();
         }
-        let layer = engine.current_layer();
-        // Text only while a modifier is held: the base layer allocates nothing.
-        let layer_changed = if layer.is_base() {
-            !s.layer.is_empty()
-        } else {
-            s.layer != layer.to_string()
-        };
+        // Compared with the last layer shown, without making text: allocates only on a change.
+        let layer_changed = engine.current_layer() != &shown_layer;
+        if layer_changed {
+            shown_layer = engine.current_layer().clone();
+        }
         let action_changed = s.last_action.as_deref() != engine.last_action();
         if s.mode != engine.current_mode()
             || layer_changed
@@ -943,7 +943,7 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         {
             s.mode = engine.current_mode().to_string();
             if layer_changed {
-                s.layer = layer.to_string();
+                s.layer = shown_layer.to_string();
             }
             if action_changed {
                 s.last_action = engine.last_action().map(String::from);

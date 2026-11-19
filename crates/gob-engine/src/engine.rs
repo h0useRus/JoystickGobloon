@@ -707,6 +707,8 @@ pub struct Engine {
     compiled_lights: Vec<Light>,
     /// The description of the last binding whose input was pressed and had one.
     last_action: Option<Arc<str>>,
+    /// The layer the held modifiers choose, kept when a modifier changes (read every pass).
+    layer_now: Layer,
     /// Modifier inputs and their names; they only choose layers, their bindings do not run.
     modifiers: Vec<(InputKey, String)>,
     /// Layer a button or hat chose when pressed; its release goes there too.
@@ -848,6 +850,7 @@ impl Engine {
             modifiers: Vec::new(),
             pressed_layers: HashMap::new(),
             last_action: None,
+            layer_now: Layer::base(),
             button_axes: HashMap::new(),
             axis_writes: Vec::new(),
             compiled_decrease: Vec::new(),
@@ -1563,11 +1566,8 @@ impl Engine {
     }
 
     /// The layer the held modifiers choose (the base layer while none is held).
-    pub fn current_layer(&self) -> Layer {
-        if self.modifiers.is_empty() {
-            return Layer::base();
-        }
-        self.held_layer()
+    pub fn current_layer(&self) -> &Layer {
+        &self.layer_now
     }
 
     /// The description of the last binding whose input was pressed and had one.
@@ -1939,7 +1939,10 @@ impl Engine {
                 self.axes.insert(key.clone(), v);
             }
             Value::Button(b) => {
-                self.buttons.insert(key.clone(), b);
+                let was = self.buttons.insert(key.clone(), b);
+                if was != Some(b) && self.is_modifier(key) {
+                    self.layer_now = self.held_layer();
+                }
             }
             Value::Hat(d) => {
                 self.hats.insert(key.clone(), d);

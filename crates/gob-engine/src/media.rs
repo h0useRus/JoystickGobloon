@@ -201,6 +201,10 @@ fn speech_thread(rx: std::sync::mpsc::Receiver<SpeechRequest>) {
     let mut platform: Option<Option<crate::platform::Speech>> = None;
     let mut loaded: Option<Natural> = None;
     let mut output: Option<(rodio::MixerDeviceSink, rodio::Player)> = None;
+    // Voices that did not load: the platform's voice speaks for them at once, without loading
+    // and logging again on every request, until the installed voices change.
+    let mut failed: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    let mut known = NaturalVoices::default();
     loop {
         let request = match rx.recv_timeout(NATURAL_IDLE) {
             Ok(r) => r,
@@ -213,6 +217,10 @@ fn speech_thread(rx: std::sync::mpsc::Receiver<SpeechRequest>) {
             Err(RecvTimeoutError::Disconnected) => return,
         };
         let natural = natural().lock().unwrap_or_else(|e| e.into_inner()).clone();
+        if natural != known {
+            failed.clear();
+            known = natural.clone();
+        }
         let name = request.voice.clone().or(natural.default.clone());
         let found = natural.library.as_ref().and_then(|lib| {
             let name = name.as_ref()?;
@@ -220,7 +228,16 @@ fn speech_thread(rx: std::sync::mpsc::Receiver<SpeechRequest>) {
             Some((lib, name, dir))
         });
         if let Some((library, name, dir)) = found
-            && speak_natural(&request, library, name, dir, &mut loaded, &mut output)
+            && !failed.contains(dir)
+            && speak_natural(
+                &request,
+                library,
+                name,
+                dir,
+                &mut loaded,
+                &mut output,
+                &mut failed,
+            )
         {
             continue;
         }
@@ -256,6 +273,7 @@ fn speak_natural(
     dir: &std::path::Path,
     loaded: &mut Option<Natural>,
     output: &mut Option<(rodio::MixerDeviceSink, rodio::Player)>,
+    failed: &mut std::collections::HashSet<PathBuf>,
 ) -> bool {
     if loaded.as_ref().is_none_or(|n| n.name != name) {
         *loaded = None;
@@ -269,7 +287,8 @@ fn speak_natural(
                 });
             }
             Err(e) => {
-                log::error!("natural voice {name}: {e}");
+                log::error!("natural voice {name}: {e}; the system's voice speaks instead");
+                failed.insert(dir.to_path_buf());
                 return false;
             }
         }
