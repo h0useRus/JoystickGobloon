@@ -718,6 +718,16 @@ curve-preset-extra-soft-center = 아주 부드러운 중앙
 curve-preset-extra-soft-center-tip = 중앙 부근이 더욱 완만합니다
 curve-preset-quick-center = 빠른 중앙
 curve-preset-quick-center-tip = 중앙 부근은 빠르고, 끝으로 갈수록 세밀합니다
+curve-preset-light-soft-center = 약간 부드러운 중앙
+curve-preset-light-soft-center-tip = 중앙에서 조금 더 차분하고, 거의 직선
+curve-preset-s-curve = S자 곡선
+curve-preset-s-curve-tip = 중앙과 끝 근처에서는 차분하고, 그 사이는 빠름
+curve-preset-flat-center = 평평한 중앙
+curve-preset-flat-center-tip = 중앙 10% 구간은 반응 없음, 그다음 끝까지 직선
+curve-preset-half-range = 절반 범위
+curve-preset-half-range-tip = 전체 범위에서 출력이 절반: 어디서나 더 세밀함
+curve-preset-inverted = 반전
+curve-preset-inverted-tip = 반대 방향 직선: 축을 뒤집음
 curve-point = 점
 curve-handle = 핸들
 

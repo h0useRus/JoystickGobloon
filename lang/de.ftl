@@ -730,6 +730,16 @@ curve-preset-extra-soft-center = Sehr weiche Mitte
 curve-preset-extra-soft-center-tip = Noch ruhiger um die Mitte
 curve-preset-quick-center = Schnelle Mitte
 curve-preset-quick-center-tip = Schnell um die Mitte, feiner zu den Enden hin
+curve-preset-light-soft-center = Leicht weiche Mitte
+curve-preset-light-soft-center-tip = In der Mitte etwas ruhiger, fast linear
+curve-preset-s-curve = S-Kurve
+curve-preset-s-curve-tip = Ruhig in der Mitte und an den Enden, dazwischen schnell
+curve-preset-flat-center = Flache Mitte
+curve-preset-flat-center-tip = Nichts im mittleren Zehntel des Wegs, danach gerade bis zu den Enden
+curve-preset-half-range = Halber Bereich
+curve-preset-half-range-tip = Halber Ausschlag über den ganzen Weg: überall feiner
+curve-preset-inverted = Umgekehrt
+curve-preset-inverted-tip = Gerade Linie andersherum: die Achse umgedreht
 curve-point = Punkt
 curve-handle = Griff
 

@@ -730,6 +730,16 @@ curve-preset-extra-soft-center = Centre très doux
 curve-preset-extra-soft-center-tip = Encore plus calme au centre
 curve-preset-quick-center = Centre vif
 curve-preset-quick-center-tip = Vive au centre, plus fine vers les extrémités
+curve-preset-light-soft-center = Centre légèrement doux
+curve-preset-light-soft-center-tip = Un peu plus calme au centre, presque linéaire
+curve-preset-s-curve = Courbe en S
+curve-preset-s-curve-tip = Calme au centre et près des extrémités, rapide entre les deux
+curve-preset-flat-center = Centre plat
+curve-preset-flat-center-tip = Rien dans le dixième central de la course, puis droit jusqu’aux extrémités
+curve-preset-half-range = Demi-plage
+curve-preset-half-range-tip = La moitié de la sortie sur toute la course : plus fin partout
+curve-preset-inverted = Inversée
+curve-preset-inverted-tip = Ligne droite dans l’autre sens : l’axe retourné
 curve-point = Point
 curve-handle = Poignée
 

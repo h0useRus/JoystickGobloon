@@ -718,6 +718,16 @@ curve-preset-extra-soft-center = 更柔和中心
 curve-preset-extra-soft-center-tip = 中心附近更加平缓
 curve-preset-quick-center = 灵敏中心
 curve-preset-quick-center-tip = 中心附近灵敏，越靠近两端越精细
+curve-preset-light-soft-center = 略柔和中心
+curve-preset-light-soft-center-tip = 中心略平缓，接近线性
+curve-preset-s-curve = S 形曲线
+curve-preset-s-curve-tip = 中心和两端附近平缓，中间较快
+curve-preset-flat-center = 平坦中心
+curve-preset-flat-center-tip = 行程中间十分之一没有输出，之后直线到两端
+curve-preset-half-range = 半范围
+curve-preset-half-range-tip = 整个行程只有一半输出：处处更精细
+curve-preset-inverted = 反向
+curve-preset-inverted-tip = 反方向的直线：轴被翻转
 curve-point = 点
 curve-handle = 控制柄
 

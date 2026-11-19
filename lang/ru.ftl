@@ -738,6 +738,16 @@ curve-preset-extra-soft-center = Очень мягкий центр
 curve-preset-extra-soft-center-tip = Ещё спокойнее у центра
 curve-preset-quick-center = Быстрый центр
 curve-preset-quick-center-tip = Быстро у центра, точнее к краям
+curve-preset-light-soft-center = Слегка мягкий центр
+curve-preset-light-soft-center-tip = Чуть спокойнее в центре, почти линейная
+curve-preset-s-curve = S-кривая
+curve-preset-s-curve-tip = Спокойная в центре и у краёв, быстрая между ними
+curve-preset-flat-center = Плоский центр
+curve-preset-flat-center-tip = Ничего в средней десятой части хода, дальше прямо до краёв
+curve-preset-half-range = Половина диапазона
+curve-preset-half-range-tip = Половина отклонения на всём ходе: точнее везде
+curve-preset-inverted = Инверсия
+curve-preset-inverted-tip = Прямая в обратную сторону: ось перевёрнута
 curve-point = Точка
 curve-handle = Маркер
 

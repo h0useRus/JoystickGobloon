@@ -730,6 +730,16 @@ curve-preset-extra-soft-center = Centro muy suave
 curve-preset-extra-soft-center-tip = Aún más tranquila en el centro
 curve-preset-quick-center = Centro rápido
 curve-preset-quick-center-tip = Rápida en el centro, más fina hacia los extremos
+curve-preset-light-soft-center = Centro algo suave
+curve-preset-light-soft-center-tip = Un poco más tranquila en el centro, casi lineal
+curve-preset-s-curve = Curva en S
+curve-preset-s-curve-tip = Tranquila en el centro y cerca de los extremos, rápida entre medias
+curve-preset-flat-center = Centro plano
+curve-preset-flat-center-tip = Nada en la décima central del recorrido, luego recta hasta los extremos
+curve-preset-half-range = Medio rango
+curve-preset-half-range-tip = La mitad de salida en todo el recorrido: más fina en todas partes
+curve-preset-inverted = Invertida
+curve-preset-inverted-tip = Línea recta al revés: el eje invertido
 curve-point = Punto
 curve-handle = Tirador
 

@@ -730,6 +730,16 @@ curve-preset-extra-soft-center = Extra soft center
 curve-preset-extra-soft-center-tip = Even calmer around the center
 curve-preset-quick-center = Quick center
 curve-preset-quick-center-tip = Quick around the center, finer towards the ends
+curve-preset-light-soft-center = Light soft center
+curve-preset-light-soft-center-tip = A little calmer around the center, almost linear
+curve-preset-s-curve = S-curve
+curve-preset-s-curve-tip = Calm around the center and near the ends, quick in between
+curve-preset-flat-center = Flat center
+curve-preset-flat-center-tip = Nothing in the middle tenth of the travel, then straight to the ends
+curve-preset-half-range = Half range
+curve-preset-half-range-tip = Half the output over the whole travel: finer everywhere
+curve-preset-inverted = Inverted
+curve-preset-inverted-tip = Straight line the other way round: the axis turned around
 curve-point = Point
 curve-handle = Handle
 

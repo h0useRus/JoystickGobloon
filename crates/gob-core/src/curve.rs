@@ -63,14 +63,29 @@ pub enum CurvePreset {
     ExtraSoftCenter,
     /// Quick around the center, finer towards the ends.
     QuickCenter,
+    /// A little calmer around the center (x to the power 1.5).
+    LightSoftCenter,
+    /// Calm around the center and near the ends, quick in between (smoothstep).
+    SCurve,
+    /// Nothing near the center, then straight to the ends: a center deadzone shaped in the curve.
+    FlatCenter,
+    /// Half the output over the whole travel: finer everywhere.
+    HalfRange,
+    /// Straight line the other way round: the axis turned around.
+    Inverted,
 }
 
 impl CurvePreset {
-    pub const ALL: [CurvePreset; 4] = [
+    pub const ALL: [CurvePreset; 9] = [
         Self::Linear,
+        Self::LightSoftCenter,
         Self::SoftCenter,
         Self::ExtraSoftCenter,
         Self::QuickCenter,
+        Self::SCurve,
+        Self::FlatCenter,
+        Self::HalfRange,
+        Self::Inverted,
     ];
 
     /// Short name, for i18n keys (`curve-preset-<name>`).
@@ -80,26 +95,40 @@ impl CurvePreset {
             Self::SoftCenter => "soft-center",
             Self::ExtraSoftCenter => "extra-soft-center",
             Self::QuickCenter => "quick-center",
+            Self::LightSoftCenter => "light-soft-center",
+            Self::SCurve => "s-curve",
+            Self::FlatCenter => "flat-center",
+            Self::HalfRange => "half-range",
+            Self::Inverted => "inverted",
         }
     }
 
     /// The curve type and points it sets.
     pub fn curve(self) -> (CurveType, Vec<(f64, f64)>) {
-        let power = match self {
-            Self::Linear => {
-                return (
-                    CurveType::PiecewiseLinear,
-                    vec![(-1.0, -1.0), (0.0, 0.0), (1.0, 1.0)],
-                );
+        let line = |points: &[(f64, f64)]| (CurveType::PiecewiseLinear, points.to_vec());
+        let shape: fn(f64) -> f64 = match self {
+            Self::Linear => return line(&[(-1.0, -1.0), (0.0, 0.0), (1.0, 1.0)]),
+            Self::FlatCenter => {
+                return line(&[
+                    (-1.0, -1.0),
+                    (-0.1, 0.0),
+                    (0.0, 0.0),
+                    (0.1, 0.0),
+                    (1.0, 1.0),
+                ]);
             }
-            Self::SoftCenter => 2.0,
-            Self::ExtraSoftCenter => 3.0,
-            Self::QuickCenter => 0.6,
+            Self::HalfRange => return line(&[(-1.0, -0.5), (0.0, 0.0), (1.0, 0.5)]),
+            Self::Inverted => return line(&[(-1.0, 1.0), (0.0, 0.0), (1.0, -1.0)]),
+            Self::SoftCenter => |x| x * x,
+            Self::ExtraSoftCenter => |x| x * x * x,
+            Self::QuickCenter => |x| x.powf(0.6),
+            Self::LightSoftCenter => |x| x.powf(1.5),
+            Self::SCurve => |x| x * x * (3.0 - 2.0 * x),
         };
         let points = (-4..=4)
             .map(|i| {
                 let x = f64::from(i) / 4.0;
-                let y = x.signum() * x.abs().powf(power);
+                let y = x.signum() * shape(x.abs());
                 // Four decimals, like the editor shows them.
                 ((x * 1e4).round() / 1e4, (y * 1e4).round() / 1e4)
             })
@@ -644,8 +673,13 @@ mod tests {
             let curve = Curve::new(kind, &points);
             assert!(curve.monotonic(), "{preset:?}");
             assert_eq!(Editable::symmetric(kind, &points), points, "{preset:?}");
-            assert!((curve.eval(1.0) - 1.0).abs() < 1e-9 && (curve.eval(-1.0) + 1.0).abs() < 1e-9);
-            assert!(curve.eval(0.0).abs() < 1e-9);
+            assert!(
+                (curve.eval(1.0) + curve.eval(-1.0)).abs() < 1e-9,
+                "{preset:?}"
+            );
+            assert!(curve.eval(0.0).abs() < 1e-9, "{preset:?}");
+            let full = !matches!(preset, CurvePreset::HalfRange | CurvePreset::Inverted);
+            assert_eq!((curve.eval(1.0) - 1.0).abs() < 1e-9, full, "{preset:?}");
         }
         let soft = Curve::new(
             CurvePreset::SoftCenter.curve().0,
