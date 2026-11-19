@@ -76,6 +76,8 @@ pub enum NewAction {
     SmartToggle,
     Delay,
     SplitAxis,
+    /// One point at 0.8, both zones stretched to the full travel.
+    AxisZones,
     PauseResume,
     RunCommand,
     /// Axis `axis` of virtual stick `device`; a press sets it to the top.
@@ -667,6 +669,11 @@ impl Action {
                     group("lower-actions", Vec::new()),
                     group("upper-actions", Vec::new()),
                 ],
+                "disallowed",
+            ),
+            NewAction::AxisZones => Self::build(
+                crate::zones::AXIS_ZONES,
+                crate::zones::new_items(),
                 "disallowed",
             ),
             NewAction::PauseResume => Self::build(

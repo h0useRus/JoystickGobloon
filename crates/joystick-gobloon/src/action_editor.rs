@@ -350,10 +350,30 @@ pub enum Op {
         id: u32,
         hold: f64,
     },
+    /// A curve saved as a preset (replacing one of the same name), or a preset deleted; kept
+    /// in the settings by the app.
+    SaveCurvePreset(crate::settings::SavedCurve),
+    DeleteCurvePreset(String),
     AddChainStep(String),
     RemoveChainStep {
         action: String,
         index: usize,
+    },
+    /// Axis zones: a point added at the top, one removed, one moved, a zone's output.
+    AddZonePoint(String),
+    RemoveZonePoint {
+        action: String,
+        index: usize,
+    },
+    SetZonePoint {
+        action: String,
+        index: usize,
+        value: f64,
+    },
+    SetZoneOutput {
+        action: String,
+        zone: usize,
+        output: gob_core::ZoneOutput,
     },
     /// Keys of a map-to-keyboard action.
     SetKeys {
@@ -636,6 +656,18 @@ pub fn apply(p: &mut Profile, op: Op) {
         }
         Op::SetKeys { action, keys } => p.set_keys(&action, &keys),
         Op::AddChainStep(action) => p.add_chain_step(&action),
+        Op::AddZonePoint(action) => p.add_zone_point(&action),
+        Op::RemoveZonePoint { action, index } => p.remove_zone_point(&action, index),
+        Op::SetZonePoint {
+            action,
+            index,
+            value,
+        } => p.set_zone_point(&action, index, value),
+        Op::SetZoneOutput {
+            action,
+            zone,
+            output,
+        } => p.set_zone_output(&action, zone, output),
         Op::AddLogicalInput(input_type) => {
             p.add_logical_input(input_type);
         }
@@ -707,6 +739,8 @@ pub fn apply(p: &mut Profile, op: Op) {
         Op::PreviewSound { .. }
         | Op::PreviewSpeech(_)
         | Op::PreviewLight { .. }
+        | Op::SaveCurvePreset(_)
+        | Op::DeleteCurvePreset(_)
         | Op::GoToVoice(_) => {}
         Op::GameBind {
             game,
@@ -871,6 +905,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "smart-toggle" => icon::TOGGLE_RIGHT,
         "delay" => icon::HOURGLASS_MEDIUM,
         "split-axis" => icon::ARROWS_SPLIT,
+        "axis-zones" => icon::SLIDERS_HORIZONTAL,
         "pause-resume" => icon::PLAY_PAUSE,
         "run-command" => icon::TERMINAL_WINDOW,
         "map-to-mouse" => icon::MOUSE,
@@ -1067,6 +1102,11 @@ fn addable(
     if behavior == InputType::Axis {
         list.push((icon::ARROWS_SPLIT, "kind-split-axis", NewAction::SplitAxis));
         list.push((
+            icon::SLIDERS_HORIZONTAL,
+            "kind-axis-zones",
+            NewAction::AxisZones,
+        ));
+        list.push((
             icon::ARROWS_DOWN_UP,
             "kind-axis-delta",
             NewAction::AxisDelta,
@@ -1115,6 +1155,8 @@ pub struct Editor<'a> {
     pub monotonic_curves: bool,
     /// A right click on empty space of the curve chart inverts the curve.
     pub curve_right_click_invert: bool,
+    /// Curves the user saved as presets.
+    pub curve_presets: &'a [crate::settings::SavedCurve],
     /// Actions voice commands run, with the command (built once per frame, when a card needs it).
     pub voice_links: std::cell::OnceCell<std::collections::HashMap<String, u32>>,
     /// How many places use each action (built once per frame, when a card needs it).
@@ -1880,6 +1922,9 @@ impl Editor<'_> {
                         depth,
                     );
                 }
+                ActionKind::AxisZones { points, zones } => {
+                    self.axis_zones(ui, &action.id, &points, &zones, depth);
+                }
                 ActionKind::PauseResume { operation } => {
                     ui.horizontal(|ui| {
                         for op in ["Pause", "Resume", "Toggle"] {
@@ -1989,6 +2034,114 @@ impl Editor<'_> {
             }
         });
         ui.add_space(4.0);
+    }
+
+    /// Axis zones: each zone with its stretch, output and actions, the points between them.
+    fn axis_zones(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: &str,
+        points: &[f64],
+        zones: &[gob_core::AxisZone<'_>],
+        depth: usize,
+    ) {
+        use gob_core::ZoneOutput;
+        if depth > 8 {
+            return;
+        }
+        for (n, zone) in zones.iter().enumerate() {
+            let lo = if n == 0 { -1.0 } else { points[n - 1] };
+            let hi = points.get(n).copied().unwrap_or(1.0);
+            let title = self.i18n.trf(
+                "edit-zone",
+                &[
+                    ("n", (n + 1).into()),
+                    ("from", format!("{lo:.2}").into()),
+                    ("to", format!("{hi:.2}").into()),
+                ],
+            );
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("{}  {title}", icon::SLIDERS_HORIZONTAL)).strong());
+                let fixed = match zone.output {
+                    ZoneOutput::Fixed(v) => v,
+                    _ => 0.0,
+                };
+                for (output, key) in [
+                    (ZoneOutput::Rescale, "edit-zone-rescale"),
+                    (ZoneOutput::Pass, "edit-zone-pass"),
+                    (ZoneOutput::Fixed(fixed), "edit-zone-fixed"),
+                ] {
+                    let on = zone.output.key() == output.key();
+                    let r = ui
+                        .radio(on, self.i18n.tr(key))
+                        .on_hover_text(self.i18n.tr(&format!("{key}-tip")));
+                    if r.clicked() && !on {
+                        self.ops.push(Op::SetZoneOutput {
+                            action: id.to_string(),
+                            zone: n,
+                            output,
+                        });
+                    }
+                }
+                if let ZoneOutput::Fixed(v) = zone.output {
+                    let mut x = v as f32;
+                    let spin = style::Spin::new(&mut x)
+                        .range(-1.0..=1.0)
+                        .step(0.01)
+                        .decimals(2);
+                    if ui.add(spin).changed() {
+                        self.ops.push(Op::SetZoneOutput {
+                            action: id.to_string(),
+                            zone: n,
+                            output: ZoneOutput::Fixed(f64::from(x)),
+                        });
+                    }
+                }
+            });
+            let group = gob_core::zones::group_tag(n);
+            ui.indent((&group, id), |ui| {
+                self.container(ui, id, &group, depth + 1);
+            });
+            if let Some(&p) = points.get(n) {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(icon::DOT_OUTLINE).size(style::ICON_SIZE))
+                        .on_hover_text(self.i18n.tr("edit-zone-point"));
+                    let mut x = p as f32;
+                    let spin = style::Spin::new(&mut x)
+                        .range(-1.0..=1.0)
+                        .step(0.005)
+                        .decimals(3);
+                    if ui
+                        .add(spin)
+                        .on_hover_text(self.i18n.tr("edit-zone-point"))
+                        .changed()
+                    {
+                        self.ops.push(Op::SetZonePoint {
+                            action: id.to_string(),
+                            index: n,
+                            value: f64::from(x),
+                        });
+                    }
+                    let tip = self.i18n.tr("edit-zone-remove");
+                    if style::icon_button(ui, true, icon::TRASH, &tip).clicked() {
+                        self.ops.push(Op::RemoveZonePoint {
+                            action: id.to_string(),
+                            index: n,
+                        });
+                    }
+                });
+            }
+        }
+        let can = points.len() < gob_core::zones::MAX_POINTS
+            && 1.0 - points.last().copied().unwrap_or(-1.0) >= gob_core::zones::MIN_GAP * 2.0;
+        let text = format!("{}  {}", icon::PLUS, self.i18n.tr("edit-zone-add"));
+        if ui
+            .add_enabled(can, egui::Button::new(text))
+            .on_hover_text(self.i18n.tr("edit-zone-add-tip"))
+            .clicked()
+        {
+            self.ops.push(Op::AddZonePoint(id.to_string()));
+        }
     }
 
     pub(crate) fn set(&mut self, action: &str, name: &str, ty: &str, value: impl Into<String>) {

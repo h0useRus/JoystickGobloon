@@ -124,7 +124,7 @@
       <div class="wrap">
         <p class="kicker">Learning</p>
         <h1 class="gradient">Every action,<br>explained with its editor</h1>
-        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 26 actions does.</p>
+        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 27 actions does.</p>
       </div>
     </header>
 
@@ -151,6 +151,7 @@
           <li><a class="toc-group" href="#axes">Axes</a><ul>
             <li><a href="#response-curve">Response curve</a></li>
             <li><a href="#split-axis">Split axis</a></li>
+            <li><a href="#axis-zones">Axis zones</a></li>
             <li><a href="#merge-axis">Merge axis</a></li>
             <li><a href="#dual-axis-deadzone">Dual axis deadzone</a></li>
             <li><a href="#axis-delta">Axis delta</a></li>
@@ -316,6 +317,7 @@
               <li><strong>Invert the curve</strong>: right click on empty space, or the <span class="term">Invert</span> button. A switch in the settings turns the right click off.</li>
               <li><strong>Symmetric</strong>: your edits are mirrored through the center.</li>
               <li><strong>Start from a preset</strong>: the <span class="term">Preset</span> menu puts in a ready-made curve (linear, soft center, extra soft center or quick center) that you can edit from there.</li>
+              <li><strong>Your own presets</strong>: at the bottom of the <span class="term">Preset</span> menu, type a name and press the save button to keep the curve; it is then offered in every curve editor, in every profile. The bin next to one deletes it.</li>
             </ul>
             <p>The <span class="term">Curve type</span> list sets how the curve runs through its points:</p>
             <ul>
@@ -331,6 +333,18 @@
             <h3><i class="ph ph-arrows-split" aria-hidden="true"></i>Split axis</h3>
             <p>Splits an axis at a point (the center by default) into two halves, and gives each half its own actions; each half is stretched to the full range again. Useful for one axis driving two outputs, like two pedals on a single rudder axis.</p>
             <figure class="shot"><img src="img/actions/split-axis.png" loading="lazy" alt="Split axis: the lower half to vJoy axis 2, the upper half to vJoy axis 3"></figure>
+          </article>
+          <article class="learn-action" id="axis-zones">
+            <h3><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>Axis zones</h3>
+            <p>Points split an axis into zones (up to eight), and each zone gets its own actions. Made for a throttle with a detent: the travel up to the afterburner gate drives the throttle, the last stretch drives the afterburner. It also fits a reverse range at the bottom, or a different curve on each part of the travel.</p>
+            <ul>
+              <li><strong>Full travel</strong>: the zone's stretch is stretched to the whole travel, from all the way down at its lower point to all the way up at its upper one.</li>
+              <li><strong>As is</strong>: the axis value goes on unchanged.</li>
+              <li><strong>Fixed</strong>: one value, wherever the axis is in the zone.</li>
+              <li><strong>Points</strong>: the field between two zones moves the point, the bin removes it (the zone above goes, with its actions), <span class="term">Point</span> adds one near the top.</li>
+            </ul>
+            <p>When the axis leaves a zone, that zone's actions get the edge it was left at, so the throttle sits at full when the afterburner zone takes over and the afterburner goes back to zero when you pull back. To press a button at a point instead, use <span class="term">Treat as a button</span> on the axis with a narrow range and a direction.</p>
+            <figure class="shot"><img src="img/actions/axis-zones.png" loading="lazy" alt="Axis zones on the Z axis: up to 0.80 the travel is stretched onto the virtual Z axis, from 0.80 on onto the slider named Afterburner"></figure>
           </article>
           <article class="learn-action" id="merge-axis">
             <h3><i class="ph ph-arrows-merge" aria-hidden="true"></i>Merge axis</h3>

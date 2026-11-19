@@ -27,6 +27,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-core    profile model grown from Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views;
   modifier.rs = modifiers and input layers (Joystick Gobloon only, `Profile::needs_own_format`)
   button_axis.rs = axis from buttons (set/velocity/stepped/encoder/smooth, second "decrease" input);
+  zones.rs = axis zones (`axis-zones`: points, `zone-N` groups with output rescale/pass/fixed; GremlinEx gated axis, lite);
   `Action::button_send` = How to send of button outputs (`send-mode` hold/press/release/pulse/repeat/toggle)
   automap.rs = the new profile wizard's mapping (every input of a device onto one vJoy device); `Profile::output_usage`
   = which inputs write each virtual output (used/conflict marks, wizard_view.rs + output_marks.rs in the GUI)
@@ -148,7 +149,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   memory, RTF and phrase accuracy of a model on WAVs; `--record` makes test WAVs; `--listen` push to talk, with
   `--vosk-lib/--vosk-model` 1/2/3 = Vosk/sherpa-onnx/both on the same audio), `vosk_bench` (Vosk on the same WAVs).
   Text to speech: Settings > Voice > Text to speech = the system's voice (default) or Piper (`tts_engine`)
-- plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
+- plans/completed/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
   on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
   hiding, learn.html = every action with a

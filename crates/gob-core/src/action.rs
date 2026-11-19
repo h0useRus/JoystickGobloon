@@ -218,6 +218,11 @@ pub enum ActionKind<'a> {
         lower: Vec<&'a str>,
         upper: Vec<&'a str>,
     },
+    /// Points split an axis into zones, each with its own output and actions (crate::zones).
+    AxisZones {
+        points: Vec<f64>,
+        zones: Vec<crate::zones::AxisZone<'a>>,
+    },
     /// `Pause`, `Resume` or `Toggle` the whole profile.
     PauseResume {
         operation: &'a str,
@@ -709,6 +714,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "smart-toggle",
     "delay",
     "split-axis",
+    crate::zones::AXIS_ZONES,
     "pause-resume",
     "run-command",
     "macro",
@@ -804,6 +810,7 @@ impl Action {
                     | "description"
                     | "response-curve"
                     | "split-axis"
+                    | "axis-zones"
                     | "merge-axis"
                     | "axis-delta"
                     | "dual-axis-deadzone"
@@ -1007,6 +1014,10 @@ impl Action {
                 lower: self.refs_in("lower-actions"),
                 upper: self.refs_in("upper-actions"),
             },
+            crate::zones::AXIS_ZONES => {
+                let (points, zones) = crate::zones::zones(self);
+                ActionKind::AxisZones { points, zones }
+            }
             "pause-resume" => ActionKind::PauseResume {
                 operation: self.str("operation").unwrap_or("Pause"),
             },

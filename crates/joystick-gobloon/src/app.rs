@@ -2038,6 +2038,11 @@ impl JoystickGobloonApp {
         self.devices_view.experimental = self.settings.experimental;
         self.devices_view.monotonic_curves = self.settings.monotonic_curves;
         self.devices_view.curve_right_click_invert = self.settings.curve_right_click_invert;
+        if self.devices_view.curve_presets != self.settings.curve_presets {
+            self.devices_view
+                .curve_presets
+                .clone_from(&self.settings.curve_presets);
+        }
         self.devices_view.leds = if self.settings.experimental {
             self.leds.update(&devices, ui.ctx());
             self.leds.guids(&devices)
@@ -2123,11 +2128,28 @@ impl JoystickGobloonApp {
         let (previews, ops): (Vec<Op>, Vec<Op>) = ops.into_iter().partition(|op| {
             matches!(
                 op,
-                Op::PreviewSound { .. } | Op::PreviewSpeech(_) | Op::PreviewLight { .. }
+                Op::PreviewSound { .. }
+                    | Op::PreviewSpeech(_)
+                    | Op::PreviewLight { .. }
+                    | Op::SaveCurvePreset(_)
+                    | Op::DeleteCurvePreset(_)
             )
         });
         for op in previews {
             match op {
+                // Presets live in the settings, not in the profile.
+                Op::SaveCurvePreset(curve) => {
+                    let presets = &mut self.settings.curve_presets;
+                    match presets.iter_mut().find(|p| p.name == curve.name) {
+                        Some(p) => *p = curve,
+                        None => presets.push(curve),
+                    }
+                    self.settings.save();
+                }
+                Op::DeleteCurvePreset(name) => {
+                    self.settings.curve_presets.retain(|p| p.name != name);
+                    self.settings.save();
+                }
                 Op::PreviewSound { file, volume } => self.media.play(&file, volume),
                 Op::PreviewSpeech(request) => self.media.speak(request),
                 Op::PreviewLight { device, led } => {

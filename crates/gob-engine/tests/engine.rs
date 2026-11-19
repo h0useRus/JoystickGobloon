@@ -240,6 +240,7 @@ fn profile() -> String {
         root("r-b7", &["toggle"]),
         root("r-b8", &["pause"]),
         root("r-a5", &["split"]),
+        root("r-a12", &["zones"]),
         root("r-b9", &["run"]),
         root("r-b10", &["mtempo"]),
         root("r-b11", &["mkeys"]),
@@ -506,6 +507,18 @@ fn profile() -> String {
             ),
         ),
         vjoy("vsplit", "axis", 2),
+        act(
+            "zones",
+            "axis-zones",
+            &format!(
+                "{}<zone-0>{}<action-id>vzone</action-id></zone-0>                 <zone-1>{}{}<action-id>vzone</action-id></zone-1>",
+                prop("string", "points", "0.8"),
+                prop("string", "output", "rescale"),
+                prop("string", "output", "fixed"),
+                prop("float", "value", "1.0")
+            ),
+        ),
+        vjoy("vzone", "axis", 4),
         act_on(
             "run",
             "run-command",
@@ -609,6 +622,7 @@ fn profile() -> String {
             gob_core::LOGICAL_DEVICE_GUID
         ),
         input("axis", 11, "Default", "r-a11", ""),
+        input("axis", 12, "Default", "r-a12", ""),
         input("axis", 9, "Default", "r-a9", ""),
         input("axis", 10, "Default", "r-a9", ""),
         input("hat", 2, "Default", "r-h2", ""),
@@ -932,6 +946,26 @@ fn split_axis_rescales_halves() {
         r.take(),
         [Out::Axis(2, 0.0), Out::Axis(2, 1.0), Out::Axis(2, 0.0)]
     );
+}
+
+#[test]
+fn axis_zones_stretch_or_fix_their_stretch() {
+    let mut r = Rig::new();
+    // Below 0.8 the stretch -1..0.8 fills the travel; from the detent on, a fixed 1.0.
+    r.axis(12, -1.0);
+    r.axis(12, -0.1);
+    r.axis(12, 0.9);
+    let out = r.take();
+    // Leaving the lower zone upwards gives it its top edge first.
+    assert_eq!(out.len(), 4, "{out:?}");
+    let Out::Axis(4, a) = out[0] else {
+        panic!("{out:?}")
+    };
+    let Out::Axis(4, b) = out[1] else {
+        panic!("{out:?}")
+    };
+    assert_eq!(out[2..], [Out::Axis(4, 1.0), Out::Axis(4, 1.0)]);
+    assert!((a + 1.0).abs() < 1e-5 && b.abs() < 1e-5, "{a} {b}");
 }
 
 #[test]
