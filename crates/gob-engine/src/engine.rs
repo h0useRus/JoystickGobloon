@@ -590,6 +590,7 @@ impl Config {
             additive,
             keep_value: false,
             send_state: false,
+            description: None,
         }
     }
 }
@@ -609,6 +610,8 @@ struct Config {
     keep_value: bool,
     /// A button held when the profile starts runs its press then.
     send_state: bool,
+    /// The binding's description (its root action's label), shown when its input is pressed.
+    description: Option<Arc<str>>,
 }
 
 pub struct Engine {
@@ -702,6 +705,8 @@ pub struct Engine {
     aliases: HashMap<String, String>,
     /// On-activate light-led actions met while compiling the current binding.
     compiled_lights: Vec<Light>,
+    /// The description of the last binding whose input was pressed and had one.
+    last_action: Option<Arc<str>>,
     /// Modifier inputs and their names; they only choose layers, their bindings do not run.
     modifiers: Vec<(InputKey, String)>,
     /// Layer a button or hat chose when pressed; its release goes there too.
@@ -842,6 +847,7 @@ impl Engine {
             compiled_lights: Vec::new(),
             modifiers: Vec::new(),
             pressed_layers: HashMap::new(),
+            last_action: None,
             button_axes: HashMap::new(),
             axis_writes: Vec::new(),
             compiled_decrease: Vec::new(),
@@ -959,6 +965,13 @@ impl Engine {
                     additive: cfg.additive,
                     keep_value: cfg.keep_value,
                     send_state: cfg.send_state,
+                    description: profile
+                        .action(&cfg.root_action)
+                        .and_then(|a| a.label())
+                        .map(str::trim)
+                        // Gremlin writes "None" for a binding without one.
+                        .filter(|l| !l.is_empty() && *l != "None")
+                        .map(Arc::from),
                 });
                 // A button-axis action's decrease input runs it too, in the same mode and layer,
                 // through copies of the containers it sits in (their own state).
@@ -1547,6 +1560,19 @@ impl Engine {
 
     pub fn is_paused(&self) -> bool {
         self.paused
+    }
+
+    /// The layer the held modifiers choose (the base layer while none is held).
+    pub fn current_layer(&self) -> Layer {
+        if self.modifiers.is_empty() {
+            return Layer::base();
+        }
+        self.held_layer()
+    }
+
+    /// The description of the last binding whose input was pressed and had one.
+    pub fn last_action(&self) -> Option<&str> {
+        self.last_action.as_deref()
     }
 
     pub fn current_mode(&self) -> &str {
@@ -2371,10 +2397,14 @@ impl Engine {
         }
         self.feed_foreign_vbuttons(key, value, &src.mode, now, out);
         let layer = self.event_layer(key, value);
+        let pressed = matches!(value, Value::Button(true) | Value::Hat(Some(_)));
         if let Some(&set) = self.lookup.get(key).and_then(|m| m.get(&*src.mode)) {
             let selection = self.selection(set, &layer);
             for ci in 0..self.sets[set].len() {
                 if selection.runs(&self.sets[set][ci].layer) {
+                    if pressed && let Some(d) = &self.sets[set][ci].description {
+                        self.last_action = Some(d.clone());
+                    }
                     self.run_config((set, ci), &src, value, now, out);
                 }
             }

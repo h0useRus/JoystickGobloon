@@ -21,6 +21,10 @@ const LATENCY_WINDOW: Duration = Duration::from_secs(1);
 #[derive(Debug, Clone, Default)]
 pub struct RunnerStatus {
     pub mode: String,
+    /// The layer the held modifiers choose (`M1+M2`); empty for the base layer.
+    pub layer: String,
+    /// The description of the last binding whose input was pressed and had one.
+    pub last_action: Option<String>,
     pub paused: bool,
     /// Profile file a load-profile action asked for; the GUI takes it.
     pub load_profile: Option<String>,
@@ -529,6 +533,8 @@ impl Runner {
 
         let status = Arc::new(Mutex::new(RunnerStatus {
             mode: engine.current_mode().to_string(),
+            layer: String::new(),
+            last_action: None,
             paused: false,
             load_profile: None,
             latency: None,
@@ -918,7 +924,17 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             s.script_errors.extend(script_errors);
             on_change();
         }
+        let layer = engine.current_layer();
+        // Text only while a modifier is held: the base layer allocates nothing.
+        let layer_changed = if layer.is_base() {
+            !s.layer.is_empty()
+        } else {
+            s.layer != layer.to_string()
+        };
+        let action_changed = s.last_action.as_deref() != engine.last_action();
         if s.mode != engine.current_mode()
+            || layer_changed
+            || action_changed
             || s.paused != engine.is_paused()
             || load.is_some()
             || latency.is_some_and(|l| s.latency != Some(l))
@@ -926,6 +942,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             || s.voice != voice_status
         {
             s.mode = engine.current_mode().to_string();
+            if layer_changed {
+                s.layer = layer.to_string();
+            }
+            if action_changed {
+                s.last_action = engine.last_action().map(String::from);
+            }
             s.paused = engine.is_paused();
             s.voice = voice_status.clone();
             if load.is_some() {

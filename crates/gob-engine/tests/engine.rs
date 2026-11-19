@@ -2390,3 +2390,67 @@ fn a_voice_group_opens_and_closes() {
     assert_eq!(e.voice_group(), None);
     assert!(e.take_voice_phrases_changed());
 }
+
+/// A pressed input shows its binding's description until another one with a description is
+/// pressed; releases, axes and bindings without one leave it. The held modifiers name the layer.
+#[test]
+fn last_action_and_layer_for_the_overlay() {
+    let labelled = |id: &str, child: &str, label: &str| {
+        act(
+            id,
+            "root",
+            &format!(
+                "<actions><action-id>{child}</action-id></actions>{}",
+                prop("string", "action-label", label)
+            ),
+        )
+    };
+    let inputs = [
+        layered_input("button", 4, &[("", false, "r1"), ("M1", false, "r3")]),
+        layered_input("button", 5, &[("", false, "r5")]),
+        layered_input("button", 6, &[("", false, "r6")]),
+        layered_input("axis", 2, &[("", false, "ra1")]),
+    ]
+    .concat();
+    let library = [
+        labelled("r1", "b1", "Landing gear"),
+        labelled("r3", "b3", "Flaps"),
+        root("r5", &["b5"]),
+        labelled("r6", "b5", "None"),
+        labelled("ra1", "x1", "Throttle"),
+        vjoy("b1", "button", 1),
+        vjoy("b3", "button", 3),
+        vjoy("b5", "button", 5),
+        vjoy("x1", "axis", 1),
+    ]
+    .concat();
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs>{inputs}</inputs><settings/><library>{library}</library>
+        <modes><mode>Default</mode></modes><modifiers>
+        <modifier name="M1" device-id="{DEV}" input-type="button" input-id="30"/>
+        </modifiers></profile>"#
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut e = Engine::new(&p, &HashMap::new());
+    let mut out = Recorder::default();
+    assert_eq!(e.last_action(), None);
+    assert!(e.current_layer().is_base());
+    button(&mut e, &mut out, 4, true);
+    assert_eq!(e.last_action(), Some("Landing gear"));
+    button(&mut e, &mut out, 4, false);
+    assert_eq!(e.last_action(), Some("Landing gear"), "a release keeps it");
+    // No description, or Gremlin's "None": the last one stays.
+    button(&mut e, &mut out, 5, true);
+    button(&mut e, &mut out, 6, true);
+    assert_eq!(e.last_action(), Some("Landing gear"));
+    // Axis motion is no press.
+    send(&mut e, &mut out, InputKind::Axis, 2, Value::Axis(0.5));
+    assert_eq!(e.last_action(), Some("Landing gear"));
+    button(&mut e, &mut out, 30, true);
+    assert_eq!(e.current_layer().to_string(), "M1");
+    button(&mut e, &mut out, 4, true);
+    assert_eq!(e.last_action(), Some("Flaps"), "the layer's binding");
+    button(&mut e, &mut out, 4, false);
+    button(&mut e, &mut out, 30, false);
+    assert!(e.current_layer().is_base());
+}
