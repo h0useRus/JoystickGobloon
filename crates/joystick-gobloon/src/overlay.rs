@@ -119,6 +119,7 @@ impl Overlay {
     /// Shows, updates or closes the overlay window; called every frame from `logic`. Returns
     /// where it was dragged once placing ends (Done, or another tab). While it is dragged the
     /// window's position is left to the system: setting it from here too would fight the drag.
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &mut self,
         ctx: &egui::Context,
@@ -126,6 +127,7 @@ impl Overlay {
         settings: &Settings,
         status: Option<&RunnerStatus>,
         profile: Option<&Profile>,
+        usage: Option<crate::usage::Reading>,
         recording_keys: bool,
     ) -> Option<[f32; 2]> {
         let keys: Vec<Key> = settings
@@ -166,7 +168,7 @@ impl Overlay {
         let lines = if self.calibrating && status.is_none() {
             sample_lines(i18n, settings)
         } else {
-            status.map_or_else(Vec::new, |s| lines(settings, s, profile))
+            status.map_or_else(Vec::new, |s| lines(settings, s, profile, usage))
         };
         let shown = self.calibrating || (settings.overlay_on && !hidden && !lines.is_empty());
         if !shown {
@@ -267,6 +269,7 @@ pub fn settings_tab(
         (&mut settings.overlay_mode, "settings-overlay-mode"),
         (&mut settings.overlay_action, "settings-overlay-action"),
         (&mut settings.overlay_latency, "settings-overlay-latency"),
+        (&mut settings.overlay_usage, "settings-overlay-usage"),
         (&mut settings.overlay_voice, "settings-overlay-voice"),
         (&mut settings.overlay_commands, "settings-overlay-commands"),
     ] {
@@ -312,7 +315,12 @@ fn color(rgba: [u8; 4]) -> Color32 {
 }
 
 /// The overlay's lines for a running profile.
-fn lines(settings: &Settings, status: &RunnerStatus, profile: Option<&Profile>) -> Vec<Line> {
+fn lines(
+    settings: &Settings,
+    status: &RunnerStatus,
+    profile: Option<&Profile>,
+    usage: Option<crate::usage::Reading>,
+) -> Vec<Line> {
     let line = |glyph, text: String| Line {
         glyph,
         text,
@@ -340,6 +348,11 @@ fn lines(settings: &Settings, status: &RunnerStatus, profile: Option<&Profile>) 
             icon::TIMER,
             format!("{:.2} ms", latency.average.as_secs_f64() * 1e3),
         ));
+    }
+    if settings.overlay_usage
+        && let Some(r) = usage
+    {
+        out.push(line(icon::MEMORY, r.text()));
     }
     if settings.overlay_voice
         && let Some(p) = profile
@@ -390,6 +403,13 @@ fn sample_lines(i18n: &I18n, settings: &Settings) -> Vec<Line> {
     }
     if settings.overlay_latency {
         out.push(line(icon::TIMER, "0.42 ms".into()));
+    }
+    if settings.overlay_usage {
+        let r = crate::usage::Reading {
+            mb: 120,
+            cpu: Some(0.3),
+        };
+        out.push(line(icon::MEMORY, r.text()));
     }
     if settings.overlay_voice || settings.overlay_commands {
         out.push(line(icon::MICROPHONE, i18n.tr("overlay-sample-voice")));

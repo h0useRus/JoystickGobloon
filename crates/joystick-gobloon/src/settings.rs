@@ -108,6 +108,8 @@ pub struct Settings {
     pub overlay_mode: bool,
     pub overlay_action: bool,
     pub overlay_latency: bool,
+    /// Memory and CPU Joystick Gobloon uses.
+    pub overlay_usage: bool,
     pub overlay_voice: bool,
     pub overlay_commands: bool,
     /// Overlay text and background colors (RGBA, not premultiplied).
@@ -370,6 +372,7 @@ impl Default for Settings {
             overlay_mode: true,
             overlay_action: true,
             overlay_latency: false,
+            overlay_usage: false,
             overlay_voice: true,
             overlay_commands: false,
             // Joystick Gobloon's green on its dark panel color, as in the program.

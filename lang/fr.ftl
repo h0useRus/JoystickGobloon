@@ -839,6 +839,7 @@ settings-overlay-show = Ce qu’elle affiche
 settings-overlay-mode = Mode et couche
 settings-overlay-action = Description de la dernière entrée pressée (rien si elle n’en a pas)
 settings-overlay-latency = Latence
+settings-overlay-usage = Mémoire et processeur utilisés par Joystick Gobloon
 settings-overlay-voice = Commande vocale reconnue
 settings-overlay-commands = Toutes les commandes vocales
 settings-overlay-look = Apparence

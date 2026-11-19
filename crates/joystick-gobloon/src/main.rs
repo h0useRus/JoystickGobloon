@@ -32,6 +32,7 @@ mod substitute_view;
 mod system_part_view;
 mod tray;
 mod update;
+mod usage;
 mod viewer_view;
 mod virtual_setup;
 mod vjoy_config_view;

@@ -827,6 +827,7 @@ settings-overlay-show = 표시 항목
 settings-overlay-mode = 모드와 레이어
 settings-overlay-action = 마지막으로 누른 입력의 설명 (없으면 표시하지 않음)
 settings-overlay-latency = 지연 시간
+settings-overlay-usage = Joystick Gobloon이 사용하는 메모리와 CPU
 settings-overlay-voice = 인식된 음성 명령
 settings-overlay-commands = 모든 음성 명령
 settings-overlay-look = 모양
