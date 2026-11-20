@@ -170,6 +170,8 @@ struct SystemOutput {
     voice: Option<gob_voice::VoiceService>,
     voice_config: Option<gob_voice::VoiceConfig>,
     voice_events: std::sync::mpsc::Sender<gob_voice::VoiceEvent>,
+    /// Sends the send-osc actions' messages; started by the first one.
+    osc: Option<gob_osc::Sender>,
 }
 
 /// The joystick input a write changes.
@@ -222,6 +224,7 @@ impl SystemOutput {
             voice: None,
             voice_config,
             voice_events,
+            osc: None,
         }
     }
 
@@ -422,6 +425,12 @@ impl Output for SystemOutput {
 
     fn load_profile(&mut self, file: &str) {
         self.load_profile = Some(file.to_string());
+    }
+
+    fn send_osc(&mut self, host: &str, port: u16, message: &gob_osc::Message) {
+        self.osc
+            .get_or_insert_with(gob_osc::Sender::new)
+            .send(host, port, message);
     }
 
     fn voice_listen(&mut self, microphone: &str, on: bool) {
@@ -850,6 +859,7 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
                 // command's button would stay down. The utterance it ends is heard with the old
                 // phrases: they change only after it.
                 engine.stop_voice(Instant::now(), &mut out);
+                engine.stop_osc(Instant::now(), &mut out);
                 if r.fresh {
                     finish_stop(&mut engine, &mut out);
                 }
@@ -885,7 +895,10 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         };
         reads.clear();
         for timed in first.into_iter().chain(events.try_iter()) {
-            if let Some((key, value)) = convert(&mut ids, &timed.event) {
+            if let InputEvent::Osc { address, value } = &timed.event {
+                engine.osc(address, *value, Instant::now(), &mut out);
+                reads.push(timed.read);
+            } else if let Some((key, value)) = convert(&mut ids, &timed.event) {
                 engine.process(&key, value, Instant::now(), &mut out);
                 reads.push(timed.read);
             }
@@ -1049,7 +1062,8 @@ fn convert(ids: &mut DeviceIds, event: &InputEvent) -> Option<(InputKey, Value)>
                 Value::Button(*pressed),
             )
         }
-        InputEvent::DevicesChanged => return None,
+        // OSC messages go to the engine by address (`Engine::osc`).
+        InputEvent::Osc { .. } | InputEvent::DevicesChanged => return None,
     })
 }
 

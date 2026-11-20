@@ -394,6 +394,10 @@ impl JoystickGobloonApp {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::Voice;
             }
+            Ok("panels") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::Panels;
+            }
             Ok("overlay") => {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::Overlay;
@@ -2013,6 +2017,7 @@ impl JoystickGobloonApp {
         self.virtual_devices_banner(ui);
         self.devices_view.logical = self.logical_device();
         self.devices_view.voice = self.activation.status().and_then(|s| s.voice);
+        self.devices_view.osc.receiving = self.input.osc_status();
         let devices = self.input.devices();
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
@@ -2102,6 +2107,10 @@ impl JoystickGobloonApp {
         }
         if std::mem::take(&mut self.devices_view.open_modifiers) {
             self.show_modifiers = true;
+        }
+        if std::mem::take(&mut self.devices_view.osc.open_settings) {
+            self.page = Page::Settings;
+            self.settings_tab = SettingsTab::Panels;
         }
         self.apply_ops(ops);
     }
@@ -2431,6 +2440,7 @@ impl eframe::App for JoystickGobloonApp {
             }
         }
         self.input.set_event_mode(self.settings.input_events);
+        self.input.set_osc(self.settings.osc_addr());
         self.input
             .set_poll_interval(std::time::Duration::from_millis(u64::from(
                 self.settings.poll_interval_ms,
@@ -2768,6 +2778,7 @@ impl eframe::App for JoystickGobloonApp {
                             system_part: &mut self.system_part,
                             voice: &mut self.voice_panel,
                             overlay: &mut self.overlay,
+                            osc: self.input.osc_status(),
                         },
                     );
                     if let Some(change) = change {

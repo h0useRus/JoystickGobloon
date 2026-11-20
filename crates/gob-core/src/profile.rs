@@ -392,6 +392,7 @@ pub enum Section {
     VoiceCommands,
     KeyCombos,
     GameBindings,
+    OscInputs,
     /// Index into [`Profile::extra`].
     Extra(usize),
 }
@@ -416,6 +417,8 @@ pub struct Profile {
     pub voice_commands: Vec<crate::voice::VoiceCommand>,
     /// Joystick Gobloon only (see [`crate::combos`]).
     pub key_combos: Vec<crate::combos::KeyCombo>,
+    /// Joystick Gobloon only (see [`crate::osc`]).
+    pub osc_inputs: Vec<crate::osc::OscInput>,
     /// Joystick Gobloon only (see [`crate::game`]).
     pub game_bindings: Vec<crate::game::GameBindings>,
     pub extra: Vec<Element>,
@@ -440,6 +443,7 @@ impl Default for Profile {
             virtual_devices: VirtualDevices::default(),
             voice_commands: Vec::new(),
             key_combos: Vec::new(),
+            osc_inputs: Vec::new(),
             game_bindings: Vec::new(),
             extra: Vec::new(),
             order: vec![
@@ -480,6 +484,7 @@ impl Profile {
                         | Section::VoiceCommands
                         | Section::KeyCombos
                         | Section::GameBindings
+                        | Section::OscInputs
                 )
             })
             .map_or(self.order.len(), |i| i + 1);
@@ -497,6 +502,7 @@ impl Profile {
             || !self.virtual_devices.gamepads.is_empty()
             || !self.voice_commands.is_empty()
             || !self.key_combos.is_empty()
+            || !self.osc_inputs.is_empty()
             || !self.game_bindings.is_empty()
             || self
                 .inputs
@@ -514,6 +520,7 @@ impl Profile {
                     || a.kind == crate::AXIS_ZONES
                     || a.button_send().mode != crate::SendMode::Hold
                     || a.kind == "voice-input"
+                    || a.kind == crate::SEND_OSC
                     || a.kind == "delay"
                     || (a.kind == "merge-axis"
                         && a.str("operation").and_then(crate::MergeOp::parse).is_some_and(|o| {

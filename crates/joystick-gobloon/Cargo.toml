@@ -19,6 +19,7 @@ gob-engine.workspace = true
 gob-voice.workspace = true
 gob-script.workspace = true
 gob-export.workspace = true
+gob-osc.workspace = true
 gob-lighting.workspace = true
 gob-ui.workspace = true
 rfd.workspace = true

@@ -119,6 +119,8 @@ pub struct DevicesView {
     pub system_part_offered: bool,
     /// A message for the status bar. The app shows it.
     pub status: Option<String>,
+    /// The OSC tab.
+    pub osc: crate::osc_view::OscTab,
 }
 
 struct Tab<'a> {
@@ -155,6 +157,11 @@ impl DevicesView {
         modifiers: &[gob_core::Modifier],
     ) {
         for event in events {
+            // OSC messages also while not following: a listening OSC tab adds them.
+            if let InputEvent::Osc { address, value } = event {
+                self.osc.heard(address, value, focus);
+                continue;
+            }
             if !focus {
                 continue;
             }
@@ -355,6 +362,7 @@ impl DevicesView {
         let keyboard_name = i18n.tr("keyboard-device");
         let voice_name = i18n.tr("voice-device");
         let events_name = i18n.tr("events-device");
+        let osc_name = i18n.tr("osc-device");
         if let Some(p) = profile {
             let known = |guid: &str| {
                 p.profile
@@ -409,6 +417,13 @@ impl DevicesView {
                 logical: false,
             });
             tabs.push(Tab {
+                guid: gob_core::OSC_GUID,
+                name: &osc_name,
+                live: None,
+                alias: None,
+                logical: false,
+            });
+            tabs.push(Tab {
                 guid: gob_core::EVENTS_GUID,
                 name: &events_name,
                 live: None,
@@ -430,6 +445,7 @@ impl DevicesView {
                 Ok("keyboard") => Some(gob_core::KEYBOARD_GUID),
                 Ok("voice") => Some(gob_core::VOICE_GUID),
                 Ok("events") => Some(gob_core::EVENTS_GUID),
+                Ok("osc") => Some(gob_core::OSC_GUID),
                 Ok("logical") => Some(gob_core::LOGICAL_DEVICE_GUID),
                 _ => None,
             };
@@ -437,6 +453,17 @@ impl DevicesView {
                 self.selected = Some(g.to_string());
                 self.user_selected = true;
             }
+        }
+        // A message from a known OSC address shows its input, like a pressed button (a
+        // button's release does not).
+        if let (Some((address, value)), Some(p)) = (self.osc.used.take(), profile)
+            && let Some(input) = p.profile.osc_input_at(&address)
+            && !(input.kind == gob_core::OscKind::Button
+                && value.is_some_and(|v| !gob_core::osc_pressed(v)))
+        {
+            let key = (osc_kind(input.kind), input.id);
+            self.selected = Some(gob_core::OSC_GUID.to_string());
+            self.scroll_to = Some((gob_core::OSC_GUID.to_string(), key));
         }
         let valid = self
             .selected
@@ -511,6 +538,7 @@ impl DevicesView {
                             _ if is_keyboard(t) => (icon::KEYBOARD, Some("keyboard-tip")),
                             _ if is_voice(t) => (icon::MICROPHONE, Some("voice-tip")),
                             _ if is_events(t) => (icon::LIGHTNING, Some("events-tip")),
+                            _ if is_osc(t) => (icon::BROADCAST, Some("osc-tip")),
                             (Some(_), Some(_)) => (icon::LINK, Some("device-linked")),
                             (Some(_), None) => (icon::JOYSTICK, None),
                             (None, _) => (icon::PLUGS, Some("device-disconnected")),
@@ -668,6 +696,14 @@ impl DevicesView {
             for c in &p.profile.key_combos {
                 rows.entry((Kind::Combo, c.id)).or_insert(Bound::None);
                 labels.insert((Kind::Combo, c.id), combo_name(i18n, &c.keys));
+            }
+        }
+        // OSC inputs, named by their address.
+        if let (true, Some(p)) = (is_osc(tab), profile) {
+            for i in &p.profile.osc_inputs {
+                let key = (osc_kind(i.kind), i.id);
+                rows.entry(key).or_insert(Bound::None);
+                labels.insert(key, i.address.clone());
             }
         }
         // Profile events, always all of them.
@@ -1184,6 +1220,11 @@ impl DevicesView {
         if is_voice(tab) {
             self.voice_tools(ui, i18n, &p.profile, ops);
         }
+        if is_osc(tab)
+            && let Some((kind, id)) = self.osc.tools(ui, i18n, &p.profile, ops)
+        {
+            self.show_input(gob_core::OSC_GUID, (osc_kind(kind), id));
+        }
         if is_events(tab) {
             ui.label(RichText::new(i18n.tr("events-head")).weak());
             ui.separator();
@@ -1505,6 +1546,15 @@ impl DevicesView {
             && let Some(command) = p.profile.voice_command(key.1)
         {
             crate::voice_view::command_editor(ui, i18n, &p.profile, command, ops);
+        } else if let (true, Some(p)) = (is_osc(tab), profile)
+            && let Some(input) = p
+                .profile
+                .osc_input(key.1)
+                .filter(|i| osc_kind(i.kind) == key.0)
+        {
+            if let Some(text) = self.osc.input_editor(ui, i18n, &p.profile, input, ops) {
+                self.status = Some(text);
+            }
         } else if let (Kind::Combo, Some(p)) = (key.0, profile)
             && let Some(combo) = p.profile.key_combo(key.1)
         {
@@ -2251,6 +2301,18 @@ fn is_events(tab: &Tab) -> bool {
     tab.guid == gob_core::EVENTS_GUID
 }
 
+fn is_osc(tab: &Tab) -> bool {
+    tab.guid == gob_core::OSC_GUID
+}
+
+/// The kind of input an OSC input is listed as.
+fn osc_kind(kind: gob_core::OscKind) -> Kind {
+    match kind {
+        gob_core::OscKind::Axis => Kind::Axis,
+        gob_core::OscKind::Button => Kind::Button,
+    }
+}
+
 /// The tab of one of the program's own devices, not a controller.
 fn is_builtin(tab: &Tab) -> bool {
     tab.logical || gob_core::is_builtin_device(tab.guid)
@@ -2437,6 +2499,9 @@ pub(crate) fn device_name(i18n: &I18n, profile: &Profile, guid: &str) -> String 
     }
     if guid.eq_ignore_ascii_case(gob_core::EVENTS_GUID) {
         return i18n.tr("events-device");
+    }
+    if guid.eq_ignore_ascii_case(gob_core::OSC_GUID) {
+        return i18n.tr("osc-device");
     }
     profile
         .devices

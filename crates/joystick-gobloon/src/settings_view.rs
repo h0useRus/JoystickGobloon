@@ -19,6 +19,7 @@ pub enum SettingsTab {
     General,
     Voice,
     Overlay,
+    Panels,
     Lighting,
     About,
 }
@@ -56,6 +57,8 @@ pub struct Attached<'a> {
     pub voice: &'a mut crate::voice::VoicePanel,
     /// The overlay, placed from its tab.
     pub overlay: &'a mut crate::overlay::Overlay,
+    /// Whether OSC messages are received now.
+    pub osc: gob_input::OscStatus,
 }
 
 pub fn show(
@@ -88,6 +91,7 @@ pub fn show(
                 icon::PICTURE_IN_PICTURE,
                 "settings-overlay",
             ),
+            (SettingsTab::Panels, icon::GRID_NINE, "settings-panels"),
             (SettingsTab::Lighting, icon::LIGHTBULB, "settings-lighting"),
             (SettingsTab::About, icon::INFO, "settings-about"),
         ] {
@@ -125,11 +129,90 @@ pub fn show(
             .then_some(Change::Voice),
         SettingsTab::Overlay => crate::overlay::settings_tab(ui, i18n, settings, attached.overlay)
             .then_some(Change::Overlay),
+        SettingsTab::Panels => {
+            panels(ui, i18n, settings, &attached.osc);
+            None
+        }
         SettingsTab::Lighting => lighting(ui, i18n, settings, attached.led_devices),
         SettingsTab::About => {
             about(ui, i18n, logo, updater);
             None
         }
+    }
+}
+
+/// Panels tab: receiving OSC (touch panels, Bitfocus Companion for Stream Deck and the like).
+/// The app applies the settings every frame.
+fn panels(ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings, status: &gob_input::OscStatus) {
+    section_title(ui, icon::BROADCAST, &i18n.tr("settings-group-osc"));
+    ui.label(RichText::new(i18n.tr("settings-osc-hint")).weak());
+    ui.add_space(4.0);
+    let on = ui
+        .add(style::switch(
+            &mut settings.osc_on,
+            i18n.tr("settings-osc-on"),
+        ))
+        .on_hover_text(i18n.tr("settings-osc-on-tip"));
+    let port = ui
+        .add_enabled_ui(settings.osc_on, |ui| {
+            ui.horizontal(|ui| {
+                let r = ui.add(style::Spin::new(&mut settings.osc_port).range(1024..=65535));
+                ui.label(i18n.tr("settings-osc-port"));
+                r
+            })
+            .inner
+        })
+        .inner
+        .on_hover_text(i18n.tr("settings-osc-port-tip"));
+    let network = ui
+        .add_enabled(
+            settings.osc_on,
+            style::switch(&mut settings.osc_network, i18n.tr("settings-osc-network")),
+        )
+        .on_hover_text(i18n.tr("settings-osc-network-tip"));
+    if settings.osc_on && settings.osc_network {
+        ui.label(
+            RichText::new(format!(
+                "{}  {}",
+                icon::WARNING,
+                i18n.tr("settings-osc-network-warn")
+            ))
+            .color(ui.visuals().warn_fg_color),
+        );
+    }
+    ui.add_space(4.0);
+    match status {
+        gob_input::OscStatus::Off => {}
+        gob_input::OscStatus::Listening(port) => {
+            ui.label(
+                RichText::new(format!(
+                    "{}  {}",
+                    icon::CHECK_CIRCLE,
+                    i18n.trf(
+                        "settings-osc-listening",
+                        &[("port", port.to_string().into())]
+                    )
+                ))
+                .weak(),
+            );
+        }
+        gob_input::OscStatus::Failed(error) => {
+            ui.label(
+                RichText::new(format!(
+                    "{}  {}",
+                    icon::WARNING,
+                    i18n.trf(
+                        "settings-osc-failed",
+                        &[("port", settings.osc_port.to_string().into())]
+                    )
+                ))
+                .color(ui.visuals().warn_fg_color),
+            )
+            .on_hover_text(error);
+        }
+    }
+    if on.changed() || port.changed() || network.changed() {
+        settings.save();
     }
 }
 

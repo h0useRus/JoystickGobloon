@@ -114,6 +114,10 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
                 p.game_bindings = games_from(section);
                 Section::GameBindings
             }
+            "osc-inputs" => {
+                p.osc_inputs = osc_from(section);
+                Section::OscInputs
+            }
             _ => {
                 p.extra.push(section.clone());
                 Section::Extra(p.extra.len() - 1)
@@ -140,6 +144,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
             Section::VoiceCommands => p.voice_commands.is_empty(),
             Section::KeyCombos => p.key_combos.is_empty(),
             Section::GameBindings => p.game_bindings.is_empty(),
+            Section::OscInputs => p.osc_inputs.is_empty(),
             _ => false,
         };
         if empty {
@@ -184,6 +189,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
             Section::VoiceCommands => voice_to(p),
             Section::KeyCombos => combos_to(&p.key_combos),
             Section::GameBindings => games_to(&p.game_bindings),
+            Section::OscInputs => osc_to(&p.osc_inputs),
             Section::Extra(i) => p.extra[i].clone(),
         });
     }
@@ -459,6 +465,58 @@ fn combos_to(combos: &[gob_core::KeyCombo]) -> Element {
                 }),
             )
             .with_attr("id", c.id.to_string())
+        }),
+    )
+}
+
+/// `<osc-inputs>`: `<input id="1" address="/deck/fire" type="button"/>`, axes with
+/// `low="0" high="1"`. Inputs without an id or address, or with one already taken, are skipped.
+fn osc_from(section: &Element) -> Vec<gob_core::OscInput> {
+    let mut inputs: Vec<gob_core::OscInput> = Vec::new();
+    for e in named(section, "input") {
+        let Some(id) = e.attr("id").and_then(|v| v.trim().parse().ok()) else {
+            continue;
+        };
+        let Some(address) = e.attr("address").and_then(gob_core::osc_address) else {
+            continue;
+        };
+        if id == 0 || inputs.iter().any(|o| o.id == id || o.address == address) {
+            continue;
+        }
+        let kind = e
+            .attr("type")
+            .and_then(gob_core::OscKind::parse)
+            .unwrap_or_default();
+        let mut input = gob_core::OscInput::new(id, &address, kind);
+        let number = |name: &str| {
+            e.attr(name)
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .filter(|v| v.is_finite())
+        };
+        if let (Some(low), Some(high)) = (number("low"), number("high"))
+            && low != high
+        {
+            (input.low, input.high) = (low, high);
+        }
+        inputs.push(input);
+    }
+    inputs
+}
+
+fn osc_to(inputs: &[gob_core::OscInput]) -> Element {
+    container(
+        "osc-inputs",
+        inputs.iter().map(|i| {
+            let el = Element::new("input")
+                .with_attr("id", i.id.to_string())
+                .with_attr("address", &i.address)
+                .with_attr("type", i.kind.input_type());
+            match i.kind {
+                gob_core::OscKind::Axis => el
+                    .with_attr("low", i.low.to_string())
+                    .with_attr("high", i.high.to_string()),
+                gob_core::OscKind::Button => el,
+            }
         }),
     )
 }

@@ -80,6 +80,8 @@ pub enum NewAction {
     AxisZones,
     PauseResume,
     RunCommand,
+    /// To Bitfocus Companion on this computer, no address or arguments yet; sends on press.
+    SendOsc,
     /// Axis `axis` of virtual stick `device`; a press sets it to the top.
     ButtonAxis {
         device: u32,
@@ -686,6 +688,15 @@ impl Action {
                 vec![
                     prop("string", "executable", ""),
                     prop("string", "arguments", ""),
+                ],
+                "press",
+            ),
+            NewAction::SendOsc => Self::build(
+                crate::osc::SEND_OSC,
+                vec![
+                    prop("string", "host", crate::osc::OSC_SEND_HOST),
+                    prop("int", "port", crate::osc::OSC_SEND_PORT.to_string()),
+                    prop("string", "address", "/"),
                 ],
                 "press",
             ),

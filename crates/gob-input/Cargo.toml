@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+gob-osc.workspace = true
 log.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]

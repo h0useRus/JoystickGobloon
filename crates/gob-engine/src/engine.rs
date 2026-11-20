@@ -61,6 +61,21 @@ enum VjoyTarget {
     Hat(u8),
 }
 
+/// An argument of a send-osc message.
+#[derive(Debug, Clone)]
+enum OscOut {
+    Fixed(gob_osc::Arg),
+    /// The value of the input that runs the action (an axis 0..1, a button 1 / 0).
+    Input,
+}
+
+/// An OSC input as the engine answers it.
+#[derive(Debug, Clone)]
+struct OscRoute {
+    key: InputKey,
+    input: gob_core::OscInput,
+}
+
 #[derive(Debug, Clone, Copy)]
 enum ChangeKind {
     Switch,
@@ -173,6 +188,14 @@ enum Node {
     },
     LoadProfile {
         file: String,
+        act: ActivationMode,
+    },
+    /// send-osc: the message, with the arguments that take the input's value marked.
+    SendOsc {
+        host: String,
+        port: u16,
+        address: String,
+        args: Vec<OscOut>,
         act: ActivationMode,
     },
     PlaySound {
@@ -399,6 +422,8 @@ enum TimerKind {
     VoiceScope,
     /// A profile event's button (by its id) goes up.
     EventRelease(u32),
+    /// The short press of an OSC button message without a number ends (input id).
+    OscRelease(u32),
     /// A Delay's time is up.
     DelayFire(NodeId),
     /// The action a run-action macro step pressed is released.
@@ -675,6 +700,10 @@ pub struct Engine {
     voice_holds: HashMap<u32, Duration>,
     /// Release timer of each voice command whose button is down.
     voice_releases: HashMap<u32, u64>,
+    /// The profile's OSC inputs by address.
+    osc_routes: HashMap<String, OscRoute>,
+    /// Release timer of each OSC button (by input id) pressed by a message without a number.
+    osc_releases: HashMap<u32, u64>,
     /// Delays pressed and not let go yet or not run yet.
     delays: HashMap<NodeId, DelayState>,
     /// Release timer of each profile event (by id) whose button is down, with the mode it runs
@@ -824,6 +853,8 @@ impl Engine {
                 .map(|c| (c.id, Duration::from_secs_f64(c.hold.clamp(0.01, 10.0))))
                 .collect(),
             voice_releases: HashMap::new(),
+            osc_routes: HashMap::new(),
+            osc_releases: HashMap::new(),
             delays: HashMap::new(),
             event_releases: HashMap::new(),
             mode_event_depth: 0,
@@ -1027,6 +1058,29 @@ impl Engine {
         engine.compiled_decrease.clear();
         engine.compiled_lights.clear();
         engine.inherit_modes(profile);
+        let osc = engine.device(gob_core::OSC_GUID);
+        engine.osc_routes = profile
+            .osc_inputs
+            .iter()
+            .map(|i| {
+                let kind = match i.kind {
+                    gob_core::OscKind::Axis => InputKind::Axis,
+                    gob_core::OscKind::Button => InputKind::Button,
+                };
+                let key = InputKey {
+                    device: osc.clone(),
+                    kind,
+                    id: i.id,
+                };
+                (
+                    i.address.clone(),
+                    OscRoute {
+                        key,
+                        input: i.clone(),
+                    },
+                )
+            })
+            .collect();
         let keyboard = engine.device(gob_core::KEYBOARD_GUID);
         engine.combos = profile
             .key_combos
@@ -1277,6 +1331,19 @@ impl Engine {
                 }
                 ActionKind::LoadProfile { file } => Node::LoadProfile {
                     file: file.to_string(),
+                    act: action.activation_mode(),
+                },
+                ActionKind::SendOsc {
+                    host,
+                    port,
+                    address,
+                    args,
+                } => Node::SendOsc {
+                    host: host.to_string(),
+                    port,
+                    // OSC addresses start with `/`: one typed without it is sent with it.
+                    address: gob_core::osc_address(address).unwrap_or_default(),
+                    args: args.iter().map(osc_out).collect(),
                     act: action.activation_mode(),
                 },
                 ActionKind::PlaySound { file, volume } => Node::PlaySound {
@@ -1784,6 +1851,60 @@ impl Engine {
         }
     }
 
+    /// An OSC message with `address` arrived, its first argument as a number (`value`). An axis
+    /// input moves to it (messages without one are ignored); a button is pressed from half of 1
+    /// up, and a message without a number presses it for [`gob_core::OSC_PULSE_MS`] (again
+    /// while down: that long from now). Addresses the profile does not know are ignored.
+    pub fn osc(&mut self, address: &str, value: Option<f64>, now: Instant, out: &mut dyn Output) {
+        let Some(route) = self.osc_routes.get(address) else {
+            return;
+        };
+        let (key, id) = (route.key.clone(), route.input.id);
+        match (route.input.kind, value) {
+            (gob_core::OscKind::Axis, Some(n)) => {
+                let v = route.input.axis_value(n);
+                self.process(&key, Value::Axis(v), now, out);
+            }
+            (gob_core::OscKind::Axis, None) => {}
+            (gob_core::OscKind::Button, Some(n)) => {
+                if let Some(timer) = self.osc_releases.remove(&id) {
+                    self.timers.retain(|t| t.id != timer);
+                }
+                self.process(&key, Value::Button(gob_core::osc_pressed(n)), now, out);
+            }
+            (gob_core::OscKind::Button, None) => {
+                match self.osc_releases.remove(&id) {
+                    Some(timer) => self.timers.retain(|t| t.id != timer),
+                    None => self.process(&key, Value::Button(true), now, out),
+                }
+                let hold = Duration::from_millis(gob_core::OSC_PULSE_MS);
+                let timer = self.add_timer(now + hold, TimerKind::OscRelease(id));
+                self.osc_releases.insert(id, timer);
+            }
+        }
+    }
+
+    /// The input of OSC input `id`.
+    fn osc_key(&self, id: u32) -> Option<InputKey> {
+        self.osc_routes
+            .values()
+            .find(|r| r.input.id == id)
+            .map(|r| r.key.clone())
+    }
+
+    /// Before this engine is replaced: releases the OSC buttons a message without a number
+    /// pressed (their release timers go with this engine).
+    pub fn stop_osc(&mut self, now: Instant, out: &mut dyn Output) {
+        let mut held: Vec<(u32, u64)> = self.osc_releases.drain().collect();
+        held.sort_unstable();
+        for (id, timer) in held {
+            self.timers.retain(|t| t.id != timer);
+            if let Some(key) = self.osc_key(id) {
+                self.process(&key, Value::Button(false), now, out);
+            }
+        }
+    }
+
     /// Whether the profile has light-led actions.
     pub fn uses_lights(&self) -> bool {
         self.nodes
@@ -2164,6 +2285,12 @@ impl Engine {
                     }
                 }
                 TimerKind::DelayFire(node) => self.delay_fire(node, now, out),
+                TimerKind::OscRelease(id) => {
+                    self.osc_releases.remove(&id);
+                    if let Some(key) = self.osc_key(id) {
+                        self.process(&key, Value::Button(false), now, out);
+                    }
+                }
                 TimerKind::EventRelease(id) => {
                     if let (Some((_, mode)), Some(event)) =
                         (self.event_releases.remove(&id), ProfileEvent::from_id(id))
@@ -2988,6 +3115,29 @@ impl Engine {
                 if should_execute(act, *value) && !file.is_empty() {
                     log::info!("load-profile action: {file}");
                     out.load_profile(file);
+                }
+            }
+            Node::SendOsc {
+                ref host,
+                port,
+                ref address,
+                ref args,
+                act,
+            } => {
+                if should_execute(act, *value) && !address.is_empty() {
+                    let input = match *value {
+                        Value::Button(b) => f32::from(u8::from(b)),
+                        Value::Axis(v) => (v + 1.0) / 2.0,
+                        Value::Hat(d) => d.map_or(-1.0, |d| f32::from(d) / 100.0),
+                    };
+                    let args = args
+                        .iter()
+                        .map(|a| match a {
+                            OscOut::Fixed(arg) => arg.clone(),
+                            OscOut::Input => gob_osc::Arg::Float(input),
+                        })
+                        .collect();
+                    out.send_osc(host, port, &gob_osc::Message::new(address.clone(), args));
                 }
             }
             Node::PlaySound {
@@ -4947,6 +5097,9 @@ macro_rules! forward_output {
         fn load_profile(&mut self, file: &str) {
             self.out.load_profile(file)
         }
+        fn send_osc(&mut self, host: &str, port: u16, message: &gob_osc::Message) {
+            self.out.send_osc(host, port, message)
+        }
         fn vjoy_state(&self, device: u32, kind: InputKind, id: u32) -> Option<Value> {
             self.out.vjoy_state(device, kind, id)
         }
@@ -5052,6 +5205,26 @@ fn held_direction(held: [bool; 2]) -> f32 {
 /// tree is compiled. One without children yet has nothing to keep.
 fn is_container(action: &Action) -> bool {
     !action.child_ids().is_empty()
+}
+
+/// A send-osc argument as sent: typed numbers that do not read as one are 0.
+fn osc_out(arg: &gob_core::OscArg) -> OscOut {
+    use gob_core::OscArgKind as K;
+    use gob_osc::Arg;
+    let number = || arg.value.trim().replace(',', ".");
+    OscOut::Fixed(match arg.kind {
+        K::Int => Arg::Int(
+            number()
+                .parse::<i32>()
+                .or_else(|_| number().parse::<f64>().map(|f| f.round() as i32))
+                .unwrap_or(0),
+        ),
+        K::Float => Arg::Float(number().parse().unwrap_or(0.0)),
+        K::Text => Arg::Str(arg.value.clone()),
+        K::True => Arg::Bool(true),
+        K::False => Arg::Bool(false),
+        K::Input => return OscOut::Input,
+    })
 }
 
 fn should_execute(act: ActivationMode, value: Value) -> bool {
