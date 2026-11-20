@@ -19,6 +19,7 @@ mod logfile;
 mod macro_editor;
 mod modes_view;
 mod modifiers_view;
+mod osc_view;
 mod output_marks;
 mod overlay;
 mod platform;

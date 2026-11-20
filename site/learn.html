@@ -90,6 +90,7 @@
       <li><a href="learn.html" aria-current="page">Learning</a></li>
       <li><a href="emulation.html">Emulation</a></li>
       <li><a href="voice.html">Voice</a></li>
+      <li><a href="panels.html">Panels</a></li>
       <li><a href="scripts.html">Scripts</a></li>
       <li><a href="game.html">Games</a></li>
       <li><a href="index.html#platforms">Windows and Linux</a></li>
@@ -111,11 +112,12 @@
       <li style="--i:3"><a href="learn.html" aria-current="page">Learning</a></li>
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
       <li style="--i:5"><a href="voice.html">Voice</a></li>
-      <li style="--i:6"><a href="scripts.html">Scripts</a></li>
-      <li style="--i:7"><a href="game.html">Games</a></li>
-      <li style="--i:8"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:9"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:10"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:6"><a href="panels.html">Panels</a></li>
+      <li style="--i:7"><a href="scripts.html">Scripts</a></li>
+      <li style="--i:8"><a href="game.html">Games</a></li>
+      <li style="--i:9"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:10"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:11"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -184,6 +186,7 @@
             <li><a href="#text-to-speech">Text to speech</a></li>
             <li><a href="#voice-input">Voice input</a></li>
             <li><a href="#run-command">Run command</a></li>
+            <li><a href="#send-osc">Send OSC</a></li>
             <li><a href="#description">Description</a></li>
           </ul></li>
           </ul>
@@ -496,6 +499,11 @@
             <p>Starts a program, with arguments if needed.</p>
             <figure class="shot"><img src="img/actions/run-command.png" loading="lazy" alt="Run command: notepad.exe"></figure>
           </article>
+          <article class="learn-action" id="send-osc">
+            <h3><i class="ph ph-paper-plane-right" aria-hidden="true"></i>Send OSC</h3>
+            <p>Sends an OSC message to a program or device: to Bitfocus Companion to change the text or color of a Stream Deck key, to a touch panel to light a control, or to anything else that listens for OSC. Set where to (127.0.0.1 is this computer; it starts with Companion's port, 12321), the address, and the arguments in order: integers, numbers, text, true, false, or the input's own value (0 to 1 for an axis, 1 or 0 for a button). On a button it sends on press, release or both; on an axis, every time the axis moves. Put it on the Events tab's Mode enter to show the mode on your panel. <a href="panels.html">Stream Deck and touch panels</a> shows the whole setup, and how panels send their keys and faders here as inputs.</p>
+            <figure class="shot"><img src="img/actions/send-osc.png" loading="lazy" alt="The /deck/mode input: Change mode to Landing, then Send OSC to 127.0.0.1 port 12321, address /location/1/0/2/style/text, one text argument LANDING, on press"></figure>
+          </article>
           <article class="learn-action" id="description">
             <h3><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</h3>
             <p>A note that does nothing when the input is used: what this input is for, for you and whoever uses the profile next. It reads as text; click it to edit it.</p>
@@ -521,6 +529,7 @@
             <li><a href="learn.html">Learning</a></li>
             <li><a href="emulation.html">Emulation</a></li>
             <li><a href="voice.html">Voice</a></li>
+            <li><a href="panels.html">Panels</a></li>
             <li><a href="scripts.html">Scripts</a></li>
             <li><a href="game.html">Games</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>

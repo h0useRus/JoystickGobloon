@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stream Deck, touch panels and OSC | Joystick Gobloon</title>
+  <meta name="description" content="Use a Stream Deck, Loupedeck or a touch panel app with Joystick Gobloon: keys and faders arrive over OSC through Bitfocus Companion and work like joystick buttons and axes, and profiles can put the mode on the keys.">
+  <link rel="canonical" href="https://h0userus.github.io/joystick-gobloon/panels.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Joystick Gobloon">
+  <meta property="og:title" content="Stream Deck, touch panels and OSC | Joystick Gobloon">
+  <meta property="og:description" content="Use a Stream Deck, Loupedeck or a touch panel app with Joystick Gobloon: keys and faders arrive over OSC through Bitfocus Companion and work like joystick buttons and axes, and profiles can put the mode on the keys.">
+  <meta property="og:url" content="https://h0userus.github.io/joystick-gobloon/panels.html">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Stream Deck, touch panels and OSC | Joystick Gobloon">
+  <meta name="twitter:description" content="Use a Stream Deck, Loupedeck or a touch panel app with Joystick Gobloon: keys and faders arrive over OSC through Bitfocus Companion and work like joystick buttons and axes, and profiles can put the mode on the keys.">
+  <meta name="twitter:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
+  <meta name="author" content="Denis Ibragimov">
+  <meta name="theme-color" content="#131209">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/icon-256.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": "Stream Deck and touch panels over OSC",
+      "description": "Use a Stream Deck, Loupedeck or a touch panel app with Joystick Gobloon: keys and faders arrive over OSC through Bitfocus Companion and work like joystick buttons and axes, and profiles can put the mode on the keys.",
+      "url": "https://h0userus.github.io/joystick-gobloon/panels.html",
+      "inLanguage": "en",
+      "image": "https://h0userus.github.io/joystick-gobloon/img/og.jpg",
+      "author": {
+        "@type": "Person",
+        "name": "Denis Ibragimov",
+        "url": "https://github.com/h0useRus"
+      },
+      "about": {
+        "@id": "https://h0userus.github.io/joystick-gobloon/#app"
+      },
+      "isPartOf": {
+        "@id": "https://h0userus.github.io/joystick-gobloon/#website"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Joystick Gobloon",
+          "item": "https://h0userus.github.io/joystick-gobloon/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Panels",
+          "item": "https://h0userus.github.io/joystick-gobloon/panels.html"
+        }
+      ]
+    }
+  ]
+}
+  </script>
+  <script>document.documentElement.classList.remove("no-js")</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <nav class="nav" aria-label="Main">
+    <a class="brand" href="index.html" aria-label="Joystick Gobloon home">
+      <img src="img/icon.svg" alt="" width="24" height="24">
+      Joystick Gobloon
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html#how">How it works</a></li>
+      <li><a href="start.html">Get started</a></li>
+      <li><a href="learn.html">Learning</a></li>
+      <li><a href="emulation.html">Emulation</a></li>
+      <li><a href="voice.html">Voice</a></li>
+      <li><a href="panels.html" aria-current="page">Panels</a></li>
+      <li><a href="scripts.html">Scripts</a></li>
+      <li><a href="game.html">Games</a></li>
+      <li><a href="index.html#platforms">Windows and Linux</a></li>
+      <li><a href="index.html#faq">FAQ</a></li>
+    </ul>
+    <a class="btn btn-primary btn-sm nav-cta" href="https://github.com/h0useRus/JoystickGobloon/releases/latest">
+      <i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+      <span></span><span></span>
+    </button>
+  </nav>
+
+  <div class="menu" id="menu" aria-hidden="true">
+    <ul>
+      <li style="--i:0"><a href="index.html#features">Features</a></li>
+      <li style="--i:1"><a href="index.html#how">How it works</a></li>
+      <li style="--i:2"><a href="start.html">Get started</a></li>
+      <li style="--i:3"><a href="learn.html">Learning</a></li>
+      <li style="--i:4"><a href="emulation.html">Emulation</a></li>
+      <li style="--i:5"><a href="voice.html">Voice</a></li>
+      <li style="--i:6"><a href="panels.html" aria-current="page">Panels</a></li>
+      <li style="--i:7"><a href="scripts.html">Scripts</a></li>
+      <li style="--i:8"><a href="game.html">Games</a></li>
+      <li style="--i:9"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:10"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:11"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+    </ul>
+  </div>
+
+  <main id="main">
+    <header class="learn-hero">
+      <div class="wrap">
+        <p class="kicker">Panels</p>
+        <h1 class="gradient">Stream Deck keys,<br>joystick buttons</h1>
+        <p class="sub">A Stream Deck, a Loupedeck or a touch panel on your tablet becomes one more controller: its keys work like joystick buttons, its faders like axes, with every action, mode and modifier. And the profile can write back, so the keys show the mode you are in.</p>
+      </div>
+    </header>
+
+    <div class="wrap learn">
+      <aside class="toc" aria-label="On this page">
+        <details>
+          <summary>On this page<i class="ph-bold ph-caret-down" aria-hidden="true"></i></summary>
+          <ul>
+          <li><a class="toc-group" href="#idea">The idea</a><ul>
+            <li><a href="#how-it-works">How it works</a></li>
+            <li><a href="#requirements">What you need</a></li>
+            <li><a href="#network">This computer or the network</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#stream-deck">Stream Deck with Companion</a><ul>
+            <li><a href="#receive">1. Receive OSC</a></li>
+            <li><a href="#companion">2. Companion</a></li>
+            <li><a href="#companion-key">3. A key sends a message</a></li>
+            <li><a href="#inputs">4. The input in Joystick Gobloon</a></li>
+            <li><a href="#feedback">5. Back to the keys</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#touch">Touch panels</a><ul>
+            <li><a href="#touch-setup">Setting one up</a></li>
+            <li><a href="#axes">Faders and their range</a></li>
+          </ul></li>
+          <li><a class="toc-group" href="#reference">Reference</a><ul>
+            <li><a href="#messages">What a message does</a></li>
+            <li><a href="#troubleshooting">When something is off</a></li>
+          </ul></li>
+          </ul>
+        </details>
+      </aside>
+
+      <div class="learn-body">
+        <section class="learn-group" id="idea" aria-labelledby="idea-title">
+          <h2 id="idea-title">The idea</h2>
+          <article class="learn-action" id="how-it-works">
+            <h3><i class="ph ph-broadcast" aria-hidden="true"></i>How it works</h3>
+            <p>Panels talk OSC (Open Sound Control): small network messages with an address such as <code>/deck/gear</code> and a value. Joystick Gobloon listens for them, and every address you add becomes an input on the <span class="term">OSC</span> tab of the Devices page, a button or an axis. You give it actions like any stick button: <a href="learn.html#map-to-vjoy">Map to virtual stick</a>, a key, a macro, a mode change.</p>
+            <p>A Stream Deck does not speak OSC itself. <a href="https://bitfocus.io/companion">Bitfocus Companion</a>, a free program for Windows, Linux and macOS, runs the Stream Deck and sends an OSC message when a key goes down or up. Companion also drives a Loupedeck, an X-keys and many other button panels, so all of them work the same way. Touch panel apps such as <a href="https://hexler.net/touchosc">TouchOSC</a> and <a href="https://openstagecontrol.ammd.net/">Open Stage Control</a> send OSC directly.</p>
+            <p>The <a href="learn.html#send-osc">Send OSC</a> action goes the other way: it sends a message from the profile, so a key's text or color can follow the mode, or a light on the panel can show that the gear is down.</p>
+          </article>
+          <article class="learn-action" id="requirements">
+            <h3><i class="ph ph-list-checks" aria-hidden="true"></i>What you need</h3>
+            <ul>
+              <li>Joystick Gobloon on Windows or Linux.</li>
+              <li>For a Stream Deck or another button panel: <a href="https://bitfocus.io/companion">Bitfocus Companion</a> 3 or newer, with its <span class="term">Generic: OSC</span> connection. Close the Elgato Stream Deck software while Companion runs: only one program can use the Stream Deck.</li>
+              <li>For a touch panel: an OSC app on your tablet or phone, on the same network as the computer.</li>
+            </ul>
+          </article>
+          <article class="learn-action" id="network">
+            <h3><i class="ph ph-shield-check" aria-hidden="true"></i>This computer or the network</h3>
+            <p>OSC messages have no password: whoever can send them can press your inputs. So Joystick Gobloon listens only to programs on this computer, which is all Companion needs when it runs on the same PC. A tablet or another computer needs <span class="term">From the network</span> on (below); turn it on only at home or on another network you trust. The first time, Windows asks whether Joystick Gobloon may use the network: allow it for private networks.</p>
+            <p>OSC messages only press inputs of the profile. They never start programs or change settings.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="stream-deck" aria-labelledby="stream-deck-title">
+          <h2 id="stream-deck-title">Stream Deck with Companion</h2>
+          <article class="learn-action" id="receive">
+            <h3><i class="ph ph-gear" aria-hidden="true"></i>1. Receive OSC</h3>
+            <p>Open <span class="term">Settings</span>, <span class="term">Panels</span> and switch on <span class="term">Receive OSC</span>. The port is where panels send to, 8000 unless you change it. The line below says <span class="term">Receiving on port 8000</span> once it works; if another program has the port, it says so, and you pick another one (and use the same in Companion).</p>
+            <figure class="shot"><img src="img/osc-settings.png" loading="lazy" width="1102" height="732" alt="Settings, Panels: Receive OSC switched on, port 8000, From the network off, and the line Receiving on port 8000"></figure>
+          </article>
+          <article class="learn-action" id="companion">
+            <h3><i class="ph ph-plugs-connected" aria-hidden="true"></i>2. Companion</h3>
+            <p>Install and start Companion and open its web page (the launcher has a button for it). Your Stream Deck shows up under <span class="term">Surfaces</span>. Under <span class="term">Connections</span>, add <span class="term">Generic: OSC</span> and set its target: host <code>127.0.0.1</code>, port <code>8000</code> (the port from step 1). Companion running on another computer needs that computer's address in Joystick Gobloon's place and <a href="#network">From the network</a> on.</p>
+          </article>
+          <article class="learn-action" id="companion-key">
+            <h3><i class="ph ph-hand-pointing" aria-hidden="true"></i>3. A key sends a message</h3>
+            <p>In Companion's <span class="term">Buttons</span> page, pick a key and give it a name to show, such as <em>GEAR</em>. Under <span class="term">Press actions</span>, add the OSC connection's <span class="term">Send integer</span> with the path <code>/deck/gear</code> and the value <code>1</code>; under <span class="term">Release actions</span>, the same path with <code>0</code>. Now Joystick Gobloon sees the key held exactly as long as you hold it, so <span class="term">Short / long press</span>, holds and modifiers all work.</p>
+            <p>Any path works as long as each key has its own; <code>/deck/</code> and a name keep them easy to tell apart. A key that only needs a tap can send <span class="term">Send message without arguments</span> on press alone: Joystick Gobloon takes that as a short press (0.1 s).</p>
+          </article>
+          <article class="learn-action" id="inputs">
+            <h3><i class="ph ph-joystick" aria-hidden="true"></i>4. The input in Joystick Gobloon</h3>
+            <p>Open the <span class="term">OSC</span> tab on the Devices page. The quickest way to add a key: click the ear, then press the key on the Stream Deck. Its address is added as a button input and selected. You can also type the address and click the plus. Then add actions to it on the right, as for any button.</p>
+            <p>The head of the editor shows the address (click to change it), whether the input is a <span class="term">Button</span> or an <span class="term">Axis</span>, and the last value that arrived, which tells you at once whether messages come through. The bin removes the input with its actions. With <span class="term">Follow the input in use</span> (Settings, General) on, pressing a key on the panel selects its input, like a stick button.</p>
+            <figure class="shot"><img src="img/osc.png" loading="lazy" width="1102" height="732" alt="OSC tab: the inputs /panel/throttle (an axis), /deck/gear, /deck/lights and /deck/mode; /panel/throttle is selected, its range 0 to 1, last value 0.730, mapped to the Z axis of vJoy 1"></figure>
+          </article>
+          <article class="learn-action" id="feedback">
+            <h3><i class="ph ph-paper-plane-right" aria-hidden="true"></i>5. Back to the keys</h3>
+            <p>Companion listens for OSC too, on port 12321 (switch on its OSC listener in Companion's settings if it is off). The <a href="learn.html#send-osc">Send OSC</a> action sends to it, and starts with that address and port. Companion's own paths change its keys:</p>
+            <dl class="trouble">
+              <dt><code>/location/1/0/2/style/text</code> with a text</dt>
+              <dd>Sets the text of the key on page 1, row 0, column 2 (rows and columns count from 0, the top left key is 0/0).</dd>
+              <dt><code>/location/1/0/2/style/bgcolor</code> with three integers</dt>
+              <dd>Sets the key's background color: red, green and blue, 0 to 255 each.</dd>
+              <dt><code>/custom-variable/mode/value</code> with a text</dt>
+              <dd>Sets a Companion custom variable; keys can show the variable in their text.</dd>
+            </dl>
+            <p>Put the Send OSC action on the <a href="learn.html#events">Events</a> tab's <span class="term">Mode enter</span> in each mode, and the Stream Deck always shows the mode you are in. On the key that changes the mode itself works too: the picture shows a key that switches to Landing and writes LANDING on its own key.</p>
+            <figure class="shot"><img src="img/actions/send-osc.png" loading="lazy" alt="The /deck/mode input: Change mode to Landing, then Send OSC to 127.0.0.1 port 12321, address /location/1/0/2/style/text, one text argument LANDING, on press"></figure>
+          </article>
+        </section>
+
+        <section class="learn-group" id="touch" aria-labelledby="touch-title">
+          <h2 id="touch-title">Touch panels</h2>
+          <article class="learn-action" id="touch-setup">
+            <h3><i class="ph ph-device-tablet" aria-hidden="true"></i>Setting one up</h3>
+            <p>Switch on <span class="term">From the network</span> in Settings, Panels. In the panel app, set the OSC target to the computer's address on your network (on Windows, <code>ipconfig</code> lists it as IPv4 address, such as <code>192.168.1.20</code>) and the port from the settings. Give each control its own address, then add them on the OSC tab: click the ear and touch the control.</p>
+            <p>To light up controls on the panel, give Send OSC actions the tablet's address and the port the app listens on.</p>
+          </article>
+          <article class="learn-action" id="axes">
+            <h3><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>Faders and their range</h3>
+            <p>A fader or a knob is an <span class="term">Axis</span> input. When you add one by listening, a value between the ends makes it an axis by itself; one added while at an end (0 or 1) comes in as a button, and the list next to its address turns it into an axis. Most panels send 0 to 1, which is the axis's whole travel. A panel that sends other numbers, such as 0 to 127, gets them in <span class="term">Range</span>: the first number is one end of the axis, the second the other, so swapping them turns the axis around.</p>
+            <p>An axis input takes every action an axis does: a <a href="learn.html#response-curve">response curve</a>, <a href="learn.html#axis-zones">zones</a>, <a href="learn.html#axis-as-button">ranges as buttons</a>, and of course a virtual stick axis.</p>
+          </article>
+        </section>
+
+        <section class="learn-group" id="reference" aria-labelledby="reference-title">
+          <h2 id="reference-title">Reference</h2>
+          <article class="learn-action" id="messages">
+            <h3><i class="ph ph-list-bullets" aria-hidden="true"></i>What a message does</h3>
+            <p>The address must match an input exactly, capital letters too. Only the first value of a message counts:</p>
+            <ul>
+              <li><strong>Button</strong>: 0.5 and up presses it (1, 1.0 or true), less lets it go (0, 0.0 or false). A message without a number is a short press of 0.1 s; another one while the button is still down keeps it down for another 0.1 s.</li>
+              <li><strong>Axis</strong>: the number is placed within the range; numbers beyond it stop at the end. A message without a number does nothing.</li>
+              <li>Text that reads as a number counts as that number; other text counts as no number. Messages inside a bundle all count, in order.</li>
+            </ul>
+            <p>Send OSC sends the address and its arguments in order: integers, numbers, text, true or false, and <span class="term">Input value</span>, the value of the input that runs the action (0 to 1 for an axis, 1 or 0 for a button).</p>
+          </article>
+          <article class="learn-action" id="troubleshooting">
+            <h3><i class="ph ph-first-aid-kit" aria-hidden="true"></i>When something is off</h3>
+            <ul>
+              <li><strong>The OSC tab says receiving is off</strong>: switch on Receive OSC in Settings, Panels; the button on the tab goes there.</li>
+              <li><strong>The port is taken</strong>: another program listens on it. Choose another port in Settings, Panels and the same one in Companion or the panel app.</li>
+              <li><strong>Nothing is received</strong>: check the target in Companion (host 127.0.0.1, the port from the settings). From a tablet: From the network on, the computer's address in the app, both on the same network, and Joystick Gobloon allowed in the Windows firewall for private networks.</li>
+              <li><strong>Received, but nothing happens</strong>: the profile must be active, and the address must be exactly the input's. The <span class="term">Last value</span> line shows what arrived for an input.</li>
+              <li><strong>A key presses but never lets go</strong>: Companion sends a release only if the key has a release action. Add the same path with 0 under Release actions, or send a message without arguments for a short press.</li>
+              <li><strong>Companion's keys do not change</strong>: switch on Companion's OSC listener and check its port (12321) in the Send OSC action. The path counts rows and columns from 0.</li>
+              <li>Still stuck? Set Settings &rsaquo; General &rsaquo; Log level to Important: the log file <code>JoystickGobloon.log</code> then says where OSC is received and whether sending failed. Attach it to a <a href="https://github.com/h0useRus/JoystickGobloon/issues">bug report</a>.</li>
+            </ul>
+          </article>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div>
+          <a class="brand" href="index.html"><img src="img/icon.svg" alt="" width="24" height="24"> Joystick Gobloon</a>
+          <p>Built on <a href="https://github.com/nefarius/HidHide">HidHide</a> by Nefarius and <a href="https://github.com/shauleiz/vJoy">vJoy</a> by Shaul Eizikovich.</p>
+        </div>
+        <div>
+          <h3>Project</h3>
+          <ul>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/releases">Releases</a></li>
+            <li><a href="start.html">Get started</a></li>
+            <li><a href="learn.html">Learning</a></li>
+            <li><a href="emulation.html">Emulation</a></li>
+            <li><a href="voice.html">Voice</a></li>
+            <li><a href="panels.html">Panels</a></li>
+            <li><a href="scripts.html">Scripts</a></li>
+            <li><a href="game.html">Games</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
+            <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>
+            <li><a href="https://www.paypal.com/paypalme/h0userus" rel="noopener">Donate with PayPal</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Legal</h3>
+          <ul>
+            <li><a href="privacy.html">Privacy</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/LICENSE">License and terms (MIT)</a></li>
+            <li><a href="https://github.com/h0useRus/JoystickGobloon/blob/main/docs/CODE_SIGNING.md">Code signing policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="copyright">© 2026 Denis Ibragimov. Joystick Gobloon is released under the MIT license.</p>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

@@ -34,6 +34,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   events.rs = profile events (`EVENTS_GUID`, input type `event`: start/stop/mode enter/leave, Events tab), run by
   the engine's `profile_started`/`profile_stopping`/mode changes; `send-state` on a sequence = held button's press at start
   combos.rs = key combinations (`<key-combos>`, keyboard input type `combo`, ids offset by COMBO_ID_BASE in the engine)
+  osc.rs = OSC inputs (`OSC_GUID`, `<osc-inputs>`: address -> axis/button input with a low..high range, OSC tab) and the
+  `send-osc` action (host, port, address, `<argument>`s; default Bitfocus Companion 127.0.0.1:12321)
 - crates/gob-gremlin XML <-> Element <-> Profile: Gremlin R14+ import, written as `<profile version="14">` while
   Gremlin can read it, else `<profile app="Gobloon" version="1">`; lossless round-trip; `report()`; example `resave`
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
@@ -88,6 +90,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.
   Example `hidhide_info [--all]` (read-only). Session blacklist waits for a signed 1.7.x - check
   nefarius/HidHide#217 and its releases before each gob-hidhide session (plans/HIDHIDE_PLAN.md)
+- crates/gob-osc     OSC 1.0 codec (messages, bundles) + `Listener` (UDP thread) + `Sender` (thread, resolves hosts);
+  gob-input `InputService::set_osc` (Settings > Panels: port, this PC or the network) turns messages into
+  `InputEvent::Osc`, the engine maps addresses to inputs (`Engine::osc`; no number = short press), runner sends
+  send-osc via `Output::send_osc`; Stream Deck through Bitfocus Companion (site/panels.html)
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
   semantics; platform/ = keyboard/mouse output (`Injector`) and speech (`SpeechEngine`): windows/ SendInput + SAPI (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy (`subscribe_timed`: RunnerStatus.latency = device read -> outputs written, per second, shown in the status bar);
   Runner batches writes: one driver call per virtual device and pass, unchanged values skipped (resent if a write
@@ -229,8 +235,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | modes (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting | overlay (Settings > Overlay, placing it),
-  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical | game-wiring (Game page schematic; the table is its first tab),
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | modes (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting | panels | overlay (Settings > Overlay, placing it),
+  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | osc | events | logical | game-wiring (Game page schematic; the table is its first tab),
   `JOYSTICK_GOBLOON_GAME_IMPORT=1` takes the game's bindings into a profile without any on the Game page (debug only),
   `JOYSTICK_GOBLOON_GAME_DIALOG` = capture | conflict | choose | unmapped opens that dialog of the Game page with sample data,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a

@@ -231,6 +231,14 @@ pub enum ActionKind<'a> {
         executable: &'a str,
         arguments: &'a str,
     },
+    /// Joystick Gobloon's own action: sends OSC message `address` with `args` to `host`:`port`
+    /// (crate::osc).
+    SendOsc {
+        host: &'a str,
+        port: u16,
+        address: &'a str,
+        args: Vec<crate::osc::OscArg>,
+    },
     /// Sequence of timed steps; `exclusive`/`preemptive` are kept but not executed.
     Macro {
         steps: Vec<MacroStep>,
@@ -720,6 +728,7 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "macro",
     "voice-input",
     crate::button_axis::BUTTON_AXIS,
+    crate::osc::SEND_OSC,
 ];
 
 impl Action {
@@ -1020,6 +1029,16 @@ impl Action {
             }
             "pause-resume" => ActionKind::PauseResume {
                 operation: self.str("operation").unwrap_or("Pause"),
+            },
+            crate::osc::SEND_OSC => ActionKind::SendOsc {
+                host: self
+                    .str("host")
+                    .map(str::trim)
+                    .filter(|h| !h.is_empty())
+                    .unwrap_or(crate::osc::OSC_SEND_HOST),
+                port: self.parse("port").unwrap_or(crate::osc::OSC_SEND_PORT),
+                address: self.str("address").unwrap_or_default().trim(),
+                args: crate::osc::send_osc_args(&self.items),
             },
             "run-command" => ActionKind::RunCommand {
                 executable: self.str("executable").unwrap_or_default(),

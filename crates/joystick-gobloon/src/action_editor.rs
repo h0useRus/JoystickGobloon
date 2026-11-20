@@ -330,6 +330,30 @@ pub enum Op {
         keys: Vec<gob_core::Key>,
     },
     RemoveCombo(u32),
+    /// Adds an OSC input for `address` (or finds the one that has it).
+    AddOscInput {
+        address: String,
+        kind: gob_core::OscKind,
+    },
+    SetOscAddress {
+        id: u32,
+        address: String,
+    },
+    SetOscKind {
+        id: u32,
+        kind: gob_core::OscKind,
+    },
+    SetOscRange {
+        id: u32,
+        low: f64,
+        high: f64,
+    },
+    RemoveOscInput(u32),
+    /// Replaces the arguments of a send-osc action.
+    SetOscArgs {
+        action: String,
+        args: Vec<gob_core::OscArg>,
+    },
     /// Makes a voice command saying `phrase` run `action` itself in `mode` and `layer` (the
     /// card's); `id` is the command it goes to, which the page then opens.
     VoiceFromAction {
@@ -712,6 +736,20 @@ pub fn apply(p: &mut Profile, op: Op) {
             p.set_combo_keys(id, &keys);
         }
         Op::RemoveCombo(id) => p.remove_key_combo(id),
+        Op::AddOscInput { address, kind } => {
+            p.add_osc_input(&address, kind);
+        }
+        Op::SetOscAddress { id, address } => {
+            p.set_osc_address(id, &address);
+        }
+        Op::SetOscKind { id, kind } => {
+            p.set_osc_kind(id, kind);
+        }
+        Op::SetOscRange { id, low, high } => {
+            p.set_osc_range(id, low, high);
+        }
+        Op::RemoveOscInput(id) => p.remove_osc_input(id),
+        Op::SetOscArgs { action, args } => p.set_osc_args(&action, &args),
         Op::VoiceFromAction {
             action,
             phrase,
@@ -924,6 +962,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "light-led" => icon::LIGHTBULB,
         "map-to-gamepad" => icon::GAME_CONTROLLER,
         "voice-input" => icon::MICROPHONE,
+        gob_core::SEND_OSC => icon::PAPER_PLANE_RIGHT,
         gob_core::BUTTON_AXIS => icon::SLIDERS_HORIZONTAL,
         _ => icon::PUZZLE_PIECE,
     }
@@ -1123,6 +1162,9 @@ fn addable(
         ));
     }
     list.push((icon::GIT_BRANCH, "kind-condition", NewAction::Condition));
+    if behavior != InputType::Other {
+        list.push((icon::PAPER_PLANE_RIGHT, "kind-send-osc", NewAction::SendOsc));
+    }
     list.push((icon::NOTE, "kind-description", NewAction::Description));
     list
 }
@@ -1183,6 +1225,7 @@ fn speakable(action: &Action) -> bool {
                 | "text-to-speech"
                 | "load-profile"
                 | "pause-resume"
+                | gob_core::SEND_OSC
         ),
     }
 }
@@ -1989,6 +2032,12 @@ impl Editor<'_> {
                         });
                     ui.horizontal(|ui| self.activation(ui, action));
                 }
+                ActionKind::SendOsc {
+                    host,
+                    port,
+                    address,
+                    args,
+                } => self.send_osc(ui, action, host, port, address, &args),
                 ActionKind::Description { text } => {
                     let mut text = text.to_string();
                     let note = style::EditableText::new(&mut text, ("description", id))
@@ -2153,7 +2202,7 @@ impl Editor<'_> {
         });
     }
 
-    fn activation(&mut self, ui: &mut egui::Ui, action: &Action) {
+    pub(crate) fn activation(&mut self, ui: &mut egui::Ui, action: &Action) {
         let current = action.str("activation-mode").unwrap_or("both");
         for (value, glyph, key) in [
             ("press", icon::ARROW_LINE_DOWN, "edit-on-press"),

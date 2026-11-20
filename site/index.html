@@ -134,6 +134,14 @@
         },
         {
           "@type": "Question",
+          "name": "Does it work with a Stream Deck?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, through Bitfocus Companion (free): Companion sends an OSC message for each key, and Joystick Gobloon turns it into a button you map like any stick button. Profiles can send the mode back to the keys. Touch panel apps such as TouchOSC work the same way."
+          }
+        },
+        {
+          "@type": "Question",
           "name": "Why does Windows SmartScreen warn on the first start?",
           "acceptedAnswer": {
             "@type": "Answer",
@@ -190,6 +198,7 @@
       <li><a href="learn.html">Learning</a></li>
       <li><a href="emulation.html">Emulation</a></li>
       <li><a href="voice.html">Voice</a></li>
+      <li><a href="panels.html">Panels</a></li>
       <li><a href="scripts.html">Scripts</a></li>
       <li><a href="game.html">Games</a></li>
       <li><a href="#platforms">Windows and Linux</a></li>
@@ -211,11 +220,12 @@
       <li style="--i:3"><a href="learn.html">Learning</a></li>
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
       <li style="--i:5"><a href="voice.html">Voice</a></li>
-      <li style="--i:6"><a href="scripts.html">Scripts</a></li>
-      <li style="--i:7"><a href="game.html">Games</a></li>
-      <li style="--i:8"><a href="#platforms">Windows and Linux</a></li>
-      <li style="--i:9"><a href="#faq">FAQ</a></li>
-      <li style="--i:10"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:6"><a href="panels.html">Panels</a></li>
+      <li style="--i:7"><a href="scripts.html">Scripts</a></li>
+      <li style="--i:8"><a href="game.html">Games</a></li>
+      <li style="--i:9"><a href="#platforms">Windows and Linux</a></li>
+      <li style="--i:10"><a href="#faq">FAQ</a></li>
+      <li style="--i:11"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -398,6 +408,20 @@
           </div>
           <figure class="shot" data-k="card"><div class="stage" data-story="voice"><img src="img/voice.png" loading="lazy" width="1102" height="732" alt="Voice tab: commands in the groups gear and engines, heard while Button 4 of the right stick is held; gear up presses virtual stick button 60"></div></figure>
         </article>
+
+        <article class="benefit anim">
+          <div>
+            <div class="benefit-icon" data-k="pop"><i class="ph ph-broadcast" aria-hidden="true"></i></div>
+            <h3 data-k="up">Stream Deck and touch panels as inputs</h3>
+            <p data-k="up">Keys of a Stream Deck or Loupedeck (through Bitfocus Companion) and the buttons and faders of a touch panel app arrive over OSC and work like joystick buttons and axes. <a href="panels.html">How to set it up</a>.</p>
+            <ul class="ticks">
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Press a key on the panel to add it</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>Every action, mode and modifier, like a stick button</li>
+              <li data-k="left"><i class="ph-bold ph-check" aria-hidden="true"></i>The profile can write the mode on your keys</li>
+            </ul>
+          </div>
+          <figure class="shot" data-k="card"><img src="img/osc.png" loading="lazy" width="1102" height="732" alt="OSC tab: the inputs /panel/throttle (an axis), /deck/gear, /deck/lights and /deck/mode; the throttle maps to the Z axis of vJoy 1"></figure>
+        </article>
       </div>
     </section>
 
@@ -558,6 +582,10 @@
             <div class="answer"><p>Yes, in desktop mode, like on any x86_64 Linux desktop. Make the AppImage executable (Properties, Executable as Program), start it and click Install on the System Gobloon banner once.</p></div>
           </details>
           <details>
+            <summary>Does it work with a Stream Deck?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>Yes, through <a href="https://bitfocus.io/companion">Bitfocus Companion</a> (free): Companion sends an OSC message for each key, and Joystick Gobloon turns it into a button you map like any stick button. Profiles can send the mode back to the keys. Touch panel apps such as TouchOSC work the same way. <a href="panels.html">How to set it up</a>.</p></div>
+          </details>
+          <details>
             <summary>Why does Windows SmartScreen warn on the first start?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
             <div class="answer"><p>Code signing through SignPath is being set up, and new releases need some downloads before SmartScreen trusts them. Choose More info, then Run anyway.</p></div>
           </details>
@@ -635,6 +663,7 @@
             <li><a href="learn.html">Learning</a></li>
             <li><a href="emulation.html">Emulation</a></li>
             <li><a href="voice.html">Voice</a></li>
+            <li><a href="panels.html">Panels</a></li>
             <li><a href="scripts.html">Scripts</a></li>
             <li><a href="game.html">Games</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>

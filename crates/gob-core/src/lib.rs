@@ -15,6 +15,7 @@ pub mod events;
 pub mod game;
 pub mod logical;
 pub mod modifier;
+pub mod osc;
 pub mod profile;
 pub mod script;
 pub mod two_axis;
@@ -40,6 +41,10 @@ pub use logical::{
     KEYBOARD_GUID, LOGICAL_DEVICE_GUID, LogicalInput, key_from_input_id, key_input_id,
 };
 pub use modifier::{Layer, Modifier, Selection};
+pub use osc::{
+    OSC_GUID, OSC_PULSE_MS, OSC_SEND_HOST, OSC_SEND_PORT, OscArg, OscArgKind, OscInput, OscKind,
+    SEND_OSC, is_osc_binding, osc_address, osc_pressed,
+};
 pub use profile::{
     ActionConfig, AxisDirection, Device, InputBinding, Mode, OutputUse, Profile, Section,
     VirtualButton, VirtualDevices, VirtualJoystick, VirtualOutput, same_device_name,

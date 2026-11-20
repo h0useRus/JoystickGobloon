@@ -1973,6 +1973,7 @@ dependencies = [
  "gob-gremlin",
  "gob-input",
  "gob-lighting",
+ "gob-osc",
  "gob-script",
  "gob-system",
  "gob-uinput",
@@ -2039,6 +2040,7 @@ dependencies = [
 name = "gob-input"
 version = "0.6.0"
 dependencies = [
+ "gob-osc",
  "gob-uinput",
  "libc",
  "log",
@@ -2051,6 +2053,13 @@ name = "gob-lighting"
 version = "0.6.0"
 dependencies = [
  "windows",
+]
+
+[[package]]
+name = "gob-osc"
+version = "0.6.0"
+dependencies = [
+ "log",
 ]
 
 [[package]]
@@ -2531,6 +2540,7 @@ dependencies = [
  "gob-i18n",
  "gob-input",
  "gob-lighting",
+ "gob-osc",
  "gob-script",
  "gob-system",
  "gob-ui",

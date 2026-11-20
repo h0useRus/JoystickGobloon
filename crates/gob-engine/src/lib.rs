@@ -132,6 +132,9 @@ pub trait Output {
     /// system's default one): once when the first voice-input action on it is pressed, once
     /// when the last is released. What is heard comes back as [`Engine::voice_command`].
     fn voice_listen(&mut self, _microphone: &str, _on: bool) {}
+    /// Sends an OSC message (send-osc action). Must not block: the runner hands it to a
+    /// sending thread.
+    fn send_osc(&mut self, _host: &str, _port: u16, _message: &gob_osc::Message) {}
     /// Last value sent to a vJoy input, for conditions; `None` if never set.
     fn vjoy_state(&self, _device: u32, _kind: InputKind, _id: u32) -> Option<Value> {
         None

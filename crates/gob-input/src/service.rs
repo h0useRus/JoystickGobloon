@@ -140,6 +140,28 @@ pub struct InputService {
     polling: Arc<AtomicBool>,
     /// Keyboard keys as events (low-level hook); `None` if it could not be installed.
     _keyboard: Option<crate::platform::keyboard::Hook>,
+    /// See [`InputService::set_osc`].
+    osc: Mutex<Osc>,
+    on_change: Arc<dyn Fn() + Send + Sync>,
+}
+
+/// The OSC receiver: where it was asked to listen and how that went.
+#[derive(Default)]
+struct Osc {
+    addr: Option<std::net::SocketAddr>,
+    listener: Option<gob_osc::Listener>,
+    status: OscStatus,
+}
+
+/// Whether OSC messages are received ([`InputService::set_osc`]).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum OscStatus {
+    #[default]
+    Off,
+    /// Listening on this port.
+    Listening(u16),
+    /// The port could not be taken (English, for the log and a tooltip).
+    Failed(String),
 }
 
 impl InputService {
@@ -183,6 +205,7 @@ impl InputService {
         };
         let keyboard = {
             let tx = broadcast.clone();
+            let on_change = on_change.clone();
             crate::platform::keyboard::start(Arc::new(move |scan_code, extended, pressed| {
                 let event = InputEvent::Key {
                     scan_code,
@@ -206,7 +229,58 @@ impl InputService {
             poll_interval,
             polling,
             _keyboard: keyboard,
+            osc: Mutex::default(),
+            on_change,
         }
+    }
+
+    /// Receives OSC messages on `addr` (`127.0.0.1:port` = from this computer only,
+    /// `0.0.0.0:port` = from the network too) as [`InputEvent::Osc`]; `None` stops. Cheap when
+    /// nothing changed: call it as often as the settings may have. A port that could not be
+    /// taken is tried again only when `addr` changes.
+    pub fn set_osc(&self, addr: Option<std::net::SocketAddr>) {
+        let mut osc = self.osc.lock().unwrap_or_else(|e| e.into_inner());
+        if osc.addr == addr {
+            return;
+        }
+        // The old port is let go first: the new address may be the same port on another
+        // interface.
+        osc.listener = None;
+        osc.addr = addr;
+        osc.status = OscStatus::Off;
+        let Some(addr) = addr else {
+            log::info!("OSC: receiving stopped");
+            return;
+        };
+        let (tx, on_change) = (self.broadcast.clone(), self.on_change.clone());
+        let started = gob_osc::Listener::start(addr, move |message, _from| {
+            let value = message.args.first().and_then(gob_osc::Arg::number);
+            let event = InputEvent::Osc {
+                address: message.address,
+                value,
+            };
+            tx.send(event, Instant::now());
+            on_change();
+        });
+        match started {
+            Ok(listener) => {
+                log::info!("OSC: receiving on {}", listener.local_addr());
+                osc.status = OscStatus::Listening(listener.local_addr().port());
+                osc.listener = Some(listener);
+            }
+            Err(e) => {
+                log::warn!("OSC: cannot receive on {addr}: {e}");
+                osc.status = OscStatus::Failed(e.to_string());
+            }
+        }
+    }
+
+    pub fn osc_status(&self) -> OscStatus {
+        self.osc
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .status
+            .clone()
     }
 
     /// Sets the button and hat debounce time of one device (0 = off, at most

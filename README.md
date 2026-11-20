@@ -53,6 +53,9 @@ imports Joystick Gremlin profiles and keeps the workflow you know.
 - **Device hiding** with one click on a stick's eye, so games see only the virtual devices.
 - **Voice commands**: hold a push-to-talk button and say a phrase; recognized offline on your PC
   ([how](https://h0userus.github.io/joystick-gobloon/voice.html)).
+- **Stream Deck and touch panels**: keys and faders sent over OSC (Stream Deck through Bitfocus Companion) work
+  like joystick buttons and axes, and profiles can send the mode back to the keys
+  ([how](https://h0userus.github.io/joystick-gobloon/panels.html)).
 - **Lua scripts**: your own logic next to the actions, like Joystick Gremlin's user scripts, sandboxed
   ([how](https://h0userus.github.io/joystick-gobloon/scripts.html)).
 - **Input viewer and calibration**, with a jitter filter for worn axes and debounce for bouncing buttons; tray

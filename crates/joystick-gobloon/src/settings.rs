@@ -101,6 +101,13 @@ pub struct Settings {
     /// Keep the microphones of voice commands open while a profile runs (some are silent for a
     /// moment after they open); only what is said while listening is recognized.
     pub voice_keep_open: bool,
+    /// Receive OSC messages (touch panels, Bitfocus Companion) as inputs of the OSC tab.
+    pub osc_on: bool,
+    /// The UDP port OSC messages are received on.
+    pub osc_port: u16,
+    /// Receive OSC messages from other computers and phones on the network too (else only
+    /// from programs on this computer).
+    pub osc_network: bool,
     /// The game overlay is on (its key combination shows and hides it while playing).
     pub overlay_on: bool,
     /// The overlay's top left on the screen (points); `None` = not placed yet.
@@ -194,6 +201,18 @@ pub const OTHER_PROGRAMS: &str = "*";
 /// [`AppEntry::key`] of a program's file name.
 pub fn program_key(name: &str) -> String {
     name.to_lowercase()
+}
+
+impl Settings {
+    /// Where OSC messages are received; `None` while off.
+    pub fn osc_addr(&self) -> Option<std::net::SocketAddr> {
+        let ip = if self.osc_network {
+            std::net::Ipv4Addr::UNSPECIFIED
+        } else {
+            std::net::Ipv4Addr::LOCALHOST
+        };
+        (self.osc_on && self.osc_port != 0).then(|| std::net::SocketAddr::from((ip, self.osc_port)))
+    }
 }
 
 /// A response curve saved as a preset: its type, symmetric editing and points.
@@ -382,6 +401,9 @@ impl Default for Settings {
             voice_gain: 1.0,
             voice_min_confidence: 0.5,
             voice_keep_open: true,
+            osc_on: false,
+            osc_port: gob_osc::DEFAULT_PORT,
+            osc_network: false,
             overlay_on: false,
             overlay_pos: None,
             overlay_mode: true,
