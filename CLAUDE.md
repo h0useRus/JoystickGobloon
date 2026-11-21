@@ -111,7 +111,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   (`<scripts>`: Lua code as CDATA or a file path, Gremlin's Python kept, variables in Gremlin's XML); the app reads
   external files on activation (activation.rs) and reloads when they change; Scripts page = scripts_view.rs, editor =
   gob-ui `CodeEditor`
-- crates/gob-export  game export (plans/GAME_EXPORT_PLAN.md): plugins = folders in `export/`: plugin.gob (TOML: id, name,
+- crates/gob-export  game export (plans/completed/GAME_EXPORT_PLAN.md): plugins = folders in `export/`: plugin.gob (TOML: id, name,
   supported game versions), plugin.luau (hooks targets/version/read/write, each takes one context table; sandboxed
   like gob-script, 2 s per call), catalog/<game version>.gob (the game's actions), renames.gob (ids changed between
   versions); plugins only turn text into text, the host reads and writes the game's files. Game names, formats and
