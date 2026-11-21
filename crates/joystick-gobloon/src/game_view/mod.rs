@@ -207,7 +207,9 @@ impl GameView {
         self.scan(ctx);
     }
 
-    /// The catalog for the selected target (or the profile's last export), and its fit.
+    /// The catalog for the selected target (or the profile's last export), and its fit, with
+    /// the actions the game's own files list added. A plugin that takes every action from the
+    /// game's files has no catalog: what the files list fits the game exactly.
     fn catalog(&self, profile: &Profile) -> Option<(Catalog, Fit)> {
         let plugin = self.plugin()?;
         let version = self.found().and_then(|f| f.version.clone()).or_else(|| {
@@ -215,10 +217,28 @@ impl GameView {
                 .game_bindings(&plugin.manifest.id)
                 .and_then(|g| g.version.clone())
         });
-        plugin
-            .catalogs
-            .pick(version.as_deref())
-            .map(|(c, f)| (c.clone(), f))
+        let listed = self
+            .in_game
+            .as_ref()
+            .filter(|g| g.plugin == self.selected && !g.actions.is_empty())
+            .map(|g| g.actions.as_slice());
+        let (mut catalog, fit) = match plugin.catalogs.pick(version.as_deref()) {
+            Some((c, f)) => (c.clone(), f),
+            None => {
+                listed?;
+                let catalog = Catalog {
+                    version: version.unwrap_or_else(|| "?".into()),
+                    actions: Vec::new(),
+                };
+                (catalog, Fit::Exact)
+            }
+        };
+        for a in listed.into_iter().flatten() {
+            if catalog.action(&a.id).is_none() {
+                catalog.actions.push(a.clone());
+            }
+        }
+        Some((catalog, fit))
     }
 
     fn poll(&mut self, ctx: &Context, ops: &mut Vec<Op>) {

@@ -177,6 +177,17 @@ ini = {
 	end,
 }
 
+-- Lua data files: the first table constructor in the text ("local diff = {...} return diff"), read
+-- without running anything; write gives a table constructor with sorted keys and tab indentation.
+luadata = {
+	parse = function(text)
+		return H.luadata_parse(text)
+	end,
+	write = function(value)
+		return H.luadata_write(value)
+	end,
+}
+
 -- version.compare("4.10.197", "4.9") -> 1 (also 0 and -1); missing segments count as 0.
 version = {
 	compare = function(a, b)

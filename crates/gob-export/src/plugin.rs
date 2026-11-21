@@ -306,10 +306,15 @@ impl Plugin {
         })
     }
 
-    /// The game's installs or channels the plugin finds, with the files of their globs.
+    /// The game's installs or channels the plugin finds (one per folder for a target with
+    /// `each`), with the files of their globs.
     pub fn targets(&self, env: &Env) -> Result<Vec<Target>, PluginError> {
         let targets: Vec<Target> = self.call(Hook::Targets, &TargetsContext { env })?;
-        Ok(targets.into_iter().map(crate::host::expand).collect())
+        Ok(targets
+            .into_iter()
+            .flat_map(crate::host::each)
+            .map(crate::host::expand)
+            .collect())
     }
 
     /// The game version of a target, read from its files.

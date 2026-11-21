@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Game bindings: export a profile to the game | Joystick Gobloon</title>
-  <meta name="description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous and X4: Foundations.">
+  <meta name="description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations and DCS World.">
   <link rel="canonical" href="https://h0userus.github.io/joystick-gobloon/game.html">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Joystick Gobloon">
   <meta property="og:title" content="Game bindings: export a profile to the game | Joystick Gobloon">
-  <meta property="og:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous and X4: Foundations.">
+  <meta property="og:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations and DCS World.">
   <meta property="og:url" content="https://h0userus.github.io/joystick-gobloon/game.html">
   <meta property="og:locale" content="en_US">
   <meta property="og:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
@@ -18,7 +18,7 @@
   <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Game bindings: export a profile to the game | Joystick Gobloon">
-  <meta name="twitter:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous and X4: Foundations.">
+  <meta name="twitter:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations and DCS World.">
   <meta name="twitter:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
   <meta name="author" content="Denis Ibragimov">
   <meta name="theme-color" content="#131209">
@@ -37,7 +37,7 @@
     {
       "@type": "TechArticle",
       "headline": "Game bindings: your profile, bound in the game",
-      "description": "Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous and X4: Foundations.",
+      "description": "Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations and DCS World.",
       "url": "https://h0userus.github.io/joystick-gobloon/game.html",
       "inLanguage": "en",
       "image": "https://h0userus.github.io/joystick-gobloon/img/og.jpg",
@@ -160,6 +160,7 @@
             <li><a href="#il2">IL-2 Sturmovik: Great Battles</a></li>
             <li><a href="#elite">Elite Dangerous</a></li>
             <li><a href="#x4">X4: Foundations</a></li>
+            <li><a href="#dcs">DCS World</a></li>
             <li><a href="#linux">On Linux</a></li>
           </ul></li>
           </ul>
@@ -183,8 +184,9 @@
               <li><strong>IL-2 Sturmovik: Great Battles</strong>: joystick, keyboard and mouse bindings, axes from two buttons included.</li>
               <li><strong>Elite Dangerous</strong> (4.x, Odyssey and Horizons): joystick, keyboard and mouse bindings of your own preset.</li>
               <li><strong>X4: Foundations</strong>: joystick and keyboard bindings.</li>
+              <li><strong>DCS World</strong>: joystick and keyboard bindings of every aircraft.</li>
             </ul>
-            <p>Each game is a plugin in the <code>export</code> folder next to the program, with the game's list of actions for each version it knows. Microsoft Flight Simulator, IL-2, Elite Dangerous and X4 were made from bindings files people have shared, not tested in the games themselves yet: if something comes out wrong, a <a href="https://github.com/h0useRus/JoystickGobloon/issues">bug report</a> with the game's file helps a lot.</p>
+            <p>Each game is a plugin in the <code>export</code> folder next to the program, with the game's list of actions for each version it knows. Microsoft Flight Simulator, IL-2, Elite Dangerous, X4 and DCS World were made from the games' file formats and bindings files people have shared, not tested in the games themselves yet: if something comes out wrong, a <a href="https://github.com/h0useRus/JoystickGobloon/issues">bug report</a> with the game's file helps a lot.</p>
           </article>
           <article class="learn-action" id="safe">
             <h3><i class="ph ph-floppy-disk" aria-hidden="true"></i>Your files are kept</h3>
@@ -279,6 +281,11 @@
           <article class="learn-action" id="x4">
             <h3><i class="ph ph-planet" aria-hidden="true"></i>X4: Foundations</h3>
             <p>The bindings live in <code>Documents\Egosoft\X4\&lt;your account number&gt;\inputmap.xml</code>. X4 knows up to eight joysticks by slot: pick the virtual joysticks once in the game under Settings &rsaquo; Controls &rsaquo; Manage controllers/joysticks, and the program finds their slots in <code>config.xml</code> next to it. Otherwise type them above the table (<code>joy1</code> to <code>joy8</code>). The game reads one hat per joystick and 64 buttons; keys can be held together with Shift and Ctrl. Axis inversion and the dead zone are the game's settings and stay as they are. X4 writes these files when you leave it, so export while it is not running.</p>
+          </article>
+          <article class="learn-action" id="dcs">
+            <h3><i class="ph ph-airplane-in-flight" aria-hidden="true"></i>DCS World</h3>
+            <p>DCS keeps the bindings of each aircraft apart, so each aircraft you have flown is an install of its own in the list, named after its folder in <code>Saved Games\DCS\Config\Input</code> (the open beta's are under <code>DCS.openbeta</code>). There is one file for each device, named after the device and its id, holding only what differs from the aircraft's defaults; a virtual joystick without one gets its own file at the first export. The program finds the virtual joysticks by that id; if a file belongs to another device, type the right id (<code>{...}</code>) above the table.</p>
+            <p>The aircraft's list of actions lives inside the game, so the program reads it from the files the game writes with <span class="term">Make HTML</span> on its Controls screen (<code>Saved Games\DCS\InputLayoutsTxt</code>). Open Controls in the game once for each aircraft and press Make HTML: without these files only the actions you already changed in the game are listed. Axis curves and dead zones you set in the game stay; inverting an axis in the profile sets the game's invert. Export while the game is closed or at least not on the Controls screen, which writes these files when you leave it.</p>
           </article>
           <article class="learn-action" id="linux">
             <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
