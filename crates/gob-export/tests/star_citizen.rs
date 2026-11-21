@@ -374,7 +374,12 @@ fn every_plugin_in_the_repository_loads() {
         let p = f
             .plugin
             .unwrap_or_else(|e| panic!("{}: {e}", f.dir.display()));
-        assert!(!p.catalogs.is_empty(), "{} has no catalog", p.id());
+        // DCS World lists every aircraft's actions from the game's own files instead.
+        assert!(
+            !p.catalogs.is_empty() || p.id() == "dcs-world",
+            "{} has no catalog",
+            p.id()
+        );
         for hook in [Hook::Targets, Hook::Version, Hook::Read, Hook::Write] {
             assert!(p.has(hook), "{} lacks {hook:?}", p.id());
         }

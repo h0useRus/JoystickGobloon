@@ -111,7 +111,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   (`<scripts>`: Lua code as CDATA or a file path, Gremlin's Python kept, variables in Gremlin's XML); the app reads
   external files on activation (activation.rs) and reloads when they change; Scripts page = scripts_view.rs, editor =
   gob-ui `CodeEditor`
-- crates/gob-export  game export (plans/GAME_EXPORT_PLAN.md): plugins = folders in `export/`: plugin.gob (TOML: id, name,
+- crates/gob-export  game export (plans/completed/GAME_EXPORT_PLAN.md): plugins = folders in `export/`: plugin.gob (TOML: id, name,
   supported game versions), plugin.luau (hooks targets/version/read/write, each takes one context table; sandboxed
   like gob-script, 2 s per call), catalog/<game version>.gob (the game's actions), renames.gob (ids changed between
   versions); plugins only turn text into text, the host reads and writes the game's files. Game names, formats and
@@ -129,7 +129,13 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   category actions `AIRPLANE:CONTEXT/KEY_X`; no sim here, tested on public vJoy profiles; elite-dangerous: the
   active Ship preset of Options/Bindings/StartPreset.4.start (`local_app_data` in Env), vJoy = `1234BEAD[:DeviceIndex]`,
   built-in presets never written; x4-foundations: Documents/Egosoft/X4/<account>/inputmap.xml, slots joy1-8 pinned by
-  instance GUID in config.xml, buttons 1-11 Xbox names; both untested in the games, round-trip checked on public files). A binding's output (gob-core game.rs
+  instance GUID in config.xml, buttons 1-11 Xbox names; both untested in the games, round-trip checked on public files;
+  dcs-world: no catalog, a target per aircraft folder (`Target::each` = one target per folder a pattern finds, `{1}`..
+  placeholders) in Saved Games/DCS*/Config/Input, actions from the game's "Make HTML" files (InputLayoutsTxt, columns found by
+  header) and the diff files' names, returned in `ReadResult::actions` (the Game page adds them to the catalog), ids
+  `<aircraft>/<game id>`, `<device> {instance GUID}.diff.lua` per joystick + Keyboard.diff.lua via `luadata.parse/write`
+  (Lua data without running it, sorted keys + tabs like the game); defaults = HTML less added plus removed; the game is not
+  installed here, tested on made-up files in tests/data/dcs-world, the HTML format is a guess). A binding's output (gob-core game.rs
   `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
   keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
   plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,

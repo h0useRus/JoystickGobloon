@@ -1,8 +1,9 @@
-//! Host functions plugins call through the prelude's `xml`, `json`, `ini` and `version` tables.
+//! Host functions plugins call through the prelude's `xml`, `json`, `ini`, `luadata` and
+//! `version` tables.
 
 use mlua::{Lua, LuaSerdeExt, Table, Value};
 
-use crate::{version, xml};
+use crate::{luadata, version, xml};
 
 /// Puts the helpers into the host table the prelude receives.
 pub fn register(lua: &Lua, host: &Table) -> mlua::Result<()> {
@@ -44,6 +45,17 @@ pub fn register(lua: &Lua, host: &Table) -> mlua::Result<()> {
             }
             Ok(t)
         })?,
+    )?;
+    host.set(
+        "luadata_parse",
+        lua.create_function(|lua, text: String| {
+            let data = luadata::parse(&text).map_err(mlua::Error::runtime)?;
+            luadata::to_lua(lua, &data)
+        })?,
+    )?;
+    host.set(
+        "luadata_write",
+        lua.create_function(|_, v: Value| Ok(luadata::write(&luadata::from_lua(&v)?)))?,
     )?;
     host.set(
         "version_compare",

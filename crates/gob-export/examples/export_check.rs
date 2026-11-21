@@ -10,7 +10,9 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use gob_export::{Bind, DeviceLink, Env, OurDevice, Plugin, ReadContext, WriteContext, host};
+use gob_export::{
+    Bind, Catalog, DeviceLink, Env, Fit, OurDevice, Plugin, ReadContext, WriteContext, host,
+};
 
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
@@ -56,10 +58,12 @@ fn main() {
         let version = plugin
             .version(&target, &files)
             .unwrap_or_else(|e| fail(&e.to_string()));
-        let Some((catalog, fit)) = plugin.catalogs.pick(version.as_deref()) else {
-            println!("- {} ({}): no catalog", target.name, target.id);
-            continue;
-        };
+        // A plugin without catalogs takes every action from the game's files.
+        let empty = Catalog::default();
+        let (catalog, fit) = plugin
+            .catalogs
+            .pick(version.as_deref())
+            .unwrap_or((&empty, Fit::Unknown));
         println!(
             "- {} at {}: version {:?}, catalog {} ({fit:?}, {} actions), supported: {}",
             target.name,
@@ -85,11 +89,13 @@ fn main() {
             let name = catalog.action(&b.action).map_or("?", |a| a.name.as_str());
             println!("    {} = {} ({name})", b.output, b.action);
         }
-        let unknown = read
-            .binds
-            .iter()
-            .filter(|b| catalog.action(&b.action).is_none())
-            .count();
+        let listed =
+            |id: &str| catalog.action(id).is_some() || read.actions.iter().any(|a| a.id == id);
+        let unknown = read.binds.iter().filter(|b| !listed(&b.action)).count();
+        println!(
+            "  {} actions listed in the game's files",
+            read.actions.len()
+        );
         println!("  {unknown} bound actions not in the catalog");
         if roundtrip {
             // The game's own defaults are not the profile's to write.

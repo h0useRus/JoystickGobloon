@@ -10,6 +10,7 @@
 pub mod catalog;
 mod helpers;
 pub mod host;
+pub mod luadata;
 mod plugin;
 pub mod types;
 pub mod version;

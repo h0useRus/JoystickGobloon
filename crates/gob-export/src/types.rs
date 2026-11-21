@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::catalog::Catalog;
+use crate::catalog::{Catalog, GameAction};
 
 /// Where to look for the game.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -46,6 +46,13 @@ pub struct Target {
     /// The key in `files` of the file that tells the game version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version_file: Option<String>,
+    /// Folders the target stands for one by one, as a pattern like a glob's
+    /// ("C:/Users/x/Saved Games/*/Config/Input/*"): the host makes a copy of the target for
+    /// every folder found, with `{1}`, `{2}` ... in its id, name, files, dirs, globs and
+    /// glob_text replaced by the folder names the first, second ... `*` matched. A target
+    /// without it stands for itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub each: Option<String>,
 }
 
 /// A game file as the host read it.
@@ -96,12 +103,16 @@ pub struct Bind {
 }
 
 /// What a plugin found in the game's files.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 pub struct ReadResult {
     #[serde(default)]
     pub devices: Vec<DeviceLink>,
     #[serde(default)]
     pub binds: Vec<Bind>,
+    /// Actions the game's own files list, for games whose actions differ per install (add-ons,
+    /// aircraft); the program shows them with the catalog's.
+    #[serde(default)]
+    pub actions: Vec<GameAction>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]

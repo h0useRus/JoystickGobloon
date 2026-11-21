@@ -41,6 +41,8 @@ pub(super) type GameBind = (String, GameOutput, bool);
 pub(super) struct InGame {
     pub(super) plugin: usize,
     pub(super) binds: Vec<GameBind>,
+    /// Actions the game's files list (games whose actions differ per install).
+    pub(super) actions: Vec<gob_export::GameAction>,
 }
 
 impl InGame {
@@ -50,7 +52,11 @@ impl InGame {
             .iter()
             .filter_map(|b| Some((b.action.clone(), GameOutput::parse(&b.output)?, b.default)))
             .collect();
-        Self { plugin, binds }
+        Self {
+            plugin,
+            binds,
+            actions: read.actions.clone(),
+        }
     }
 
     /// Bindings on the virtual devices: what an import takes.

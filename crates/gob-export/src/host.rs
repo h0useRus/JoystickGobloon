@@ -136,6 +136,95 @@ fn wildcard(pattern: &str, name: &str) -> bool {
     rest.is_empty()
 }
 
+/// The folders matching `pattern` (like [`glob`], for folders), each with the names the `*`
+/// parts of the pattern matched, in order.
+pub fn glob_dirs(pattern: &str) -> Vec<(String, Vec<String>)> {
+    let pattern = pattern.replace('\\', "/");
+    let pattern = pattern.trim_end_matches('/');
+    let cut = match pattern.find('*') {
+        Some(star) => pattern[..star].rfind('/').map_or(0, |i| i + 1),
+        None => pattern.rfind('/').map_or(0, |i| i + 1),
+    };
+    let parts: Vec<&str> = pattern[cut..]
+        .split('/')
+        .filter(|p| !p.is_empty())
+        .collect();
+    let mut out = Vec::new();
+    walk_dirs(&pattern[..cut], &parts, &mut Vec::new(), &mut out);
+    out
+}
+
+fn walk_dirs(
+    dir: &str,
+    parts: &[&str],
+    names: &mut Vec<String>,
+    out: &mut Vec<(String, Vec<String>)>,
+) {
+    let Some((first, rest)) = parts.split_first() else {
+        let path = dir.trim_end_matches('/');
+        if Path::new(path).is_dir() {
+            out.push((path.to_string(), names.clone()));
+        }
+        return;
+    };
+    if out.len() >= GLOB_LIMIT {
+        return;
+    }
+    if !first.contains('*') {
+        walk_dirs(&format!("{dir}{first}/"), rest, names, out);
+        return;
+    }
+    let base = if dir.is_empty() { "." } else { dir };
+    let Ok(entries) = std::fs::read_dir(base) else {
+        return;
+    };
+    let mut found: Vec<String> = entries
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| wildcard(first, n))
+        .collect();
+    found.sort();
+    for name in found {
+        names.push(name.clone());
+        walk_dirs(&format!("{dir}{name}/"), rest, names, out);
+        names.pop();
+    }
+}
+
+/// One copy of a target per folder its `each` pattern finds (see `Target::each`); a target
+/// without `each` as it is.
+pub fn each(target: Target) -> Vec<Target> {
+    let Some(pattern) = target.each.clone() else {
+        return vec![target];
+    };
+    glob_dirs(&pattern)
+        .into_iter()
+        .map(|(_, names)| {
+            let fill = |s: &str| {
+                let mut s = s.to_string();
+                for (i, name) in names.iter().enumerate() {
+                    s = s.replace(&format!("{{{}}}", i + 1), name);
+                }
+                s
+            };
+            let map = |m: &std::collections::BTreeMap<String, String>| {
+                m.iter().map(|(k, v)| (k.clone(), fill(v))).collect()
+            };
+            Target {
+                id: fill(&target.id),
+                name: fill(&target.name),
+                files: map(&target.files),
+                dirs: map(&target.dirs),
+                globs: map(&target.globs),
+                glob_text: map(&target.glob_text),
+                version_file: target.version_file.clone(),
+                each: None,
+            }
+        })
+        .collect()
+}
+
 /// A target with the files of its globs added to `files`.
 pub fn expand(mut target: Target) -> Target {
     for (key, pattern) in &target.globs {
@@ -275,6 +364,7 @@ mod tests {
             globs: BTreeMap::new(),
             glob_text: BTreeMap::new(),
             version_file: None,
+            each: None,
         };
         assert!(installed(&target));
         let files = read_files(&target);
@@ -367,6 +457,7 @@ mod tests {
             )]),
             glob_text: BTreeMap::new(),
             version_file: None,
+            each: None,
         });
         assert_eq!(target.files.len(), 2);
         assert_eq!(target.files[&format!("p:{}", found[0])], found[0]);
@@ -376,6 +467,44 @@ mod tests {
         let one = format!("{base}/userdata/111/1250410/remote/UserCfg.opt");
         assert_eq!(glob(&one, None), std::slice::from_ref(&one));
         assert!(glob(&format!("{base}/userdata/111/1250410/remote/none"), None).is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn each_folder_makes_a_target() {
+        let dir = std::env::temp_dir().join(format!("gob-export-each-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for path in [
+            "Game/Input/Plane A",
+            "Game.beta/Input/Heli",
+            "Other/Input/X",
+        ] {
+            std::fs::create_dir_all(dir.join(path)).unwrap();
+        }
+        std::fs::write(dir.join("Game/Input/file"), "not a folder").unwrap();
+        let base = dir.to_string_lossy().replace('\\', "/");
+        let targets = each(Target {
+            id: "{1}/{2}".into(),
+            name: "{2}".into(),
+            files: BTreeMap::from([("k".into(), format!("{base}/{{1}}/Input/{{2}}/k.txt"))]),
+            dirs: BTreeMap::new(),
+            globs: BTreeMap::from([("g".into(), format!("{base}/{{1}}/Input/{{2}}/*.lua"))]),
+            glob_text: BTreeMap::new(),
+            version_file: None,
+            each: Some(format!("{base}/Game*/Input/*")),
+        });
+        let ids: Vec<&str> = targets.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids, ["Game/Plane A", "Game.beta/Heli"]);
+        assert_eq!(targets[0].name, "Plane A");
+        assert_eq!(
+            targets[1].files["k"],
+            format!("{base}/Game.beta/Input/Heli/k.txt")
+        );
+        assert_eq!(
+            targets[1].globs["g"],
+            format!("{base}/Game.beta/Input/Heli/*.lua")
+        );
+        assert!(targets.iter().all(|t| t.each.is_none()));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
