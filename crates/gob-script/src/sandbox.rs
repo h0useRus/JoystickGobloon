@@ -93,7 +93,10 @@ mod reach {
             }
         }
         assert!(reachable.is_empty(), "reachable: {reachable:?}");
-        let exec: bool = lua.load("return os ~= nil and os.execute ~= nil").eval().unwrap();
+        let exec: bool = lua
+            .load("return os ~= nil and os.execute ~= nil")
+            .eval()
+            .unwrap();
         assert!(!exec, "os.execute is reachable");
     }
 }

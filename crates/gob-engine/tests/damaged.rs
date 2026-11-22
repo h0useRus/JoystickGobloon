@@ -60,7 +60,12 @@ fn damage(text: &str, rng: &mut Rng) -> String {
             let mut out = s.clone();
             if let Some(i) = s.match_indices("=\"").map(|(i, _)| i).nth(rng.below(400)) {
                 let end = s[i + 2..].find('"').map_or(s.len(), |e| i + 2 + e);
-                out = format!("{}=\"{}{}", &s[..i], numbers[rng.below(numbers.len())], &s[end..]);
+                out = format!(
+                    "{}=\"{}{}",
+                    &s[..i],
+                    numbers[rng.below(numbers.len())],
+                    &s[end..]
+                );
             }
             return out;
         }
@@ -80,7 +85,12 @@ fn run(profile: &gob_core::Profile) {
         for id in 1..=4u32 {
             t += Duration::from_millis(7);
             let key = |kind| InputKey::new(device, kind, id);
-            engine.process(&key(InputKind::Axis), Value::Axis(n as f32 / 4.0 - 1.0), t, &mut out);
+            engine.process(
+                &key(InputKind::Axis),
+                Value::Axis(n as f32 / 4.0 - 1.0),
+                t,
+                &mut out,
+            );
             engine.process(&key(InputKind::Button), Value::Button(true), t, &mut out);
             engine.process(&key(InputKind::Hat), Value::Hat(Some(9000)), t, &mut out);
             engine.tick(t + Duration::from_millis(600), &mut out);
@@ -124,7 +134,9 @@ fn damaged_profiles_never_crash() {
                     run(&profile);
                     // What was imported saves and imports again.
                     let saved = gob_gremlin::to_string(&profile);
-                    gob_gremlin::from_str(&saved).map(|_| ()).map_err(|e| e.to_string())
+                    gob_gremlin::from_str(&saved)
+                        .map(|_| ())
+                        .map_err(|e| e.to_string())
                 } else {
                     Ok(())
                 }
