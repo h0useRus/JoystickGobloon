@@ -412,23 +412,26 @@ pub fn watch(hide: Arc<Mutex<Hide>>) -> io::Result<()> {
             log::warn!("watching {dir:?}: {}", io::Error::last_os_error());
         }
     }
-    std::thread::spawn(move || {
-        let mut buf = [0u8; 4096];
-        loop {
-            let n = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) };
-            if n <= 0 {
-                log::error!("watching device nodes: {}", io::Error::last_os_error());
-                return;
+    std::thread::Builder::new()
+        .name("node-watch".into())
+        .spawn(move || {
+            let mut buf = [0u8; 4096];
+            loop {
+                // SAFETY: `buf` is valid for `buf.len()` bytes; `fd` is the inotify descriptor.
+                let n = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) };
+                if n <= 0 {
+                    log::error!("watching device nodes: {}", io::Error::last_os_error());
+                    return;
+                }
+                // Many events come at once (a device brings several nodes, udev sets them in
+                // steps): let them settle, drop what came meanwhile, look once.
+                std::thread::sleep(Duration::from_millis(200));
+                drain(fd, &mut buf);
+                hide.lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .enforce();
             }
-            // Many events come at once (a device brings several nodes, udev sets them in
-            // steps): let them settle, drop what came meanwhile, look once.
-            std::thread::sleep(Duration::from_millis(200));
-            drain(fd, &mut buf);
-            hide.lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .enforce();
-        }
-    });
+        })?;
     Ok(())
 }
 
