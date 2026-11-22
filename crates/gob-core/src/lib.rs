@@ -12,6 +12,7 @@ pub mod condition;
 pub mod curve;
 pub mod edit;
 pub mod events;
+pub mod file;
 pub mod game;
 pub mod logical;
 pub mod modifier;

@@ -95,11 +95,13 @@ fn walk(dir: &str, parts: &[&str], text: Option<&str>, out: &mut Vec<String>) {
     }
 }
 
-/// A small file that is not a backup copy [`apply`] made, with `text` near its start.
+/// A small file that is not a backup copy [`apply`] made (nor a `.new` file a write cut short
+/// left), with `text` near its start.
 fn wanted(path: &str, text: Option<&str>) -> bool {
     use std::io::Read;
-    let name = path.rsplit('/').next().unwrap_or(path);
-    if name.to_ascii_lowercase().contains(".gobak-")
+    let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
+    if name.contains(".gobak-")
+        || name.ends_with(".new")
         || !std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() <= GLOB_MAX_SIZE)
     {
         return false;
@@ -326,7 +328,8 @@ pub fn apply(target: &Target, files: &Files, result: &WriteResult) -> Result<Wri
         } else if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
-        std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+        gob_core::file::write_whole(&path, text.as_bytes())
+            .map_err(|e| format!("{}: {e}", path.display()))?;
         out.files.push(path);
     }
     Ok(out)

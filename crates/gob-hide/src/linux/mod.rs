@@ -127,7 +127,7 @@ fn write_state(state: &State) -> Result<(), Error> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(failed)?;
     }
-    std::fs::write(&path, text).map_err(failed)
+    gob_core::file::write_whole(&path, text.as_bytes()).map_err(failed)
 }
 
 /// Tells the input service what to read exclusively.

@@ -8,6 +8,7 @@ license.workspace = true
 gob-vjoy.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+gob-core.workspace = true
 gob-system.workspace = true
 gob-uinput.workspace = true
 log.workspace = true
