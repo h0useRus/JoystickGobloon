@@ -586,10 +586,29 @@ mod tests {
         assert!(shine(&mut lit, 1, None, true, at(t, 400)).0);
         assert!(!shine(&mut lit, 1, None, false, at(t, 500)).0);
         // A 20 ms tap stays lit MIN_LIT from its start.
-        assert!(shine(&mut lit, 1, None, true, at(t, 1000)).0);
-        assert!(shine(&mut lit, 1, None, false, at(t, 1020)).0);
-        assert!(shine(&mut lit, 1, None, false, at(t, 1140)).0);
-        assert!(!shine(&mut lit, 1, None, false, at(t, 1160)).0);
+        let tap = at(t, 1000);
+        assert!(shine(&mut lit, 1, None, true, tap).0);
+        assert!(shine(&mut lit, 1, None, false, at(tap, 20)).0);
+        assert!(
+            shine(
+                &mut lit,
+                1,
+                None,
+                false,
+                tap + MIN_LIT - Duration::from_millis(10)
+            )
+            .0
+        );
+        assert!(
+            !shine(
+                &mut lit,
+                1,
+                None,
+                false,
+                tap + MIN_LIT + Duration::from_millis(10)
+            )
+            .0
+        );
         // A hat keeps its last direction while a tap is shown.
         assert_eq!(shine(&mut lit, 2, Some(9000), true, t), (true, Some(9000)));
         assert_eq!(
