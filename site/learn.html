@@ -286,8 +286,14 @@
               <li><strong>Press only</strong>: the input presses it and it stays down; another input set to <strong>Release only</strong> lets it go.</li>
               <li><strong>Release only</strong>: the input lets it go.</li>
               <li><strong>Pulse</strong>: one press of a set length, however long the input is held. 50 ms, the default, suits most games: a shorter press may come and go before the game looks.</li>
-              <li><strong>Repeat</strong>: presses it again and again while the input is held: the first repeat after a delay, then at a steady pace. The mouse wheel turns notch after notch this way.</li>
+              <li><strong>Repeat</strong>: presses it again and again while the input is held: the first repeat after a delay, then at a steady pace. The mouse wheel turns notch after notch this way. Both times run from the start of one press to the start of the next, so <span class="term">First repeat after</span> 250 ms and <span class="term">Repeat every</span> 1000 ms press at 0, 250 ms, 1250 ms, 2250 ms and so on. A press lasts <span class="term">Press length</span>, but at most half the time to the next one, so there is always a gap between presses.</li>
               <li><strong>Toggle</strong>: the first press holds it down, the next one lets it go.</li>
+            </ul>
+            <p>The three buttons next to it (on press, on release, both) pick the moment that sends it:</p>
+            <ul>
+              <li><strong>Hold</strong> follows the button only with <strong>both</strong>. On press alone it presses the output and leaves it down, like Press only; on release alone it only lets go, like Release only.</li>
+              <li><strong>Pulse</strong> and <strong>Toggle</strong> act once per button press: on the press, or on the release when set to on release. <strong>Both</strong> works like on press.</li>
+              <li><strong>Repeat</strong> starts on the press (or on the release when set to on release) and stops on the opposite one: on press repeats while you hold the button, on release repeats from letting go until the next press.</li>
             </ul>
             <p>Whatever is still down when the profile stops or another profile starts is let go, so nothing stays stuck.</p>
             <p>It is in the pictures of every output above; <a href="#map-to-keyboard">Map to keyboard</a> shows Repeat with its times.</p>
