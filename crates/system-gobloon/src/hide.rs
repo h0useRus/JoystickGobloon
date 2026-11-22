@@ -401,7 +401,6 @@ fn udevadm(args: &[&str]) -> io::Result<()> {
 /// again which controllers are attached and closes hidden devices' nodes again when someone
 /// opened them: another rule, `setfacl`, a replugged device off USB. Runs until the process ends.
 pub fn watch(hide: Arc<Mutex<Hide>>) -> io::Result<()> {
-    // SAFETY: plain syscalls on a descriptor we own; the buffer outlives every read.
     // SAFETY: no pointers; the descriptor is owned by the watcher thread from here on.
     let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC) };
     if fd < 0 {

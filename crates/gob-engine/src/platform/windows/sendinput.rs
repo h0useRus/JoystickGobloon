@@ -29,7 +29,7 @@ fn inject(input: INPUT) {
     let refused = sent == 0;
     if REFUSED.swap(refused, Ordering::Relaxed) != refused && refused {
         log::warn!(
-            "keyboard/mouse output refused by Windows ({}); a program running as administrator              only takes keys from programs running as administrator too",
+            "keyboard/mouse output refused by Windows ({}); a program running as administrator only takes keys from programs running as administrator too",
             std::io::Error::last_os_error()
         );
     }

@@ -148,7 +148,12 @@ impl HidHideView {
                     self.have_state = true;
                     self.error = None;
                 }
-                Reply::State(Err(e)) | Reply::ChangeFailed(e) => self.error = Some(e),
+                Reply::State(Err(e)) => {
+                    // Shown as off, as before the read moved to the worker.
+                    self.have_state = true;
+                    self.error = Some(e);
+                }
+                Reply::ChangeFailed(e) => self.error = Some(e),
             }
         }
     }

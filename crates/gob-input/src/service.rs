@@ -448,6 +448,8 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
 
     let tx = shared.tx;
     let Some(platform) = Platform::new() else {
+        // Nothing will ever be found: nobody waits for a first look that never comes.
+        shared.scanned.store(true, Ordering::Release);
         return;
     };
     let mut devices: Vec<<Platform as Backend>::Device> = Vec::new();

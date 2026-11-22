@@ -63,8 +63,22 @@ pub fn note_text(text: &str) {
     }
 }
 
-/// Loads the Chinese and Korean fonts once something asked for them; cheap every frame.
+/// Loads the Chinese and Korean fonts once something asked for them, or such text is typed,
+/// pasted or composed (IME) into a field; cheap every frame.
 pub fn load_cjk_if_wanted(ctx: &egui::Context) {
+    if !CJK_LOADED.load(Ordering::Relaxed) {
+        let typed = ctx.input(|i| {
+            i.events.iter().any(|e| match e {
+                egui::Event::Text(t) | egui::Event::Paste(t) => has_cjk(t),
+                egui::Event::Ime(egui::ImeEvent::Commit(t))
+                | egui::Event::Ime(egui::ImeEvent::Preedit { text: t, .. }) => has_cjk(t),
+                _ => false,
+            })
+        });
+        if typed {
+            want_cjk();
+        }
+    }
     if CJK_WANTED.load(Ordering::Relaxed) && !CJK_LOADED.swap(true, Ordering::Relaxed) {
         set_fonts(ctx, true);
     }

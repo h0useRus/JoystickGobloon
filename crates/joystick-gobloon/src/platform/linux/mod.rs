@@ -159,9 +159,11 @@ impl super::Desktop for Desktop {
     }
 
     fn key_held(key: Key) -> Option<bool> {
-        // `held_keys` tells whether the keyboards can be read at all.
-        gob_input::held_keys()?;
-        Some(gob_input::key_held(key.scan_code, key.extended))
+        if gob_input::key_held(key.scan_code, key.extended) {
+            return Some(true);
+        }
+        // Not held: `held_keys` tells whether the keyboards can be read at all.
+        gob_input::held_keys().map(|_| false)
     }
 
     fn key_name(key: Key) -> String {

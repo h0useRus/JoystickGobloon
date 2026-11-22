@@ -562,6 +562,7 @@ impl JoystickGobloonApp {
                 }
                 self.drop_autosave(false);
                 style::note_text(&gob_gremlin::to_string(&loaded.profile));
+                style::note_text(&loaded.file_name());
                 self.profile = Some(loaded);
                 if how != OpenAs::Program {
                     self.activation.stop();
@@ -683,6 +684,13 @@ impl JoystickGobloonApp {
                     &[("program", program.into()), ("file", file.into())],
                 );
             }
+            // Stopped (or another profile opened) while the engine took it: nothing to undo.
+            Err(e) if !self.activation.is_active() => {
+                log::info!(
+                    "{program} in front: {}: stopped meanwhile ({e})",
+                    path.display()
+                );
+            }
             Err(e) => {
                 log::error!("{program} in front: {}: {e}", path.display());
                 // The engine keeps the old profile: the window shows it again too.
@@ -706,6 +714,8 @@ impl JoystickGobloonApp {
             match (done.job, done.result) {
                 (Job::Switch, result) => self.switch_done(result),
                 (_, Ok(())) => self.status = self.i18n.tr("status-active"),
+                // A reload that failed because the profile was stopped meanwhile.
+                (Job::Edit, Err(_)) if !self.activation.is_active() => {}
                 (_, Err(e)) => {
                     let text = self.i18n.trf("activate-error", &[("error", e.into())]);
                     self.error(text);
@@ -1027,6 +1037,7 @@ impl JoystickGobloonApp {
             .trf("status-restored", &[("file", loaded.file_name().into())]);
         self.drop_autosave(false);
         style::note_text(&gob_gremlin::to_string(&loaded.profile));
+        style::note_text(&loaded.file_name());
         self.profile = Some(loaded);
         self.activation.stop();
         self.activation.set_start_mode(None);
@@ -1322,6 +1333,7 @@ impl JoystickGobloonApp {
         loaded.autosave = crate::autosave::dir()
             .map(|dir| crate::autosave::next_file(&dir, &self.settings.autosave));
         style::note_text(&gob_gremlin::to_string(&loaded.profile));
+        style::note_text(&loaded.file_name());
         self.profile = Some(loaded);
         self.activation.stop();
         self.activation.set_start_mode(None);
@@ -2293,6 +2305,13 @@ impl eframe::App for JoystickGobloonApp {
     /// of it.
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         [0.0; 4]
+    }
+
+    /// The running profile stops now: the activation thread and the tray keep the activation
+    /// alive past the window, and `main` waits for the stop actions only of runners already
+    /// stopped ([`gob_engine::wait_stopped`]).
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.activation.stop();
     }
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
