@@ -1,7 +1,8 @@
 //! Platforms without controller access (neither Windows nor Linux): no controllers, no keyboard
 //! keys.
 
-use crate::{Calibrations, DeviceState, InputEvent};
+use super::Buffered;
+use crate::{Calibrations, DeviceState};
 
 pub(crate) struct Platform;
 
@@ -47,7 +48,7 @@ impl super::Device for NoDevice {
         match *self {}
     }
 
-    fn read(&mut self, _: &mut dyn FnMut(InputEvent)) -> bool {
+    fn read(&mut self, _: &mut dyn FnMut(Buffered)) -> bool {
         match *self {}
     }
 }

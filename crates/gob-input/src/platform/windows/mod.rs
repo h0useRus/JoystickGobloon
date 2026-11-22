@@ -19,8 +19,9 @@ use windows::Win32::System::Threading::{
 };
 use windows::core::PCWSTR;
 
+use super::Buffered;
 use super::{format_guid, normalize_axis};
-use crate::{Calibrations, DeviceState, InputEvent};
+use crate::{Calibrations, DeviceState};
 
 /// Event mode: devices are also read this often without a change signal, as a fallback.
 const EVENT_TIMEOUT: Duration = Duration::from_millis(20);
@@ -174,7 +175,7 @@ impl super::Device for Controller {
         self.di.event().is_some() && self.pad.as_ref().is_none_or(|p| p.slot().is_none())
     }
 
-    fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool {
+    fn read(&mut self, emit: &mut dyn FnMut(Buffered)) -> bool {
         let di = &mut self.di;
         match &mut self.pad {
             // DirectInput's state only while the XInput slot is not found yet.

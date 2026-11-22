@@ -13,8 +13,9 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::CreateEventW;
 use windows::core::{BOOL, GUID, Interface};
 
+use super::super::Buffered;
 use super::{format_guid, normalize_axis, pov_direction};
-use crate::{AXIS_SLOTS, Calibration, DeviceInfo, DeviceState, InputEvent};
+use crate::{AXIS_SLOTS, Calibration, DeviceInfo, DeviceState};
 
 const DIRECTINPUT_VERSION: u32 = 0x0800;
 /// `DIPROP_RANGE` is `MAKEDIPROP(4)`: a small integer passed as a GUID pointer.
@@ -225,7 +226,7 @@ impl Device {
     /// the time between two reads is not lost), then reads the state like [`Device::poll`].
     /// Axes, and anything the buffer missed, are left to the `previous` -> `state` diff.
     /// Returns false when the device is gone.
-    pub fn read_buffered(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool {
+    pub fn read_buffered(&mut self, emit: &mut dyn FnMut(Buffered)) -> bool {
         self.previous.copy_readings(&self.state);
         let mut data = [DIDEVICEOBJECTDATA::default(); 64];
         loop {
@@ -259,7 +260,7 @@ impl Device {
     }
 
     /// One buffered button or hat change: updates `state` and sends it if it differs.
-    fn apply_buffered(&mut self, item: &DIDEVICEOBJECTDATA, emit: &mut dyn FnMut(InputEvent)) {
+    fn apply_buffered(&mut self, item: &DIDEVICEOBJECTDATA, emit: &mut dyn FnMut(Buffered)) {
         let s = &mut self.state;
         let ofs = item.dwOfs;
         if (BUTTON_OFFSET..BUTTON_END).contains(&ofs) {
@@ -269,8 +270,7 @@ impl Device {
                 && *b != pressed
             {
                 *b = pressed;
-                emit(InputEvent::Button {
-                    device: s.info.guid.clone(),
+                emit(Buffered::Button {
                     id: i as u16 + 1,
                     pressed,
                 });
@@ -282,8 +282,7 @@ impl Device {
                 && *h != direction
             {
                 *h = direction;
-                emit(InputEvent::Hat {
-                    device: s.info.guid.clone(),
+                emit(Buffered::Hat {
                     id: i as u8 + 1,
                     direction,
                 });

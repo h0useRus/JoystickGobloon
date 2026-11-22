@@ -2,7 +2,6 @@
 //! speech-dispatcher.
 
 mod injector;
-mod keystate;
 mod speech;
 
 pub(crate) use injector::Injector;

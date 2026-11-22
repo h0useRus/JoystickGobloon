@@ -162,7 +162,7 @@ impl crate::platform::Injector for Injector {
     /// Whether any keyboard holds the key, our own virtual one included (like Windows'
     /// GetAsyncKeyState, which sees injected keys too).
     fn key_pressed(&self, scan_code: u16, extended: bool) -> bool {
-        keys::key_code(scan_code, extended).is_some_and(super::keystate::pressed)
+        gob_input::key_held(scan_code, extended)
     }
 }
 
