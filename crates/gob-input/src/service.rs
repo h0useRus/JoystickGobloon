@@ -421,7 +421,7 @@ fn spawn_scanner<P: crate::platform::Backend>() -> Option<std::sync::mpsc::Recei
                 return;
             };
             loop {
-                std::thread::sleep(RESCAN);
+                platform.wait_for_attach(RESCAN);
                 let at = Instant::now();
                 let attached = platform.attached();
                 let took = at.elapsed();
@@ -549,6 +549,9 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
         }
 
         let mut lost = false;
+        // Raw readings moved (sensor noise does that all the time): the snapshot follows for the
+        // calibration page, which redraws on its own; nobody is woken for it.
+        let mut raw_changed = false;
         // A device's layout changed: the snapshot is built anew.
         let mut relayout = false;
         for dev in &mut devices {
@@ -576,14 +579,13 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
                 changed = true;
             }
             changed |= filter.update(dev.state(), at, &mut |event| tx.send(event, at));
-            // Raw values matter to the calibration page even when the scaled value stays.
-            changed |= dev.previous().raw != dev.state().raw;
+            raw_changed |= dev.previous().raw != dev.state().raw;
         }
         if lost || relayout {
             next_scan = Instant::now(); // rescan (and announce) right away
             announce = true;
         }
-        if changed {
+        if changed || raw_changed {
             let mut snapshot = shared.snapshot.write().unwrap_or_else(|e| e.into_inner());
             let same_devices = !relayout
                 && snapshot.len() == devices.len()
@@ -609,7 +611,9 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
                 *snapshot = devices.iter().map(|d| shown(&filters, d).clone()).collect();
             }
             drop(snapshot);
-            on_change();
+            if changed {
+                on_change();
+            }
         }
         // The devices found by the first pass are in the snapshot now.
         shared.scanned.store(true, Ordering::Release);
