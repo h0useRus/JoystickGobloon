@@ -62,6 +62,7 @@ pub struct Device {
 impl DirectInput {
     pub fn new() -> windows::core::Result<Self> {
         unsafe {
+            // SAFETY: DirectInput8Create with this module and the IDirectInput8W IID; the object is wrapped at once.
             let module = GetModuleHandleW(None)?;
             let mut raw: *mut c_void = std::ptr::null_mut();
             DirectInput8Create(
@@ -80,6 +81,7 @@ impl DirectInput {
     /// Attached game controllers.
     pub fn enumerate(&self) -> Vec<DIDEVICEINSTANCEW> {
         let mut found: Vec<DIDEVICEINSTANCEW> = Vec::new();
+        // SAFETY: `collect_device` gets `found`, which outlives the synchronous enumeration.
         unsafe {
             let _ = self.di.EnumDevices(
                 DI8DEVCLASS_GAMECTRL,
@@ -94,6 +96,7 @@ impl DirectInput {
     /// Opens a controller. With `events`, DirectInput buffers its changes and signals
     /// [`Device::event`] when there are new ones; otherwise it is only polled.
     pub fn open(&self, inst: &DIDEVICEINSTANCEW, events: bool) -> windows::core::Result<Device> {
+        // SAFETY: COM calls on the live DirectInput object; every out pointer is a local.
         unsafe {
             let mut dev = None;
             self.di.CreateDevice(&inst.guidInstance, &mut dev, None)?;
@@ -243,6 +246,7 @@ impl Device {
             };
             if read.is_err() {
                 // Input lost: re-acquire, the state read below tells whether it worked.
+                // SAFETY: COM call on the live device.
                 let _ = unsafe { self.dev.Acquire() };
                 break;
             }
@@ -293,6 +297,7 @@ impl Device {
     /// Reads the whole state into `state`; returns false when the device is gone.
     fn read_state(&mut self) -> bool {
         let mut raw = DIJOYSTATE2::default();
+        // SAFETY: `raw` is a DIJOYSTATE2 of the size passed, the format set at open (c_dfDIJoystick2).
         let read = |dev: &IDirectInputDevice8W, raw: &mut DIJOYSTATE2| unsafe {
             let _ = dev.Poll();
             dev.GetDeviceState(
@@ -302,6 +307,7 @@ impl Device {
         };
         if read(&self.dev, &mut raw).is_err() {
             // Input lost (e.g. focus or power change): re-acquire once before giving up.
+            // SAFETY: COM call on the live device.
             if unsafe { self.dev.Acquire() }.is_err() || read(&self.dev, &mut raw).is_err() {
                 return false;
             }
@@ -339,6 +345,7 @@ impl Device {
 impl Drop for Device {
     fn drop(&mut self) {
         unsafe {
+            // SAFETY: the device and its event handle are released once, on drop.
             let _ = self.dev.Unacquire();
             if let Some(event) = self.event {
                 let _ = self.dev.SetEventNotification(HANDLE::default());
@@ -350,6 +357,7 @@ impl Drop for Device {
 
 unsafe extern "system" fn collect_device(inst: *mut DIDEVICEINSTANCEW, ctx: *mut c_void) -> BOOL {
     unsafe {
+        // SAFETY: DirectInput passes a valid instance; `ctx` is the Vec `enumerate` handed over.
         let found = &mut *(ctx as *mut Vec<DIDEVICEINSTANCEW>);
         found.push(*inst);
         BOOL(1) // DIENUM_CONTINUE

@@ -135,6 +135,7 @@ impl XInput {
         Some(Self {
             get_state: unsafe { std::mem::transmute::<Proc, GetState>(get_state) },
             capabilities: by_ordinal(108)
+                // SAFETY: see above.
                 .map(|f| unsafe { std::mem::transmute::<Proc, GetCapabilitiesEx>(f) }),
         })
     }

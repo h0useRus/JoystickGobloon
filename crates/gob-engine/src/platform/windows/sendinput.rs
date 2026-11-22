@@ -1,6 +1,7 @@
 //! Mouse and keyboard output through the Windows `SendInput` API.
 
 use std::mem::size_of;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use gob_core::MouseButton;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -17,6 +18,23 @@ const XBUTTON2: i32 = 2;
 
 pub(crate) struct Injector;
 
+/// The last `SendInput` call was refused: logged once until one works again.
+static REFUSED: AtomicBool = AtomicBool::new(false);
+
+/// Sends one input event. Windows refuses injected input into a program running with higher
+/// rights (a game started as administrator): that is logged once, so silent keys are explained.
+fn inject(input: INPUT) {
+    // SAFETY: one fully initialized INPUT with its size, as SendInput expects.
+    let sent = unsafe { SendInput(&[input], size_of::<INPUT>() as i32) };
+    let refused = sent == 0;
+    if REFUSED.swap(refused, Ordering::Relaxed) != refused && refused {
+        log::warn!(
+            "keyboard/mouse output refused by Windows ({}); a program running as administrator              only takes keys from programs running as administrator too",
+            std::io::Error::last_os_error()
+        );
+    }
+}
+
 fn send(flags: MOUSE_EVENT_FLAGS, dx: i32, dy: i32, data: i32) {
     let input = INPUT {
         r#type: INPUT_MOUSE,
@@ -31,14 +49,13 @@ fn send(flags: MOUSE_EVENT_FLAGS, dx: i32, dy: i32, data: i32) {
             },
         },
     };
-    unsafe {
-        SendInput(&[input], size_of::<INPUT>() as i32);
-    }
+    inject(input);
 }
 
 /// Virtual key of a set 1 scan code; 0 when there is none.
 fn virtual_key(scan_code: u16, extended: bool) -> u32 {
     let prefix = if extended { 0xE000 } else { 0 };
+    // SAFETY: plain value conversion, no pointers.
     unsafe { MapVirtualKeyW(u32::from(scan_code) | prefix, MAPVK_VSC_TO_VK_EX) }
 }
 
@@ -85,14 +102,13 @@ impl crate::platform::Injector for Injector {
                 },
             },
         };
-        unsafe {
-            SendInput(&[input], size_of::<INPUT>() as i32);
-        }
+        inject(input);
     }
 
     /// Current key state, like Gremlin's keyboard condition.
     fn key_pressed(&self, scan_code: u16, extended: bool) -> bool {
         let vk = virtual_key(scan_code, extended);
+        // SAFETY: plain query by virtual key, no pointers.
         vk != 0 && unsafe { GetAsyncKeyState(vk as i32) } < 0
     }
 }
