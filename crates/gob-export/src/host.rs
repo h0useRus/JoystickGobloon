@@ -328,7 +328,15 @@ pub fn apply(target: &Target, files: &Files, result: &WriteResult) -> Result<Wri
         } else if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
+        // A running game may keep its file open so it cannot be replaced: then it is written
+        // in place (the backup above keeps the old text).
         gob_core::file::write_whole(&path, text.as_bytes())
+            .or_else(|e| match e.kind() {
+                std::io::ErrorKind::PermissionDenied if path.is_file() => {
+                    std::fs::write(&path, text)
+                }
+                _ => Err(e),
+            })
             .map_err(|e| format!("{}: {e}", path.display()))?;
         out.files.push(path);
     }
