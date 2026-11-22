@@ -8,6 +8,9 @@ on:
         description: "Version without the v, e.g. 0.2.0 or 0.2.0-alpha.12"
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   announce:
     runs-on: windows-latest
