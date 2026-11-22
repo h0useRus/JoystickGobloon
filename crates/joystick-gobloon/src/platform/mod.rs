@@ -118,8 +118,6 @@ pub(crate) trait Desktop {
     fn exe_name() -> &'static str;
     /// Runs a downloaded installer; it closes this copy and starts the new one.
     fn run_installer(setup: &Path) -> Result<(), String>;
-    /// Unpacks a downloaded zip into `to`.
-    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String>;
     /// Waits until process `pid` exits, at most `timeout`.
     fn wait_for_process(pid: u32, timeout: Duration);
 
@@ -353,10 +351,6 @@ pub(crate) fn exe_name() -> &'static str {
 
 pub(crate) fn run_installer(setup: &Path) -> Result<(), String> {
     Current::run_installer(setup)
-}
-
-pub(crate) fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
-    Current::unpack_zip(zip, to)
 }
 
 pub(crate) fn wait_for_process(pid: u32, timeout: Duration) {

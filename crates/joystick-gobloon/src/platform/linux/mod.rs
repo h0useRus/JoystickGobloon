@@ -314,10 +314,6 @@ impl super::Desktop for Desktop {
         update::replace_appimage(setup)
     }
 
-    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
-        Fallback::unpack_zip(zip, to)
-    }
-
     fn wait_for_process(pid: u32, timeout: Duration) {
         update::wait_for_process(pid, timeout);
     }

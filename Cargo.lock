@@ -2567,6 +2567,7 @@ dependencies = [
  "winit",
  "winresource",
  "x11rb",
+ "zip",
 ]
 
 [[package]]

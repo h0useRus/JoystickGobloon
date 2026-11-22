@@ -154,10 +154,6 @@ impl super::Desktop for Desktop {
         update::run_installer(setup)
     }
 
-    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
-        update::unpack_zip(zip, to)
-    }
-
     fn wait_for_process(pid: u32, timeout: Duration) {
         update::wait_for_process(pid, timeout);
     }
