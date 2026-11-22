@@ -9,6 +9,7 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
+foldhash = "0.2"
 gob-i18n = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.4.1" }
 gob-core = { path = "crates/gob-core" }
 gob-gremlin = { path = "crates/gob-gremlin" }

@@ -1,4 +1,9 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+/// Maps with a fast hasher: every input event looks up and updates several of them, and the
+/// keys (device GUIDs, mode names) come from the profile, not from the network.
+type HashMap<K, V> = std::collections::HashMap<K, V, foldhash::fast::RandomState>;
+type HashSet<K> = std::collections::HashSet<K, foldhash::fast::RandomState>;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -806,7 +811,7 @@ impl Engine {
     /// Compiles `profile`. `aliases` maps profile device GUIDs to attached ones
     /// (same stick under another GUID on this PC).
     /// Action types Joystick Gobloon does not know are kept and do nothing.
-    pub fn new(profile: &Profile, aliases: &HashMap<String, String>) -> Self {
+    pub fn new(profile: &Profile, aliases: &std::collections::HashMap<String, String>) -> Self {
         let index = profile.action_index();
         let start = profile
             .startup_mode()
@@ -815,51 +820,51 @@ impl Engine {
             .unwrap_or_else(|| "Default".into());
         let mut engine = Self {
             nodes: Vec::new(),
-            tempo: HashMap::new(),
-            cycle: HashMap::new(),
+            tempo: HashMap::default(),
+            cycle: HashMap::default(),
             sets: Vec::new(),
-            lookup: HashMap::new(),
+            lookup: HashMap::default(),
             virtual_device: VIRTUAL_DEVICE.into(),
             modes: ModeStack::new(&start),
-            releases: HashMap::new(),
+            releases: HashMap::default(),
             release_buffer: Vec::new(),
             timers: Vec::new(),
             next_timer: 0,
-            axes: HashMap::new(),
-            relative: HashMap::new(),
+            axes: HashMap::default(),
+            relative: HashMap::default(),
             motion: Motion::default(),
-            toggles: HashMap::new(),
-            macros: HashMap::new(),
-            taps: HashMap::new(),
-            chains: HashMap::new(),
-            hat_buttons: HashMap::new(),
-            deltas: HashMap::new(),
-            buttons: HashMap::new(),
-            hats: HashMap::new(),
-            logical_relative: HashMap::new(),
+            toggles: HashMap::default(),
+            macros: HashMap::default(),
+            taps: HashMap::default(),
+            chains: HashMap::default(),
+            hat_buttons: HashMap::default(),
+            deltas: HashMap::default(),
+            buttons: HashMap::default(),
+            hats: HashMap::default(),
+            logical_relative: HashMap::default(),
             logical_depth: 0,
             logical_changed: false,
-            cond_cache: HashMap::new(),
-            keys_down: HashSet::new(),
+            cond_cache: HashMap::default(),
+            keys_down: HashSet::default(),
             mouse_down: Vec::new(),
             vjoy_down: Vec::new(),
             pad_down: Vec::new(),
-            pad_axes: HashMap::new(),
-            sends: HashMap::new(),
-            listening: HashMap::new(),
+            pad_axes: HashMap::default(),
+            sends: HashMap::default(),
+            listening: HashMap::default(),
             voice_holds: profile
                 .voice_commands
                 .iter()
                 .map(|c| (c.id, Duration::from_secs_f64(c.hold.clamp(0.01, 10.0))))
                 .collect(),
-            voice_releases: HashMap::new(),
-            osc_routes: HashMap::new(),
-            osc_releases: HashMap::new(),
-            delays: HashMap::new(),
-            event_releases: HashMap::new(),
+            voice_releases: HashMap::default(),
+            osc_routes: HashMap::default(),
+            osc_releases: HashMap::default(),
+            delays: HashMap::default(),
+            event_releases: HashMap::default(),
             mode_event_depth: 0,
             combos: Vec::new(),
-            combos_down: HashSet::new(),
+            combos_down: HashSet::default(),
             event_chain: 0,
             event_released: false,
             stopping: false,
@@ -878,7 +883,7 @@ impl Engine {
                 .and_then(|d| d.trim().parse().ok())
                 .filter(|d: &f64| *d >= 0.0)
                 .unwrap_or(MACRO_DELAY),
-            vjoy_axes: HashMap::new(),
+            vjoy_axes: HashMap::default(),
             paused: false,
             aliases: aliases
                 .iter()
@@ -886,24 +891,24 @@ impl Engine {
                 .collect(),
             compiled_lights: Vec::new(),
             modifiers: Vec::new(),
-            pressed_layers: HashMap::new(),
+            pressed_layers: HashMap::default(),
             last_action: None,
-            zone_last: HashMap::new(),
+            zone_last: HashMap::default(),
             layer_now: Layer::base(),
-            button_axes: HashMap::new(),
+            button_axes: HashMap::default(),
             axis_writes: Vec::new(),
             compiled_decrease: Vec::new(),
             prune: None,
             started: false,
-            action_nodes: HashMap::new(),
-            run_targets: HashMap::new(),
-            run_releases: HashMap::new(),
+            action_nodes: HashMap::default(),
+            run_targets: HashMap::default(),
+            run_releases: HashMap::default(),
             scripts: None,
-            script_keys: HashMap::new(),
-            script_modes: HashSet::new(),
+            script_keys: HashMap::default(),
+            script_modes: HashSet::default(),
             script_keys_down: Vec::new(),
             script_hats: Vec::new(),
-            action_labels: HashMap::new(),
+            action_labels: HashMap::default(),
         };
         for m in profile.library.iter().filter(|a| a.kind == "macro") {
             let targets = m.run_targets();
@@ -1172,7 +1177,12 @@ impl Engine {
         }
     }
 
-    fn compile(&mut self, index: &HashMap<&str, &Action>, id: &str, depth: usize) -> NodeId {
+    fn compile(
+        &mut self,
+        index: &std::collections::HashMap<&str, &Action>,
+        id: &str,
+        depth: usize,
+    ) -> NodeId {
         let pruned = self.prune.as_deref().is_some_and(|target| {
             index
                 .get(id)
