@@ -109,7 +109,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   memory cap, also used by gob-export plugins), 5 ms per call (interrupt), off after
   10 errors; prelude.luau = the Lua API (script.<kind>{} variables, input:on(mode, fn), script.every, vjoy/gamepad/
   keyboard/mouse/mode/joystick, speak, run_action, log), `describe` for the Scripts page form, `ScriptHost` +
-  `ScriptApi` (engine.rs `ScriptContext`); handlers run before an input's actions. Profile side: gob-core script.rs
+  `ScriptApi` (engine/script.rs `ScriptContext`); handlers run before an input's actions. Profile side: gob-core script.rs
   (`<scripts>`: Lua code as CDATA or a file path, Gremlin's Python kept, variables in Gremlin's XML); the app reads
   external files on activation (activation.rs) and reloads when they change; Scripts page = scripts_view.rs, editor =
   gob-ui `CodeEditor`
