@@ -291,7 +291,7 @@ impl JoystickGobloonApp {
             game_view: Default::default(),
             game_window: false,
             calibrations: Default::default(),
-            hidhide_view: HidHideView::new(),
+            hidhide_view: HidHideView::new(cc.egui_ctx.clone()),
             hidhide_window: false,
             apps_view: AppsView::new(),
             device_access: crate::device_access::DeviceAccess::new(),
@@ -1993,7 +1993,7 @@ impl JoystickGobloonApp {
                 self.status = self.i18n.tr(key);
                 self.vjoy_view.release();
                 self.vjoy_view = VJoyView::new();
-                self.hidhide_view = HidHideView::new();
+                self.hidhide_view.renew();
                 self.device_access = crate::device_access::DeviceAccess::new();
             }
             Err(e) => {
@@ -2017,7 +2017,7 @@ impl JoystickGobloonApp {
                 self.status = self.i18n.tr("access-granted");
                 // They found no access when they were made: make them again.
                 self.vjoy_view = VJoyView::new();
-                self.hidhide_view = HidHideView::new();
+                self.hidhide_view.renew();
             }
             Some(Err(e)) => {
                 let text = self.i18n.trf("access-error", &[("error", e.into())]);

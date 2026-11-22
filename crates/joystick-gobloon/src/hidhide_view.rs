@@ -1,7 +1,11 @@
 //! Device hiding window: the devices the system can hide, with the options of HidHide's own
 //! client.
+//!
+//! Reading the devices (SetupAPI, tens of milliseconds) and changing them run on a thread of
+//! their own; the window shows the last state read until the next one arrives.
 
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender};
 
 use eframe::egui::{self, RichText};
 use gob_hide::{Backend, Device};
@@ -12,6 +16,13 @@ use crate::style::{self, icon};
 
 pub struct HidHideView {
     hh: Result<Arc<dyn Backend>, String>,
+    /// Asks the worker for reads and changes; `None` without device hiding.
+    worker: Option<Sender<Work>>,
+    replies: Option<Receiver<Reply>>,
+    /// A first state arrived.
+    have_state: bool,
+    ctx: egui::Context,
+    /// A read is asked for (or arrived) since the last change elsewhere.
     loaded: bool,
     /// The list was read with this "gaming only" filter.
     gaming_only: bool,
@@ -22,10 +33,74 @@ pub struct HidHideView {
     inputs: Vec<String>,
 }
 
+/// A change to run, then a read.
+type Change = Box<dyn FnOnce(&dyn Backend) -> Result<(), gob_hide::Error> + Send>;
+
+enum Work {
+    /// Read the state with this "gaming only" filter.
+    Read(bool),
+    Change(Change, bool),
+}
+
+enum Reply {
+    State(Result<(bool, Vec<Device>), String>),
+    ChangeFailed(String),
+}
+
+/// The worker: changes and reads in the order they were asked for.
+fn work(hh: &dyn Backend, ctx: &egui::Context, jobs: &Receiver<Work>, replies: &Sender<Reply>) {
+    for job in jobs {
+        let gaming_only = match job {
+            Work::Read(g) => g,
+            Work::Change(change, g) => {
+                if let Err(e) = change(hh) {
+                    log::error!("changing the device hiding state: {e}");
+                    let _ = replies.send(Reply::ChangeFailed(e.to_string()));
+                    ctx.request_repaint();
+                    continue;
+                }
+                g
+            }
+        };
+        let state = (|| Ok::<_, gob_hide::Error>((hh.enabled()?, hh.devices(gaming_only)?)))()
+            .map_err(|e| {
+                log::error!("reading the device hiding state: {e}");
+                e.to_string()
+            });
+        if replies.send(Reply::State(state)).is_err() {
+            return;
+        }
+        ctx.request_repaint();
+    }
+}
+
 impl HidHideView {
-    pub fn new() -> Self {
+    pub fn new(ctx: egui::Context) -> Self {
+        let hh = gob_hide::load().map_err(|e| e.to_string());
+        let (worker, replies) = match &hh {
+            Ok(backend) => {
+                let (tx, jobs) = std::sync::mpsc::channel();
+                let (reply, replies) = std::sync::mpsc::channel();
+                let (backend, ctx) = (backend.clone(), ctx.clone());
+                let spawned = std::thread::Builder::new()
+                    .name("device-hiding".into())
+                    .spawn(move || work(backend.as_ref(), &ctx, &jobs, &reply));
+                match spawned {
+                    Ok(_) => (Some(tx), Some(replies)),
+                    Err(e) => {
+                        log::error!("device hiding thread: {e}");
+                        (None, None)
+                    }
+                }
+            }
+            Err(_) => (None, None),
+        };
         Self {
-            hh: gob_hide::load().map_err(|e| e.to_string()),
+            hh,
+            worker,
+            replies,
+            have_state: false,
+            ctx,
             loaded: false,
             gaming_only: true,
             cloaked: false,
@@ -35,31 +110,47 @@ impl HidHideView {
         }
     }
 
+    /// Made again (device access changed): a new backend, the same window.
+    pub fn renew(&mut self) {
+        *self = Self::new(self.ctx.clone());
+    }
+
+    /// Asks for the state; it arrives in a later frame.
     fn refresh(&mut self, gaming_only: bool) {
         self.loaded = true;
         self.gaming_only = gaming_only;
-        let Ok(hh) = &self.hh else { return };
-        let result = (|| {
-            self.cloaked = hh.enabled()?;
-            self.groups = hh.devices(gaming_only)?;
-            Ok::<_, gob_hide::Error>(())
-        })();
-        if let Err(e) = &result {
-            log::error!("reading the device hiding state: {e}");
+        if let Some(worker) = &self.worker {
+            let _ = worker.send(Work::Read(gaming_only));
         }
-        self.error = result.err().map(|e| e.to_string());
     }
 
-    /// Runs a change, then reloads the state.
-    fn apply(&mut self, change: impl FnOnce(&dyn Backend) -> Result<(), gob_hide::Error>) {
-        if let Ok(hh) = &self.hh
-            && let Err(e) = change(hh.as_ref())
-        {
-            log::error!("changing the device hiding state: {e}");
-            self.error = Some(e.to_string());
-            return;
+    /// Runs a change, then reads the state again (both on the worker).
+    fn apply(
+        &mut self,
+        change: impl FnOnce(&dyn Backend) -> Result<(), gob_hide::Error> + Send + 'static,
+    ) {
+        self.loaded = true;
+        if let Some(worker) = &self.worker {
+            let _ = worker.send(Work::Change(Box::new(change), self.gaming_only));
         }
-        self.refresh(self.gaming_only);
+    }
+
+    /// Takes what the worker finished.
+    fn poll(&mut self) {
+        let Some(replies) = &self.replies else {
+            return;
+        };
+        for reply in replies.try_iter() {
+            match reply {
+                Reply::State(Ok((cloaked, groups))) => {
+                    self.cloaked = cloaked;
+                    self.groups = groups;
+                    self.have_state = true;
+                    self.error = None;
+                }
+                Reply::State(Err(e)) | Reply::ChangeFailed(e) => self.error = Some(e),
+            }
+        }
     }
 
     /// The hideable device an input device belongs to (see [`gob_hide::find_device`]).
@@ -75,6 +166,7 @@ impl HidHideView {
         gaming_only: bool,
     ) -> Option<bool> {
         self.hh.as_ref().ok()?;
+        self.poll();
         if !self.loaded {
             self.refresh(gaming_only);
         }
@@ -93,21 +185,22 @@ impl HidHideView {
     pub fn set_device_hidden(&mut self, info: &gob_input::DeviceInfo, hide: bool) {
         if let Some(i) = self.find_group(info) {
             let group = self.groups[i].clone();
-            self.apply(|hh| hh.set_hidden(&group, hide));
+            self.apply(move |hh| hh.set_hidden(&group, hide));
         }
     }
 
     /// Whether device hiding is on; `None` without it. Reads the state the first time.
     pub fn cloak(&mut self, gaming_only: bool) -> Option<bool> {
         self.hh.as_ref().ok()?;
+        self.poll();
         if !self.loaded {
             self.refresh(gaming_only);
         }
-        Some(self.cloaked)
+        self.have_state.then_some(self.cloaked)
     }
 
     pub fn set_cloak(&mut self, on: bool) {
-        self.apply(|hh| hh.set_enabled(on));
+        self.apply(move |hh| hh.set_enabled(on));
     }
 
     /// The connected input devices (ids); when they change the list is read again when next
@@ -145,6 +238,7 @@ impl HidHideView {
             }
         };
         self.poll_changed();
+        self.poll();
         if !self.loaded || self.gaming_only != settings.hidhide_gaming_only {
             self.refresh(settings.hidhide_gaming_only);
         }
@@ -173,7 +267,7 @@ impl HidHideView {
                             .add(style::switch(&mut cloaked, i18n.tr("hidhide-enable")))
                             .changed()
                         {
-                            self.apply(|hh| hh.set_enabled(cloaked));
+                            self.apply(move |hh| hh.set_enabled(cloaked));
                         }
                     });
                     ui.add_space(16.0);
@@ -243,7 +337,7 @@ impl HidHideView {
         });
         if let Some((i, hide)) = toggle {
             let group = self.groups[i].clone();
-            self.apply(|hh| hh.set_hidden(&group, hide));
+            self.apply(move |hh| hh.set_hidden(&group, hide));
         }
         changed
     }
