@@ -222,7 +222,8 @@ impl JoystickGobloonApp {
             .and_then(|p| p.parent().map(|d| d.join("lang")));
         let mut i18n = I18n::new(crate::LANGUAGES, lang_dir.as_deref());
         i18n.set_language(&settings.language);
-        style::install_fonts(&cc.egui_ctx);
+        // The UI language's own text (a Chinese, Korean or added language) decides the fonts.
+        style::install_fonts(&cc.egui_ctx, style::has_cjk(&i18n.tr("language-name")));
         style::apply(&cc.egui_ctx, settings.theme);
         style::follow_system_theme(&cc.egui_ctx);
         // Double clicks (curve points, the hide button) follow the system's setting.
@@ -560,6 +561,7 @@ impl JoystickGobloonApp {
                     });
                 }
                 self.drop_autosave(false);
+                style::note_text(&gob_gremlin::to_string(&loaded.profile));
                 self.profile = Some(loaded);
                 if how != OpenAs::Program {
                     self.activation.stop();
@@ -1024,6 +1026,7 @@ impl JoystickGobloonApp {
             .i18n
             .trf("status-restored", &[("file", loaded.file_name().into())]);
         self.drop_autosave(false);
+        style::note_text(&gob_gremlin::to_string(&loaded.profile));
         self.profile = Some(loaded);
         self.activation.stop();
         self.activation.set_start_mode(None);
@@ -1318,6 +1321,7 @@ impl JoystickGobloonApp {
         // Named now, written after the first edit.
         loaded.autosave = crate::autosave::dir()
             .map(|dir| crate::autosave::next_file(&dir, &self.settings.autosave));
+        style::note_text(&gob_gremlin::to_string(&loaded.profile));
         self.profile = Some(loaded);
         self.activation.stop();
         self.activation.set_start_mode(None);
@@ -2070,6 +2074,9 @@ impl JoystickGobloonApp {
         (self.devices_view.max_gamepads, self.devices_view.gamepads) =
             self.vjoy_view.gamepad_list();
         let gaming_only = self.settings.hidhide_gaming_only;
+        for d in &devices {
+            style::note_text(&d.info.name);
+        }
         self.hidhide_view
             .track_inputs(devices.iter().map(|d| d.info.guid.clone()).collect());
         self.devices_view.hiding_on = self.hidhide_view.cloak(gaming_only) == Some(true);
@@ -2372,6 +2379,7 @@ impl eframe::App for JoystickGobloonApp {
             self.request(Pending::Update, ctx);
         }
         self.activation_done();
+        style::load_cjk_if_wanted(ctx);
         self.update_title(ctx);
         if self.hide_frames > 0 {
             self.vjoy_view.release();

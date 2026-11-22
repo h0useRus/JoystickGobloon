@@ -4,6 +4,7 @@
 
 use eframe::egui::{self, Color32, RichText, Vec2};
 pub use gob_ui::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::settings::Theme;
 
@@ -23,15 +24,54 @@ const PALETTES: Palettes = Palettes {
     },
 };
 
-pub fn install_fonts(ctx: &egui::Context) {
+/// Fonts at start: the Chinese and Korean ones only when `cjk` (they are tens of megabytes);
+/// otherwise they load the first time such text is about to show ([`want_cjk`]).
+pub fn install_fonts(ctx: &egui::Context, cjk: bool) {
+    CJK_LOADED.store(cjk, Ordering::Relaxed);
+    set_fonts(ctx, cjk);
+}
+
+fn set_fonts(ctx: &egui::Context, cjk: bool) {
     let mut fonts = egui::FontDefinitions::default();
     add_icon_font(&mut fonts);
-    add_cjk_fallbacks(&mut fonts);
+    if cjk {
+        add_cjk_fallbacks(&mut fonts);
+    }
     ctx.set_fonts(fonts);
 }
 
+static CJK_LOADED: AtomicBool = AtomicBool::new(false);
+static CJK_WANTED: AtomicBool = AtomicBool::new(false);
+
+/// Whether `text` has Chinese, Japanese or Korean characters.
+pub fn has_cjk(text: &str) -> bool {
+    text.chars().any(|c| {
+        matches!(c as u32, 0x2E80..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF)
+    })
+}
+
+/// Chinese or Korean text is about to show (the language list, a profile or device with such
+/// names): the fonts load before the next frame.
+pub fn want_cjk() {
+    CJK_WANTED.store(true, Ordering::Relaxed);
+}
+
+/// Notes text that may need the Chinese and Korean fonts.
+pub fn note_text(text: &str) {
+    if !CJK_LOADED.load(Ordering::Relaxed) && has_cjk(text) {
+        want_cjk();
+    }
+}
+
+/// Loads the Chinese and Korean fonts once something asked for them; cheap every frame.
+pub fn load_cjk_if_wanted(ctx: &egui::Context) {
+    if CJK_WANTED.load(Ordering::Relaxed) && !CJK_LOADED.swap(true, Ordering::Relaxed) {
+        set_fonts(ctx, true);
+    }
+}
+
 /// Chinese and Korean glyphs from the system's fonts (`platform::cjk_fonts`), after egui's own
-/// fonts. Always loaded: the language list shows 简体中文 and 한국어 whatever the UI language is.
+/// fonts.
 fn add_cjk_fallbacks(fonts: &mut egui::FontDefinitions) {
     for (name, file) in crate::platform::cjk_fonts() {
         let Ok(bytes) = std::fs::read(&file) else {

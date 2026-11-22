@@ -58,6 +58,11 @@ pub(crate) trait Desktop {
     /// Keyboard keys held right now; `None` when the program cannot see the keyboard's state
     /// (key recording then uses the window's own key events).
     fn held_keys() -> Option<Vec<Key>>;
+    /// Whether one key is held; `None` as with [`Desktop::held_keys`]. Cheaper than reading
+    /// every key where the system can ask for one.
+    fn key_held(key: Key) -> Option<bool> {
+        Self::held_keys().map(|held| held.contains(&key))
+    }
     /// A key's name in the current keyboard layout, e.g. "Right Ctrl".
     fn key_name(key: Key) -> String;
     /// The system's light/dark setting: `Some(true)` dark, `Some(false)` light, `None` when it
@@ -255,6 +260,10 @@ pub(crate) fn set_keyboard_access(allow: bool) -> Result<(), String> {
 
 pub(crate) fn held_keys() -> Option<Vec<Key>> {
     Current::held_keys()
+}
+
+pub(crate) fn key_held(key: Key) -> Option<bool> {
+    Current::key_held(key)
 }
 
 pub(crate) fn key_name(key: Key) -> String {

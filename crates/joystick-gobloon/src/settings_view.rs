@@ -70,6 +70,8 @@ pub fn show(
     updater: &mut crate::update::Updater,
     attached: Attached,
 ) -> Option<Change> {
+    // The language lists name each language in its own script.
+    style::want_cjk();
     if !settings.experimental && *tab == SettingsTab::Lighting {
         *tab = SettingsTab::General;
     }

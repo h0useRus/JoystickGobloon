@@ -82,6 +82,10 @@ impl super::Desktop for Desktop {
         Some(keys::held())
     }
 
+    fn key_held(key: Key) -> Option<bool> {
+        Some(keys::is_held(key))
+    }
+
     fn key_name(key: Key) -> String {
         keys::name(key)
     }

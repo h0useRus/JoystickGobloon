@@ -48,20 +48,37 @@ pub fn key_code(key: Key) -> u16 {
     key.scan_code | if key.extended { 0x100 } else { 0 }
 }
 
-/// Left and right Ctrl, Alt and Shift count as one.
-fn same_key(a: Key, b: Key) -> bool {
-    let side_free = |k: Key| match (k.scan_code, k.extended) {
-        (0x1d, _) => (0x1d, false),
-        (0x38, _) => (0x38, false),
-        (0x36, false) => (0x2a, false),
-        other => other,
-    };
-    side_free(a) == side_free(b)
+/// Whether every key of `combo` is among `held`.
+#[cfg(test)]
+fn combo_held(combo: &[Key], held: &[Key]) -> bool {
+    combo_matches(combo, |k| held.contains(&k))
 }
 
-/// Whether every key of `combo` is among `held`.
-fn combo_held(combo: &[Key], held: &[Key]) -> bool {
-    !combo.is_empty() && combo.iter().all(|k| held.iter().any(|h| same_key(*h, *k)))
+/// The key and its other side's twin (left and right Ctrl, Alt and Shift count as one).
+fn both_sides(k: Key) -> [Key; 2] {
+    let key = |scan_code, extended| Key {
+        scan_code,
+        extended,
+    };
+    match (k.scan_code, k.extended) {
+        (0x1d, _) => [key(0x1d, false), key(0x1d, true)],
+        (0x38, _) => [key(0x38, false), key(0x38, true)],
+        (0x2a, false) | (0x36, false) => [key(0x2a, false), key(0x36, false)],
+        _ => [k, k],
+    }
+}
+
+/// Whether every key of `combo` is held (either side of Ctrl, Alt and Shift), by `is_held`.
+fn combo_matches(combo: &[Key], is_held: impl Fn(Key) -> bool) -> bool {
+    !combo.is_empty()
+        && combo
+            .iter()
+            .all(|&k| both_sides(k).iter().any(|&side| is_held(side)))
+}
+
+/// Whether the combination is held now, asking the system only for its keys.
+fn combo_down(combo: &[Key]) -> bool {
+    combo_matches(combo, |k| crate::platform::key_held(k) == Some(true))
 }
 
 /// One line of the overlay.
@@ -559,8 +576,7 @@ fn spawn_key_thread(ctx: egui::Context, shared: Arc<Shared>) -> Result<(), Strin
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .clone();
-                let held = crate::platform::held_keys().unwrap_or_default();
-                let now = combo_held(&combo, &held);
+                let now = combo_down(&combo);
                 if now && !down {
                     let hidden = !shared.hidden.load(Ordering::Relaxed);
                     shared.hidden.store(hidden, Ordering::Relaxed);
