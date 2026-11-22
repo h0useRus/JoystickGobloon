@@ -8,7 +8,7 @@ nav-vjoy = 虚拟摇杆
 nav-viewer = 输入查看器
 nav-calibration = 校准
 nav-settings = 设置
-action-open = 导入 Joystick Gremlin 配置文件
+action-open = 打开配置文件
 action-save = 保存
 label-mode = 模式
 

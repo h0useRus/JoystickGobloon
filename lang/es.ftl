@@ -8,7 +8,7 @@ nav-vjoy = Joysticks virtuales
 nav-viewer = Visor de entradas
 nav-calibration = Calibración
 nav-settings = Configuración
-action-open = Importar perfil de Joystick Gremlin
+action-open = Abrir perfil
 action-save = Guardar
 label-mode = Modo
 
