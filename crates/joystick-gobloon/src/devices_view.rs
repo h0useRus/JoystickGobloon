@@ -67,7 +67,7 @@ pub struct DevicesView {
     mode: Option<String>,
     scroll_to: Option<(String, Key)>,
     /// Axis value when it last counted as moved (per device and axis).
-    axis_ref: HashMap<(String, u8), f32>,
+    axis_ref: HashMap<(std::sync::Arc<str>, u8), f32>,
     /// Device whose info window is open.
     info: Option<String>,
     /// JOYSTICK_GOBLOON_INFO was handled (debug builds).
@@ -211,7 +211,7 @@ impl DevicesView {
             let (kind, id) = key;
             if devices
                 .iter()
-                .any(|d| d.info.guid == device && d.info.is_own())
+                .any(|d| *d.info.guid == *device && d.info.is_own())
                 || (kind == Kind::Button
                     && modifiers
                         .iter()
@@ -219,8 +219,8 @@ impl DevicesView {
             {
                 continue;
             }
-            self.selected = Some(device.clone());
-            self.scroll_to = Some((device, key));
+            self.selected = Some(device.to_string());
+            self.scroll_to = Some((device.to_string(), key));
         }
     }
 

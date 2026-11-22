@@ -23,8 +23,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - joystick-gobloon overlay.rs = game overlay (Settings > Overlay): a deferred viewport (transparent, on top,
   click-through) whose lines `logic` builds from RunnerStatus (also while in the tray); Ctrl+Alt+F polled from
   `held_keys` on a thread. The root window is transparent with a transparent clear_color for it: panels must cover it
-- crates/gob-core    profile model
-- crates/gob-core    profile model grown from Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views;
+- crates/gob-core    profile model grown from Gremlin R14; file.rs `write_whole` = how every crate saves a file
+  (temp + fsync + rename: profiles, settings, state files, game bindings); generic Action{kind, items} + typed `Action::kind()` views;
   modifier.rs = modifiers and input layers (Joystick Gobloon only, `Profile::needs_own_format`)
   button_axis.rs = axis from buttons (set/velocity/stepped/encoder/smooth, second "decrease" input);
   zones.rs = axis zones (`axis-zones`: points, `zone-N` groups with output rescale/pass/fixed; GremlinEx gated axis, lite);
@@ -51,7 +51,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   + filter.rs: jitter threshold per axis (in `Calibration::jitter`) and button/hat debounce per device
   (`set_debounce`), applied in service.rs for every backend; the snapshot shows filtered values, `raw` stays as read
   + low-level keyboard hook (platform/windows/keyboard.rs) -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
-  use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine
+  use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine;
+  Linux `held_keys()` (keyboard.rs, keyboards kept open) = the only "keys held now" reader (engine + app)
 - crates/gob-vjoy    talks to the vJoy driver directly (direct.rs: device_NNN handles + IOCTLs, HID caps; no
   vJoyInterface.dll / vJoyConfig.exe); VJoy::acquire -> Device (reset+release on drop); axis slots 1..8 like
   gob-input. Config = HID descriptors in HKLM\...\services\vjoy\Parameters\DeviceNN (descriptor.rs, vJoy 2.1.9
@@ -104,7 +105,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/completed/LIGHTING_PLAN.md
 - crates/gob-script  Lua user scripts (plans/completed/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
-  (`send`: the engine is built off its thread), one sandboxed state per script, 5 ms per call (interrupt), off after
+  (`send`: the engine is built off its thread), one sandboxed state per script (sandbox.rs `new_state`: time budget +
+  memory cap, also used by gob-export plugins), 5 ms per call (interrupt), off after
   10 errors; prelude.luau = the Lua API (script.<kind>{} variables, input:on(mode, fn), script.every, vjoy/gamepad/
   keyboard/mouse/mode/joystick, speak, run_action, log), `describe` for the Scripts page form, `ScriptHost` +
   `ScriptApi` (engine.rs `ScriptContext`); handlers run before an input's actions. Profile side: gob-core script.rs

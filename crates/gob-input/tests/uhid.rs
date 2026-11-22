@@ -185,7 +185,7 @@ fn buttons_past_80_come_from_hidraw() {
         stick.press(&down);
         wait_for(&events, |e| {
             matches!(e, InputEvent::Button { device, id, pressed: p }
-                if *device == guid && *id == button && *p == pressed)
+                if **device == *guid && *id == button && *p == pressed)
         });
     }
     let d = input

@@ -1969,6 +1969,7 @@ version = "0.6.0"
 name = "gob-engine"
 version = "0.6.0"
 dependencies = [
+ "foldhash 0.2.0",
  "gob-core",
  "gob-gremlin",
  "gob-input",
@@ -1989,6 +1990,7 @@ dependencies = [
 name = "gob-export"
 version = "0.6.0"
 dependencies = [
+ "gob-core",
  "gob-script",
  "log",
  "mlua",
@@ -2010,6 +2012,7 @@ dependencies = [
 name = "gob-hide"
 version = "0.6.0"
 dependencies = [
+ "gob-core",
  "gob-hidhide",
  "gob-input",
  "gob-system",
@@ -2098,6 +2101,7 @@ dependencies = [
 name = "gob-virtual"
 version = "0.6.0"
 dependencies = [
+ "gob-core",
  "gob-system",
  "gob-uinput",
  "gob-vjoy",
@@ -4538,6 +4542,7 @@ dependencies = [
 name = "system-gobloon"
 version = "0.6.0"
 dependencies = [
+ "gob-core",
  "gob-input",
  "gob-system",
  "gob-uinput",

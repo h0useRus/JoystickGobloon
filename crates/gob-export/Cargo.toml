@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+gob-core.workspace = true
 gob-script.workspace = true
 # "serde": plugin hooks take and return plain tables, converted with serde.
 mlua = { workspace = true, features = ["serde"] }

@@ -192,7 +192,7 @@ impl Hide {
         if let Some(dir) = self.state_path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        write_atomic(&self.state_path, &text)
+        gob_core::file::write_whole(&self.state_path, text.as_bytes())
     }
 
     /// Writes the rule for the state (or removes it), has udev apply it and closes the nodes of
@@ -210,7 +210,7 @@ impl Hide {
             if let Some(dir) = self.rule_path.parent() {
                 std::fs::create_dir_all(dir)?;
             }
-            write_atomic(&self.rule_path, &text)?;
+            gob_core::file::write_whole(&self.rule_path, text.as_bytes())?;
         }
         self.system.trigger()?;
         self.enforce();
@@ -308,13 +308,6 @@ fn is_rule_safe(s: &str) -> bool {
     !s.is_empty()
         && s.chars()
             .all(|c| c.is_ascii_graphic() && !matches!(c, '"' | '\\' | '*' | '?' | '[' | ']' | '|'))
-}
-
-/// Writes a file through a temporary one next to it, so readers never see half of it.
-fn write_atomic(path: &Path, text: &str) -> io::Result<()> {
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
 }
 
 /// Removes the rule and has udev give access back (`--cleanup`, the unit's `ExecStopPost`).

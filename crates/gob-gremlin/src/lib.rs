@@ -67,5 +67,8 @@ pub fn load(path: impl AsRef<Path>) -> Result<Profile, Error> {
 }
 
 pub fn save(path: impl AsRef<Path>, profile: &Profile) -> Result<(), Error> {
-    Ok(std::fs::write(path, to_string(profile))?)
+    Ok(gob_core::file::write_whole(
+        path.as_ref(),
+        to_string(profile).as_bytes(),
+    )?)
 }

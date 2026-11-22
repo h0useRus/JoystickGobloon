@@ -484,21 +484,7 @@ fn load_toml<T: Default + for<'de> Deserialize<'de>>(name: &str) -> T {
     })
 }
 
-/// Writes `path` so that a crash or power loss leaves either the old file or the new one, never
-/// a cut one: the text goes to a file next to it, reaches the disk, then replaces it.
-pub(crate) fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".new");
-    let new = path.with_file_name(name);
-    let mut file = std::fs::File::create(&new)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    drop(file);
-    std::fs::rename(&new, path).inspect_err(|_| {
-        let _ = std::fs::remove_file(&new);
-    })
-}
+pub(crate) use gob_core::file::write_whole;
 
 fn save_toml(name: &str, value: &impl Serialize) {
     let Some(dir) = data_dir() else {

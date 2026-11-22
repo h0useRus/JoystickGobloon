@@ -134,3 +134,77 @@ fn is_keyboard(node: &Node) -> bool {
             .all(|&k| caps.keys.has(k))
         && !is_own(node)
 }
+
+/// The keyboards [`held_keys`] reads, kept open between calls: opening and closing every event
+/// node on each call is slow (closing waits for the kernel, see `NodeCache`).
+struct Readable {
+    keyboards: Vec<Node>,
+    seen: NodeCache<()>,
+    next_scan: Instant,
+}
+
+static READABLE: std::sync::Mutex<Option<Readable>> = std::sync::Mutex::new(None);
+
+/// Runs `f` on the keyboards that can be read now (rescanned every [`RESCAN`]).
+fn with_keyboards<R>(f: impl FnOnce(&[Node]) -> R) -> R {
+    let mut state = READABLE.lock().unwrap_or_else(|e| e.into_inner());
+    let state = state.get_or_insert_with(|| Readable {
+        keyboards: Vec::new(),
+        seen: NodeCache::default(),
+        next_scan: Instant::now(),
+    });
+    if Instant::now() >= state.next_scan {
+        state.next_scan = Instant::now() + RESCAN;
+        let paths = super::evdev::event_nodes();
+        state.keyboards.retain(|k| paths.contains(&k.path));
+        let keyboards = &mut state.keyboards;
+        state.seen.scan(paths, |path| {
+            let node = Node::open_direct(path)?;
+            // Looked at again: another device at this path (unplugged and plugged back between
+            // two scans), or new permissions. A node kept from before may be dead: replace it.
+            keyboards.retain(|k| k.path != path);
+            let keys = node.caps().keys;
+            if [KEY_ESC, KEY_A, KEY_Z, KEY_SPACE]
+                .iter()
+                .all(|&k| keys.has(k))
+            {
+                keyboards.push(node);
+            }
+            Ok(())
+        });
+    }
+    f(&state.keyboards)
+}
+
+/// Keys held on any keyboard right now as (set 1 scan code, extended), our own virtual keyboard
+/// included (like Windows' GetAsyncKeyState, which sees injected keys too); `None` when no
+/// keyboard can be read (no access to /dev/input).
+pub fn held_keys() -> Option<Vec<(u16, bool)>> {
+    with_keyboards(|keyboards| {
+        if keyboards.is_empty() {
+            return None;
+        }
+        let mut held = Vec::new();
+        for keyboard in keyboards {
+            let down = keyboard.pressed();
+            for code in (0..down.0.len() * 8).filter(|&c| down.has(c)) {
+                if let Some(key) = u16::try_from(code).ok().and_then(scan_code)
+                    && !held.contains(&key)
+                {
+                    held.push(key);
+                }
+            }
+        }
+        Some(held)
+    })
+}
+
+/// Whether any keyboard holds the key (set 1 scan code, extended), like [`held_keys`] but for
+/// one key: the key's evdev code is checked, so aliases (Right Shift sent with E0) count too.
+/// False when no keyboard can be read.
+pub fn key_held(scan_code: u16, extended: bool) -> bool {
+    let Some(code) = gob_uinput::keys::key_code(scan_code, extended) else {
+        return false;
+    };
+    with_keyboards(|keyboards| keyboards.iter().any(|k| k.pressed().has(usize::from(code))))
+}

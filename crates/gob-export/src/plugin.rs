@@ -2,13 +2,12 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
+use gob_script::sandbox::{self, Deadline};
 use gob_script::{ScriptError, script_error};
 use mlua::serde::SerializeOptions;
-use mlua::{Function, Lua, LuaSerdeExt, Table, Value, VmState};
+use mlua::{Function, Lua, LuaSerdeExt, Table, Value};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +24,8 @@ const PRELUDE: &str = include_str!("prelude.luau");
 pub const API: u32 = 1;
 /// Longest a hook may run: export reads and writes whole binding files.
 pub const CALL_BUDGET: Duration = Duration::from_secs(2);
+/// Most memory a plugin's state may use: it holds whole binding files and catalogs.
+const MEMORY: usize = 512 << 20;
 /// Longest `plugin.luau`'s top level may run when it is loaded.
 pub const LOAD_BUDGET: Duration = Duration::from_secs(1);
 
@@ -91,9 +92,7 @@ pub struct Plugin {
     lua: Lua,
     host: Table,
     hooks: Table,
-    /// Nanoseconds after `clock` at which the running call is stopped.
-    deadline: Arc<AtomicU64>,
-    clock: Instant,
+    deadline: Deadline,
 }
 
 impl std::fmt::Debug for Plugin {
@@ -160,19 +159,7 @@ impl Plugin {
             script: name.to_string(),
             ..script_error(CODE, &e)
         };
-        let lua = Lua::new();
-        let clock = Instant::now();
-        let deadline = Arc::new(AtomicU64::new(u64::MAX));
-        {
-            let deadline = deadline.clone();
-            lua.set_interrupt(move |_| {
-                if clock.elapsed().as_nanos() as u64 > deadline.load(Ordering::Relaxed) {
-                    Err(mlua::Error::runtime("ran too long and was stopped"))
-                } else {
-                    Ok(VmState::Continue)
-                }
-            });
-        }
+        let (lua, deadline) = sandbox::new_state(MEMORY).map_err(lua_error)?;
         let host = lua.create_table().map_err(lua_error)?;
         {
             let name = name.to_string();
@@ -200,7 +187,6 @@ impl Plugin {
             host,
             hooks,
             deadline,
-            clock,
         };
         plugin.arm(LOAD_BUDGET);
         let result = plugin.lua.load(code).set_name(format!("={CODE}")).exec();
@@ -256,12 +242,11 @@ impl Plugin {
     }
 
     fn arm(&self, budget: Duration) {
-        let at = (self.clock.elapsed() + budget).as_nanos() as u64;
-        self.deadline.store(at, Ordering::Relaxed);
+        self.deadline.arm(budget);
     }
 
     fn disarm(&self) {
-        self.deadline.store(u64::MAX, Ordering::Relaxed);
+        self.deadline.disarm();
     }
 
     fn lua_error(&self, e: &mlua::Error) -> PluginError {
@@ -336,6 +321,7 @@ impl Plugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     fn manifest() -> Manifest {
         toml::from_str("id = \"test\"\nname = \"Test\"").unwrap()

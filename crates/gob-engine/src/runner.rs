@@ -1,6 +1,10 @@
 //! Runs the engine on a background thread against real devices.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+
+/// Maps the runner touches on every write: a fast hasher (keys are small numbers and ids).
+type FastMap<K, V> = HashMap<K, V, foldhash::fast::RandomState>;
+type FastSet<K> = std::collections::HashSet<K, foldhash::fast::RandomState>;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
@@ -145,21 +149,21 @@ pub fn wait_stopped() {
 const RELOAD_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct SystemOutput {
-    devices: HashMap<u32, Box<dyn gob_virtual::Device>>,
-    gamepads: HashMap<u32, Box<dyn gob_virtual::Gamepad>>,
+    devices: FastMap<u32, Box<dyn gob_virtual::Device>>,
+    gamepads: FastMap<u32, Box<dyn gob_virtual::Gamepad>>,
     /// Last values written, read back by vJoy conditions; a write of the same value again is
     /// not sent.
-    written: HashMap<(u32, InputKind, u32), Value>,
+    written: FastMap<(u32, InputKind, u32), Value>,
     /// Writes of this pass of the loop, sent per device by [`SystemOutput::flush`]: one driver
     /// call per device instead of one per value. Buffers are kept between passes.
     pending: Vec<(u32, Vec<gob_virtual::Write>)>,
     pending_pads: Vec<(u32, Vec<gob_virtual::PadWrite>)>,
     /// Outputs whose last write the driver refused; logged once until one succeeds again.
-    failing: HashSet<(u32, InputKind, u32)>,
+    failing: FastSet<(u32, InputKind, u32)>,
     /// Writes the driver did not take (refused, or no device held): sent again even when the
     /// value is unchanged.
-    unsent: HashSet<(u32, InputKind, u32)>,
-    failing_pads: HashSet<(u32, Option<GamepadControl>)>,
+    unsent: FastSet<(u32, InputKind, u32)>,
+    failing_pads: FastSet<(u32, Option<GamepadControl>)>,
     /// What the GUI sees of the outputs, and what this pass sent for it.
     tap: crate::OutputTap,
     sent: Vec<(crate::Sent, Value)>,
@@ -208,14 +212,14 @@ impl SystemOutput {
         voice_events: std::sync::mpsc::Sender<gob_voice::VoiceEvent>,
     ) -> Self {
         Self {
-            devices: HashMap::new(),
-            gamepads: HashMap::new(),
-            written: HashMap::new(),
+            devices: FastMap::default(),
+            gamepads: FastMap::default(),
+            written: FastMap::default(),
             pending: Vec::new(),
             pending_pads: Vec::new(),
-            failing: HashSet::new(),
-            unsent: HashSet::new(),
-            failing_pads: HashSet::new(),
+            failing: FastSet::default(),
+            unsent: FastSet::default(),
+            failing_pads: FastSet::default(),
             tap: Default::default(),
             sent: Vec::new(),
             media: Default::default(),
@@ -374,7 +378,7 @@ impl SystemOutput {
 
 /// Logs a write the driver refused when it starts failing, and when it works again.
 fn log_refused<K: Copy + Eq + std::hash::Hash>(
-    failing: &mut HashSet<K>,
+    failing: &mut FastSet<K>,
     key: K,
     ok: Option<bool>,
     what: impl FnOnce() -> String,
@@ -762,7 +766,7 @@ struct ServiceState {
     ready: bool,
     error: Option<String>,
     /// Microphones listening now.
-    listening: HashSet<String>,
+    listening: FastSet<String>,
 }
 
 impl ServiceState {
@@ -1006,7 +1010,7 @@ fn on_voice(
 
 /// Device ids of input events as the engine's keys take them, made once per device.
 #[derive(Default)]
-struct DeviceIds(HashMap<String, Arc<str>>);
+struct DeviceIds(FastMap<String, Arc<str>>);
 
 impl DeviceIds {
     fn key(&mut self, device: &str, kind: InputKind, id: u32) -> InputKey {

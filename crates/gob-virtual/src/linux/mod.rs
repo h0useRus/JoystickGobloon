@@ -426,7 +426,8 @@ impl Backend for Uinput {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
-        std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+        gob_core::file::write_whole(&path, text.as_bytes())
+            .map_err(|e| format!("{}: {e}", path.display()))?;
         Ok(Outcome::Done)
     }
 }

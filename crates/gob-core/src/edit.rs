@@ -334,7 +334,9 @@ fn behavior_of(input_type: &str) -> &str {
 
 /// The name the user gave an action (Gremlin writes "None" for none).
 fn named(a: &Action) -> Option<&str> {
-    a.label().filter(|l| !l.trim().is_empty() && *l != "None")
+    a.label()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && *l != "None")
 }
 
 /// `name` with the lowest number not in `taken`: `Name (2)`, `Name (3)`...; a name that already
@@ -345,7 +347,7 @@ fn numbered(name: &str, taken: &HashSet<String>) -> String {
         .and_then(|s| s.rsplit_once(" ("))
         .and_then(|(base, n)| Some((base, n.parse::<u32>().ok()?)))
         .unwrap_or((name, 1));
-    (from.saturating_add(1)..)
+    (from.saturating_add(1)..=u32::MAX)
         .map(|n| format!("{base} ({n})"))
         .find(|n| !taken.contains(n))
         .unwrap_or_else(|| name.to_string())

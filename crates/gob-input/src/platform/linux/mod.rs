@@ -20,8 +20,9 @@ use std::time::{Duration, Instant};
 
 use evdev::{ABS_CNT, Bits, Caps, EV_ABS, EV_KEY, EV_SYN, KEY_CNT, Node, SYN_DROPPED, SYN_REPORT};
 
+use super::Buffered;
 use super::{format_guid, normalize_axis};
-use crate::{AXIS_SLOTS, Calibration, Calibrations, DeviceInfo, DeviceState, InputEvent};
+use crate::{AXIS_SLOTS, Calibration, Calibrations, DeviceInfo, DeviceState};
 
 /// Event mode: devices are also read this often without new events, as a fallback.
 const EVENT_TIMEOUT: Duration = Duration::from_millis(20);
@@ -604,14 +605,13 @@ impl Device {
     }
 
     /// Button `i` (0-based) changed; sent as an event in event mode.
-    fn set_button(&mut self, i: usize, pressed: bool, emit: &mut dyn FnMut(InputEvent)) {
+    fn set_button(&mut self, i: usize, pressed: bool, emit: &mut dyn FnMut(Buffered)) {
         if let Some(b) = self.state.buttons.get_mut(i)
             && *b != pressed
         {
             *b = pressed;
             if self.events {
-                emit(InputEvent::Button {
-                    device: self.state.info.guid.clone(),
+                emit(Buffered::Button {
                     id: i as u16 + 1,
                     pressed,
                 });
@@ -686,14 +686,13 @@ impl Device {
 
     /// End of a report: hat changes become directions (both hat axes of a diagonal arrive in
     /// one report).
-    fn end_report(&mut self, emit: &mut dyn FnMut(InputEvent)) {
+    fn end_report(&mut self, emit: &mut dyn FnMut(Buffered)) {
         for (n, hat) in self.hats.iter().enumerate().take(self.state.hats.len()) {
             let direction = hat.direction();
             if self.state.hats[n] != direction {
                 self.state.hats[n] = direction;
                 if self.events {
-                    emit(InputEvent::Hat {
-                        device: self.state.info.guid.clone(),
+                    emit(Buffered::Hat {
                         id: n as u8 + 1,
                         direction,
                     });
@@ -702,7 +701,7 @@ impl Device {
         }
     }
 
-    fn apply(&mut self, event: &evdev::Event, emit: &mut dyn FnMut(InputEvent)) {
+    fn apply(&mut self, event: &evdev::Event, emit: &mut dyn FnMut(Buffered)) {
         let code = usize::from(event.code);
         match event.type_ {
             EV_SYN if event.code == SYN_DROPPED => self.dropped = true,
@@ -766,7 +765,7 @@ impl super::Device for Device {
 
     /// Applies every waiting event in order. In event mode button and hat changes are sent
     /// as they come (so short presses are kept); in polling mode the caller's diff finds them.
-    fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool {
+    fn read(&mut self, emit: &mut dyn FnMut(Buffered)) -> bool {
         self.previous.copy_readings(&self.state);
         // SAFETY: `input_event` is plain data; all zeroes is a valid value.
         let mut buf: [evdev::Event; 64] = unsafe { std::mem::zeroed() };

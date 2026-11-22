@@ -533,10 +533,14 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
         let mut relayout = false;
         for dev in &mut devices {
             let at = Instant::now();
-            let id = dev.state().info.guid.clone();
-            let filter = filters
-                .entry(id)
-                .or_insert_with(|| Filtered::new(dev.state()));
+            // Looked up by reference: an owned key would allocate per device and pass.
+            if !filters.contains_key(&dev.state().info.guid) {
+                let filter = Filtered::new(dev.state());
+                filters.insert(dev.state().info.guid.clone(), filter);
+            }
+            let Some(filter) = filters.get_mut(&dev.state().info.guid) else {
+                continue;
+            };
             let read = dev.read(&mut |event| {
                 if let Some(event) = filter.event(event, at) {
                     tx.send(event, at);
