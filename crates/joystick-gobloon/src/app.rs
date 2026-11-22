@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use eframe::egui::{self, Align, Layout, RichText, Vec2};
 use gob_i18n::I18n;
 
-use crate::activation::Activation;
+use crate::activation::{Activation, Job};
 use crate::apps_view::AppsView;
 use crate::devices_view::DevicesView;
 use crate::hidhide_view::HidHideView;
@@ -90,6 +90,8 @@ pub struct JoystickGobloonApp {
     autosave_writer: crate::autosave::Writer,
     /// The program whose profile runs now by switching: (its key, its name, the profile file).
     switched: Option<(String, String, String)>,
+    /// A profile switch by program handed to the engine, waiting for its result.
+    pending_switch: Option<PendingSwitch>,
     /// Activated with unsaved changes while programs have profiles: ask to save first.
     ask_switch_unsaved: bool,
     /// The program whose waiting switch the user put off (no question again for it).
@@ -145,6 +147,17 @@ pub struct JoystickGobloonApp {
 }
 
 /// A dialog with a title and lines of text; technical details go to the log file.
+/// A profile switch by program waiting for the engine (see `switch_done`).
+struct PendingSwitch {
+    app: crate::settings::AppEntry,
+    program: String,
+    file: String,
+    path: PathBuf,
+    previous: Option<PathBuf>,
+    previous_mode: Option<String>,
+    current: bool,
+}
+
 struct Alert {
     title: String,
     lines: Vec<String>,
@@ -298,6 +311,7 @@ impl JoystickGobloonApp {
             ask_switch_unsaved: false,
             autosave_writer: crate::autosave::Writer::start(),
             switched: None,
+            pending_switch: None,
             held_dismissed: None,
             switch_paused: false,
             device_baseline: None,
@@ -593,7 +607,7 @@ impl JoystickGobloonApp {
                 self.status = self.i18n.tr("status-switch-paused");
             }
         }
-        if dirty {
+        if dirty || self.pending_switch.is_some() {
             return;
         }
         let Some(app) = self
@@ -629,7 +643,33 @@ impl JoystickGobloonApp {
         self.activation.set_start_mode(app.mode.clone());
         self.sync_activation();
         self.vjoy_view.release();
-        match self.activation.reload(true) {
+        self.activation.reload(Job::Switch, true);
+        self.pending_switch = Some(PendingSwitch {
+            app,
+            program,
+            file,
+            path,
+            previous,
+            previous_mode,
+            current,
+        });
+    }
+
+    /// The engine took the profile of the program in front, or kept the old one.
+    fn switch_done(&mut self, result: Result<(), String>) {
+        let Some(PendingSwitch {
+            app,
+            program,
+            file,
+            path,
+            previous,
+            previous_mode,
+            current,
+        }) = self.pending_switch.take()
+        else {
+            return;
+        };
+        match result {
             Ok(()) => {
                 self.switcher.applied(&app);
                 self.switched = Some((app.key(), program.clone(), file.clone()));
@@ -654,6 +694,20 @@ impl JoystickGobloonApp {
                     "status-switch-failed",
                     &[("program", program.into()), ("file", file.into())],
                 );
+            }
+        }
+    }
+
+    /// Results of starts and reloads the activation thread finished.
+    fn activation_done(&mut self) {
+        while let Some(done) = self.activation.take_done() {
+            match (done.job, done.result) {
+                (Job::Switch, result) => self.switch_done(result),
+                (_, Ok(())) => self.status = self.i18n.tr("status-active"),
+                (_, Err(e)) => {
+                    let text = self.i18n.trf("activate-error", &[("error", e.into())]);
+                    self.error(text);
+                }
             }
         }
     }
@@ -694,7 +748,12 @@ impl JoystickGobloonApp {
         shape
     }
 
+    /// `None` until the input thread has looked for devices once: the controllers it has not
+    /// found yet would count as connected later and stop the profile.
     fn device_snapshot(&mut self) -> Option<DeviceBaseline> {
+        if !self.input.scanned() {
+            return None;
+        }
         let devices = self.input.devices();
         let served = crate::program_switch::served(&self.profile.as_ref()?.profile, &devices);
         Some(DeviceBaseline {
@@ -715,6 +774,8 @@ impl JoystickGobloonApp {
         }
         self.devices_checked = std::time::Instant::now();
         let Some(base) = &self.device_baseline else {
+            // Started before the first look for devices: the baseline is taken once it is done.
+            self.device_baseline = self.device_snapshot();
             return;
         };
         let devices = self.input.devices();
@@ -1730,13 +1791,7 @@ impl JoystickGobloonApp {
         self.sync_activation();
         // The vJoy tester must not hold a device the profile needs.
         self.vjoy_view.release();
-        match self.activation.start() {
-            Ok(()) => self.status = self.i18n.tr("status-active"),
-            Err(e) => {
-                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
-                self.error(text);
-            }
-        }
+        self.activation.start(Job::Start);
     }
 
     /// Applies the edited profile to the running engine without releasing its virtual devices.
@@ -1744,13 +1799,7 @@ impl JoystickGobloonApp {
         self.sync_activation();
         // The vJoy tester must not hold a device the profile now needs.
         self.vjoy_view.release();
-        match self.activation.reload(false) {
-            Ok(()) => self.status = self.i18n.tr("status-active"),
-            Err(e) => {
-                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
-                self.error(text);
-            }
-        }
+        self.activation.reload(Job::Edit, false);
     }
 
     /// Hands the current profile to the shared activation (for the tray menu too).
@@ -1785,10 +1834,7 @@ impl JoystickGobloonApp {
         // Against the files as the running profile read them.
         if self.activation.script_files_changed() {
             log::info!("script file changed: reloading the profile");
-            if let Err(e) = self.activation.reload(false) {
-                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
-                self.error(text);
-            }
+            self.activation.reload(Job::Edit, false);
         }
     }
 
@@ -2325,10 +2371,7 @@ impl eframe::App for JoystickGobloonApp {
             self.update = Some(prepared);
             self.request(Pending::Update, ctx);
         }
-        if let Some(e) = self.activation.take_error() {
-            let text = self.i18n.trf("activate-error", &[("error", e.into())]);
-            self.error(text);
-        }
+        self.activation_done();
         self.update_title(ctx);
         if self.hide_frames > 0 {
             self.vjoy_view.release();

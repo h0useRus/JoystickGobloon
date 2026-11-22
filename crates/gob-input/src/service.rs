@@ -34,9 +34,16 @@ pub const MAX_DEBOUNCE_MS: u16 = 100;
 pub struct InputHandle {
     snapshot: Arc<RwLock<Vec<DeviceState>>>,
     broadcast: Broadcast,
+    scanned: Arc<AtomicBool>,
 }
 
 impl InputHandle {
+    /// The input thread has looked for devices once: [`Self::devices`] lists what is attached
+    /// (before that it may be empty only because nobody looked yet).
+    pub fn scanned(&self) -> bool {
+        self.scanned.load(Ordering::Acquire)
+    }
+
     /// Current state of every attached device.
     pub fn devices(&self) -> Vec<DeviceState> {
         self.snapshot
@@ -138,6 +145,8 @@ pub struct InputService {
     poll_interval: Arc<AtomicU64>,
     /// See [`InputService::polls_devices`].
     polling: Arc<AtomicBool>,
+    /// See [`InputHandle::scanned`].
+    scanned: Arc<AtomicBool>,
     /// Keyboard keys as events (low-level hook); `None` if it could not be installed.
     _keyboard: Option<crate::platform::keyboard::Hook>,
     /// See [`InputService::set_osc`].
@@ -175,6 +184,7 @@ impl InputService {
         let event_mode = Arc::new(AtomicBool::new(false));
         let poll_interval = Arc::new(AtomicU64::new(DEFAULT_POLL_INTERVAL.as_micros() as u64));
         let polling = Arc::new(AtomicBool::new(true));
+        let scanned = Arc::new(AtomicBool::new(false));
         let snapshot = Arc::new(RwLock::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let broadcast = Broadcast::default();
@@ -185,6 +195,7 @@ impl InputService {
             let debounce = debounce.clone();
             let (version, mode) = (calibration_version.clone(), event_mode.clone());
             let (poll, polling) = (poll_interval.clone(), polling.clone());
+            let scanned = scanned.clone();
             std::thread::Builder::new()
                 .name("gob-input".into())
                 .spawn(move || {
@@ -198,6 +209,7 @@ impl InputService {
                         event_mode: &mode,
                         poll_interval: &poll,
                         polling: &polling,
+                        scanned: &scanned,
                     };
                     run(&shared, &*on_change)
                 })
@@ -228,6 +240,7 @@ impl InputService {
             event_mode,
             poll_interval,
             polling,
+            scanned,
             _keyboard: keyboard,
             osc: Mutex::default(),
             on_change,
@@ -331,6 +344,11 @@ impl InputService {
         self.polling.load(Ordering::Relaxed)
     }
 
+    /// See [`InputHandle::scanned`].
+    pub fn scanned(&self) -> bool {
+        self.scanned.load(Ordering::Acquire)
+    }
+
     /// Current state of every attached device.
     pub fn devices(&self) -> Vec<DeviceState> {
         self.snapshot
@@ -355,6 +373,7 @@ impl InputService {
         InputHandle {
             snapshot: self.snapshot.clone(),
             broadcast: self.broadcast.clone(),
+            scanned: self.scanned.clone(),
         }
     }
 
@@ -384,6 +403,7 @@ struct Shared<'a> {
     event_mode: &'a AtomicBool,
     poll_interval: &'a AtomicU64,
     polling: &'a AtomicBool,
+    scanned: &'a AtomicBool,
 }
 
 /// Attached devices with their ids, as [`crate::platform::Backend::attached`] lists them.
@@ -591,6 +611,8 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
             drop(snapshot);
             on_change();
         }
+        // The devices found by the first pass are in the snapshot now.
+        shared.scanned.store(true, Ordering::Release);
         let polled = !events || devices.iter().any(|d| !d.signals());
         shared.polling.store(polled, Ordering::Relaxed);
         let poll = Duration::from_micros(shared.poll_interval.load(Ordering::Relaxed));

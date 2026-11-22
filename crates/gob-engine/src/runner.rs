@@ -594,19 +594,12 @@ impl Runner {
         initial: &[DeviceState],
         fresh: bool,
     ) -> Result<(), String> {
-        let (reply, answer) = std::sync::mpsc::channel();
-        let request = Reload {
-            engine: Engine::new(profile, aliases),
-            initial: initial.to_vec(),
-            fresh,
-            reply,
-        };
-        self.reload
-            .send(request)
-            .map_err(|_| "the engine has stopped".to_string())?;
-        answer
-            .recv_timeout(RELOAD_TIMEOUT)
-            .map_err(|_| "the engine did not answer".to_string())?
+        self.reloader().reload(profile, aliases, initial, fresh)
+    }
+
+    /// A handle that reloads this runner from another thread, without holding the runner.
+    pub fn reloader(&self) -> Reloader {
+        Reloader(self.reload.clone())
     }
 
     /// Script errors since the last call: a script that did not load, or the first error of a
@@ -648,6 +641,35 @@ impl Runner {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
+    }
+}
+
+/// Reloads a running [`Runner`] from any thread ([`Runner::reloader`]).
+#[derive(Clone)]
+pub struct Reloader(Sender<Reload>);
+
+impl Reloader {
+    /// As [`Runner::reload`]; waits for the engine thread to take the new profile.
+    pub fn reload(
+        &self,
+        profile: &Profile,
+        aliases: &HashMap<String, String>,
+        initial: &[DeviceState],
+        fresh: bool,
+    ) -> Result<(), String> {
+        let (reply, answer) = std::sync::mpsc::channel();
+        let request = Reload {
+            engine: Engine::new(profile, aliases),
+            initial: initial.to_vec(),
+            fresh,
+            reply,
+        };
+        self.0
+            .send(request)
+            .map_err(|_| "the engine has stopped".to_string())?;
+        answer
+            .recv_timeout(RELOAD_TIMEOUT)
+            .map_err(|_| "the engine did not answer".to_string())?
     }
 }
 
