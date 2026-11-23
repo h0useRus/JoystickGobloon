@@ -7,6 +7,9 @@ on:
     branches: [main]
     types: [opened, edited, reopened, synchronize]
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: windows-latest
@@ -16,9 +19,13 @@ jobs:
           fetch-depth: 0
       - name: From dev
         shell: bash
+        # The branch name comes from whoever opened the pull request: an environment variable,
+        # never pasted into the script.
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          if [ "${{ github.head_ref }}" != "dev" ]; then
-            echo "::error::Pull requests into main must come from dev (this one is from ${{ github.head_ref }})."
+          if [ "$HEAD_REF" != "dev" ]; then
+            echo "::error::Pull requests into main must come from dev (this one is from $HEAD_REF)."
             exit 1
           fi
       # The version comes from the commits (.github/scripts/next-version.sh): they must all be

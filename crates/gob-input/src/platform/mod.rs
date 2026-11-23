@@ -37,6 +37,11 @@ pub(crate) trait Backend: Sized {
 
     /// `None` when the platform's input API is not available.
     fn new() -> Option<Self>;
+    /// Waits until controllers may have come or gone: `rescan` here; a platform that is told
+    /// about devices arriving waits for that instead.
+    fn wait_for_attach(&self, rescan: std::time::Duration) {
+        std::thread::sleep(rescan);
+    }
     /// Attached controllers with their device ids (Gremlin's GUID format).
     fn attached(&self) -> Vec<(String, Self::Found)>;
     /// Opens a controller. `events`: it is read when it signals a change (event mode) instead

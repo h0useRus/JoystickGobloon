@@ -34,9 +34,16 @@ pub const MAX_DEBOUNCE_MS: u16 = 100;
 pub struct InputHandle {
     snapshot: Arc<RwLock<Vec<DeviceState>>>,
     broadcast: Broadcast,
+    scanned: Arc<AtomicBool>,
 }
 
 impl InputHandle {
+    /// The input thread has looked for devices once: [`Self::devices`] lists what is attached
+    /// (before that it may be empty only because nobody looked yet).
+    pub fn scanned(&self) -> bool {
+        self.scanned.load(Ordering::Acquire)
+    }
+
     /// Current state of every attached device.
     pub fn devices(&self) -> Vec<DeviceState> {
         self.snapshot
@@ -138,6 +145,8 @@ pub struct InputService {
     poll_interval: Arc<AtomicU64>,
     /// See [`InputService::polls_devices`].
     polling: Arc<AtomicBool>,
+    /// See [`InputHandle::scanned`].
+    scanned: Arc<AtomicBool>,
     /// Keyboard keys as events (low-level hook); `None` if it could not be installed.
     _keyboard: Option<crate::platform::keyboard::Hook>,
     /// See [`InputService::set_osc`].
@@ -175,6 +184,7 @@ impl InputService {
         let event_mode = Arc::new(AtomicBool::new(false));
         let poll_interval = Arc::new(AtomicU64::new(DEFAULT_POLL_INTERVAL.as_micros() as u64));
         let polling = Arc::new(AtomicBool::new(true));
+        let scanned = Arc::new(AtomicBool::new(false));
         let snapshot = Arc::new(RwLock::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let broadcast = Broadcast::default();
@@ -185,6 +195,7 @@ impl InputService {
             let debounce = debounce.clone();
             let (version, mode) = (calibration_version.clone(), event_mode.clone());
             let (poll, polling) = (poll_interval.clone(), polling.clone());
+            let scanned = scanned.clone();
             std::thread::Builder::new()
                 .name("gob-input".into())
                 .spawn(move || {
@@ -198,6 +209,7 @@ impl InputService {
                         event_mode: &mode,
                         poll_interval: &poll,
                         polling: &polling,
+                        scanned: &scanned,
                     };
                     run(&shared, &*on_change)
                 })
@@ -228,6 +240,7 @@ impl InputService {
             event_mode,
             poll_interval,
             polling,
+            scanned,
             _keyboard: keyboard,
             osc: Mutex::default(),
             on_change,
@@ -331,6 +344,11 @@ impl InputService {
         self.polling.load(Ordering::Relaxed)
     }
 
+    /// See [`InputHandle::scanned`].
+    pub fn scanned(&self) -> bool {
+        self.scanned.load(Ordering::Acquire)
+    }
+
     /// Current state of every attached device.
     pub fn devices(&self) -> Vec<DeviceState> {
         self.snapshot
@@ -355,6 +373,7 @@ impl InputService {
         InputHandle {
             snapshot: self.snapshot.clone(),
             broadcast: self.broadcast.clone(),
+            scanned: self.scanned.clone(),
         }
     }
 
@@ -384,6 +403,7 @@ struct Shared<'a> {
     event_mode: &'a AtomicBool,
     poll_interval: &'a AtomicU64,
     polling: &'a AtomicBool,
+    scanned: &'a AtomicBool,
 }
 
 /// Attached devices with their ids, as [`crate::platform::Backend::attached`] lists them.
@@ -401,7 +421,7 @@ fn spawn_scanner<P: crate::platform::Backend>() -> Option<std::sync::mpsc::Recei
                 return;
             };
             loop {
-                std::thread::sleep(RESCAN);
+                platform.wait_for_attach(RESCAN);
                 let at = Instant::now();
                 let attached = platform.attached();
                 let took = at.elapsed();
@@ -428,6 +448,8 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
 
     let tx = shared.tx;
     let Some(platform) = Platform::new() else {
+        // Nothing will ever be found: nobody waits for a first look that never comes.
+        shared.scanned.store(true, Ordering::Release);
         return;
     };
     let mut devices: Vec<<Platform as Backend>::Device> = Vec::new();
@@ -529,6 +551,9 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
         }
 
         let mut lost = false;
+        // Raw readings moved (sensor noise does that all the time): the snapshot follows for the
+        // calibration page, which redraws on its own; nobody is woken for it.
+        let mut raw_changed = false;
         // A device's layout changed: the snapshot is built anew.
         let mut relayout = false;
         for dev in &mut devices {
@@ -556,14 +581,13 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
                 changed = true;
             }
             changed |= filter.update(dev.state(), at, &mut |event| tx.send(event, at));
-            // Raw values matter to the calibration page even when the scaled value stays.
-            changed |= dev.previous().raw != dev.state().raw;
+            raw_changed |= dev.previous().raw != dev.state().raw;
         }
         if lost || relayout {
             next_scan = Instant::now(); // rescan (and announce) right away
             announce = true;
         }
-        if changed {
+        if changed || raw_changed {
             let mut snapshot = shared.snapshot.write().unwrap_or_else(|e| e.into_inner());
             let same_devices = !relayout
                 && snapshot.len() == devices.len()
@@ -589,8 +613,12 @@ fn run(shared: &Shared, on_change: &dyn Fn()) {
                 *snapshot = devices.iter().map(|d| shown(&filters, d).clone()).collect();
             }
             drop(snapshot);
-            on_change();
+            if changed {
+                on_change();
+            }
         }
+        // The devices found by the first pass are in the snapshot now.
+        shared.scanned.store(true, Ordering::Release);
         let polled = !events || devices.iter().any(|d| !d.signals());
         shared.polling.store(polled, Ordering::Relaxed);
         let poll = Duration::from_micros(shared.poll_interval.load(Ordering::Relaxed));

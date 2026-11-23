@@ -344,6 +344,7 @@ mod imp {
 
     unsafe fn detail(set: HDEVINFO, data: &SP_DEVICE_INTERFACE_DATA) -> Option<String> {
         unsafe {
+            // SAFETY: the caller passes a live device info set and one of its interfaces; the buffer is sized by the first call.
             let mut needed = 0u32;
             let _ = SetupDiGetDeviceInterfaceDetailW(set, data, None, 0, Some(&mut needed), None);
             let mut buffer = vec![0u8; needed as usize + 8];

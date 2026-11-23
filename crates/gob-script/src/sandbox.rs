@@ -33,6 +33,8 @@ impl Deadline {
 pub fn new_state(memory: usize) -> mlua::Result<(Lua, Deadline)> {
     let lua = Lua::new();
     lua.set_memory_limit(memory)?;
+    // mlua's Luau `require` loads modules from disk: user code gets nothing outside its own text.
+    lua.globals().raw_set("require", mlua::Value::Nil)?;
     let deadline = Deadline {
         at: Arc::new(AtomicU64::new(u64::MAX)),
         clock: Instant::now(),
@@ -70,5 +72,31 @@ mod tests {
             .exec()
             .unwrap_err();
         assert!(matches!(e, mlua::Error::MemoryError(_)), "{e}");
+    }
+}
+
+#[cfg(test)]
+mod reach {
+    use super::*;
+
+    #[test]
+    fn user_code_reaches_no_files_programs_or_loaders() {
+        let (lua, _) = new_state(1 << 20).unwrap();
+        lua.sandbox(true).unwrap();
+        let mut reachable = Vec::new();
+        // `loadstring` stays: it compiles into the same sandbox. Luau's `debug` only has
+        // traceback and info.
+        for name in ["io", "load", "dofile", "loadfile", "require", "package"] {
+            let present: bool = lua.load(format!("return {name} ~= nil")).eval().unwrap();
+            if present {
+                reachable.push(name);
+            }
+        }
+        assert!(reachable.is_empty(), "reachable: {reachable:?}");
+        let exec: bool = lua
+            .load("return os ~= nil and os.execute ~= nil")
+            .eval()
+            .unwrap();
+        assert!(!exec, "os.execute is reachable");
     }
 }

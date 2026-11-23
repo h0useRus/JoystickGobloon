@@ -12,10 +12,9 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# The builds only read; the publish job alone may write (the release and its tag).
 permissions:
-  contents: write
-  # The release request's text becomes the release notes.
-  pull-requests: read
+  contents: read
 
 env:
   # Like ci.yml: no debug info in the checks' builds (less to compile and cache).
@@ -33,7 +32,7 @@ jobs:
           fetch-depth: 0
       # Cached .deb packages instead of apt-get update + download on every run.
       - name: System libraries
-        uses: awalsh128/cache-apt-pkgs-action@v1
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
         with:
           packages: pkg-config libasound2-dev libgtk-3-dev libxdo-dev libayatana-appindicator3-dev libudev-dev libssl-dev libxkbcommon-dev libwayland-dev libxkbcommon-x11-0 libxcb-xkb1
           version: 1
@@ -44,7 +43,7 @@ jobs:
       # Installs the Rust version pinned in rust-toolchain.toml.
       - name: Rust toolchain
         run: rustup toolchain install && rustup show
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       # Same version as the Windows job: same script, commit and run number.
       - name: Version
@@ -80,6 +79,10 @@ jobs:
   # Windows: the app, the installer and the portable zip, at the same time as the AppImage.
   windows:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      # SignPath fetches the build artifact to sign through the GitHub API.
+      actions: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
@@ -94,7 +97,7 @@ jobs:
       # Installs the Rust version pinned in rust-toolchain.toml.
       - name: Rust toolchain
         run: rustup toolchain install && rustup show
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Version
         id: version
@@ -136,7 +139,7 @@ jobs:
 
       - name: Sign the app
         if: env.SIGN == 'true'
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -244,7 +247,7 @@ jobs:
 
       - name: Sign the installer
         if: env.SIGN == 'true'
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -291,6 +294,10 @@ jobs:
   publish:
     needs: [appimage, windows]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # The release request's text becomes the release notes.
+      pull-requests: read
     env:
       VERSION: ${{ needs.windows.outputs.version }}
     steps:
@@ -326,7 +333,7 @@ jobs:
           fi
 
       - name: Publish
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: v${{ env.VERSION }}
           name: Joystick Gobloon ${{ env.VERSION }}

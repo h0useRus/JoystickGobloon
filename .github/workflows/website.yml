@@ -19,6 +19,9 @@ concurrency:
   group: website
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest

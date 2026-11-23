@@ -158,6 +158,14 @@ impl super::Desktop for Desktop {
         keys::held()
     }
 
+    fn key_held(key: Key) -> Option<bool> {
+        if gob_input::key_held(key.scan_code, key.extended) {
+            return Some(true);
+        }
+        // Not held: `held_keys` tells whether the keyboards can be read at all.
+        gob_input::held_keys().map(|_| false)
+    }
+
     fn key_name(key: Key) -> String {
         keys::name(key).unwrap_or_else(|| super::key_code(key))
     }
@@ -312,10 +320,6 @@ impl super::Desktop for Desktop {
     /// The new AppImage replaces the running one and starts.
     fn run_installer(setup: &Path) -> Result<(), String> {
         update::replace_appimage(setup)
-    }
-
-    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
-        Fallback::unpack_zip(zip, to)
     }
 
     fn wait_for_process(pid: u32, timeout: Duration) {

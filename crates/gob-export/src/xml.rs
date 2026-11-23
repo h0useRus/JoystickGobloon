@@ -41,6 +41,10 @@ pub struct Doc {
 struct DocData(Arc<Doc>);
 impl UserData for DocData {}
 
+/// Elements nested deeper than this are refused, read or written: a deeper tree (or a table that
+/// holds itself) would overflow the stack.
+const MAX_DEPTH: usize = 256;
+
 impl Doc {
     pub fn parse(text: &str) -> Result<Self, String> {
         let mut reader = Reader::from_str(text);
@@ -70,6 +74,9 @@ impl Doc {
                         empty,
                     });
                     if !empty {
+                        if stack.len() >= MAX_DEPTH {
+                            return Err(format!("elements nested deeper than {MAX_DEPTH}"));
+                        }
                         doc.push(&stack, XNode::El(id));
                         stack.push(id);
                         continue;
@@ -177,15 +184,25 @@ pub fn from_lua(doc: &Table) -> mlua::Result<String> {
     };
     let mut out = String::new();
     let children: Table = doc.get("children")?;
-    write_nodes(&mut out, original.as_deref(), &children)?;
+    write_nodes(&mut out, original.as_deref(), &children, 0)?;
     Ok(out)
 }
 
-fn write_nodes(out: &mut String, doc: Option<&Doc>, nodes: &Table) -> mlua::Result<()> {
+fn write_nodes(
+    out: &mut String,
+    doc: Option<&Doc>,
+    nodes: &Table,
+    depth: usize,
+) -> mlua::Result<()> {
+    if depth > MAX_DEPTH {
+        return Err(mlua::Error::runtime(format!(
+            "XML elements nested deeper than {MAX_DEPTH} (a table that holds itself?)"
+        )));
+    }
     for node in nodes.sequence_values::<Value>() {
         match node? {
             Value::String(s) => escape_text(out, &s.to_str()?),
-            Value::Table(t) => write_table(out, doc, &t)?,
+            Value::Table(t) => write_table(out, doc, &t, depth)?,
             Value::Integer(i) => out.push_str(&i.to_string()),
             Value::Number(n) => out.push_str(&n.to_string()),
             other => {
@@ -218,7 +235,7 @@ fn original<'a>(doc: Option<&'a Doc>, t: &Table) -> mlua::Result<Option<&'a XEl>
     Ok(doc.els.get(id))
 }
 
-fn write_table(out: &mut String, doc: Option<&Doc>, t: &Table) -> mlua::Result<()> {
+fn write_table(out: &mut String, doc: Option<&Doc>, t: &Table, depth: usize) -> mlua::Result<()> {
     if let Some(raw) = t.get::<Option<String>>("raw")? {
         out.push_str(&raw);
         return Ok(());
@@ -266,7 +283,7 @@ fn write_table(out: &mut String, doc: Option<&Doc>, t: &Table) -> mlua::Result<(
         }
     }
     if let Some(children) = children {
-        write_nodes(out, doc, &children)?;
+        write_nodes(out, doc, &children, depth + 1)?;
     }
     out.push_str(&format!("</{tag}>"));
     Ok(())
@@ -352,6 +369,19 @@ fn same_element(doc: &Doc, orig: &XEl, t: &Table) -> mlua::Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deep_documents_and_tables_that_hold_themselves_fail_cleanly() {
+        let n = 100_000;
+        let text = format!("<a>{}{}</a>", "<b>".repeat(n), "</b>".repeat(n));
+        assert!(Doc::parse(&text).is_err());
+        let lua = Lua::new();
+        let doc = to_lua(&lua, "<a/>").unwrap();
+        lua.load("local d = ... local e = d.children[1] e.children = { e }")
+            .call::<()>(doc.clone())
+            .unwrap();
+        assert!(from_lua(&doc).is_err());
+    }
 
     fn round(text: &str, edit: &str) -> String {
         let lua = Lua::new();

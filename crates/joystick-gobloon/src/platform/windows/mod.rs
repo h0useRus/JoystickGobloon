@@ -82,6 +82,10 @@ impl super::Desktop for Desktop {
         Some(keys::held())
     }
 
+    fn key_held(key: Key) -> Option<bool> {
+        Some(keys::is_held(key))
+    }
+
     fn key_name(key: Key) -> String {
         keys::name(key)
     }
@@ -152,10 +156,6 @@ impl super::Desktop for Desktop {
 
     fn run_installer(setup: &Path) -> Result<(), String> {
         update::run_installer(setup)
-    }
-
-    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
-        update::unpack_zip(zip, to)
     }
 
     fn wait_for_process(pid: u32, timeout: Duration) {

@@ -5,7 +5,7 @@ use std::os::fd::{AsFd, AsRawFd, OwnedFd};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use gob_system::protocol::{
@@ -31,17 +31,46 @@ pub fn bind(path: &Path) -> io::Result<UnixListener> {
     Ok(listener)
 }
 
+/// Most clients served at once: each has a thread, and anyone may connect.
+const MAX_CLIENTS: usize = 32;
+
 /// Serves clients until the listener fails.
 pub fn serve(listener: UnixListener, policy: Policy, service: Arc<Service>) -> io::Result<()> {
+    let clients = Arc::new(AtomicUsize::new(0));
     for stream in listener.incoming() {
         let stream = stream?;
-        let policy = policy.clone();
-        let service = service.clone();
-        std::thread::spawn(move || {
-            if let Err(e) = client(&stream, &policy, &service) {
-                log::warn!("client: {e}");
+        // Refused before a thread is made: users the service is not for, and too many clients.
+        let uid = match peer_uid(&stream) {
+            Ok(uid) if policy(uid) => uid,
+            Ok(uid) => {
+                log::warn!("uid {uid} may not use the service");
+                let _ = error(&stream, ErrorCode::Denied);
+                continue;
             }
-        });
+            Err(e) => {
+                log::warn!("client: {e}");
+                continue;
+            }
+        };
+        if clients.fetch_add(1, Ordering::AcqRel) >= MAX_CLIENTS {
+            clients.fetch_sub(1, Ordering::AcqRel);
+            log::warn!("uid {uid}: too many clients, connection refused");
+            let _ = error(&stream, ErrorCode::Busy);
+            continue;
+        }
+        let (policy, service, count) = (policy.clone(), service.clone(), clients.clone());
+        let spawned = std::thread::Builder::new()
+            .name(format!("client-{uid}"))
+            .spawn(move || {
+                if let Err(e) = client(&stream, uid, &policy, &service) {
+                    log::warn!("client: {e}");
+                }
+                count.fetch_sub(1, Ordering::AcqRel);
+            });
+        if let Err(e) = spawned {
+            clients.fetch_sub(1, Ordering::AcqRel);
+            log::error!("client thread: {e}");
+        }
     }
     Ok(())
 }
@@ -76,8 +105,7 @@ static LAST_CLIENT: Mutex<String> = Mutex::new(String::new());
 /// Numbers the connections, to know who has a virtual device.
 static NEXT_CONN: AtomicU64 = AtomicU64::new(1);
 
-fn client(stream: &UnixStream, policy: &Policy, service: &Service) -> io::Result<()> {
-    let uid = peer_uid(stream)?;
+fn client(stream: &UnixStream, uid: u32, policy: &Policy, service: &Service) -> io::Result<()> {
     let conn = NEXT_CONN.fetch_add(1, Ordering::Relaxed);
     let result = requests(stream, uid, conn, policy, service);
     // Gone (closed, crashed, refused): its virtual devices are centered and free again.

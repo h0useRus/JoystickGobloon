@@ -58,6 +58,11 @@ pub(crate) trait Desktop {
     /// Keyboard keys held right now; `None` when the program cannot see the keyboard's state
     /// (key recording then uses the window's own key events).
     fn held_keys() -> Option<Vec<Key>>;
+    /// Whether one key is held; `None` as with [`Desktop::held_keys`]. Cheaper than reading
+    /// every key where the system can ask for one.
+    fn key_held(key: Key) -> Option<bool> {
+        Self::held_keys().map(|held| held.contains(&key))
+    }
     /// A key's name in the current keyboard layout, e.g. "Right Ctrl".
     fn key_name(key: Key) -> String;
     /// The system's light/dark setting: `Some(true)` dark, `Some(false)` light, `None` when it
@@ -118,8 +123,6 @@ pub(crate) trait Desktop {
     fn exe_name() -> &'static str;
     /// Runs a downloaded installer; it closes this copy and starts the new one.
     fn run_installer(setup: &Path) -> Result<(), String>;
-    /// Unpacks a downloaded zip into `to`.
-    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String>;
     /// Waits until process `pid` exits, at most `timeout`.
     fn wait_for_process(pid: u32, timeout: Duration);
 
@@ -259,6 +262,10 @@ pub(crate) fn held_keys() -> Option<Vec<Key>> {
     Current::held_keys()
 }
 
+pub(crate) fn key_held(key: Key) -> Option<bool> {
+    Current::key_held(key)
+}
+
 pub(crate) fn key_name(key: Key) -> String {
     Current::key_name(key)
 }
@@ -353,10 +360,6 @@ pub(crate) fn exe_name() -> &'static str {
 
 pub(crate) fn run_installer(setup: &Path) -> Result<(), String> {
     Current::run_installer(setup)
-}
-
-pub(crate) fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
-    Current::unpack_zip(zip, to)
 }
 
 pub(crate) fn wait_for_process(pid: u32, timeout: Duration) {

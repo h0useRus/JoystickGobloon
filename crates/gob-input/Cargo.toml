@@ -17,6 +17,7 @@ libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = [
+    "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_Devices_HumanInterfaceDevice",
     "Win32_Foundation",
     "Win32_Security",

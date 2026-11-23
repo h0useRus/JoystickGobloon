@@ -503,3 +503,14 @@ fn scripts_round_trip() {
         }
     );
 }
+
+#[test]
+fn a_profile_nested_too_deep_is_refused_without_crashing() {
+    let n = 100_000;
+    let text = format!(
+        "<profile version=\"14\">{}{}</profile>",
+        "<a>".repeat(n),
+        "</a>".repeat(n)
+    );
+    assert!(gob_gremlin::from_str(&text).is_err());
+}

@@ -46,25 +46,6 @@ pub(super) fn run_installer(setup: &Path) -> Result<(), String> {
     }
 }
 
-/// tar.exe (Windows 10 1803+) unpacks zip files; it runs without a console window.
-pub(super) fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let status = std::process::Command::new("tar")
-        .creation_flags(CREATE_NO_WINDOW)
-        .arg("-xf")
-        .arg(zip)
-        .arg("-C")
-        .arg(to)
-        .status()
-        .map_err(|e| format!("tar: {e}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("tar: {status}"))
-    }
-}
-
 pub(super) fn wait_for_process(pid: u32, timeout: Duration) {
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Threading::{

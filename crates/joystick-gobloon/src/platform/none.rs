@@ -152,10 +152,6 @@ impl super::Desktop for Desktop {
         Err("no installer on this system".into())
     }
 
-    fn unpack_zip(_zip: &Path, _to: &Path) -> Result<(), String> {
-        Err("unpacking is not supported on this system".into())
-    }
-
     fn wait_for_process(_pid: u32, _timeout: Duration) {}
 
     fn foreground_program() -> Option<super::Program> {
