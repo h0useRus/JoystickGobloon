@@ -249,7 +249,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `JOYSTICK_GOBLOON_GAME_DIALOG` = capture | conflict | choose | unmapped opens that dialog of the Game page with sample data,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
-- Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
+- Updates (joystick-gobloon/src/update.rs): GitHub's latest final release (update channel Release, default) or the newest release with alpha builds (channel Alpha, About page), newer than VERSION and with this copy's file; installed copies run the new
   setup with /UPDATE=1 (it restarts the app), portable copies swap the files listed in the zip's files.gob (written by
   release.yml; files the old list had and the new one lacks are removed, user files are never listed; what was set
   aside is listed in update-aside.gob, deleted on the next start). Debug builds never update.

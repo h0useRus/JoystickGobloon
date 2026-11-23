@@ -700,6 +700,9 @@ fn about(
                     })
                     .response
                     .on_hover_text(i18n.tr("update-channel-tip"));
+                if channel_changed {
+                    updater.forget();
+                }
                 updater.ui(ui, i18n, *channel);
             },
         );
