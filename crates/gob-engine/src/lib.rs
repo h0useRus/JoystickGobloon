@@ -37,13 +37,22 @@ pub fn prepare_mouse() {
     platform::injector().prepare();
 }
 
-/// Moves the mouse one pixel and back through the system's input, so the net movement is zero:
-/// a program that signs out an idle user sees activity.
+/// How far the mouse moves: games skip tiny movements (a pixel or two is sensor noise to them)
+/// when they decide whether the player is idle.
+const NUDGE_PIXELS: i32 = 18;
+/// How long the mouse stays moved: several frames even at a low frame rate. Games add up the raw
+/// mouse movement of each frame, and a move and its way back in the same frame add up to nothing.
+const NUDGE_HOLD: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Moves the mouse [`NUDGE_PIXELS`] and back through the system's input, so the net movement is
+/// zero: a program that signs out an idle user sees activity. Blocks for [`NUDGE_HOLD`] between
+/// the two.
 pub fn nudge_mouse() {
     use platform::Injector;
     let injector = platform::injector();
-    injector.mouse_move(1, 0);
-    injector.mouse_move(-1, 0);
+    injector.mouse_move(NUDGE_PIXELS, 0);
+    std::thread::sleep(NUDGE_HOLD);
+    injector.mouse_move(-NUDGE_PIXELS, 0);
 }
 
 /// Values of the logical device's inputs that actions wrote, by input id.

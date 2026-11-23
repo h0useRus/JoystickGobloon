@@ -1,5 +1,5 @@
 //! Keep alive (Settings > General): a key combination (Win+Alt+Z unless changed) switches a
-//! mouse nudge (one pixel and back) every few seconds on and off, so a program that signs out an
+//! mouse nudge (a short move and back) every few seconds on and off, so a program that signs out an
 //! idle user keeps seeing activity.
 //!
 //! The shortcut is watched on a thread of its own, like the overlay's: the game has the focus,
