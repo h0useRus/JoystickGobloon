@@ -160,6 +160,7 @@ impl Overlay {
         profile: Option<&Profile>,
         usage: Option<crate::usage::Reading>,
         recording_keys: bool,
+        keep_alive: bool,
     ) -> Option<[f32; 2]> {
         if self.keys != settings.overlay_keys {
             self.keys.clone_from(&settings.overlay_keys);
@@ -212,7 +213,21 @@ impl Overlay {
             sample_lines(i18n, settings)
         } else {
             let commands = &mut self.commands;
-            status.map_or_else(Vec::new, |s| lines(settings, s, profile, usage, commands))
+            let mut out =
+                status.map_or_else(Vec::new, |s| lines(settings, s, profile, usage, commands));
+            // Shown while it runs, with or without a profile.
+            if keep_alive {
+                out.insert(
+                    0,
+                    Line {
+                        glyph: icon::COFFEE,
+                        text: i18n.tr("overlay-keep-alive"),
+                        depth: 0,
+                        strong: false,
+                    },
+                );
+            }
+            out
         };
         let shown = self.calibrating || (settings.overlay_on && !hidden && !lines.is_empty());
         if !shown {

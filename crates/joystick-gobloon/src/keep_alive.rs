@@ -71,6 +71,11 @@ impl KeepAlive {
         Some(Self { on, shown: false })
     }
 
+    /// The nudge runs now.
+    pub fn is_on(&self) -> bool {
+        self.on.load(Ordering::Relaxed)
+    }
+
     /// Switched on or off since the last call: the new state, for the status bar.
     pub fn changed(&mut self) -> Option<bool> {
         let on = self.on.load(Ordering::Relaxed);

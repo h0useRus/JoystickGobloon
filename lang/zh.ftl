@@ -865,6 +865,7 @@ settings-overlay-opacity = 不透明度
 overlay-drag = 把叠加层拖到位置，然后点击完成
 overlay-sample-mode = 默认  ·  M1
 overlay-sample-action = 起落架
+overlay-keep-alive = 保持活动
 overlay-sample-voice = 收起落架
 edit-binding-description = 此输入的描述
 edit-unbound = 暂无动作：添加一个。

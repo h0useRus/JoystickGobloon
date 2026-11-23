@@ -2350,6 +2350,7 @@ impl eframe::App for JoystickGobloonApp {
             self.profile.as_ref().map(|p| &p.profile),
             usage,
             recording,
+            self.keep_alive.as_ref().is_some_and(|k| k.is_on()),
         ) {
             // Placing is done.
             self.settings.overlay_pos = Some(pos);

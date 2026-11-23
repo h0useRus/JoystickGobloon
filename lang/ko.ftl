@@ -865,6 +865,7 @@ settings-overlay-opacity = 불투명도
 overlay-drag = 오버레이를 원하는 위치로 끈 다음 완료를 누르세요
 overlay-sample-mode = 기본  ·  M1
 overlay-sample-action = 착륙 장치
+overlay-keep-alive = 활성 유지
 overlay-sample-voice = 기어 올려
 edit-binding-description = 이 입력의 설명
 edit-unbound = 아직 동작이 없습니다: 하나 추가하세요.

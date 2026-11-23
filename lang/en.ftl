@@ -877,6 +877,7 @@ settings-overlay-opacity = Opacity
 overlay-drag = Drag the overlay into place, then click Done
 overlay-sample-mode = Default  ·  M1
 overlay-sample-action = Landing gear
+overlay-keep-alive = Keep alive
 overlay-sample-voice = gear up
 edit-binding-description = Description of this input
 edit-unbound = No actions yet: add one.

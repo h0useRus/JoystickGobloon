@@ -885,6 +885,7 @@ settings-overlay-opacity = Непрозрачность
 overlay-drag = Перетащите оверлей на место, затем нажмите «Готово»
 overlay-sample-mode = Default  ·  M1
 overlay-sample-action = Шасси
+overlay-keep-alive = Не давать заснуть
 overlay-sample-voice = шасси убрать
 edit-binding-description = Описание этого входа
 edit-unbound = Действий пока нет: добавьте действие.

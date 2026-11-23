@@ -877,6 +877,7 @@ settings-overlay-opacity = Opacité
 overlay-drag = Faites glisser la surcouche à sa place, puis cliquez sur Terminé
 overlay-sample-mode = Défaut  ·  M1
 overlay-sample-action = Train d’atterrissage
+overlay-keep-alive = Maintien actif
 overlay-sample-voice = sortir le train
 edit-binding-description = Description de cette entrée
 edit-unbound = Aucune action pour l’instant : ajoutez-en une.

@@ -877,6 +877,7 @@ settings-overlay-opacity = Deckkraft
 overlay-drag = Das Overlay an seinen Platz ziehen, dann auf Fertig klicken
 overlay-sample-mode = Standard  ·  M1
 overlay-sample-action = Fahrwerk
+overlay-keep-alive = Wachhalten
 overlay-sample-voice = Fahrwerk aus
 edit-binding-description = Beschreibung dieser Eingabe
 edit-unbound = Noch keine Aktionen: fügen Sie eine hinzu.
