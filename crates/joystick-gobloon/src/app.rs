@@ -2405,9 +2405,15 @@ impl eframe::App for JoystickGobloonApp {
         }
         self.activation_done();
         if let Some(k) = &mut self.keep_alive {
+            let recording = crate::key_capture::recording(ctx);
+            if recording {
+                // A frame after the recording's grace ends, so the shortcut works again even
+                // when nothing else repaints the window.
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            }
             k.configure(
                 self.settings.keep_alive,
-                !crate::key_capture::recording(ctx),
+                !recording,
                 self.settings.keep_alive_secs,
                 &self.settings.keep_alive_keys,
             );

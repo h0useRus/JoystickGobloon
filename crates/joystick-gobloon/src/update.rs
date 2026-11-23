@@ -130,6 +130,17 @@ impl Updater {
         self.job = Some(rx);
     }
 
+    /// The channel changed: what the last check found (an update, or none) was for the other
+    /// channel, and a check still running for it is dropped. A running download goes on.
+    pub fn forget(&mut self) {
+        if matches!(self.state, State::Downloading(_)) {
+            return;
+        }
+        self.job = None;
+        self.auto = false;
+        self.state = State::Idle;
+    }
+
     fn download(&mut self, ctx: &egui::Context) {
         let State::Available(release) = &self.state else {
             return;
@@ -302,7 +313,8 @@ fn latest(channel: UpdateChannel) -> Result<Option<Release>, String> {
 
 /// The newest of `releases` that `channel` takes, newer than `current`, with its asset. Final
 /// releases only on the release channel; on the alpha channel alpha builds too (semver puts
-/// `1.0.1-alpha.5` after `1.0.0` and before `1.0.1`).
+/// `1.0.1-alpha.5` after `1.0.0` and before `1.0.1`). A release without the asset (still
+/// uploading, or a build that failed) is passed over for the next newest that has it.
 fn newest(
     releases: Vec<GhRelease>,
     current: &Version,
@@ -315,19 +327,17 @@ fn newest(
         .filter_map(|r| {
             let version = Version::parse(r.tag_name.trim_start_matches('v')).ok()?;
             let alpha = r.prerelease || !version.pre.is_empty();
-            (channel == UpdateChannel::Alpha || !alpha).then_some((version, r))
+            if (alpha && channel != UpdateChannel::Alpha) || version <= *current {
+                return None;
+            }
+            let asset = r.assets.into_iter().find(|a| a.name.ends_with(suffix));
+            if asset.is_none() {
+                log::debug!("update: release {version} has no *{suffix} (yet)");
+            }
+            Some((version, asset?))
         })
-        .filter(|(version, _)| version > current)
         .max_by(|a, b| a.0.cmp(&b.0));
-    let Some((version, release)) = best else {
-        return Ok(None);
-    };
-    let asset = release
-        .assets
-        .into_iter()
-        .find(|a| a.name.ends_with(suffix))
-        .ok_or_else(|| format!("release {version} has no *{suffix}"))?;
-    Ok(Some(Release { version, asset }))
+    Ok(best.map(|(version, asset)| Release { version, asset }))
 }
 
 /// Downloads (and for portable copies unpacks) the update into a temporary folder.
@@ -769,6 +779,22 @@ mod tests {
             next.map(|r| r.version.to_string()).as_deref(),
             Some("1.0.1")
         );
+        // The newest build is still uploading its files: the next newest that has them.
+        let mut uploading = list();
+        let mut bare = release("v1.0.1-alpha.121", true);
+        bare.assets.clear();
+        uploading.insert(0, bare);
+        let found = newest(
+            uploading,
+            &Version::parse("1.0.0").unwrap(),
+            "-setup.exe",
+            UpdateChannel::Alpha,
+        )
+        .unwrap();
+        assert_eq!(
+            found.map(|r| r.version.to_string()).as_deref(),
+            Some("1.0.1-alpha.120")
+        );
     }
 
     fn zip_with(dir: &Path, names: &[&str]) -> PathBuf {
@@ -1085,8 +1111,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// Network: `cargo test -p joystick-gobloon -- --ignored`. This build's version is not older than
-    /// the latest release, so nothing is offered; the request, TLS and JSON work.
+    /// Network: the alpha channel's list has alpha builds, and an old version is offered one.
     #[test]
     #[ignore]
     fn the_alpha_channel_reads_the_recent_releases() {
@@ -1104,6 +1129,8 @@ mod tests {
         assert!(found.is_some_and(|r| r.version > old));
     }
 
+    /// Network: `cargo test -p joystick-gobloon -- --ignored`. This build's version is not older than
+    /// the latest release, so nothing is offered; the request, TLS and JSON work.
     #[test]
     #[ignore]
     fn asks_github_for_the_latest_release() {

@@ -52,7 +52,8 @@ fn run(shared: &Shared, ctx: &egui::Context) {
                 log::info!("keep alive off (option switched off)");
                 ctx.request_repaint();
             }
-            was_down = false;
+            // Switched on again: made ready again (Linux retries a virtual mouse that failed).
+            (was_down, prepared) = (false, false);
             std::thread::sleep(IDLE);
             continue;
         }
