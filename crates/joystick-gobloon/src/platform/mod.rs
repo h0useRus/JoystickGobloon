@@ -131,6 +131,24 @@ pub(crate) trait Desktop {
     fn foreground_program() -> Option<Program>;
     /// Running programs with a window the user can switch to.
     fn running_programs() -> Vec<Program>;
+    /// Whether this platform can bring another program's window to the front
+    /// ([`Desktop::bring_to_front`]).
+    fn window_switching() -> bool {
+        false
+    }
+    /// The window in front as an opaque number; `None` when there is none or the system does
+    /// not tell.
+    fn front_window() -> Option<u64> {
+        None
+    }
+    /// Whether `window` (from [`Desktop::front_window`]) is one of this program's own.
+    fn own_window(_window: u64) -> bool {
+        false
+    }
+    /// Brings `window` to the front; false when it is gone or the system refused.
+    fn bring_to_front(_window: u64) -> bool {
+        false
+    }
     /// Folders game export plugins search for games: the drives on Windows; the home folder and
     /// the Wine and Proton prefixes' drive_c on Linux.
     fn game_roots() -> Vec<String>;
@@ -372,6 +390,22 @@ pub(crate) fn foreground_program() -> Option<Program> {
 
 pub(crate) fn running_programs() -> Vec<Program> {
     Current::running_programs()
+}
+
+pub(crate) fn window_switching() -> bool {
+    Current::window_switching()
+}
+
+pub(crate) fn front_window() -> Option<u64> {
+    Current::front_window()
+}
+
+pub(crate) fn own_window(window: u64) -> bool {
+    Current::own_window(window)
+}
+
+pub(crate) fn bring_to_front(window: u64) -> bool {
+    Current::bring_to_front(window)
 }
 
 /// A key as its code, when the system has no name for it: `0x1d`, `E0 0x1d`.

@@ -170,6 +170,22 @@ impl super::Desktop for Desktop {
         programs::running_programs()
     }
 
+    fn window_switching() -> bool {
+        true
+    }
+
+    fn front_window() -> Option<u64> {
+        programs::front_window()
+    }
+
+    fn own_window(window: u64) -> bool {
+        programs::own_window(window)
+    }
+
+    fn bring_to_front(window: u64) -> bool {
+        programs::bring_to_front(window)
+    }
+
     fn usage() -> Option<super::Usage> {
         use windows::Win32::Foundation::FILETIME;
         use windows::Win32::System::ProcessStatus::{

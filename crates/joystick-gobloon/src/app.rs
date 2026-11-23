@@ -2415,6 +2415,7 @@ impl eframe::App for JoystickGobloonApp {
                 self.settings.keep_alive,
                 !recording,
                 self.settings.keep_alive_secs,
+                self.settings.keep_alive_front,
                 &self.settings.keep_alive_keys,
             );
         }

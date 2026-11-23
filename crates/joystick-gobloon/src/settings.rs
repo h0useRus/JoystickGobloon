@@ -169,6 +169,8 @@ pub struct Settings {
     pub keep_alive: bool,
     pub keep_alive_secs: u32,
     pub keep_alive_keys: Vec<u16>,
+    /// Keep alive brings the window in front at switch-on (the game) forward for each nudge.
+    pub keep_alive_front: bool,
     /// Which releases update the program.
     pub update_channel: UpdateChannel,
 }
@@ -446,6 +448,7 @@ impl Default for Settings {
             keep_alive: false,
             keep_alive_secs: 60,
             keep_alive_keys: crate::keep_alive::DEFAULT_KEYS.to_vec(),
+            keep_alive_front: true,
             update_channel: UpdateChannel::Release,
             game_folders: Vec::new(),
             multi_instance: false,

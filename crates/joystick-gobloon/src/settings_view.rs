@@ -459,6 +459,16 @@ fn general(
         })
         .inner
         .on_hover_text(i18n.tr("settings-keep-alive-every-tip"));
+    let keep_alive_front = crate::platform::window_switching().then(|| {
+        ui.add_enabled_ui(settings.keep_alive, |ui| {
+            ui.add(style::switch(
+                &mut settings.keep_alive_front,
+                i18n.tr("settings-keep-alive-front"),
+            ))
+        })
+        .inner
+        .on_hover_text(i18n.tr("settings-keep-alive-front-tip"))
+    });
 
     ui.add_space(18.0);
     section_title(ui, icon::FILE_TEXT, &i18n.tr("settings-group-log"));
@@ -517,6 +527,7 @@ fn general(
     .iter()
     .any(|r| r.changed())
         || see_hidden.is_some_and(|r| r.changed())
+        || keep_alive_front.is_some_and(|r| r.changed())
         || log_level
         || keep_alive_keys;
     if changed {
