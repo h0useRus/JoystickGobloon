@@ -263,9 +263,6 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - One instance per user (named mutex/event, separate names for debug builds): a second start shows the
   running window and exits. tools/single_instance.ps1 checks it. Hidden setting `multi_instance = true`
   (top of settings.gob, not in the UI) turns this off.
-- Keep alive is a hidden feature for the user only: `keep_alive_secs = N` (settings.gob, no UI, not on the site or in
-  release notes) makes Win+Alt+Z switch a mouse nudge (1 px and back) every N seconds (joystick-gobloon keep_alive.rs,
-  `gob_engine::nudge_mouse`).
 - Joystick lighting is an experimental feature for the user only: hidden setting `experimental = true`
   (settings.gob, no switch in the UI) turns it on. Leave lighting alone unless asked (also on Linux).
 - target\debug\settings.gob = local debug settings (copy of the user's + `multi_instance = true`): debug runs

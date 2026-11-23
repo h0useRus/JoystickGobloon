@@ -420,6 +420,45 @@ fn general(
         .on_hover_text(i18n.tr("settings-warn-gremlin-tip"));
 
     ui.add_space(18.0);
+    section_title(ui, icon::COFFEE, &i18n.tr("settings-group-keep-alive"));
+    let keep_alive = ui
+        .add(style::switch(
+            &mut settings.keep_alive,
+            i18n.tr("settings-keep-alive"),
+        ))
+        .on_hover_text(i18n.tr("settings-keep-alive-tip"));
+    let mut keep_alive_keys = false;
+    ui.add_enabled_ui(settings.keep_alive, |ui| {
+        ui.horizontal(|ui| {
+            let keys: Vec<gob_core::Key> = settings
+                .keep_alive_keys
+                .iter()
+                .map(|&c| crate::overlay::key_from_code(c))
+                .collect();
+            let id = ui.scope_id().with("keep-alive-keys");
+            if let Some(new) = crate::key_capture::keys_field(ui, id, &keys, i18n) {
+                settings.keep_alive_keys = new.into_iter().map(crate::overlay::key_code).collect();
+                keep_alive_keys = true;
+            }
+            ui.label(i18n.tr("settings-keep-alive-keys"));
+        });
+    });
+    let keep_alive_every = ui
+        .add_enabled_ui(settings.keep_alive, |ui| {
+            ui.horizontal(|ui| {
+                let r = ui.add(
+                    style::Spin::new(&mut settings.keep_alive_secs)
+                        .range(crate::keep_alive::MIN_SECS..=crate::keep_alive::MAX_SECS),
+                );
+                ui.label(i18n.tr("settings-keep-alive-every"));
+                r
+            })
+            .inner
+        })
+        .inner
+        .on_hover_text(i18n.tr("settings-keep-alive-every-tip"));
+
+    ui.add_space(18.0);
     section_title(ui, icon::FILE_TEXT, &i18n.tr("settings-group-log"));
     let log_level = ui
         .horizontal(|ui| {
@@ -470,11 +509,14 @@ fn general(
         &curves,
         &curve_invert,
         &gremlin,
+        &keep_alive,
+        &keep_alive_every,
     ]
     .iter()
     .any(|r| r.changed())
         || see_hidden.is_some_and(|r| r.changed())
-        || log_level;
+        || log_level
+        || keep_alive_keys;
     if changed {
         settings.save();
     }

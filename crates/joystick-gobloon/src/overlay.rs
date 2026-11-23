@@ -54,7 +54,7 @@ fn combo_held(combo: &[Key], held: &[Key]) -> bool {
     combo_matches(combo, |k| held.contains(&k))
 }
 
-/// The key and its other side's twin (left and right Ctrl, Alt and Shift count as one).
+/// The key and its other side's twin (left and right Ctrl, Alt, Shift and Win count as one).
 fn both_sides(k: Key) -> [Key; 2] {
     let key = |scan_code, extended| Key {
         scan_code,
@@ -64,11 +64,12 @@ fn both_sides(k: Key) -> [Key; 2] {
         (0x1d, _) => [key(0x1d, false), key(0x1d, true)],
         (0x38, _) => [key(0x38, false), key(0x38, true)],
         (0x2a, false) | (0x36, false) => [key(0x2a, false), key(0x36, false)],
+        (0x5b, true) | (0x5c, true) => [key(0x5b, true), key(0x5c, true)],
         _ => [k, k],
     }
 }
 
-/// Whether every key of `combo` is held (either side of Ctrl, Alt and Shift), by `is_held`.
+/// Whether every key of `combo` is held (either side of Ctrl, Alt, Shift and Win), by `is_held`.
 fn combo_matches(combo: &[Key], is_held: impl Fn(Key) -> bool) -> bool {
     !combo.is_empty()
         && combo
@@ -77,7 +78,7 @@ fn combo_matches(combo: &[Key], is_held: impl Fn(Key) -> bool) -> bool {
 }
 
 /// Whether the combination is held now, asking the system only for its keys.
-fn combo_down(combo: &[Key]) -> bool {
+pub(crate) fn combo_down(combo: &[Key]) -> bool {
     combo_matches(combo, |k| crate::platform::key_held(k) == Some(true))
 }
 
@@ -646,5 +647,6 @@ mod tests {
         assert!(!combo_held(&[], &[k(0x21, false)]));
         // Right Shift for left Shift.
         assert!(combo_held(&[k(0x2a, false)], &[k(0x36, false)]));
+        assert!(combo_held(&[k(0x5b, true)], &[k(0x5c, true)]), "either Win");
     }
 }

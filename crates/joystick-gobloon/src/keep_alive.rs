@@ -1,84 +1,126 @@
-//! Keep alive: Win+Alt+Z switches a mouse nudge (one pixel and back) every few seconds on and
-//! off, so a program that signs out an idle user keeps seeing activity. Hidden: only with
-//! `keep_alive_secs` in settings.gob, no switch in the UI and nothing on the site.
+//! Keep alive (Settings > General): a key combination (Win+Alt+Z unless changed) switches a
+//! mouse nudge (one pixel and back) every few seconds on and off, so a program that signs out an
+//! idle user keeps seeing activity.
 //!
 //! The shortcut is watched on a thread of its own, like the overlay's: the game has the focus,
-//! so the window gets no key events.
+//! so the window gets no key events. While the option is off the thread only sleeps.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use eframe::egui;
 use gob_core::Key;
 
-/// How often the shortcut is looked at.
+/// How often the shortcut is looked at while the option is on.
 const POLL: Duration = Duration::from_millis(50);
+/// How often the thread looks whether the option was switched on.
+const IDLE: Duration = Duration::from_millis(250);
+/// Win+Alt+Z as settings store keys (left Win with its E0 prefix, left Alt, Z).
+pub const DEFAULT_KEYS: [u16; 3] = [0x15b, 0x38, 0x2c];
+/// The range of the interval in the settings, in seconds.
+pub const MIN_SECS: u32 = 10;
+pub const MAX_SECS: u32 = 900;
+
+#[derive(Default)]
+struct Shared {
+    /// The option is on and no shortcut is being recorded: the shortcut works.
+    enabled: AtomicBool,
+    /// The shortcut.
+    keys: Mutex<Vec<Key>>,
+    /// Seconds between nudges.
+    every: AtomicU32,
+    /// The nudge runs now.
+    on: AtomicBool,
+}
 
 pub struct KeepAlive {
-    on: Arc<AtomicBool>,
+    shared: Arc<Shared>,
+    /// The shortcut as the settings last gave it.
+    codes: Vec<u16>,
     /// What the status bar last said.
     shown: bool,
 }
 
-/// Win (either), Alt (either) and Z held together.
-fn shortcut_down() -> bool {
-    let held = |scan_code, extended| {
-        crate::platform::key_held(Key {
-            scan_code,
-            extended,
-        }) == Some(true)
-    };
-    (held(0x5b, true) || held(0x5c, true))
-        && (held(0x38, false) || held(0x38, true))
-        && held(0x2c, false)
+fn run(shared: &Shared, ctx: &egui::Context) {
+    let (mut was_down, mut next, mut prepared) = (false, Instant::now(), false);
+    loop {
+        if !shared.enabled.load(Ordering::Relaxed) {
+            if shared.on.swap(false, Ordering::Relaxed) {
+                log::info!("keep alive off (option switched off)");
+                ctx.request_repaint();
+            }
+            was_down = false;
+            std::thread::sleep(IDLE);
+            continue;
+        }
+        std::thread::sleep(POLL);
+        let keys = shared
+            .keys
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let down = crate::overlay::combo_down(&keys);
+        if down && !was_down {
+            let on = !shared.on.fetch_xor(true, Ordering::Relaxed);
+            log::info!("keep alive {}", if on { "on" } else { "off" });
+            next = Instant::now();
+            ctx.request_repaint();
+        }
+        was_down = down;
+        if shared.on.load(Ordering::Relaxed) && Instant::now() >= next {
+            gob_engine::nudge_mouse(!prepared);
+            prepared = true;
+            let every = shared
+                .every
+                .load(Ordering::Relaxed)
+                .clamp(MIN_SECS, MAX_SECS);
+            next = Instant::now() + Duration::from_secs(u64::from(every));
+        }
+    }
 }
 
 impl KeepAlive {
-    /// `None` when the hidden setting is off (0) or the thread did not start.
-    pub fn start(every_secs: u32, ctx: egui::Context) -> Option<Self> {
-        if every_secs == 0 {
-            return None;
-        }
-        let every = Duration::from_secs(u64::from(every_secs));
-        let on = Arc::new(AtomicBool::new(false));
-        let shared = on.clone();
+    /// Starts the thread; `None` when it did not start (logged).
+    pub fn start(ctx: egui::Context) -> Option<Self> {
+        let shared = Arc::new(Shared::default());
+        let thread_shared = shared.clone();
         let spawned = std::thread::Builder::new()
             .name("keep-alive".into())
-            .spawn(move || {
-                let (mut was_down, mut next, mut prepared) = (false, Instant::now(), false);
-                loop {
-                    std::thread::sleep(POLL);
-                    let down = shortcut_down();
-                    if down && !was_down {
-                        let now_on = !shared.fetch_xor(true, Ordering::Relaxed);
-                        log::info!("keep alive {}", if now_on { "on" } else { "off" });
-                        next = Instant::now();
-                        ctx.request_repaint();
-                    }
-                    was_down = down;
-                    if shared.load(Ordering::Relaxed) && Instant::now() >= next {
-                        gob_engine::nudge_mouse(!prepared);
-                        prepared = true;
-                        next = Instant::now() + every;
-                    }
-                }
-            });
+            .spawn(move || run(&thread_shared, &ctx));
         if let Err(e) = spawned {
             log::error!("keep alive thread: {e}");
             return None;
         }
-        Some(Self { on, shown: false })
+        Some(Self {
+            shared,
+            codes: Vec::new(),
+            shown: false,
+        })
+    }
+
+    /// Takes the option from the settings; cheap, called every frame. `enabled` is off while a
+    /// shortcut is being recorded, so recording does not switch it.
+    pub fn configure(&mut self, enabled: bool, every_secs: u32, keys: &[u16]) {
+        self.shared.enabled.store(enabled, Ordering::Relaxed);
+        self.shared.every.store(every_secs, Ordering::Relaxed);
+        if self.codes != keys {
+            self.codes = keys.to_vec();
+            *self.shared.keys.lock().unwrap_or_else(|e| e.into_inner()) = keys
+                .iter()
+                .map(|&c| crate::overlay::key_from_code(c))
+                .collect();
+        }
     }
 
     /// The nudge runs now.
     pub fn is_on(&self) -> bool {
-        self.on.load(Ordering::Relaxed)
+        self.shared.on.load(Ordering::Relaxed)
     }
 
     /// Switched on or off since the last call: the new state, for the status bar.
     pub fn changed(&mut self) -> Option<bool> {
-        let on = self.on.load(Ordering::Relaxed);
+        let on = self.is_on();
         (on != self.shown).then(|| {
             self.shown = on;
             on
