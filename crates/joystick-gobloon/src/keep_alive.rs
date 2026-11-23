@@ -24,8 +24,10 @@ pub const MAX_SECS: u32 = 900;
 
 #[derive(Default)]
 struct Shared {
-    /// The option is on and no shortcut is being recorded: the shortcut works.
+    /// The option is on: the shortcut works and the nudge may run.
     enabled: AtomicBool,
+    /// No shortcut is being recorded: pressing the shortcut switches the nudge.
+    listening: AtomicBool,
     /// The shortcut.
     keys: Mutex<Vec<Key>>,
     /// Seconds between nudges.
@@ -43,7 +45,7 @@ pub struct KeepAlive {
 }
 
 fn run(shared: &Shared, ctx: &egui::Context) {
-    let (mut was_down, mut next, mut prepared) = (false, Instant::now(), false);
+    let (mut was_down, mut last, mut prepared) = (false, None::<Instant>, false);
     loop {
         if !shared.enabled.load(Ordering::Relaxed) {
             if shared.on.swap(false, Ordering::Relaxed) {
@@ -54,28 +56,37 @@ fn run(shared: &Shared, ctx: &egui::Context) {
             std::thread::sleep(IDLE);
             continue;
         }
+        if !prepared {
+            // Before the shortcut is first pressed, so the first nudge is not lost.
+            gob_engine::prepare_mouse();
+            prepared = true;
+        }
         std::thread::sleep(POLL);
-        let keys = shared
-            .keys
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        let down = crate::overlay::combo_down(&keys);
+        let down = shared.listening.load(Ordering::Relaxed) && {
+            let keys = shared
+                .keys
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            crate::overlay::combo_down(&keys)
+        };
         if down && !was_down {
             let on = !shared.on.fetch_xor(true, Ordering::Relaxed);
             log::info!("keep alive {}", if on { "on" } else { "off" });
-            next = Instant::now();
+            last = None;
             ctx.request_repaint();
         }
         was_down = down;
-        if shared.on.load(Ordering::Relaxed) && Instant::now() >= next {
-            gob_engine::nudge_mouse(!prepared);
-            prepared = true;
-            let every = shared
+        // Taken every pass, so a changed interval counts from the last nudge at once.
+        let every = Duration::from_secs(u64::from(
+            shared
                 .every
                 .load(Ordering::Relaxed)
-                .clamp(MIN_SECS, MAX_SECS);
-            next = Instant::now() + Duration::from_secs(u64::from(every));
+                .clamp(MIN_SECS, MAX_SECS),
+        ));
+        if shared.on.load(Ordering::Relaxed) && last.is_none_or(|t| t.elapsed() >= every) {
+            gob_engine::nudge_mouse();
+            last = Some(Instant::now());
         }
     }
 }
@@ -99,10 +110,12 @@ impl KeepAlive {
         })
     }
 
-    /// Takes the option from the settings; cheap, called every frame. `enabled` is off while a
-    /// shortcut is being recorded, so recording does not switch it.
-    pub fn configure(&mut self, enabled: bool, every_secs: u32, keys: &[u16]) {
+    /// Takes the option from the settings; cheap, called every frame. `listening` is off while a
+    /// shortcut or input is being recorded, so recording does not switch it (a running nudge
+    /// keeps running).
+    pub fn configure(&mut self, enabled: bool, listening: bool, every_secs: u32, keys: &[u16]) {
         self.shared.enabled.store(enabled, Ordering::Relaxed);
+        self.shared.listening.store(listening, Ordering::Relaxed);
         self.shared.every.store(every_secs, Ordering::Relaxed);
         if self.codes != keys {
             self.codes = keys.to_vec();

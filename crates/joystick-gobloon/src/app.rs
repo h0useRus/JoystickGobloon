@@ -2405,7 +2405,8 @@ impl eframe::App for JoystickGobloonApp {
         self.activation_done();
         if let Some(k) = &mut self.keep_alive {
             k.configure(
-                self.settings.keep_alive && !crate::key_capture::recording(ctx),
+                self.settings.keep_alive,
+                !crate::key_capture::recording(ctx),
                 self.settings.keep_alive_secs,
                 &self.settings.keep_alive_keys,
             );

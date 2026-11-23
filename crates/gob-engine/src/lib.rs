@@ -30,15 +30,18 @@ pub use media::{Media, NaturalVoices, SpeechQueue, SpeechRequest, set_natural_vo
 pub use runner::{Latency, Reloader, Runner, RunnerStatus, VoiceHeard, VoiceStatus, wait_stopped};
 pub use tap::{OutputTap, Sent, Tapped};
 
+/// Gets the mouse output ready before the first [`nudge_mouse`] (Linux makes its virtual mouse
+/// then: the desktop needs a moment to open a new device, and events sent before that are lost).
+pub fn prepare_mouse() {
+    use platform::Injector;
+    platform::injector().prepare();
+}
+
 /// Moves the mouse one pixel and back through the system's input, so the net movement is zero:
-/// a program that signs out an idle user sees activity. `first`: get the output ready before
-/// the first nudge (Linux makes its virtual mouse then).
-pub fn nudge_mouse(first: bool) {
+/// a program that signs out an idle user sees activity.
+pub fn nudge_mouse() {
     use platform::Injector;
     let injector = platform::injector();
-    if first {
-        injector.prepare();
-    }
     injector.mouse_move(1, 0);
     injector.mouse_move(-1, 0);
 }
