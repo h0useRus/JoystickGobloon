@@ -92,6 +92,8 @@ pub struct JoystickGobloonApp {
     switched: Option<(String, String, String)>,
     /// A profile switch by program handed to the engine, waiting for its result.
     pending_switch: Option<PendingSwitch>,
+    /// Win+Alt+Z keep alive; `None` unless the hidden setting turns it on.
+    keep_alive: Option<crate::keep_alive::KeepAlive>,
     /// Activated with unsaved changes while programs have profiles: ask to save first.
     ask_switch_unsaved: bool,
     /// The program whose waiting switch the user put off (no question again for it).
@@ -268,6 +270,8 @@ impl JoystickGobloonApp {
             })
         };
         let activation = Activation::new(input.handle(), cc.egui_ctx.clone());
+        let keep_alive =
+            crate::keep_alive::KeepAlive::start(settings.keep_alive_secs, cc.egui_ctx.clone());
         let mut app = Self {
             i18n,
             settings,
@@ -300,6 +304,7 @@ impl JoystickGobloonApp {
             voice_panel: Default::default(),
             overlay: crate::overlay::Overlay::new(),
             activation,
+            keep_alive,
             was_active: false,
             switching: false,
             switcher: Default::default(),
@@ -2398,6 +2403,13 @@ impl eframe::App for JoystickGobloonApp {
             self.request(Pending::Update, ctx);
         }
         self.activation_done();
+        if let Some(on) = self.keep_alive.as_mut().and_then(|k| k.changed()) {
+            self.status = self.i18n.tr(if on {
+                "status-keep-alive-on"
+            } else {
+                "status-keep-alive-off"
+            });
+        }
         style::load_cjk_if_wanted(ctx);
         self.update_title(ctx);
         if self.hide_frames > 0 {

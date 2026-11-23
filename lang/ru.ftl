@@ -210,6 +210,8 @@ title-active = Активен
 title-inactive = Неактивен
 title-not-saved = не сохранён
 status-active = Профиль активен
+status-keep-alive-on = Не давать заснуть: мышь время от времени сдвигается на пиксель и обратно (Win+Alt+Z — остановить)
+status-keep-alive-off = Не давать заснуть: выключено
 status-stopped = Профиль остановлен
 activate-error = Не удалось активировать профиль: { $error }
 

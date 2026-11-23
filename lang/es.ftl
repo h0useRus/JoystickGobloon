@@ -206,6 +206,8 @@ title-active = Activo
 title-inactive = Inactivo
 title-not-saved = sin guardar
 status-active = Perfil activo
+status-keep-alive-on = Mantener activo: el ratón se mueve un píxel y vuelve de vez en cuando (Win+Alt+Z lo detiene)
+status-keep-alive-off = Mantener activo desactivado
 status-stopped = Perfil detenido
 activate-error = No se pudo activar el perfil: { $error }
 

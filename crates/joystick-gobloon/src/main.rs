@@ -14,6 +14,7 @@ mod device_access;
 mod devices_view;
 mod game_view;
 mod hidhide_view;
+mod keep_alive;
 mod key_capture;
 mod leds;
 mod logfile;

@@ -206,6 +206,8 @@ title-active = 활성
 title-inactive = 비활성
 title-not-saved = 저장되지 않음
 status-active = 프로필 활성화됨
+status-keep-alive-on = 활성 유지 켜짐: 마우스가 가끔 1픽셀 움직였다 돌아옵니다 (Win+Alt+Z로 중지)
+status-keep-alive-off = 활성 유지 꺼짐
 status-stopped = 프로필 중지됨
 activate-error = 프로필을 활성화할 수 없습니다: { $error }
 

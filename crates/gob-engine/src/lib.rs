@@ -30,6 +30,19 @@ pub use media::{Media, NaturalVoices, SpeechQueue, SpeechRequest, set_natural_vo
 pub use runner::{Latency, Reloader, Runner, RunnerStatus, VoiceHeard, VoiceStatus, wait_stopped};
 pub use tap::{OutputTap, Sent, Tapped};
 
+/// Moves the mouse one pixel and back through the system's input, so the net movement is zero:
+/// a program that signs out an idle user sees activity. `first`: get the output ready before
+/// the first nudge (Linux makes its virtual mouse then).
+pub fn nudge_mouse(first: bool) {
+    use platform::Injector;
+    let injector = platform::injector();
+    if first {
+        injector.prepare();
+    }
+    injector.mouse_move(1, 0);
+    injector.mouse_move(-1, 0);
+}
+
 /// Values of the logical device's inputs that actions wrote, by input id.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LogicalValues {

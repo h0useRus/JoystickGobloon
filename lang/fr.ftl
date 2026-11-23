@@ -206,6 +206,8 @@ title-active = Actif
 title-inactive = Inactif
 title-not-saved = non enregistré
 status-active = Profil actif
+status-keep-alive-on = Maintien actif : la souris bouge d’un pixel et revient de temps en temps (Win+Alt+Z l’arrête)
+status-keep-alive-off = Maintien actif désactivé
 status-stopped = Profil arrêté
 activate-error = Impossible d’activer le profil : { $error }
 

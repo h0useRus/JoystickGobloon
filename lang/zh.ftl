@@ -206,6 +206,8 @@ title-active = 已激活
 title-inactive = 未激活
 title-not-saved = 未保存
 status-active = 配置文件已激活
+status-keep-alive-on = 保持活动已开启：鼠标会不时移动一个像素再移回（Win+Alt+Z 停止）
+status-keep-alive-off = 保持活动已关闭
 status-stopped = 配置文件已停止
 activate-error = 无法激活配置文件：{ $error }
 
