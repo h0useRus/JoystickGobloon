@@ -241,6 +241,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   e.g. `feat(gob-gremlin): parse R14 library`). CI rejects other messages; the type sets the release version.
 
 ## Testing notes
+- Test layout: small unit tests inline (`#[cfg(test)] mod tests { .. }`); a test module over ~100 lines moves to
+  its own file (`foo.rs` -> `foo/tests.rs`, `mod.rs` -> `tests.rs` beside it) declared `#[cfg(test)] mod tests;`,
+  so it keeps access to private items; tests that need only the public API go to the crate's `tests/`.
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
   Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | modes (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting | panels | overlay (Settings > Overlay, placing it),
