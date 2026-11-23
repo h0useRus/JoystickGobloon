@@ -20,16 +20,22 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   come from Windows fonts (msyh.ttc, malgun.ttf; joystick-gobloon style.rs).
 - crates/joystick-gobloon    eframe/egui GUI binary -> JoystickGobloon.exe; OS code only in src/platform/ (`Desktop` trait:
   data dir, fonts, single instance, keys, window/tray (`Window` handle), autostart, updates; windows/ = Win32 + Inno Setup)
-- crates/gob-core    profile model
-- crates/gob-core    profile model grown from Gremlin R14: generic Action{kind, items} + typed `Action::kind()` views;
+- joystick-gobloon overlay.rs = game overlay (Settings > Overlay): a deferred viewport (transparent, on top,
+  click-through) whose lines `logic` builds from RunnerStatus (also while in the tray); Ctrl+Alt+F polled from
+  `held_keys` on a thread. The root window is transparent with a transparent clear_color for it: panels must cover it
+- crates/gob-core    profile model grown from Gremlin R14; file.rs `write_whole` = how every crate saves a file
+  (temp + fsync + rename: profiles, settings, state files, game bindings); generic Action{kind, items} + typed `Action::kind()` views;
   modifier.rs = modifiers and input layers (Joystick Gobloon only, `Profile::needs_own_format`)
   button_axis.rs = axis from buttons (set/velocity/stepped/encoder/smooth, second "decrease" input);
+  zones.rs = axis zones (`axis-zones`: points, `zone-N` groups with output rescale/pass/fixed; GremlinEx gated axis, lite);
   `Action::button_send` = How to send of button outputs (`send-mode` hold/press/release/pulse/repeat/toggle)
   automap.rs = the new profile wizard's mapping (every input of a device onto one vJoy device); `Profile::output_usage`
   = which inputs write each virtual output (used/conflict marks, wizard_view.rs + output_marks.rs in the GUI)
   events.rs = profile events (`EVENTS_GUID`, input type `event`: start/stop/mode enter/leave, Events tab), run by
   the engine's `profile_started`/`profile_stopping`/mode changes; `send-state` on a sequence = held button's press at start
   combos.rs = key combinations (`<key-combos>`, keyboard input type `combo`, ids offset by COMBO_ID_BASE in the engine)
+  osc.rs = OSC inputs (`OSC_GUID`, `<osc-inputs>`: address -> axis/button input with a low..high range, OSC tab) and the
+  `send-osc` action (host, port, address, `<argument>`s; default Bitfocus Companion 127.0.0.1:12321)
 - crates/gob-gremlin XML <-> Element <-> Profile: Gremlin R14+ import, written as `<profile version="14">` while
   Gremlin can read it, else `<profile app="Gobloon" version="1">`; lossless round-trip; `report()`; example `resave`
 - crates/gob-input   input thread (InputService: snapshot + events) in service.rs over platform::Backend/Device;
@@ -45,7 +51,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   + filter.rs: jitter threshold per axis (in `Calibration::jitter`) and button/hat debounce per device
   (`set_debounce`), applied in service.rs for every backend; the snapshot shows filtered values, `raw` stays as read
   + low-level keyboard hook (platform/windows/keyboard.rs) -> InputEvent::Key (no auto-repeat, injected keys ignored); keyboard bindings
-  use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine
+  use KEYBOARD_GUID, input type "key", id extended<<8|scan, and behave as buttons in the engine;
+  Linux `held_keys()` (keyboard.rs, keyboards kept open) = the only "keys held now" reader (engine + app)
 - crates/gob-vjoy    talks to the vJoy driver directly (direct.rs: device_NNN handles + IOCTLs, HID caps; no
   vJoyInterface.dll / vJoyConfig.exe); VJoy::acquire -> Device (reset+release on drop); axis slots 1..8 like
   gob-input. Config = HID descriptors in HKLM\...\services\vjoy\Parameters\DeviceNN (descriptor.rs, vJoy 2.1.9
@@ -84,6 +91,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   volume.rs), device groups from SetupAPI/CfgMgr (devices.rs, like `--dev-all`); version = HidHide.sys file.
   Example `hidhide_info [--all]` (read-only). Session blacklist waits for a signed 1.7.x - check
   nefarius/HidHide#217 and its releases before each gob-hidhide session (plans/HIDHIDE_PLAN.md)
+- crates/gob-osc     OSC 1.0 codec (messages, bundles) + `Listener` (UDP thread) + `Sender` (thread, resolves hosts);
+  gob-input `InputService::set_osc` (Settings > Panels: port, this PC or the network) turns messages into
+  `InputEvent::Osc`, the engine maps addresses to inputs (`Engine::osc`; no number = short press), runner sends
+  send-osc via `Output::send_osc`; Stream Deck through Bitfocus Companion (site/panels.html)
 - crates/gob-engine  pure Engine (process/tick with explicit Instant, `Output` trait) following Gremlin R14
   semantics; platform/ = keyboard/mouse output (`Injector`) and speech (`SpeechEngine`): windows/ SendInput + SAPI (read ref/JoystickGremlin action_plugins/*/__init__.py functors); Runner = thread gob-input -> vJoy (`subscribe_timed`: RunnerStatus.latency = device read -> outputs written, per second, shown in the status bar);
   Runner batches writes: one driver call per virtual device and pass, unchanged values skipped (resent if a write
@@ -94,21 +105,65 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/completed/LIGHTING_PLAN.md
 - crates/gob-script  Lua user scripts (plans/completed/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
-  (`send`: the engine is built off its thread), one sandboxed state per script, 5 ms per call (interrupt), off after
+  (`send`: the engine is built off its thread), one sandboxed state per script (sandbox.rs `new_state`: time budget +
+  memory cap, also used by gob-export plugins), 5 ms per call (interrupt), off after
   10 errors; prelude.luau = the Lua API (script.<kind>{} variables, input:on(mode, fn), script.every, vjoy/gamepad/
   keyboard/mouse/mode/joystick, speak, run_action, log), `describe` for the Scripts page form, `ScriptHost` +
-  `ScriptApi` (engine.rs `ScriptContext`); handlers run before an input's actions. Profile side: gob-core script.rs
+  `ScriptApi` (engine/script.rs `ScriptContext`); handlers run before an input's actions. Profile side: gob-core script.rs
   (`<scripts>`: Lua code as CDATA or a file path, Gremlin's Python kept, variables in Gremlin's XML); the app reads
   external files on activation (activation.rs) and reloads when they change; Scripts page = scripts_view.rs, editor =
   gob-ui `CodeEditor`
+- crates/gob-export  game export (plans/completed/GAME_EXPORT_PLAN.md): plugins = folders in `export/`: plugin.gob (TOML: id, name,
+  supported game versions), plugin.luau (hooks targets/version/read/write, each takes one context table; sandboxed
+  like gob-script, 2 s per call), catalog/<game version>.gob (the game's actions), renames.gob (ids changed between
+  versions); plugins only turn text into text, the host reads and writes the game's files. Game names, formats and
+  paths only in plugins; tests/plugins/sample = a made-up game for the tests; example `export_check` (read-only run on the
+  real game files, `--roundtrip [--dump <dir>]`). Plugins: plugins/export/<id>/ (star-citizen: dev/catalog.py rebuilds
+  catalog/<version>.gob from a local install, only on the user's request; il2-great-battles: data/input/global.actions,
+  device numbers from devices.txt, the game compiles current.map itself; an axis from two buttons = catalog actions
+  `<id>:inc`/`<id>:dec`; dev/catalog.py builds the catalog from key mapping files; the game is not installed here, tested
+  on a public key mapping file in crates/gob-export/tests/data; msfs: a control profile per device and aircraft kind,
+  Steam profiles (`<Steam>/userdata/*/<app>/remote/inputprofile_*`, found by the target's `globs`, which the host expands
+  into files `<key>:<path>`, `glob_text` = text near their start, our .gobak copies skipped) updated in place, Microsoft
+  Store cloud saves only read (2024: files to import written to Documents/Joystick Gobloon), a profile's device = the
+  DirectInput instance GUID (`OurDevice::instance`; vJoy: HID path `&colNN` = NN-th configured device, gob-virtual
+  `joystick_of_input`), by name only when one device has it; links the profile keeps win, catalogs 2020/2024 from control profiles by dev/catalog.py, ids `CONTEXT/KEY_X` and 2024
+  category actions `AIRPLANE:CONTEXT/KEY_X`; no sim here, tested on public vJoy profiles; elite-dangerous: the
+  active Ship preset of Options/Bindings/StartPreset.4.start (`local_app_data` in Env), vJoy = `1234BEAD[:DeviceIndex]`,
+  built-in presets never written; x4-foundations: Documents/Egosoft/X4/<account>/inputmap.xml, slots joy1-8 pinned by
+  instance GUID in config.xml, buttons 1-11 Xbox names; both untested in the games, round-trip checked on public files;
+  dcs-world: no catalog, a target per aircraft folder (`Target::each` = one target per folder a pattern finds, `{1}`..
+  placeholders) in Saved Games/DCS*/Config/Input, actions from the game's "Make HTML" files (InputLayoutsTxt, columns found by
+  header) and the diff files' names, returned in `ReadResult::actions` (the Game page adds them to the catalog), ids
+  `<aircraft>/<game id>`, `<device> {instance GUID}.diff.lua` per joystick + Keyboard.diff.lua via `luadata.parse/write`
+  (Lua data without running it, sorted keys + tabs like the game); defaults = HTML less added plus removed; the game is not
+  installed here, tested on made-up files in tests/data/dcs-world, the HTML format is a guess). A binding's output (gob-core game.rs
+  `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
+  keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
+  plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,
+  detaches like calibration): worker.rs (plugins on a worker thread), state.rs (one state per action: the profile set
+  against the game's files), wiring.rs (schematic, a lane per output), table.rs ("As in the game": groups, chips), capture.rs
+  + bind.rs (press a key/mouse button/joystick control to bind or look up; warning listing where a control is used; mapping
+  an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs). Releases put
+  plugins/export (without `dev/`) into `export/` next to the exe (installer, portable zip, AppImage)
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
-  and level; vosk.rs = libvosk loaded at run time (libloading; the app runs without it), grammar mode with the
-  profile's phrases; models.rs = small Vosk model per program language (URL + SHA-256), downloaded into
-  `<data dir>/voice`; service.rs = `VoiceService` thread (keeps the profile's microphones open by default: some
-  are silent 1-2 s after opening). Profile side: gob-core voice.rs (`VOICE_GUID`, input type `voice`,
-  `<voice-commands>`, action `voice-input`); engine `Output::voice_listen` + `Engine::voice_command`.
-  Example `voice_check` (`--meter` mic test, `--models <dir> --lang`, `--wav`)
-- plans/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
+  and level; two engines (`Engine`, Settings > Voice, default Vosk): vosk.rs = libvosk 0.3.45 in grammar mode
+  (hears only the phrases: much more reliable for short commands with an accent or a quiet headset), sherpa.rs =
+  sherpa-onnx 2.0.1 C API loaded at run time (libloading; the app runs without it; its
+  `#[repr(C)]` structs mirror that version's c-api.h, a test pins sizes/offsets: bump the library and the
+  structs together), offline recognizer: audio kept while the button is held, decoded once on release,
+  `ModelSpec::detect` reads the model kind from file names; matcher.rs = text -> phrase by character edit
+  distance, confidence lowered when two phrases are close; models.rs = per engine: one small Vosk model per
+  language (.zip from alphacephei.com) and a small and large sherpa-onnx model (.tar.bz2; de/es/fr share one; ko
+  small only; URL + SHA-256 + memory MB), downloaded into `<data dir>/voice`, both engines' models kept when
+  switching; service.rs = `VoiceService`
+  thread below normal priority (keeps the profile's microphones open by default: some are silent 1-2 s after
+  opening). Profile side: gob-core voice.rs (`VOICE_GUID`, input type `voice`, `<voice-commands>`, action
+  `voice-input`); engine `Output::voice_listen` + `Engine::voice_command`. Example `speech_bench` (load time,
+  memory, RTF and phrase accuracy of a model on WAVs; `--record` makes test WAVs; `--listen` push to talk, with
+  `--vosk-lib/--vosk-model` 1/2/3 = Vosk/sherpa-onnx/both on the same audio), `vosk_bench` (Vosk on the same WAVs).
+  Text to speech: Settings > Voice > Text to speech = the system's voice (default) or Piper (`tts_engine`)
+- plans/completed/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
   on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
   hiding, learn.html = every action with a
@@ -171,7 +226,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   pre-release `v<version>-alpha.<run>`; both ship the Inno Setup installer (installer/JoystickGobloon.iss), a
   portable zip and a Linux AppImage (job `appimage`, tools/linux/appimage.sh; it updates itself in place). The installer bundles the signed HidHide and vJoy 2.1.9.1 (jshafer817) installers
   (downloaded by release.yml, SHA-256 pinned) and runs each when its driver is missing; installer and portable zip
-  carry libvosk 0.3.45 (libvosk.dll + 3 MinGW DLLs next to the exe), the AppImage libvosk.so in usr/bin (both pinned); uninstall runs `JoystickGobloon.exe
+  carry sherpa-onnx 2.0.1 without TTS (sherpa-onnx-c-api.dll + onnxruntime.dll + onnxruntime_providers_shared.dll next to
+  the exe), the AppImage libsherpa-onnx-c-api.so + libonnxruntime.so in usr/bin (both pinned); uninstall runs `JoystickGobloon.exe
   --hidhide-unregister`. `JOYSTICK_GOBLOON_VERSION` (env at build time) is the version the app shows. CI (ci.yml) checks commit
   messages, runs fmt, cargo-machete (unused dependencies), clippy -D warnings and tests on pull requests and work branches,
   and clippy + tests on Linux (job `linux`).
@@ -187,8 +243,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 ## Testing notes
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting,
-  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | events | logical,
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | modes (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting | panels | overlay (Settings > Overlay, placing it),
+  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | osc | events | logical | game-wiring (Game page schematic; the table is its first tab),
+  `JOYSTICK_GOBLOON_GAME_IMPORT=1` takes the game's bindings into a profile without any on the Game page (debug only),
+  `JOYSTICK_GOBLOON_GAME_DIALOG` = capture | conflict | choose | unmapped opens that dialog of the Game page with sample data,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
 - Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new

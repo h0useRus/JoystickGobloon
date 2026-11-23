@@ -1,6 +1,7 @@
-//! Voice commands in the program: where libvosk and the speech models live (libvosk next to the
-//! exe or in `<data folder>/voice`, models downloaded into `<data folder>/voice` by gob-voice's
-//! `models`), and the Voice tab of the settings.
+//! Voice commands in the program: where the speech libraries (libvosk, sherpa-onnx) and models
+//! live (the libraries next to the exe or in `<data folder>/voice`, models of both engines
+//! downloaded into `<data folder>/voice` by gob-voice's `models` and kept there), and the Voice
+//! tab of the settings.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,18 +12,20 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, RichText};
 use gob_engine::VoiceConfig;
 use gob_i18n::I18n;
-use gob_voice::ModelInfo;
+use gob_voice::models::Size;
+use gob_voice::tts::VoiceInfo;
+use gob_voice::{Engine, ModelInfo};
 
 use crate::settings::Settings;
 use crate::settings_view::section_title;
 use crate::style::{self, icon};
 
-/// The folder of the speech models (and of libvosk when it is not next to the exe).
+/// The folder of the speech models (and of sherpa-onnx when it is not next to the exe).
 pub fn dir() -> Option<PathBuf> {
     crate::settings::data_dir().map(|d| d.join("voice"))
 }
 
-/// Folders libvosk is looked for in.
+/// Folders the speech libraries are looked for in.
 fn library_dirs() -> Vec<PathBuf> {
     let exe_dir = std::env::current_exe()
         .ok()
@@ -39,13 +42,29 @@ fn language(settings: &Settings) -> &str {
     }
 }
 
+/// The speech recognizer chosen in the settings.
+fn engine(settings: &Settings) -> Engine {
+    Engine::parse(&settings.voice_engine)
+}
+
+/// The speech model size chosen in the settings.
+fn size(settings: &Settings) -> Size {
+    Size::parse(&settings.voice_model_size)
+}
+
 /// How voice commands run with these settings; `None` while the model of their language is not
 /// installed (voice-input actions then do nothing).
 pub fn config(settings: &Settings) -> Option<VoiceConfig> {
+    // Called on start and after every voice setting: the natural voices follow too.
+    apply_natural_voices(settings);
     let dir = dir()?;
+    let engine = engine(settings);
     let language = language(settings);
-    let Some(model) = gob_voice::models::for_language(language) else {
-        log::info!("voice commands: no speech model for {language}");
+    let Some(model) = gob_voice::models::pick(engine, language, size(settings)) else {
+        log::info!(
+            "voice commands: no {} speech model for {language}",
+            engine.name()
+        );
         return None;
     };
     let Some(path) = gob_voice::models::installed(&dir, model) else {
@@ -57,8 +76,14 @@ pub fn config(settings: &Settings) -> Option<VoiceConfig> {
         return None;
     };
     Some(VoiceConfig {
+        engine,
         library_dirs: library_dirs(),
         model: path,
+        language: language
+            .split(['-', '_'])
+            .next()
+            .unwrap_or(language)
+            .to_lowercase(),
         gain: settings.voice_gain,
         min_confidence: settings.voice_min_confidence,
         keep_open: settings.voice_keep_open,
@@ -105,26 +130,85 @@ pub fn microphones(ctx: &egui::Context, fresh: bool) -> Option<Arc<Vec<gob_voice
     list.microphones.clone()
 }
 
-/// Whether libvosk loads, checked once per run.
-fn library_available() -> bool {
-    static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *AVAILABLE.get_or_init(|| match gob_voice::Vosk::load(&library_dirs()) {
-        Ok(_) => true,
+/// Whether the speech library of `engine` loads, checked once per run.
+fn library_available(engine: Engine) -> bool {
+    static VOSK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    static SHERPA: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let check = |loaded: Result<(), gob_voice::Error>| match loaded {
+        Ok(()) => true,
         Err(e) => {
             log::warn!("voice commands: {e}");
             false
         }
-    })
+    };
+    match engine {
+        Engine::Vosk => {
+            *VOSK.get_or_init(|| check(gob_voice::Vosk::load(&library_dirs()).map(|_| ())))
+        }
+        Engine::Sherpa => {
+            *SHERPA.get_or_init(|| check(gob_voice::Sherpa::load(&library_dirs()).map(|_| ())))
+        }
+    }
 }
 
-/// A speech model download running on its own thread.
+/// Whether text to speech uses Piper voices (else the system's voice).
+fn piper(settings: &Settings) -> bool {
+    settings.tts_engine == "piper"
+}
+
+/// Tells the engine which natural voices are installed and which one is the default; none with
+/// the system's voice chosen, so every action speaks with it.
+pub fn apply_natural_voices(settings: &Settings) {
+    if !piper(settings) {
+        gob_engine::set_natural_voices(gob_engine::NaturalVoices::default());
+        return;
+    }
+    let tts = dir().map(|d| gob_voice::tts::dir(&d));
+    let library = tts.as_deref().and_then(gob_voice::tts::library_installed);
+    let voices: Vec<(String, PathBuf)> = tts
+        .as_deref()
+        .map(|dir| {
+            gob_voice::tts::VOICES
+                .iter()
+                .filter_map(|v| Some((v.display_name(), gob_voice::tts::installed(dir, v)?)))
+                .collect()
+        })
+        .unwrap_or_default();
+    let default = voices
+        .iter()
+        .find(|(n, _)| *n == settings.tts_voice)
+        .or(voices.first())
+        .map(|(n, _)| n.clone());
+    gob_engine::set_natural_voices(gob_engine::NaturalVoices {
+        library,
+        voices,
+        default,
+    });
+}
+
+/// What is being downloaded.
+#[derive(Clone, Copy, PartialEq)]
+enum Target {
+    Model,
+    VoiceLibrary,
+    Voice(&'static VoiceInfo),
+}
+
+/// A download (speech model, voice library or voice) running on its own thread.
 struct Download {
-    model: &'static ModelInfo,
+    what: Target,
+    /// For the log.
+    name: &'static str,
     /// Bytes so far, total.
     progress: Arc<Mutex<(u64, u64)>>,
     cancel: Arc<AtomicBool>,
     done: Receiver<Result<(), String>>,
 }
+
+/// What a download thread runs: the install with its progress and cancel flag.
+type Job = Box<
+    dyn FnOnce(&mut dyn FnMut(u64, u64), &AtomicBool) -> Result<PathBuf, gob_voice::Error> + Send,
+>;
 
 /// The microphone open for the level meter.
 struct MicTest {
@@ -141,12 +225,26 @@ struct Opening {
     done: Receiver<Result<gob_voice::Capture, String>>,
 }
 
+/// How long what is installed on disk is trusted before it is looked up again (each look lists
+/// folders; the tab is drawn many times a second while a download runs).
+const DISK_RECHECK: Duration = Duration::from_secs(3);
+
+/// What the Voice tab found installed, by model, library or voice; forgotten after
+/// [`DISK_RECHECK`] or an install or removal.
+#[derive(Default)]
+struct DiskCache {
+    at: Option<Instant>,
+    found: std::collections::HashMap<String, Option<PathBuf>>,
+}
+
 /// State of the Voice settings tab between frames.
 #[derive(Default)]
 pub struct VoicePanel {
+    /// What is installed, looked up at most every few seconds rather than every frame.
+    disk: std::cell::RefCell<DiskCache>,
     download: Option<Download>,
-    /// The last download's error.
-    error: Option<String>,
+    /// The last download's error, and what it was.
+    error: Option<(Target, String)>,
     /// The microphone test is on.
     testing: bool,
     test: Option<MicTest>,
@@ -166,9 +264,35 @@ impl VoicePanel {
     /// The Voice tab; true when voice settings changed (or a model was installed or removed).
     /// A slider counts once it is let go, not on every step of a drag.
     pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
-        let changed = self.model_section(ui, i18n, settings);
+        let mut changed = self.poll_download(ui.ctx());
+        if changed {
+            self.disk.get_mut().found.clear();
+        }
+        changed |= self.model_section(ui, i18n, settings);
         ui.add_space(18.0);
-        self.microphone_section(ui, i18n, settings) || changed
+        changed |= self.microphone_section(ui, i18n, settings);
+        ui.add_space(18.0);
+        changed |= self.natural_section(ui, i18n, settings);
+        if changed {
+            // Something was installed or removed (or a setting changed): look again.
+            self.disk.get_mut().found.clear();
+        }
+        changed
+    }
+
+    /// `probe`'s answer for `key`, kept for [`DISK_RECHECK`].
+    fn on_disk(&self, key: &str, probe: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+        let mut cache = self.disk.borrow_mut();
+        if cache.at.is_none_or(|t| t.elapsed() >= DISK_RECHECK) {
+            cache.found.clear();
+            cache.at = Some(Instant::now());
+        }
+        if let Some(found) = cache.found.get(key) {
+            return found.clone();
+        }
+        let found = probe();
+        cache.found.insert(key.to_string(), found.clone());
+        found
     }
 
     fn model_section(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
@@ -183,6 +307,35 @@ impl VoicePanel {
                 .find(|(c, _)| c == code)
                 .map_or_else(|| code.to_string(), |(_, name)| name.clone())
         };
+        let engine_tip = |e: Engine| match e {
+            Engine::Vosk => i18n.tr("settings-voice-engine-vosk"),
+            Engine::Sherpa => i18n.tr("settings-voice-engine-sherpa"),
+        };
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::EAR).size(style::ICON_SIZE))
+                .on_hover_text(i18n.tr("settings-voice-engine"));
+            let current = engine(settings);
+            egui::ComboBox::from_id_salt("voice-engine")
+                .selected_text(current.name())
+                .show_ui(ui, |ui| {
+                    for e in Engine::ALL {
+                        // Models of the other engine stay installed: switching back needs no
+                        // download.
+                        if ui
+                            .selectable_label(e == current, e.name())
+                            .on_hover_text(engine_tip(e))
+                            .clicked()
+                            && e != current
+                        {
+                            settings.voice_engine = e.key().to_string();
+                            changed = true;
+                        }
+                    }
+                })
+                .response
+                .on_hover_text(engine_tip(current));
+        });
+        let engine = engine(settings);
         ui.horizontal(|ui| {
             ui.label(RichText::new(icon::GLOBE).size(style::ICON_SIZE))
                 .on_hover_text(i18n.tr("settings-voice-language"));
@@ -206,15 +359,47 @@ impl VoicePanel {
                         }
                     };
                     pick(ui, "", same);
-                    for m in gob_voice::models::MODELS {
-                        pick(ui, m.language, language_name(m.language));
+                    for code in gob_voice::models::languages(engine) {
+                        pick(ui, code, language_name(code));
                     }
                 });
         });
+        let language = language(settings).to_string();
+        let models = gob_voice::models::for_language(engine, &language);
+        if !models.is_empty() {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icon::GAUGE).size(style::ICON_SIZE))
+                    .on_hover_text(i18n.tr("settings-voice-size"));
+                let text = |m: &ModelInfo| {
+                    let key = match m.size {
+                        Size::Small => "settings-voice-size-small",
+                        Size::Large => "settings-voice-size-large",
+                    };
+                    i18n.trf(key, &[("memory", m.memory_mb.into())])
+                };
+                let chosen = gob_voice::models::pick(engine, &language, size(settings));
+                let current = chosen.map(text).unwrap_or_default();
+                if models.len() == 1 {
+                    ui.label(current)
+                        .on_hover_text(i18n.tr("settings-voice-size-only"));
+                    return;
+                }
+                egui::ComboBox::from_id_salt("voice-size")
+                    .selected_text(current)
+                    .show_ui(ui, |ui| {
+                        for m in &models {
+                            let selected = chosen.is_some_and(|c| c.size == m.size);
+                            if ui.selectable_label(selected, text(m)).clicked() && !selected {
+                                settings.voice_model_size = m.size.key().to_string();
+                                changed = true;
+                            }
+                        }
+                    });
+            });
+        }
 
         let Some(dir) = dir() else { return changed };
-        let language = language(settings).to_string();
-        let Some(model) = gob_voice::models::for_language(&language) else {
+        let Some(model) = gob_voice::models::pick(engine, &language, size(settings)) else {
             let text = i18n.trf(
                 "settings-voice-no-model",
                 &[("language", language_name(&language).into())],
@@ -222,30 +407,14 @@ impl VoicePanel {
             ui.label(RichText::new(text).weak());
             return changed;
         };
-        changed |= self.poll_download(ui.ctx());
-        let megabytes = model.size.div_ceil(1_000_000);
-        ui.horizontal(
-            |ui| match (&self.download, gob_voice::models::installed(&dir, model)) {
-                (Some(d), _) => {
-                    let (done, total) = *d.progress.lock().unwrap_or_else(|e| e.into_inner());
-                    let fraction = done as f32 / total.max(1) as f32;
-                    let text = i18n.trf(
-                        "settings-voice-downloading",
-                        &[
-                            ("done", (done / 1_000_000).into()),
-                            ("total", megabytes.into()),
-                        ],
-                    );
-                    ui.add(
-                        egui::ProgressBar::new(fraction)
-                            .desired_width(240.0)
-                            .text(text),
-                    );
-                    let tip = i18n.tr("settings-voice-cancel");
-                    if style::icon_button(ui, true, icon::X, &tip).clicked() {
-                        d.cancel.store(true, Ordering::Relaxed);
-                    }
-                }
+        let megabytes = model.bytes.div_ceil(1_000_000);
+        let busy = self.download.is_some();
+        ui.horizontal(|ui| {
+            match (
+                self.downloading(Target::Model),
+                self.on_disk(model.name, || gob_voice::models::installed(&dir, model)),
+            ) {
+                (Some(d), _) => progress_bar(ui, i18n, d),
                 (None, Some(_)) => {
                     let text = i18n.trf("settings-voice-installed", &[("size", megabytes.into())]);
                     ui.label(format!("{}  {text}", icon::CHECK_CIRCLE));
@@ -263,13 +432,17 @@ impl VoicePanel {
                         icon::DOWNLOAD_SIMPLE,
                         i18n.trf("settings-voice-download", &[("size", megabytes.into())])
                     );
-                    if ui.button(text).clicked() {
-                        self.start_download(ui.ctx(), dir.clone(), model);
+                    if ui.add_enabled(!busy, egui::Button::new(text)).clicked() {
+                        let dir = dir.clone();
+                        let job: Job = Box::new(move |progress, cancel| {
+                            gob_voice::models::install(&dir, model, progress, cancel)
+                        });
+                        self.start_download(ui.ctx(), Target::Model, model.name, model.bytes, job);
                     }
                 }
-            },
-        );
-        if let Some(e) = &self.error {
+            }
+        });
+        if let Some((Target::Model, e)) = &self.error {
             let text = format!(
                 "{}  {}",
                 icon::WARNING,
@@ -280,7 +453,7 @@ impl VoicePanel {
             );
             ui.label(RichText::new(text).color(ui.visuals().warn_fg_color));
         }
-        if !library_available() {
+        if !library_available(engine) {
             let text = format!(
                 "{}  {}",
                 icon::WARNING,
@@ -291,38 +464,49 @@ impl VoicePanel {
         changed
     }
 
-    fn start_download(&mut self, ctx: &egui::Context, dir: PathBuf, model: &'static ModelInfo) {
-        let progress = Arc::new(Mutex::new((0, model.size)));
+    /// The download of `what`, when it runs.
+    fn downloading(&self, what: Target) -> Option<&Download> {
+        self.download.as_ref().filter(|d| d.what == what)
+    }
+
+    fn start_download(
+        &mut self,
+        ctx: &egui::Context,
+        what: Target,
+        name: &'static str,
+        bytes: u64,
+        job: Job,
+    ) {
+        let progress = Arc::new(Mutex::new((0, bytes)));
         let cancel = Arc::new(AtomicBool::new(false));
         let (tx, done) = std::sync::mpsc::channel();
         let (p, c, ctx) = (progress.clone(), cancel.clone(), ctx.clone());
         let spawned = std::thread::Builder::new()
-            .name("voice-model".into())
+            .name("voice-download".into())
             .spawn(move || {
                 let mut report = |done, total| {
                     *p.lock().unwrap_or_else(|e| e.into_inner()) = (done, total);
                     ctx.request_repaint();
                 };
-                let result = gob_voice::models::install(&dir, model, &mut report, &c)
-                    .map(|_| ())
-                    .map_err(|e| e.to_string());
+                let result = job(&mut report, &c).map(|_| ()).map_err(|e| e.to_string());
                 let _ = tx.send(result);
                 ctx.request_repaint();
             });
         if let Err(e) = spawned {
-            self.error = Some(e.to_string());
+            self.error = Some((what, e.to_string()));
             return;
         }
         self.error = None;
         self.download = Some(Download {
-            model,
+            what,
+            name,
             progress,
             cancel,
             done,
         });
     }
 
-    /// Takes a finished download; true when a model was installed.
+    /// Takes a finished download; true when something was installed.
     fn poll_download(&mut self, ctx: &egui::Context) -> bool {
         let Some(d) = &self.download else {
             return false;
@@ -336,17 +520,219 @@ impl VoicePanel {
             Err(TryRecvError::Disconnected) => Err("the download stopped".into()),
         };
         let cancelled = d.cancel.load(Ordering::Relaxed);
-        let name = d.model.name;
+        let (what, name) = (d.what, d.name);
         self.download = None;
         match result {
             Ok(()) => true,
             Err(_) if cancelled => false,
             Err(e) => {
-                log::error!("speech model {name}: {e}");
-                self.error = Some(e);
+                log::error!("download {name}: {e}");
+                self.error = Some((what, e));
                 false
             }
         }
+    }
+
+    /// Natural voices: the voice library (downloaded on request: it carries GPL code), the
+    /// voices, and which one speaks text to speech without a voice of its own.
+    fn natural_section(&mut self, ui: &mut egui::Ui, i18n: &I18n, settings: &mut Settings) -> bool {
+        section_title(ui, icon::USER_SOUND, &i18n.tr("settings-tts"));
+        let mut changed = false;
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(icon::SPEAKER_HIGH).size(style::ICON_SIZE))
+                .on_hover_text(i18n.tr("settings-tts-engine"));
+            let system = i18n.tr("settings-tts-engine-system");
+            egui::ComboBox::from_id_salt("tts-engine")
+                .selected_text(if piper(settings) { "Piper" } else { &system })
+                .show_ui(ui, |ui| {
+                    // Piper's voices stay installed with the system's voice chosen.
+                    for (key, name) in [("system", system.as_str()), ("piper", "Piper")] {
+                        if ui
+                            .selectable_label(settings.tts_engine == key, name)
+                            .clicked()
+                            && settings.tts_engine != key
+                        {
+                            settings.tts_engine = key.to_string();
+                            changed = true;
+                        }
+                    }
+                });
+        });
+        if !piper(settings) {
+            ui.label(RichText::new(i18n.tr("settings-tts-system-hint")).weak());
+            return changed;
+        }
+        ui.label(RichText::new(i18n.tr("settings-tts-hint")).weak());
+        ui.add_space(4.0);
+        let Some(tts) = dir().map(|d| gob_voice::tts::dir(&d)) else {
+            return changed;
+        };
+        let busy = self.download.is_some();
+        let library = self.on_disk("tts-library", || gob_voice::tts::library_installed(&tts));
+        let archive = gob_voice::tts::library();
+        let megabytes = archive.bytes.div_ceil(1_000_000);
+        ui.horizontal(
+            |ui| match (self.downloading(Target::VoiceLibrary), &library) {
+                (Some(d), _) => progress_bar(ui, i18n, d),
+                (None, Some(_)) => {
+                    ui.label(format!(
+                        "{}  {}",
+                        icon::CHECK_CIRCLE,
+                        i18n.tr("settings-tts-library-installed")
+                    ));
+                    let tip = i18n.tr("settings-tts-library-remove");
+                    if style::icon_button(ui, true, icon::TRASH, &tip).clicked() {
+                        match gob_voice::tts::remove_library(&tts) {
+                            Ok(()) => changed = true,
+                            Err(e) => log::warn!("removing the voice library: {e}"),
+                        }
+                    }
+                }
+                (None, None) => {
+                    let text = format!(
+                        "{}  {}",
+                        icon::DOWNLOAD_SIMPLE,
+                        i18n.trf(
+                            "settings-tts-library-download",
+                            &[("size", megabytes.into())]
+                        )
+                    );
+                    if ui.add_enabled(!busy, egui::Button::new(text)).clicked() {
+                        let dir = tts.clone();
+                        let job: Job = Box::new(move |progress, cancel| {
+                            gob_voice::tts::install_library(&dir, progress, cancel)
+                        });
+                        self.start_download(
+                            ui.ctx(),
+                            Target::VoiceLibrary,
+                            archive.name,
+                            archive.bytes,
+                            job,
+                        );
+                    }
+                }
+            },
+        );
+        ui.label(RichText::new(i18n.tr("settings-tts-gpl")).weak().small());
+        if library.is_some() {
+            ui.add_space(4.0);
+            let language = language(settings)
+                .split(['-', '_'])
+                .next()
+                .unwrap_or("")
+                .to_string();
+            let mut voices: Vec<&'static VoiceInfo> = gob_voice::tts::VOICES.iter().collect();
+            // The voices of the language spoken first.
+            voices.sort_by_key(|v| v.language != language);
+            egui::Grid::new("tts-voices")
+                .num_columns(2)
+                .spacing([style::SPACE_M, style::SPACE_XS])
+                .show(ui, |ui| {
+                    for v in voices {
+                        ui.label(format!("{}  ·  {}", v.display_name(), v.license));
+                        let megabytes = v.bytes.div_ceil(1_000_000);
+                        ui.horizontal(|ui| {
+                            match (
+                                self.downloading(Target::Voice(v)),
+                                self.on_disk(v.id, || gob_voice::tts::installed(&tts, v)),
+                            ) {
+                                (Some(d), _) => progress_bar(ui, i18n, d),
+                                (None, Some(_)) => {
+                                    ui.label(format!(
+                                        "{}  {}",
+                                        icon::CHECK_CIRCLE,
+                                        i18n.tr("settings-tts-voice-installed")
+                                    ));
+                                    let tip = i18n.tr("settings-tts-voice-remove");
+                                    if style::icon_button(ui, true, icon::TRASH, &tip).clicked() {
+                                        match gob_voice::tts::remove(&tts, v) {
+                                            Ok(()) => changed = true,
+                                            Err(e) => {
+                                                log::warn!("removing the voice {}: {e}", v.id)
+                                            }
+                                        }
+                                    }
+                                }
+                                (None, None) => {
+                                    let text = format!(
+                                        "{}  {}",
+                                        icon::DOWNLOAD_SIMPLE,
+                                        i18n.trf(
+                                            "settings-tts-voice-download",
+                                            &[("size", megabytes.into())]
+                                        )
+                                    );
+                                    if ui.add_enabled(!busy, egui::Button::new(text)).clicked() {
+                                        let dir = tts.clone();
+                                        let job: Job = Box::new(move |progress, cancel| {
+                                            gob_voice::tts::install(&dir, v, progress, cancel)
+                                        });
+                                        let archive = v.archive();
+                                        self.start_download(
+                                            ui.ctx(),
+                                            Target::Voice(v),
+                                            archive.name,
+                                            archive.bytes,
+                                            job,
+                                        );
+                                    }
+                                }
+                            }
+                        });
+                        ui.end_row();
+                    }
+                });
+            ui.add_space(4.0);
+            let installed: Vec<String> = gob_voice::tts::VOICES
+                .iter()
+                .filter(|v| {
+                    self.on_disk(v.id, || gob_voice::tts::installed(&tts, v))
+                        .is_some()
+                })
+                .map(|v| v.display_name())
+                .collect();
+            // The voice of actions without one: the chosen one, else the first installed (the
+            // system's voice only while none is).
+            let current = installed
+                .iter()
+                .find(|n| **n == settings.tts_voice)
+                .or(installed.first())
+                .cloned();
+            if let Some(current) = current {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(icon::USER_SOUND).size(style::ICON_SIZE))
+                        .on_hover_text(i18n.tr("settings-tts-default"));
+                    egui::ComboBox::from_id_salt("tts-default")
+                        .selected_text(&current)
+                        .show_ui(ui, |ui| {
+                            for name in &installed {
+                                if ui.selectable_label(current == *name, name).clicked()
+                                    && current != *name
+                                {
+                                    settings.tts_voice = name.clone();
+                                    changed = true;
+                                }
+                            }
+                        });
+                });
+            } else {
+                ui.label(RichText::new(i18n.tr("settings-tts-no-voice")).weak());
+            }
+        }
+        if let Some((what, e)) = &self.error
+            && *what != Target::Model
+        {
+            let text = format!(
+                "{}  {}",
+                icon::WARNING,
+                i18n.trf(
+                    "settings-tts-download-failed",
+                    &[("error", e.clone().into())]
+                )
+            );
+            ui.label(RichText::new(text).color(ui.visuals().warn_fg_color));
+        }
+        changed
     }
 
     fn microphone_section(
@@ -524,6 +910,28 @@ impl VoicePanel {
                 }
             }
         }
+    }
+}
+
+/// A download's progress bar with its cancel button.
+fn progress_bar(ui: &mut egui::Ui, i18n: &I18n, d: &Download) {
+    let (done, total) = *d.progress.lock().unwrap_or_else(|e| e.into_inner());
+    let fraction = done as f32 / total.max(1) as f32;
+    let text = i18n.trf(
+        "settings-voice-downloading",
+        &[
+            ("done", (done / 1_000_000).into()),
+            ("total", total.div_ceil(1_000_000).into()),
+        ],
+    );
+    ui.add(
+        egui::ProgressBar::new(fraction)
+            .desired_width(240.0)
+            .text(text),
+    );
+    let tip = i18n.tr("settings-voice-cancel");
+    if style::icon_button(ui, true, icon::X, &tip).clicked() {
+        d.cancel.store(true, Ordering::Relaxed);
     }
 }
 

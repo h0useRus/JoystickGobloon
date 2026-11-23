@@ -6,13 +6,15 @@ use std::collections::HashSet;
 use eframe::egui::{self, RichText};
 use gob_core::{
     Action, ActionConfig, ActionKind, AxisDirection, InputType, Item, Layer, MergeOp, MouseAction,
-    MouseButton, NewAction, Profile, Property, VirtualButton, VirtualOutput, child_groups,
+    MouseButton, NewAction, Profile, VirtualButton, VirtualOutput, child_groups,
 };
 use gob_i18n::I18n;
 
 use crate::devices_view::hat_glyph;
 use crate::output_marks::OutputMarks;
 use crate::style::{self, OutputMark, icon};
+
+pub use crate::action_ops::{Op, apply};
 
 /// Builds an [`AddKind`] from an existing action id.
 type MakeAdd = fn(String) -> AddKind;
@@ -86,615 +88,6 @@ pub fn copy_actions(
     names
 }
 
-/// Adds a bound device to the profile's `<devices>` (not the logical device or the keyboard).
-fn list_device(p: &mut Profile, device: &str, name: String) {
-    if !gob_core::is_builtin_device(device)
-        && !p.devices.iter().any(|d| d.id.eq_ignore_ascii_case(device))
-    {
-        p.devices.push(gob_core::Device {
-            id: device.to_string(),
-            name,
-        });
-    }
-}
-
-fn add_to(p: &mut Profile, parent: &str, group: &str, kind: &AddKind) {
-    match kind {
-        // Id 0: a new logical input of that type.
-        AddKind::New(NewAction::MapToLogicalDevice { input_type, id: 0 }) => {
-            let id = p.add_logical_input(*input_type);
-            let kind = NewAction::MapToLogicalDevice {
-                input_type: *input_type,
-                id,
-            };
-            p.add_child(parent, group, Action::new(&kind));
-        }
-        AddKind::New(kind) => {
-            p.add_child(parent, group, Action::new(kind));
-        }
-        AddKind::Reuse(id) => {
-            p.add_ref(parent, group, id);
-        }
-        AddKind::Duplicate(id) => {
-            if let Some(copy) = p.duplicate(id) {
-                p.add_ref(parent, group, &copy);
-                p.separate_outputs(&copy);
-            }
-        }
-        AddKind::Paste(clip) => {
-            for copy in p.paste(&clip.actions, &clip.tops) {
-                p.add_ref(parent, group, &copy);
-                p.separate_outputs(&copy);
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Op {
-    /// Creates the binding (empty root), optionally with a first action.
-    Bind {
-        device: String,
-        name: String,
-        input_type: String,
-        input_id: String,
-        mode: String,
-        /// Layer the actions go on (the base without modifiers).
-        layer: Layer,
-        add: Option<AddKind>,
-    },
-    /// Removes one layer of an input's binding (the binding when it was the last one).
-    Unbind {
-        device: String,
-        input_type: String,
-        input_id: String,
-        mode: String,
-        layer: Layer,
-    },
-    SetLayerAdditive {
-        device: String,
-        input_type: String,
-        input_id: String,
-        mode: String,
-        layer: Layer,
-        additive: bool,
-    },
-    SetLayerSendState {
-        device: String,
-        input_type: String,
-        input_id: String,
-        mode: String,
-        layer: Layer,
-        send: bool,
-    },
-    SetLayerKeepValue {
-        device: String,
-        input_type: String,
-        input_id: String,
-        mode: String,
-        layer: Layer,
-        keep: bool,
-    },
-    /// Makes the action sequence `root` of an axis or hat run as a button (`Some`) or as the
-    /// input itself (`None`).
-    SetVirtualButton {
-        root: String,
-        input_type: String,
-        button: Option<VirtualButton>,
-    },
-    /// Adds an action sequence running as `button` to an input's layer, binding it if needed.
-    AddButtonSequence {
-        device: String,
-        name: String,
-        input_type: String,
-        input_id: String,
-        mode: String,
-        layer: Layer,
-        button: VirtualButton,
-    },
-    /// Removes one action sequence (the binding's layer with its last one).
-    RemoveSequence(String),
-    Add {
-        parent: String,
-        group: String,
-        action: AddKind,
-    },
-    /// Sets axis `slot` of a two-axis action (merge-axis, dual-axis-deadzone) and moves its
-    /// binding along: bound to the new axis, unbound from the old one (logged).
-    TwoAxisInput {
-        action: String,
-        slot: u8,
-        device: String,
-        /// Device name for the profile's device list.
-        name: String,
-        axis: u32,
-        mode: String,
-        layer: Layer,
-    },
-    /// A two-axis action is being linked to `device`'s `axis`: a new one takes it as its
-    /// second axis (logged).
-    TwoAxisAdopt {
-        action: String,
-        device: String,
-        axis: u32,
-    },
-    Remove {
-        parent: String,
-        group: String,
-        index: usize,
-    },
-    /// Gives a shared child its own copy here (see [`gob_core::Profile::unlink_child`]).
-    Unlink {
-        parent: String,
-        group: String,
-        index: usize,
-    },
-    Move {
-        parent: String,
-        group: String,
-        from: usize,
-        to: usize,
-    },
-    Unset {
-        action: String,
-        name: String,
-    },
-    Set {
-        action: String,
-        name: String,
-        ty: String,
-        value: String,
-    },
-    /// Property inside a group, e.g. a deadzone limit.
-    SetInGroup {
-        action: String,
-        group: String,
-        name: String,
-        ty: String,
-        value: String,
-    },
-    SetPoints {
-        action: String,
-        points: Vec<(f32, f32)>,
-    },
-    SetTargets {
-        action: String,
-        targets: Vec<String>,
-    },
-    /// Replaces (or appends, at the end index) a condition of a condition action.
-    SetCondition {
-        action: String,
-        index: usize,
-        condition: gob_core::Condition,
-    },
-    RemoveCondition {
-        action: String,
-        index: usize,
-    },
-    /// Replaces (or appends, at the end index) a macro step.
-    SetMacroStep {
-        action: String,
-        index: usize,
-        step: gob_core::MacroStep,
-    },
-    RemoveMacroStep {
-        action: String,
-        index: usize,
-    },
-    /// Swaps step `index` with the next one.
-    SwapMacroSteps {
-        action: String,
-        index: usize,
-    },
-    AddLogicalInput(InputType),
-    RenameLogicalInput {
-        input_type: InputType,
-        id: u32,
-        label: String,
-    },
-    RemoveLogicalInput {
-        input_type: InputType,
-        id: u32,
-    },
-    AddVoiceCommand,
-    /// Adds a combination of these keys (or finds it) and binds it in `mode`.
-    AddCombo {
-        keys: Vec<gob_core::Key>,
-        mode: String,
-    },
-    SetComboKeys {
-        id: u32,
-        keys: Vec<gob_core::Key>,
-    },
-    RemoveCombo(u32),
-    /// Makes a voice command saying `phrase` run `action` itself in `mode` and `layer` (the
-    /// card's); `id` is the command it goes to, which the page then opens.
-    VoiceFromAction {
-        action: String,
-        phrase: String,
-        mode: String,
-        id: u32,
-    },
-    /// Not an edit: the page opens voice command `id`.
-    GoToVoice(u32),
-    RemoveVoiceCommand(u32),
-    SetVoicePhrases {
-        id: u32,
-        phrases: Vec<String>,
-    },
-    /// Seconds a recognized command holds its button.
-    SetVoiceHold {
-        id: u32,
-        hold: f64,
-    },
-    AddChainStep(String),
-    RemoveChainStep {
-        action: String,
-        index: usize,
-    },
-    /// Keys of a map-to-keyboard action.
-    SetKeys {
-        action: String,
-        keys: Vec<gob_core::Key>,
-    },
-    /// Preview in the editor; not an edit.
-    PreviewSound {
-        file: String,
-        volume: u8,
-    },
-    /// Preview in the editor; not an edit.
-    PreviewSpeech(gob_engine::SpeechRequest),
-    /// Lights a LED now ("light it now" in the light-led editor); not an edit. `device`
-    /// is the profile's device GUID.
-    PreviewLight {
-        device: String,
-        led: crate::leds::LedValue,
-    },
-    /// button-axis: the input that moves the axis down, `None` to remove it.
-    SetDecrease {
-        action: String,
-        /// (device GUID, device name for the profile's device list, input type, id).
-        input: Option<(String, String, String, u32)>,
-    },
-    /// button-axis: write a logical axis (the first one, a new one when there is none).
-    ButtonAxisLogical(String),
-    /// hat-buttons: 4 or 8 directions.
-    HatButtonCount {
-        action: String,
-        count: u8,
-    },
-    AddScript {
-        name: String,
-        source: gob_core::ScriptSource,
-    },
-    RemoveScript(String),
-    MoveScript {
-        id: String,
-        up: bool,
-    },
-    SetScriptName {
-        id: String,
-        name: String,
-    },
-    SetScriptSource {
-        id: String,
-        source: gob_core::ScriptSource,
-    },
-    /// `None` clears the value.
-    SetScriptVariable {
-        id: String,
-        name: String,
-        value: Option<gob_core::ScriptValue>,
-    },
-}
-
-pub fn apply(p: &mut Profile, op: Op) {
-    match op {
-        Op::Bind {
-            device,
-            name,
-            input_type,
-            input_id,
-            mode,
-            layer,
-            add,
-        } => {
-            list_device(p, &device, name);
-            let root = p.bind_layer(&device, &input_type, &input_id, &mode, &layer);
-            if let Some(kind) = add {
-                add_to(p, &root, "actions", &kind);
-            }
-        }
-        Op::Unbind {
-            device,
-            input_type,
-            input_id,
-            mode,
-            layer,
-        } => p.unbind_layer(&device, &input_type, &input_id, &mode, &layer),
-        Op::SetLayerAdditive {
-            device,
-            input_type,
-            input_id,
-            mode,
-            layer,
-            additive,
-        } => p.set_layer_additive(&device, &input_type, &input_id, &mode, &layer, additive),
-        Op::SetLayerSendState {
-            device,
-            input_type,
-            input_id,
-            mode,
-            layer,
-            send,
-        } => p.set_layer_send_state(&device, &input_type, &input_id, &mode, &layer, send),
-        Op::SetLayerKeepValue {
-            device,
-            input_type,
-            input_id,
-            mode,
-            layer,
-            keep,
-        } => p.set_layer_keep_value(&device, &input_type, &input_id, &mode, &layer, keep),
-        Op::SetVirtualButton {
-            root,
-            input_type,
-            button,
-        } => p.set_virtual_button(&root, &input_type, button.as_ref()),
-        Op::AddButtonSequence {
-            device,
-            name,
-            input_type,
-            input_id,
-            mode,
-            layer,
-            button,
-        } => {
-            list_device(p, &device, name);
-            let added = p.add_sequence(
-                &device,
-                &input_type,
-                &input_id,
-                &mode,
-                &layer,
-                Some(&button),
-            );
-            if added.is_none() {
-                let root = p.bind_layer(&device, &input_type, &input_id, &mode, &layer);
-                p.set_virtual_button(&root, &input_type, Some(&button));
-            }
-        }
-        Op::RemoveSequence(root) => p.remove_sequence(&root),
-        Op::Add {
-            parent,
-            group,
-            action,
-        } => add_to(p, &parent, &group, &action),
-        Op::TwoAxisInput {
-            action,
-            slot,
-            device,
-            name,
-            axis,
-            mode,
-            layer,
-        } => {
-            list_device(p, &device, name);
-            for line in p.set_two_axis_input(&action, slot, &(device, axis), &mode, &layer) {
-                log::debug!("{line}");
-            }
-        }
-        Op::TwoAxisAdopt {
-            action,
-            device,
-            axis,
-        } => {
-            if let Some(line) = p.two_axis_adopt(&action, &(device, axis)) {
-                log::debug!("{line}");
-            }
-        }
-        Op::Remove {
-            parent,
-            group,
-            index,
-        } => p.remove_child(&parent, &group, index),
-        Op::Unlink {
-            parent,
-            group,
-            index,
-        } => {
-            p.unlink_child(&parent, &group, index);
-        }
-        Op::Move {
-            parent,
-            group,
-            from,
-            to,
-        } => p.move_child(&parent, &group, from, to),
-        Op::Unset { action, name } => {
-            if let Some(a) = p.action_mut(&action) {
-                a.unset(&name);
-            }
-        }
-        Op::Set {
-            action,
-            name,
-            ty,
-            value,
-        } => {
-            if let Some(a) = p.action_mut(&action) {
-                a.set(&name, &ty, value);
-            }
-        }
-        Op::HatButtonCount { action, count } => p.set_hat_button_count(&action, count),
-        Op::AddScript { name, source } => {
-            p.add_script(&name, source);
-        }
-        Op::RemoveScript(id) => p.remove_script(&id),
-        Op::MoveScript { id, up } => p.move_script(&id, up),
-        Op::SetScriptName { id, name } => p.set_script_name(&id, &name),
-        Op::SetScriptSource { id, source } => p.set_script_source(&id, &source),
-        Op::SetScriptVariable { id, name, value } => {
-            p.set_script_variable(&id, &name, value.as_ref())
-        }
-        Op::SetDecrease { action, input } => {
-            if let Some((device, name, ..)) = &input {
-                list_device(p, device, name.clone());
-            }
-            if let Some(a) = p.action_mut(&action) {
-                match input {
-                    Some((device, _, input_type, id)) => {
-                        a.set("decrease-device-id", "uuid", device);
-                        a.set("decrease-input-type", "string", input_type);
-                        a.set("decrease-input-id", "int", id.to_string());
-                    }
-                    None => {
-                        for name in [
-                            "decrease-device-id",
-                            "decrease-input-type",
-                            "decrease-input-id",
-                        ] {
-                            a.unset(name);
-                        }
-                    }
-                }
-            }
-        }
-        Op::ButtonAxisLogical(action) => {
-            let first = p
-                .logical_inputs()
-                .into_iter()
-                .find(|i| i.input_type == InputType::Axis)
-                .map(|i| i.id);
-            let id = first.unwrap_or_else(|| p.add_logical_input(InputType::Axis));
-            if let Some(a) = p.action_mut(&action) {
-                a.set("output-type", "string", "logical");
-                a.set("logical-id", "int", id.to_string());
-            }
-        }
-        Op::SetKeys { action, keys } => p.set_keys(&action, &keys),
-        Op::AddChainStep(action) => p.add_chain_step(&action),
-        Op::AddLogicalInput(input_type) => {
-            p.add_logical_input(input_type);
-        }
-        Op::RenameLogicalInput {
-            input_type,
-            id,
-            label,
-        } => {
-            p.rename_logical_input(input_type, id, &label);
-        }
-        Op::RemoveLogicalInput { input_type, id } => p.remove_logical_input(input_type, id),
-        Op::AddVoiceCommand => {
-            p.add_voice_command();
-        }
-        Op::AddCombo { keys, mode } => {
-            if let Some(id) = p.add_key_combo(&keys) {
-                p.bind_layer(
-                    gob_core::KEYBOARD_GUID,
-                    gob_core::COMBO_INPUT_TYPE,
-                    &id.to_string(),
-                    &mode,
-                    &Layer::base(),
-                );
-            }
-        }
-        Op::SetComboKeys { id, keys } => {
-            p.set_combo_keys(id, &keys);
-        }
-        Op::RemoveCombo(id) => p.remove_key_combo(id),
-        Op::VoiceFromAction {
-            action,
-            phrase,
-            mode,
-            ..
-        } => {
-            p.add_voice_command_for(&action, &phrase, &mode);
-        }
-        Op::RemoveVoiceCommand(id) => p.remove_voice_command(id),
-        Op::SetVoicePhrases { id, phrases } => {
-            p.set_voice_phrases(id, &phrases);
-        }
-        Op::SetVoiceHold { id, hold } => {
-            p.set_voice_hold(id, hold);
-        }
-        Op::SetMacroStep {
-            action,
-            index,
-            step,
-        } => p.set_macro_step(&action, index, &step),
-        Op::RemoveMacroStep { action, index } => p.remove_macro_step(&action, index),
-        Op::SwapMacroSteps { action, index } => p.swap_macro_steps(&action, index),
-        Op::RemoveChainStep { action, index } => p.remove_chain_step(&action, index),
-        // Handled by the app (previews) or the page (going to a command) before edits are applied.
-        Op::PreviewSound { .. }
-        | Op::PreviewSpeech(_)
-        | Op::PreviewLight { .. }
-        | Op::GoToVoice(_) => {}
-        Op::SetCondition {
-            action,
-            index,
-            condition,
-        } => p.set_condition(&action, index, &condition),
-        Op::RemoveCondition { action, index } => p.remove_condition(&action, index),
-        Op::SetInGroup {
-            action,
-            group,
-            name,
-            ty,
-            value,
-        } => {
-            if let Some(a) = p.action_mut(&action) {
-                let items = a.group_mut(&group);
-                match items.iter_mut().find_map(|i| match i {
-                    Item::Property(p) if p.name == name => Some(p),
-                    _ => None,
-                }) {
-                    Some(prop) => prop.value = value,
-                    None => items.push(Item::Property(Property { ty, name, value })),
-                }
-            }
-        }
-        Op::SetPoints { action, points } => {
-            if let Some(a) = p.action_mut(&action) {
-                *a.group_mut("control-points") = points
-                    .iter()
-                    .map(|&(x, y)| {
-                        Item::Property(Property {
-                            ty: "point2d".into(),
-                            name: "point".into(),
-                            value: format!("{},{}", py_float(x), py_float(y)),
-                        })
-                    })
-                    .collect();
-            }
-        }
-        Op::SetTargets { action, targets } => {
-            if let Some(a) = p.action_mut(&action) {
-                a.items
-                    .retain(|i| !matches!(i, Item::Group { tag, .. } if tag == "target-mode"));
-                let at = a
-                    .items
-                    .iter()
-                    .position(|i| matches!(i, Item::Property(p) if p.name == "change-type"))
-                    .map_or(0, |i| i + 1);
-                for (n, t) in targets.into_iter().enumerate() {
-                    let item = Item::Group {
-                        tag: "target-mode".into(),
-                        attrs: Vec::new(),
-                        items: vec![Item::Property(Property {
-                            ty: "string".into(),
-                            name: "name".into(),
-                            value: t,
-                        })],
-                    };
-                    a.items.insert(at + n, item);
-                }
-            }
-        }
-    }
-}
-
 /// Float text the way Python prints it (`1.0`, `0.25`), as Gremlin writes values.
 pub fn py_float(v: f32) -> String {
     let v = (v * 10_000.0).round() / 10_000.0;
@@ -737,6 +130,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "smart-toggle" => icon::TOGGLE_RIGHT,
         "delay" => icon::HOURGLASS_MEDIUM,
         "split-axis" => icon::ARROWS_SPLIT,
+        "axis-zones" => icon::SLIDERS_HORIZONTAL,
         "pause-resume" => icon::PLAY_PAUSE,
         "run-command" => icon::TERMINAL_WINDOW,
         "map-to-mouse" => icon::MOUSE,
@@ -755,6 +149,7 @@ pub fn kind_icon(kind: &str) -> &'static str {
         "light-led" => icon::LIGHTBULB,
         "map-to-gamepad" => icon::GAME_CONTROLLER,
         "voice-input" => icon::MICROPHONE,
+        gob_core::SEND_OSC => icon::PAPER_PLANE_RIGHT,
         gob_core::BUTTON_AXIS => icon::SLIDERS_HORIZONTAL,
         _ => icon::PUZZLE_PIECE,
     }
@@ -933,6 +328,11 @@ fn addable(
     if behavior == InputType::Axis {
         list.push((icon::ARROWS_SPLIT, "kind-split-axis", NewAction::SplitAxis));
         list.push((
+            icon::SLIDERS_HORIZONTAL,
+            "kind-axis-zones",
+            NewAction::AxisZones,
+        ));
+        list.push((
             icon::ARROWS_DOWN_UP,
             "kind-axis-delta",
             NewAction::AxisDelta,
@@ -949,6 +349,9 @@ fn addable(
         ));
     }
     list.push((icon::GIT_BRANCH, "kind-condition", NewAction::Condition));
+    if behavior != InputType::Other {
+        list.push((icon::PAPER_PLANE_RIGHT, "kind-send-osc", NewAction::SendOsc));
+    }
     list.push((icon::NOTE, "kind-description", NewAction::Description));
     list
 }
@@ -981,6 +384,8 @@ pub struct Editor<'a> {
     pub monotonic_curves: bool,
     /// A right click on empty space of the curve chart inverts the curve.
     pub curve_right_click_invert: bool,
+    /// Curves the user saved as presets.
+    pub curve_presets: &'a [crate::settings::SavedCurve],
     /// Actions voice commands run, with the command (built once per frame, when a card needs it).
     pub voice_links: std::cell::OnceCell<std::collections::HashMap<String, u32>>,
     /// How many places use each action (built once per frame, when a card needs it).
@@ -1007,6 +412,7 @@ fn speakable(action: &Action) -> bool {
                 | "text-to-speech"
                 | "load-profile"
                 | "pause-resume"
+                | gob_core::SEND_OSC
         ),
     }
 }
@@ -1746,6 +1152,9 @@ impl Editor<'_> {
                         depth,
                     );
                 }
+                ActionKind::AxisZones { points, zones } => {
+                    self.axis_zones(ui, &action.id, &points, &zones, depth);
+                }
                 ActionKind::PauseResume { operation } => {
                     ui.horizontal(|ui| {
                         for op in ["Pause", "Resume", "Toggle"] {
@@ -1810,6 +1219,12 @@ impl Editor<'_> {
                         });
                     ui.horizontal(|ui| self.activation(ui, action));
                 }
+                ActionKind::SendOsc {
+                    host,
+                    port,
+                    address,
+                    args,
+                } => self.send_osc(ui, action, host, port, address, &args),
                 ActionKind::Description { text } => {
                     let mut text = text.to_string();
                     let note = style::EditableText::new(&mut text, ("description", id))
@@ -1857,6 +1272,114 @@ impl Editor<'_> {
         ui.add_space(4.0);
     }
 
+    /// Axis zones: each zone with its stretch, output and actions, the points between them.
+    fn axis_zones(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: &str,
+        points: &[f64],
+        zones: &[gob_core::AxisZone<'_>],
+        depth: usize,
+    ) {
+        use gob_core::ZoneOutput;
+        if depth > 8 {
+            return;
+        }
+        for (n, zone) in zones.iter().enumerate() {
+            let lo = if n == 0 { -1.0 } else { points[n - 1] };
+            let hi = points.get(n).copied().unwrap_or(1.0);
+            let title = self.i18n.trf(
+                "edit-zone",
+                &[
+                    ("n", (n + 1).into()),
+                    ("from", format!("{lo:.2}").into()),
+                    ("to", format!("{hi:.2}").into()),
+                ],
+            );
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("{}  {title}", icon::SLIDERS_HORIZONTAL)).strong());
+                let fixed = match zone.output {
+                    ZoneOutput::Fixed(v) => v,
+                    _ => 0.0,
+                };
+                for (output, key) in [
+                    (ZoneOutput::Rescale, "edit-zone-rescale"),
+                    (ZoneOutput::Pass, "edit-zone-pass"),
+                    (ZoneOutput::Fixed(fixed), "edit-zone-fixed"),
+                ] {
+                    let on = zone.output.key() == output.key();
+                    let r = ui
+                        .radio(on, self.i18n.tr(key))
+                        .on_hover_text(self.i18n.tr(&format!("{key}-tip")));
+                    if r.clicked() && !on {
+                        self.ops.push(Op::SetZoneOutput {
+                            action: id.to_string(),
+                            zone: n,
+                            output,
+                        });
+                    }
+                }
+                if let ZoneOutput::Fixed(v) = zone.output {
+                    let mut x = v as f32;
+                    let spin = style::Spin::new(&mut x)
+                        .range(-1.0..=1.0)
+                        .step(0.01)
+                        .decimals(2);
+                    if ui.add(spin).changed() {
+                        self.ops.push(Op::SetZoneOutput {
+                            action: id.to_string(),
+                            zone: n,
+                            output: ZoneOutput::Fixed(f64::from(x)),
+                        });
+                    }
+                }
+            });
+            let group = gob_core::zones::group_tag(n);
+            ui.indent((&group, id), |ui| {
+                self.container(ui, id, &group, depth + 1);
+            });
+            if let Some(&p) = points.get(n) {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(icon::DOT_OUTLINE).size(style::ICON_SIZE))
+                        .on_hover_text(self.i18n.tr("edit-zone-point"));
+                    let mut x = p as f32;
+                    let spin = style::Spin::new(&mut x)
+                        .range(-1.0..=1.0)
+                        .step(0.005)
+                        .decimals(3);
+                    if ui
+                        .add(spin)
+                        .on_hover_text(self.i18n.tr("edit-zone-point"))
+                        .changed()
+                    {
+                        self.ops.push(Op::SetZonePoint {
+                            action: id.to_string(),
+                            index: n,
+                            value: f64::from(x),
+                        });
+                    }
+                    let tip = self.i18n.tr("edit-zone-remove");
+                    if style::icon_button(ui, true, icon::TRASH, &tip).clicked() {
+                        self.ops.push(Op::RemoveZonePoint {
+                            action: id.to_string(),
+                            index: n,
+                        });
+                    }
+                });
+            }
+        }
+        let can = points.len() < gob_core::zones::MAX_POINTS
+            && 1.0 - points.last().copied().unwrap_or(-1.0) >= gob_core::zones::MIN_GAP * 2.0;
+        let text = format!("{}  {}", icon::PLUS, self.i18n.tr("edit-zone-add"));
+        if ui
+            .add_enabled(can, egui::Button::new(text))
+            .on_hover_text(self.i18n.tr("edit-zone-add-tip"))
+            .clicked()
+        {
+            self.ops.push(Op::AddZonePoint(id.to_string()));
+        }
+    }
+
     pub(crate) fn set(&mut self, action: &str, name: &str, ty: &str, value: impl Into<String>) {
         self.ops.push(Op::Set {
             action: action.into(),
@@ -1866,7 +1389,7 @@ impl Editor<'_> {
         });
     }
 
-    fn activation(&mut self, ui: &mut egui::Ui, action: &Action) {
+    pub(crate) fn activation(&mut self, ui: &mut egui::Ui, action: &Action) {
         let current = action.str("activation-mode").unwrap_or("both");
         for (value, glyph, key) in [
             ("press", icon::ARROW_LINE_DOWN, "edit-on-press"),
@@ -3112,7 +2635,7 @@ impl Editor<'_> {
                             name: "voice".into(),
                         });
                     }
-                    for v in voices {
+                    for v in &voices {
                         if ui.selectable_label(voice == Some(v.as_str()), v).clicked() {
                             self.set(&id, "voice", "string", v.clone());
                         }

@@ -44,13 +44,14 @@ impl ProfileEvent {
 }
 
 /// One of the program's own input devices, not a controller: the logical device, the keyboard,
-/// voice commands and profile events. They are never listed in `<devices>`.
+/// voice commands, OSC inputs and profile events. They are never listed in `<devices>`.
 pub fn is_builtin_device(id: &str) -> bool {
     let id = id.trim();
     [
         crate::LOGICAL_DEVICE_GUID,
         crate::KEYBOARD_GUID,
         crate::VOICE_GUID,
+        crate::OSC_GUID,
         EVENTS_GUID,
     ]
     .iter()

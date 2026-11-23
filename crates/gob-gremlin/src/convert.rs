@@ -110,6 +110,14 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
                 p.key_combos = combos_from(section);
                 Section::KeyCombos
             }
+            "game-bindings" => {
+                p.game_bindings = games_from(section);
+                Section::GameBindings
+            }
+            "osc-inputs" => {
+                p.osc_inputs = osc_from(section);
+                Section::OscInputs
+            }
             _ => {
                 p.extra.push(section.clone());
                 Section::Extra(p.extra.len() - 1)
@@ -135,6 +143,8 @@ pub fn profile_to_element(p: &Profile) -> Element {
             Section::VirtualDevices => p.virtual_devices.is_empty(),
             Section::VoiceCommands => p.voice_commands.is_empty(),
             Section::KeyCombos => p.key_combos.is_empty(),
+            Section::GameBindings => p.game_bindings.is_empty(),
+            Section::OscInputs => p.osc_inputs.is_empty(),
             _ => false,
         };
         if empty {
@@ -176,8 +186,10 @@ pub fn profile_to_element(p: &Profile) -> Element {
                 }),
             ),
             Section::VirtualDevices => virtual_to(&p.virtual_devices),
-            Section::VoiceCommands => voice_to(&p.voice_commands),
+            Section::VoiceCommands => voice_to(p),
             Section::KeyCombos => combos_to(&p.key_combos),
+            Section::GameBindings => games_to(&p.game_bindings),
+            Section::OscInputs => osc_to(&p.osc_inputs),
             Section::Extra(i) => p.extra[i].clone(),
         });
     }
@@ -260,43 +272,153 @@ fn virtual_to(v: &VirtualDevices) -> Element {
     container("virtual-devices", joysticks.chain(gamepads))
 }
 
-/// `<voice-commands>`: `<command id="1" hold="0.1"><phrase>lights on</phrase>...</command>`;
-/// commands without a valid id are skipped, a missing or bad hold is the default.
+/// `<voice-commands>`: `<command id="1" hold="0.1"><phrase>lights on</phrase>...</command>`,
+/// and `<group id="2" hold="0.1"><phrase>radio</phrase><command .../><group .../></group>` around
+/// commands and groups; ones without a valid id are skipped (with what is in them), a missing or
+/// bad hold is the default.
 fn voice_from(section: &Element) -> Vec<VoiceCommand> {
-    let mut commands: Vec<VoiceCommand> = Vec::new();
-    for c in named(section, "command") {
-        let Some(id) = c.attr("id").and_then(|v| v.trim().parse().ok()) else {
-            continue;
-        };
-        if id == 0 || commands.iter().any(|o| o.id == id) {
-            continue;
+    fn read(parent_el: &Element, parent: Option<u32>, commands: &mut Vec<VoiceCommand>) {
+        for c in parent_el.elements() {
+            let group = match c.name.as_str() {
+                "command" => false,
+                "group" => true,
+                _ => continue,
+            };
+            let Some(id) = c.attr("id").and_then(|v| v.trim().parse().ok()) else {
+                continue;
+            };
+            if id == 0 || commands.iter().any(|o| o.id == id) {
+                continue;
+            }
+            commands.push(VoiceCommand {
+                id,
+                phrases: named(c, "phrase")
+                    .map(|p| p.text().split_whitespace().collect::<Vec<_>>().join(" "))
+                    .filter(|p| !p.is_empty())
+                    .collect(),
+                hold: c
+                    .attr("hold")
+                    .and_then(|v| v.trim().parse::<f64>().ok())
+                    .filter(|h| h.is_finite() && *h > 0.0)
+                    .unwrap_or(gob_core::DEFAULT_VOICE_HOLD),
+                parent,
+                group,
+            });
+            if group {
+                read(c, Some(id), commands);
+            }
         }
-        commands.push(VoiceCommand {
-            id,
-            phrases: named(c, "phrase")
-                .map(|p| p.text().split_whitespace().collect::<Vec<_>>().join(" "))
-                .filter(|p| !p.is_empty())
-                .collect(),
-            hold: c
-                .attr("hold")
-                .and_then(|v| v.trim().parse::<f64>().ok())
-                .filter(|h| h.is_finite() && *h > 0.0)
-                .unwrap_or(gob_core::DEFAULT_VOICE_HOLD),
-        });
     }
+    let mut commands = Vec::new();
+    read(section, None, &mut commands);
     commands
 }
 
-fn voice_to(commands: &[VoiceCommand]) -> Element {
+/// `<voice-commands>` in tree order: every command and group once, whatever its parent says (one
+/// whose group is gone, or whose groups make a loop, at the top level, as [`Profile::voice_tree`]
+/// lists them), at any depth.
+fn voice_to(p: &Profile) -> Element {
+    fn node(c: &VoiceCommand, inner: Vec<Element>) -> Element {
+        let phrases = c.phrases.iter().map(|p| Element::with_text("phrase", p));
+        container(
+            if c.group { "group" } else { "command" },
+            phrases.chain(inner),
+        )
+        .with_attr("id", c.id.to_string())
+        .with_attr("hold", c.hold.to_string())
+    }
+    // The elements at `depth` from `tree[*at..]`, each with what follows it one level deeper.
+    fn level(tree: &[(usize, &VoiceCommand)], at: &mut usize, depth: usize) -> Vec<Element> {
+        let mut out = Vec::new();
+        while let Some(&(d, c)) = tree.get(*at) {
+            if d < depth {
+                break;
+            }
+            *at += 1;
+            let inner = level(tree, at, d + 1);
+            out.push(node(c, inner));
+        }
+        out
+    }
+    let tree = p.voice_tree();
+    let mut at = 0;
+    container("voice-commands", level(&tree, &mut at, 0))
+}
+
+/// `<game-bindings>`: `<game id="..." target="..." version="..."><device output="vjoy:1"
+/// game-device="js1"/><bind action="..." output="vjoy:1:button:5" invert="true"/><clear
+/// action="..."/></game>`; binds with an unknown output and games without an id are skipped.
+fn games_from(section: &Element) -> Vec<gob_core::GameBindings> {
+    let mut games: Vec<gob_core::GameBindings> = Vec::new();
+    for g in named(section, "game") {
+        let game = g.attr("id").unwrap_or_default().trim().to_string();
+        if game.is_empty() || games.iter().any(|o| o.game == game) {
+            continue;
+        }
+        let devices = named(g, "device")
+            .filter_map(|d| {
+                Some(gob_core::GameDevice {
+                    output: d.attr("output")?.trim().to_string(),
+                    game_device: d.attr("game-device")?.trim().to_string(),
+                })
+            })
+            .collect();
+        let binds = named(g, "bind")
+            .filter_map(|b| {
+                Some(gob_core::GameBind {
+                    action: b.attr("action")?.trim().to_string(),
+                    output: gob_core::GameOutput::parse(b.attr("output")?)?,
+                    invert: b.attr("invert").is_some_and(|v| v.trim() == "true"),
+                })
+            })
+            .collect();
+        games.push(gob_core::GameBindings {
+            game,
+            target: g.attr("target").unwrap_or_default().trim().to_string(),
+            version: g
+                .attr("version")
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty()),
+            devices,
+            binds,
+            cleared: named(g, "clear")
+                .filter_map(|c| Some(c.attr("action")?.trim().to_string()))
+                .collect(),
+        });
+    }
+    games
+}
+
+fn games_to(games: &[gob_core::GameBindings]) -> Element {
     container(
-        "voice-commands",
-        commands.iter().map(|c| {
-            container(
-                "command",
-                c.phrases.iter().map(|p| Element::with_text("phrase", p)),
-            )
-            .with_attr("id", c.id.to_string())
-            .with_attr("hold", c.hold.to_string())
+        "game-bindings",
+        games.iter().map(|g| {
+            let devices = g.devices.iter().map(|d| {
+                Element::new("device")
+                    .with_attr("output", &d.output)
+                    .with_attr("game-device", &d.game_device)
+            });
+            let binds = g.binds.iter().map(|b| {
+                let el = Element::new("bind")
+                    .with_attr("action", &b.action)
+                    .with_attr("output", b.output.to_string());
+                if b.invert {
+                    el.with_attr("invert", "true")
+                } else {
+                    el
+                }
+            });
+            let cleared = g
+                .cleared
+                .iter()
+                .map(|a| Element::new("clear").with_attr("action", a));
+            let mut el = container("game", devices.chain(binds).chain(cleared))
+                .with_attr("id", &g.game)
+                .with_attr("target", &g.target);
+            if let Some(v) = &g.version {
+                el = el.with_attr("version", v);
+            }
+            el
         }),
     )
 }
@@ -343,6 +465,58 @@ fn combos_to(combos: &[gob_core::KeyCombo]) -> Element {
                 }),
             )
             .with_attr("id", c.id.to_string())
+        }),
+    )
+}
+
+/// `<osc-inputs>`: `<input id="1" address="/deck/fire" type="button"/>`, axes with
+/// `low="0" high="1"`. Inputs without an id or address, or with one already taken, are skipped.
+fn osc_from(section: &Element) -> Vec<gob_core::OscInput> {
+    let mut inputs: Vec<gob_core::OscInput> = Vec::new();
+    for e in named(section, "input") {
+        let Some(id) = e.attr("id").and_then(|v| v.trim().parse().ok()) else {
+            continue;
+        };
+        let Some(address) = e.attr("address").and_then(gob_core::osc_address) else {
+            continue;
+        };
+        if id == 0 || inputs.iter().any(|o| o.id == id || o.address == address) {
+            continue;
+        }
+        let kind = e
+            .attr("type")
+            .and_then(gob_core::OscKind::parse)
+            .unwrap_or_default();
+        let mut input = gob_core::OscInput::new(id, &address, kind);
+        let number = |name: &str| {
+            e.attr(name)
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .filter(|v| v.is_finite())
+        };
+        if let (Some(low), Some(high)) = (number("low"), number("high"))
+            && low != high
+        {
+            (input.low, input.high) = (low, high);
+        }
+        inputs.push(input);
+    }
+    inputs
+}
+
+fn osc_to(inputs: &[gob_core::OscInput]) -> Element {
+    container(
+        "osc-inputs",
+        inputs.iter().map(|i| {
+            let el = Element::new("input")
+                .with_attr("id", i.id.to_string())
+                .with_attr("address", &i.address)
+                .with_attr("type", i.kind.input_type());
+            match i.kind {
+                gob_core::OscKind::Axis => el
+                    .with_attr("low", i.low.to_string())
+                    .with_attr("high", i.high.to_string()),
+                gob_core::OscKind::Button => el,
+            }
         }),
     )
 }

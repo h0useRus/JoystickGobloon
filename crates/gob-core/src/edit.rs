@@ -76,8 +76,12 @@ pub enum NewAction {
     SmartToggle,
     Delay,
     SplitAxis,
+    /// One point at 0.8, both zones stretched to the full travel.
+    AxisZones,
     PauseResume,
     RunCommand,
+    /// To Bitfocus Companion on this computer, no address or arguments yet; sends on press.
+    SendOsc,
     /// Axis `axis` of virtual stick `device`; a press sets it to the top.
     ButtonAxis {
         device: u32,
@@ -326,6 +330,27 @@ fn behavior_of(input_type: &str) -> &str {
         InputType::Axis | InputType::Hat => input_type,
         _ => "button",
     }
+}
+
+/// The name the user gave an action (Gremlin writes "None" for none).
+fn named(a: &Action) -> Option<&str> {
+    a.label()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && *l != "None")
+}
+
+/// `name` with the lowest number not in `taken`: `Name (2)`, `Name (3)`...; a name that already
+/// ends with a number counts on from it.
+fn numbered(name: &str, taken: &HashSet<String>) -> String {
+    let (base, from) = name
+        .strip_suffix(')')
+        .and_then(|s| s.rsplit_once(" ("))
+        .and_then(|(base, n)| Some((base, n.parse::<u32>().ok()?)))
+        .unwrap_or((name, 1));
+    (from.saturating_add(1)..=u32::MAX)
+        .map(|n| format!("{base} ({n})"))
+        .find(|n| !taken.contains(n))
+        .unwrap_or_else(|| name.to_string())
 }
 
 fn remap_refs(items: &mut [Item], ids: &HashMap<String, String>) {
@@ -669,6 +694,11 @@ impl Action {
                 ],
                 "disallowed",
             ),
+            NewAction::AxisZones => Self::build(
+                crate::zones::AXIS_ZONES,
+                crate::zones::new_items(),
+                "disallowed",
+            ),
             NewAction::PauseResume => Self::build(
                 "pause-resume",
                 vec![prop("string", "operation", "Pause")],
@@ -679,6 +709,15 @@ impl Action {
                 vec![
                     prop("string", "executable", ""),
                     prop("string", "arguments", ""),
+                ],
+                "press",
+            ),
+            NewAction::SendOsc => Self::build(
+                crate::osc::SEND_OSC,
+                vec![
+                    prop("string", "host", crate::osc::OSC_SEND_HOST),
+                    prop("int", "port", crate::osc::OSC_SEND_PORT.to_string()),
+                    prop("string", "address", "/"),
                 ],
                 "press",
             ),
@@ -1183,7 +1222,8 @@ impl Profile {
     /// under new ids, references among them following; returns the new ids of `tops` (those
     /// not among `actions` are left out). The copies are not in any list yet. An action only
     /// run by a run-action step is copied only when this profile lacks it: otherwise the copy
-    /// runs the very same action, like the original.
+    /// runs the very same action, like the original. A copy whose name another action of this
+    /// profile has gets a number (`Name (2)`), so action lists show no two alike.
     pub fn paste(&mut self, actions: &[Action], tops: &[String]) -> Vec<String> {
         let given: HashMap<&str, &Action> = actions.iter().map(|a| (a.id.as_str(), a)).collect();
         // What `tops` contain (children, not run-action targets) is always copied.
@@ -1202,12 +1242,26 @@ impl Profile {
             .collect();
         let ids: HashMap<String, String> =
             copied.iter().map(|a| (a.id.clone(), new_uuid())).collect();
+        let mut names: HashSet<String> = self
+            .library
+            .iter()
+            .filter_map(|a| named(a).map(String::from))
+            .collect();
         let copies: Vec<Action> = copied
             .into_iter()
             .map(|a| {
                 let mut copy = a.clone();
                 copy.id = ids[&a.id].clone();
                 remap_refs(&mut copy.items, &ids);
+                if let Some(name) = named(a) {
+                    let name = if names.contains(name) {
+                        numbered(name, &names)
+                    } else {
+                        name.to_string()
+                    };
+                    copy.set("action-label", "string", name.clone());
+                    names.insert(name);
+                }
                 copy
             })
             .collect();
@@ -1512,6 +1566,49 @@ mod tests {
             p.action(&copied_short).unwrap().items
         );
         assert!(p.unlink_child(&b, "actions", 3).is_none());
+    }
+
+    #[test]
+    fn pasted_named_actions_get_a_number() {
+        let mut p = Profile::default();
+        let a = p.bind("{DEV}", "button", "10", "Default");
+        let b = p.bind("{DEV}", "button", "11", "Default");
+        let named = |p: &mut Profile, parent: &str, label: &str| {
+            let id = p
+                .add_child(parent, "actions", Action::new(&NewAction::Macro))
+                .unwrap();
+            p.action_mut(&id)
+                .unwrap()
+                .set("action-label", "string", label);
+            id
+        };
+        let one = named(&mut p, &a, "One");
+        let two = named(&mut p, &a, "Two (2)");
+        let plain = p
+            .add_child(&a, "actions", Action::new(&NewAction::Macro))
+            .unwrap();
+        let label = |p: &Profile, id: &str| p.action(id).unwrap().label().map(String::from);
+
+        let tops = vec![one.clone(), two.clone(), plain.clone()];
+        let clip = p.subtree(&tops);
+        let first = p.paste(&clip, &tops);
+        let second = p.paste(&clip, &tops);
+        for id in first.iter().chain(&second) {
+            assert!(p.add_ref(&b, "actions", id));
+        }
+        assert_eq!(label(&p, &first[0]).as_deref(), Some("One (2)"));
+        assert_eq!(label(&p, &second[0]).as_deref(), Some("One (3)"));
+        assert_eq!(label(&p, &first[1]).as_deref(), Some("Two (3)"));
+        assert_eq!(label(&p, &second[1]).as_deref(), Some("Two (4)"));
+        // No name, no number.
+        assert_eq!(label(&p, &first[2]), label(&p, &plain));
+        // The originals keep theirs.
+        assert_eq!(label(&p, &one).as_deref(), Some("One"));
+
+        // Into a profile without the name, the copy keeps it.
+        let mut other = Profile::default();
+        let pasted = other.paste(&clip, &tops);
+        assert_eq!(label(&other, &pasted[0]).as_deref(), Some("One"));
     }
 
     #[test]

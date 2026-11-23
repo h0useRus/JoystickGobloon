@@ -51,8 +51,15 @@ imports Joystick Gremlin profiles and keeps the workflow you know.
 - **Virtual joysticks and gamepads** configured right in the app; profiles remember the ones they use, and the
   tester shows which outputs the profile uses and where two inputs fight over one.
 - **Device hiding** with one click on a stick's eye, so games see only the virtual devices.
+- **Game bindings**: read a game's joystick bindings and write the profile's straight into the game's own
+  settings files, with a backup ([supported games](https://h0userus.github.io/joystick-gobloon/game.html)).
+- **Profile per program**: the profile and mode switch by themselves when a game comes to the front.
+- **Game overlay**: mode, layer, the action just run, latency and voice status on top of the game.
 - **Voice commands**: hold a push-to-talk button and say a phrase; recognized offline on your PC
   ([how](https://h0userus.github.io/joystick-gobloon/voice.html)).
+- **Stream Deck and touch panels**: keys and faders sent over OSC (Stream Deck through Bitfocus Companion) work
+  like joystick buttons and axes, and profiles can send the mode back to the keys
+  ([how](https://h0userus.github.io/joystick-gobloon/panels.html)).
 - **Lua scripts**: your own logic next to the actions, like Joystick Gremlin's user scripts, sandboxed
   ([how](https://h0userus.github.io/joystick-gobloon/scripts.html)).
 - **Input viewer and calibration**, with a jitter filter for worn axes and debounce for bouncing buttons; tray
@@ -82,7 +89,8 @@ password once, then import your profile or use the wizard as above.
 Code signing through SignPath is being set up ([code signing policy](docs/CODE_SIGNING.md)); until then Windows
 SmartScreen may warn on the first start: *More info → Run anyway*.
 
-> **Status:** alpha — daily-driver features are in place; expect rough edges.
+> **Status:** 1.0 — stable. Bugs and ideas are welcome in [issues](https://github.com/h0useRus/JoystickGobloon/issues)
+> and on [Discord](https://discord.gg/8cd9APqwG4).
 
 ## Building from source
 

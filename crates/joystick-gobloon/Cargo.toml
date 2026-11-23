@@ -18,6 +18,8 @@ gob-hide.workspace = true
 gob-engine.workspace = true
 gob-voice.workspace = true
 gob-script.workspace = true
+gob-export.workspace = true
+gob-osc.workspace = true
 gob-lighting.workspace = true
 gob-ui.workspace = true
 rfd.workspace = true
@@ -28,6 +30,7 @@ log.workspace = true
 tray-icon = "0.26"
 ureq.workspace = true
 sha2.workspace = true
+zip.workspace = true
 semver = "1.0.28"
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -62,6 +65,8 @@ windows = { workspace = true, features = [
     "Win32_Security",
     "Win32_UI_Shell",
     "Win32_System_Com",
+    "Win32_Storage_FileSystem",
+    "Win32_System_ProcessStatus",
 ] }
 
 [build-dependencies]

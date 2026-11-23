@@ -12,10 +12,9 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# The builds only read; the publish job alone may write (the release and its tag).
 permissions:
-  contents: write
-  # The release request's text becomes the release notes.
-  pull-requests: read
+  contents: read
 
 env:
   # Like ci.yml: no debug info in the checks' builds (less to compile and cache).
@@ -33,7 +32,7 @@ jobs:
           fetch-depth: 0
       # Cached .deb packages instead of apt-get update + download on every run.
       - name: System libraries
-        uses: awalsh128/cache-apt-pkgs-action@v1
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
         with:
           packages: pkg-config libasound2-dev libgtk-3-dev libxdo-dev libayatana-appindicator3-dev libudev-dev libssl-dev libxkbcommon-dev libwayland-dev libxkbcommon-x11-0 libxcb-xkb1
           version: 1
@@ -44,7 +43,7 @@ jobs:
       # Installs the Rust version pinned in rust-toolchain.toml.
       - name: Rust toolchain
         run: rustup toolchain install && rustup show
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       # Same version as the Windows job: same script, commit and run number.
       - name: Version
@@ -80,6 +79,10 @@ jobs:
   # Windows: the app, the installer and the portable zip, at the same time as the AppImage.
   windows:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      # SignPath fetches the build artifact to sign through the GitHub API.
+      actions: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
@@ -94,7 +97,7 @@ jobs:
       # Installs the Rust version pinned in rust-toolchain.toml.
       - name: Rust toolchain
         run: rustup toolchain install && rustup show
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       - name: Version
         id: version
@@ -136,7 +139,7 @@ jobs:
 
       - name: Sign the app
         if: env.SIGN == 'true'
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -178,9 +181,12 @@ jobs:
           $got = (Get-FileHash "$dir\$name" -Algorithm SHA256).Hash
           if ($got -ne $hash) { Write-Error "$name hash $got, expected $hash"; exit 1 }
 
-      # Voice commands: Vosk 0.3.45's libvosk.dll and its MinGW runtime next to the app, pinned
-      # by hash like the drivers (the last Vosk release with built libraries).
-      - name: Speech library
+      # Voice commands, either engine (chosen in the settings), next to the app, pinned by hash
+      # like the drivers: Vosk 0.3.45's libvosk.dll and its MinGW runtime (the last Vosk release
+      # with built libraries), and sherpa-onnx 2.0.1 (its build without text to speech, static C
+      # runtime) with its ONNX Runtime. gob-voice's sherpa.rs mirrors this sherpa-onnx version's
+      # C structs: change both together.
+      - name: Speech libraries
         shell: pwsh
         run: |
           $name = "vosk-win64-0.3.45.zip"
@@ -193,6 +199,32 @@ jobs:
           Expand-Archive "target\$name" "target\voice-zip" -Force
           Copy-Item "target\voice-zip\vosk-win64-0.3.45\*.dll" $dir
           if ((Get-ChildItem "$dir\*.dll").Count -ne 4) { Write-Error "expected 4 DLLs in $name"; exit 1 }
+
+          $base = "sherpa-onnx-v2.0.1-win-x64-shared-MT-Release-no-tts-lib"
+          $name = "$base.tar.bz2"
+          $hash = "21DA6A8B92D63CA02AD41DBFC120012343AAAEC2E5E02B14819C6B4F38004509"
+          $dir = "target\voice"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Invoke-WebRequest "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/$name" -OutFile "target\$name"
+          $got = (Get-FileHash "target\$name" -Algorithm SHA256).Hash
+          if ($got -ne $hash) { Write-Error "$name hash $got, expected $hash"; exit 1 }
+          New-Item -ItemType Directory -Force "target\voice-archive" | Out-Null
+          tar -xjf "target\$name" -C "target\voice-archive"
+          if ($LASTEXITCODE -ne 0) { Write-Error "unpacking $name failed"; exit 1 }
+          foreach ($dll in "sherpa-onnx-c-api.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll") {
+            Copy-Item "target\voice-archive\$base\lib\$dll" $dir
+          }
+          if ((Get-ChildItem "$dir\*.dll").Count -ne 7) { Write-Error "expected 3 DLLs in $name next to Vosk's 4"; exit 1 }
+
+      # Game export plugins (plugins/export/<game>) go into export/ next to the app, without
+      # their dev folders (tools that build the action lists).
+      - name: Game export plugins
+        shell: pwsh
+        run: |
+          robocopy plugins\export target\export /E /XD dev /NFL /NDL /NJH /NJS | Out-Null
+          if ($LASTEXITCODE -ge 8) { Write-Error "copying the export plugins failed"; exit 1 }
+          if (-not (Get-ChildItem target\export -Recurse -Filter plugin.luau)) { Write-Error "no export plugins found"; exit 1 }
+          $global:LASTEXITCODE = 0
 
       - name: Installer
         shell: pwsh
@@ -215,7 +247,7 @@ jobs:
 
       - name: Sign the installer
         if: env.SIGN == 'true'
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -235,10 +267,13 @@ jobs:
         shell: pwsh
         run: |
           $dir = "target\portable\JoystickGobloon"
+          # The cached target folder may hold the last run's copy: start from an empty one.
+          if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
           New-Item -ItemType Directory -Force "$dir\lang" | Out-Null
           Copy-Item target\release\JoystickGobloon.exe $dir
           Copy-Item target\voice\*.dll $dir
           Copy-Item lang\*.ftl "$dir\lang"
+          Copy-Item target\export $dir -Recurse
           Copy-Item LICENSE $dir
           Copy-Item assets\THIRD-PARTY-NOTICES.txt $dir
           # files.gob: the files of this version, which an update replaces (update.rs MANIFEST).
@@ -259,6 +294,10 @@ jobs:
   publish:
     needs: [appimage, windows]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # The release request's text becomes the release notes.
+      pull-requests: read
     env:
       VERSION: ${{ needs.windows.outputs.version }}
     steps:
@@ -294,7 +333,7 @@ jobs:
           fi
 
       - name: Publish
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: v${{ env.VERSION }}
           name: Joystick Gobloon ${{ env.VERSION }}

@@ -7,6 +7,10 @@ use quick_xml::events::{BytesStart, Event};
 
 use crate::Error;
 
+/// Elements nested deeper than this are refused: real profiles stay far below it, and a tree
+/// thousands of levels deep would overflow the stack when it is read or dropped.
+const MAX_DEPTH: usize = 256;
+
 pub fn parse(text: &str) -> Result<Element, Error> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let mut reader = Reader::from_str(text);
@@ -18,7 +22,12 @@ pub fn parse(text: &str) -> Result<Element, Error> {
             .read_event()
             .map_err(|e| Error::Xml(format!("{e} at byte {}", reader.buffer_position())))?;
         match event {
-            Event::Start(e) => stack.push(start(&e).map_err(|e| xml(&e))?),
+            Event::Start(e) => {
+                if stack.len() >= MAX_DEPTH {
+                    return Err(xml(&format!("elements nested deeper than {MAX_DEPTH}")));
+                }
+                stack.push(start(&e).map_err(|e| xml(&e))?);
+            }
             Event::Empty(e) => attach(&mut stack, &mut root, start(&e).map_err(|e| xml(&e))?),
             Event::End(_) => {
                 let mut el = stack.pop().ok_or_else(|| xml(&"unexpected closing tag"))?;

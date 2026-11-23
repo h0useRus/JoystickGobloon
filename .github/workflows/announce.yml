@@ -8,6 +8,9 @@ on:
         description: "Version without the v, e.g. 0.2.0 or 0.2.0-alpha.12"
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   announce:
     runs-on: windows-latest
@@ -18,7 +21,9 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_WEBHOOK_ALPHA: ${{ secrets.DISCORD_WEBHOOK_ALPHA }}
+          # Typed by whoever runs the workflow: an environment variable, never pasted into the script.
+          VERSION: ${{ inputs.version }}
         run: |
-          $v = "${{ inputs.version }}"
+          $v = $env:VERSION
           $pre = $v.Contains("-")
           .github/scripts/discord-announce.ps1 -Version $v -Repo "${{ github.repository }}" -Sha "${{ github.sha }}" -Prerelease:$pre

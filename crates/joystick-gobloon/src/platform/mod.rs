@@ -32,6 +32,9 @@ pub(crate) trait Desktop {
     fn default_data_dir() -> Option<PathBuf>;
     /// The user's documents folder, where the profile file dialogs start the first time.
     fn documents_dir() -> Option<PathBuf>;
+    /// The user's local application data folder (%LOCALAPPDATA%), where some games keep their
+    /// settings; `None` where there is no such folder.
+    fn local_app_data_dir() -> Option<PathBuf>;
     /// Font files with Chinese and Korean glyphs: (egui font name, file).
     fn cjk_fonts() -> Vec<(&'static str, PathBuf)>;
     /// Opens a text file (the log) in the system's editor.
@@ -55,6 +58,11 @@ pub(crate) trait Desktop {
     /// Keyboard keys held right now; `None` when the program cannot see the keyboard's state
     /// (key recording then uses the window's own key events).
     fn held_keys() -> Option<Vec<Key>>;
+    /// Whether one key is held; `None` as with [`Desktop::held_keys`]. Cheaper than reading
+    /// every key where the system can ask for one.
+    fn key_held(key: Key) -> Option<bool> {
+        Self::held_keys().map(|held| held.contains(&key))
+    }
     /// A key's name in the current keyboard layout, e.g. "Right Ctrl".
     fn key_name(key: Key) -> String;
     /// The system's light/dark setting: `Some(true)` dark, `Some(false)` light, `None` when it
@@ -115,8 +123,6 @@ pub(crate) trait Desktop {
     fn exe_name() -> &'static str;
     /// Runs a downloaded installer; it closes this copy and starts the new one.
     fn run_installer(setup: &Path) -> Result<(), String>;
-    /// Unpacks a downloaded zip into `to`.
-    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String>;
     /// Waits until process `pid` exits, at most `timeout`.
     fn wait_for_process(pid: u32, timeout: Duration);
 
@@ -125,6 +131,13 @@ pub(crate) trait Desktop {
     fn foreground_program() -> Option<Program>;
     /// Running programs with a window the user can switch to.
     fn running_programs() -> Vec<Program>;
+    /// Folders game export plugins search for games: the drives on Windows; the home folder and
+    /// the Wine and Proton prefixes' drive_c on Linux.
+    fn game_roots() -> Vec<String>;
+    /// What the program uses now: memory (its working set: RAM, not swapped out) and the CPU
+    /// time of all its threads so far; `None` where the system does not tell. Cheap system
+    /// calls, no sampling thread.
+    fn usage() -> Option<Usage>;
 }
 
 /// A running program, for switching profiles by program.
@@ -189,6 +202,26 @@ pub(crate) fn documents_dir() -> Option<PathBuf> {
     Current::documents_dir()
 }
 
+pub(crate) fn local_app_data_dir() -> Option<PathBuf> {
+    Current::local_app_data_dir()
+}
+
+pub(crate) fn game_roots() -> Vec<String> {
+    Current::game_roots()
+}
+
+pub(crate) fn usage() -> Option<Usage> {
+    Current::usage()
+}
+
+/// See [`Desktop::usage`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Usage {
+    /// Bytes.
+    pub memory: u64,
+    pub cpu_time: Duration,
+}
+
 pub(crate) fn cjk_fonts() -> Vec<(&'static str, PathBuf)> {
     Current::cjk_fonts()
 }
@@ -227,6 +260,10 @@ pub(crate) fn set_keyboard_access(allow: bool) -> Result<(), String> {
 
 pub(crate) fn held_keys() -> Option<Vec<Key>> {
     Current::held_keys()
+}
+
+pub(crate) fn key_held(key: Key) -> Option<bool> {
+    Current::key_held(key)
 }
 
 pub(crate) fn key_name(key: Key) -> String {
@@ -323,10 +360,6 @@ pub(crate) fn exe_name() -> &'static str {
 
 pub(crate) fn run_installer(setup: &Path) -> Result<(), String> {
     Current::run_installer(setup)
-}
-
-pub(crate) fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
-    Current::unpack_zip(zip, to)
 }
 
 pub(crate) fn wait_for_process(pid: u32, timeout: Duration) {

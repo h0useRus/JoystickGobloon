@@ -9,12 +9,12 @@ mod filter;
 mod platform;
 mod service;
 
-/// Linux: device nodes of the controllers, for SystemGobloon.
+/// Linux: device nodes of the controllers, for SystemGobloon; the keys the keyboards hold.
 #[cfg(target_os = "linux")]
-pub use platform::{Nodes, Opener, controller_nodes, set_opener};
+pub use platform::{Nodes, Opener, controller_nodes, held_keys, key_held, set_opener};
 pub use service::{
     Calibrations, DEFAULT_POLL_INTERVAL, InputHandle, InputService, MAX_DEBOUNCE_MS, MAX_JITTER,
-    MAX_POLL_INTERVAL, MIN_POLL_INTERVAL,
+    MAX_POLL_INTERVAL, MIN_POLL_INTERVAL, OscStatus,
 };
 
 /// Number of DirectInput axis slots: X, Y, Z, Rx, Ry, Rz, Slider 0, Slider 1.
@@ -153,21 +153,22 @@ impl DeviceState {
     }
 }
 
-/// A single input change; ids are 1-based, as in Gremlin profiles.
+/// A single input change; ids are 1-based, as in Gremlin profiles. The device id is shared:
+/// events are made and copied to every subscriber without allocating.
 #[derive(Debug, Clone, PartialEq)]
 pub enum InputEvent {
     Axis {
-        device: String,
+        device: std::sync::Arc<str>,
         id: u8,
         value: f32,
     },
     Button {
-        device: String,
+        device: std::sync::Arc<str>,
         id: u16,
         pressed: bool,
     },
     Hat {
-        device: String,
+        device: std::sync::Arc<str>,
         id: u8,
         direction: Option<u16>,
     },
@@ -178,6 +179,14 @@ pub enum InputEvent {
         /// E0 prefix (right Ctrl/Alt, arrows, ...).
         extended: bool,
         pressed: bool,
+    },
+    /// An OSC message arrived ([`InputService::set_osc`]).
+    Osc {
+        /// Its address, e.g. `/deck/fire`.
+        address: String,
+        /// Its first argument as a number; `None` without one (no arguments, an impulse, text
+        /// that is no number).
+        value: Option<f64>,
     },
     /// Devices were attached or removed.
     DevicesChanged,

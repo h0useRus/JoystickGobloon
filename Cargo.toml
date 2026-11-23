@@ -9,6 +9,7 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
+foldhash = "0.2"
 gob-i18n = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.4.1" }
 gob-core = { path = "crates/gob-core" }
 gob-gremlin = { path = "crates/gob-gremlin" }
@@ -26,6 +27,8 @@ gob-ui = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.4.1"
 gob-system = { path = "crates/gob-system" }
 gob-voice = { path = "crates/gob-voice" }
 gob-script = { path = "crates/gob-script" }
+gob-export = { path = "crates/gob-export" }
+gob-osc = { path = "crates/gob-osc" }
 # User scripts: Luau (Lua 5.1 syntax, sandboxed), built from source; "send": the engine moves threads.
 mlua = { version = "0.12", features = ["luau", "send"] }
 # The OpenGL renderer: wgpu reserves hundreds of MB, the window stays small with glow.
@@ -45,6 +48,8 @@ serde_json = "1"
 ureq = { version = "3", default-features = false, features = ["native-tls", "json"] }
 sha2 = "0.11.1"
 # Unpacking speech models; deflate through zlib-rs (pure Rust).
+bzip2 = "0.6.1"
+tar = { version = "0.4.46", default-features = false }
 zip = { version = "9.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # Tests only: virtual Xbox 360 controllers through the ViGEmBus driver.
 vigem-client = "0.1.4"

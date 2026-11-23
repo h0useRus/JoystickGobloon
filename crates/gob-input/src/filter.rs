@@ -2,8 +2,10 @@
 //! hardware: a jitter threshold per axis and a debounce time per device for buttons and hats.
 //! Shared by every backend; raw values pass unchanged (the calibration page needs them).
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::platform::Buffered;
 use crate::{AXIS_SLOTS, Calibrations, DeviceState, InputEvent};
 
 /// Changes smaller than this are sensor noise and never sent.
@@ -13,6 +15,8 @@ const NOISE: f32 = 0.0005;
 pub(crate) struct Filtered {
     /// What was sent last: changes are found against it, the snapshot shows it.
     pub out: DeviceState,
+    /// The device id its events carry, made once.
+    device: Arc<str>,
     /// Per axis slot, the smallest change that passes (in -1..1 units); 0 = off.
     jitter: [f32; AXIS_SLOTS],
     debounce: Duration,
@@ -25,6 +29,7 @@ impl Filtered {
     pub fn new(state: &DeviceState) -> Self {
         Self {
             out: state.clone(),
+            device: state.info.guid.as_str().into(),
             jitter: [0.0; AXIS_SLOTS],
             debounce: Duration::ZERO,
             buttons_held: vec![None; state.buttons.len()],
@@ -39,6 +44,9 @@ impl Filtered {
             return false;
         }
         self.out.info.clone_from(&state.info);
+        if *self.device != *state.info.guid {
+            self.device = state.info.guid.as_str().into();
+        }
         self.out.buttons.resize(state.buttons.len(), false);
         self.out.hats.resize(state.hats.len(), None);
         self.buttons_held.resize(state.buttons.len(), None);
@@ -58,27 +66,36 @@ impl Filtered {
 
     /// A button or hat change the device buffered: passes unless that input still holds an
     /// earlier change (its final state follows when the hold ends).
-    pub fn event(&mut self, event: InputEvent, at: Instant) -> Option<InputEvent> {
-        match &event {
-            InputEvent::Button { id, pressed, .. } => {
-                let i = usize::from(*id).checked_sub(1)?;
+    pub fn event(&mut self, change: Buffered, at: Instant) -> Option<InputEvent> {
+        let device = self.device.clone();
+        Some(match change {
+            Buffered::Button { id, pressed } => {
+                let i = usize::from(id).checked_sub(1)?;
                 if held(self.buttons_held.get(i)?, at) {
                     return None;
                 }
-                *self.out.buttons.get_mut(i)? = *pressed;
+                *self.out.buttons.get_mut(i)? = pressed;
                 self.buttons_held[i] = self.hold_from(at);
+                InputEvent::Button {
+                    device,
+                    id,
+                    pressed,
+                }
             }
-            InputEvent::Hat { id, direction, .. } => {
-                let i = usize::from(*id).checked_sub(1)?;
+            Buffered::Hat { id, direction } => {
+                let i = usize::from(id).checked_sub(1)?;
                 if held(self.hats_held.get(i)?, at) {
                     return None;
                 }
-                *self.out.hats.get_mut(i)? = *direction;
+                *self.out.hats.get_mut(i)? = direction;
                 self.hats_held[i] = self.hold_from(at);
+                InputEvent::Hat {
+                    device,
+                    id,
+                    direction,
+                }
             }
-            _ => {}
-        }
-        Some(event)
+        })
     }
 
     /// Brings [`Self::out`] up to the device's `state`, calling `send` with every change;
@@ -89,7 +106,7 @@ impl Filtered {
         at: Instant,
         send: &mut dyn FnMut(InputEvent),
     ) -> bool {
-        let device = || state.info.guid.clone();
+        let device = || self.device.clone();
         let mut changed = false;
         for &id in &state.info.axes {
             let i = usize::from(id) - 1;
@@ -241,11 +258,7 @@ mod tests {
     fn debounce_keeps_the_first_change_and_sends_the_final_state() {
         let mut f = filtered(0, 20);
         let t = Instant::now();
-        let press = |pressed| InputEvent::Button {
-            device: "dev".into(),
-            id: 1,
-            pressed,
-        };
+        let press = |pressed| Buffered::Button { id: 1, pressed };
         // A bouncing press: the first edge passes at once, the bounces do not.
         assert!(f.event(press(true), t).is_some());
         assert!(
@@ -261,7 +274,12 @@ mod tests {
         f.update(&s, t + Duration::from_millis(10), &mut |e| sent.push(e));
         assert!(sent.is_empty());
         f.update(&s, t + Duration::from_millis(20), &mut |e| sent.push(e));
-        assert_eq!(sent, vec![press(false)]);
+        let release = InputEvent::Button {
+            device: "dev".into(),
+            id: 1,
+            pressed: false,
+        };
+        assert_eq!(sent, vec![release]);
 
         // Without debounce every edge passes.
         let mut f = filtered(0, 0);

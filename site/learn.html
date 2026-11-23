@@ -90,7 +90,9 @@
       <li><a href="learn.html" aria-current="page">Learning</a></li>
       <li><a href="emulation.html">Emulation</a></li>
       <li><a href="voice.html">Voice</a></li>
+      <li><a href="panels.html">Panels</a></li>
       <li><a href="scripts.html">Scripts</a></li>
+      <li><a href="game.html">Games</a></li>
       <li><a href="index.html#platforms">Windows and Linux</a></li>
       <li><a href="index.html#faq">FAQ</a></li>
     </ul>
@@ -110,10 +112,12 @@
       <li style="--i:3"><a href="learn.html" aria-current="page">Learning</a></li>
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
       <li style="--i:5"><a href="voice.html">Voice</a></li>
-      <li style="--i:6"><a href="scripts.html">Scripts</a></li>
-      <li style="--i:7"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:8"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:9"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:6"><a href="panels.html">Panels</a></li>
+      <li style="--i:7"><a href="scripts.html">Scripts</a></li>
+      <li style="--i:8"><a href="game.html">Games</a></li>
+      <li style="--i:9"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:10"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:11"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -122,7 +126,7 @@
       <div class="wrap">
         <p class="kicker">Learning</p>
         <h1 class="gradient">Every action,<br>explained with its editor</h1>
-        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 26 actions does.</p>
+        <p class="sub">What an input does is a list of actions. Here is how they run, how modes and modifiers change them, and what each of the 29 actions does.</p>
       </div>
     </header>
 
@@ -149,6 +153,7 @@
           <li><a class="toc-group" href="#axes">Axes</a><ul>
             <li><a href="#response-curve">Response curve</a></li>
             <li><a href="#split-axis">Split axis</a></li>
+            <li><a href="#axis-zones">Axis zones</a></li>
             <li><a href="#merge-axis">Merge axis</a></li>
             <li><a href="#dual-axis-deadzone">Dual axis deadzone</a></li>
             <li><a href="#axis-delta">Axis delta</a></li>
@@ -181,6 +186,7 @@
             <li><a href="#text-to-speech">Text to speech</a></li>
             <li><a href="#voice-input">Voice input</a></li>
             <li><a href="#run-command">Run command</a></li>
+            <li><a href="#send-osc">Send OSC</a></li>
             <li><a href="#description">Description</a></li>
           </ul></li>
           </ul>
@@ -197,11 +203,12 @@
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>When it runs.</strong> Button actions have three switches: on press, on release, or both. Both follows the button, so a vJoy button is held exactly as long as yours.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Containers.</strong> Some actions hold other actions: tempo, double tap, condition, split axis and others. Their children are edited inside them.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Names.</strong> The name above the list names the input; it also shows on the input's card. It, the title of every action and description notes read as text: click one to edit it, then press Enter or click elsewhere.</span></li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Shared actions.</strong> A linked action shows a chain link next to its title: it is the same action in every place that uses it, so a change in one changes them all. Profiles from Joystick Gremlin can have such links too. The broken link button next to it gives this place its own copy, and the other places keep the original.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Shared actions.</strong> A linked action shows a chain link next to its title: it is the same action in every place that uses it, so a change in one changes them all. Profiles from Joystick Gremlin can have such links too. The broken link button next to it gives this place its own copy (a named one gets a number, like "Fire (2)"), and the other places keep the original.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Voice command.</strong> A named button-like action (a vJoy button, a key, a macro and the like) has a microphone with a plus next to its bin: it makes a voice command that says the name and runs that action. With an arrow instead, the action already has one, and a click goes to it. See <a href="voice.html#from-action">Voice commands</a>.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Scripts.</strong> When actions are not enough, a few lines of Lua on the Scripts page do the rest, next to the actions: see <a href="scripts.html">Scripts</a>.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Game bindings.</strong> The Game bindings page tells the game which virtual output drives which of its actions and writes it into the game's files: see <a href="game.html">Games</a>.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Keys and key combinations.</strong> On the <span class="term">Keyboard</span> tab, record a key to bind it like a button. Keys pressed together while recording become a combination (up to five keys, for example Ctrl + F1): it goes down when the last of its keys does, in any order, and up when one is let go. The keys' own actions run as well. Record again in its title to change its keys.</span></li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Copy and paste.</strong> The copy icon on an action card copies that action with everything inside it; the one next to the bin at the top copies all actions of the input (or press Ctrl+C). A clipboard button then shows next to each add button: it pastes copies, also on another device or in another profile, on inputs of the same kind (axis actions onto axes, button actions onto buttons, keys and the like). Ctrl+V pastes onto the input shown.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Copy and paste.</strong> The copy icon on an action card copies that action with everything inside it; the one next to the bin at the top copies all actions of the input (or press Ctrl+C). A clipboard button then shows next to each add button: it pastes copies, also on another device or in another profile, on inputs of the same kind (axis actions onto axes, button actions onto buttons, keys and the like). Ctrl+V pastes onto the input shown. Copies are separate actions: a named one whose name the profile already has gets a number, like "Fire (2)", so no two look the same in the link list. To use the very same action in several places, pick "Link an existing action" in the add menu instead.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Numbers.</strong> Type a value, click the arrows, or turn the mouse wheel over the field; Shift moves it ten steps at a time.</span></li>
             </ul>
             <figure class="shot"><img src="img/devices.png" loading="lazy" width="1102" height="732" alt="Devices page: the inputs of a stick on the left, the actions of the selected button on the right"></figure>
@@ -235,7 +242,7 @@
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span>Layers, containers and conditions work as on any button. Enter actions that change the mode again run that mode's events too.</span></li>
             </ul>
             <p>A stick button can also <strong>send its state at start</strong>: turn on the switch above its actions, and if the button is held when the profile starts, its press runs right then. A latching switch that is already on reaches the game without flipping it off and on again.</p>
-            <figure class="shot"><img src="img/events.png" loading="lazy" width="1242" height="922" alt="Events tab: Profile start, Profile stop, Mode enter and Mode leave; Mode enter selected, saying the mode's name and pressing a virtual stick button"></figure>
+            <figure class="shot"><img src="img/events.png" loading="lazy" width="1102" height="732" alt="Events tab: Profile start, Profile stop, Mode enter and Mode leave; Mode enter selected, saying the mode's name and pressing a virtual stick button"></figure>
           </article>
         </section>
 
@@ -251,7 +258,7 @@
             <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</h3>
             <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted; for a button, <a href="#how-to-send">How to send</a> sets how it follows the input.</p>
             <p><strong>Picking the control works like <a href="#map-to-vjoy">Map to virtual stick</a>.</strong> A new one starts on the gamepad you picked last and its first free control. The grid button next to the lists shows the controls of every gamepad at once, and a click picks one. Controls other inputs already use are marked the same way.</p>
-            <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release, held while the input is"></figure>
+            <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release, held while the input is; on Windows a note says gamepad 1 does not exist yet"></figure>
           </article>
           <article class="learn-action" id="map-to-keyboard">
             <h3><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</h3>
@@ -279,8 +286,14 @@
               <li><strong>Press only</strong>: the input presses it and it stays down; another input set to <strong>Release only</strong> lets it go.</li>
               <li><strong>Release only</strong>: the input lets it go.</li>
               <li><strong>Pulse</strong>: one press of a set length, however long the input is held. 50 ms, the default, suits most games: a shorter press may come and go before the game looks.</li>
-              <li><strong>Repeat</strong>: presses it again and again while the input is held: the first repeat after a delay, then at a steady pace. The mouse wheel turns notch after notch this way.</li>
+              <li><strong>Repeat</strong>: presses it again and again while the input is held: the first repeat after a delay, then at a steady pace. The mouse wheel turns notch after notch this way. Both times run from the start of one press to the start of the next, so <span class="term">First repeat after</span> 250 ms and <span class="term">Repeat every</span> 1000 ms press at 0, 250 ms, 1250 ms, 2250 ms and so on. A press lasts <span class="term">Press length</span>, but at most half the time to the next one, so there is always a gap between presses.</li>
               <li><strong>Toggle</strong>: the first press holds it down, the next one lets it go.</li>
+            </ul>
+            <p>The three buttons next to it (on press, on release, both) pick the moment that sends it:</p>
+            <ul>
+              <li><strong>Hold</strong> follows the button only with <strong>both</strong>. On press alone it presses the output and leaves it down, like Press only; on release alone it only lets go, like Release only.</li>
+              <li><strong>Pulse</strong> and <strong>Toggle</strong> act once per button press: on the press, or on the release when set to on release. <strong>Both</strong> works like on press.</li>
+              <li><strong>Repeat</strong> starts on the press (or on the release when set to on release) and stops on the opposite one: on press repeats while you hold the button, on release repeats from letting go until the next press.</li>
             </ul>
             <p>Whatever is still down when the profile stops or another profile starts is let go, so nothing stays stuck.</p>
             <p>It is in the pictures of every output above; <a href="#map-to-keyboard">Map to keyboard</a> shows Repeat with its times.</p>
@@ -312,7 +325,8 @@
               <li><strong>Remove a point</strong>: right click it.</li>
               <li><strong>Invert the curve</strong>: right click on empty space, or the <span class="term">Invert</span> button. A switch in the settings turns the right click off.</li>
               <li><strong>Symmetric</strong>: your edits are mirrored through the center.</li>
-              <li><strong>Start from a preset</strong>: the <span class="term">Preset</span> menu puts in a ready-made curve (linear, soft center, extra soft center or quick center) that you can edit from there.</li>
+              <li><strong>Start from a preset</strong>: the <span class="term">Preset</span> menu puts in a ready-made curve that you can edit from there: linear, light soft center, soft center, extra soft center, quick center, S-curve (calm in the middle and near the ends), flat center (nothing in the middle tenth), half range (half the output, finer everywhere) or inverted.</li>
+              <li><strong>Your own presets</strong>: at the bottom of the <span class="term">Preset</span> menu, type a name and press the save button to keep the curve; it is then offered in every curve editor, in every profile. The bin next to one deletes it.</li>
             </ul>
             <p>The <span class="term">Curve type</span> list sets how the curve runs through its points:</p>
             <ul>
@@ -328,6 +342,18 @@
             <h3><i class="ph ph-arrows-split" aria-hidden="true"></i>Split axis</h3>
             <p>Splits an axis at a point (the center by default) into two halves, and gives each half its own actions; each half is stretched to the full range again. Useful for one axis driving two outputs, like two pedals on a single rudder axis.</p>
             <figure class="shot"><img src="img/actions/split-axis.png" loading="lazy" alt="Split axis: the lower half to vJoy axis 2, the upper half to vJoy axis 3"></figure>
+          </article>
+          <article class="learn-action" id="axis-zones">
+            <h3><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>Axis zones</h3>
+            <p>Points split an axis into zones (up to eight), and each zone gets its own actions. Made for a throttle with a detent: the travel up to the afterburner gate drives the throttle, the last stretch drives the afterburner. It also fits a reverse range at the bottom, or a different curve on each part of the travel.</p>
+            <ul>
+              <li><strong>Full travel</strong>: the zone's stretch is stretched to the whole travel, from all the way down at its lower point to all the way up at its upper one.</li>
+              <li><strong>As is</strong>: the axis value goes on unchanged.</li>
+              <li><strong>Fixed</strong>: one value, wherever the axis is in the zone.</li>
+              <li><strong>Points</strong>: the field between two zones moves the point, the bin removes it (the zone above goes, with its actions), <span class="term">Point</span> adds one near the top.</li>
+            </ul>
+            <p>When the axis leaves a zone, that zone's actions get the edge it was left at, so the throttle sits at full when the afterburner zone takes over and the afterburner goes back to zero when you pull back. To press a button at a point instead, use <span class="term">Treat as a button</span> on the axis with a narrow range and a direction.</p>
+            <figure class="shot"><img src="img/actions/axis-zones.png" loading="lazy" alt="Axis zones on the Z axis: up to 0.80 the travel is stretched onto the virtual Z axis, from 0.80 on onto the slider named Afterburner"></figure>
           </article>
           <article class="learn-action" id="merge-axis">
             <h3><i class="ph ph-arrows-merge" aria-hidden="true"></i>Merge axis</h3>
@@ -465,7 +491,8 @@
           </article>
           <article class="learn-action" id="text-to-speech">
             <h3><i class="ph ph-chat-text" aria-hidden="true"></i>Text to speech</h3>
-            <p>Speaks a text with a voice of the system. <code>${current_mode}</code> becomes the name of the active mode. Speed, volume and pitch can be set; the new text can wait for the current one or interrupt it.</p>
+            <p>Speaks a text with a voice of the system or a natural voice. <code>${current_mode}</code> becomes the name of the active mode. Speed, volume and pitch can be set; the new text can wait for the current one or interrupt it.</p>
+            <p>Natural (Piper) voices sound like a person reading. Get them in <span class="term">Settings</span>, <span class="term">Voice</span>, <span class="term">Text to speech</span>: choose <span class="term">Piper</span> instead of <span class="term">The system's voice</span>, download the voice library once (about 8 MB on Windows, 10 MB on Linux), then a voice for each language you want (60-80 MB each; English, German, Spanish, French, Russian and Chinese). They are listed first in the action's voice list, named with their language, and one of them speaks for every action without a voice of its own. Switching back to <span class="term">The system's voice</span> makes every action speak with the system's voice and keeps the downloaded voices. Pitch does not change a natural voice. A voice takes about 100 MB of memory while it is in use and is let go after five quiet minutes. The voice library contains espeak-ng, which is under the GNU GPL 3, so it is a download of its own rather than part of the installer.</p>
             <figure class="shot"><img src="img/actions/text-to-speech.png" loading="lazy" alt="Text to speech saying the mode name"></figure>
           </article>
           <article class="learn-action" id="voice-input">
@@ -477,6 +504,11 @@
             <h3><i class="ph ph-terminal-window" aria-hidden="true"></i>Run command</h3>
             <p>Starts a program, with arguments if needed.</p>
             <figure class="shot"><img src="img/actions/run-command.png" loading="lazy" alt="Run command: notepad.exe"></figure>
+          </article>
+          <article class="learn-action" id="send-osc">
+            <h3><i class="ph ph-paper-plane-right" aria-hidden="true"></i>Send OSC</h3>
+            <p>Sends an OSC message to a program or device: to Bitfocus Companion to change the text or color of a Stream Deck key, to a touch panel to light a control, or to anything else that listens for OSC. Set where to (127.0.0.1 is this computer; it starts with Companion's port, 12321), the address, and the arguments in order: integers, numbers, text, true, false, or the input's own value (0 to 1 for an axis, 1 or 0 for a button). On a button it sends on press, release or both; on an axis, every time the axis moves. Put it on the Events tab's Mode enter to show the mode on your panel. <a href="panels.html">Stream Deck and touch panels</a> shows the whole setup, and how panels send their keys and faders here as inputs.</p>
+            <figure class="shot"><img src="img/actions/send-osc.png" loading="lazy" alt="The /deck/mode input: Change mode to Landing, then Send OSC to 127.0.0.1 port 12321, address /location/1/0/2/style/text, one text argument LANDING, on press"></figure>
           </article>
           <article class="learn-action" id="description">
             <h3><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</h3>
@@ -503,7 +535,9 @@
             <li><a href="learn.html">Learning</a></li>
             <li><a href="emulation.html">Emulation</a></li>
             <li><a href="voice.html">Voice</a></li>
+            <li><a href="panels.html">Panels</a></li>
             <li><a href="scripts.html">Scripts</a></li>
+            <li><a href="game.html">Games</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>

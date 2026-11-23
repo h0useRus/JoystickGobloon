@@ -1,0 +1,10 @@
+# A made-up game whose bindings file holds "action = output" lines; for the tests only.
+id = "sample"
+name = "Sample game"
+version = "1.0.0"
+authors = ["Joystick Gobloon"]
+api = 1
+
+[game]
+min = "1.0"
+max = "1.*"

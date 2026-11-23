@@ -1,6 +1,10 @@
 //! Runs the engine on a background thread against real devices.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+
+/// Maps the runner touches on every write: a fast hasher (keys are small numbers and ids).
+type FastMap<K, V> = HashMap<K, V, foldhash::fast::RandomState>;
+type FastSet<K> = std::collections::HashSet<K, foldhash::fast::RandomState>;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
@@ -21,6 +25,10 @@ const LATENCY_WINDOW: Duration = Duration::from_secs(1);
 #[derive(Debug, Clone, Default)]
 pub struct RunnerStatus {
     pub mode: String,
+    /// The layer the held modifiers choose (`M1+M2`); empty for the base layer.
+    pub layer: String,
+    /// The description of the last binding whose input was pressed and had one.
+    pub last_action: Option<String>,
     pub paused: bool,
     /// Profile file a load-profile action asked for; the GUI takes it.
     pub load_profile: Option<String>,
@@ -45,8 +53,6 @@ pub struct VoiceStatus {
     pub listening: bool,
     /// The last utterance.
     pub heard: Option<VoiceHeard>,
-    /// Phrases with words the speech model does not know (shared: cloned with every status).
-    pub unknown_words: std::sync::Arc<[gob_voice::UnknownPhrase]>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -108,6 +114,7 @@ pub struct Runner {
     thread: Option<JoinHandle<()>>,
     status: Arc<Mutex<RunnerStatus>>,
     logical: Arc<Mutex<LogicalValues>>,
+    outputs: crate::OutputTap,
     reload: Sender<Reload>,
 }
 
@@ -142,21 +149,24 @@ pub fn wait_stopped() {
 const RELOAD_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct SystemOutput {
-    devices: HashMap<u32, Box<dyn gob_virtual::Device>>,
-    gamepads: HashMap<u32, Box<dyn gob_virtual::Gamepad>>,
+    devices: FastMap<u32, Box<dyn gob_virtual::Device>>,
+    gamepads: FastMap<u32, Box<dyn gob_virtual::Gamepad>>,
     /// Last values written, read back by vJoy conditions; a write of the same value again is
     /// not sent.
-    written: HashMap<(u32, InputKind, u32), Value>,
+    written: FastMap<(u32, InputKind, u32), Value>,
     /// Writes of this pass of the loop, sent per device by [`SystemOutput::flush`]: one driver
     /// call per device instead of one per value. Buffers are kept between passes.
     pending: Vec<(u32, Vec<gob_virtual::Write>)>,
     pending_pads: Vec<(u32, Vec<gob_virtual::PadWrite>)>,
     /// Outputs whose last write the driver refused; logged once until one succeeds again.
-    failing: HashSet<(u32, InputKind, u32)>,
+    failing: FastSet<(u32, InputKind, u32)>,
     /// Writes the driver did not take (refused, or no device held): sent again even when the
     /// value is unchanged.
-    unsent: HashSet<(u32, InputKind, u32)>,
-    failing_pads: HashSet<(u32, Option<GamepadControl>)>,
+    unsent: FastSet<(u32, InputKind, u32)>,
+    failing_pads: FastSet<(u32, Option<GamepadControl>)>,
+    /// What the GUI sees of the outputs, and what this pass sent for it.
+    tap: crate::OutputTap,
+    sent: Vec<(crate::Sent, Value)>,
     media: crate::media::Media,
     lighting: crate::lighting::Lighting,
     load_profile: Option<String>,
@@ -164,6 +174,8 @@ struct SystemOutput {
     voice: Option<gob_voice::VoiceService>,
     voice_config: Option<gob_voice::VoiceConfig>,
     voice_events: std::sync::mpsc::Sender<gob_voice::VoiceEvent>,
+    /// Sends the send-osc actions' messages; started by the first one.
+    osc: Option<gob_osc::Sender>,
 }
 
 /// The joystick input a write changes.
@@ -200,20 +212,23 @@ impl SystemOutput {
         voice_events: std::sync::mpsc::Sender<gob_voice::VoiceEvent>,
     ) -> Self {
         Self {
-            devices: HashMap::new(),
-            gamepads: HashMap::new(),
-            written: HashMap::new(),
+            devices: FastMap::default(),
+            gamepads: FastMap::default(),
+            written: FastMap::default(),
             pending: Vec::new(),
             pending_pads: Vec::new(),
-            failing: HashSet::new(),
-            unsent: HashSet::new(),
-            failing_pads: HashSet::new(),
+            failing: FastSet::default(),
+            unsent: FastSet::default(),
+            failing_pads: FastSet::default(),
+            tap: Default::default(),
+            sent: Vec::new(),
             media: Default::default(),
             lighting,
             load_profile: None,
             voice: None,
             voice_config,
             voice_events,
+            osc: None,
         }
     }
 
@@ -280,6 +295,15 @@ impl SystemOutput {
         for i in 0..self.pending_pads.len() {
             self.send_pad(i);
         }
+        self.publish();
+    }
+
+    /// Hands what was sent since the last call to the [`crate::OutputTap`].
+    fn publish(&mut self) {
+        if !self.sent.is_empty() {
+            self.tap.publish(&self.sent, Instant::now());
+            self.sent.clear();
+        }
     }
 
     /// Sends the queued writes of `pending[i]`; a refused one is logged when it starts failing
@@ -293,7 +317,7 @@ impl SystemOutput {
         let target = self.devices.get(&device);
         let batch = target.map(|d| d.write(writes));
         for &w in writes.iter() {
-            let key = write_key(device, w).0;
+            let (key, value) = write_key(device, w);
             // A refused batch: each write alone tells which ones the device took (those of the
             // batch it took are sent once more, which changes nothing).
             let ok = match batch {
@@ -302,8 +326,12 @@ impl SystemOutput {
             };
             if ok != Some(true) {
                 self.unsent.insert(key);
-            } else if !self.unsent.is_empty() {
-                self.unsent.remove(&key);
+            } else {
+                if !self.unsent.is_empty() {
+                    self.unsent.remove(&key);
+                }
+                self.sent
+                    .push((crate::Sent::Joystick(key.0, key.1, key.2), value));
             }
             log_refused(&mut self.failing, key, ok, || {
                 format!("virtual device {device}: writing {w:?}")
@@ -330,6 +358,15 @@ impl SystemOutput {
                 gob_virtual::PadWrite::Button(c, _) | gob_virtual::PadWrite::Axis(c, _) => Some(c),
                 gob_virtual::PadWrite::Dpad(_) => None,
             };
+            if ok == Some(true) {
+                let (control, value) = match w {
+                    gob_virtual::PadWrite::Button(c, p) => (c, Value::Button(p)),
+                    gob_virtual::PadWrite::Axis(c, v) => (c, Value::Axis(v)),
+                    gob_virtual::PadWrite::Dpad(d) => (GamepadControl::Dpad, Value::Hat(d)),
+                };
+                self.sent
+                    .push((crate::Sent::Gamepad(gamepad, control), value));
+            }
             log_refused(&mut self.failing_pads, (gamepad, control), ok, || {
                 let control = control.map_or("dpad", GamepadControl::name);
                 format!("virtual gamepad {gamepad}: writing {control}")
@@ -341,7 +378,7 @@ impl SystemOutput {
 
 /// Logs a write the driver refused when it starts failing, and when it works again.
 fn log_refused<K: Copy + Eq + std::hash::Hash>(
-    failing: &mut HashSet<K>,
+    failing: &mut FastSet<K>,
     key: K,
     ok: Option<bool>,
     what: impl FnOnce() -> String,
@@ -394,6 +431,12 @@ impl Output for SystemOutput {
         self.load_profile = Some(file.to_string());
     }
 
+    fn send_osc(&mut self, host: &str, port: u16, message: &gob_osc::Message) {
+        self.osc
+            .get_or_insert_with(gob_osc::Sender::new)
+            .send(host, port, message);
+    }
+
     fn voice_listen(&mut self, microphone: &str, on: bool) {
         if let Some(voice) = &self.voice {
             voice.listen(microphone, on);
@@ -418,18 +461,38 @@ impl Output for SystemOutput {
         // Joystick writes queued before it go out first, in the profile's order.
         self.flush();
         crate::platform::injector().mouse_button(button, pressed);
+        self.sent
+            .push((crate::Sent::Mouse(button), Value::Button(pressed)));
+        self.publish();
     }
 
     fn mouse_wheel(&mut self, notches: i32) {
         // Joystick writes queued before it go out first, in the profile's order.
         self.flush();
         crate::platform::injector().mouse_wheel(notches);
+        // A notch has no "held": it shows as a short press.
+        let button = if notches > 0 {
+            gob_core::MouseButton::WheelUp
+        } else {
+            gob_core::MouseButton::WheelDown
+        };
+        if notches != 0 {
+            let wheel = crate::Sent::Mouse(button);
+            self.sent.push((wheel, Value::Button(true)));
+            self.sent.push((wheel, Value::Button(false)));
+            self.publish();
+        }
     }
 
     fn key(&mut self, scan_code: u16, extended: bool, pressed: bool) {
         // Joystick writes queued before it go out first, in the profile's order.
         self.flush();
         crate::platform::injector().key(scan_code, extended, pressed);
+        self.sent.push((
+            crate::Sent::Key(scan_code, extended),
+            Value::Button(pressed),
+        ));
+        self.publish();
     }
 
     fn run_command(&mut self, executable: &str, arguments: &[String]) {
@@ -469,6 +532,7 @@ impl Runner {
             led_defaults.map(<[crate::Light]>::to_vec),
         );
         let mut out = SystemOutput::new(lighting, voice, voice_events);
+        let outputs = out.tap.clone();
         acquire(&engine, &mut out, virtual_devices.as_ref())?;
         feed_initial(&mut engine, &mut out, initial);
         set_up_voice(&engine, &mut out);
@@ -482,6 +546,8 @@ impl Runner {
 
         let status = Arc::new(Mutex::new(RunnerStatus {
             mode: engine.current_mode().to_string(),
+            layer: String::new(),
+            last_action: None,
             paused: false,
             load_profile: None,
             latency: None,
@@ -513,6 +579,7 @@ impl Runner {
             thread: Some(thread),
             status,
             logical,
+            outputs,
             reload,
         })
     }
@@ -527,19 +594,12 @@ impl Runner {
         initial: &[DeviceState],
         fresh: bool,
     ) -> Result<(), String> {
-        let (reply, answer) = std::sync::mpsc::channel();
-        let request = Reload {
-            engine: Engine::new(profile, aliases),
-            initial: initial.to_vec(),
-            fresh,
-            reply,
-        };
-        self.reload
-            .send(request)
-            .map_err(|_| "the engine has stopped".to_string())?;
-        answer
-            .recv_timeout(RELOAD_TIMEOUT)
-            .map_err(|_| "the engine did not answer".to_string())?
+        self.reloader().reload(profile, aliases, initial, fresh)
+    }
+
+    /// A handle that reloads this runner from another thread, without holding the runner.
+    pub fn reloader(&self) -> Reloader {
+        Reloader(self.reload.clone())
     }
 
     /// Script errors since the last call: a script that did not load, or the first error of a
@@ -570,12 +630,46 @@ impl Runner {
             .clone()
     }
 
+    /// What the profile last sent to the virtual devices and the keyboard.
+    pub fn outputs(&self) -> crate::OutputTap {
+        self.outputs.clone()
+    }
+
     /// Current values of the logical device's inputs.
     pub fn logical(&self) -> LogicalValues {
         self.logical
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
+    }
+}
+
+/// Reloads a running [`Runner`] from any thread ([`Runner::reloader`]).
+#[derive(Clone)]
+pub struct Reloader(Sender<Reload>);
+
+impl Reloader {
+    /// As [`Runner::reload`]; waits for the engine thread to take the new profile.
+    pub fn reload(
+        &self,
+        profile: &Profile,
+        aliases: &HashMap<String, String>,
+        initial: &[DeviceState],
+        fresh: bool,
+    ) -> Result<(), String> {
+        let (reply, answer) = std::sync::mpsc::channel();
+        let request = Reload {
+            engine: Engine::new(profile, aliases),
+            initial: initial.to_vec(),
+            fresh,
+            reply,
+        };
+        self.0
+            .send(request)
+            .map_err(|_| "the engine has stopped".to_string())?;
+        answer
+            .recv_timeout(RELOAD_TIMEOUT)
+            .map_err(|_| "the engine did not answer".to_string())?
     }
 }
 
@@ -694,8 +788,7 @@ struct ServiceState {
     ready: bool,
     error: Option<String>,
     /// Microphones listening now.
-    listening: HashSet<String>,
-    unknown_words: std::sync::Arc<[gob_voice::UnknownPhrase]>,
+    listening: FastSet<String>,
 }
 
 impl ServiceState {
@@ -720,7 +813,6 @@ impl ServiceState {
             } => {
                 self.listening.remove(&microphone);
             }
-            VoiceEvent::UnknownWords(list) => self.unknown_words = list,
             VoiceEvent::Heard {
                 command,
                 text,
@@ -742,7 +834,6 @@ impl ServiceState {
             ready: self.ready,
             error: self.error.clone(),
             listening: !self.listening.is_empty(),
-            unknown_words: self.unknown_words.clone(),
             ..status
         }
     }
@@ -776,6 +867,8 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
     // A fine timer is on: outputs move on their own.
     let mut fine = false;
     let mut service = ServiceState::default();
+    // The layer the status shows (its text is made only when it changes).
+    let mut shown_layer = gob_core::Layer::default();
     let mut voice_status = status
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -792,6 +885,7 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
                 // command's button would stay down. The utterance it ends is heard with the old
                 // phrases: they change only after it.
                 engine.stop_voice(Instant::now(), &mut out);
+                engine.stop_osc(Instant::now(), &mut out);
                 if r.fresh {
                     finish_stop(&mut engine, &mut out);
                 }
@@ -827,7 +921,10 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         };
         reads.clear();
         for timed in first.into_iter().chain(events.try_iter()) {
-            if let Some((key, value)) = convert(&mut ids, &timed.event) {
+            if let InputEvent::Osc { address, value } = &timed.event {
+                engine.osc(address, *value, Instant::now(), &mut out);
+                reads.push(timed.read);
+            } else if let Some((key, value)) = convert(&mut ids, &timed.event) {
                 engine.process(&key, value, Instant::now(), &mut out);
                 reads.push(timed.read);
             }
@@ -844,6 +941,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
         }
         let now = Instant::now();
         engine.tick(now, &mut out);
+        // A voice group opened or closed: listen for what is in it, or for everything again.
+        if engine.take_voice_phrases_changed()
+            && let Some(voice) = &out.voice
+        {
+            voice.set_phrases(engine.voice_phrases().to_vec());
+        }
         out.flush();
         // Latency ends when the outputs are written.
         for read in &reads {
@@ -862,7 +965,15 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             s.script_errors.extend(script_errors);
             on_change();
         }
+        // Compared with the last layer shown, without making text: allocates only on a change.
+        let layer_changed = engine.current_layer() != &shown_layer;
+        if layer_changed {
+            shown_layer = engine.current_layer().clone();
+        }
+        let action_changed = s.last_action.as_deref() != engine.last_action();
         if s.mode != engine.current_mode()
+            || layer_changed
+            || action_changed
             || s.paused != engine.is_paused()
             || load.is_some()
             || latency.is_some_and(|l| s.latency != Some(l))
@@ -870,6 +981,12 @@ fn run(mut engine: Engine, mut out: SystemOutput, shared: &Threads, on_change: &
             || s.voice != voice_status
         {
             s.mode = engine.current_mode().to_string();
+            if layer_changed {
+                s.layer = shown_layer.to_string();
+            }
+            if action_changed {
+                s.last_action = engine.last_action().map(String::from);
+            }
             s.paused = engine.is_paused();
             s.voice = voice_status.clone();
             if load.is_some() {
@@ -915,7 +1032,7 @@ fn on_voice(
 
 /// Device ids of input events as the engine's keys take them, made once per device.
 #[derive(Default)]
-struct DeviceIds(HashMap<String, Arc<str>>);
+struct DeviceIds(FastMap<String, Arc<str>>);
 
 impl DeviceIds {
     fn key(&mut self, device: &str, kind: InputKind, id: u32) -> InputKey {
@@ -971,7 +1088,8 @@ fn convert(ids: &mut DeviceIds, event: &InputEvent) -> Option<(InputKey, Value)>
                 Value::Button(*pressed),
             )
         }
-        InputEvent::DevicesChanged => return None,
+        // OSC messages go to the engine by address (`Engine::osc`).
+        InputEvent::Osc { .. } | InputEvent::DevicesChanged => return None,
     })
 }
 
@@ -1022,6 +1140,43 @@ mod tests {
         assert_eq!(&*a.device, "aaaa-01");
         assert!(Arc::ptr_eq(&a.device, &b.device));
         assert_eq!(a, InputKey::new("aaaa-01", InputKind::Axis, 1));
+    }
+
+    #[test]
+    fn the_tap_shows_what_the_driver_took() {
+        let (mut out, _calls) = output();
+        let tap = out.tap.clone();
+        out.button(1, 3, true);
+        out.axis(1, 1, 0.5);
+        // Device 2 is not held: nothing of it was sent.
+        out.button(2, 1, true);
+        assert_eq!(
+            tap.get(crate::Sent::Joystick(1, InputKind::Button, 3)),
+            None
+        );
+        out.flush();
+        let value = |s| tap.get(s).map(|t| t.value);
+        assert_eq!(
+            value(crate::Sent::Joystick(1, InputKind::Button, 3)),
+            Some(Value::Button(true))
+        );
+        assert_eq!(
+            value(crate::Sent::Joystick(1, InputKind::Axis, 1)),
+            Some(Value::Axis(0.5))
+        );
+        assert_eq!(value(crate::Sent::Joystick(2, InputKind::Button, 1)), None);
+        let room = out.sent.capacity();
+        out.button(1, 3, false);
+        out.flush();
+        assert_eq!(
+            value(crate::Sent::Joystick(1, InputKind::Button, 3)),
+            Some(Value::Button(false))
+        );
+        assert_eq!(
+            out.sent.capacity(),
+            room,
+            "the buffer is kept between passes"
+        );
     }
 
     #[test]
@@ -1167,25 +1322,6 @@ mod tests {
         assert!(service.apply(VoiceStatus::default()).listening);
         service.handle(listening("right", false));
         assert!(!service.apply(VoiceStatus::default()).listening);
-    }
-
-    #[test]
-    fn unknown_words_reach_the_status() {
-        let mut service = ServiceState::default();
-        let list: std::sync::Arc<[_]> = std::sync::Arc::new([gob_voice::UnknownPhrase {
-            command: 1,
-            phrase: "zz me".into(),
-            words: vec!["zz".into()],
-        }]);
-        service.handle(gob_voice::VoiceEvent::UnknownWords(list.clone()));
-        assert_eq!(service.apply(VoiceStatus::default()).unknown_words, list);
-        service.handle(gob_voice::VoiceEvent::UnknownWords(std::sync::Arc::new([])));
-        assert!(
-            service
-                .apply(VoiceStatus::default())
-                .unknown_words
-                .is_empty()
-        );
     }
 
     #[test]

@@ -1,0 +1,11 @@
+[[action]]
+id = "gear"
+category = "Flight"
+name = "Landing gear"
+default = ["key:0x22"]
+
+[[action]]
+id = "roll"
+category = "Flight"
+name = "Roll"
+kind = "axis"

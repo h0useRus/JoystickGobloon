@@ -90,7 +90,9 @@
       <li><a href="learn.html">Learning</a></li>
       <li><a href="emulation.html">Emulation</a></li>
       <li><a href="voice.html">Voice</a></li>
+      <li><a href="panels.html">Panels</a></li>
       <li><a href="scripts.html">Scripts</a></li>
+      <li><a href="game.html">Games</a></li>
       <li><a href="index.html#platforms">Windows and Linux</a></li>
       <li><a href="index.html#faq">FAQ</a></li>
     </ul>
@@ -110,10 +112,12 @@
       <li style="--i:3"><a href="learn.html">Learning</a></li>
       <li style="--i:4"><a href="emulation.html">Emulation</a></li>
       <li style="--i:5"><a href="voice.html">Voice</a></li>
-      <li style="--i:6"><a href="scripts.html">Scripts</a></li>
-      <li style="--i:7"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:8"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:9"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:6"><a href="panels.html">Panels</a></li>
+      <li style="--i:7"><a href="scripts.html">Scripts</a></li>
+      <li style="--i:8"><a href="game.html">Games</a></li>
+      <li style="--i:9"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:10"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:11"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -150,6 +154,8 @@
           </ul></li>
           <li><a class="toc-group" href="#more">More</a><ul>
             <li><a href="#other-ways">Other ways to start</a></li>
+            <li><a href="#overlay">Overlay over the game</a></li>
+            <li><a href="#status-bar">The status bar</a></li>
             <li><a href="#wizard-trouble">When the wizard is stuck</a></li>
           </ul></li>
           </ul>
@@ -206,7 +212,7 @@
           <article class="learn-action" id="open-wizard">
             <h3><i class="ph ph-magic-wand" aria-hidden="true"></i>Open it</h3>
             <p>Click the wand, the first button in the top toolbar. If the open profile has unsaved changes, Joystick Gobloon asks to save them first.</p>
-            <figure class="shot"><img src="img/wizard.png" loading="lazy" width="1100" height="700" alt="New profile wizard: the profile name, then each attached stick with its axis, button and hat counts and the virtual joystick it maps to, a warning that one virtual joystick has a button less than its stick, and the Create and Cancel buttons"></figure>
+            <figure class="shot"><img src="img/wizard.png" loading="lazy" width="1102" height="732" alt="New profile wizard: the profile name, then each attached stick with its axis, button and hat counts and the virtual joystick it maps to, a warning that one virtual joystick has a button less than its stick, and the Create and Cancel buttons"></figure>
           </article>
 
           <article class="learn-action" id="wizard-steps">
@@ -266,12 +272,34 @@
             <h3><i class="ph ph-signpost" aria-hidden="true"></i>Other ways to start</h3>
             <ul class="ticks">
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Empty profile.</strong> The page button next to the wand starts a profile with nothing mapped; add actions input by input.</span></li>
-              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Import from Joystick Gremlin.</strong> The folder button opens a profile from Joystick Gremlin R14 or newer and it runs as it is. Anything not supported yet is kept unchanged in the file. Profiles from R13 and older cannot be imported; the wizard builds a new one quickly.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Import from Joystick Gremlin.</strong> The folder button (Open profile) opens Joystick Gobloon profiles and profiles from Joystick Gremlin R14 or newer; a Gremlin profile runs as it is. Anything not supported yet is kept unchanged in the file. Profiles from R13 and older cannot be imported; the wizard builds a new one quickly.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>A profile from another PC.</strong> The same stick has a different ID on every PC. A banner on the Devices page offers <span class="term">Map controls</span>, which matches the profile's devices to your sticks; <span class="term">Auto</span> does it by name.</span></li>
               <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Missing virtual joysticks.</strong> When a profile uses virtual devices this system lacks or has set up smaller, a banner offers <span class="term">Set up</span>: it creates what is missing and never removes anything.</span></li>
             </ul>
           </article>
 
+          <article class="learn-action" id="overlay">
+            <h3><i class="ph ph-picture-in-picture" aria-hidden="true"></i>Overlay over the game</h3>
+            <p>The overlay is a small box on top of the game that shows what the active profile is doing. Turn it on in <span class="term">Settings</span>, <span class="term">Overlay</span>, <span class="term">Show the overlay</span>. Click <span class="term">Place the overlay</span>, drag the box to where it should be on the screen, then click <span class="term">Done</span> (leaving the Overlay tab or hiding the window finishes placing too). While you place it the box has a border and the size it has in the game, so it lines up exactly; with no profile active it shows sample lines, so for an exact fit place it with your profile running. Clicks go through the box to the game, and it never takes the focus.</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>What it shows</strong>, each line switched on or off: the active mode and the modifier layer, the description of the last input you pressed (nothing when its binding has no description; give it one above its actions on the Devices page), the latency, the memory and CPU Joystick Gobloon uses, the voice command that was recognized, and the list of all voice commands as a reminder.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Show and hide it while you play</strong> with <span class="term">Ctrl+Alt+F</span>; either Ctrl or Alt key works. The record button next to the keys sets another combination.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Its look</strong>: text color, background color with its transparency, font size, and the opacity of the whole overlay.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Full screen games</strong>: a game in exclusive full screen draws over every window, the overlay too. Set the game to borderless (windowed full screen) or windowed mode.</span></li>
+            </ul>
+            <figure class="shot"><img src="img/overlay.png" loading="lazy" width="1102" height="822" alt="Settings, Overlay: Show the overlay on, the show/hide shortcut Ctrl + Alt + F, the Done button while it is being placed with the hint to drag it, the lines it shows (mode and layer, active action description, latency, recognized voice command), and its look: text color, background, font size 16 pt and opacity 100 %"></figure>
+          </article>
+
+          <article class="learn-action" id="status-bar">
+            <h3><i class="ph ph-info" aria-hidden="true"></i>The status bar</h3>
+            <p>The bar at the bottom of the window shows, from the left:</p>
+            <ul class="ticks">
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Device hiding</strong>: the eye, green and crossed out while the real sticks are hidden. A click asks before switching hiding off or on for every program, a double click switches it at once.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>The active profile</strong>, while one runs: the play sign, the mode, the state of voice commands, and the <strong>latency</strong>, the time from reading your stick to the virtual joystick having the new value, averaged every second (the tooltip adds the slowest one).</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>Memory and CPU</strong>, for example <em>122 MB · 0.2 % CPU</em>: the memory Joystick Gobloon uses right now and its share of the whole processor over the last five seconds. It is read every five seconds and only while the window is shown, so it costs nothing while you play. The overlay can show the same line.</span></li>
+              <li><i class="ph-bold ph-check" aria-hidden="true"></i><span><strong>What just happened</strong>: a profile loaded, created or saved, which program chose the profile, and the like.</span></li>
+            </ul>
+          </article>
           <article class="learn-action" id="wizard-trouble">
             <h3><i class="ph ph-first-aid-kit" aria-hidden="true"></i>When the wizard is stuck</h3>
             <dl class="trouble">
@@ -306,7 +334,9 @@
             <li><a href="learn.html">Learning</a></li>
             <li><a href="emulation.html">Emulation</a></li>
             <li><a href="voice.html">Voice</a></li>
+            <li><a href="panels.html">Panels</a></li>
             <li><a href="scripts.html">Scripts</a></li>
+            <li><a href="game.html">Games</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>

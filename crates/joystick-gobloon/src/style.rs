@@ -4,6 +4,7 @@
 
 use eframe::egui::{self, Color32, RichText, Vec2};
 pub use gob_ui::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::settings::Theme;
 
@@ -23,15 +24,68 @@ const PALETTES: Palettes = Palettes {
     },
 };
 
-pub fn install_fonts(ctx: &egui::Context) {
+/// Fonts at start: the Chinese and Korean ones only when `cjk` (they are tens of megabytes);
+/// otherwise they load the first time such text is about to show ([`want_cjk`]).
+pub fn install_fonts(ctx: &egui::Context, cjk: bool) {
+    CJK_LOADED.store(cjk, Ordering::Relaxed);
+    set_fonts(ctx, cjk);
+}
+
+fn set_fonts(ctx: &egui::Context, cjk: bool) {
     let mut fonts = egui::FontDefinitions::default();
     add_icon_font(&mut fonts);
-    add_cjk_fallbacks(&mut fonts);
+    if cjk {
+        add_cjk_fallbacks(&mut fonts);
+    }
     ctx.set_fonts(fonts);
 }
 
+static CJK_LOADED: AtomicBool = AtomicBool::new(false);
+static CJK_WANTED: AtomicBool = AtomicBool::new(false);
+
+/// Whether `text` has Chinese, Japanese or Korean characters.
+pub fn has_cjk(text: &str) -> bool {
+    text.chars().any(|c| {
+        matches!(c as u32, 0x2E80..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF)
+    })
+}
+
+/// Chinese or Korean text is about to show (the language list, a profile or device with such
+/// names): the fonts load before the next frame.
+pub fn want_cjk() {
+    CJK_WANTED.store(true, Ordering::Relaxed);
+}
+
+/// Notes text that may need the Chinese and Korean fonts.
+pub fn note_text(text: &str) {
+    if !CJK_LOADED.load(Ordering::Relaxed) && has_cjk(text) {
+        want_cjk();
+    }
+}
+
+/// Loads the Chinese and Korean fonts once something asked for them, or such text is typed,
+/// pasted or composed (IME) into a field; cheap every frame.
+pub fn load_cjk_if_wanted(ctx: &egui::Context) {
+    if !CJK_LOADED.load(Ordering::Relaxed) {
+        let typed = ctx.input(|i| {
+            i.events.iter().any(|e| match e {
+                egui::Event::Text(t) | egui::Event::Paste(t) => has_cjk(t),
+                egui::Event::Ime(egui::ImeEvent::Commit(t))
+                | egui::Event::Ime(egui::ImeEvent::Preedit { text: t, .. }) => has_cjk(t),
+                _ => false,
+            })
+        });
+        if typed {
+            want_cjk();
+        }
+    }
+    if CJK_WANTED.load(Ordering::Relaxed) && !CJK_LOADED.swap(true, Ordering::Relaxed) {
+        set_fonts(ctx, true);
+    }
+}
+
 /// Chinese and Korean glyphs from the system's fonts (`platform::cjk_fonts`), after egui's own
-/// fonts. Always loaded: the language list shows 简体中文 and 한국어 whatever the UI language is.
+/// fonts.
 fn add_cjk_fallbacks(fonts: &mut egui::FontDefinitions) {
     for (name, file) in crate::platform::cjk_fonts() {
         let Ok(bytes) = std::fs::read(&file) else {
@@ -145,4 +199,56 @@ pub fn eye(ui: &egui::Ui, hidden: bool, active: bool) -> (&'static str, Color32)
         (true, false) => accent(ui),
     };
     (glyph, color)
+}
+
+/// The rail button of the Game bindings page: a gamepad wired to three contacts, drawn here
+/// because the icon font has nothing like it. Sized and coloured like [`nav_toggle`].
+pub fn game_nav_toggle(ui: &mut egui::Ui, selected: bool, tooltip: &str) -> egui::Response {
+    let response = nav_toggle(ui, selected, " ", tooltip);
+    let color = if selected {
+        accent(ui)
+    } else {
+        ui.style().interact(&response).fg_stroke.color
+    };
+    game_icon(
+        ui.painter(),
+        response.rect.center(),
+        LARGE_ICON_SIZE + 4.0,
+        color,
+    );
+    response
+}
+
+/// The Game bindings icon, `size` wide and high around `center`.
+fn game_icon(painter: &egui::Painter, center: egui::Pos2, size: f32, color: Color32) {
+    use egui::{Pos2, Rect, Stroke};
+    // Drawn on a 24 x 24 grid.
+    let unit = size / 24.0;
+    let at = |x: f32, y: f32| center + Vec2::new(x - 12.0, y - 12.0) * unit;
+    let stroke = Stroke::new((1.6 * unit).max(1.2), color);
+    // The gamepad, with its d-pad and two buttons.
+    painter.rect_stroke(
+        Rect::from_min_max(at(2.0, 12.5), at(22.0, 21.5)),
+        4.0 * unit,
+        stroke,
+        egui::StrokeKind::Middle,
+    );
+    painter.line_segment([at(5.6, 17.0), at(9.4, 17.0)], stroke);
+    painter.line_segment([at(7.5, 15.1), at(7.5, 18.9)], stroke);
+    painter.circle_filled(at(15.4, 18.0), 1.1 * unit, color);
+    painter.circle_filled(at(18.2, 16.0), 1.1 * unit, color);
+    // The wires up to their contacts.
+    let wire = |points: &[Pos2], contact: Pos2| {
+        painter.add(egui::Shape::line(points.to_vec(), stroke));
+        painter.circle_stroke(contact, 1.6 * unit, stroke);
+    };
+    wire(&[at(12.0, 12.5), at(12.0, 6.6)], at(12.0, 5.0));
+    wire(
+        &[at(8.0, 12.5), at(8.0, 9.8), at(5.0, 9.8), at(5.0, 5.6)],
+        at(5.0, 4.0),
+    );
+    wire(
+        &[at(16.0, 12.5), at(16.0, 9.8), at(19.0, 9.8), at(19.0, 5.6)],
+        at(19.0, 4.0),
+    );
 }

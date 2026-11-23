@@ -5,12 +5,13 @@
 #     sh /src/tools/linux/appimage.sh <version> /target/appimage /target/release/JoystickGobloon
 #
 # The AppImage carries the program, SystemGobloon next to it (the program installs it as a
-# service from there), the speech library for voice commands (libvosk, next to the program
-# where it looks first), its extra languages and the desktop entry; GTK, the
+# service from there), the speech libraries for voice commands (libvosk, sherpa-onnx and ONNX
+# Runtime, next to the program where it looks first), its extra languages, the game export plugins and the desktop entry; GTK, the
 # AppIndicator and the X11/Wayland libraries come from the system (every desktop has them),
 # except BUNDLED: the window library loads them at run time, and systems with GTK may not
 # have them (the AppImage catalog's test machine does not).
-# appimagetool, the AppImage runtime and libvosk are pinned by SHA-256 like the Windows drivers.
+# appimagetool, the AppImage runtime, libvosk and sherpa-onnx are pinned by SHA-256 like the
+# Windows drivers.
 set -eu
 
 VERSION=$1
@@ -26,6 +27,11 @@ RUNTIME_SHA=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
 # Vosk 0.3.45, the last release with built libraries (glibc 2.4 and the system's libstdc++).
 VOSK_URL=https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-linux-x86_64-0.3.45.zip
 VOSK_SHA=bbdc8ed85c43979f6443142889770ea95cbfbc56cffb5c5dcd73afa875c5fbb2
+# sherpa-onnx 2.0.1 without text to speech, with its ONNX Runtime (glibc 2.17; the library finds
+# ONNX Runtime next to itself). gob-voice's sherpa.rs mirrors this version's C structs.
+SHERPA=sherpa-onnx-v2.0.1-linux-x64-shared-no-tts-lib
+SHERPA_URL=https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/$SHERPA.tar.bz2
+SHERPA_SHA=ce437357915491e6f2754b52bec7dcf62ff6fc6aaed9cdcd66f17807bbaef374
 
 # Not libxkbcommon.so.0 itself: GTK needs it, so the system's (newer) copy is always there.
 BUNDLED="libxkbcommon-x11.so.0 libxcb-xkb.so.1"
@@ -40,6 +46,7 @@ fetch() { # url sha file
 }
 fetch "$TOOL_URL" "$TOOL_SHA" "$TOOLS/appimagetool"
 fetch "$RUNTIME_URL" "$RUNTIME_SHA" "$TOOLS/runtime"
+fetch "$SHERPA_URL" "$SHERPA_SHA" "$TOOLS/sherpa.tar.bz2"
 fetch "$VOSK_URL" "$VOSK_SHA" "$TOOLS/vosk.zip"
 chmod +x "$TOOLS/appimagetool"
 
@@ -51,6 +58,10 @@ install -m 755 "$BIN" "$APPDIR/usr/bin/JoystickGobloon"
 install -m 755 "$SERVICE" "$APPDIR/usr/bin/SystemGobloon"
 unzip -p "$TOOLS/vosk.zip" vosk-linux-x86_64-0.3.45/libvosk.so > "$APPDIR/usr/bin/libvosk.so"
 chmod 644 "$APPDIR/usr/bin/libvosk.so"
+for lib in libsherpa-onnx-c-api.so libonnxruntime.so; do
+    tar -xjOf "$TOOLS/sherpa.tar.bz2" "$SHERPA/lib/$lib" > "$APPDIR/usr/bin/$lib"
+    chmod 644 "$APPDIR/usr/bin/$lib"
+done
 for lib in $BUNDLED; do
     path=$(/sbin/ldconfig -p | awk -v l="$lib" '$1 == l && /x86-64/ { print $NF; exit }')
     [ -n "$path" ] || { echo "$lib not found: install it on the build system" >&2; exit 1; }
@@ -58,6 +69,10 @@ for lib in $BUNDLED; do
 done
 # Languages beyond the embedded ones load from <exe>/lang/.
 cp "$SRC"/lang/*.ftl "$APPDIR/usr/bin/lang/"
+# Game export plugins load from <exe>/export/; their dev folders (tools that build the action
+# lists) stay out.
+cp -r "$SRC/plugins/export" "$APPDIR/usr/bin/export"
+find "$APPDIR/usr/bin/export" -type d -name dev -prune -exec rm -rf {} +
 cp "$SRC/LICENSE" "$APPDIR/usr/bin/"
 cp "$SRC/assets/THIRD-PARTY-NOTICES.txt" "$APPDIR/usr/bin/"
 cp "$SRC/assets/icon/JoystickGobloon-256.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/joystick-gobloon.png"

@@ -2,6 +2,7 @@
 //! Xbox controllers through XInput under the same ids (`xinput.rs`), keyboard keys through a
 //! low-level hook, controller numbers through WinMM.
 
+mod arrival;
 mod dinput;
 pub(crate) mod keyboard;
 mod xinput;
@@ -19,13 +20,19 @@ use windows::Win32::System::Threading::{
 };
 use windows::core::PCWSTR;
 
+use super::Buffered;
 use super::{format_guid, normalize_axis};
-use crate::{Calibrations, DeviceState, InputEvent};
+use crate::{Calibrations, DeviceState};
 
 /// Event mode: devices are also read this often without a change signal, as a fallback.
 const EVENT_TIMEOUT: Duration = Duration::from_millis(20);
 /// WaitForMultipleObjects takes at most this many handles.
 const MAX_WAIT: usize = 64;
+/// With device notifications the scanner still looks this often, in case one was missed.
+const SCAN_FALLBACK: Duration = Duration::from_secs(30);
+/// After a notification: DirectInput lists a new device a moment after its interface arrives,
+/// so the scanner keeps looking at its usual pace this long.
+const ARRIVAL_WINDOW: Duration = Duration::from_secs(10);
 
 pub(crate) struct Platform {
     di: dinput::DirectInput,
@@ -38,6 +45,11 @@ pub(crate) struct Platform {
     /// High resolution timer that paces the polled devices while waiting for the others'
     /// change signals; `None` before Windows 10 1803.
     timer: Option<HANDLE>,
+    /// Device arrival and removal notifications, made by the first [`Backend::wait_for_attach`]
+    /// (only the scanner's backend waits for them).
+    arrivals: std::cell::OnceCell<Option<arrival::Arrivals>>,
+    /// The last device notification, see [`ARRIVAL_WINDOW`].
+    arrived: std::cell::Cell<Option<std::time::Instant>>,
 }
 
 impl Drop for Platform {
@@ -52,6 +64,7 @@ impl Drop for Platform {
 impl super::Backend for Platform {
     type Found = DIDEVICEINSTANCEW;
     type Device = Controller;
+    const SCAN_ON_THREAD: bool = true;
 
     fn new() -> Option<Self> {
         let di = dinput::DirectInput::new().ok()?;
@@ -71,7 +84,25 @@ impl super::Backend for Platform {
             slots: Arc::default(),
             handles: RefCell::default(),
             timer,
+            arrivals: std::cell::OnceCell::new(),
+            arrived: std::cell::Cell::new(None),
         })
+    }
+
+    fn wait_for_attach(&self, rescan: Duration) {
+        let recent = self
+            .arrived
+            .get()
+            .is_some_and(|t| t.elapsed() < ARRIVAL_WINDOW);
+        match self.arrivals.get_or_init(arrival::Arrivals::new) {
+            Some(arrivals) if !recent => {
+                if arrivals.wait(SCAN_FALLBACK) {
+                    self.arrived.set(Some(std::time::Instant::now()));
+                    std::thread::sleep(rescan.min(Duration::from_millis(500)));
+                }
+            }
+            _ => std::thread::sleep(rescan),
+        }
     }
 
     fn attached(&self) -> Vec<(String, DIDEVICEINSTANCEW)> {
@@ -173,7 +204,7 @@ impl super::Device for Controller {
         self.di.event().is_some() && self.pad.as_ref().is_none_or(|p| p.slot().is_none())
     }
 
-    fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool {
+    fn read(&mut self, emit: &mut dyn FnMut(Buffered)) -> bool {
         let di = &mut self.di;
         match &mut self.pad {
             // DirectInput's state only while the XInput slot is not found yet.

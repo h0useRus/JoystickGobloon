@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use eframe::egui::{self, Align, Layout, RichText, Vec2};
 use gob_i18n::I18n;
 
-use crate::activation::Activation;
+use crate::activation::{Activation, Job};
 use crate::apps_view::AppsView;
 use crate::devices_view::DevicesView;
 use crate::hidhide_view::HidHideView;
@@ -24,6 +24,7 @@ enum Page {
     Viewer,
     Calibration,
     Scripts,
+    Game,
     Settings,
 }
 
@@ -53,6 +54,9 @@ pub struct JoystickGobloonApp {
     calibration_view: crate::calibration_view::CalibrationView,
     /// The calibration is shown in its own window.
     calibration_window: bool,
+    game_view: crate::game_view::GameView,
+    /// The game bindings are shown in their own window.
+    game_window: bool,
     /// Saved axis calibrations (also applied in the input service).
     calibrations: gob_input::Calibrations,
     hidhide_view: HidHideView,
@@ -64,6 +68,8 @@ pub struct JoystickGobloonApp {
     system_part: crate::system_part_view::SystemPartView,
     /// The settings' Voice tab: speech model download and microphone test.
     voice_panel: crate::voice::VoicePanel,
+    /// The game overlay (Settings, Overlay).
+    overlay: crate::overlay::Overlay,
     /// Running profile, if activated.
     /// New releases from GitHub (About page, check on start).
     updater: crate::update::Updater,
@@ -84,6 +90,8 @@ pub struct JoystickGobloonApp {
     autosave_writer: crate::autosave::Writer,
     /// The program whose profile runs now by switching: (its key, its name, the profile file).
     switched: Option<(String, String, String)>,
+    /// A profile switch by program handed to the engine, waiting for its result.
+    pending_switch: Option<PendingSwitch>,
     /// Activated with unsaved changes while programs have profiles: ask to save first.
     ask_switch_unsaved: bool,
     /// The program whose waiting switch the user put off (no question again for it).
@@ -104,6 +112,8 @@ pub struct JoystickGobloonApp {
     gremlin_dont_ask: bool,
     /// Time of a single click on the device hiding eye, waiting to see if a second one follows.
     cloak_click: Option<f64>,
+    /// Memory and CPU the program uses, for the status bar and the overlay.
+    usage: crate::usage::UsageMeter,
     /// Asking whether to switch device hiding to this state.
     cloak_confirm: Option<bool>,
     /// The user already agreed to close without saving.
@@ -137,6 +147,17 @@ pub struct JoystickGobloonApp {
 }
 
 /// A dialog with a title and lines of text; technical details go to the log file.
+/// A profile switch by program waiting for the engine (see `switch_done`).
+struct PendingSwitch {
+    app: crate::settings::AppEntry,
+    program: String,
+    file: String,
+    path: PathBuf,
+    previous: Option<PathBuf>,
+    previous_mode: Option<String>,
+    current: bool,
+}
+
 struct Alert {
     title: String,
     lines: Vec<String>,
@@ -201,7 +222,8 @@ impl JoystickGobloonApp {
             .and_then(|p| p.parent().map(|d| d.join("lang")));
         let mut i18n = I18n::new(crate::LANGUAGES, lang_dir.as_deref());
         i18n.set_language(&settings.language);
-        style::install_fonts(&cc.egui_ctx);
+        // The UI language's own text (a Chinese, Korean or added language) decides the fonts.
+        style::install_fonts(&cc.egui_ctx, style::has_cjk(&i18n.tr("language-name")));
         style::apply(&cc.egui_ctx, settings.theme);
         style::follow_system_theme(&cc.egui_ctx);
         // Double clicks (curve points, the hide button) follow the system's setting.
@@ -267,13 +289,16 @@ impl JoystickGobloonApp {
             scripts_checked: std::time::Instant::now(),
             calibration_view: Default::default(),
             calibration_window: false,
+            game_view: Default::default(),
+            game_window: false,
             calibrations: Default::default(),
-            hidhide_view: HidHideView::new(),
+            hidhide_view: HidHideView::new(cc.egui_ctx.clone()),
             hidhide_window: false,
             apps_view: AppsView::new(),
             device_access: crate::device_access::DeviceAccess::new(),
             system_part: crate::system_part_view::SystemPartView::new(),
             voice_panel: Default::default(),
+            overlay: crate::overlay::Overlay::new(),
             activation,
             was_active: false,
             switching: false,
@@ -287,6 +312,7 @@ impl JoystickGobloonApp {
             ask_switch_unsaved: false,
             autosave_writer: crate::autosave::Writer::start(),
             switched: None,
+            pending_switch: None,
             held_dismissed: None,
             switch_paused: false,
             device_baseline: None,
@@ -297,6 +323,7 @@ impl JoystickGobloonApp {
             gremlin_warning: None,
             gremlin_dont_ask: false,
             cloak_click: None,
+            usage: Default::default(),
             cloak_confirm: None,
             allow_close: false,
             was_minimized: false,
@@ -342,11 +369,13 @@ impl JoystickGobloonApp {
         match std::env::var("JOYSTICK_GOBLOON_START_PAGE").as_deref() {
             Ok("hidhide") => app.hidhide_window = true,
             Ok("modifiers") => app.show_modifiers = true,
+            Ok("modes") => app.show_modes = true,
             Ok("apps") => app.page = Page::Apps,
             Ok("vjoy") => app.page = Page::VJoy,
             Ok("viewer") => app.page = Page::Viewer,
             Ok("calibration") => app.page = Page::Calibration,
             Ok("scripts") => app.page = Page::Scripts,
+            Ok("game") => app.page = Page::Game,
             Ok("wizard") => app.wizard = Some(crate::wizard_view::Wizard::new()),
             Ok("switch-unsaved") => app.ask_switch_unsaved = true,
             Ok("switch-stopped") => {
@@ -379,6 +408,15 @@ impl JoystickGobloonApp {
             Ok("voice") => {
                 app.page = Page::Settings;
                 app.settings_tab = SettingsTab::Voice;
+            }
+            Ok("panels") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::Panels;
+            }
+            Ok("overlay") => {
+                app.page = Page::Settings;
+                app.settings_tab = SettingsTab::Overlay;
+                app.overlay.calibrating = true;
             }
             _ => {}
         }
@@ -523,6 +561,8 @@ impl JoystickGobloonApp {
                     });
                 }
                 self.drop_autosave(false);
+                style::note_text(&gob_gremlin::to_string(&loaded.profile));
+                style::note_text(&loaded.file_name());
                 self.profile = Some(loaded);
                 if how != OpenAs::Program {
                     self.activation.stop();
@@ -570,7 +610,7 @@ impl JoystickGobloonApp {
                 self.status = self.i18n.tr("status-switch-paused");
             }
         }
-        if dirty {
+        if dirty || self.pending_switch.is_some() {
             return;
         }
         let Some(app) = self
@@ -606,7 +646,33 @@ impl JoystickGobloonApp {
         self.activation.set_start_mode(app.mode.clone());
         self.sync_activation();
         self.vjoy_view.release();
-        match self.activation.reload(true) {
+        self.activation.reload(Job::Switch, true);
+        self.pending_switch = Some(PendingSwitch {
+            app,
+            program,
+            file,
+            path,
+            previous,
+            previous_mode,
+            current,
+        });
+    }
+
+    /// The engine took the profile of the program in front, or kept the old one.
+    fn switch_done(&mut self, result: Result<(), String>) {
+        let Some(PendingSwitch {
+            app,
+            program,
+            file,
+            path,
+            previous,
+            previous_mode,
+            current,
+        }) = self.pending_switch.take()
+        else {
+            return;
+        };
+        match result {
             Ok(()) => {
                 self.switcher.applied(&app);
                 self.switched = Some((app.key(), program.clone(), file.clone()));
@@ -616,6 +682,13 @@ impl JoystickGobloonApp {
                 self.status = self.i18n.trf(
                     "status-switched",
                     &[("program", program.into()), ("file", file.into())],
+                );
+            }
+            // Stopped (or another profile opened) while the engine took it: nothing to undo.
+            Err(e) if !self.activation.is_active() => {
+                log::info!(
+                    "{program} in front: {}: stopped meanwhile ({e})",
+                    path.display()
                 );
             }
             Err(e) => {
@@ -631,6 +704,22 @@ impl JoystickGobloonApp {
                     "status-switch-failed",
                     &[("program", program.into()), ("file", file.into())],
                 );
+            }
+        }
+    }
+
+    /// Results of starts and reloads the activation thread finished.
+    fn activation_done(&mut self) {
+        while let Some(done) = self.activation.take_done() {
+            match (done.job, done.result) {
+                (Job::Switch, result) => self.switch_done(result),
+                (_, Ok(())) => self.status = self.i18n.tr("status-active"),
+                // A reload that failed because the profile was stopped meanwhile.
+                (Job::Edit, Err(_)) if !self.activation.is_active() => {}
+                (_, Err(e)) => {
+                    let text = self.i18n.trf("activate-error", &[("error", e.into())]);
+                    self.error(text);
+                }
             }
         }
     }
@@ -671,7 +760,12 @@ impl JoystickGobloonApp {
         shape
     }
 
+    /// `None` until the input thread has looked for devices once: the controllers it has not
+    /// found yet would count as connected later and stop the profile.
     fn device_snapshot(&mut self) -> Option<DeviceBaseline> {
+        if !self.input.scanned() {
+            return None;
+        }
         let devices = self.input.devices();
         let served = crate::program_switch::served(&self.profile.as_ref()?.profile, &devices);
         Some(DeviceBaseline {
@@ -692,6 +786,8 @@ impl JoystickGobloonApp {
         }
         self.devices_checked = std::time::Instant::now();
         let Some(base) = &self.device_baseline else {
+            // Started before the first look for devices: the baseline is taken once it is done.
+            self.device_baseline = self.device_snapshot();
             return;
         };
         let devices = self.input.devices();
@@ -940,6 +1036,8 @@ impl JoystickGobloonApp {
             .i18n
             .trf("status-restored", &[("file", loaded.file_name().into())]);
         self.drop_autosave(false);
+        style::note_text(&gob_gremlin::to_string(&loaded.profile));
+        style::note_text(&loaded.file_name());
         self.profile = Some(loaded);
         self.activation.stop();
         self.activation.set_start_mode(None);
@@ -1234,6 +1332,8 @@ impl JoystickGobloonApp {
         // Named now, written after the first edit.
         loaded.autosave = crate::autosave::dir()
             .map(|dir| crate::autosave::next_file(&dir, &self.settings.autosave));
+        style::note_text(&gob_gremlin::to_string(&loaded.profile));
+        style::note_text(&loaded.file_name());
         self.profile = Some(loaded);
         self.activation.stop();
         self.activation.set_start_mode(None);
@@ -1369,6 +1469,48 @@ impl JoystickGobloonApp {
             self.apply_calibration(out);
             if attach {
                 self.calibration_window = false;
+            }
+        }
+        if self.game_window {
+            let title = self.i18n.tr("nav-game");
+            let mut ops = Vec::new();
+            let mut status = None;
+            let mut folder = None;
+            let vjoy = self.vjoy_view.device_list();
+            let (view, i18n) = (&mut self.game_view, &self.i18n);
+            let attach = match &self.profile {
+                Some(p) => {
+                    let name = p.file_name();
+                    let name = name.trim_end_matches(".xml");
+                    let mode = self.devices_view.mode(&p.profile);
+                    let game_ctx = crate::game_view::Context {
+                        profile: &p.profile,
+                        profile_name: name,
+                        devices: &devices,
+                        vjoy: &vjoy,
+                        sent: self.activation.outputs(),
+                        mode: &mode,
+                        folders: &self.settings.game_folders,
+                    };
+                    detached_window(ctx, "game", &title, BIG_WINDOW, |ui| {
+                        let out = view.show(ui, i18n, &game_ctx, &mut ops, true);
+                        status = status.take().or(out.status);
+                        folder = folder.take().or(out.add_folder);
+                        out.toggle_window
+                    })
+                }
+                None => true,
+            };
+            if let Some(s) = status {
+                self.status = s;
+            }
+            if let Some(f) = folder {
+                self.settings.game_folders.push(f);
+                self.settings.save();
+            }
+            self.apply_ops(ops);
+            if attach {
+                self.game_window = false;
             }
         }
         if self.hidhide_window {
@@ -1607,6 +1749,12 @@ impl JoystickGobloonApp {
                     self.page = page;
                 }
             }
+            // The Game page has its own drawn icon: the icon font has none like it.
+            if style::game_nav_toggle(ui, self.page == Page::Game, &self.i18n.tr("nav-game"))
+                .clicked()
+            {
+                self.page = Page::Game;
+            }
         });
         ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
             ui.add_space(8.0);
@@ -1659,13 +1807,7 @@ impl JoystickGobloonApp {
         self.sync_activation();
         // The vJoy tester must not hold a device the profile needs.
         self.vjoy_view.release();
-        match self.activation.start() {
-            Ok(()) => self.status = self.i18n.tr("status-active"),
-            Err(e) => {
-                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
-                self.error(text);
-            }
-        }
+        self.activation.start(Job::Start);
     }
 
     /// Applies the edited profile to the running engine without releasing its virtual devices.
@@ -1673,13 +1815,7 @@ impl JoystickGobloonApp {
         self.sync_activation();
         // The vJoy tester must not hold a device the profile now needs.
         self.vjoy_view.release();
-        match self.activation.reload(false) {
-            Ok(()) => self.status = self.i18n.tr("status-active"),
-            Err(e) => {
-                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
-                self.error(text);
-            }
-        }
+        self.activation.reload(Job::Edit, false);
     }
 
     /// Hands the current profile to the shared activation (for the tray menu too).
@@ -1714,10 +1850,7 @@ impl JoystickGobloonApp {
         // Against the files as the running profile read them.
         if self.activation.script_files_changed() {
             log::info!("script file changed: reloading the profile");
-            if let Err(e) = self.activation.reload(false) {
-                let text = self.i18n.trf("activate-error", &[("error", e.into())]);
-                self.error(text);
-            }
+            self.activation.reload(Job::Edit, false);
         }
     }
 
@@ -1876,7 +2009,7 @@ impl JoystickGobloonApp {
                 self.status = self.i18n.tr(key);
                 self.vjoy_view.release();
                 self.vjoy_view = VJoyView::new();
-                self.hidhide_view = HidHideView::new();
+                self.hidhide_view.renew();
                 self.device_access = crate::device_access::DeviceAccess::new();
             }
             Err(e) => {
@@ -1900,7 +2033,7 @@ impl JoystickGobloonApp {
                 self.status = self.i18n.tr("access-granted");
                 // They found no access when they were made: make them again.
                 self.vjoy_view = VJoyView::new();
-                self.hidhide_view = HidHideView::new();
+                self.hidhide_view.renew();
             }
             Some(Err(e)) => {
                 let text = self.i18n.trf("access-error", &[("error", e.into())]);
@@ -1946,12 +2079,16 @@ impl JoystickGobloonApp {
         self.virtual_devices_banner(ui);
         self.devices_view.logical = self.logical_device();
         self.devices_view.voice = self.activation.status().and_then(|s| s.voice);
+        self.devices_view.osc.receiving = self.input.osc_status();
         let devices = self.input.devices();
         let mut ops = Vec::new();
         let vjoy = self.vjoy_view.device_list();
         (self.devices_view.max_gamepads, self.devices_view.gamepads) =
             self.vjoy_view.gamepad_list();
         let gaming_only = self.settings.hidhide_gaming_only;
+        for d in &devices {
+            style::note_text(&d.info.name);
+        }
         self.hidhide_view
             .track_inputs(devices.iter().map(|d| d.info.guid.clone()).collect());
         self.devices_view.hiding_on = self.hidhide_view.cloak(gaming_only) == Some(true);
@@ -1971,6 +2108,11 @@ impl JoystickGobloonApp {
         self.devices_view.experimental = self.settings.experimental;
         self.devices_view.monotonic_curves = self.settings.monotonic_curves;
         self.devices_view.curve_right_click_invert = self.settings.curve_right_click_invert;
+        if self.devices_view.curve_presets != self.settings.curve_presets {
+            self.devices_view
+                .curve_presets
+                .clone_from(&self.settings.curve_presets);
+        }
         self.devices_view.leds = if self.settings.experimental {
             self.leds.update(&devices, ui.ctx());
             self.leds.guids(&devices)
@@ -2031,6 +2173,10 @@ impl JoystickGobloonApp {
         if std::mem::take(&mut self.devices_view.open_modifiers) {
             self.show_modifiers = true;
         }
+        if std::mem::take(&mut self.devices_view.osc.open_settings) {
+            self.page = Page::Settings;
+            self.settings_tab = SettingsTab::Panels;
+        }
         self.apply_ops(ops);
     }
 
@@ -2056,11 +2202,28 @@ impl JoystickGobloonApp {
         let (previews, ops): (Vec<Op>, Vec<Op>) = ops.into_iter().partition(|op| {
             matches!(
                 op,
-                Op::PreviewSound { .. } | Op::PreviewSpeech(_) | Op::PreviewLight { .. }
+                Op::PreviewSound { .. }
+                    | Op::PreviewSpeech(_)
+                    | Op::PreviewLight { .. }
+                    | Op::SaveCurvePreset(_)
+                    | Op::DeleteCurvePreset(_)
             )
         });
         for op in previews {
             match op {
+                // Presets live in the settings, not in the profile.
+                Op::SaveCurvePreset(curve) => {
+                    let presets = &mut self.settings.curve_presets;
+                    match presets.iter_mut().find(|p| p.name == curve.name) {
+                        Some(p) => *p = curve,
+                        None => presets.push(curve),
+                    }
+                    self.settings.save();
+                }
+                Op::DeleteCurvePreset(name) => {
+                    self.settings.curve_presets.retain(|p| p.name != name);
+                    self.settings.save();
+                }
                 Op::PreviewSound { file, volume } => self.media.play(&file, volume),
                 Op::PreviewSpeech(request) => self.media.speak(request),
                 Op::PreviewLight { device, led } => {
@@ -2129,6 +2292,7 @@ impl JoystickGobloonApp {
                 self.activation
                     .set_voice(crate::voice::config(&self.settings));
             }
+            Change::Overlay => {}
         }
         self.settings.save();
     }
@@ -2137,8 +2301,55 @@ impl JoystickGobloonApp {
 impl eframe::App for JoystickGobloonApp {
     /// Runs every frame, and also while the window is in the tray or minimized (eframe then
     /// draws nothing and skips [`Self::ui`]).
+    /// Fully transparent: the overlay window needs it, and the main window's panels paint all
+    /// of it.
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0; 4]
+    }
+
+    /// The running profile stops now: the activation thread and the tray keep the activation
+    /// alive past the window, and `main` waits for the stop actions only of runners already
+    /// stopped ([`gob_engine::wait_stopped`]).
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.activation.stop();
+    }
+
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.sync_activation();
+        // Placing the overlay ends when its tab is not shown: another page, or the window
+        // hidden or minimized (otherwise it would stay on screen catching clicks).
+        let minimized = ctx.input(|i| i.viewport().minimized).unwrap_or(false);
+        let in_tray = self.main_window.is_some_and(crate::platform::in_tray);
+        if self.page != Page::Settings
+            || self.settings_tab != SettingsTab::Overlay
+            || minimized
+            || in_tray
+        {
+            self.overlay.calibrating = false;
+        }
+        // The overlay follows the running profile, also while this window is in the tray.
+        let status = self.activation.status();
+        let recording = crate::key_capture::recording(ctx);
+        // Memory and CPU for the overlay: read here, so it follows them in the tray too.
+        let usage = (self.settings.overlay_on && self.settings.overlay_usage)
+            .then(|| self.usage.read())
+            .flatten();
+        if usage.is_some() {
+            ctx.request_repaint_after(crate::usage::EVERY);
+        }
+        if let Some(pos) = self.overlay.update(
+            ctx,
+            &self.i18n,
+            &self.settings,
+            status.as_ref(),
+            self.profile.as_ref().map(|p| &p.profile),
+            usage,
+            recording,
+        ) {
+            // Placing is done.
+            self.settings.overlay_pos = Some(pos);
+            self.settings.save();
+        }
         self.watch_scripts();
         self.switch_by_program();
         // Started or stopped from the tray menu (maybe while the window was hidden).
@@ -2186,10 +2397,8 @@ impl eframe::App for JoystickGobloonApp {
             self.update = Some(prepared);
             self.request(Pending::Update, ctx);
         }
-        if let Some(e) = self.activation.take_error() {
-            let text = self.i18n.trf("activate-error", &[("error", e.into())]);
-            self.error(text);
-        }
+        self.activation_done();
+        style::load_cjk_if_wanted(ctx);
         self.update_title(ctx);
         if self.hide_frames > 0 {
             self.vjoy_view.release();
@@ -2301,6 +2510,7 @@ impl eframe::App for JoystickGobloonApp {
             }
         }
         self.input.set_event_mode(self.settings.input_events);
+        self.input.set_osc(self.settings.osc_addr());
         self.input
             .set_poll_interval(std::time::Duration::from_millis(u64::from(
                 self.settings.poll_interval_ms,
@@ -2318,9 +2528,14 @@ impl eframe::App for JoystickGobloonApp {
         }
         // Detached windows stay on screen while the main window is only minimized.
         let live = !in_tray
-            && ((shown && matches!(self.page, Page::Devices | Page::Viewer | Page::Calibration))
+            && ((shown
+                && matches!(
+                    self.page,
+                    Page::Devices | Page::Viewer | Page::Calibration | Page::Game
+                ))
                 || self.viewer_window
-                || self.calibration_window);
+                || self.calibration_window
+                || self.game_window);
         self.live_input
             .store(live, std::sync::atomic::Ordering::Relaxed);
         // Always drained; events from before the window came back are stale and only dropped.
@@ -2435,6 +2650,18 @@ impl eframe::App for JoystickGobloonApp {
                     }
                     ui.separator();
                 }
+                // Read only while this window is drawn; its redraw costs more than the reading.
+                if let Some(r) = self.usage.read() {
+                    let text = format!("{}  {}", icon::MEMORY, r.text());
+                    let tip = self.i18n.trf(
+                        "status-usage",
+                        &[("mb", r.mb.into()), ("cpu", r.cpu_text().into())],
+                    );
+                    ui.label(RichText::new(text).size(12.0)).on_hover_text(tip);
+                    ui.separator();
+                    // Woken only when nothing else redrew the window in the meantime.
+                    ctx.request_repaint_after(crate::usage::EVERY);
+                }
                 ui.label(RichText::new(&self.status).size(12.0).weak());
             });
         });
@@ -2535,6 +2762,52 @@ impl eframe::App for JoystickGobloonApp {
                     }
                     self.apply_calibration(out);
                 }
+                Page::Game if self.game_window => {
+                    empty_state(ui, icon::ARROW_SQUARE_OUT, &self.i18n.tr("game-in-window"));
+                    ui.vertical_centered(|ui| {
+                        let text = format!(
+                            "{}  {}",
+                            icon::ARROW_SQUARE_IN,
+                            self.i18n.tr("viewer-attach")
+                        );
+                        if ui.button(text).clicked() {
+                            self.game_window = false;
+                        }
+                    });
+                }
+                Page::Game => match &self.profile {
+                    None => empty_state(ui, icon::GAME_CONTROLLER, &self.i18n.tr("no-profile")),
+                    Some(p) => {
+                        let devices = self.input.devices();
+                        let vjoy = self.vjoy_view.device_list();
+                        let name = p.file_name();
+                        let mode = self.devices_view.mode(&p.profile);
+                        let game_ctx = crate::game_view::Context {
+                            profile: &p.profile,
+                            profile_name: name.trim_end_matches(".xml"),
+                            devices: &devices,
+                            vjoy: &vjoy,
+                            sent: self.activation.outputs(),
+                            mode: &mode,
+                            folders: &self.settings.game_folders,
+                        };
+                        let mut ops = Vec::new();
+                        let out = self
+                            .game_view
+                            .show(ui, &self.i18n, &game_ctx, &mut ops, false);
+                        if out.toggle_window {
+                            self.game_window = true;
+                        }
+                        if let Some(s) = out.status {
+                            self.status = s;
+                        }
+                        if let Some(f) = out.add_folder {
+                            self.settings.game_folders.push(f);
+                            self.settings.save();
+                        }
+                        self.apply_ops(ops);
+                    }
+                },
                 Page::Scripts => match &self.profile {
                     None => empty_state(ui, icon::CODE, &self.i18n.tr("no-profile")),
                     Some(p) => {
@@ -2574,6 +2847,8 @@ impl eframe::App for JoystickGobloonApp {
                             polls_devices: self.input.polls_devices(),
                             system_part: &mut self.system_part,
                             voice: &mut self.voice_panel,
+                            overlay: &mut self.overlay,
+                            osc: self.input.osc_status(),
                         },
                     );
                     if let Some(change) = change {

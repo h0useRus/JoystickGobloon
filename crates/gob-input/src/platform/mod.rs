@@ -3,7 +3,7 @@
 //! `windows/`: DirectInput, the keyboard hook and WinMM controller numbers;
 //! `linux/`: evdev controllers and keyboards, joydev numbers; `none.rs`: no controllers.
 
-use crate::{Calibrations, DeviceState, InputEvent};
+use crate::{Calibrations, DeviceState};
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -13,7 +13,9 @@ mod none;
 mod windows;
 
 #[cfg(target_os = "linux")]
-pub use linux::{Nodes, Opener, controller_nodes, set_opener};
+pub use linux::{
+    Nodes, Opener, controller_nodes, keyboard::held_keys, keyboard::key_held, set_opener,
+};
 #[cfg(target_os = "linux")]
 pub(crate) use linux::{Platform, joystick_ids, keyboard};
 #[cfg(not(any(windows, target_os = "linux")))]
@@ -24,13 +26,22 @@ pub(crate) use windows::{Platform, joystick_ids, keyboard};
 /// A platform's way to find, open and wait for controllers.
 pub(crate) trait Backend: Sized {
     /// What [`Backend::attached`] found, to open it.
-    type Found;
+    type Found: Send + 'static;
     type Device: Device;
     /// Devices can be read exclusively ([`Device::set_exclusive`], crate::exclusive).
     const EXCLUSIVE: bool = false;
+    /// [`Backend::attached`] can take long (DirectInput's enumeration: tens to hundreds of
+    /// milliseconds with some devices): a backend of its own looks on another thread, so reading
+    /// the controllers never waits for it.
+    const SCAN_ON_THREAD: bool = false;
 
     /// `None` when the platform's input API is not available.
     fn new() -> Option<Self>;
+    /// Waits until controllers may have come or gone: `rescan` here; a platform that is told
+    /// about devices arriving waits for that instead.
+    fn wait_for_attach(&self, rescan: std::time::Duration) {
+        std::thread::sleep(rescan);
+    }
     /// Attached controllers with their device ids (Gremlin's GUID format).
     fn attached(&self) -> Vec<(String, Self::Found)>;
     /// Opens a controller. `events`: it is read when it signals a change (event mode) instead
@@ -48,6 +59,14 @@ pub(crate) trait Backend: Sized {
     );
 }
 
+/// A button or hat change a device buffered (ids 1-based); the device is the one read, so the
+/// platform code never copies its id per event.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum Buffered {
+    Button { id: u16, pressed: bool },
+    Hat { id: u8, direction: Option<u16> },
+}
+
 /// An open controller.
 pub(crate) trait Device {
     fn state(&self) -> &DeviceState;
@@ -58,7 +77,7 @@ pub(crate) trait Device {
     /// Reads the device into `state` (the old one moves to `previous`). Button and hat changes
     /// the device buffered go to `emit` in order (so short presses are not lost); the caller
     /// finds the rest by comparing `previous` and `state`. False when the device is gone.
-    fn read(&mut self, emit: &mut dyn FnMut(InputEvent)) -> bool;
+    fn read(&mut self, emit: &mut dyn FnMut(Buffered)) -> bool;
     /// Signals its changes, so `wait` wakes for it (event mode); false: it is polled.
     fn signals(&self) -> bool {
         true

@@ -95,7 +95,7 @@ pub fn keep_locally() -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    std::fs::write(&path, super::to_text(&layout)?)
+    gob_core::file::write_whole(&path, super::to_text(&layout)?.as_bytes())
         .map_err(|e| format!("{}: {e}", path.display()))?;
     let _ = std::fs::remove_file(path.with_extension("gob.migrated"));
     Ok(())

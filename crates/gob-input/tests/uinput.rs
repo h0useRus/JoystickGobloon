@@ -266,7 +266,7 @@ fn virtual_stick_reads_back() {
     stick.send(&[(EV_KEY, BTN_TRIGGER_HAPPY + 63, 0)]);
     let pressed = |p: bool| move |e: &InputEvent| matches!(e, InputEvent::Button { id: 96, pressed, .. } if *pressed == p);
     let e = wait_for(&events, pressed(true));
-    assert!(matches!(e, InputEvent::Button { device, .. } if device == guid));
+    assert!(matches!(e, InputEvent::Button { device, .. } if *device == *guid));
     wait_for(&events, pressed(false));
 
     stick.send(&[(EV_ABS, ABS_HAT0X, 1), (EV_ABS, ABS_HAT0Y, -1)]);

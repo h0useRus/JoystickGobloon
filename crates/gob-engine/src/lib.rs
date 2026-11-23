@@ -20,13 +20,15 @@ mod modes;
 mod motion;
 mod platform;
 mod runner;
+mod tap;
 
-pub use engine::Engine;
+pub use engine::{Engine, VOICE_GROUP_OPEN};
 pub use gob_script::ScriptError;
 pub use gob_voice::VoiceConfig;
 pub use lighting::to_led;
-pub use media::{Media, SpeechQueue, SpeechRequest, voices};
-pub use runner::{Latency, Runner, RunnerStatus, VoiceHeard, VoiceStatus, wait_stopped};
+pub use media::{Media, NaturalVoices, SpeechQueue, SpeechRequest, set_natural_voices, voices};
+pub use runner::{Latency, Reloader, Runner, RunnerStatus, VoiceHeard, VoiceStatus, wait_stopped};
+pub use tap::{OutputTap, Sent, Tapped};
 
 /// Values of the logical device's inputs that actions wrote, by input id.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -130,6 +132,9 @@ pub trait Output {
     /// system's default one): once when the first voice-input action on it is pressed, once
     /// when the last is released. What is heard comes back as [`Engine::voice_command`].
     fn voice_listen(&mut self, _microphone: &str, _on: bool) {}
+    /// Sends an OSC message (send-osc action). Must not block: the runner hands it to a
+    /// sending thread.
+    fn send_osc(&mut self, _host: &str, _port: u16, _message: &gob_osc::Message) {}
     /// Last value sent to a vJoy input, for conditions; `None` if never set.
     fn vjoy_state(&self, _device: u32, _kind: InputKind, _id: u32) -> Option<Value> {
         None

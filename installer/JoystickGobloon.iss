@@ -125,9 +125,12 @@ Name: "vjoy"; Description: "{cm:InstallVJoy}"; GroupDescription: "{cm:Drivers}";
 
 [Files]
 Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
-; The speech library for voice commands (libvosk and its MinGW runtime; release.yml fetches it).
+; The speech libraries for voice commands (Vosk with its MinGW runtime, sherpa-onnx with ONNX
+; Runtime; release.yml fetches them).
 Source: "..\target\voice\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\lang\*.ftl"; DestDir: "{app}\lang"; Flags: ignoreversion
+; Game export plugins (release.yml copies plugins\export there, without the dev folders).
+Source: "..\target\export\*"; DestDir: "{app}\export"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; Extracted to {tmp} only when needed (InstallHidHide / InstallVJoy); not installed or

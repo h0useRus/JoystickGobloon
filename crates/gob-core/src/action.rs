@@ -218,6 +218,11 @@ pub enum ActionKind<'a> {
         lower: Vec<&'a str>,
         upper: Vec<&'a str>,
     },
+    /// Points split an axis into zones, each with its own output and actions (crate::zones).
+    AxisZones {
+        points: Vec<f64>,
+        zones: Vec<crate::zones::AxisZone<'a>>,
+    },
     /// `Pause`, `Resume` or `Toggle` the whole profile.
     PauseResume {
         operation: &'a str,
@@ -225,6 +230,14 @@ pub enum ActionKind<'a> {
     RunCommand {
         executable: &'a str,
         arguments: &'a str,
+    },
+    /// Joystick Gobloon's own action: sends OSC message `address` with `args` to `host`:`port`
+    /// (crate::osc).
+    SendOsc {
+        host: &'a str,
+        port: u16,
+        address: &'a str,
+        args: Vec<crate::osc::OscArg>,
     },
     /// Sequence of timed steps; `exclusive`/`preemptive` are kept but not executed.
     Macro {
@@ -435,7 +448,7 @@ impl MergeOp {
 }
 
 /// Mouse buttons as Gremlin names them in profiles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MouseButton {
     Left,
     Right,
@@ -709,11 +722,13 @@ pub const SUPPORTED_KINDS: &[&str] = &[
     "smart-toggle",
     "delay",
     "split-axis",
+    crate::zones::AXIS_ZONES,
     "pause-resume",
     "run-command",
     "macro",
     "voice-input",
     crate::button_axis::BUTTON_AXIS,
+    crate::osc::SEND_OSC,
 ];
 
 impl Action {
@@ -804,6 +819,7 @@ impl Action {
                     | "description"
                     | "response-curve"
                     | "split-axis"
+                    | "axis-zones"
                     | "merge-axis"
                     | "axis-delta"
                     | "dual-axis-deadzone"
@@ -1007,8 +1023,22 @@ impl Action {
                 lower: self.refs_in("lower-actions"),
                 upper: self.refs_in("upper-actions"),
             },
+            crate::zones::AXIS_ZONES => {
+                let (points, zones) = crate::zones::zones(self);
+                ActionKind::AxisZones { points, zones }
+            }
             "pause-resume" => ActionKind::PauseResume {
                 operation: self.str("operation").unwrap_or("Pause"),
+            },
+            crate::osc::SEND_OSC => ActionKind::SendOsc {
+                host: self
+                    .str("host")
+                    .map(str::trim)
+                    .filter(|h| !h.is_empty())
+                    .unwrap_or(crate::osc::OSC_SEND_HOST),
+                port: self.parse("port").unwrap_or(crate::osc::OSC_SEND_PORT),
+                address: self.str("address").unwrap_or_default().trim(),
+                args: crate::osc::send_osc_args(&self.items),
             },
             "run-command" => ActionKind::RunCommand {
                 executable: self.str("executable").unwrap_or_default(),

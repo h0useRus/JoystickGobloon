@@ -240,6 +240,7 @@ fn profile() -> String {
         root("r-b7", &["toggle"]),
         root("r-b8", &["pause"]),
         root("r-a5", &["split"]),
+        root("r-a12", &["zones"]),
         root("r-b9", &["run"]),
         root("r-b10", &["mtempo"]),
         root("r-b11", &["mkeys"]),
@@ -506,6 +507,18 @@ fn profile() -> String {
             ),
         ),
         vjoy("vsplit", "axis", 2),
+        act(
+            "zones",
+            "axis-zones",
+            &format!(
+                "{}<zone-0>{}<action-id>vzone</action-id></zone-0><zone-1>{}{}<action-id>vzone</action-id></zone-1>",
+                prop("string", "points", "0.8"),
+                prop("string", "output", "rescale"),
+                prop("string", "output", "fixed"),
+                prop("float", "value", "1.0")
+            ),
+        ),
+        vjoy("vzone", "axis", 4),
         act_on(
             "run",
             "run-command",
@@ -609,6 +622,7 @@ fn profile() -> String {
             gob_core::LOGICAL_DEVICE_GUID
         ),
         input("axis", 11, "Default", "r-a11", ""),
+        input("axis", 12, "Default", "r-a12", ""),
         input("axis", 9, "Default", "r-a9", ""),
         input("axis", 10, "Default", "r-a9", ""),
         input("hat", 2, "Default", "r-h2", ""),
@@ -932,6 +946,26 @@ fn split_axis_rescales_halves() {
         r.take(),
         [Out::Axis(2, 0.0), Out::Axis(2, 1.0), Out::Axis(2, 0.0)]
     );
+}
+
+#[test]
+fn axis_zones_stretch_or_fix_their_stretch() {
+    let mut r = Rig::new();
+    // Below 0.8 the stretch -1..0.8 fills the travel; from the detent on, a fixed 1.0.
+    r.axis(12, -1.0);
+    r.axis(12, -0.1);
+    r.axis(12, 0.9);
+    let out = r.take();
+    // Leaving the lower zone upwards gives it its top edge first.
+    assert_eq!(out.len(), 4, "{out:?}");
+    let Out::Axis(4, a) = out[0] else {
+        panic!("{out:?}")
+    };
+    let Out::Axis(4, b) = out[1] else {
+        panic!("{out:?}")
+    };
+    assert_eq!(out[2..], [Out::Axis(4, 1.0), Out::Axis(4, 1.0)]);
+    assert!((a + 1.0).abs() < 1e-5 && b.abs() < 1e-5, "{a} {b}");
 }
 
 #[test]
@@ -2356,4 +2390,101 @@ fn axis_condition_stops_relative_motion_of_the_branch_it_leaves() {
     r.take();
     r.tick(400);
     assert!(r.take().is_empty(), "keeps moving after leaving the branch");
+}
+
+/// Saying a voice group opens it: only what is in it is listened for until a command in it is
+/// heard or the group closes by itself.
+#[test]
+fn a_voice_group_opens_and_closes() {
+    let xml = r#"<profile app="Gobloon" version="1"><inputs/><settings/><library/>
+        <modes><mode>Default</mode></modes>
+        <voice-commands><command id="1"><phrase>lights on</phrase></command>
+        <group id="2"><phrase>radio</phrase>
+            <command id="3"><phrase>attack</phrase></command></group>
+        </voice-commands></profile>"#;
+    let p = gob_gremlin::from_str(xml).unwrap();
+    let mut e = Engine::new(&p, &HashMap::new());
+    let (mut out, t0) = (Recorder::default(), Instant::now());
+    let top = e.voice_phrases().to_vec();
+    assert!(top.contains(&(3, "radio attack".to_string())));
+    assert!(!e.take_voice_phrases_changed());
+    e.voice_command(2, t0, &mut out);
+    assert_eq!(e.voice_group(), Some(2));
+    assert!(e.take_voice_phrases_changed());
+    assert_eq!(e.voice_phrases(), [(3, "attack".to_string())]);
+    // A command in it closes the group.
+    e.voice_command(3, ms(t0, 500), &mut out);
+    assert_eq!(e.voice_group(), None);
+    assert!(e.take_voice_phrases_changed());
+    assert_eq!(e.voice_phrases(), top);
+    // Left open, it closes by itself.
+    e.voice_command(2, ms(t0, 1000), &mut out);
+    assert!(e.take_voice_phrases_changed());
+    e.tick(ms(t0, 1000) + gob_engine::VOICE_GROUP_OPEN, &mut out);
+    assert_eq!(e.voice_group(), None);
+    assert!(e.take_voice_phrases_changed());
+}
+
+/// A pressed input shows its binding's description until another one with a description is
+/// pressed; releases, axes and bindings without one leave it. The held modifiers name the layer.
+#[test]
+fn last_action_and_layer_for_the_overlay() {
+    let labelled = |id: &str, child: &str, label: &str| {
+        act(
+            id,
+            "root",
+            &format!(
+                "<actions><action-id>{child}</action-id></actions>{}",
+                prop("string", "action-label", label)
+            ),
+        )
+    };
+    let inputs = [
+        layered_input("button", 4, &[("", false, "r1"), ("M1", false, "r3")]),
+        layered_input("button", 5, &[("", false, "r5")]),
+        layered_input("button", 6, &[("", false, "r6")]),
+        layered_input("axis", 2, &[("", false, "ra1")]),
+    ]
+    .concat();
+    let library = [
+        labelled("r1", "b1", "Landing gear"),
+        labelled("r3", "b3", "Flaps"),
+        root("r5", &["b5"]),
+        labelled("r6", "b5", "None"),
+        labelled("ra1", "x1", "Throttle"),
+        vjoy("b1", "button", 1),
+        vjoy("b3", "button", 3),
+        vjoy("b5", "button", 5),
+        vjoy("x1", "axis", 1),
+    ]
+    .concat();
+    let xml = format!(
+        r#"<profile app="Gobloon" version="1"><inputs>{inputs}</inputs><settings/><library>{library}</library>
+        <modes><mode>Default</mode></modes><modifiers>
+        <modifier name="M1" device-id="{DEV}" input-type="button" input-id="30"/>
+        </modifiers></profile>"#
+    );
+    let p = gob_gremlin::from_str(&xml).unwrap();
+    let mut e = Engine::new(&p, &HashMap::new());
+    let mut out = Recorder::default();
+    assert_eq!(e.last_action(), None);
+    assert!(e.current_layer().is_base());
+    button(&mut e, &mut out, 4, true);
+    assert_eq!(e.last_action(), Some("Landing gear"));
+    button(&mut e, &mut out, 4, false);
+    assert_eq!(e.last_action(), Some("Landing gear"), "a release keeps it");
+    // No description, or Gremlin's "None": the last one stays.
+    button(&mut e, &mut out, 5, true);
+    button(&mut e, &mut out, 6, true);
+    assert_eq!(e.last_action(), Some("Landing gear"));
+    // Axis motion is no press.
+    send(&mut e, &mut out, InputKind::Axis, 2, Value::Axis(0.5));
+    assert_eq!(e.last_action(), Some("Landing gear"));
+    button(&mut e, &mut out, 30, true);
+    assert_eq!(e.current_layer().to_string(), "M1");
+    button(&mut e, &mut out, 4, true);
+    assert_eq!(e.last_action(), Some("Flaps"), "the layer's binding");
+    button(&mut e, &mut out, 4, false);
+    button(&mut e, &mut out, 30, false);
+    assert!(e.current_layer().is_base());
 }

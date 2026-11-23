@@ -4,66 +4,19 @@
 //! `input` group); otherwise there is none and key recording uses the window's key events.
 //! Names are English, by set 1 scan code (the US layout's key caps).
 
-use std::fs::File;
-use std::os::fd::AsRawFd;
-
 use gob_core::Key;
-
-const KEY_CNT: usize = 0x300;
-/// Esc, A, Z, Space: every keyboard has them.
-const KEYBOARD_KEYS: [usize; 4] = [1, 30, 44, 57];
-
-/// `ioctl(_IOC(_IOC_READ, 'E', nr, len))` into `buf`.
-fn read_bits(file: &File, nr: u32, buf: &mut [u8]) -> bool {
-    let request = (2u32 << 30) | ((buf.len() as u32) << 16) | (u32::from(b'E') << 8) | nr;
-    // SAFETY: the request writes at most `buf.len()` bytes into `buf`.
-    unsafe { libc::ioctl(file.as_raw_fd(), request as _, buf.as_mut_ptr()) >= 0 }
-}
-
-fn has(bits: &[u8], bit: usize) -> bool {
-    bits.get(bit / 8).is_some_and(|b| b & (1 << (bit % 8)) != 0)
-}
-
-/// The keyboards that can be read; `None` when there are none (no access).
-fn keyboards() -> Option<Vec<File>> {
-    let files: Vec<File> = std::fs::read_dir("/dev/input")
-        .ok()?
-        .flatten()
-        .filter(|e| {
-            e.file_name()
-                .to_str()
-                .is_some_and(|n| n.starts_with("event"))
-        })
-        .filter_map(|e| File::open(e.path()).ok())
-        .filter(|f| {
-            let mut keys = [0u8; KEY_CNT / 8];
-            read_bits(f, 0x21, &mut keys) && KEYBOARD_KEYS.iter().all(|&k| has(&keys, k))
-        })
-        .collect();
-    (!files.is_empty()).then_some(files)
-}
 
 /// Keys held on any keyboard; `None` without access to the keyboards.
 pub(super) fn held() -> Option<Vec<Key>> {
-    let mut keys = Vec::new();
-    for file in keyboards()? {
-        let mut down = [0u8; KEY_CNT / 8];
-        if !read_bits(&file, 0x18, &mut down) {
-            continue;
-        }
-        for code in (0..KEY_CNT as u16).filter(|&c| has(&down, usize::from(c))) {
-            if let Some((scan_code, extended)) = gob_uinput::keys::scan_code(code) {
-                let key = Key {
-                    scan_code,
-                    extended,
-                };
-                if !keys.contains(&key) {
-                    keys.push(key);
-                }
-            }
-        }
-    }
-    Some(keys)
+    let keys = gob_input::held_keys()?;
+    Some(
+        keys.into_iter()
+            .map(|(scan_code, extended)| Key {
+                scan_code,
+                extended,
+            })
+            .collect(),
+    )
 }
 
 /// English name, e.g. "Right Ctrl"; `None` for keys without one here.

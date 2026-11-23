@@ -199,8 +199,26 @@ impl Client {
         code: Code,
         payload: &[u8],
     ) -> Result<(Vec<u8>, Option<OwnedFd>), Error> {
-        send(&self.stream, code, payload, None)?;
-        let reply = recv(&self.stream)?.ok_or(Error::Protocol("connection closed"))?;
+        // The service may have refused this connection already (a user it is not for, too many
+        // clients) and closed it: its reply is still waiting to be read.
+        let mut refused = None;
+        if let Err(e) = send(&self.stream, code, payload, None) {
+            if !matches!(
+                e.kind(),
+                io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset
+            ) {
+                return Err(e.into());
+            }
+            refused = Some(e);
+        }
+        let reply = match recv(&self.stream) {
+            Ok(Some(reply)) => reply,
+            Ok(None) => match refused {
+                Some(e) => return Err(e.into()),
+                None => return Err(Error::Protocol("connection closed")),
+            },
+            Err(e) => return Err(refused.unwrap_or(e).into()),
+        };
         if reply.code == Code::Error as u16 {
             let e = ErrorReply::read(&reply.payload).ok_or(Error::Protocol("short error"))?;
             return Err(Error::Service(e.code));

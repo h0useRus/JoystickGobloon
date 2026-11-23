@@ -1,7 +1,12 @@
 //! Profile activation shared by the main window and the tray menu. eframe does not run the
 //! app's `update` while the window is hidden in the tray, so the tray menu starts and stops
 //! the engine through this object instead of asking the app.
+//!
+//! Starting and reloading run on a worker thread of their own (building the engine runs the
+//! profile's scripts, taking the virtual devices talks to drivers or System Gobloon), so the
+//! window never waits for them; each result comes back as a [`Done`]. Stopping is immediate.
 
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use eframe::egui;
@@ -10,7 +15,35 @@ use gob_engine::{LogicalValues, Runner, RunnerStatus};
 use gob_input::InputHandle;
 
 #[derive(Clone)]
-pub struct Activation(Arc<Mutex<Inner>>);
+pub struct Activation {
+    inner: Arc<Mutex<Inner>>,
+    worker: Sender<Request>,
+}
+
+/// What a start or reload was asked for, so the window knows what its result means.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Job {
+    /// Activate in the window.
+    Start,
+    /// The edited profile or a changed script file handed to the running engine.
+    Edit,
+    /// Another profile because another program came to the front.
+    Switch,
+    /// Activate from the tray menu.
+    Tray,
+}
+
+/// A finished start or reload.
+pub struct Done {
+    pub job: Job,
+    pub result: Result<(), String>,
+}
+
+enum Request {
+    Start(Job),
+    /// `fresh`: another profile takes over (stop and start events run), not an edit.
+    Reload(Job, bool),
+}
 
 struct Inner {
     runner: Option<Runner>,
@@ -18,8 +51,13 @@ struct Inner {
     profile: Option<(Profile, String)>,
     input: InputHandle,
     ctx: egui::Context,
-    /// A start from the tray failed; the app shows it once the window is visible.
-    error: Option<String>,
+    /// Finished starts and reloads, for the window (a tray start's error shows once the window
+    /// is visible).
+    done: Vec<Done>,
+    /// A start is on its way to the worker or running there.
+    starting: bool,
+    /// Counts stops: a start that finishes after a stop is dropped.
+    generation: u64,
     /// Default LED colors, set when a profile that changed them stops; `None`: LED control
     /// is off (experimental features off).
     led_defaults: Option<Vec<gob_engine::Light>>,
@@ -38,19 +76,32 @@ struct Inner {
 
 impl Activation {
     pub fn new(input: InputHandle, ctx: egui::Context) -> Self {
-        Self(Arc::new(Mutex::new(Inner {
+        let inner = Arc::new(Mutex::new(Inner {
             runner: None,
             profile: None,
             input,
             ctx,
-            error: None,
+            done: Vec::new(),
+            starting: false,
+            generation: 0,
             led_defaults: None,
             voice: None,
             start_mode: None,
             folder: None,
             file_errors: Vec::new(),
             script_files: Vec::new(),
-        })))
+        }));
+        let (worker, requests) = std::sync::mpsc::channel();
+        {
+            let inner = inner.clone();
+            let spawned = std::thread::Builder::new()
+                .name("activation".into())
+                .spawn(move || work(&inner, &requests));
+            if let Err(e) = spawned {
+                log::error!("activation thread: {e}");
+            }
+        }
+        Self { inner, worker }
     }
 
     /// Default LED colors for the next start (a running profile keeps its own); `None`
@@ -74,11 +125,18 @@ impl Activation {
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
-        self.0.lock().unwrap_or_else(|e| e.into_inner())
+        lock(&self.inner)
     }
 
+    /// A profile runs, or is starting.
     pub fn is_active(&self) -> bool {
-        self.lock().runner.is_some()
+        let inner = self.lock();
+        inner.runner.is_some() || inner.starting
+    }
+
+    /// What the running profile sends to the virtual devices and the keyboard.
+    pub fn outputs(&self) -> Option<gob_engine::OutputTap> {
+        self.lock().runner.as_ref().map(gob_engine::Runner::outputs)
     }
 
     /// The profile's folder, for its external script files.
@@ -121,90 +179,64 @@ impl Activation {
         self.lock().profile.as_ref().map(|(_, n)| n.clone())
     }
 
-    /// Stops the engine; true if it was running.
+    /// Stops the engine (or a start on its way); true if it was running or starting.
     pub fn stop(&self) -> bool {
-        let stopped = self.lock().runner.take().is_some();
+        let (runner, starting) = {
+            let mut inner = self.lock();
+            inner.generation += 1;
+            let starting = std::mem::take(&mut inner.starting);
+            (inner.runner.take(), starting)
+        };
+        let stopped = runner.is_some() || starting;
         if stopped {
             log::info!("profile stopped");
         }
         stopped
     }
 
-    /// Starts the engine on the current profile. A running one hands over in its own thread
-    /// (its stop actions, then the start of this one), so the window never waits for it.
-    pub fn start(&self) -> Result<(), String> {
-        if self.lock().runner.is_some() {
-            return self.reload(true);
+    /// Starts the engine on the current profile, or hands it to the running one (its stop
+    /// actions, then the start of this one). The result comes as a [`Done`].
+    pub fn start(&self, job: Job) {
+        {
+            let mut inner = self.lock();
+            if inner.runner.is_none() {
+                inner.starting = true;
+            }
         }
-        let mut inner = self.lock();
-        let Some((profile, name)) = &inner.profile else {
-            return Err("no profile loaded".into());
-        };
-        let profile = starting_in(profile, inner.start_mode.as_deref());
-        let (profile, file_errors, files) = with_script_files(profile, inner.folder.as_deref());
-        let profile = &*profile;
-        let devices = inner.input.devices();
-        let aliases = crate::substitute_view::auto_aliases(profile, &devices);
-        let repaint = {
-            let ctx = inner.ctx.clone();
-            move || ctx.request_repaint()
-        };
-        let runner = Runner::start(
-            profile,
-            &aliases,
-            inner.input.subscribe_timed(),
-            &devices,
-            inner.led_defaults.as_deref(),
-            inner.voice.clone(),
-            repaint,
-        )?;
-        log::info!(
-            "profile {name} active, {} device substitution(s)",
-            aliases.len()
-        );
-        inner.runner = Some(runner);
-        inner.file_errors = file_errors;
-        inner.script_files = files;
-        Ok(())
+        self.send(Request::Start(job));
     }
 
     /// Hands the current profile to the running engine, which keeps its virtual devices (a game
-    /// keeps them too); not running: nothing to do. On an error the old profile keeps running.
+    /// keeps them too); not running: nothing happens. On an error the old profile keeps running.
     /// `fresh`: another profile takes over (stop and start events run), not an edit.
-    pub fn reload(&self, fresh: bool) -> Result<(), String> {
-        let mut inner = self.lock();
-        let (Some(runner), Some((profile, name))) = (&inner.runner, &inner.profile) else {
-            return Ok(());
+    pub fn reload(&self, job: Job, fresh: bool) {
+        self.send(Request::Reload(job, fresh));
+    }
+
+    fn send(&self, request: Request) {
+        let job = match &request {
+            Request::Start(job) | Request::Reload(job, _) => *job,
         };
-        let profile = starting_in(profile, inner.start_mode.as_deref());
-        let (profile, file_errors, files) = with_script_files(profile, inner.folder.as_deref());
-        let profile = &*profile;
-        let devices = inner.input.devices();
-        let aliases = crate::substitute_view::auto_aliases(profile, &devices);
-        runner.reload(profile, &aliases, &devices, fresh)?;
-        let name = name.clone();
-        inner.file_errors = file_errors;
-        inner.script_files = files;
-        log::info!(
-            "profile {name} reloaded, {} device substitution(s)",
-            aliases.len()
-        );
-        Ok(())
+        if self.worker.send(request).is_err() {
+            finish(
+                &self.inner,
+                job,
+                Some(Err("the activation thread has stopped".into())),
+            );
+        }
     }
 
-    /// Start or stop, for the tray menu: a failed start is kept for [`Self::take_error`].
+    /// The next finished start or reload.
+    pub fn take_done(&self) -> Option<Done> {
+        let mut inner = self.lock();
+        (!inner.done.is_empty()).then(|| inner.done.remove(0))
+    }
+
+    /// Start or stop, for the tray menu: a failed start waits as a [`Done`] for the window.
     pub fn toggle_from_tray(&self) {
-        if self.stop() {
-            return;
+        if !self.stop() {
+            self.start(Job::Tray);
         }
-        if let Err(e) = self.start() {
-            log::error!("tray: activating the profile: {e}");
-            self.lock().error = Some(e);
-        }
-    }
-
-    pub fn take_error(&self) -> Option<String> {
-        self.lock().error.take()
     }
 
     pub fn status(&self) -> Option<RunnerStatus> {
@@ -223,6 +255,150 @@ impl Activation {
             .as_ref()
             .and_then(|r| r.take_load_request())
     }
+}
+
+fn lock(inner: &Mutex<Inner>) -> MutexGuard<'_, Inner> {
+    inner.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The worker: starts and reloads in the order they were asked for.
+fn work(inner: &Arc<Mutex<Inner>>, requests: &Receiver<Request>) {
+    for request in requests {
+        let (job, result) = match request {
+            Request::Start(job) => (job, start_now(inner)),
+            Request::Reload(job, fresh) => (job, reload_now(inner, fresh)),
+        };
+        finish(inner, job, result);
+    }
+}
+
+/// Hands a result to the window; `None` (stopped meanwhile, nothing running) is no result.
+fn finish(inner: &Mutex<Inner>, job: Job, result: Option<Result<(), String>>) {
+    let Some(result) = result else {
+        return;
+    };
+    if let Err(e) = &result {
+        log::error!("activating the profile ({job:?}): {e}");
+    }
+    let mut inner = lock(inner);
+    inner.done.push(Done { job, result });
+    inner.ctx.request_repaint();
+}
+
+/// What a start or reload takes from the shared state, so the slow part runs unlocked.
+struct Prepared {
+    profile: Profile,
+    name: String,
+    folder: Option<std::path::PathBuf>,
+    devices: Vec<gob_input::DeviceState>,
+    generation: u64,
+}
+
+fn prepare(inner: &Inner) -> Option<Prepared> {
+    let (profile, name) = inner.profile.as_ref()?;
+    Some(Prepared {
+        profile: starting_in(profile, inner.start_mode.as_deref()).into_owned(),
+        name: name.clone(),
+        folder: inner.folder.clone(),
+        devices: inner.input.devices(),
+        generation: inner.generation,
+    })
+}
+
+/// Longest a start waits for the input thread's first look for devices (a profile activated
+/// as the program starts): the profile's devices, their positions and substitutions need it.
+const SCAN_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
+
+fn start_now(shared: &Mutex<Inner>) -> Option<Result<(), String>> {
+    let input = lock(shared).input.clone();
+    let waited = std::time::Instant::now();
+    while !input.scanned() && waited.elapsed() < SCAN_WAIT {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let (prepared, events, led_defaults, voice, ctx) = {
+        let mut inner = lock(shared);
+        if inner.runner.is_some() {
+            drop(inner);
+            return reload_now(shared, true);
+        }
+        if !inner.starting {
+            return None; // stopped before it began
+        }
+        let Some(prepared) = prepare(&inner) else {
+            inner.starting = false;
+            return Some(Err("no profile loaded".into()));
+        };
+        let events = inner.input.subscribe_timed();
+        (
+            prepared,
+            events,
+            inner.led_defaults.clone(),
+            inner.voice.clone(),
+            inner.ctx.clone(),
+        )
+    };
+    let (profile, file_errors, files) = with_script_files(
+        std::borrow::Cow::Owned(prepared.profile),
+        prepared.folder.as_deref(),
+    );
+    let aliases = crate::substitute_view::auto_aliases(&profile, &prepared.devices);
+    let started = Runner::start(
+        &profile,
+        &aliases,
+        events,
+        &prepared.devices,
+        led_defaults.as_deref(),
+        voice,
+        move || ctx.request_repaint(),
+    );
+    let mut inner = lock(shared);
+    if inner.generation != prepared.generation {
+        return None; // stopped while starting: the new runner stops as it is dropped
+    }
+    inner.starting = false;
+    let runner = match started {
+        Ok(runner) => runner,
+        Err(e) => return Some(Err(e)),
+    };
+    log::info!(
+        "profile {} active, {} device substitution(s)",
+        prepared.name,
+        aliases.len()
+    );
+    inner.runner = Some(runner);
+    inner.file_errors = file_errors;
+    inner.script_files = files;
+    Some(Ok(()))
+}
+
+fn reload_now(shared: &Mutex<Inner>, fresh: bool) -> Option<Result<(), String>> {
+    // Nothing running or no profile: nothing to hand over, which is fine.
+    let (prepared, reloader) = {
+        let inner = lock(shared);
+        let (Some(runner), Some(prepared)) = (inner.runner.as_ref(), prepare(&inner)) else {
+            return Some(Ok(()));
+        };
+        (prepared, runner.reloader())
+    };
+    let (profile, file_errors, files) = with_script_files(
+        std::borrow::Cow::Owned(prepared.profile),
+        prepared.folder.as_deref(),
+    );
+    let aliases = crate::substitute_view::auto_aliases(&profile, &prepared.devices);
+    if let Err(e) = reloader.reload(&profile, &aliases, &prepared.devices, fresh) {
+        return Some(Err(e));
+    }
+    let mut inner = lock(shared);
+    if inner.generation == prepared.generation {
+        inner.file_errors = file_errors;
+        inner.script_files = files;
+    }
+    log::info!(
+        "profile {} reloaded, {} device substitution(s)",
+        prepared.name,
+        aliases.len()
+    );
+    Some(Ok(()))
 }
 
 /// The running profile's external script files with their modification time when read.

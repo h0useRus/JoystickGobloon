@@ -23,17 +23,11 @@ impl super::Desktop for Desktop {
 
     /// The Documents known folder (wherever the user moved it, e.g. into OneDrive).
     fn documents_dir() -> Option<PathBuf> {
-        use windows::Win32::System::Com::CoTaskMemFree;
-        use windows::Win32::UI::Shell::{
-            FOLDERID_Documents, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
-        };
-        // SAFETY: the returned string is read once, then freed with CoTaskMemFree as documented.
-        unsafe {
-            let path = SHGetKnownFolderPath(&FOLDERID_Documents, KF_FLAG_DEFAULT, None).ok()?;
-            let dir = path.to_string().ok().map(PathBuf::from);
-            CoTaskMemFree(Some(path.as_ptr().cast()));
-            dir
-        }
+        known_folder(&windows::Win32::UI::Shell::FOLDERID_Documents)
+    }
+
+    fn local_app_data_dir() -> Option<PathBuf> {
+        known_folder(&windows::Win32::UI::Shell::FOLDERID_LocalAppData)
     }
 
     /// Fonts every Windows 10/11 has: Microsoft YaHei, Malgun Gothic.
@@ -86,6 +80,10 @@ impl super::Desktop for Desktop {
 
     fn held_keys() -> Option<Vec<Key>> {
         Some(keys::held())
+    }
+
+    fn key_held(key: Key) -> Option<bool> {
+        Some(keys::is_held(key))
     }
 
     fn key_name(key: Key) -> String {
@@ -160,10 +158,6 @@ impl super::Desktop for Desktop {
         update::run_installer(setup)
     }
 
-    fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
-        update::unpack_zip(zip, to)
-    }
-
     fn wait_for_process(pid: u32, timeout: Duration) {
         update::wait_for_process(pid, timeout);
     }
@@ -174,6 +168,62 @@ impl super::Desktop for Desktop {
 
     fn running_programs() -> Vec<super::Program> {
         programs::running_programs()
+    }
+
+    fn usage() -> Option<super::Usage> {
+        use windows::Win32::Foundation::FILETIME;
+        use windows::Win32::System::ProcessStatus::{
+            GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+        };
+        use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
+        let mut counters = PROCESS_MEMORY_COUNTERS {
+            cb: size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+            ..Default::default()
+        };
+        let mut times = [FILETIME::default(); 4];
+        // SAFETY: the pseudo handle of this process and buffers of the sizes given.
+        unsafe {
+            let process = GetCurrentProcess();
+            GetProcessMemoryInfo(process, &mut counters, counters.cb).ok()?;
+            let [created, exited, kernel, user] = &mut times;
+            GetProcessTimes(process, created, exited, kernel, user).ok()?;
+        }
+        // 100 ns units.
+        let ticks = |t: FILETIME| (u64::from(t.dwHighDateTime) << 32) | u64::from(t.dwLowDateTime);
+        Some(super::Usage {
+            memory: counters.WorkingSetSize as u64,
+            cpu_time: Duration::from_nanos((ticks(times[2]) + ticks(times[3])) * 100),
+        })
+    }
+
+    /// Fixed and removable drives (C: to Z:); network and optical drives are skipped, so the
+    /// search never waits on them.
+    fn game_roots() -> Vec<String> {
+        use windows::Win32::Storage::FileSystem::{GetDriveTypeW, GetLogicalDrives};
+        use windows::core::PCWSTR;
+        const DRIVE_REMOVABLE: u32 = 2;
+        const DRIVE_FIXED: u32 = 3;
+        // SAFETY: no arguments; returns a bit mask of the drive letters.
+        let mask = unsafe { GetLogicalDrives() };
+        let mut roots: Vec<String> = (2..26u8)
+            .filter(|i| mask & (1 << i) != 0)
+            .filter_map(|i| {
+                let root = format!("{}:\\", char::from(b'A' + i));
+                let wide: Vec<u16> = root.encode_utf16().chain([0]).collect();
+                // SAFETY: `wide` is a NUL-terminated path that lives through the call.
+                let kind = unsafe { GetDriveTypeW(PCWSTR(wide.as_ptr())) };
+                matches!(kind, DRIVE_REMOVABLE | DRIVE_FIXED).then(|| root.replace('\\', "/"))
+            })
+            .collect();
+        // The user's own folder: games keep settings and saves under AppData and Documents.
+        if let Some(home) = std::env::var_os("USERPROFILE") {
+            let home = home.to_string_lossy().replace('\\', "/");
+            let home = format!("{}/", home.trim_end_matches('/'));
+            if home.len() > 1 && !roots.contains(&home) {
+                roots.push(home);
+            }
+        }
+        roots
     }
 
     /// The drivers' installers give access; nothing for the user to grant.
@@ -201,5 +251,18 @@ impl super::Desktop for Desktop {
 
     fn remove_system_part() -> Result<(), String> {
         Err("not supported on Windows yet".into())
+    }
+}
+
+/// A known folder's path (Documents, local application data: wherever the user moved it).
+fn known_folder(id: &windows::core::GUID) -> Option<PathBuf> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{KF_FLAG_DEFAULT, SHGetKnownFolderPath};
+    // SAFETY: the returned string is read once, then freed with CoTaskMemFree as documented.
+    unsafe {
+        let path = SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, None).ok()?;
+        let dir = path.to_string().ok().map(PathBuf::from);
+        CoTaskMemFree(Some(path.as_ptr().cast()));
+        dir
     }
 }

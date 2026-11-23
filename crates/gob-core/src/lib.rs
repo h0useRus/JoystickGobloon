@@ -12,13 +12,17 @@ pub mod condition;
 pub mod curve;
 pub mod edit;
 pub mod events;
+pub mod file;
+pub mod game;
 pub mod logical;
 pub mod modifier;
+pub mod osc;
 pub mod profile;
 pub mod script;
 pub mod two_axis;
 pub mod voice;
 pub mod xml;
+pub mod zones;
 
 pub use action::{
     Action, ActionKind, ActivationMode, ButtonSend, InputType, Item, Key, LedBlend, LedMode,
@@ -33,10 +37,15 @@ pub use edit::{NewAction, child_groups, new_uuid};
 pub use events::{
     EVENT_INPUT_TYPE, EVENTS_GUID, ProfileEvent, is_builtin_device, is_event_binding,
 };
+pub use game::{Combo, ComboPart, GameBind, GameBindings, GameDevice, GameOutput, HatDirection};
 pub use logical::{
     KEYBOARD_GUID, LOGICAL_DEVICE_GUID, LogicalInput, key_from_input_id, key_input_id,
 };
 pub use modifier::{Layer, Modifier, Selection};
+pub use osc::{
+    OSC_GUID, OSC_PULSE_MS, OSC_SEND_HOST, OSC_SEND_PORT, OscArg, OscArgKind, OscInput, OscKind,
+    SEND_OSC, is_osc_binding, osc_address, osc_pressed,
+};
 pub use profile::{
     ActionConfig, AxisDirection, Device, InputBinding, Mode, OutputUse, Profile, Section,
     VirtualButton, VirtualDevices, VirtualJoystick, VirtualOutput, same_device_name,
@@ -49,3 +58,4 @@ pub use voice::{
     is_voice_binding,
 };
 pub use xml::{Element, Node};
+pub use zones::{AXIS_ZONES, AxisZone, ZoneOutput};

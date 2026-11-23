@@ -64,6 +64,7 @@ pub fn volumes() -> Vec<Volume> {
         let z: Vec<u16> = volume.encode_utf16().chain([0]).collect();
         let mut paths = vec![0u16; 4096];
         let mut len = 0u32;
+        // SAFETY: `z` is NUL-terminated, `paths` and `len` outlive the call.
         let mounts = unsafe {
             GetVolumePathNamesForVolumeNameW(PCWSTR(z.as_ptr()), Some(&mut paths), &mut len)
         }
@@ -77,6 +78,7 @@ pub fn volumes() -> Vec<Volume> {
             .chain([0])
             .collect();
         let mut target = vec![0u16; 1024];
+        // SAFETY: `short` is NUL-terminated, `target` outlives the call.
         let n = unsafe { QueryDosDeviceW(PCWSTR(short.as_ptr()), Some(&mut target)) };
         if n > 0 && !mounts.is_empty() {
             result.push(Volume {
@@ -85,10 +87,12 @@ pub fn volumes() -> Vec<Volume> {
             });
         }
         name.fill(0);
+        // SAFETY: `find` came from FindFirstVolumeW and is still open.
         if unsafe { FindNextVolumeW(find, &mut name) }.is_err() {
             break;
         }
     }
+    // SAFETY: `find` is closed once, here.
     unsafe {
         let _ = FindVolumeClose(find);
     }

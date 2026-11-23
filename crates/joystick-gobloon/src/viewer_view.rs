@@ -73,8 +73,55 @@ pub struct ViewerView {
     history: HashMap<String, VecDeque<(f64, [f32; 8])>>,
     start: Option<Instant>,
     last_sample: Option<Instant>,
-    /// Per device and button or hat index: until when it stays lit, and the hat's direction.
-    lit: HashMap<(String, Lit), (Instant, Option<u16>)>,
+    /// Per device and button or hat index: how it is shown.
+    lit: HashMap<(String, Lit), Shine>,
+}
+
+/// A button or hat as the viewer shows it.
+#[derive(Clone, Copy, Debug)]
+struct Shine {
+    /// A quick tap stays lit until then: [`MIN_LIT`] after it went down.
+    until: Instant,
+    /// The hat's last direction.
+    last: Option<u16>,
+    down: bool,
+}
+
+/// Whether the button or hat with entry `key` is lit at `now` (and the hat direction shown):
+/// while it is down, and after a press shorter than [`MIN_LIT`] until that much from its
+/// start. A longer press goes dark when it goes up, so the viewer shows outputs' real times.
+fn shine<K: std::hash::Hash + Eq>(
+    lit: &mut HashMap<K, Shine>,
+    key: K,
+    on: Option<u16>,
+    down: bool,
+    now: Instant,
+) -> (bool, Option<u16>) {
+    if down {
+        let s = lit.entry(key).or_insert(Shine {
+            until: now + MIN_LIT,
+            last: on,
+            down: true,
+        });
+        if !s.down {
+            // A new press after a tap that was still shown.
+            s.until = now + MIN_LIT;
+        }
+        s.down = true;
+        s.last = on;
+        return (true, on);
+    }
+    match lit.get_mut(&key) {
+        Some(s) if s.until > now => {
+            s.down = false;
+            (true, s.last)
+        }
+        Some(_) => {
+            lit.remove(&key);
+            (false, None)
+        }
+        None => (false, None),
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -178,30 +225,24 @@ impl ViewerView {
         toggle
     }
 
-    /// Buttons and hats as shown: what is down now, and what went up less than [`MIN_LIT`]
-    /// ago (a hat keeps its last direction that long).
+    /// Buttons and hats as shown ([`shine`]).
     fn lit_state(&mut self, d: &DeviceState) -> (Vec<bool>, Vec<Option<u16>>) {
         let now = Instant::now();
-        let mut lit = |key: Lit, on: Option<u16>, down: bool| {
-            let k = (d.info.guid.clone(), key);
-            if down {
-                self.lit.insert(k, (now + MIN_LIT, on));
-                return (true, on);
-            }
-            match self.lit.get(&k) {
-                Some(&(until, last)) if until > now => (true, last),
-                Some(_) => {
-                    self.lit.remove(&k);
-                    (false, None)
-                }
-                None => (false, None),
-            }
-        };
+        let guid = &d.info.guid;
         let buttons = (d.buttons.iter().enumerate())
-            .map(|(i, &p)| lit(Lit::Button(i), None, p).0)
+            .map(|(i, &p)| shine(&mut self.lit, (guid.clone(), Lit::Button(i)), None, p, now).0)
             .collect();
         let hats = (d.hats.iter().enumerate())
-            .map(|(i, &h)| lit(Lit::Hat(i), h, h.is_some()).1)
+            .map(|(i, &h)| {
+                shine(
+                    &mut self.lit,
+                    (guid.clone(), Lit::Hat(i)),
+                    h,
+                    h.is_some(),
+                    now,
+                )
+                .1
+            })
             .collect();
         (buttons, hats)
     }
@@ -526,4 +567,53 @@ fn hat_rose(
         center_color,
     );
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(start: Instant, ms: u64) -> Instant {
+        start + Duration::from_millis(ms)
+    }
+
+    #[test]
+    fn a_long_press_goes_dark_at_once_and_a_tap_shows() {
+        let t = Instant::now();
+        let mut lit = HashMap::new();
+        // Held 500 ms: dark as soon as it is up, so a pulse shows its real length.
+        assert!(shine(&mut lit, 1, None, true, t).0);
+        assert!(shine(&mut lit, 1, None, true, at(t, 400)).0);
+        assert!(!shine(&mut lit, 1, None, false, at(t, 500)).0);
+        // A 20 ms tap stays lit MIN_LIT from its start.
+        let tap = at(t, 1000);
+        assert!(shine(&mut lit, 1, None, true, tap).0);
+        assert!(shine(&mut lit, 1, None, false, at(tap, 20)).0);
+        assert!(
+            shine(
+                &mut lit,
+                1,
+                None,
+                false,
+                tap + MIN_LIT - Duration::from_millis(10)
+            )
+            .0
+        );
+        assert!(
+            !shine(
+                &mut lit,
+                1,
+                None,
+                false,
+                tap + MIN_LIT + Duration::from_millis(10)
+            )
+            .0
+        );
+        // A hat keeps its last direction while a tap is shown.
+        assert_eq!(shine(&mut lit, 2, Some(9000), true, t), (true, Some(9000)));
+        assert_eq!(
+            shine(&mut lit, 2, None, false, at(t, 50)),
+            (true, Some(9000))
+        );
+    }
 }

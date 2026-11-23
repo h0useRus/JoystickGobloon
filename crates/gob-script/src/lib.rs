@@ -8,20 +8,24 @@
 //! hands over the code, the engine implements [`ScriptApi`].
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gob_core::{
     InputType, KEYBOARD_GUID, Key, LOGICAL_DEVICE_GUID, MouseButton, ScriptValue, key_input_id,
 };
-use mlua::{Function, Lua, MultiValue, Table, Value, VmState};
+use mlua::{Function, Lua, MultiValue, Table, Value};
+
+pub mod sandbox;
+use sandbox::Deadline;
 
 const PRELUDE: &str = include_str!("prelude.luau");
 /// Longest a handler or a periodic function may run before it is stopped.
 pub const BUDGET: Duration = Duration::from_millis(5);
 /// Longest a script's top level may run when it is loaded or described.
 pub const LOAD_BUDGET: Duration = Duration::from_millis(250);
+/// Most memory one script's state may use.
+const MEMORY: usize = 64 << 20;
 /// Errors after which a running script is switched off.
 const MAX_ERRORS: u32 = 10;
 /// Shortest interval of a periodic function.
@@ -159,27 +163,13 @@ struct State {
     name: String,
     lua: Lua,
     host: Table,
-    /// Nanoseconds after `clock` at which the running call is stopped.
-    deadline: Arc<AtomicU64>,
-    clock: Instant,
+    deadline: Deadline,
     collected: Arc<Mutex<Collected>>,
 }
 
 impl State {
     fn new(name: &str, values: &[(String, ScriptValue)], describing: bool) -> mlua::Result<Self> {
-        let lua = Lua::new();
-        let clock = Instant::now();
-        let deadline = Arc::new(AtomicU64::new(u64::MAX));
-        {
-            let deadline = deadline.clone();
-            lua.set_interrupt(move |_| {
-                if clock.elapsed().as_nanos() as u64 > deadline.load(Ordering::Relaxed) {
-                    Err(mlua::Error::runtime("ran too long and was stopped"))
-                } else {
-                    Ok(VmState::Continue)
-                }
-            });
-        }
+        let (lua, deadline) = sandbox::new_state(MEMORY)?;
         let collected = Arc::new(Mutex::new(Collected::default()));
         let host = lua.create_table()?;
         let values: HashMap<String, ScriptValue> = values.iter().cloned().collect();
@@ -271,30 +261,24 @@ impl State {
             lua,
             host,
             deadline,
-            clock,
             collected,
         })
     }
 
-    fn arm(&self, budget: Duration) {
-        let at = (self.clock.elapsed() + budget).as_nanos() as u64;
-        self.deadline.store(at, Ordering::Relaxed);
-    }
-
     fn run_top_level(&self, code: &str) -> Result<(), ScriptError> {
-        self.arm(LOAD_BUDGET);
+        self.deadline.arm(LOAD_BUDGET);
         let result = self
             .lua
             .load(code)
             .set_name(format!("={}", self.name))
             .exec();
-        self.deadline.store(u64::MAX, Ordering::Relaxed);
+        self.deadline.disarm();
         result.map_err(|e| script_error(&self.name, &e))
     }
 
     /// Calls `f` with `arg`, `api` reachable through the host's `call` for the call only.
     fn call(&self, f: &Function, arg: Value, api: &mut dyn ScriptApi) -> Result<(), ScriptError> {
-        self.arm(BUDGET);
+        self.deadline.arm(BUDGET);
         let host = self.host.clone();
         let result = self.lua.scope(|scope| {
             let api = &mut *api;
@@ -305,7 +289,7 @@ impl State {
             host.raw_set("call", Value::Nil)?;
             r
         });
-        self.deadline.store(u64::MAX, Ordering::Relaxed);
+        self.deadline.disarm();
         result.map_err(|e| script_error(&self.name, &e))
     }
 }
@@ -607,8 +591,9 @@ fn host_call(lua: &Lua, args: MultiValue, api: &mut dyn ScriptApi) -> mlua::Resu
     }
 }
 
-/// A Lua error as the user should read it, with its line when there is one.
-fn script_error(script: &str, e: &mlua::Error) -> ScriptError {
+/// A Lua error as the user should read it, with its line when there is one. `script` is the chunk
+/// name the code was loaded with (without the leading `=`).
+pub fn script_error(script: &str, e: &mlua::Error) -> ScriptError {
     let text = match e {
         mlua::Error::CallbackError { cause, .. } => cause.to_string(),
         e => e.to_string(),

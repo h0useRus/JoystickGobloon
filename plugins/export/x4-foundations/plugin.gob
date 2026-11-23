@@ -1,0 +1,9 @@
+id = "x4-foundations"
+name = "X4: Foundations"
+version = "1.0.0"
+authors = ["Joystick Gobloon"]
+api = 1
+
+[game]
+min = "6.0"
+max = "9.*"

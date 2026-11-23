@@ -2,8 +2,21 @@
 
 use gob_core::Key;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, GetKeyNameTextW, MAPVK_VK_TO_VSC_EX, MapVirtualKeyW,
+    GetAsyncKeyState, GetKeyNameTextW, MAPVK_VK_TO_VSC_EX, MAPVK_VSC_TO_VK_EX, MapVirtualKeyW,
 };
+
+/// Whether one key is held: one state query instead of every key's.
+pub(super) fn is_held(key: Key) -> bool {
+    let prefix = if key.extended { 0xE000 } else { 0 };
+    // SAFETY: plain value conversion.
+    let vk = unsafe { MapVirtualKeyW(u32::from(key.scan_code) | prefix, MAPVK_VSC_TO_VK_EX) };
+    // Keys Windows maps differently (see `scan_code`) are looked up the long way.
+    if vk == 0 || scan_code(vk) != Some(key) {
+        return held().contains(&key);
+    }
+    // SAFETY: plain state query.
+    unsafe { GetAsyncKeyState(vk as i32) < 0 }
+}
 
 /// Keys held right now. Mouse buttons and the side-neutral Shift/Ctrl/Alt codes are
 /// skipped (their left/right versions are reported instead).

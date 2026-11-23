@@ -331,7 +331,7 @@ fn prepare(release: &Release) -> Result<Prepared, String> {
     if release.asset.name.ends_with(".zip") {
         let out = dir.join("unpacked");
         std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-        crate::platform::unpack_zip(&file, &out)?;
+        unpack_zip(&file, &out)?;
         // The zip holds a JoystickGobloon folder.
         let root = out.join("JoystickGobloon");
         let root = if root.is_dir() { root } else { out };
@@ -354,6 +354,34 @@ fn check_portable(root: &Path) -> Result<(), String> {
     }
     if let Some(missing) = files.iter().find(|n| !root.join(n).is_file()) {
         return Err(format!("the portable zip has no {}", missing.display()));
+    }
+    Ok(())
+}
+
+/// Unpacks a zip into `to` (the same way speech models are unpacked), refusing entries that
+/// would land outside it.
+fn unpack_zip(zip: &Path, to: &Path) -> Result<(), String> {
+    let file = std::fs::File::open(zip).map_err(|e| format!("{}: {e}", zip.display()))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("zip: {e}"))?;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| format!("zip: {e}"))?;
+        let Some(name) = entry.enclosed_name() else {
+            return Err(format!(
+                "zip: unsafe path {}",
+                String::from_utf8_lossy(entry.name_raw())
+            ));
+        };
+        let path = to.join(name);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+            continue;
+        }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut out =
+            std::fs::File::create(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        std::io::copy(&mut entry, &mut out).map_err(|e| format!("{}: {e}", path.display()))?;
     }
     Ok(())
 }
@@ -647,6 +675,33 @@ pub fn wait_for_previous() {
 mod tests {
     use super::*;
 
+    fn zip_with(dir: &Path, names: &[&str]) -> PathBuf {
+        use std::io::Write;
+        let path = dir.join("test.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        for name in names {
+            zip.start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(b"x").unwrap();
+        }
+        zip.finish().unwrap();
+        path
+    }
+
+    #[test]
+    fn unpacks_a_portable_zip_and_refuses_paths_outside_the_folder() {
+        let dir = std::env::temp_dir().join(format!("gobloon-unzip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("out")).unwrap();
+        let good = zip_with(&dir, &["JoystickGobloon/lang/de.ftl"]);
+        unpack_zip(&good, &dir.join("out")).unwrap();
+        assert!(dir.join("out/JoystickGobloon/lang/de.ftl").is_file());
+        let bad = zip_with(&dir, &["../evil.txt"]);
+        assert!(unpack_zip(&bad, &dir.join("out")).is_err());
+        assert!(!dir.join("evil.txt").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn a_failed_portable_update_puts_every_file_back() {
         let root = std::env::temp_dir().join(format!("gobloon-rollback-{}", std::process::id()));
@@ -654,10 +709,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(new.join("lang")).unwrap();
         std::fs::create_dir_all(old.join("lang")).unwrap();
-        for name in ["libvosk.dll", "LICENSE", "NEW.txt", "lang/de.ftl"] {
+        for name in ["sherpa-onnx-c-api.dll", "LICENSE", "NEW.txt", "lang/de.ftl"] {
             std::fs::write(new.join(name), "new").unwrap();
         }
-        for name in ["libvosk.dll", "LICENSE", "lang/de.ftl"] {
+        for name in ["sherpa-onnx-c-api.dll", "LICENSE", "lang/de.ftl"] {
             std::fs::write(old.join(name), "old").unwrap();
         }
         // The language files copy after the others; one fails, as when it cannot be written.
@@ -678,10 +733,10 @@ mod tests {
         left.sort_unstable();
         assert_eq!(
             left,
-            ["LICENSE", "de.ftl", "libvosk.dll"],
+            ["LICENSE", "de.ftl", "sherpa-onnx-c-api.dll"],
             "nothing new, nothing aside"
         );
-        for name in ["libvosk.dll", "LICENSE", "lang/de.ftl"] {
+        for name in ["sherpa-onnx-c-api.dll", "LICENSE", "lang/de.ftl"] {
             assert_eq!(
                 std::fs::read_to_string(old.join(name)).unwrap(),
                 "old",
@@ -701,7 +756,7 @@ mod tests {
         let exe = crate::platform::exe_name();
         for (name, text) in [
             (exe, "new exe"),
-            ("libvosk.dll", "speech"),
+            ("sherpa-onnx-c-api.dll", "speech"),
             ("LICENSE", "license"),
             ("lang/de.ftl", "de"),
         ] {
@@ -711,7 +766,7 @@ mod tests {
         copy_portable(&new, &old).unwrap();
         for (name, text) in [
             (exe, "new exe"),
-            ("libvosk.dll", "speech"),
+            ("sherpa-onnx-c-api.dll", "speech"),
             ("LICENSE", "license"),
             ("lang/de.ftl", "de"),
         ] {
@@ -735,7 +790,7 @@ mod tests {
         std::fs::write(
             new.join(MANIFEST),
             format!(
-                "files = [\"{exe}\", \"libvosk.dll\", \"lang/de.ftl\", \"voice/model.txt\"]
+                "files = [\"{exe}\", \"sherpa-onnx-c-api.dll\", \"lang/de.ftl\", \"voice/model.txt\"]
 "
             ),
         )
@@ -743,7 +798,7 @@ mod tests {
         std::fs::create_dir_all(new.join("voice")).unwrap();
         for name in [
             exe,
-            "libvosk.dll",
+            "sherpa-onnx-c-api.dll",
             "lang/de.ftl",
             "voice/model.txt",
             "stray.txt",
@@ -762,7 +817,12 @@ mod tests {
             std::fs::write(old.join(name), "old").unwrap();
         }
         copy_portable(&new, &old).unwrap();
-        for name in [exe, "libvosk.dll", "lang/de.ftl", "voice/model.txt"] {
+        for name in [
+            exe,
+            "sherpa-onnx-c-api.dll",
+            "lang/de.ftl",
+            "voice/model.txt",
+        ] {
             assert_eq!(
                 std::fs::read_to_string(old.join(name)).unwrap(),
                 "new",

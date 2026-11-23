@@ -85,9 +85,9 @@
   const STORIES = {
     // The sticks move: the axis bars swing and settle, Button 3 is tapped and then held.
     devices(stage, W, H) {
-      const rows = [0, 0, 1, 0, 0, 0, 0];
-      const bars = rows.map((rest, i) => axisBar(stage, W, H, 229, 166 + i * 78, rest));
-      const dot = overlay(stage, W, H, 616.5, 159.5, 11, 11, "ov-dot");
+      const rows = [0, 0, 1, 0, 0, 0];
+      const bars = rows.map((rest, i) => axisBar(stage, W, H, 229, 205 + i * 84, rest));
+      const dot = overlay(stage, W, H, 617.5, 199, 11, 11, "ov-dot");
       const keys = [
         [[0, 0], [0.7, 0.62], [1.5, -0.45], [2.3, 0.2], [3.0, 0]],
         [[0.2, 0], [0.9, -0.55], [1.8, 0.4], [2.6, -0.1], [3.2, 0]],
@@ -95,7 +95,6 @@
         [[0.5, 0], [1.3, 0.3], [2.2, -0.25], [3.0, 0]],
         [[0.6, 0], [1.5, -0.3], [2.4, 0.2], [3.1, 0]],
         [[3.6, 0], [4.3, 0.8], [5.0, -0.8], [5.8, 0]],
-        [[0.8, 0], [2.0, 0.9], [3.4, 0]],
       ];
       return {
         period: 6.4,
@@ -108,10 +107,10 @@
 
     // A tap runs the short press branch; holding past 0.50 s fills the timer and runs the long one.
     tempo(stage, W, H) {
-      const dot = overlay(stage, W, H, 117, 11, 11, 11, "ov-dot");
-      const short = overlay(stage, W, H, 23.5, 171, 2, 144, "ov-line");
-      const long = overlay(stage, W, H, 23.5, 347, 2, 112, "ov-line");
-      const timer = overlay(stage, W, H, 39, 115, 56, 26, "ov-fill");
+      const dot = overlay(stage, W, H, 628.5, 199, 11, 11, "ov-dot");
+      const short = overlay(stage, W, H, 523.5, 396, 2, 146, "ov-line");
+      const long = overlay(stage, W, H, 523.5, 572, 2, 102, "ov-line");
+      const timer = overlay(stage, W, H, 541, 340, 56, 26, "ov-fill");
       return {
         period: 6.2,
         draw(t) {
@@ -128,13 +127,13 @@
 
     // M1 is held, then M2, then both: the toolbar badges, the layer chip and the modifier rows light.
     modifiers(stage, W, H) {
-      const badge = [overlay(stage, W, H, 854, 100, 33, 24, "ov-glow"), overlay(stage, W, H, 895, 100, 34, 24, "ov-glow")];
+      const badge = [overlay(stage, W, H, 855, 101, 33, 24, "ov-glow"), overlay(stage, W, H, 896, 101, 33, 24, "ov-glow")];
       const chip = [
-        overlay(stage, W, H, 583, 227, 60, 32, "ov-glow"),
-        overlay(stage, W, H, 651, 227, 59, 32, "ov-glow"),
-        overlay(stage, W, H, 718, 227, 88, 32, "ov-glow"),
+        overlay(stage, W, H, 583, 229, 60, 31, "ov-glow"),
+        overlay(stage, W, H, 650, 229, 60, 31, "ov-glow"),
+        overlay(stage, W, H, 717, 229, 86, 31, "ov-glow"),
       ];
-      const row = [overlay(stage, W, H, 370, 393, 40, 26, "ov-glow"), overlay(stage, W, H, 370, 425, 40, 26, "ov-glow")];
+      const row = [overlay(stage, W, H, 372, 343, 40, 26, "ov-glow"), overlay(stage, W, H, 372, 375, 40, 26, "ov-glow")];
       for (const el of [...badge, ...chip, ...row]) el.style.borderRadius = "calc(var(--s) * 4px)";
       return {
         period: 7.6,
@@ -153,13 +152,13 @@
     // The output tester: every axis slider sweeps in turn and comes back to the centre.
     vjoy(stage, W, H) {
       const knobs = [];
-      for (let i = 0; i < 8; i++) {
-        const row = overlay(stage, W, H, 148, 418 + i * 32, 328, 24, "ov-slider");
+      for (let i = 0; i < 7; i++) {
+        const row = overlay(stage, W, H, 148, 453 + i * 32, 328, 20, "ov-slider");
         const rail = document.createElement("i");
         rail.className = "rail";
         const knob = document.createElement("i");
         knob.className = "knob";
-        knob.style.left = `${((300 - 148) / 328) * 100}%`;
+        knob.style.left = `${((305 - 148) / 328) * 100}%`;
         row.append(rail, knob);
         knobs.push(knob);
       }
@@ -170,7 +169,7 @@
             const at = 0.3 + i * 0.14;
             const a = i % 2 ? -1 : 1;
             const v = track([[at, 0], [at + 0.8, 0.85 * a], [at + 1.7, -0.6 * a], [at + 2.5, 0]], t);
-            knob.style.transform = `translateX(${(v * 148 * 100) / 24}%)`;
+            knob.style.transform = `translateX(${(v * 152 * 100) / 15}%)`;
           });
         },
       };
@@ -200,16 +199,16 @@
     // A live feed: the axis bars breathe and settle on their values, buttons 2 to 16 light in a chase.
     viewer(stage, W, H) {
       const colors = ["#3b8ede", "#e5484d", "#46a758", "#f0932b", "#9a9a9a", "#e8c13a", "#1fb0bf", "#8e57d4"];
-      const rest = [0.99, 0, 0, -1, -1, -1, -1, -1];
+      const rest = [0, 0, 0, -1, -1, -1, -1, -1];
       const fills = colors.map((c, i) => {
-        const bar = overlay(stage, W, H, 328 + i * 80, 482, 20, 100, "ov-bar");
+        const bar = overlay(stage, W, H, 331 + i * 80, 483, 20, 100, "ov-bar");
         const fill = document.createElement("i");
         fill.style.background = c;
         bar.append(fill);
         return fill;
       });
       const cells = [];
-      for (let i = 1; i < 16; i++) cells.push(overlay(stage, W, H, 302 + i * 42, 647, 34, 34, "ov-cell"));
+      for (let i = 1; i < 16; i++) cells.push(overlay(stage, W, H, 305 + i * 42, 648, 34, 34, "ov-cell"));
       const amp = [0.5, 0.8, 0.6, 0.9, 0.7, 1.0, 0.8, 0.6];
       return {
         period: 6.0,
@@ -227,10 +226,10 @@
 
     // Push to talk: the listening line lights, the phrase is heard, its command and its action run.
     voice(stage, W, H) {
-      const listen = overlay(stage, W, H, 85, 189, 372, 18, "ov-row");
-      const phrase = overlay(stage, W, H, 507, 246, 260, 27, "ov-row");
-      const command = overlay(stage, W, H, 85, 257, 403, 70, "ov-row");
-      const action = overlay(stage, W, H, 507, 428, 568, 110, "ov-row");
+      const listen = overlay(stage, W, H, 85, 189, 344, 18, "ov-row");
+      const phrase = overlay(stage, W, H, 507, 279, 260, 27, "ov-row");
+      const command = overlay(stage, W, H, 103, 309, 385, 70, "ov-row");
+      const action = overlay(stage, W, H, 507, 449, 568, 109, "ov-row");
       return {
         period: 5.4,
         draw(t) {

@@ -31,13 +31,13 @@ fn events_of(events: &Receiver<InputEvent>, guid: &str) -> Vec<String> {
                 device,
                 id,
                 pressed,
-            } if device == guid => out.push(format!("button {id} {pressed}")),
+            } if *device == *guid => out.push(format!("button {id} {pressed}")),
             InputEvent::Hat {
                 device,
                 id,
                 direction,
-            } if device == guid => out.push(format!("hat {id} {direction:?}")),
-            InputEvent::Axis { device, id, value } if device == guid => {
+            } if *device == *guid => out.push(format!("hat {id} {direction:?}")),
+            InputEvent::Axis { device, id, value } if *device == *guid => {
                 out.push(format!("axis {id} {:.0}", value))
             }
             _ => {}

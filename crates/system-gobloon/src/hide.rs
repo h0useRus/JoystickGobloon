@@ -192,7 +192,7 @@ impl Hide {
         if let Some(dir) = self.state_path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        write_atomic(&self.state_path, &text)
+        gob_core::file::write_whole(&self.state_path, text.as_bytes())
     }
 
     /// Writes the rule for the state (or removes it), has udev apply it and closes the nodes of
@@ -210,7 +210,7 @@ impl Hide {
             if let Some(dir) = self.rule_path.parent() {
                 std::fs::create_dir_all(dir)?;
             }
-            write_atomic(&self.rule_path, &text)?;
+            gob_core::file::write_whole(&self.rule_path, text.as_bytes())?;
         }
         self.system.trigger()?;
         self.enforce();
@@ -310,13 +310,6 @@ fn is_rule_safe(s: &str) -> bool {
             .all(|c| c.is_ascii_graphic() && !matches!(c, '"' | '\\' | '*' | '?' | '[' | ']' | '|'))
 }
 
-/// Writes a file through a temporary one next to it, so readers never see half of it.
-fn write_atomic(path: &Path, text: &str) -> io::Result<()> {
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, text)?;
-    std::fs::rename(&tmp, path)
-}
-
 /// Removes the rule and has udev give access back (`--cleanup`, the unit's `ExecStopPost`).
 pub fn cleanup(rule_path: &Path, system: &dyn System) -> io::Result<()> {
     match std::fs::remove_file(rule_path) {
@@ -408,34 +401,38 @@ fn udevadm(args: &[&str]) -> io::Result<()> {
 /// again which controllers are attached and closes hidden devices' nodes again when someone
 /// opened them: another rule, `setfacl`, a replugged device off USB. Runs until the process ends.
 pub fn watch(hide: Arc<Mutex<Hide>>) -> io::Result<()> {
-    // SAFETY: plain syscalls on a descriptor we own; the buffer outlives every read.
+    // SAFETY: no pointers; the descriptor is owned by the watcher thread from here on.
     let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC) };
     if fd < 0 {
         return Err(io::Error::last_os_error());
     }
     for dir in [c"/dev", c"/dev/input"] {
         let mask = libc::IN_ATTRIB | libc::IN_CREATE | libc::IN_DELETE;
+        // SAFETY: `dir` is a NUL-terminated C string literal.
         if unsafe { libc::inotify_add_watch(fd, dir.as_ptr(), mask) } < 0 {
             log::warn!("watching {dir:?}: {}", io::Error::last_os_error());
         }
     }
-    std::thread::spawn(move || {
-        let mut buf = [0u8; 4096];
-        loop {
-            let n = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) };
-            if n <= 0 {
-                log::error!("watching device nodes: {}", io::Error::last_os_error());
-                return;
+    std::thread::Builder::new()
+        .name("node-watch".into())
+        .spawn(move || {
+            let mut buf = [0u8; 4096];
+            loop {
+                // SAFETY: `buf` is valid for `buf.len()` bytes; `fd` is the inotify descriptor.
+                let n = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) };
+                if n <= 0 {
+                    log::error!("watching device nodes: {}", io::Error::last_os_error());
+                    return;
+                }
+                // Many events come at once (a device brings several nodes, udev sets them in
+                // steps): let them settle, drop what came meanwhile, look once.
+                std::thread::sleep(Duration::from_millis(200));
+                drain(fd, &mut buf);
+                hide.lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .enforce();
             }
-            // Many events come at once (a device brings several nodes, udev sets them in
-            // steps): let them settle, drop what came meanwhile, look once.
-            std::thread::sleep(Duration::from_millis(200));
-            drain(fd, &mut buf);
-            hide.lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .enforce();
-        }
-    });
+        })?;
     Ok(())
 }
 

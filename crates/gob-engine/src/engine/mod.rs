@@ -1,4 +1,9 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+/// Maps with a fast hasher: every input event looks up and updates several of them, and the
+/// keys (device GUIDs, mode names) come from the profile, not from the network.
+type HashMap<K, V> = std::collections::HashMap<K, V, foldhash::fast::RandomState>;
+type HashSet<K> = std::collections::HashSet<K, foldhash::fast::RandomState>;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -20,6 +25,16 @@ use gob_script::{
 use gob_virtual::ControlKind;
 
 /// Delay between press and release of a pulse (Gremlin: 50 ms).
+mod button_axis;
+mod compile;
+mod outputs;
+mod script;
+mod send;
+mod timed;
+
+use outputs::{Deferred, Recording};
+use script::ScriptContext;
+
 const PULSE: Duration = Duration::from_millis(50);
 /// Guards against reference cycles in broken profiles.
 const MAX_DEPTH: usize = 32;
@@ -59,6 +74,21 @@ enum VjoyTarget {
     Axis(u8),
     Button(u8),
     Hat(u8),
+}
+
+/// An argument of a send-osc message.
+#[derive(Debug, Clone)]
+enum OscOut {
+    Fixed(gob_osc::Arg),
+    /// The value of the input that runs the action (an axis 0..1, a button 1 / 0).
+    Input,
+}
+
+/// An OSC input as the engine answers it.
+#[derive(Debug, Clone)]
+struct OscRoute {
+    key: InputKey,
+    input: gob_core::OscInput,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -133,6 +163,11 @@ enum Node {
         lower: Vec<NodeId>,
         upper: Vec<NodeId>,
     },
+    /// Axis zones: the points, and each zone's output with its children.
+    Zones {
+        points: Vec<f64>,
+        zones: Vec<(gob_core::ZoneOutput, Vec<NodeId>)>,
+    },
     Pause(PauseOp),
     Run {
         executable: String,
@@ -168,6 +203,14 @@ enum Node {
     },
     LoadProfile {
         file: String,
+        act: ActivationMode,
+    },
+    /// send-osc: the message, with the arguments that take the input's value marked.
+    SendOsc {
+        host: String,
+        port: u16,
+        address: String,
+        args: Vec<OscOut>,
         act: ActivationMode,
     },
     PlaySound {
@@ -272,6 +315,10 @@ struct AxisState {
 
 /// How often moving button-axis axes are written.
 const AXIS_STEP: Duration = Duration::from_millis(5);
+
+/// How long a voice group stays open after it was said: time to press again and say what is in
+/// it.
+pub const VOICE_GROUP_OPEN: Duration = Duration::from_secs(6);
 
 #[derive(Debug, Clone)]
 enum CondSource {
@@ -386,8 +433,12 @@ enum TimerKind {
     },
     /// A recognized voice command's button goes up.
     VoiceRelease(u32),
+    /// An open voice group closes: nothing more was said in it.
+    VoiceScope,
     /// A profile event's button (by its id) goes up.
     EventRelease(u32),
+    /// The short press of an OSC button message without a number ends (input id).
+    OscRelease(u32),
     /// A Delay's time is up.
     DelayFire(NodeId),
     /// The action a run-action macro step pressed is released.
@@ -584,6 +635,7 @@ impl Config {
             additive,
             keep_value: false,
             send_state: false,
+            description: None,
         }
     }
 }
@@ -603,6 +655,8 @@ struct Config {
     keep_value: bool,
     /// A button held when the profile starts runs its press then.
     send_state: bool,
+    /// The binding's description (its root action's label), shown when its input is pressed.
+    description: Option<Arc<str>>,
 }
 
 pub struct Engine {
@@ -661,6 +715,10 @@ pub struct Engine {
     voice_holds: HashMap<u32, Duration>,
     /// Release timer of each voice command whose button is down.
     voice_releases: HashMap<u32, u64>,
+    /// The profile's OSC inputs by address.
+    osc_routes: HashMap<String, OscRoute>,
+    /// Release timer of each OSC button (by input id) pressed by a message without a number.
+    osc_releases: HashMap<u32, u64>,
     /// Delays pressed and not let go yet or not run yet.
     delays: HashMap<NodeId, DelayState>,
     /// Release timer of each profile event (by id) whose button is down, with the mode it runs
@@ -678,8 +736,14 @@ pub struct Engine {
     event_released: bool,
     /// The profile is stopping: no more events run (its stop actions may still change modes).
     stopping: bool,
-    /// Every phrase of the profile's voice commands with the command's id.
+    /// Every phrase of the profile's voice commands and groups with its id, said from the top.
     voice_phrases: Vec<(u32, String)>,
+    /// What each voice group listens for while it is open.
+    voice_scopes: HashMap<u32, Vec<(u32, String)>>,
+    /// The open voice group and the timer that closes it.
+    voice_scope: Option<(u32, u64)>,
+    /// The phrases to listen for changed (a group opened or closed) since the runner last asked.
+    voice_scope_changed: bool,
     /// Profile's `macro-default-delay` in seconds.
     macro_delay: f64,
     /// Last value written to each vJoy axis, for relative macro steps.
@@ -690,6 +754,12 @@ pub struct Engine {
     aliases: HashMap<String, String>,
     /// On-activate light-led actions met while compiling the current binding.
     compiled_lights: Vec<Light>,
+    /// The description of the last binding whose input was pressed and had one.
+    last_action: Option<Arc<str>>,
+    /// The zone each axis-zones action's axis was in last.
+    zone_last: HashMap<NodeId, usize>,
+    /// The layer the held modifiers choose, kept when a modifier changes (read every pass).
+    layer_now: Layer,
     /// Modifier inputs and their names; they only choose layers, their bindings do not run.
     modifiers: Vec<(InputKey, String)>,
     /// Layer a button or hat chose when pressed; its release goes there too.
@@ -751,7 +821,7 @@ impl Engine {
     /// Compiles `profile`. `aliases` maps profile device GUIDs to attached ones
     /// (same stick under another GUID on this PC).
     /// Action types Joystick Gobloon does not know are kept and do nothing.
-    pub fn new(profile: &Profile, aliases: &HashMap<String, String>) -> Self {
+    pub fn new(profile: &Profile, aliases: &std::collections::HashMap<String, String>) -> Self {
         let index = profile.action_index();
         let start = profile
             .startup_mode()
@@ -760,64 +830,70 @@ impl Engine {
             .unwrap_or_else(|| "Default".into());
         let mut engine = Self {
             nodes: Vec::new(),
-            tempo: HashMap::new(),
-            cycle: HashMap::new(),
+            tempo: HashMap::default(),
+            cycle: HashMap::default(),
             sets: Vec::new(),
-            lookup: HashMap::new(),
+            lookup: HashMap::default(),
             virtual_device: VIRTUAL_DEVICE.into(),
             modes: ModeStack::new(&start),
-            releases: HashMap::new(),
+            releases: HashMap::default(),
             release_buffer: Vec::new(),
             timers: Vec::new(),
             next_timer: 0,
-            axes: HashMap::new(),
-            relative: HashMap::new(),
+            axes: HashMap::default(),
+            relative: HashMap::default(),
             motion: Motion::default(),
-            toggles: HashMap::new(),
-            macros: HashMap::new(),
-            taps: HashMap::new(),
-            chains: HashMap::new(),
-            hat_buttons: HashMap::new(),
-            deltas: HashMap::new(),
-            buttons: HashMap::new(),
-            hats: HashMap::new(),
-            logical_relative: HashMap::new(),
+            toggles: HashMap::default(),
+            macros: HashMap::default(),
+            taps: HashMap::default(),
+            chains: HashMap::default(),
+            hat_buttons: HashMap::default(),
+            deltas: HashMap::default(),
+            buttons: HashMap::default(),
+            hats: HashMap::default(),
+            logical_relative: HashMap::default(),
             logical_depth: 0,
             logical_changed: false,
-            cond_cache: HashMap::new(),
-            keys_down: HashSet::new(),
+            cond_cache: HashMap::default(),
+            keys_down: HashSet::default(),
             mouse_down: Vec::new(),
             vjoy_down: Vec::new(),
             pad_down: Vec::new(),
-            pad_axes: HashMap::new(),
-            sends: HashMap::new(),
-            listening: HashMap::new(),
+            pad_axes: HashMap::default(),
+            sends: HashMap::default(),
+            listening: HashMap::default(),
             voice_holds: profile
                 .voice_commands
                 .iter()
                 .map(|c| (c.id, Duration::from_secs_f64(c.hold.clamp(0.01, 10.0))))
                 .collect(),
-            voice_releases: HashMap::new(),
-            delays: HashMap::new(),
-            event_releases: HashMap::new(),
+            voice_releases: HashMap::default(),
+            osc_routes: HashMap::default(),
+            osc_releases: HashMap::default(),
+            delays: HashMap::default(),
+            event_releases: HashMap::default(),
             mode_event_depth: 0,
             combos: Vec::new(),
-            combos_down: HashSet::new(),
+            combos_down: HashSet::default(),
             event_chain: 0,
             event_released: false,
             stopping: false,
-            voice_phrases: profile
-                .voice_phrases()
-                .into_iter()
-                .map(|(id, p)| (id, p.to_string()))
+            voice_phrases: profile.voice_phrases(),
+            voice_scopes: profile
+                .voice_commands
+                .iter()
+                .filter(|c| c.group)
+                .map(|c| (c.id, profile.voice_phrases_in(Some(c.id))))
                 .collect(),
+            voice_scope: None,
+            voice_scope_changed: false,
             macro_delay: profile
                 .settings
                 .child_text("macro-default-delay")
                 .and_then(|d| d.trim().parse().ok())
                 .filter(|d: &f64| *d >= 0.0)
                 .unwrap_or(MACRO_DELAY),
-            vjoy_axes: HashMap::new(),
+            vjoy_axes: HashMap::default(),
             paused: false,
             aliases: aliases
                 .iter()
@@ -825,21 +901,24 @@ impl Engine {
                 .collect(),
             compiled_lights: Vec::new(),
             modifiers: Vec::new(),
-            pressed_layers: HashMap::new(),
-            button_axes: HashMap::new(),
+            pressed_layers: HashMap::default(),
+            last_action: None,
+            zone_last: HashMap::default(),
+            layer_now: Layer::base(),
+            button_axes: HashMap::default(),
             axis_writes: Vec::new(),
             compiled_decrease: Vec::new(),
             prune: None,
             started: false,
-            action_nodes: HashMap::new(),
-            run_targets: HashMap::new(),
-            run_releases: HashMap::new(),
+            action_nodes: HashMap::default(),
+            run_targets: HashMap::default(),
+            run_releases: HashMap::default(),
             scripts: None,
-            script_keys: HashMap::new(),
-            script_modes: HashSet::new(),
+            script_keys: HashMap::default(),
+            script_modes: HashSet::default(),
             script_keys_down: Vec::new(),
             script_hats: Vec::new(),
-            action_labels: HashMap::new(),
+            action_labels: HashMap::default(),
         };
         for m in profile.library.iter().filter(|a| a.kind == "macro") {
             let targets = m.run_targets();
@@ -943,6 +1022,13 @@ impl Engine {
                     additive: cfg.additive,
                     keep_value: cfg.keep_value,
                     send_state: cfg.send_state,
+                    description: profile
+                        .action(&cfg.root_action)
+                        .and_then(|a| a.label())
+                        .map(str::trim)
+                        // Gremlin writes "None" for a binding without one.
+                        .filter(|l| !l.is_empty() && *l != "None")
+                        .map(Arc::from),
                 });
                 // A button-axis action's decrease input runs it too, in the same mode and layer,
                 // through copies of the containers it sits in (their own state).
@@ -987,6 +1073,29 @@ impl Engine {
         engine.compiled_decrease.clear();
         engine.compiled_lights.clear();
         engine.inherit_modes(profile);
+        let osc = engine.device(gob_core::OSC_GUID);
+        engine.osc_routes = profile
+            .osc_inputs
+            .iter()
+            .map(|i| {
+                let kind = match i.kind {
+                    gob_core::OscKind::Axis => InputKind::Axis,
+                    gob_core::OscKind::Button => InputKind::Button,
+                };
+                let key = InputKey {
+                    device: osc.clone(),
+                    kind,
+                    id: i.id,
+                };
+                (
+                    i.address.clone(),
+                    OscRoute {
+                        key,
+                        input: i.clone(),
+                    },
+                )
+            })
+            .collect();
         let keyboard = engine.device(gob_core::KEYBOARD_GUID);
         engine.combos = profile
             .key_combos
@@ -1047,490 +1156,18 @@ impl Engine {
         engine
     }
 
-    /// Attached device for a profile device GUID.
-    fn device(&self, guid: &str) -> Arc<str> {
-        let guid = guid.trim().to_ascii_lowercase();
-        self.aliases.get(&guid).cloned().unwrap_or(guid).into()
-    }
-
-    /// Child modes use their parent's binding (the very same one) unless they override it.
-    fn inherit_modes(&mut self, profile: &Profile) {
-        let names: Vec<&str> = profile.modes.iter().map(|m| m.name.as_str()).collect();
-        let mut queue: VecDeque<&str> = profile
-            .modes
-            .iter()
-            .filter(|m| m.parent.as_deref().is_none_or(|p| !names.contains(&p)))
-            .map(|m| m.name.as_str())
-            .collect();
-        while let Some(parent) = queue.pop_front() {
-            for child in profile
-                .modes
-                .iter()
-                .filter(|m| m.parent.as_deref() == Some(parent))
-            {
-                for modes in self.lookup.values_mut() {
-                    if let Some(&set) = modes.get(parent) {
-                        modes.entry(child.name.clone()).or_insert(set);
-                    }
-                }
-                queue.push_back(&child.name);
-            }
-        }
-    }
-
-    fn compile(&mut self, index: &HashMap<&str, &Action>, id: &str, depth: usize) -> NodeId {
-        let pruned = self.prune.as_deref().is_some_and(|target| {
-            index
-                .get(id)
-                .is_some_and(|a| a.id != target && !is_container(a))
-        });
-        let node = match index.get(id).filter(|_| depth < MAX_DEPTH && !pruned) {
-            None => Node::Noop,
-            Some(action) => match action.kind() {
-                ActionKind::Root { children } => Node::Seq(
-                    children
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                ),
-                ActionKind::MapToVjoy {
-                    device,
-                    input_type,
-                    input_id,
-                    inverted,
-                } => {
-                    let id = input_id.min(255) as u8;
-                    let target = match input_type {
-                        InputType::Axis => Some(VjoyTarget::Axis(id)),
-                        InputType::Button => Some(VjoyTarget::Button(id)),
-                        InputType::Hat => Some(VjoyTarget::Hat(id)),
-                        InputType::Other => None,
-                    };
-                    let relative = (action.str("axis-mode") == Some("relative")).then(|| {
-                        action
-                            .str("axis-scaling")
-                            .and_then(|s| s.trim().parse().ok())
-                            .unwrap_or(1.0)
-                    });
-                    target.map_or(Node::Noop, |target| Node::Vjoy {
-                        device,
-                        target,
-                        inverted,
-                        act: action.activation_mode(),
-                        relative,
-                        send: action.button_send(),
-                    })
-                }
-                ActionKind::MapToGamepad {
-                    gamepad,
-                    control,
-                    inverted,
-                } => GamepadControl::parse(control).map_or(Node::Noop, |control| Node::Gamepad {
-                    gamepad,
-                    control,
-                    inverted,
-                    act: action.activation_mode(),
-                    send: action.button_send(),
-                }),
-                ActionKind::ChangeMode { change_type, .. } => Node::ChangeMode {
-                    kind: match change_type {
-                        "Previous" => ChangeKind::Previous,
-                        "Unwind" => ChangeKind::Unwind,
-                        "Cycle" => ChangeKind::Cycle,
-                        "Temporary" => ChangeKind::Temporary,
-                        _ => ChangeKind::Switch,
-                    },
-                    targets: target_modes(action),
-                    act: action.activation_mode(),
-                },
-                ActionKind::ResponseCurve {
-                    curve_type,
-                    deadzone,
-                    points,
-                } => Node::Curve {
-                    deadzone: deadzone.map(|d| d as f32),
-                    curve: gob_core::curve::Curve::new(
-                        gob_core::curve::CurveType::parse(curve_type),
-                        &points,
-                    ),
-                },
-                ActionKind::Tempo {
-                    short,
-                    long,
-                    threshold,
-                    activate_on,
-                } => Node::Tempo {
-                    short: short
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                    long: long
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                    threshold: Duration::from_secs_f64(threshold.max(0.0)),
-                    on_press: activate_on == "press",
-                },
-                ActionKind::Chain { chains, timeout } => Node::Chain {
-                    chains: chains
-                        .iter()
-                        .map(|c| {
-                            c.iter()
-                                .map(|a| self.compile(index, a, depth + 1))
-                                .collect()
-                        })
-                        .collect(),
-                    timeout: Duration::from_secs_f64(timeout.max(0.0)),
-                },
-                ActionKind::DoubleTap {
-                    single,
-                    double,
-                    threshold,
-                    activate_on,
-                } => Node::DoubleTap {
-                    single: single
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                    double: double
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                    threshold: Duration::from_secs_f64(threshold.max(0.0)),
-                    exclusive: activate_on != "combined",
-                },
-                ActionKind::HatButtons { directions } => Node::HatButtons(
-                    directions
-                        .into_iter()
-                        .map(|(_, d, ids)| {
-                            (
-                                d,
-                                ids.iter()
-                                    .map(|c| self.compile(index, c, depth + 1))
-                                    .collect(),
-                            )
-                        })
-                        .collect(),
-                ),
-                ActionKind::MapToLogicalDevice {
-                    input_type,
-                    id,
-                    inverted,
-                    relative,
-                } => {
-                    let kind = match input_type {
-                        InputType::Axis => Some(InputKind::Axis),
-                        InputType::Button => Some(InputKind::Button),
-                        InputType::Hat => Some(InputKind::Hat),
-                        InputType::Other => None,
-                    };
-                    kind.map_or(Node::Noop, |kind| Node::Logical {
-                        key: InputKey {
-                            device: gob_core::LOGICAL_DEVICE_GUID.into(),
-                            kind,
-                            id,
-                        },
-                        inverted,
-                        relative: relative.map(|r| r as f32),
-                        act: action.activation_mode(),
-                    })
-                }
-                ActionKind::LoadProfile { file } => Node::LoadProfile {
-                    file: file.to_string(),
-                    act: action.activation_mode(),
-                },
-                ActionKind::PlaySound { file, volume } => Node::PlaySound {
-                    file: file.to_string(),
-                    volume,
-                    act: action.activation_mode(),
-                },
-                ActionKind::LightLed {
-                    device,
-                    led,
-                    element,
-                    color,
-                    color2,
-                    blend,
-                    mode,
-                    on_activate,
-                } => {
-                    let light = Light {
-                        device: self.device(device).to_string(),
-                        led,
-                        element,
-                        color,
-                        color2,
-                        blend,
-                        mode,
-                    };
-                    if light.device.is_empty() {
-                        Node::Noop
-                    } else if on_activate {
-                        self.compiled_lights.push(light);
-                        Node::Noop
-                    } else {
-                        Node::LightLed {
-                            light,
-                            act: action.activation_mode(),
-                        }
-                    }
-                }
-                ActionKind::TextToSpeech {
-                    text,
-                    voice,
-                    queue_mode,
-                    rate,
-                    volume,
-                    pitch,
-                } => Node::Speak {
-                    request: SpeechRequest {
-                        text: text.to_string(),
-                        voice: voice.map(String::from),
-                        rate: rate as f32,
-                        volume: volume as f32,
-                        pitch: pitch as f32,
-                        queue: SpeechQueue::parse(queue_mode),
-                    },
-                    act: action.activation_mode(),
-                },
-                ActionKind::Condition {
-                    all,
-                    conditions,
-                    true_actions,
-                    false_actions,
-                } => Node::Condition {
-                    all,
-                    conditions: conditions
-                        .into_iter()
-                        .map(|c| Cond {
-                            source: match c.source {
-                                ConditionSource::CurrentInput => CondSource::Current,
-                                ConditionSource::Joystick(inputs) => CondSource::Inputs(
-                                    inputs
-                                        .into_iter()
-                                        .filter_map(|(device, ty, id)| {
-                                            let kind = match ty {
-                                                InputType::Axis => InputKind::Axis,
-                                                InputType::Button => InputKind::Button,
-                                                InputType::Hat => InputKind::Hat,
-                                                InputType::Other => return None,
-                                            };
-                                            Some(InputKey {
-                                                device: self.device(&device),
-                                                kind,
-                                                id,
-                                            })
-                                        })
-                                        .collect(),
-                                ),
-                                ConditionSource::Keyboard(keys) => CondSource::Keys(keys),
-                                ConditionSource::Vjoy {
-                                    device,
-                                    input_type,
-                                    id,
-                                } => match input_type {
-                                    InputType::Axis => {
-                                        CondSource::Vjoy(device, InputKind::Axis, id)
-                                    }
-                                    InputType::Hat => CondSource::Vjoy(device, InputKind::Hat, id),
-                                    _ => CondSource::Vjoy(device, InputKind::Button, id),
-                                },
-                                ConditionSource::Logical { input_type, id } => {
-                                    let kind = match input_type {
-                                        InputType::Axis => InputKind::Axis,
-                                        InputType::Hat => InputKind::Hat,
-                                        _ => InputKind::Button,
-                                    };
-                                    CondSource::Inputs(vec![InputKey {
-                                        device: gob_core::LOGICAL_DEVICE_GUID.into(),
-                                        kind,
-                                        id,
-                                    }])
-                                }
-                                ConditionSource::Other(_) => CondSource::Never,
-                            },
-                            comparator: c.comparator,
-                        })
-                        .collect(),
-                    branches: [true_actions, false_actions].map(|ids| {
-                        ids.iter()
-                            .map(|c| self.compile(index, c, depth + 1))
-                            .collect()
-                    }),
-                    act: action.activation_mode(),
-                },
-                ActionKind::DualAxisDeadzone {
-                    axis1,
-                    axis2,
-                    inner,
-                    outer,
-                    first,
-                    second,
-                } => Node::DualDeadzone {
-                    axes: [axis1, axis2].map(|(device, id)| InputKey {
-                        device: self.device(device),
-                        kind: InputKind::Axis,
-                        id,
-                    }),
-                    inner: inner as f32,
-                    outer: outer as f32,
-                    outputs: [first, second].map(|ids| {
-                        ids.iter()
-                            .map(|c| self.compile(index, c, depth + 1))
-                            .collect()
-                    }),
-                },
-                ActionKind::AxisDelta {
-                    threshold,
-                    positive,
-                    negative,
-                } => Node::AxisDelta {
-                    threshold: threshold.max(0.0001) as f32,
-                    positive: positive
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                    negative: negative
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                },
-                ActionKind::MergeAxis {
-                    axis1,
-                    axis2,
-                    operation,
-                    children,
-                } => Node::Merge {
-                    axes: [axis1, axis2].map(|(device, id)| InputKey {
-                        device: self.device(device),
-                        kind: InputKind::Axis,
-                        id,
-                    }),
-                    op: operation,
-                    children: children
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                },
-                ActionKind::MapToKeyboard { keys } => Node::Keys {
-                    keys,
-                    act: action.activation_mode(),
-                    send: action.button_send(),
-                },
-                ActionKind::MapToMouse(action_kind) => Node::Mouse {
-                    action: action_kind,
-                    act: action.activation_mode(),
-                    send: action.button_send(),
-                },
-                ActionKind::Delay {
-                    children,
-                    seconds,
-                    while_held,
-                } => Node::Delay {
-                    children: children
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                    delay: Duration::from_secs_f64(seconds.clamp(0.0, 600.0)),
-                    while_held,
-                },
-                ActionKind::SmartToggle { children, delay } => Node::SmartToggle {
-                    children: children
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                    delay: Duration::from_secs_f64(delay.max(0.0)),
-                },
-                ActionKind::SplitAxis {
-                    split,
-                    lower,
-                    upper,
-                } => Node::Split {
-                    split: split as f32,
-                    lower: lower
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                    upper: upper
-                        .iter()
-                        .map(|c| self.compile(index, c, depth + 1))
-                        .collect(),
-                },
-                ActionKind::PauseResume { operation } => Node::Pause(match operation.trim() {
-                    "Resume" => PauseOp::Resume,
-                    "Toggle" => PauseOp::Toggle,
-                    _ => PauseOp::Pause,
-                }),
-                ActionKind::RunCommand {
-                    executable,
-                    arguments,
-                } => Node::Run {
-                    executable: executable.to_string(),
-                    arguments: split_command(arguments),
-                    act: action.activation_mode(),
-                },
-                ActionKind::Macro { steps, repeat, .. } => Node::Macro {
-                    steps: with_default_delay(&steps, self.macro_delay),
-                    repeat,
-                    act: action.activation_mode(),
-                    targets: self.run_targets.get(id).cloned().unwrap_or_default(),
-                },
-                ActionKind::VoiceInput { microphone } => Node::Voice {
-                    microphone: microphone.to_string(),
-                    act: action.activation_mode(),
-                },
-                ActionKind::ButtonAxis(axis) => self.button_axis_node(axis, &action.id),
-                ActionKind::Other | ActionKind::Description { .. } => Node::Noop,
-            },
-        };
-        self.nodes.push(Arc::new(node));
-        let node = self.nodes.len() - 1;
-        if self.prune.is_none() && index.contains_key(id) && !self.action_nodes.contains_key(id) {
-            self.action_nodes.insert(id.to_string(), node);
-        }
-        node
-    }
-
-    /// button-axis: its node, the decrease one while compiling the decrease input's tree;
-    /// otherwise the decrease input goes to `compiled_decrease`.
-    fn button_axis_node(&mut self, axis: ButtonAxis, id: &str) -> Node {
-        let target = match &axis.output {
-            AxisOutput::Vjoy { device, axis } => AxisOut::Vjoy(*device, (*axis).min(255) as u8),
-            AxisOutput::Gamepad { gamepad, control } => match GamepadControl::parse(control) {
-                Some(c) if matches!(c.kind(), ControlKind::Stick | ControlKind::Trigger) => {
-                    AxisOut::Pad(*gamepad, c)
-                }
-                _ => return Node::Noop,
-            },
-            AxisOutput::Logical { id } => AxisOut::Logical(InputKey {
-                device: gob_core::LOGICAL_DEVICE_GUID.into(),
-                kind: InputKind::Axis,
-                id: *id,
-            }),
-        };
-        // Compiling the decrease input's tree: this is the node it reaches.
-        if self.prune.as_deref() == Some(id) {
-            return Node::ButtonAxis {
-                axis,
-                target,
-                up: false,
-            };
-        }
-        if self.prune.is_none()
-            && let Some(input) = axis.decrease.clone()
-            && matches!(input.input_type.as_str(), "button" | "key")
-        {
-            self.compiled_decrease.push((input, id.to_string()));
-        }
-        Node::ButtonAxis {
-            axis,
-            target,
-            up: true,
-        }
-    }
-
     pub fn is_paused(&self) -> bool {
         self.paused
+    }
+
+    /// The layer the held modifiers choose (the base layer while none is held).
+    pub fn current_layer(&self) -> &Layer {
+        &self.layer_now
+    }
+
+    /// The description of the last binding whose input was pressed and had one.
+    pub fn last_action(&self) -> Option<&str> {
+        self.last_action.as_deref()
     }
 
     pub fn current_mode(&self) -> &str {
@@ -1657,6 +1294,30 @@ impl Engine {
         }
         let timer = self.add_timer(now + hold, TimerKind::VoiceRelease(id));
         self.voice_releases.insert(id, timer);
+        // A group opens for a while: then only what is in it is listened for. A command closes
+        // the open group.
+        let old = self.voice_scope.take();
+        if let Some((_, timer)) = old {
+            self.timers.retain(|t| t.id != timer);
+        }
+        if self.voice_scopes.contains_key(&id) {
+            let timer = self.add_timer(now + VOICE_GROUP_OPEN, TimerKind::VoiceScope);
+            self.voice_scope = Some((id, timer));
+        }
+        if old.map(|o| o.0) != self.voice_scope.map(|s| s.0) {
+            self.voice_scope_changed = true;
+        }
+    }
+
+    /// The open voice group, if any.
+    pub fn voice_group(&self) -> Option<u32> {
+        self.voice_scope.map(|s| s.0)
+    }
+
+    /// Whether the phrases to listen for ([`Engine::voice_phrases`]) changed since the last call:
+    /// a voice group opened or closed.
+    pub fn take_voice_phrases_changed(&mut self) -> bool {
+        std::mem::take(&mut self.voice_scope_changed)
     }
 
     /// The microphones voice-input actions listen on (empty = the default one), each once.
@@ -1672,9 +1333,12 @@ impl Engine {
         found
     }
 
-    /// The phrases to listen for, each with its command's id.
+    /// The phrases to listen for now, each with its command's or group's id: what is in the open
+    /// voice group, else everything said from the top.
     pub fn voice_phrases(&self) -> &[(u32, String)] {
-        &self.voice_phrases
+        self.voice_scope
+            .and_then(|(g, _)| self.voice_scopes.get(&g))
+            .unwrap_or(&self.voice_phrases)
     }
 
     /// Before this engine is replaced: stops listening on every microphone, as if each
@@ -1690,6 +1354,60 @@ impl Engine {
         for (id, timer) in held {
             self.timers.retain(|t| t.id != timer);
             self.process(&voice_key(id), Value::Button(false), now, out);
+        }
+    }
+
+    /// An OSC message with `address` arrived, its first argument as a number (`value`). An axis
+    /// input moves to it (messages without one are ignored); a button is pressed from half of 1
+    /// up, and a message without a number presses it for [`gob_core::OSC_PULSE_MS`] (again
+    /// while down: that long from now). Addresses the profile does not know are ignored.
+    pub fn osc(&mut self, address: &str, value: Option<f64>, now: Instant, out: &mut dyn Output) {
+        let Some(route) = self.osc_routes.get(address) else {
+            return;
+        };
+        let (key, id) = (route.key.clone(), route.input.id);
+        match (route.input.kind, value) {
+            (gob_core::OscKind::Axis, Some(n)) => {
+                let v = route.input.axis_value(n);
+                self.process(&key, Value::Axis(v), now, out);
+            }
+            (gob_core::OscKind::Axis, None) => {}
+            (gob_core::OscKind::Button, Some(n)) => {
+                if let Some(timer) = self.osc_releases.remove(&id) {
+                    self.timers.retain(|t| t.id != timer);
+                }
+                self.process(&key, Value::Button(gob_core::osc_pressed(n)), now, out);
+            }
+            (gob_core::OscKind::Button, None) => {
+                match self.osc_releases.remove(&id) {
+                    Some(timer) => self.timers.retain(|t| t.id != timer),
+                    None => self.process(&key, Value::Button(true), now, out),
+                }
+                let hold = Duration::from_millis(gob_core::OSC_PULSE_MS);
+                let timer = self.add_timer(now + hold, TimerKind::OscRelease(id));
+                self.osc_releases.insert(id, timer);
+            }
+        }
+    }
+
+    /// The input of OSC input `id`.
+    fn osc_key(&self, id: u32) -> Option<InputKey> {
+        self.osc_routes
+            .values()
+            .find(|r| r.input.id == id)
+            .map(|r| r.key.clone())
+    }
+
+    /// Before this engine is replaced: releases the OSC buttons a message without a number
+    /// pressed (their release timers go with this engine).
+    pub fn stop_osc(&mut self, now: Instant, out: &mut dyn Output) {
+        let mut held: Vec<(u32, u64)> = self.osc_releases.drain().collect();
+        held.sort_unstable();
+        for (id, timer) in held {
+            self.timers.retain(|t| t.id != timer);
+            if let Some(key) = self.osc_key(id) {
+                self.process(&key, Value::Button(false), now, out);
+            }
         }
     }
 
@@ -1870,7 +1588,10 @@ impl Engine {
                 self.axes.insert(key.clone(), v);
             }
             Value::Button(b) => {
-                self.buttons.insert(key.clone(), b);
+                let was = self.buttons.insert(key.clone(), b);
+                if was != Some(b) && self.is_modifier(key) {
+                    self.layer_now = self.held_layer();
+                }
             }
             Value::Hat(d) => {
                 self.hats.insert(key.clone(), d);
@@ -2064,7 +1785,18 @@ impl Engine {
                     self.voice_releases.remove(&id);
                     self.process(&voice_key(id), Value::Button(false), now, out);
                 }
+                TimerKind::VoiceScope => {
+                    if self.voice_scope.take().is_some() {
+                        self.voice_scope_changed = true;
+                    }
+                }
                 TimerKind::DelayFire(node) => self.delay_fire(node, now, out),
+                TimerKind::OscRelease(id) => {
+                    self.osc_releases.remove(&id);
+                    if let Some(key) = self.osc_key(id) {
+                        self.process(&key, Value::Button(false), now, out);
+                    }
+                }
                 TimerKind::EventRelease(id) => {
                     if let (Some((_, mode)), Some(event)) =
                         (self.event_releases.remove(&id), ProfileEvent::from_id(id))
@@ -2323,10 +2055,14 @@ impl Engine {
         }
         self.feed_foreign_vbuttons(key, value, &src.mode, now, out);
         let layer = self.event_layer(key, value);
+        let pressed = matches!(value, Value::Button(true) | Value::Hat(Some(_)));
         if let Some(&set) = self.lookup.get(key).and_then(|m| m.get(&*src.mode)) {
             let selection = self.selection(set, &layer);
             for ci in 0..self.sets[set].len() {
                 if selection.runs(&self.sets[set][ci].layer) {
+                    if pressed && let Some(d) = &self.sets[set][ci].description {
+                        self.last_action = Some(d.clone());
+                    }
                     self.run_config((set, ci), &src, value, now, out);
                 }
             }
@@ -2692,6 +2428,47 @@ impl Engine {
                     }
                 }
             }
+            Node::Zones {
+                ref points,
+                ref zones,
+            } => {
+                if let Value::Axis(v) = *value {
+                    let v = f64::from(v);
+                    let n = gob_core::zones::zone_of(points, v);
+                    // The zone left, and any the axis jumped over, get the edge it passed them
+                    // at, so their outputs do not stay somewhere in the middle (a fixed zone
+                    // keeps its value).
+                    let was = self.zone_last.insert(node, n);
+                    if let Some(old) = was.filter(|&o| o != n) {
+                        let up = n > old;
+                        let passed = if up { old..n } else { n + 1..old + 1 };
+                        for z in passed {
+                            let Some((output, nodes)) = zones.get(z) else {
+                                continue;
+                            };
+                            if matches!(output, gob_core::ZoneOutput::Fixed(_)) {
+                                continue;
+                            }
+                            let lo = if z == 0 { -1.0 } else { points[z - 1] };
+                            let hi = points.get(z).copied().unwrap_or(1.0);
+                            let edge = if up { hi } else { lo };
+                            let mut left = Value::Axis(gob_core::zones::output(
+                                points, z, *output, edge,
+                            ) as f32);
+                            for &c in nodes {
+                                self.run(c, src, &mut left, now, out, depth + 1);
+                            }
+                        }
+                    }
+                    if let Some((output, nodes)) = zones.get(n) {
+                        let out_v = gob_core::zones::output(points, n, *output, v);
+                        *value = Value::Axis(out_v as f32);
+                        for &c in nodes {
+                            self.run(c, src, value, now, out, depth + 1);
+                        }
+                    }
+                }
+            }
             Node::Pause(op) => {
                 if value.truthy() {
                     self.paused = match op {
@@ -2844,6 +2621,29 @@ impl Engine {
                 if should_execute(act, *value) && !file.is_empty() {
                     log::info!("load-profile action: {file}");
                     out.load_profile(file);
+                }
+            }
+            Node::SendOsc {
+                ref host,
+                port,
+                ref address,
+                ref args,
+                act,
+            } => {
+                if should_execute(act, *value) && !address.is_empty() {
+                    let input = match *value {
+                        Value::Button(b) => f32::from(u8::from(b)),
+                        Value::Axis(v) => (v + 1.0) / 2.0,
+                        Value::Hat(d) => d.map_or(-1.0, |d| f32::from(d) / 100.0),
+                    };
+                    let args = args
+                        .iter()
+                        .map(|a| match a {
+                            OscOut::Fixed(arg) => arg.clone(),
+                            OscOut::Input => gob_osc::Arg::Float(input),
+                        })
+                        .collect();
+                    out.send_osc(host, port, &gob_osc::Message::new(address.clone(), args));
                 }
             }
             Node::PlaySound {
@@ -3058,231 +2858,6 @@ impl Engine {
         }
     }
 
-    /// Presses a map-to-keyboard action's keys in order, unless they are down already.
-    fn press_keys(&mut self, node: NodeId, out: &mut dyn Output) {
-        if !self.keys_down.insert(node) {
-            return;
-        }
-        if let Node::Keys { keys, .. } = &*self.nodes[node] {
-            for k in keys {
-                out.key(k.scan_code, k.extended, true);
-            }
-        }
-    }
-
-    /// An input event for a button output with a [`SendMode`] other than hold. The trigger is
-    /// the press, or the release when the action runs on release.
-    #[allow(clippy::too_many_arguments)]
-    fn send_event(
-        &mut self,
-        node: NodeId,
-        press: Press,
-        send: ButtonSend,
-        act: ActivationMode,
-        src: &Source,
-        value: Value,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        // A hat is on while it is pushed in any direction.
-        let on = match value {
-            Value::Hat(direction) => direction.is_some(),
-            v => v.truthy(),
-        };
-        let state = self.sends.entry(node).or_default();
-        if state.input == on {
-            return;
-        }
-        state.input = on;
-        let triggered = on != (act == ActivationMode::Release);
-        // A wheel has nothing to hold: press, release and toggle turn it one notch each time.
-        if let Press::Mouse(wheel @ (MouseButton::WheelUp | MouseButton::WheelDown)) = press
-            && matches!(
-                send.mode,
-                SendMode::Press | SendMode::Release | SendMode::Toggle
-            )
-        {
-            if triggered {
-                out.mouse_wheel(if wheel == MouseButton::WheelUp { 1 } else { -1 });
-            }
-            return;
-        }
-        let state = self.sends.entry(node).or_default();
-        match send.mode {
-            SendMode::Hold => {}
-            SendMode::Press | SendMode::Release if triggered => {
-                self.press(node, press, send.mode == SendMode::Press, out)
-            }
-            SendMode::Toggle if triggered => {
-                let down = !state.down;
-                self.press(node, press, down, out);
-            }
-            SendMode::Pulse if triggered => {
-                self.press(node, press, true, out);
-                let at = now + ms(send.pulse_ms);
-                self.restart_send_timer(node, at, TimerKind::SendUp(node), false);
-            }
-            SendMode::Repeat if triggered => {
-                if state.repeating {
-                    return;
-                }
-                state.repeating = true;
-                state.send = send;
-                self.press(node, press, true, out);
-                let up = now + ms(send.pulse_ms.min(send.delay_ms / 2).max(1));
-                self.restart_send_timer(node, up, TimerKind::SendUp(node), false);
-                let next = now + ms(send.delay_ms);
-                self.restart_send_timer(node, next, TimerKind::SendNext(node), true);
-                // Let go of the input in another mode: the repeat stops too. Inside smart-toggle
-                // the container sends the release itself.
-                if src.no_auto_release {
-                    return;
-                }
-                self.register(
-                    &src.key,
-                    ReleaseEntry {
-                        mode: src.mode.clone(),
-                        any_mode: false,
-                        on_press: act == ActivationMode::Release,
-                        action: ReleaseAction::StopSend(node),
-                    },
-                );
-            }
-            SendMode::Repeat => self.stop_send(node, out),
-            _ => {}
-        }
-    }
-
-    /// A [`Press`] output goes down or up; the action's state remembers it.
-    fn press(&mut self, node: NodeId, press: Press, down: bool, out: &mut dyn Output) {
-        match press {
-            Press::Vjoy(device, button) => self.vjoy_button(device, button, down, out),
-            Press::Pad(gamepad, control) => self.pad_button(gamepad, control, down, out),
-            Press::Keys(node) if down => self.press_keys(node, out),
-            Press::Keys(node) if self.keys_down.contains(&node) => self.release_keys(node, out),
-            // Release only: the keys were pressed by another action (press only).
-            Press::Keys(node) => self.let_go_of_keys(node, out),
-            // A wheel turns one notch each time it goes down.
-            Press::Mouse(MouseButton::WheelUp) if down => out.mouse_wheel(1),
-            Press::Mouse(MouseButton::WheelDown) if down => out.mouse_wheel(-1),
-            Press::Mouse(MouseButton::WheelUp | MouseButton::WheelDown) => {}
-            Press::Mouse(button) => self.mouse_button(button, down, out),
-        }
-        let state = self.sends.entry(node).or_default();
-        state.down = down;
-        state.press = Some(press);
-    }
-
-    /// Replaces the action's pending release (`next` false) or next pulse (`next` true).
-    fn restart_send_timer(&mut self, node: NodeId, at: Instant, kind: TimerKind, next: bool) {
-        let old = {
-            let state = self.sends.entry(node).or_default();
-            if next {
-                state.next_timer.take()
-            } else {
-                state.up_timer.take()
-            }
-        };
-        if let Some(id) = old {
-            self.timers.retain(|t| t.id != id);
-        }
-        let id = self.add_timer(at, kind);
-        let state = self.sends.entry(node).or_default();
-        if next {
-            state.next_timer = Some(id);
-        } else {
-            state.up_timer = Some(id);
-        }
-    }
-
-    /// A pulse's time is up.
-    fn send_up(&mut self, node: NodeId, out: &mut dyn Output) {
-        let Some(state) = self.sends.get_mut(&node) else {
-            return;
-        };
-        state.up_timer = None;
-        if let (true, Some(press)) = (state.down, state.press) {
-            self.press(node, press, false, out);
-        }
-    }
-
-    /// Repeat: the next pulse, `at` the time it was due (the period does not drift).
-    fn send_next(&mut self, node: NodeId, at: Instant, out: &mut dyn Output) {
-        let Some(state) = self.sends.get_mut(&node) else {
-            return;
-        };
-        let send = state.send;
-        state.next_timer = None;
-        let (true, Some(press)) = (state.repeating, state.press) else {
-            return;
-        };
-        if state.down {
-            // A pulse longer than the period: the output goes up for one pass first.
-            self.press(node, press, false, out);
-        }
-        self.press(node, press, true, out);
-        let up = at + ms(send.pulse_ms.min(send.period_ms / 2).max(1));
-        self.restart_send_timer(node, up, TimerKind::SendUp(node), false);
-        let next = at + ms(send.period_ms);
-        self.restart_send_timer(node, next, TimerKind::SendNext(node), true);
-    }
-
-    /// Repeat ends: no more pulses, the output goes up.
-    fn stop_send(&mut self, node: NodeId, out: &mut dyn Output) {
-        let Some(state) = self.sends.get_mut(&node) else {
-            return;
-        };
-        state.repeating = false;
-        let timers = [state.up_timer.take(), state.next_timer.take()];
-        let (down, press) = (state.down, state.press);
-        self.timers.retain(|t| !timers.contains(&Some(t.id)));
-        if let (true, Some(press)) = (down, press) {
-            self.press(node, press, false, out);
-        }
-    }
-
-    /// A mouse button held by the profile (released by [`Engine::release_all`]).
-    fn mouse_button(&mut self, button: MouseButton, down: bool, out: &mut dyn Output) {
-        out.mouse_button(button, down);
-        let held = self.mouse_down.contains(&button);
-        if down && !held {
-            self.mouse_down.push(button);
-        } else if !down && held {
-            self.mouse_down.retain(|&b| b != button);
-        }
-    }
-
-    /// A virtual stick button the profile presses or lets go.
-    fn vjoy_button(&mut self, device: u32, button: u8, down: bool, out: &mut dyn Output) {
-        out.button(device, button, down);
-        self.vjoy_down.retain(|&b| b != (device, button));
-        if down {
-            self.vjoy_down.push((device, button));
-        }
-    }
-
-    /// A virtual gamepad stick or trigger value (trigger 0..1), remembered so an axis from
-    /// buttons on it starts from where other actions left it.
-    fn pad_axis(&mut self, gamepad: u32, control: GamepadControl, v: f32, out: &mut dyn Output) {
-        self.pad_axes.insert((gamepad, control), v);
-        out.gamepad_axis(gamepad, control, v);
-    }
-
-    /// A virtual gamepad button the profile presses or lets go.
-    fn pad_button(
-        &mut self,
-        gamepad: u32,
-        control: GamepadControl,
-        down: bool,
-        out: &mut dyn Output,
-    ) {
-        out.gamepad_button(gamepad, control, down);
-        self.pad_down.retain(|&b| b != (gamepad, control));
-        if down {
-            self.pad_down.push((gamepad, control));
-        }
-    }
-
     /// Lets go of everything the profile holds down: keys, mouse buttons, virtual stick and
     /// gamepad buttons, latched and repeating outputs. Called when the profile stops or
     /// another one takes over (the virtual devices stay, so nothing else would release them).
@@ -3342,202 +2917,6 @@ impl Engine {
         // Axes stay where they are, but stop moving.
         for a in self.button_axes.values_mut() {
             (a.held, a.moving, a.spring_at, a.before) = ([false; 2], false, None, None);
-        }
-    }
-
-    /// The state of a button-axis axis, made at its current value (a virtual stick axis may
-    /// have been written by other actions).
-    fn axis_state(&mut self, target: &AxisOut, node: NodeId, now: Instant) -> &mut AxisState {
-        let known = match target {
-            AxisOut::Vjoy(device, axis) => self.vjoy_axes.get(&(*device, *axis)).copied(),
-            AxisOut::Logical(key) => self.axes.get(key).copied(),
-            // As the device takes it: a trigger 0..1, here -1..1 like the other axes.
-            AxisOut::Pad(gamepad, control) => {
-                self.pad_axes
-                    .get(&(*gamepad, *control))
-                    .map(|&v| match control.kind() {
-                        ControlKind::Trigger => v * 2.0 - 1.0,
-                        _ => v,
-                    })
-            }
-        };
-        let state = self
-            .button_axes
-            .entry(target.clone())
-            .or_insert_with(|| AxisState {
-                value: known.unwrap_or_else(|| target.rest()),
-                node,
-                held: [false; 2],
-                speed: 0.0,
-                target: 0.0,
-                before: None,
-                last_press: None,
-                spring_at: None,
-                moving: false,
-                last_step: now,
-            });
-        // Another action wrote it while it stood still.
-        if !state.moving
-            && let Some(v) = known
-        {
-            state.value = v;
-        }
-        state
-    }
-
-    /// A button-axis input (`node`'s) went down or up.
-    fn button_axis_event(
-        &mut self,
-        node: NodeId,
-        target: &AxisOut,
-        pressed: bool,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        let shared = Arc::clone(&self.nodes[node]);
-        let Node::ButtonAxis { ref axis, up, .. } = *shared else {
-            return;
-        };
-        let dir = if up { 1.0 } else { -1.0 };
-        let state = self.axis_state(target, node, now);
-        let write = match axis.motion {
-            AxisMotion::Set => {
-                state.held[usize::from(!up)] = pressed;
-                if pressed {
-                    state.before.get_or_insert(state.value);
-                    Some(dir * axis.value)
-                } else if state.held[usize::from(up)] {
-                    // The other button is still held: its value again.
-                    axis.return_on_release.then_some(-dir * axis.value)
-                } else {
-                    state.before.take().filter(|_| axis.return_on_release)
-                }
-            }
-            AxisMotion::Velocity => {
-                let was = held_direction(state.held);
-                state.held[usize::from(!up)] = pressed;
-                state.node = node;
-                let dir = held_direction(state.held);
-                // A new press, or one of two held buttons let go: it travels (again) from
-                // the start speed.
-                if dir != 0.0 && (pressed || dir != was || !state.moving) {
-                    state.speed = axis.speed;
-                    if !state.moving {
-                        state.moving = true;
-                        state.last_step = now;
-                    }
-                }
-                None
-            }
-            AxisMotion::Stepped if pressed => {
-                let v = state.value;
-                let eps = ButtonAxis::MIN_STEP;
-                if up {
-                    axis.positions.iter().copied().find(|&p| p > v + eps)
-                } else {
-                    axis.positions.iter().copied().rev().find(|&p| p < v - eps)
-                }
-            }
-            AxisMotion::Encoder if pressed => {
-                // Presses per second, from the time since the last one.
-                let rate = state.last_press.map_or(0.0, |t| {
-                    1.0 / now.duration_since(t).as_secs_f32().max(0.001)
-                });
-                let fast = (rate / axis.fast_rate).min(1.0);
-                let step = axis.step + (axis.max_step - axis.step) * fast;
-                state.spring_at = (axis.spring_ms > 0).then(|| now + ms(axis.spring_ms));
-                state.node = node;
-                Some((state.value + dir * step * 2.0).clamp(-1.0, 1.0))
-            }
-            AxisMotion::Smooth if pressed => {
-                let from = if state.moving {
-                    state.target
-                } else {
-                    state.value
-                };
-                state.target = (from + dir * axis.step * 2.0).clamp(-1.0, 1.0);
-                state.node = node;
-                if !state.moving {
-                    state.moving = true;
-                    state.last_step = now;
-                }
-                None
-            }
-            _ => None,
-        };
-        if pressed {
-            state.last_press = Some(now);
-        }
-        if let Some(v) = write {
-            state.value = v;
-            self.write_axis(target, v, now, out);
-        }
-    }
-
-    /// Moves the moving button-axis axes to `now`: velocity and smooth over the real time since
-    /// their last step, encoder springs when due.
-    fn step_button_axes(&mut self, now: Instant, out: &mut dyn Output) {
-        let mut writes = std::mem::take(&mut self.axis_writes);
-        for (target, a) in &mut self.button_axes {
-            if a.spring_at.is_some_and(|t| t <= now) {
-                a.spring_at = None;
-                let rest = match &*self.nodes[a.node] {
-                    Node::ButtonAxis { axis, .. } => axis.start.unwrap_or_else(|| target.rest()),
-                    _ => target.rest(),
-                };
-                a.value = rest;
-                writes.push((target.clone(), rest));
-            }
-            if !a.moving || now < a.last_step + AXIS_STEP {
-                continue;
-            }
-            let dt = now.duration_since(a.last_step).as_secs_f32();
-            a.last_step = now;
-            let Node::ButtonAxis { axis, .. } = &*self.nodes[a.node] else {
-                a.moving = false;
-                continue;
-            };
-            match axis.motion {
-                AxisMotion::Velocity => {
-                    let dir = held_direction(a.held);
-                    let top = axis.max_speed.max(axis.speed);
-                    a.speed = (a.speed + axis.acceleration * dt).min(top);
-                    a.value = (a.value + dir * a.speed * 2.0 * dt).clamp(-1.0, 1.0);
-                    // Let go, or at the end it travels to.
-                    if dir == 0.0 || a.value.abs() >= 1.0 && a.value.signum() == dir {
-                        a.moving = false;
-                    }
-                }
-                AxisMotion::Smooth => {
-                    // 99 % of the way in the response time.
-                    let tau = axis.response_ms as f32 / 1000.0 / 4.6;
-                    a.value = a.target + (a.value - a.target) * (-dt / tau).exp();
-                    if (a.value - a.target).abs() < ButtonAxis::MIN_STEP {
-                        a.value = a.target;
-                        a.moving = false;
-                    }
-                }
-                _ => a.moving = false,
-            }
-            writes.push((target.clone(), a.value));
-        }
-        for (target, v) in writes.drain(..) {
-            self.write_axis(&target, v, now, out);
-        }
-        self.axis_writes = writes;
-    }
-
-    fn write_axis(&mut self, target: &AxisOut, v: f32, now: Instant, out: &mut dyn Output) {
-        match target {
-            AxisOut::Vjoy(device, axis) => self.set_axis(*device, *axis, v, out),
-            AxisOut::Pad(gamepad, control) => {
-                let v = match control.kind() {
-                    ControlKind::Trigger => (v + 1.0) / 2.0,
-                    _ => v,
-                };
-                self.pad_axis(*gamepad, *control, v, out);
-            }
-            AxisOut::Logical(key) => self.feed_logical(key, Value::Axis(v), now, out),
         }
     }
 
@@ -3637,917 +3016,6 @@ impl Engine {
     fn set_axis(&mut self, device: u32, axis: u8, value: f32, out: &mut dyn Output) {
         out.axis(device, axis, value);
         self.vjoy_axes.insert((device, axis), value);
-    }
-
-    /// Gremlin's MacroFunctor + MacroManager.queue_macro.
-    fn macro_trigger(
-        &mut self,
-        node: NodeId,
-        repeat: MacroRepeat,
-        src: &Source,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        match self.macros.get_mut(&node) {
-            // A second activation stops a running toggle macro.
-            Some(run) if matches!(repeat, MacroRepeat::Toggle { .. }) => {
-                run.stop = true;
-                run.queued = 0;
-                return;
-            }
-            Some(run) => run.queued += 1,
-            None => {
-                self.macros.insert(node, MacroRun::default());
-                self.macro_advance(node, now, out);
-            }
-        }
-        if matches!(repeat, MacroRepeat::Hold { .. }) {
-            self.register(
-                &src.key,
-                ReleaseEntry {
-                    mode: src.mode.clone(),
-                    any_mode: true,
-                    on_press: false,
-                    action: ReleaseAction::StopMacro(node),
-                },
-            );
-        }
-    }
-
-    /// Executes steps until the next pause, the end of the macro or its termination.
-    fn macro_advance(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        let shared = Arc::clone(&self.nodes[node]);
-        let Node::Macro {
-            ref steps,
-            repeat,
-            ref targets,
-            ..
-        } = *shared
-        else {
-            return;
-        };
-        loop {
-            let Some(run) = self.macros.get_mut(&node) else {
-                return;
-            };
-            if run.between_rounds {
-                run.between_rounds = false;
-                let more = match repeat {
-                    MacroRepeat::Single => false,
-                    MacroRepeat::Count { count, .. } => run.rounds < count,
-                    MacroRepeat::Hold { .. } | MacroRepeat::Toggle { .. } => true,
-                };
-                if run.stop || !more {
-                    self.macro_finish(node, now, out);
-                    return;
-                }
-            }
-            let Some(step) = steps.get(run.pos).cloned() else {
-                let delay = match repeat {
-                    MacroRepeat::Single => {
-                        self.macro_finish(node, now, out);
-                        return;
-                    }
-                    MacroRepeat::Count { delay, .. }
-                    | MacroRepeat::Hold { delay }
-                    | MacroRepeat::Toggle { delay } => delay,
-                };
-                run.pos = 0;
-                run.rounds += 1;
-                run.between_rounds = true;
-                let wait = Duration::from_secs_f64(delay.max(0.0)).max(MACRO_MIN_REPEAT);
-                self.add_timer(now + wait, TimerKind::MacroStep(node));
-                return;
-            };
-            run.pos += 1;
-            if let MacroStep::Pause(d) = step {
-                self.add_timer(
-                    now + Duration::from_secs_f64(d.max(0.0)),
-                    TimerKind::MacroStep(node),
-                );
-                return;
-            }
-            if let MacroStep::RunAction { action } = &step {
-                if targets.contains(action)
-                    && let Some(&target) = self.action_nodes.get(action)
-                {
-                    self.run_action(target, now, out);
-                }
-                continue;
-            }
-            self.macro_step(step, now, out);
-        }
-    }
-
-    /// A run-action step: the action runs as a short press of a button of its own would run
-    /// it, pressed now and released [`PULSE`] later.
-    /// A press still held from an earlier run is released first, so presses and releases
-    /// always alternate.
-    fn run_action(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        if let Some(timer) = self.run_releases.remove(&node)
-            && let Some(pos) = self.timers.iter().position(|t| t.id == timer)
-            && let TimerKind::RunRelease { node, src } = self.timers.remove(pos).kind
-        {
-            self.run_release(node, &src, now, out);
-        }
-        let src = Source {
-            key: InputKey::new(RUN_ACTION_DEVICE, InputKind::Button, node as u32),
-            mode: self.modes.shared(),
-            no_auto_release: false,
-        };
-        self.run(node, &src, &mut Value::Button(true), now, out, 0);
-        self.process_release(&src.key, true, now, out);
-        let timer = self.add_timer(now + PULSE, TimerKind::RunRelease { node, src });
-        self.run_releases.insert(node, timer);
-    }
-
-    fn run_release(&mut self, node: NodeId, src: &Source, now: Instant, out: &mut dyn Output) {
-        self.run(node, src, &mut Value::Button(false), now, out, 0);
-        self.process_release(&src.key, false, now, out);
-    }
-
-    /// Ends a run and starts the next queued activation, if any.
-    fn macro_finish(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        let queued = self.macros.remove(&node).map_or(0, |r| r.queued);
-        if queued > 0 {
-            self.macros.insert(
-                node,
-                MacroRun {
-                    queued: queued - 1,
-                    ..MacroRun::default()
-                },
-            );
-            self.macro_advance(node, now, out);
-        }
-    }
-
-    fn macro_step(&mut self, step: MacroStep, now: Instant, out: &mut dyn Output) {
-        let id = |n: u32| n.min(255) as u8;
-        match step {
-            MacroStep::Key {
-                scan_code,
-                extended,
-                pressed,
-            } => out.key(scan_code, extended, pressed),
-            // Wheel steps scroll one notch whatever their pressed flag says.
-            MacroStep::MouseButton {
-                button: MouseButton::WheelUp,
-                ..
-            } => out.mouse_wheel(1),
-            MacroStep::MouseButton {
-                button: MouseButton::WheelDown,
-                ..
-            } => out.mouse_wheel(-1),
-            MacroStep::MouseButton { button, pressed } => out.mouse_button(button, pressed),
-            MacroStep::MouseMotion { dx, dy } => out.mouse_move(dx, dy),
-            MacroStep::VjoyButton {
-                device,
-                id: n,
-                pressed,
-            } => self.vjoy_button(device, id(n), pressed, out),
-            MacroStep::VjoyAxis {
-                device,
-                id: n,
-                value,
-                relative,
-            } => {
-                let mut v = value as f32;
-                if relative {
-                    v += self.vjoy_axes.get(&(device, id(n))).copied().unwrap_or(0.0);
-                }
-                self.set_axis(device, id(n), v.clamp(-1.0, 1.0), out);
-            }
-            MacroStep::VjoyHat {
-                device,
-                id: n,
-                direction,
-            } => out.hat(device, id(n), direction),
-            MacroStep::GamepadButton {
-                gamepad,
-                control,
-                pressed,
-            } => {
-                if let Some(c) = GamepadControl::parse(&control) {
-                    self.pad_button(gamepad, c, pressed, out);
-                }
-            }
-            MacroStep::GamepadAxis {
-                gamepad,
-                control,
-                value,
-            } => {
-                let Some(c) = GamepadControl::parse(&control) else {
-                    return;
-                };
-                let low = if c.kind() == ControlKind::Trigger {
-                    0.0
-                } else {
-                    -1.0
-                };
-                self.pad_axis(gamepad, c, (value as f32).clamp(low, 1.0), out);
-            }
-            MacroStep::GamepadDpad { gamepad, direction } => out.gamepad_dpad(gamepad, direction),
-            MacroStep::LogicalButton { id: n, pressed } => {
-                let key = InputKey::new(gob_core::LOGICAL_DEVICE_GUID, InputKind::Button, n);
-                self.feed_logical(&key, Value::Button(pressed), now, out);
-            }
-            MacroStep::LogicalAxis {
-                id: n,
-                value,
-                relative,
-            } => {
-                let key = InputKey::new(gob_core::LOGICAL_DEVICE_GUID, InputKind::Axis, n);
-                let mut v = value as f32;
-                if relative {
-                    v += self.axes.get(&key).copied().unwrap_or(0.0);
-                }
-                self.feed_logical(&key, Value::Axis(v.clamp(-1.0, 1.0)), now, out);
-            }
-            MacroStep::LogicalHat { id: n, direction } => {
-                let key = InputKey::new(gob_core::LOGICAL_DEVICE_GUID, InputKind::Hat, n);
-                self.feed_logical(&key, Value::Hat(direction), now, out);
-            }
-            // Run-action steps run in `macro_advance`, which knows the macro's targets.
-            MacroStep::Pause(_) | MacroStep::RunAction { .. } | MacroStep::Other => {}
-        }
-    }
-
-    fn mouse(
-        &mut self,
-        node: NodeId,
-        action: MouseAction,
-        src: &Source,
-        value: Value,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        let MouseAction::Motion {
-            direction,
-            min_speed,
-            max_speed,
-            time_to_max_speed,
-        } = action
-        else {
-            if let MouseAction::Button(button) = action {
-                match button {
-                    MouseButton::WheelUp if value.truthy() => out.mouse_wheel(1),
-                    MouseButton::WheelDown if value.truthy() => out.mouse_wheel(-1),
-                    MouseButton::WheelUp | MouseButton::WheelDown => {}
-                    b => self.mouse_button(b, value.truthy(), out),
-                }
-            }
-            return;
-        };
-        let key = (node, src.key.clone());
-        match value {
-            Value::Axis(v) => {
-                // Gremlin maps the "vertical" heading 0 to 180 for axes: positive values move down.
-                let heading = if direction == 0.0 { 180.0 } else { direction };
-                let speed = if v.abs() < 1e-3 {
-                    0.0
-                } else {
-                    (min_speed + v.abs() * (max_speed - min_speed)).copysign(v)
-                };
-                let (x, y) = compass(heading);
-                self.motion
-                    .set_velocity(key, (x * speed, y * speed), src.mode.clone(), now);
-            }
-            Value::Hat(Some(d)) => {
-                let dir = compass(f32::from(d) / 100.0);
-                self.motion.set_accelerated(
-                    key,
-                    dir,
-                    min_speed,
-                    max_speed,
-                    time_to_max_speed,
-                    src.mode.clone(),
-                    now,
-                );
-            }
-            Value::Button(true) => {
-                let dir = compass(direction);
-                self.motion.set_accelerated(
-                    key,
-                    dir,
-                    min_speed,
-                    max_speed,
-                    time_to_max_speed,
-                    src.mode.clone(),
-                    now,
-                );
-            }
-            Value::Hat(None) | Value::Button(false) => self.motion.clear(&key),
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn smart_toggle(
-        &mut self,
-        node: NodeId,
-        children: &[NodeId],
-        delay: Duration,
-        src: &Source,
-        pressed: bool,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        let inner = Source {
-            no_auto_release: true,
-            ..src.clone()
-        };
-        let phase = self.toggles.entry(node).or_default().phase;
-        let (next, run) = match (phase, pressed) {
-            (TogglePhase::Wait, true) => {
-                let timer = self.add_timer(now + delay, TimerKind::ToggleTimeout(node));
-                self.toggles.entry(node).or_default().timer = Some(timer);
-                (TogglePhase::Down, true)
-            }
-            (TogglePhase::Down, false) => (TogglePhase::Latched, false),
-            (TogglePhase::Held | TogglePhase::Latched, false) => (TogglePhase::Wait, true),
-            (p, _) => (p, false),
-        };
-        self.toggles.entry(node).or_default().phase = next;
-        if run {
-            self.run_all(children, &inner, Value::Button(pressed), now, out);
-        }
-    }
-
-    /// Stops relative axes and cursor motion the actions under `nodes` keep going (Gremlin's
-    /// `reset_functor_tree`).
-    fn stop_motion(&mut self, nodes: &[NodeId], depth: usize) {
-        if depth > MAX_DEPTH {
-            return;
-        }
-        for &node in nodes {
-            let shared = Arc::clone(&self.nodes[node]);
-            match *shared {
-                Node::Vjoy {
-                    device,
-                    target: VjoyTarget::Axis(id),
-                    relative: Some(_),
-                    ..
-                } => {
-                    if let Some(r) = self.relative.get_mut(&(device, id)) {
-                        r.active = false;
-                        r.delta = 0.0;
-                    }
-                }
-                Node::Logical {
-                    ref key,
-                    relative: Some(_),
-                    ..
-                } => {
-                    if let Some(r) = self.logical_relative.get_mut(key) {
-                        r.active = false;
-                        r.delta = 0.0;
-                    }
-                }
-                Node::Mouse { .. } => self.motion.retain(|(n, _), _| *n != node),
-                Node::Seq(ref c)
-                | Node::SmartToggle {
-                    children: ref c, ..
-                }
-                | Node::Delay {
-                    children: ref c, ..
-                }
-                | Node::Merge {
-                    children: ref c, ..
-                } => self.stop_motion(c, depth + 1),
-                Node::Split {
-                    ref lower,
-                    ref upper,
-                    ..
-                } => {
-                    self.stop_motion(lower, depth + 1);
-                    self.stop_motion(upper, depth + 1);
-                }
-                Node::Tempo {
-                    ref short,
-                    ref long,
-                    ..
-                } => {
-                    self.stop_motion(short, depth + 1);
-                    self.stop_motion(long, depth + 1);
-                }
-                Node::DoubleTap {
-                    ref single,
-                    ref double,
-                    ..
-                } => {
-                    self.stop_motion(single, depth + 1);
-                    self.stop_motion(double, depth + 1);
-                }
-                Node::AxisDelta {
-                    ref positive,
-                    ref negative,
-                    ..
-                } => {
-                    self.stop_motion(positive, depth + 1);
-                    self.stop_motion(negative, depth + 1);
-                }
-                Node::Chain { ref chains, .. } => {
-                    for c in chains {
-                        self.stop_motion(c, depth + 1);
-                    }
-                }
-                Node::HatButtons(ref dirs) => {
-                    for (_, c) in dirs {
-                        self.stop_motion(c, depth + 1);
-                    }
-                }
-                Node::Condition { ref branches, .. } => {
-                    for c in branches {
-                        self.stop_motion(c, depth + 1);
-                    }
-                }
-                Node::DualDeadzone { ref outputs, .. } => {
-                    for c in outputs {
-                        self.stop_motion(c, depth + 1);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn run_all(
-        &mut self,
-        nodes: &[NodeId],
-        src: &Source,
-        value: Value,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        for &n in nodes {
-            self.run(n, src, &mut value.clone(), now, out, 0);
-        }
-    }
-
-    fn leave_temporary(&mut self, mode: &str) {
-        if self.modes.current() == mode && self.modes.is_temporary() {
-            self.modes.unwind();
-        }
-    }
-
-    fn tempo_event(
-        &mut self,
-        node: NodeId,
-        src: &Source,
-        value: Value,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        let Value::Button(pressed) = value else {
-            return;
-        };
-        let Node::Tempo {
-            short,
-            long,
-            threshold,
-            on_press,
-        } = (*self.nodes[node]).clone()
-        else {
-            return;
-        };
-        if pressed {
-            self.tempo.entry(node).or_default().press = Some((value, src.clone()));
-            self.register(
-                &src.key,
-                ReleaseEntry {
-                    mode: src.mode.clone(),
-                    any_mode: true,
-                    on_press: false,
-                    action: ReleaseAction::TempoRelease(node),
-                },
-            );
-        }
-        let phase = self.tempo.entry(node).or_default().phase;
-        match (phase, pressed) {
-            (Phase::Wait, true) => {
-                let timer = self.add_timer(now + threshold, TimerKind::TempoTimeout(node));
-                let state = self.tempo.entry(node).or_default();
-                state.phase = Phase::Short;
-                state.timer = Some(timer);
-                if on_press {
-                    self.run_all(&short, src, value, now, out);
-                }
-            }
-            (Phase::Wait, false) => {}
-            (Phase::Short, false) => {
-                self.cancel_tempo_timer(node);
-                self.tempo.entry(node).or_default().phase = Phase::Wait;
-                if on_press {
-                    self.run_all(&short, src, value, now, out);
-                } else {
-                    self.short_pulse(node, &short, now, out);
-                }
-            }
-            (Phase::Long, false) => {
-                self.tempo.entry(node).or_default().phase = Phase::Wait;
-                self.run_all(&long, src, value, now, out);
-                if on_press {
-                    self.run_all(&short, src, value, now, out);
-                }
-            }
-            // A press while already pressed: invalid transition, reset like Gremlin.
-            (Phase::Short | Phase::Long, true) => self.tempo_reset(node, src, value, now, out),
-        }
-    }
-
-    fn tempo_timeout(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        let Node::Tempo { long, .. } = (*self.nodes[node]).clone() else {
-            return;
-        };
-        let state = self.tempo.entry(node).or_default();
-        state.timer = None;
-        if state.phase != Phase::Short {
-            return;
-        }
-        state.phase = Phase::Long;
-        if let Some((value, src)) = state.press.clone() {
-            self.run_all(&long, &src, value, now, out);
-        }
-    }
-
-    fn short_pulse(&mut self, node: NodeId, short: &[NodeId], now: Instant, out: &mut dyn Output) {
-        if let Some((value, src)) = self.tempo.get(&node).and_then(|s| s.press.clone()) {
-            self.pulse(short, value, src, now, out);
-        }
-    }
-
-    /// Runs `nodes` with the press value now and with a release [`PULSE`] later.
-    fn pulse(
-        &mut self,
-        nodes: &[NodeId],
-        value: Value,
-        src: Source,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        self.run_all(nodes, &src, value, now, out);
-        self.add_timer(
-            now + PULSE,
-            TimerKind::PulseRelease {
-                nodes: nodes.to_vec(),
-                src,
-            },
-        );
-    }
-
-    /// A logical device input changed: record it and run its bindings like a device event.
-    fn feed_logical(&mut self, key: &InputKey, value: Value, now: Instant, out: &mut dyn Output) {
-        if self.logical_depth >= 8 {
-            return;
-        }
-        self.logical_depth += 1;
-        self.logical_changed = true;
-        self.seed(key, value);
-        let mode = self.modes.shared();
-        self.run_scripts(key, value, &mode, now, out);
-        self.dispatch(key, value, mode, now, out);
-        self.logical_depth -= 1;
-    }
-
-    /// Advances relative logical axes like [`Engine::step_relative`] does for vJoy.
-    fn step_logical(&mut self, now: Instant, out: &mut dyn Output) {
-        let mut moved = Vec::new();
-        for (key, r) in self.logical_relative.iter_mut().filter(|(_, r)| r.active) {
-            let steps = (now.saturating_duration_since(r.last_step).as_secs_f32()
-                / RELATIVE_STEP.as_secs_f32())
-            .floor();
-            if steps < 1.0 {
-                continue;
-            }
-            r.value = (r.value + r.delta * steps).clamp(-1.0, 1.0);
-            r.last_step += RELATIVE_STEP.mul_f32(steps);
-            moved.push((key.clone(), r.value));
-            if r.stopping && now.saturating_duration_since(r.last_update) > RELATIVE_STOP {
-                r.active = false;
-            }
-        }
-        for (key, v) in moved {
-            self.feed_logical(&key, Value::Axis(v), now, out);
-        }
-    }
-
-    /// One condition of a condition action (Gremlin's comparators on the source states).
-    fn cond_holds(&self, cond: &Cond, value: Value, out: &dyn Output) -> bool {
-        let states: Vec<Value> = match &cond.source {
-            CondSource::Current => vec![value],
-            CondSource::Inputs(keys) => keys
-                .iter()
-                .map(|k| match k.kind {
-                    InputKind::Axis => Value::Axis(self.axes.get(k).copied().unwrap_or(0.0)),
-                    InputKind::Button => {
-                        Value::Button(self.buttons.get(k).copied().unwrap_or(false))
-                    }
-                    InputKind::Hat => Value::Hat(self.hats.get(k).copied().flatten()),
-                })
-                .collect(),
-            CondSource::Keys(keys) => keys
-                .iter()
-                .map(|k| Value::Button(out.key_pressed(k.scan_code, k.extended)))
-                .collect(),
-            CondSource::Vjoy(device, kind, id) => {
-                vec![out.vjoy_state(*device, *kind, *id).unwrap_or(match kind {
-                    InputKind::Axis => Value::Axis(0.0),
-                    InputKind::Button => Value::Button(false),
-                    InputKind::Hat => Value::Hat(None),
-                })]
-            }
-            CondSource::Never => return false,
-        };
-        compare(&cond.comparator, &states)
-    }
-
-    /// Gremlin's HatButtonsFunctor: every direction is a button pressed while the hat
-    /// points exactly there (4-button mode ignores diagonals), centered presses `Center`.
-    #[allow(clippy::too_many_arguments)]
-    fn hat_buttons_event(
-        &mut self,
-        node: NodeId,
-        buttons: &[(Option<u16>, Vec<NodeId>)],
-        src: &Source,
-        direction: Option<u16>,
-        now: Instant,
-        out: &mut dyn Output,
-        depth: usize,
-    ) {
-        for (i, (dir, children)) in buttons.iter().enumerate() {
-            let pressed = *dir == direction;
-            let state = self
-                .hat_buttons
-                .entry(node)
-                .or_insert_with(|| vec![false; buttons.len()]);
-            if state[i] == pressed {
-                continue;
-            }
-            state[i] = pressed;
-            let vsrc = Source {
-                key: hat_button_key(node, i),
-                mode: src.mode.clone(),
-                no_auto_release: src.no_auto_release,
-            };
-            for &c in children {
-                self.run(c, &vsrc, &mut Value::Button(pressed), now, out, depth + 1);
-            }
-            self.process_release(&vsrc.key, pressed, now, out);
-        }
-        // Not in Gremlin: the hat centered in a mode where it is bound differently
-        // still releases what the directions pressed.
-        if direction.is_some() {
-            self.register(
-                &src.key,
-                ReleaseEntry {
-                    mode: src.mode.clone(),
-                    any_mode: false,
-                    on_press: false,
-                    action: ReleaseAction::HatButtons(node),
-                },
-            );
-        }
-    }
-
-    /// Gremlin's DoubleTapFunctor state machine.
-    fn tap_event(
-        &mut self,
-        node: NodeId,
-        src: &Source,
-        value: Value,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        let Value::Button(pressed) = value else {
-            return;
-        };
-        let Node::DoubleTap {
-            single,
-            double,
-            threshold,
-            exclusive,
-        } = (*self.nodes[node]).clone()
-        else {
-            return;
-        };
-        if pressed {
-            self.taps.entry(node).or_default().press = Some((value, src.clone()));
-            self.register(
-                &src.key,
-                ReleaseEntry {
-                    mode: src.mode.clone(),
-                    any_mode: true,
-                    on_press: false,
-                    action: ReleaseAction::TapRelease(node),
-                },
-            );
-        }
-        use TapPhase::*;
-        let phase = self.taps.entry(node).or_default().phase;
-        let next = match (exclusive, phase, pressed) {
-            (_, Neutral, true) => {
-                if !exclusive {
-                    self.run_all(&single, src, value, now, out);
-                }
-                let timer = self.add_timer(now + threshold, TimerKind::TapTimeout(node));
-                self.taps.entry(node).or_default().timer = Some(timer);
-                PressedTimed
-            }
-            (true, Neutral, false) => Neutral,
-            (_, PressedTimed, false) => {
-                if !exclusive {
-                    self.run_all(&single, src, value, now, out);
-                }
-                Timed
-            }
-            (_, Pressed, false) => {
-                self.run_all(&single, src, value, now, out);
-                Neutral
-            }
-            (_, Timed, true) => {
-                if !exclusive {
-                    self.run_all(&single, src, value, now, out);
-                }
-                self.run_all(&double, src, value, now, out);
-                SecondTimed
-            }
-            (_, SecondTimed, false) => {
-                if !exclusive {
-                    self.run_all(&single, src, value, now, out);
-                }
-                self.run_all(&double, src, value, now, out);
-                Neutral
-            }
-            // Invalid transition: reset like Gremlin.
-            _ => {
-                self.tap_reset(node, src, value, now, out);
-                return;
-            }
-        };
-        self.taps.entry(node).or_default().phase = next;
-    }
-
-    fn tap_timeout(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        let Node::DoubleTap {
-            single, exclusive, ..
-        } = (*self.nodes[node]).clone()
-        else {
-            return;
-        };
-        let state = self.taps.entry(node).or_default();
-        state.timer = None;
-        let press = state.press.clone();
-        // Timeouts without a transition are stale and ignored.
-        let next = match state.phase {
-            TapPhase::PressedTimed => {
-                if let (true, Some((value, src))) = (exclusive, press) {
-                    self.run_all(&single, &src, value, now, out);
-                }
-                TapPhase::Pressed
-            }
-            TapPhase::Timed => {
-                if let (true, Some((value, src))) = (exclusive, press) {
-                    self.pulse(&single, value, src, now, out);
-                }
-                TapPhase::Neutral
-            }
-            phase => phase,
-        };
-        self.taps.entry(node).or_default().phase = next;
-    }
-
-    fn tap_reset(
-        &mut self,
-        node: NodeId,
-        src: &Source,
-        value: Value,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        let Node::DoubleTap { single, double, .. } = (*self.nodes[node]).clone() else {
-            return;
-        };
-        let state = self.taps.entry(node).or_default();
-        state.phase = TapPhase::Neutral;
-        if let Some(id) = state.timer.take() {
-            self.timers.retain(|t| t.id != id);
-        }
-        let all: Vec<NodeId> = single.into_iter().chain(double).collect();
-        self.run_all(&all, src, value, now, out);
-    }
-
-    fn tempo_reset(
-        &mut self,
-        node: NodeId,
-        src: &Source,
-        value: Value,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        let Node::Tempo { short, long, .. } = (*self.nodes[node]).clone() else {
-            return;
-        };
-        self.cancel_tempo_timer(node);
-        self.tempo.entry(node).or_default().phase = Phase::Wait;
-        let all: Vec<NodeId> = short.into_iter().chain(long).collect();
-        self.run_all(&all, src, value, now, out);
-    }
-
-    /// A Delay's input went down (its time starts again) or up.
-    fn delay_event(
-        &mut self,
-        node: NodeId,
-        delay: Duration,
-        src: &Source,
-        pressed: bool,
-        now: Instant,
-        out: &mut dyn Output,
-    ) {
-        if !pressed {
-            self.delay_release(node, now, out);
-            return;
-        }
-        if let Some(timer) = self.delays.remove(&node).and_then(|d| d.timer) {
-            self.timers.retain(|t| t.id != timer);
-        }
-        let timer = self.add_timer(now + delay, TimerKind::DelayFire(node));
-        self.delays.insert(
-            node,
-            DelayState {
-                timer: Some(timer),
-                src: src.clone(),
-                held: true,
-            },
-        );
-        // Inside a container that keeps the press latched (smart toggle), letting go of the
-        // input is not a release: the container sends its own.
-        if !src.no_auto_release {
-            self.register(
-                &src.key,
-                ReleaseEntry {
-                    mode: src.mode.clone(),
-                    any_mode: true,
-                    on_press: false,
-                    action: ReleaseAction::DelayRelease(node),
-                },
-            );
-        }
-    }
-
-    /// Let go before the time is up: cancelled while it needs the input held, else run as a
-    /// short press when the time is up; after it: the children are let go.
-    fn delay_release(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        let Node::Delay {
-            ref children,
-            while_held,
-            ..
-        } = *self.nodes[node].clone()
-        else {
-            return;
-        };
-        let Some(state) = self.delays.get_mut(&node).filter(|d| d.held) else {
-            return;
-        };
-        match state.timer {
-            Some(timer) if while_held => {
-                self.timers.retain(|t| t.id != timer);
-                self.delays.remove(&node);
-            }
-            Some(_) => state.held = false,
-            None => {
-                if let Some(state) = self.delays.remove(&node) {
-                    self.run_all(children, &state.src, Value::Button(false), now, out);
-                }
-            }
-        }
-    }
-
-    /// A Delay's time is up: its children run (held: pressed until the input goes up; let go
-    /// already: a short press).
-    fn delay_fire(&mut self, node: NodeId, now: Instant, out: &mut dyn Output) {
-        let Node::Delay { ref children, .. } = *self.nodes[node].clone() else {
-            return;
-        };
-        let Some(state) = self.delays.get_mut(&node) else {
-            return;
-        };
-        state.timer = None;
-        if state.held {
-            let src = state.src.clone();
-            self.run_all(children, &src, Value::Button(true), now, out);
-        } else if let Some(state) = self.delays.remove(&node) {
-            // The input is up already: nothing may wait for its release (the pulse lets go).
-            let src = Source {
-                no_auto_release: true,
-                ..state.src
-            };
-            self.pulse(children, Value::Button(true), src, now, out);
-        }
-    }
-
-    fn cancel_tempo_timer(&mut self, node: NodeId) {
-        if let Some(id) = self.tempo.get_mut(&node).and_then(|s| s.timer.take()) {
-            self.timers.retain(|t| t.id != id);
-        }
     }
 
     fn add_timer(&mut self, at: Instant, kind: TimerKind) -> u64 {
@@ -4697,145 +3165,6 @@ impl Engine {
     }
 }
 
-/// A vJoy output written during a layer change.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Target {
-    Axis(u32, u8),
-    Button(u32, u8),
-    Hat(u32, u8),
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Write {
-    Axis(u32, u8, f32),
-    Button(u32, u8, bool),
-    Hat(u32, u8, Option<u16>),
-}
-
-impl Write {
-    fn target(&self) -> Target {
-        match *self {
-            Write::Axis(d, a, _) => Target::Axis(d, a),
-            Write::Button(d, b, _) => Target::Button(d, b),
-            Write::Hat(d, h, _) => Target::Hat(d, h),
-        }
-    }
-
-    fn send(self, out: &mut dyn Output) {
-        match self {
-            Write::Axis(d, a, v) => out.axis(d, a, v),
-            Write::Button(d, b, p) => out.button(d, b, p),
-            Write::Hat(d, h, v) => out.hat(d, h, v),
-        }
-    }
-}
-
-/// Forwards to `out` but holds back vJoy writes (the neutral values of a layer change).
-struct Deferred<'a> {
-    out: &'a mut dyn Output,
-    pending: Vec<Write>,
-}
-
-impl<'a> Deferred<'a> {
-    fn new(out: &'a mut dyn Output) -> Self {
-        Self {
-            out,
-            pending: Vec::new(),
-        }
-    }
-
-    fn into_parts(self) -> (Vec<Write>, &'a mut dyn Output) {
-        (self.pending, self.out)
-    }
-}
-
-/// Forwards to `out` and notes which vJoy outputs were written.
-struct Recording<'a> {
-    out: &'a mut dyn Output,
-    written: Vec<Target>,
-}
-
-impl<'a> Recording<'a> {
-    fn new(out: &'a mut dyn Output) -> Self {
-        Self {
-            out,
-            written: Vec::new(),
-        }
-    }
-
-    fn into_parts(self) -> (Vec<Target>, &'a mut dyn Output) {
-        (self.written, self.out)
-    }
-}
-
-/// The non-vJoy outputs of a wrapper go straight through to `self.out`.
-macro_rules! forward_output {
-    () => {
-        fn mouse_move(&mut self, dx: i32, dy: i32) {
-            self.out.mouse_move(dx, dy)
-        }
-        fn mouse_button(&mut self, button: MouseButton, pressed: bool) {
-            self.out.mouse_button(button, pressed)
-        }
-        fn mouse_wheel(&mut self, notches: i32) {
-            self.out.mouse_wheel(notches)
-        }
-        fn key(&mut self, scan_code: u16, extended: bool, pressed: bool) {
-            self.out.key(scan_code, extended, pressed)
-        }
-        fn run_command(&mut self, executable: &str, arguments: &[String]) {
-            self.out.run_command(executable, arguments)
-        }
-        fn play_sound(&mut self, file: &str, volume: u8) {
-            self.out.play_sound(file, volume)
-        }
-        fn light_led(&mut self, light: &Light) {
-            self.out.light_led(light)
-        }
-        fn speak(&mut self, request: SpeechRequest) {
-            self.out.speak(request)
-        }
-        fn load_profile(&mut self, file: &str) {
-            self.out.load_profile(file)
-        }
-        fn vjoy_state(&self, device: u32, kind: InputKind, id: u32) -> Option<Value> {
-            self.out.vjoy_state(device, kind, id)
-        }
-        fn key_pressed(&self, scan_code: u16, extended: bool) -> bool {
-            self.out.key_pressed(scan_code, extended)
-        }
-    };
-}
-
-impl Output for Deferred<'_> {
-    fn axis(&mut self, device: u32, axis: u8, value: f32) {
-        self.pending.push(Write::Axis(device, axis, value));
-    }
-    fn button(&mut self, device: u32, button: u8, pressed: bool) {
-        self.pending.push(Write::Button(device, button, pressed));
-    }
-    fn hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
-        self.pending.push(Write::Hat(device, hat, direction));
-    }
-    forward_output!();
-}
-
-impl Output for Recording<'_> {
-    fn axis(&mut self, device: u32, axis: u8, value: f32) {
-        self.written.push(Target::Axis(device, axis));
-        self.out.axis(device, axis, value);
-    }
-    fn button(&mut self, device: u32, button: u8, pressed: bool) {
-        self.written.push(Target::Button(device, button));
-        self.out.button(device, button, pressed);
-    }
-    fn hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
-        self.written.push(Target::Hat(device, hat));
-        self.out.hat(device, hat, direction);
-    }
-    forward_output!();
-}
-
 /// Gremlin's comparators. Python compares bools and floats as numbers (True == 1.0).
 fn compare(comparator: &Comparator, states: &[Value]) -> bool {
     match comparator {
@@ -4905,6 +3234,26 @@ fn is_container(action: &Action) -> bool {
     !action.child_ids().is_empty()
 }
 
+/// A send-osc argument as sent: typed numbers that do not read as one are 0.
+fn osc_out(arg: &gob_core::OscArg) -> OscOut {
+    use gob_core::OscArgKind as K;
+    use gob_osc::Arg;
+    let number = || arg.value.trim().replace(',', ".");
+    OscOut::Fixed(match arg.kind {
+        K::Int => Arg::Int(
+            number()
+                .parse::<i32>()
+                .or_else(|_| number().parse::<f64>().map(|f| f.round() as i32))
+                .unwrap_or(0),
+        ),
+        K::Float => Arg::Float(number().parse().unwrap_or(0.0)),
+        K::Text => Arg::Str(arg.value.clone()),
+        K::True => Arg::Bool(true),
+        K::False => Arg::Bool(false),
+        K::Input => return OscOut::Input,
+    })
+}
+
 fn should_execute(act: ActivationMode, value: Value) -> bool {
     match act {
         ActivationMode::Both | ActivationMode::Disallowed => true,
@@ -4966,126 +3315,6 @@ fn apply_deadzone(value: f32, [low, center_low, center_high, high]: [f32; 4]) ->
         ((value - center_high) / (high - center_high).abs().max(0.01)).clamp(0.0, 1.0)
     } else {
         ((value - center_low) / (low - center_low).abs().max(0.01)).clamp(-1.0, 0.0)
-    }
-}
-
-/// What scripts reach while one of their functions runs: the engine and its outputs.
-struct ScriptContext<'a> {
-    engine: &'a mut Engine,
-    out: &'a mut dyn Output,
-    now: Instant,
-}
-
-impl ScriptApi for ScriptContext<'_> {
-    fn vjoy_axis(&mut self, device: u32, axis: u8, value: f32) {
-        self.engine.set_axis(device, axis, value, self.out);
-    }
-    fn vjoy_button(&mut self, device: u32, button: u8, pressed: bool) {
-        self.engine.vjoy_button(device, button, pressed, self.out);
-    }
-    fn vjoy_hat(&mut self, device: u32, hat: u8, direction: Option<u16>) {
-        let held = &mut self.engine.script_hats;
-        held.retain(|&h| h != (device, hat));
-        if direction.is_some() {
-            held.push((device, hat));
-        }
-        self.out.hat(device, hat, direction);
-    }
-    fn gamepad_button(&mut self, gamepad: u32, control: &str, pressed: bool) {
-        if let Some(c) = GamepadControl::parse(control) {
-            self.engine.pad_button(gamepad, c, pressed, self.out);
-        }
-    }
-    fn gamepad_axis(&mut self, gamepad: u32, control: &str, value: f32) {
-        if let Some(c) = GamepadControl::parse(control) {
-            let low = if c.kind() == ControlKind::Trigger {
-                0.0
-            } else {
-                -1.0
-            };
-            self.engine
-                .pad_axis(gamepad, c, value.clamp(low, 1.0), self.out);
-        }
-    }
-    fn key(&mut self, key: Key, pressed: bool) {
-        let held = &mut self.engine.script_keys_down;
-        held.retain(|&k| k != key);
-        if pressed {
-            held.push(key);
-        }
-        self.out.key(key.scan_code, key.extended, pressed);
-    }
-    fn mouse_button(&mut self, button: MouseButton, pressed: bool) {
-        match button {
-            MouseButton::WheelUp => self.out.mouse_wheel(1),
-            MouseButton::WheelDown => self.out.mouse_wheel(-1),
-            b => self.engine.mouse_button(b, pressed, self.out),
-        }
-    }
-    fn mouse_move(&mut self, dx: i32, dy: i32) {
-        self.out.mouse_move(dx, dy);
-    }
-    fn mouse_wheel(&mut self, notches: i32) {
-        self.out.mouse_wheel(notches);
-    }
-    fn current_mode(&self) -> String {
-        self.engine.modes.current().to_string()
-    }
-    fn switch_mode(&mut self, mode: &str) -> bool {
-        if !self.engine.script_modes.contains(mode) {
-            return false;
-        }
-        self.engine.modes.switch_to(mode, false);
-        true
-    }
-    fn input(&self, input: &ScriptInput) -> Option<EventValue> {
-        let kind = match input.kind {
-            ScriptKind::Axis => InputKind::Axis,
-            ScriptKind::Button => InputKind::Button,
-            ScriptKind::Hat => InputKind::Hat,
-        };
-        let key = InputKey {
-            device: self.engine.device(&input.device),
-            kind,
-            id: input.id,
-        };
-        match kind {
-            InputKind::Axis => self.engine.axes.get(&key).map(|v| EventValue::Axis(*v)),
-            InputKind::Button => self
-                .engine
-                .buttons
-                .get(&key)
-                .map(|b| EventValue::Button(*b)),
-            InputKind::Hat => self.engine.hats.get(&key).map(|d| EventValue::Hat(*d)),
-        }
-    }
-    fn speak(&mut self, text: &str) {
-        self.out.speak(SpeechRequest {
-            text: text.to_string(),
-            voice: None,
-            rate: 0.0,
-            volume: 1.0,
-            pitch: 0.0,
-            queue: SpeechQueue::Back,
-        });
-    }
-    fn play_sound(&mut self, file: &str, volume: u8) {
-        self.out.play_sound(file, volume);
-    }
-    fn run_action(&mut self, name: &str) -> bool {
-        let node = self
-            .engine
-            .action_labels
-            .get(name.trim())
-            .and_then(|id| self.engine.action_nodes.get(id))
-            .copied();
-        match node {
-            Some(node) => {
-                self.engine.run_action(node, self.now, self.out);
-                true
-            }
-            None => false,
-        }
     }
 }
 

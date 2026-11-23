@@ -2,6 +2,11 @@
 //! an input of the voice device [`VOICE_GUID`] (input type `voice`, input id = the command's id)
 //! and is bound to actions like any button. The microphone listens only while an input with a
 //! `voice-input` action is held.
+//!
+//! Commands can sit in groups, and groups in groups: a command is said with its groups' phrases
+//! before its own ("radio wing a attack"), in one go or a group at a time. Saying a group opens it
+//! for a moment: then only what is in it is listened for. A group is an input too; its actions run
+//! when it opens (a spoken answer, a sound).
 
 use crate::action::ActionKind;
 use crate::profile::Profile;
@@ -15,15 +20,32 @@ pub const VOICE_INPUT_TYPE: &str = "voice";
 /// How long a recognized command holds its button down when nothing else is set, in seconds.
 pub const DEFAULT_HOLD: f64 = 0.1;
 
-/// One voice command (`<command>` in `<voice-commands>`).
+/// One voice command (`<command>` in `<voice-commands>`) or group of them (`<group>`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoiceCommand {
-    /// Its input id, unique, from 1.
+    /// Its input id, unique, from 1 (groups and commands share them).
     pub id: u32,
     /// What can be said for it; any of them triggers it.
     pub phrases: Vec<String>,
     /// Seconds the command's button stays pressed after it was recognized.
     pub hold: f64,
+    /// The group it is in; `None` = the top level.
+    pub parent: Option<u32>,
+    /// A group: holds commands and groups, and opens when said.
+    pub group: bool,
+}
+
+impl VoiceCommand {
+    /// A command at the top level with no phrases yet.
+    pub fn new(id: u32) -> Self {
+        Self {
+            id,
+            phrases: Vec::new(),
+            hold: DEFAULT_HOLD,
+            parent: None,
+            group: false,
+        }
+    }
 }
 
 /// A binding whose actions start listening ([`Profile::voice_inputs`]).
@@ -49,16 +71,213 @@ impl Profile {
             .unwrap_or(1)
     }
 
-    /// Adds a command with the lowest free id and no phrases yet; returns its id.
+    /// Adds a command with the lowest free id and no phrases yet at the top level; returns its
+    /// id.
     pub fn add_voice_command(&mut self) -> u32 {
+        self.add_voice_node(None, false)
+    }
+
+    /// Adds a command or a group (`group`) with no phrases into group `parent` (`None` or not a
+    /// group = the top level); returns its id.
+    pub fn add_voice_node(&mut self, parent: Option<u32>, group: bool) -> u32 {
         let id = self.next_voice_command_id();
+        let parent = parent.filter(|p| self.voice_command(*p).is_some_and(|c| c.group));
         self.voice_commands.push(VoiceCommand {
-            id,
-            phrases: Vec::new(),
-            hold: DEFAULT_HOLD,
+            parent,
+            group,
+            ..VoiceCommand::new(id)
         });
         self.add_section(crate::profile::Section::VoiceCommands);
         id
+    }
+
+    /// The commands and groups right in group `parent` (`None` = the top level), in order.
+    pub fn voice_children(&self, parent: Option<u32>) -> impl Iterator<Item = &VoiceCommand> {
+        self.voice_commands
+            .iter()
+            .filter(move |c| c.parent == parent)
+    }
+
+    /// Every command and group in group `id`, at any depth, in tree order.
+    pub fn voice_descendants(&self, id: u32) -> Vec<u32> {
+        let tree = self.voice_tree();
+        let Some(start) = tree.iter().position(|(_, c)| c.id == id) else {
+            return Vec::new();
+        };
+        let depth = tree[start].0;
+        tree[start + 1..]
+            .iter()
+            .take_while(|(d, _)| *d > depth)
+            .map(|(_, c)| c.id)
+            .collect()
+    }
+
+    /// Every command and group in tree order (a group, then what is in it), with its depth from
+    /// 0. One whose group is missing counts as top level.
+    pub fn voice_tree(&self) -> Vec<(usize, &VoiceCommand)> {
+        fn walk<'a>(
+            p: &'a Profile,
+            parent: Option<u32>,
+            depth: usize,
+            out: &mut Vec<(usize, &'a VoiceCommand)>,
+        ) {
+            for c in p.voice_children(parent) {
+                if out.iter().any(|(_, o)| o.id == c.id) {
+                    continue;
+                }
+                out.push((depth, c));
+                if c.group {
+                    walk(p, Some(c.id), depth + 1, out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(self, None, 0, &mut out);
+        for c in &self.voice_commands {
+            if !out.iter().any(|(_, o)| o.id == c.id) {
+                out.push((0, c));
+                if c.group {
+                    walk(self, Some(c.id), 1, &mut out);
+                }
+            }
+        }
+        out
+    }
+
+    /// The groups `id` is in, outermost first.
+    pub fn voice_groups_of(&self, id: u32) -> Vec<&VoiceCommand> {
+        let mut groups: Vec<&VoiceCommand> = Vec::new();
+        let mut at = self.voice_command(id).and_then(|c| c.parent);
+        while let Some(g) = at.and_then(|g| self.voice_command(g)) {
+            if g.id == id || groups.iter().any(|o| o.id == g.id) {
+                break;
+            }
+            groups.push(g);
+            at = g.parent;
+        }
+        groups.reverse();
+        groups
+    }
+
+    /// What is said for `id` in one go: the first phrase of each of its groups and its own.
+    pub fn voice_full_phrase(&self, id: u32) -> String {
+        self.voice_groups_of(id)
+            .into_iter()
+            .chain(self.voice_command(id))
+            .filter_map(|c| c.phrases.first().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// Moves `id` into group `parent` (`None` = the top level), at its end. False when `parent`
+    /// is no group, or is `id` or inside it.
+    pub fn set_voice_parent(&mut self, id: u32, parent: Option<u32>) -> bool {
+        if let Some(g) = parent
+            && (g == id
+                || !self.voice_command(g).is_some_and(|c| c.group)
+                || self.voice_descendants(id).contains(&g))
+        {
+            return false;
+        }
+        let Some(pos) = self.voice_commands.iter().position(|c| c.id == id) else {
+            return false;
+        };
+        let mut c = self.voice_commands.remove(pos);
+        c.parent = parent;
+        self.voice_commands.push(c);
+        true
+    }
+
+    /// Puts `ids` into a new group, made where the first of them (in tree order) is: in its group,
+    /// at its place. Ones inside another of `ids` move with it. Returns the new group's id;
+    /// `None` when none of `ids` exists.
+    pub fn group_voice_nodes(&mut self, ids: &[u32]) -> Option<u32> {
+        let moving = self.voice_tops(ids);
+        let first = *moving.first()?;
+        let parent = self.voice_command(first)?.parent;
+        let group = self.add_voice_node(parent, true);
+        // The new group takes the first one's place.
+        let new = self.voice_commands.pop()?;
+        let at = self.voice_commands.iter().position(|c| c.id == first)?;
+        self.voice_commands.insert(at, new);
+        for id in moving {
+            if let Some(c) = self.voice_commands.iter_mut().find(|c| c.id == id) {
+                c.parent = Some(group);
+            }
+        }
+        Some(group)
+    }
+
+    /// Those of `ids` that exist and are not inside another of them, in tree order: a group
+    /// stands for everything in it.
+    fn voice_tops(&self, ids: &[u32]) -> Vec<u32> {
+        let tree: Vec<u32> = self.voice_tree().into_iter().map(|(_, c)| c.id).collect();
+        let mut tops: Vec<u32> = tree.into_iter().filter(|id| ids.contains(id)).collect();
+        let inside: Vec<u32> = tops
+            .iter()
+            .flat_map(|id| self.voice_descendants(*id))
+            .collect();
+        tops.retain(|id| !inside.contains(id));
+        tops
+    }
+
+    /// Copies group `id` with everything in it (phrases and hold times, not their actions:
+    /// those usually differ) into the same group. Returns the copy's id.
+    pub fn duplicate_voice_group(&mut self, id: u32) -> Option<u32> {
+        let parent = self.voice_command(id).filter(|c| c.group)?.parent;
+        self.copy_voice_nodes(&[id], parent).first().copied()
+    }
+
+    /// Copies `ids` (a group with everything in it; phrases and hold times, not actions) to the
+    /// end of group `parent` (`None` or not a group = the top level). Returns the copies' ids,
+    /// one per copied command or group of `ids` not inside another of them.
+    pub fn copy_voice_nodes(&mut self, ids: &[u32], parent: Option<u32>) -> Vec<u32> {
+        let parent = parent.filter(|p| self.voice_command(*p).is_some_and(|c| c.group));
+        // All taken before any copy is made: a group may be copied into itself.
+        let copies: Vec<Vec<VoiceCommand>> = self
+            .voice_tops(ids)
+            .into_iter()
+            .map(|top| {
+                std::iter::once(top)
+                    .chain(self.voice_descendants(top))
+                    .filter_map(|d| self.voice_command(d).cloned())
+                    .collect()
+            })
+            .collect();
+        let mut made = Vec::new();
+        for nodes in copies {
+            let mut new_ids = std::collections::HashMap::new();
+            for (i, mut node) in nodes.into_iter().enumerate() {
+                let new = self.next_voice_command_id();
+                new_ids.insert(node.id, new);
+                node.id = new;
+                node.parent = if i == 0 {
+                    made.push(new);
+                    parent
+                } else {
+                    node.parent.and_then(|p| new_ids.get(&p).copied())
+                };
+                self.voice_commands.push(node);
+            }
+        }
+        if !made.is_empty() {
+            self.add_section(crate::profile::Section::VoiceCommands);
+        }
+        made
+    }
+
+    /// Moves `ids` (a group with everything in it) to the end of group `parent` (`None` = the
+    /// top level), with their actions. One that is `parent` or holds it stays. Returns the
+    /// moved ones; none when `parent` is no group.
+    pub fn move_voice_nodes(&mut self, ids: &[u32], parent: Option<u32>) -> Vec<u32> {
+        let mut moved = Vec::new();
+        for id in self.voice_tops(ids) {
+            // What is in a group goes with it: only the group itself changes its parent.
+            if self.set_voice_parent(id, parent) {
+                moved.push(id);
+            }
+        }
+        moved
     }
 
     /// Replaces a command's phrases: trimmed, inner spaces collapsed, empty and repeated ones
@@ -187,23 +406,67 @@ impl Profile {
         self.voice_links().get(action).copied()
     }
 
-    /// Removes the command and its bindings (in every mode).
+    /// Removes the command, or the group with everything in it, and their bindings (in every
+    /// mode).
     pub fn remove_voice_command(&mut self, id: u32) {
-        self.voice_commands.retain(|c| c.id != id);
-        let id = id.to_string();
+        let mut gone = self.voice_descendants(id);
+        gone.push(id);
+        self.voice_commands.retain(|c| !gone.contains(&c.id));
+        let gone: Vec<String> = gone.iter().map(u32::to_string).collect();
         self.inputs.retain(|b| {
-            !(is_voice_binding(&b.device_id, &b.input_type) && b.input_id.trim() == id)
+            !(is_voice_binding(&b.device_id, &b.input_type)
+                && gone.iter().any(|g| b.input_id.trim() == g))
         });
         self.collect_garbage();
     }
 
-    /// Every phrase with the id of its command, in command order: what the recognizer listens
-    /// for while the profile runs.
-    pub fn voice_phrases(&self) -> Vec<(u32, &str)> {
-        self.voice_commands
-            .iter()
-            .flat_map(|c| c.phrases.iter().map(move |p| (c.id, p.as_str())))
-            .collect()
+    /// What the recognizer listens for while the profile runs, with the id of the command or
+    /// group each phrase sets off: every command and group with its groups' phrases before its
+    /// own.
+    pub fn voice_phrases(&self) -> Vec<(u32, String)> {
+        self.voice_phrases_in(None)
+    }
+
+    /// What is listened for while group `scope` is open (`None` = none is): everything in it,
+    /// said from there on ("wing a attack" in "radio").
+    pub fn voice_phrases_in(&self, scope: Option<u32>) -> Vec<(u32, String)> {
+        let tree = self.voice_tree();
+        let (start, base) = match scope {
+            None => (0, 0),
+            Some(g) => match tree.iter().position(|(_, c)| c.id == g) {
+                Some(i) => (i + 1, tree[i].0 + 1),
+                None => return Vec::new(),
+            },
+        };
+        let mut out = Vec::new();
+        // The phrases said so far for each depth below `scope`: every combination of them.
+        let mut said: Vec<Vec<String>> = Vec::new();
+        for &(depth, c) in tree[start..].iter().take_while(|(d, _)| *d >= base) {
+            let level = depth - base;
+            said.truncate(level);
+            let before: Vec<String> = match said.last() {
+                Some(prefixes) => prefixes.clone(),
+                None if level == 0 => vec![String::new()],
+                // Its group has no phrases: it cannot be said.
+                None => Vec::new(),
+            };
+            let mut mine = Vec::new();
+            for prefix in &before {
+                for phrase in &c.phrases {
+                    let full = if prefix.is_empty() {
+                        phrase.clone()
+                    } else {
+                        format!("{prefix} {phrase}")
+                    };
+                    out.push((c.id, full.clone()));
+                    mine.push(full);
+                }
+            }
+            if c.group {
+                said.push(mine);
+            }
+        }
+        out
     }
 
     /// The bindings with a `voice-input` action anywhere in their action trees, in binding order.
