@@ -137,7 +137,9 @@ pub fn show(
         }
         SettingsTab::Lighting => lighting(ui, i18n, settings, attached.led_devices),
         SettingsTab::About => {
-            about(ui, i18n, logo, updater);
+            if about(ui, i18n, logo, updater, &mut settings.update_channel) {
+                settings.save();
+            }
             None
         }
     }
@@ -633,12 +635,15 @@ fn backends() -> &'static [(&'static str, BackendInfo)] {
     })
 }
 
+/// The About tab; true when the update channel changed.
 fn about(
     ui: &mut egui::Ui,
     i18n: &I18n,
     logo: &egui::TextureHandle,
     updater: &mut crate::update::Updater,
-) {
+    channel: &mut crate::settings::UpdateChannel,
+) -> bool {
+    let mut channel_changed = false;
     let accent = style::accent(ui);
     ui.add_space(12.0);
     ui.vertical_centered(|ui| {
@@ -666,11 +671,37 @@ fn about(
                 .corner_radius(10)
                 .sense(egui::Sense::hover()),
         );
-        // Update check, centered under the version.
+        // Update check, centered under the version, with the channel it follows.
         ui.add_space(6.0);
         ui.scope_builder(
             egui::UiBuilder::new().layout(egui::Layout::top_down(egui::Align::Center)),
-            |ui| updater.ui(ui, i18n),
+            |ui| {
+                use crate::settings::UpdateChannel;
+                let choices = [
+                    (UpdateChannel::Release, "update-channel-release"),
+                    (UpdateChannel::Alpha, "update-channel-alpha"),
+                ];
+                let current = choices
+                    .iter()
+                    .find(|(c, _)| c == channel)
+                    .map_or_else(String::new, |(_, key)| i18n.tr(key));
+                egui::ComboBox::from_id_salt("update-channel")
+                    .selected_text(current)
+                    .show_ui(ui, |ui| {
+                        for (choice, key) in choices {
+                            let item = ui
+                                .selectable_label(*channel == choice, i18n.tr(key))
+                                .on_hover_text(i18n.tr(&format!("{key}-tip")));
+                            if item.clicked() && *channel != choice {
+                                *channel = choice;
+                                channel_changed = true;
+                            }
+                        }
+                    })
+                    .response
+                    .on_hover_text(i18n.tr("update-channel-tip"));
+                updater.ui(ui, i18n, *channel);
+            },
         );
         ui.add_space(10.0);
         ui.label(RichText::new(i18n.tr("about-text")).size(15.0));
@@ -739,4 +770,5 @@ fn about(
         ui.label(RichText::new(i18n.tr("about-gremlin")).weak());
         ui.label(RichText::new(i18n.tr("about-license")).weak());
     });
+    channel_changed
 }

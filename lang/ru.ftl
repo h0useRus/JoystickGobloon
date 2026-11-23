@@ -663,6 +663,11 @@ about-license = Свободная программа с открытым код
 # Updates
 settings-check-updates = Проверять новую версию при запуске и устанавливать её
 update-check = Проверить обновления
+update-channel-release = Только релизы
+update-channel-release-tip = Обновления приносят только финальные релизы, проверенные лучше всего.
+update-channel-alpha = Также альфа-сборки
+update-channel-alpha-tip = Обновления приносят самую новую сборку: альфа-сборки с последними изменениями сразу после выхода и финальные релизы.
+update-channel-tip = Какие сборки обновляют Joystick Gobloon
 update-checking = Поиск новой версии…
 update-latest = У вас последняя версия
 update-available = Доступна версия { $version }

@@ -655,6 +655,11 @@ about-license = Free and open source under the MIT license.
 # Updates
 settings-check-updates = Check for a new version on startup and install it
 update-check = Check for updates
+update-channel-release = Releases only
+update-channel-release-tip = Updates bring final releases only, as tested as they get.
+update-channel-alpha = Alpha builds too
+update-channel-alpha-tip = Updates bring the newest build: alpha builds with the latest changes as soon as they are out, and final releases.
+update-channel-tip = Which builds update Joystick Gobloon
 update-checking = Looking for a new version…
 update-latest = You have the latest version
 update-available = Version { $version } is available

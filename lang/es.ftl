@@ -655,6 +655,11 @@ about-license = Libre y de código abierto bajo la licencia MIT.
 # Updates
 settings-check-updates = Buscar una versión nueva al iniciar e instalarla
 update-check = Buscar actualizaciones
+update-channel-release = Solo versiones finales
+update-channel-release-tip = Las actualizaciones traen solo versiones finales, lo más probadas posible.
+update-channel-alpha = También versiones alfa
+update-channel-alpha-tip = Las actualizaciones traen la versión más nueva: versiones alfa con los últimos cambios en cuanto salen, y versiones finales.
+update-channel-tip = Qué versiones actualizan Joystick Gobloon
 update-checking = Buscando una versión nueva…
 update-latest = Tiene la versión más reciente
 update-available = La versión { $version } está disponible

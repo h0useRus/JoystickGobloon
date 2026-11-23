@@ -454,7 +454,8 @@ impl JoystickGobloonApp {
         crate::update::cleanup();
         crate::autosave::prune(&mut app.settings.autosave);
         if app.settings.check_updates && crate::update::enabled() {
-            app.updater.check(&cc.egui_ctx, true);
+            app.updater
+                .check(&cc.egui_ctx, true, app.settings.update_channel);
         }
         if let Some(path) = reopen.filter(|p| {
             let found = p.is_file();

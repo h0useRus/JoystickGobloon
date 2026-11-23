@@ -643,6 +643,11 @@ about-license = 基于 MIT 许可证的自由开源软件。
 # Updates
 settings-check-updates = 启动时检查新版本并安装
 update-check = 检查更新
+update-channel-release = 仅正式版
+update-channel-release-tip = 只更新到正式版，测试最充分。
+update-channel-alpha = 包括 Alpha 版
+update-channel-alpha-tip = 更新到最新的版本：Alpha 版一发布就获得最新改动，也包括正式版。
+update-channel-tip = 哪些版本会更新 Joystick Gobloon
 update-checking = 正在查找新版本…
 update-latest = 已是最新版本
 update-available = 有新版本 { $version }

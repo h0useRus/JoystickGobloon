@@ -643,6 +643,11 @@ about-license = MIT 라이선스에 따른 무료 오픈 소스 소프트웨어�
 # Updates
 settings-check-updates = 시작할 때 새 버전을 확인하고 설치
 update-check = 업데이트 확인
+update-channel-release = 정식 릴리스만
+update-channel-release-tip = 정식 릴리스만 업데이트합니다. 가장 충분히 테스트된 버전입니다.
+update-channel-alpha = 알파 빌드 포함
+update-channel-alpha-tip = 가장 새로운 빌드로 업데이트합니다. 최신 변경 사항이 담긴 알파 빌드를 나오는 즉시 받고, 정식 릴리스도 받습니다.
+update-channel-tip = Joystick Gobloon을 업데이트할 빌드
 update-checking = 새 버전을 찾는 중…
 update-latest = 최신 버전입니다
 update-available = { $version } 버전을 사용할 수 있습니다
