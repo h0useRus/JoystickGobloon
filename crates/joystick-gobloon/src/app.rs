@@ -92,6 +92,8 @@ pub struct JoystickGobloonApp {
     switched: Option<(String, String, String)>,
     /// A profile switch by program handed to the engine, waiting for its result.
     pending_switch: Option<PendingSwitch>,
+    /// Win+Alt+Z keep alive (Settings > General); `None` if its thread did not start.
+    keep_alive: Option<crate::keep_alive::KeepAlive>,
     /// Activated with unsaved changes while programs have profiles: ask to save first.
     ask_switch_unsaved: bool,
     /// The program whose waiting switch the user put off (no question again for it).
@@ -268,6 +270,7 @@ impl JoystickGobloonApp {
             })
         };
         let activation = Activation::new(input.handle(), cc.egui_ctx.clone());
+        let keep_alive = crate::keep_alive::KeepAlive::start(cc.egui_ctx.clone());
         let mut app = Self {
             i18n,
             settings,
@@ -300,6 +303,7 @@ impl JoystickGobloonApp {
             voice_panel: Default::default(),
             overlay: crate::overlay::Overlay::new(),
             activation,
+            keep_alive,
             was_active: false,
             switching: false,
             switcher: Default::default(),
@@ -450,7 +454,8 @@ impl JoystickGobloonApp {
         crate::update::cleanup();
         crate::autosave::prune(&mut app.settings.autosave);
         if app.settings.check_updates && crate::update::enabled() {
-            app.updater.check(&cc.egui_ctx, true);
+            app.updater
+                .check(&cc.egui_ctx, true, app.settings.update_channel);
         }
         if let Some(path) = reopen.filter(|p| {
             let found = p.is_file();
@@ -2345,6 +2350,7 @@ impl eframe::App for JoystickGobloonApp {
             self.profile.as_ref().map(|p| &p.profile),
             usage,
             recording,
+            self.keep_alive.as_ref().is_some_and(|k| k.is_on()),
         ) {
             // Placing is done.
             self.settings.overlay_pos = Some(pos);
@@ -2398,6 +2404,21 @@ impl eframe::App for JoystickGobloonApp {
             self.request(Pending::Update, ctx);
         }
         self.activation_done();
+        if let Some(k) = &mut self.keep_alive {
+            k.configure(
+                self.settings.keep_alive,
+                !crate::key_capture::recording(ctx),
+                self.settings.keep_alive_secs,
+                &self.settings.keep_alive_keys,
+            );
+        }
+        if let Some(on) = self.keep_alive.as_mut().and_then(|k| k.changed()) {
+            self.status = self.i18n.tr(if on {
+                "status-keep-alive-on"
+            } else {
+                "status-keep-alive-off"
+            });
+        }
         style::load_cjk_if_wanted(ctx);
         self.update_title(ctx);
         if self.hide_frames > 0 {

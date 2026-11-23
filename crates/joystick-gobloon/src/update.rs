@@ -3,6 +3,7 @@
 //! silently, which starts the app again; a portable copy swaps its files and restarts itself.
 //! Downloads are checked against the SHA-256 digest GitHub keeps for every release asset.
 
+use crate::settings::UpdateChannel;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
@@ -15,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use crate::style::{self, icon};
 
 const LATEST: &str = "https://api.github.com/repos/h0useRus/JoystickGobloon/releases/latest";
+/// The newest releases, alpha builds included (newest first).
+const RECENT: &str = "https://api.github.com/repos/h0useRus/JoystickGobloon/releases?per_page=30";
 /// The restarted copy waits for the old process (`--wait-pid <pid>`) before the
 /// single-instance check, which would otherwise hand over to the old window.
 pub const WAIT_PID: &str = "--wait-pid";
@@ -110,8 +113,9 @@ fn exe_dir() -> Option<PathBuf> {
 }
 
 impl Updater {
-    /// Asks GitHub for the latest release in the background. `auto`: install it right away.
-    pub fn check(&mut self, ctx: &egui::Context, auto: bool) {
+    /// Asks GitHub for the newest release of `channel` in the background. `auto`: install it
+    /// right away.
+    pub fn check(&mut self, ctx: &egui::Context, auto: bool, which: UpdateChannel) {
         if self.job.is_some() {
             return;
         }
@@ -120,7 +124,7 @@ impl Updater {
         let (tx, rx) = channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(Done::Checked(latest()));
+            let _ = tx.send(Done::Checked(latest(which)));
             ctx.request_repaint();
         });
         self.job = Some(rx);
@@ -173,7 +177,7 @@ impl Updater {
 
     /// The update block of the About page: a status line and a button, each centered by the
     /// caller's top-down layout.
-    pub fn ui(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
+    pub fn ui(&mut self, ui: &mut egui::Ui, i18n: &I18n, channel: UpdateChannel) {
         let busy = self.job.is_some();
         let weak = |t: String| RichText::new(t).weak();
         let status = match &self.state {
@@ -249,7 +253,7 @@ impl Updater {
             )
             .clicked()
         {
-            self.check(ui.ctx(), false);
+            self.check(ui.ctx(), false, channel);
         }
     }
 }
@@ -267,29 +271,57 @@ fn agent() -> ureq::Agent {
         .new_agent()
 }
 
-/// The latest final release, when it is newer than this build and has the asset this copy
-/// updates from (installer or portable zip).
-fn latest() -> Result<Option<Release>, String> {
+/// The newest release of `channel` when it is newer than this build and has the asset this
+/// copy updates from (installer, portable zip or AppImage).
+fn latest(channel: UpdateChannel) -> Result<Option<Release>, String> {
     let Some(suffix) = crate::platform::update_asset(installed()) else {
         return Ok(None);
     };
     let current = Version::parse(crate::VERSION).map_err(|e| format!("own version: {e}"))?;
-    let release: GhRelease = agent()
-        .get(LATEST)
-        .header("Accept", "application/vnd.github+json")
-        .call()
-        .map_err(|e| e.to_string())?
-        .body_mut()
-        .read_json()
-        .map_err(|e| e.to_string())?;
-    if release.draft || release.prerelease {
+    let get = |url: &str| {
+        agent()
+            .get(url)
+            .header("Accept", "application/vnd.github+json")
+            .call()
+            .map_err(|e| e.to_string())
+    };
+    let releases: Vec<GhRelease> = match channel {
+        UpdateChannel::Release => vec![
+            get(LATEST)?
+                .body_mut()
+                .read_json()
+                .map_err(|e| e.to_string())?,
+        ],
+        UpdateChannel::Alpha => get(RECENT)?
+            .body_mut()
+            .read_json()
+            .map_err(|e| e.to_string())?,
+    };
+    newest(releases, &current, suffix, channel)
+}
+
+/// The newest of `releases` that `channel` takes, newer than `current`, with its asset. Final
+/// releases only on the release channel; on the alpha channel alpha builds too (semver puts
+/// `1.0.1-alpha.5` after `1.0.0` and before `1.0.1`).
+fn newest(
+    releases: Vec<GhRelease>,
+    current: &Version,
+    suffix: &str,
+    channel: UpdateChannel,
+) -> Result<Option<Release>, String> {
+    let best = releases
+        .into_iter()
+        .filter(|r| !r.draft)
+        .filter_map(|r| {
+            let version = Version::parse(r.tag_name.trim_start_matches('v')).ok()?;
+            let alpha = r.prerelease || !version.pre.is_empty();
+            (channel == UpdateChannel::Alpha || !alpha).then_some((version, r))
+        })
+        .filter(|(version, _)| version > current)
+        .max_by(|a, b| a.0.cmp(&b.0));
+    let Some((version, release)) = best else {
         return Ok(None);
-    }
-    let version = Version::parse(release.tag_name.trim_start_matches('v'))
-        .map_err(|e| format!("release tag {}: {e}", release.tag_name))?;
-    if !version.pre.is_empty() || version <= current {
-        return Ok(None);
-    }
+    };
     let asset = release
         .assets
         .into_iter()
@@ -675,6 +707,70 @@ pub fn wait_for_previous() {
 mod tests {
     use super::*;
 
+    fn release(tag: &str, prerelease: bool) -> GhRelease {
+        GhRelease {
+            tag_name: tag.into(),
+            prerelease,
+            draft: false,
+            assets: vec![GhAsset {
+                name: format!("JoystickGobloon-{}-setup.exe", tag.trim_start_matches('v')),
+                browser_download_url: String::new(),
+                digest: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn channels_pick_the_newest_release_they_take() {
+        let list = || {
+            vec![
+                release("v1.0.1-alpha.120", true),
+                release("v1.0.0", false),
+                release("v1.0.0-alpha.112", true),
+            ]
+        };
+        let pick = |current: &str, channel| {
+            newest(
+                list(),
+                &Version::parse(current).unwrap(),
+                "-setup.exe",
+                channel,
+            )
+            .unwrap()
+            .map(|r| r.version.to_string())
+        };
+        // Release channel: finals only, also when an alpha is newer.
+        assert_eq!(
+            pick("0.15.3", UpdateChannel::Release).as_deref(),
+            Some("1.0.0")
+        );
+        assert_eq!(pick("1.0.0", UpdateChannel::Release), None);
+        // Alpha channel: whatever is newest.
+        assert_eq!(
+            pick("1.0.0", UpdateChannel::Alpha).as_deref(),
+            Some("1.0.1-alpha.120")
+        );
+        assert_eq!(
+            pick("1.0.0-alpha.112", UpdateChannel::Alpha).as_deref(),
+            Some("1.0.1-alpha.120")
+        );
+        // An alpha on the release channel waits for the next final release.
+        assert_eq!(pick("1.0.1-alpha.120", UpdateChannel::Release), None);
+        let mut with_final = list();
+        with_final.insert(0, release("v1.0.1", false));
+        let next = newest(
+            with_final,
+            &Version::parse("1.0.1-alpha.120").unwrap(),
+            "-setup.exe",
+            UpdateChannel::Release,
+        )
+        .unwrap();
+        assert_eq!(
+            next.map(|r| r.version.to_string()).as_deref(),
+            Some("1.0.1")
+        );
+    }
+
     fn zip_with(dir: &Path, names: &[&str]) -> PathBuf {
         use std::io::Write;
         let path = dir.join("test.zip");
@@ -993,8 +1089,25 @@ mod tests {
     /// the latest release, so nothing is offered; the request, TLS and JSON work.
     #[test]
     #[ignore]
+    fn the_alpha_channel_reads_the_recent_releases() {
+        let releases: Vec<GhRelease> = agent()
+            .get(RECENT)
+            .header("Accept", "application/vnd.github+json")
+            .call()
+            .unwrap()
+            .body_mut()
+            .read_json()
+            .unwrap();
+        assert!(releases.iter().any(|r| r.prerelease), "alpha builds listed");
+        let old = Version::parse("0.15.3").unwrap();
+        let found = newest(releases, &old, "-setup.exe", UpdateChannel::Alpha).unwrap();
+        assert!(found.is_some_and(|r| r.version > old));
+    }
+
+    #[test]
+    #[ignore]
     fn asks_github_for_the_latest_release() {
-        assert!(latest().unwrap().is_none());
+        assert!(latest(UpdateChannel::Release).unwrap().is_none());
     }
 
     /// Network: downloads the 0.4.0 portable zip, checks its digest and unpacks it.
