@@ -55,6 +55,8 @@ fn run(shared: &Shared, ctx: &egui::Context) {
     let (mut was_down, mut last, mut prepared) = (false, None::<Instant>, false);
     // The window in front when the nudge was switched on, unless it was one of ours.
     let mut target = None;
+    // The nudge running now, if any.
+    let mut nudging: Option<std::thread::JoinHandle<()>> = None;
     loop {
         if !shared.enabled.load(Ordering::Relaxed) {
             if shared.on.swap(false, Ordering::Relaxed) {
@@ -95,9 +97,18 @@ fn run(shared: &Shared, ctx: &egui::Context) {
                 .load(Ordering::Relaxed)
                 .clamp(MIN_SECS, MAX_SECS),
         ));
-        if shared.on.load(Ordering::Relaxed) && last.is_none_or(|t| t.elapsed() >= every) {
+        let idle = nudging
+            .as_ref()
+            .is_none_or(std::thread::JoinHandle::is_finished);
+        if idle && shared.on.load(Ordering::Relaxed) && last.is_none_or(|t| t.elapsed() >= every) {
             let target = target.filter(|_| shared.front.load(Ordering::Relaxed));
-            nudge(target);
+            // On a thread of its own: a nudge takes up to a second, and the shortcut is
+            // watched meanwhile (a quick press to stop it is not missed).
+            nudging = std::thread::Builder::new()
+                .name("keep-alive-nudge".into())
+                .spawn(move || nudge(target))
+                .inspect_err(|e| log::error!("keep alive nudge thread: {e}"))
+                .ok();
             last = Some(Instant::now());
         }
     }
