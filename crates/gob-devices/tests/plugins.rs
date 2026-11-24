@@ -1,0 +1,79 @@
+use std::path::{Path, PathBuf};
+
+use gob_devices::{Catalog, Direction, Input, Inputs, Level, check, taught_path};
+
+fn sample_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/plugins")
+}
+
+#[test]
+fn loads_and_finds() {
+    let catalog = Catalog::load(&[sample_dir()]);
+    assert!(catalog.errors.is_empty(), "{:?}", catalog.errors);
+    let plugin = catalog.find(0x0001, 0x0099, "The Sample Stick v2").unwrap();
+    assert_eq!(plugin.id(), "sample-stick");
+    assert!(catalog.find(0x0001, 0x0099, "Other").is_none());
+    assert!(catalog.find(0x0001, 0x0002, "Other").is_some());
+    assert_eq!(plugin.input_of("hat", "push"), Some(Input::Button(3)));
+    let (control, part) = plugin
+        .control_of(Input::HatDirection(1, Direction::Left))
+        .unwrap();
+    assert_eq!((control.id.as_str(), part), ("hat", "left"));
+    let (control, part) = plugin.control_of(Input::Axis(2)).unwrap();
+    assert_eq!((control.id.as_str(), part), ("stick", "y"));
+    assert!(check(plugin).is_empty(), "{:?}", check(plugin));
+}
+
+#[test]
+fn taught_numbering_wins() {
+    let dir = std::env::temp_dir().join(format!("gob-devices-taught-{}", std::process::id()));
+    let mut taught = Inputs::default();
+    taught.set("trigger", "first", Input::Button(7));
+    taught.save(&taught_path(&dir, "sample-stick")).unwrap();
+    let mut catalog = Catalog::load(&[sample_dir()]);
+    assert!(catalog.load_taught(&dir).is_empty());
+    let plugin = catalog.get("sample-stick").unwrap();
+    assert_eq!(plugin.input_of("trigger", "first"), Some(Input::Button(7)));
+    // A taught control replaces the whole control: its other parts are taught again too.
+    assert_eq!(plugin.input_of("trigger", "second"), None);
+    assert_eq!(plugin.input_of("hat", "push"), Some(Input::Button(3)));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn finds_mistakes() {
+    let mut plugin = Catalog::load(&[sample_dir()]).plugins.remove(0);
+    plugin.inputs.set("trigger", "second", Input::Button(3));
+    plugin.inputs.set("stick", "x", Input::Button(9));
+    plugin.manifest.controls[1].at = [500.0, 10.0];
+    let errors: Vec<String> = check(&plugin)
+        .into_iter()
+        .filter(|i| i.level == Level::Error)
+        .map(|i| i.message)
+        .collect();
+    assert!(
+        errors.iter().any(|e| e.contains("used by both")),
+        "{errors:?}"
+    );
+    assert!(
+        errors.iter().any(|e| e.contains("needs an axis")),
+        "{errors:?}"
+    );
+    assert!(errors.iter().any(|e| e.contains("outside")), "{errors:?}");
+}
+
+/// The plugins the program ships load and have no errors.
+#[test]
+fn shipped_plugins() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
+    let catalog = Catalog::load(&[dir]);
+    assert!(catalog.errors.is_empty(), "{:?}", catalog.errors);
+    assert!(!catalog.plugins.is_empty());
+    for plugin in &catalog.plugins {
+        let errors: Vec<_> = check(plugin)
+            .into_iter()
+            .filter(|i| i.level == Level::Error)
+            .collect();
+        assert!(errors.is_empty(), "{}: {errors:?}", plugin.id());
+    }
+}

@@ -1,0 +1,130 @@
+# Gladiator NXT EVO, left-hand grip on the Omni Throttle adapter: the stick works as a throttle.
+# The grip sends what VKBDevCfg sets up; inputs.gob is the factory profile, users teach their own.
+id = "vkb-gladiator-nxt-evo-ot-l"
+name = "Gladiator NXT EVO Omni Throttle (left)"
+brand = "VKB"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Gladiator EVO OT L"
+
+[[view]]
+id = "main"
+name = "Throttle"
+svg = "views/main.svg"
+
+# Grip
+
+[[control]]
+id = "right_hat"
+name = "Right hat"
+kind = "hat"
+at = [532, 178]
+side = "right"
+
+[[control]]
+id = "centre_hat"
+name = "Centre hat"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [470, 218]
+side = "right"
+
+[[control]]
+id = "red_button"
+name = "Red button"
+kind = "button"
+at = [570, 244]
+side = "right"
+
+[[control]]
+id = "front_lever"
+name = "Front lever"
+kind = "lever"
+at = [610, 286]
+side = "right"
+
+[[control]]
+id = "trigger"
+name = "Trigger"
+kind = "trigger"
+at = [616, 350]
+side = "right"
+
+[[control]]
+id = "side_lever"
+name = "Side lever"
+kind = "hat"
+at = [400, 300]
+side = "right"
+
+[[control]]
+id = "pinky"
+name = "Pinky button"
+kind = "button"
+at = [576, 458]
+side = "right"
+
+[[control]]
+id = "left_hat"
+name = "Left hat"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [416, 178]
+side = "left"
+
+[[control]]
+id = "stick"
+name = "Throttle axes"
+kind = "stick"
+parts = ["x", "y", "twist"]
+at = [500, 690]
+side = "left"
+
+# Base
+
+[[control]]
+id = "f2"
+name = "F2"
+kind = "button"
+at = [423, 722]
+side = "left"
+group = "Base buttons"
+
+[[control]]
+id = "f1"
+name = "F1"
+kind = "button"
+at = [377, 720]
+side = "left"
+group = "Base buttons"
+
+[[control]]
+id = "f3"
+name = "F3"
+kind = "button"
+at = [331, 718]
+side = "left"
+group = "Base buttons"
+
+[[control]]
+id = "en1"
+name = "EN1 encoder"
+kind = "encoder"
+at = [410, 805]
+side = "left"
+
+[[control]]
+id = "wheel"
+name = "Centre wheel"
+kind = "axis"
+at = [333, 804]
+side = "left"
+
+[[control]]
+id = "sw1"
+name = "SW1 switch"
+kind = "switch"
+at = [256, 800]
+side = "left"

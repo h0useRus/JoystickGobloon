@@ -1,0 +1,14 @@
+[trigger]
+first = "button:1"
+second = "button:2"
+
+[hat]
+up = "hat:1:up"
+right = "hat:1:right"
+down = "hat:1:down"
+left = "hat:1:left"
+push = "button:3"
+
+[stick]
+x = "axis:x"
+y = "axis:y"

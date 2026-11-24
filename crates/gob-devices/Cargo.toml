@@ -1,0 +1,17 @@
+[package]
+name = "gob-devices"
+description = "Device plugins: pictures of game controllers and which input each of their controls sends"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gob-core.workspace = true
+serde.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+# device_teach: reads the controller while its controls are pressed.
+gob-input.workspace = true
+# device_check: renders each view with its hotspots to PNG (same resvg as egui_extras' svg loader).
+resvg = "0.45.1"

@@ -1,0 +1,38 @@
+# A made-up stick for the tests.
+id = "sample-stick"
+name = "Sample stick"
+brand = "Sample"
+
+[[match]]
+vid = 0x0001
+name = "Sample Stick"
+
+[[match]]
+vid = 0x0001
+pid = 0x0002
+
+[[view]]
+id = "main"
+name = "Stick"
+svg = "views/main.svg"
+
+[[control]]
+id = "trigger"
+name = "Trigger"
+kind = "trigger"
+at = [40, 30]
+
+[[control]]
+id = "hat"
+name = "Hat"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [60, 10]
+side = "right"
+
+[[control]]
+id = "stick"
+name = "Stick axes"
+kind = "stick"
+at = [50, 90]
+side = "right"

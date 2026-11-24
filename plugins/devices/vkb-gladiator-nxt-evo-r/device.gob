@@ -1,0 +1,130 @@
+# Gladiator NXT EVO, right-hand stick on the standard base.
+# The grip sends what VKBDevCfg sets up; inputs.gob is the factory profile, users teach their own.
+id = "vkb-gladiator-nxt-evo-r"
+name = "Gladiator NXT EVO (right)"
+brand = "VKB"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Gladiator EVO R"
+
+[[view]]
+id = "main"
+name = "Stick"
+svg = "views/main.svg"
+
+# Grip
+
+[[control]]
+id = "left_hat"
+name = "Left hat"
+kind = "hat"
+at = [468, 178]
+side = "left"
+
+[[control]]
+id = "centre_hat"
+name = "Centre hat"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [530, 218]
+side = "left"
+
+[[control]]
+id = "red_button"
+name = "Red button"
+kind = "button"
+at = [430, 244]
+side = "left"
+
+[[control]]
+id = "front_lever"
+name = "Front lever"
+kind = "lever"
+at = [390, 286]
+side = "left"
+
+[[control]]
+id = "trigger"
+name = "Trigger"
+kind = "trigger"
+at = [384, 350]
+side = "left"
+
+[[control]]
+id = "side_lever"
+name = "Side lever"
+kind = "hat"
+at = [600, 300]
+side = "left"
+
+[[control]]
+id = "pinky"
+name = "Pinky button"
+kind = "button"
+at = [424, 458]
+side = "left"
+
+[[control]]
+id = "right_hat"
+name = "Right hat"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [584, 178]
+side = "right"
+
+[[control]]
+id = "stick"
+name = "Stick axes"
+kind = "stick"
+parts = ["x", "y", "twist"]
+at = [500, 690]
+side = "right"
+
+# Base
+
+[[control]]
+id = "f2"
+name = "F2"
+kind = "button"
+at = [577, 722]
+side = "right"
+group = "Base buttons"
+
+[[control]]
+id = "f1"
+name = "F1"
+kind = "button"
+at = [623, 720]
+side = "right"
+group = "Base buttons"
+
+[[control]]
+id = "f3"
+name = "F3"
+kind = "button"
+at = [669, 718]
+side = "right"
+group = "Base buttons"
+
+[[control]]
+id = "en1"
+name = "EN1 encoder"
+kind = "encoder"
+at = [590, 805]
+side = "right"
+
+[[control]]
+id = "wheel"
+name = "Centre wheel"
+kind = "axis"
+at = [667, 804]
+side = "right"
+
+[[control]]
+id = "sw1"
+name = "SW1 switch"
+kind = "switch"
+at = [744, 800]
+side = "right"

@@ -163,6 +163,13 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   memory, RTF and phrase accuracy of a model on WAVs; `--record` makes test WAVs; `--listen` push to talk, with
   `--vosk-lib/--vosk-model` 1/2/3 = Vosk/sherpa-onnx/both on the same audio), `vosk_bench` (Vosk on the same WAVs).
   Text to speech: Settings > Voice > Text to speech = the system's voice (default) or Piper (`tts_engine`)
+- crates/gob-devices device plugins (plans/DEVICE_VIEW_PLAN.md; one brand per release, VKB = 1.0.1): folders in
+  plugins/devices/<id>/ (shipped as `devices/` next to the exe): device.gob (TOML: `[[match]]` vid + pid and/or name part,
+  `[[view]]` SVGs, `[[control]]` id/name/kind/parts/at/side/group), inputs.gob (control[.part] -> `button:N`/`axis:x`/
+  `hat:N[:dir]`, the factory numbering), views/*.svg (one line-art style, classes body/shade/line/detail/accent, colors
+  from `svg::themed`; our own drawings, never vendor images); user-taught numbering `<data dir>/devices/<id>.gob`
+  overlays control by control. Brands/models only in plugins. Examples `device_check <dir>` (checks, PNG with hotspots)
+  and `device_teach <dir> [--write]` (press each control of a connected device; fills inputs.gob)
 - plans/completed/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
   on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
