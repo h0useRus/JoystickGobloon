@@ -46,9 +46,6 @@
 <path class="shade" stroke-width="2.5" d="M402 270 C388 272 380 282 382 292 L404 296 Z"/>
 <!-- trigger -->
 <path class="shade" stroke-width="3" d="M402 312 C380 316 364 334 368 356 C372 374 388 382 410 380 C404 360 402 336 402 312 Z"/>
-<!-- side lever (thumb, four-way) -->
-<circle class="body" stroke-width="2.5" cx="600" cy="300" r="22"/>
-<path class="detail" stroke-width="2" d="M600 286 L600 314 M586 300 L614 300"/>
 <!-- pinky lever -->
 <path class="shade" stroke-width="2.5" d="M434 440 C418 444 410 456 414 468 L440 470 Z"/>
 </g>

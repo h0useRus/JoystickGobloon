@@ -7,7 +7,6 @@ use std::fmt;
 use crate::input::Input;
 use crate::inputs::Entry;
 use crate::plugin::{DevicePlugin, PARTS};
-use crate::svg::view_box;
 
 /// Hotspots closer than this (in SVG units) are hard to tell apart.
 const MIN_GAP: f32 = 14.0;
@@ -55,11 +54,11 @@ pub fn check(plugin: &DevicePlugin) -> Vec<Issue> {
     }
     let mut boxes = BTreeMap::new();
     for view in &manifest.views {
-        match plugin.svgs.get(&view.id).and_then(|svg| view_box(svg)) {
+        match plugin.pictures.get(&view.id).and_then(|p| p.bounds()) {
             Some(b) => {
                 boxes.insert(view.id.as_str(), b);
             }
-            None => error(format!("view `{}`: {} has no viewBox", view.id, view.svg)),
+            None => error(format!("view `{}`: {} has no size", view.id, view.image)),
         }
     }
     let mut ids = BTreeSet::new();

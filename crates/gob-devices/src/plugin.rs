@@ -1,5 +1,5 @@
 //! One device plugin: a folder with `device.gob` (identity, views, controls), `inputs.gob`
-//! (the default numbering) and the views' SVG pictures.
+//! (the default numbering) and the views' pictures (photos as PNG, or SVG drawings).
 //!
 //! ```toml
 //! id = "vkb-gladiator-nxt-evo-r"
@@ -13,7 +13,7 @@
 //! [[view]]
 //! id = "main"
 //! name = "Stick"
-//! svg = "views/main.svg"
+//! image = "views/main.png"
 //!
 //! [[control]]
 //! id = "trigger"
@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::input::Input;
 use crate::inputs::Inputs;
+use crate::picture::Picture;
 
 /// The device plugin format this host reads; a plugin asking for a newer one is not loaded.
 pub const API: u32 = 1;
@@ -137,8 +138,8 @@ impl Match {
 pub struct View {
     pub id: String,
     pub name: String,
-    /// Path of the SVG, relative to the plugin folder.
-    pub svg: String,
+    /// Path of the picture (.png photo or .svg drawing), relative to the plugin folder.
+    pub image: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -206,8 +207,8 @@ pub struct DevicePlugin {
     pub defaults: Inputs,
     /// The numbering in use: the defaults with the user's taught controls over them.
     pub inputs: Inputs,
-    /// View id -> its SVG text.
-    pub svgs: BTreeMap<String, String>,
+    /// View id -> its picture.
+    pub pictures: BTreeMap<String, Picture>,
 }
 
 impl DevicePlugin {
@@ -225,16 +226,16 @@ impl DevicePlugin {
             ));
         }
         let defaults = Inputs::load(&dir.join(INPUTS)).map_err(|e| format!("{INPUTS}: {e}"))?;
-        let mut svgs = BTreeMap::new();
+        let mut pictures = BTreeMap::new();
         for view in &manifest.views {
-            svgs.insert(view.id.clone(), read(&view.svg)?);
+            pictures.insert(view.id.clone(), Picture::load(&dir.join(&view.image))?);
         }
         Ok(Self {
             dir: dir.to_path_buf(),
             manifest,
             inputs: defaults.clone(),
             defaults,
-            svgs,
+            pictures,
         })
     }
 

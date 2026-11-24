@@ -14,7 +14,7 @@ pid = 0x0002
 [[view]]
 id = "main"
 name = "Stick"
-svg = "views/main.svg"
+image = "views/main.svg"
 
 [[control]]
 id = "trigger"

@@ -3,7 +3,7 @@
 //! (PNGs go to `target/device_check/<id>-<view>.png` by default). Exits with 1 on errors.
 use std::path::PathBuf;
 
-use gob_devices::{DevicePlugin, Level, Palette, Side, check, themed};
+use gob_devices::{DevicePlugin, Level, Palette, Picture, Side, check, themed};
 use resvg::{tiny_skia, usvg};
 
 fn main() {
@@ -52,7 +52,11 @@ fn main() {
         }
         failed |= issues.iter().any(|i| i.level == Level::Error);
         for view in &plugin.manifest.views {
-            let svg = with_hotspots(&plugin, &view.id, &themed(&plugin.svgs[&view.id], &palette));
+            let svg = with_hotspots(
+                &plugin,
+                &view.id,
+                &as_svg(&plugin.pictures[&view.id], &palette),
+            );
             let background = if light { [245, 246, 248] } else { [14, 15, 17] };
             let path = out.join(format!("{}-{}.png", plugin.id(), view.id));
             match render(&svg, background) {
@@ -68,6 +72,38 @@ fn main() {
         }
     }
     std::process::exit(i32::from(failed));
+}
+
+/// The picture as SVG: a drawing themed, a photo embedded as an image.
+fn as_svg(picture: &Picture, palette: &Palette) -> String {
+    let (mime, bytes, [w, h]) = match picture {
+        Picture::Svg(svg) => return themed(svg, palette),
+        Picture::Png { bytes, size } => ("image/png", bytes, size),
+        Picture::Jpeg { bytes, size } => ("image/jpeg", bytes, size),
+    };
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}"><image width="{w}" height="{h}" href="data:{mime};base64,{}"/></svg>"#,
+        base64(bytes)
+    )
+}
+
+fn base64(bytes: &[u8]) -> String {
+    const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len() * 4 / 3 + 4);
+    for chunk in bytes.chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |n, (i, b)| n | u32::from(*b) << (16 - 8 * i));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(ABC[(n >> (18 - 6 * i) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }
 
 /// The SVG with a marker and a label (id and inputs) per hotspot of the view.

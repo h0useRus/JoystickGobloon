@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" stroke-linejoin="round" stroke-linecap="round">
+<style>.body{fill:#24272c;stroke:#8a8f98}.shade{fill:#1a1c20;stroke:#8a8f98}.line{fill:none;stroke:#8a8f98}.detail{fill:none;stroke:#4a4f57}.accent{fill:#c8402f;stroke:#8a8f98}</style>
+<g transform="translate(1000 0) scale(-1 1)">
+<!-- base plate -->
+<path class="shade" stroke-width="3" d="M120 905 L190 870 L820 852 L885 885 L860 920 L150 940 Z"/>
+<!-- base body: top, front and side faces -->
+<path class="body" stroke-width="3" d="M235 745 L300 700 L705 688 L780 725 L790 750 L230 772 Z"/>
+<path class="shade" stroke-width="3" d="M230 772 L790 750 L835 860 L185 880 Z"/>
+<path class="detail" stroke-width="2" d="M290 800 L520 792 M286 812 L520 804 M282 824 L520 816 M278 836 L520 828 M274 848 L520 840"/>
+<!-- base buttons F2 F1 F3 -->
+<rect class="shade" stroke-width="2.5" x="560" y="712" width="34" height="20" rx="5"/>
+<rect class="shade" stroke-width="2.5" x="606" y="710" width="34" height="20" rx="5"/>
+<rect class="shade" stroke-width="2.5" x="652" y="708" width="34" height="20" rx="5"/>
+<!-- encoder EN1, centre wheel, switch SW1 on the front face -->
+<ellipse class="body" stroke-width="2.5" cx="590" cy="805" rx="18" ry="26"/>
+<path class="detail" stroke-width="1.5" d="M578 790 L602 790 M575 800 L605 800 M575 810 L605 810 M578 820 L602 820"/>
+<rect class="body" stroke-width="2.5" x="650" y="776" width="34" height="56" rx="8"/>
+<path class="detail" stroke-width="1.5" d="M654 786 L680 786 M654 796 L680 796 M654 806 L680 806 M654 816 L680 816 M654 826 L680 826"/>
+<rect class="shade" stroke-width="2.5" x="733" y="782" width="22" height="40" rx="6"/>
+<path class="line" stroke-width="5" d="M744 802 L744 778"/>
+<circle class="body" stroke-width="2" cx="744" cy="776" r="5"/>
+<!-- gimbal boot and collar -->
+<ellipse class="shade" stroke-width="3" cx="500" cy="705" rx="95" ry="22"/>
+<path class="body" stroke-width="3" d="M425 700 C440 680 455 668 460 650 L540 650 C545 668 560 680 575 700 C545 714 455 714 425 700 Z"/>
+<path class="detail" stroke-width="1.5" d="M445 690 C480 700 520 700 555 690 M455 676 C485 684 515 684 545 676 M462 662 C488 668 512 668 538 662"/>
+<rect class="shade" stroke-width="3" x="456" y="628" width="88" height="24" rx="6"/>
+<!-- grip -->
+<path class="body" stroke-width="3.5" d="M462 630 C456 560 446 505 436 455 C426 405 406 365 400 322 C394 280 388 232 402 192 C418 150 472 118 532 118 C592 118 634 150 644 196 C654 242 624 272 612 302 C602 342 642 382 652 432 C662 502 602 560 566 600 C552 614 546 622 546 630 Z"/>
+<!-- finger grooves and palm rest seams -->
+<path class="detail" stroke-width="2" d="M438 470 C452 478 458 492 452 506 M446 520 C460 528 466 542 460 556 M452 570 C466 578 470 590 464 602"/>
+<path class="detail" stroke-width="2" d="M612 302 C580 330 570 380 590 430 C604 470 600 520 572 572"/>
+<!-- head plate -->
+<path class="shade" stroke-width="2.5" d="M412 205 C424 162 470 136 530 136 C584 136 620 160 628 196 C612 226 584 244 540 250 C488 256 438 244 412 205 Z"/>
+<!-- left hat (POV) -->
+<circle class="body" stroke-width="2.5" cx="468" cy="178" r="20"/>
+<path class="detail" stroke-width="2" d="M468 166 L468 190 M456 178 L480 178"/>
+<!-- right hat -->
+<circle class="body" stroke-width="2.5" cx="584" cy="178" r="20"/>
+<circle class="detail" stroke-width="2" cx="584" cy="178" r="7"/>
+<!-- centre hat -->
+<circle class="body" stroke-width="2.5" cx="530" cy="218" r="18"/>
+<circle class="detail" stroke-width="2" cx="530" cy="218" r="6"/>
+<!-- red button on the front of the head -->
+<circle class="accent" stroke-width="2.5" cx="430" cy="244" r="15"/>
+<!-- front lever above the trigger -->
+<path class="shade" stroke-width="2.5" d="M402 270 C388 272 380 282 382 292 L404 296 Z"/>
+<!-- trigger -->
+<path class="shade" stroke-width="3" d="M402 312 C380 316 364 334 368 356 C372 374 388 382 410 380 C404 360 402 336 402 312 Z"/>
+<!-- pinky lever -->
+<path class="shade" stroke-width="2.5" d="M434 440 C418 444 410 456 414 468 L440 470 Z"/>
+</g>
+</svg>

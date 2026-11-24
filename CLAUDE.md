@@ -165,9 +165,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Text to speech: Settings > Voice > Text to speech = the system's voice (default) or Piper (`tts_engine`)
 - crates/gob-devices device plugins (plans/DEVICE_VIEW_PLAN.md; one brand per release, VKB = 1.0.1): folders in
   plugins/devices/<id>/ (shipped as `devices/` next to the exe): device.gob (TOML: `[[match]]` vid + pid and/or name part,
-  `[[view]]` SVGs, `[[control]]` id/name/kind/parts/at/side/group), inputs.gob (control[.part] -> `button:N`/`axis:x`/
-  `hat:N[:dir]`, the factory numbering), views/*.svg (one line-art style, classes body/shade/line/detail/accent, colors
-  from `svg::themed`; our own drawings, never vendor images); user-taught numbering `<data dir>/devices/<id>.gob`
+  `[[view]]` pictures, `[[control]]` id/name/kind/parts/at/side/group), inputs.gob (control[.part] -> `button:N`/`axis:x`/
+  `hat:N[:dir]`, the factory numbering), views/ = realistic pictures: photos of the user's own devices as PNG cut out to
+  transparency (JPEG works), never vendor images; SVG line art (classes body/shade/line/detail/accent, `svg::themed`)
+  only as a stand-in until a photo exists; hotspots in picture pixels; user-taught numbering `<data dir>/devices/<id>.gob`
   overlays control by control. Brands/models only in plugins. Examples `device_check <dir>` (checks, PNG with hotspots)
   and `device_teach <dir> [--write]` (press each control of a connected device; fills inputs.gob)
 - plans/completed/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
