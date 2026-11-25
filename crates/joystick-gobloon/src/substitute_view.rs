@@ -139,7 +139,13 @@ impl SubstituteDialog {
                 .spacing([12.0, 8.0])
                 .show(ui, |ui| {
                     for row in &mut self.rows {
-                        ui.label(format!("{}  {}", icon::PLUGS, row.old_name))
+                        // A profile without device names still says which device a row is.
+                        let name = if row.old_name.is_empty() {
+                            &row.old_id
+                        } else {
+                            &row.old_name
+                        };
+                        ui.label(format!("{}  {name}", icon::PLUGS))
                             .on_hover_text(&row.old_id);
                         ui.label(RichText::new(icon::ARROW_RIGHT).size(style::ICON_SIZE));
                         let selected = row

@@ -592,9 +592,12 @@ impl JoystickGobloonApp {
             Err(e) => {
                 log::error!("loading {}: {e}", path.display());
                 if how != OpenAs::Program {
-                    let text = self
-                        .i18n
-                        .trf("import-error", &[("error", e.to_string().into())]);
+                    let text = match e {
+                        gob_gremlin::Error::GremlinEx(_) => self.i18n.tr("import-gremlin-ex"),
+                        e => self
+                            .i18n
+                            .trf("import-error", &[("error", e.to_string().into())]),
+                    };
                     self.error(text);
                 }
                 false
