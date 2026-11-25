@@ -215,12 +215,14 @@ fn changed(rest: &Snapshot, now: &DeviceState, axis_wanted: bool) -> Vec<Input> 
             out.push(Input::Button(i as u16 + 1));
         }
     }
+    // A hat counts when it points a new way: also one resting off its centre (a mini stick
+    // that never reads centred).
     for (i, (h, was)) in now.hats.iter().zip(&rest.hats).enumerate() {
-        if let (Some(angle), None) = (h, was) {
-            out.push(Input::HatDirection(
-                i as u8 + 1,
-                Direction::of_angle(*angle),
-            ));
+        if let Some(angle) = h {
+            let d = Direction::of_angle(*angle);
+            if was.is_none_or(|w| Direction::of_angle(w) != d) {
+                out.push(Input::HatDirection(i as u8 + 1, d));
+            }
         }
     }
     out
