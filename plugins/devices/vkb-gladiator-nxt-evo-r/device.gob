@@ -49,6 +49,14 @@ parts = ["up", "right", "down", "left", "push"]
 at = [230, 252]
 side = "left"
 
+# On the front of the head, above the triggers (hidden behind the head in this photo).
+[[control]]
+id = "white_button"
+name = "White button"
+kind = "button"
+at = [90, 80]
+side = "left"
+
 [[control]]
 id = "rapid_fire"
 name = "Rapid fire lever"
