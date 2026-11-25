@@ -21,6 +21,7 @@ gob-script.workspace = true
 gob-export.workspace = true
 gob-osc.workspace = true
 gob-lighting.workspace = true
+gob-devices.workspace = true
 gob-ui.workspace = true
 rfd.workspace = true
 eframe.workspace = true

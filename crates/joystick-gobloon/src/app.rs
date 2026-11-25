@@ -126,6 +126,12 @@ pub struct JoystickGobloonApp {
     modes_window: crate::modes_view::ModesWindow,
     show_modifiers: bool,
     modifiers_window: crate::modifiers_view::ModifiersWindow,
+    /// Device plugins and their pictures for the hotspot editor, loaded when first shown.
+    #[cfg(debug_assertions)]
+    device_pictures: crate::device_pictures::DevicePictures,
+    /// Debug builds: the hotspot editor window.
+    #[cfg(debug_assertions)]
+    device_editor: Option<crate::device_editor::DeviceEditor>,
     /// Sound and speech previews from the editor.
     media: gob_engine::Media,
     leds: crate::leds::Leds,
@@ -335,6 +341,10 @@ impl JoystickGobloonApp {
             modes_window: Default::default(),
             show_modifiers: false,
             modifiers_window: Default::default(),
+            #[cfg(debug_assertions)]
+            device_pictures: Default::default(),
+            #[cfg(debug_assertions)]
+            device_editor: None,
             title: crate::APP_NAME.into(),
             media: Default::default(),
             leds: Default::default(),
@@ -374,6 +384,7 @@ impl JoystickGobloonApp {
             Ok("hidhide") => app.hidhide_window = true,
             Ok("modifiers") => app.show_modifiers = true,
             Ok("modes") => app.show_modes = true,
+            Ok("device-editor") => app.device_editor = Some(Default::default()),
             Ok("apps") => app.page = Page::Apps,
             Ok("vjoy") => app.page = Page::VJoy,
             Ok("viewer") => app.page = Page::Viewer,
@@ -1449,6 +1460,16 @@ impl JoystickGobloonApp {
 
     /// The input viewer and the calibration in their own native windows, when detached.
     fn detached_windows(&mut self, ctx: &egui::Context) {
+        #[cfg(debug_assertions)]
+        if let Some(editor) = &mut self.device_editor {
+            let pictures = &mut self.device_pictures;
+            let close = detached_window(ctx, "device-editor", "Device editor", BIG_WINDOW, |ui| {
+                !editor.show(ui, pictures)
+            });
+            if close {
+                self.device_editor = None;
+            }
+        }
         let devices = self.input.devices();
         if self.viewer_window {
             let mut devices = devices.clone();

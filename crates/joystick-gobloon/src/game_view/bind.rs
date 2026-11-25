@@ -73,7 +73,7 @@ fn is_hat(v: &VirtualOutput) -> bool {
 
 /// The profile's id of the device `guid` (a profile made on another computer names it by its
 /// old id), and the bindings of the pressed input.
-fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
+pub(super) fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
     let aliases = crate::substitute_view::auto_aliases(ctx.profile, ctx.devices);
     let mut device = p.device.clone();
     let mut found = Vec::new();
@@ -102,7 +102,7 @@ fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
 
 /// What a game can bind of what the pressed input sends: virtual joystick and gamepad outputs,
 /// keys and mouse buttons. What the running profile sends right now comes first.
-fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput> {
+pub(super) fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput> {
     let mine = |uses: &[gob_core::OutputUse]| uses.iter().any(|u| bindings.contains(&u.binding));
     let mut out: Vec<GameOutput> = Vec::new();
     for (v, uses) in ctx.profile.output_usage(None) {
@@ -368,6 +368,14 @@ impl GameView {
                 input,
                 outputs,
             })),
+        }
+    }
+
+    /// Binds `aim`'s action to a control known without a press (dropped on its picture): the
+    /// same way as pressing it, with the same dialogs.
+    pub(super) fn bind_pressed(&mut self, scene: &Scene, aim: Aim, p: Pressed, ops: &mut Vec<Op>) {
+        if let Step::Go(next) = self.pressed(scene, aim, p, ops) {
+            self.dialog = Some(*next);
         }
     }
 

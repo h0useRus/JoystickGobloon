@@ -7,7 +7,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
 - gob-ui + gob-i18n live in the shared repo h0useRus/gobloon-common-ui (also used by Keyboard Gobloon), taken by git tag
-  in `[workspace.dependencies]` (now `v0.4.0`); move the tag on purpose. Local work on both: clone it to
+  in `[workspace.dependencies]` (now `v0.5.0`); move the tag on purpose. Local work on both: clone it to
   `..\gobloon-common-ui`, rename the gitignored `.cargo/config.toml.off` to `config.toml` (a `[patch]` to its crates by
   path) and back when done; Cargo.lock changes while it is on, don't commit that. Its gallery example
   (`cargo run -p gob-ui --example gallery` there) shows every widget. egui upgrades start there; both apps move together.
@@ -171,7 +171,12 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   images, credited "Product images (c) VKB-Sim, used with permission" in the app and on the site); SVG line art (classes body/shade/line/detail/accent, `svg::themed`)
   only as a stand-in until a photo exists; hotspots in picture pixels; user-taught numbering `<data dir>/devices/<id>.gob`
   overlays control by control. Brands/models only in plugins. Examples `device_check <dir>` (checks, PNG with hotspots)
-  and `device_teach <dir> [--write]` (press each control of a connected device; fills inputs.gob)
+  and `device_teach <dir> [--write]` (press each control of a connected device; fills inputs.gob). `credit` in
+  device.gob = picture credit, shown under the picture. App: device_pictures.rs (catalog from `<exe>/devices` + the
+  user's, textures; near-black pixels lifted: transparent windows show through them), Game page Device tab
+  (game_view/device.rs: gob-ui `DevicePicture`, drag an action onto a control = the press flow of bind.rs, teach =
+  press each control, kept in the user's `<data dir>/devices/<id>.gob`), debug-only hotspot editor device_editor.rs.
+  Releases put plugins/devices into `devices/` next to the exe
 - plans/completed/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
   on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
@@ -255,8 +260,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   so it keeps access to private items; tests that need only the public API go to the crate's `tests/`.
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
-  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | modes (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting | panels | overlay (Settings > Overlay, placing it),
-  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | osc | events | logical | game-wiring (Game page schematic; the table is its first tab),
+  Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | modes (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | device-editor (hotspot editor, window) | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting | panels | overlay (Settings > Overlay, placing it),
+  select an input with `JOYSTICK_GOBLOON_EXPAND` = axis1 | button3 | hat1 ... (script2 = the second script on the Scripts page), a tab with `JOYSTICK_GOBLOON_TAB` = keyboard | voice | osc | events | logical | game-wiring (Game page schematic; the table is its first tab) | game-device (Device tab),
   `JOYSTICK_GOBLOON_GAME_IMPORT=1` takes the game's bindings into a profile without any on the Game page (debug only),
   `JOYSTICK_GOBLOON_GAME_DIALOG` = capture | conflict | choose | unmapped opens that dialog of the Game page with sample data,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a

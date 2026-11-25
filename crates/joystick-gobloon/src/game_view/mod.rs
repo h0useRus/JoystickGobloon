@@ -25,6 +25,7 @@ use crate::style::{self, icon};
 
 mod bind;
 mod capture;
+mod device;
 mod export_dialog;
 mod graph;
 mod state;
@@ -66,6 +67,8 @@ enum Tab {
     #[default]
     List,
     Wiring,
+    /// A picture of the player's controller with the actions on its controls.
+    Device,
 }
 
 #[derive(Default)]
@@ -115,6 +118,7 @@ pub struct GameView {
     reread: bool,
     export: Option<ExportDialog>,
     status: Option<String>,
+    device: device::DeviceTab,
 }
 
 /// What the page asks of the app.
@@ -387,10 +391,12 @@ impl GameView {
         if self.worker.is_none() {
             self.worker = Some(spawn_worker(ui.ctx().clone()));
             // Debug builds open the schematic with JOYSTICK_GOBLOON_TAB=game-wiring, for checks.
-            if cfg!(debug_assertions)
-                && std::env::var("JOYSTICK_GOBLOON_TAB").is_ok_and(|t| t == "game-wiring")
-            {
-                self.tab = Tab::Wiring;
+            if cfg!(debug_assertions) {
+                match std::env::var("JOYSTICK_GOBLOON_TAB").as_deref() {
+                    Ok("game-wiring") => self.tab = Tab::Wiring,
+                    Ok("game-device") => self.tab = Tab::Device,
+                    _ => {}
+                }
             }
         }
         self.poll(ctx, ops);
@@ -436,6 +442,16 @@ impl GameView {
             .clicked()
             {
                 self.tab = Tab::Wiring;
+            }
+            if style::tab(
+                ui,
+                self.tab == Tab::Device,
+                icon::JOYSTICK,
+                &i18n.tr("game-tab-device"),
+            )
+            .clicked()
+            {
+                self.tab = Tab::Device;
             }
             ui.add_space(style::SPACE_L);
             ui.label(icon::MAGNIFYING_GLASS);
@@ -520,7 +536,7 @@ impl GameView {
         );
         // The table lists every action of the game, like the game's own screen; the schematic
         // only what is wired.
-        let all = self.tab == Tab::List;
+        let all = self.tab != Tab::Wiring;
         let graph = Graph::build(ctx, i18n, &catalog, &self.search, all, &state);
         let live = Live::read(ctx, &graph);
         let now = ui.input(|i| i.time);
@@ -543,6 +559,7 @@ impl GameView {
         match self.tab {
             Tab::Wiring => self.wiring(ui, i18n, &game, &graph, &live, &state, now, ops),
             Tab::List => self.table(ui, i18n, ctx, &game, &graph, &live, &state, now, ops),
+            Tab::Device => self.device_tab(ui, i18n, ctx, &game, &graph, &state, ops),
         }
         let scene = bind::Scene {
             i18n,
@@ -551,6 +568,7 @@ impl GameView {
             catalog: &catalog,
             state: &state,
         };
+        self.bind_dropped(&scene, ops);
         self.debug_dialog(&scene);
         self.bind_dialog(ui, &scene, ops);
         self.export_dialog(ui, i18n, ctx, &game);
@@ -1010,9 +1028,9 @@ fn combo_name(i18n: &I18n, combo: &gob_core::Combo) -> String {
 
 fn arrow(d: HatDirection) -> &'static str {
     match d {
-        HatDirection::Up => "↑",
-        HatDirection::Right => "→",
-        HatDirection::Down => "↓",
-        HatDirection::Left => "←",
+        HatDirection::Up => icon::ARROW_UP,
+        HatDirection::Right => icon::ARROW_RIGHT,
+        HatDirection::Down => icon::ARROW_DOWN,
+        HatDirection::Left => icon::ARROW_LEFT,
     }
 }

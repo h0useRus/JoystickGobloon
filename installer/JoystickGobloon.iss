@@ -131,6 +131,8 @@ Source: "..\target\voice\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\lang\*.ftl"; DestDir: "{app}\lang"; Flags: ignoreversion
 ; Game export plugins (release.yml copies plugins\export there, without the dev folders).
 Source: "..\target\export\*"; DestDir: "{app}\export"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Device plugins: controller pictures and their control numbering (release.yml copies plugins\devices).
+Source: "..\target\devices\*"; DestDir: "{app}\devices"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; Extracted to {tmp} only when needed (InstallHidHide / InstallVJoy); not installed or
