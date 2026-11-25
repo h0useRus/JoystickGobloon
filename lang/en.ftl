@@ -1153,6 +1153,7 @@ game-device-teach-all = Teach every control
 game-device-teach-all-tip = Press each control when asked, so the picture knows which button is which on your device
 game-device-teach-press = Press { $control } on { $device }
 game-device-teach-skip = Skip
+game-device-teach-taken = { $input } is already { $control }: press again
 game-device-taught = Kept which control is which on { $device }.
 game-device-live-tip = Live: what the controller sends now. Taught controls light up on the picture too.
 game-device-live-none = Press a button or a hat, or move an axis

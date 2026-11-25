@@ -1153,6 +1153,7 @@ game-device-teach-all = Apprendre toutes les commandes
 game-device-teach-all-tip = Appuyez sur chaque commande quand c'est demandé, pour que l'image sache quel bouton est lequel sur votre appareil
 game-device-teach-press = Appuyez sur { $control } de { $device }
 game-device-teach-skip = Passer
+game-device-teach-taken = { $input } est déjà { $control } : appuyez à nouveau
 game-device-taught = Correspondance des commandes de { $device } enregistrée.
 game-device-live-tip = En direct : ce que la manette envoie maintenant. Les commandes apprises s’allument aussi sur l’image.
 game-device-live-none = Appuyez sur un bouton ou un chapeau, ou bougez un axe

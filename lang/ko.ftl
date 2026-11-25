@@ -1141,6 +1141,7 @@ game-device-teach-all = 모든 조작부 학습
 game-device-teach-all-tip = 요청할 때마다 각 조작부를 눌러, 그림이 장치의 어떤 버튼이 어느 것인지 알게 합니다
 game-device-teach-press = { $device }의 { $control }을(를) 누르세요
 game-device-teach-skip = 건너뛰기
+game-device-teach-taken = { $input }은(는) 이미 { $control }입니다: 다시 누르세요
 game-device-taught = { $device }의 조작부 배치를 저장했습니다.
 game-device-live-tip = 실시간: 컨트롤러가 지금 보내는 입력입니다. 학습된 컨트롤은 그림에서도 켜집니다.
 game-device-live-none = 버튼이나 햇을 누르거나 축을 움직이세요

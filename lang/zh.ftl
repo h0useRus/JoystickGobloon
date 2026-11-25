@@ -1141,6 +1141,7 @@ game-device-teach-all = 学习所有控件
 game-device-teach-all-tip = 按提示依次按下每个控件，让图片知道你设备上哪个按钮是哪个
 game-device-teach-press = 请按下 { $device } 上的 { $control }
 game-device-teach-skip = 跳过
+game-device-teach-taken = { $input } 已是 { $control }：请再按一次
 game-device-taught = 已保存 { $device } 的控件对应关系。
 game-device-live-tip = 实时：控制器现在发送的输入。已学习的控件也会在图片上亮起。
 game-device-live-none = 按下按钮或苦力帽，或移动一个轴

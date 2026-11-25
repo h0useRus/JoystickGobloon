@@ -1161,6 +1161,7 @@ game-device-teach-all = Обучить все элементы
 game-device-teach-all-tip = Нажимайте каждый элемент по запросу, чтобы картинка знала, какая кнопка какая на вашем устройстве
 game-device-teach-press = Нажмите { $control } на { $device }
 game-device-teach-skip = Пропустить
+game-device-teach-taken = { $input } уже занят: { $control }. Нажмите ещё раз
 game-device-taught = Сохранено, какой элемент какой на { $device }.
 game-device-live-tip = Вживую: что контроллер передаёт сейчас. Обученные элементы подсвечиваются и на картинке.
 game-device-live-none = Нажмите кнопку или хатку либо двиньте ось

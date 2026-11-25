@@ -38,6 +38,8 @@ struct Teach {
     /// What the device read when the current part was asked for.
     rest: Option<Snapshot>,
     taught: Inputs,
+    /// The last press refused because another control sends it: (input, that control).
+    clash: Option<(Input, String)>,
 }
 
 #[derive(Clone)]
@@ -734,7 +736,15 @@ impl GameView {
             return;
         };
         let rest = teach.rest.get_or_insert_with(|| Snapshot::of(device));
-        if let Some(input) = changed(rest, device, c.kind.is_axis_part(&part)) {
+        let found = changed(rest, device, c.kind.is_axis_part(&part));
+        let clash = found.and_then(|input| taken_by(teach, plugin, &control, input));
+        if let (Some(input), Some(other)) = (found, clash) {
+            // Another control sends it already (a slip onto a neighbour, or a press still
+            // held): ask again instead of keeping two controls on one input.
+            teach.clash = Some((input, other));
+            teach.rest = None;
+        } else if let Some(input) = found {
+            teach.clash = None;
             match input {
                 // A hat (or a mini stick set up as one) reports its directions on one POV:
                 // the whole hat is taught at once, its other directions need no press.
@@ -771,6 +781,18 @@ impl GameView {
                             ("device", device.info.name.clone().into()),
                         ],
                     ));
+                    if let Some((input, other)) = &teach.clash {
+                        ui.label(
+                            RichText::new(i18n.trf(
+                                "game-device-teach-taken",
+                                &[
+                                    ("input", input_text(i18n, *input).into()),
+                                    ("control", other.clone().into()),
+                                ],
+                            ))
+                            .color(ui.visuals().warn_fg_color),
+                        );
+                    }
                     skip = ui.button(i18n.tr("game-device-teach-skip")).clicked();
                     cancel = ui.button(i18n.tr("cancel")).clicked();
                 });
@@ -875,6 +897,38 @@ fn set_hat(taught: &mut Inputs, control: &str, n: u8) {
     }
 }
 
+/// The other control (its name and part) that already sends `input`: in what this round
+/// taught, or in the numbering of a control this round does not teach again. Directions of one
+/// POV hat count as one input.
+fn taken_by(teach: &Teach, plugin: &DevicePlugin, control: &str, input: Input) -> Option<String> {
+    let same = |a: Input| match (a, input) {
+        (Input::HatDirection(n, _), Input::HatDirection(m, _)) => n == m,
+        (a, b) => a == b,
+    };
+    let again =
+        |id: &str| teach.queue.iter().any(|(c, _)| c == id) || teach.taught.0.contains_key(id);
+    plugin
+        .manifest
+        .controls
+        .iter()
+        .filter(|c| c.id != control)
+        .find_map(|c| {
+            c.parts().into_iter().find_map(|part| {
+                let known = if again(&c.id) {
+                    teach.taught.get(&c.id, part)
+                } else {
+                    plugin.input_of(&c.id, part)
+                };
+                known
+                    .filter(|i| same(*i))
+                    .map(|_| match part_label(None, part) {
+                        l if l.is_empty() => c.name.clone(),
+                        l => format!("{} {l}", c.name),
+                    })
+            })
+        })
+}
+
 fn start_teach(
     tab: &mut DeviceTab,
     device: &DeviceState,
@@ -891,6 +945,7 @@ fn start_teach(
         queue,
         rest: None,
         taught: Inputs::default(),
+        clash: None,
     });
 }
 

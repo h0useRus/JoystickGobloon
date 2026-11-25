@@ -1153,6 +1153,7 @@ game-device-teach-all = Enseñar todos los controles
 game-device-teach-all-tip = Pulsa cada control cuando se pida, para que la imagen sepa qué botón es cuál en tu dispositivo
 game-device-teach-press = Pulsa { $control } en { $device }
 game-device-teach-skip = Saltar
+game-device-teach-taken = { $input } ya es { $control }: vuelve a pulsar
 game-device-taught = Guardado qué control es cuál en { $device }.
 game-device-live-tip = En vivo: lo que envía ahora el mando. Los controles aprendidos también se iluminan en la imagen.
 game-device-live-none = Pulsa un botón o un hat, o mueve un eje

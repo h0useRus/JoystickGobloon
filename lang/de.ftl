@@ -1153,6 +1153,7 @@ game-device-teach-all = Alle Elemente anlernen
 game-device-teach-all-tip = Jedes Element auf Aufforderung drücken, damit das Bild weiß, welche Taste welche an deinem Gerät ist
 game-device-teach-press = Drücke { $control } an { $device }
 game-device-teach-skip = Überspringen
+game-device-teach-taken = { $input } ist schon { $control }: noch einmal drücken
 game-device-taught = Die Belegung der Elemente von { $device } ist gespeichert.
 game-device-live-tip = Live: was der Controller gerade sendet. Angelernte Bedienelemente leuchten auch im Bild.
 game-device-live-none = Drücke eine Taste oder einen Hat oder bewege eine Achse
