@@ -23,6 +23,7 @@ image = "views/main.png"
 id = "right_hat"
 name = "Right hat (mini stick)"
 kind = "hat"
+look = "stick"
 at = [408, 65]
 side = "right"
 

@@ -21,5 +21,5 @@ pub use check::{Issue, Level, check};
 pub use input::{Direction, Input};
 pub use inputs::{Entry, Inputs};
 pub use picture::{Picture, Rgba, rasterize_svg};
-pub use plugin::{Control, DevicePlugin, Kind, Manifest, Match, Side, View, with_hotspots};
+pub use plugin::{Control, DevicePlugin, Kind, Look, Manifest, Match, Side, View, with_hotspots};
 pub use svg::{Palette, themed, view_box};

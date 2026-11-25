@@ -161,6 +161,17 @@ pub struct Control {
     /// Callout heading when several controls share one (e.g. "Base buttons").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// How the picture draws the control when not by its kind: `stick` for a hat that is a
+    /// mini stick (a ring whose dot follows the hat's direction).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub look: Option<Look>,
+}
+
+/// A control's drawing other than its kind's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Look {
+    Stick,
 }
 
 fn main_view() -> String {

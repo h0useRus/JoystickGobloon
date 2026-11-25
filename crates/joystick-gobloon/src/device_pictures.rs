@@ -272,7 +272,9 @@ pub fn callouts(
             continue;
         }
         let parts = c.parts();
+        let mini_stick = c.look == Some(gob_devices::Look::Stick) && c.kind == Kind::Hat;
         let glyph = match c.kind {
+            _ if mini_stick => style::CalloutGlyph::Stick,
             Kind::Hat if parts.starts_with(&["up", "right", "down", "left"]) => {
                 style::CalloutGlyph::Hat
             }
@@ -308,6 +310,28 @@ pub fn callouts(
         }
         if known {
             callout.axes = values;
+        }
+        // A mini stick on a hat: its dot leans the way the hat points.
+        if mini_stick {
+            let lit = |p: &str| {
+                parts
+                    .iter()
+                    .position(|q| *q == p)
+                    .is_some_and(|n| callout.lines[n].lit)
+            };
+            let axis = |minus: &str, plus: &str| match (lit(minus), lit(plus)) {
+                (true, false) => -1.0,
+                (false, true) => 1.0,
+                _ => 0.0,
+            };
+            let (x, y) = (axis("left", "right"), axis("up", "down"));
+            // A diagonal stays on the ring like a straight push.
+            let k = if x != 0.0 && y != 0.0 {
+                std::f32::consts::FRAC_1_SQRT_2
+            } else {
+                1.0
+            };
+            callout.axes = vec![x * k, y * k];
         }
         out.list.push(callout);
         out.parts.push(
