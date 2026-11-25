@@ -51,7 +51,7 @@ side = "right"
 
 [[control]]
 id = "rapid_fire"
-name = "Rapid fire trigger"
+name = "Rapid fire lever"
 kind = "lever"
 at = [480, 178]
 side = "right"
