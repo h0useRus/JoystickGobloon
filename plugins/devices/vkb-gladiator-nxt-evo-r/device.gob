@@ -1,5 +1,5 @@
 # Gladiator NXT EVO "Space Combat Edition", right hand: SCG standard grip (twist, dual action
-# trigger, 3 four-way hats with push, 4 buttons) on the GNX EVO base (X/Y, 3 buttons, encoder,
+# trigger, 3 four-way hats with push, a grey mini stick that works as a fourth hat, 4 buttons) on the GNX EVO base (X/Y, 3 buttons, encoder,
 # throttle wheel, auto-centering 3-position switch), as listed by VKB's stores.
 # The grip sends what VKBDevCfg sets up; inputs.gob is the factory profile, users teach their own.
 id = "vkb-gladiator-nxt-evo-r"
@@ -43,9 +43,10 @@ at = [173, 140]
 side = "left"
 
 [[control]]
-id = "front_lever"
-name = "Front lever"
-kind = "lever"
+id = "mini_stick"
+name = "Mini stick"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
 at = [228, 257]
 side = "left"
 
