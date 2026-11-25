@@ -70,6 +70,8 @@ pub(super) struct DeviceTab {
     choose: Option<(String, String)>,
     /// An action to bind to a pressed control, once the page has what binding needs.
     pub(super) pending: Option<(String, Pressed)>,
+    /// Axis motion of the shown device (its id): an axis counts as used while it moves.
+    motion: Option<(String, Motion)>,
 }
 
 /// The press a control part stands for.
@@ -116,6 +118,80 @@ fn active(d: &DeviceState, input: Input) -> bool {
             .copied()
             .flatten()
             .is_some_and(|a| super::graph::hat_has(a, direction(dir))),
+    }
+}
+
+/// How long an axis counts as used after it last moved, seconds.
+const AXIS_LIVE: f64 = 0.6;
+/// How far an axis has to move between frames to count as moving (noise stays below it).
+const AXIS_STEP: f32 = 0.02;
+
+/// Where each axis was and when it last moved.
+struct Motion {
+    at: [f32; 8],
+    moved: [f64; 8],
+}
+
+impl Motion {
+    fn new(d: &DeviceState) -> Self {
+        Self {
+            at: d.axes,
+            moved: [f64::NEG_INFINITY; 8],
+        }
+    }
+
+    /// Takes the new reading at `now` (seconds); returns the axes moving lately.
+    fn update(&mut self, d: &DeviceState, now: f64) -> Vec<u8> {
+        let mut out = Vec::new();
+        for i in 0..8 {
+            if (d.axes[i] - self.at[i]).abs() > AXIS_STEP {
+                self.at[i] = d.axes[i];
+                self.moved[i] = now;
+            }
+            if now - self.moved[i] < AXIS_LIVE {
+                out.push(i as u8 + 1);
+            }
+        }
+        out
+    }
+}
+
+/// What the device sends now: buttons held, hat directions and the `moving` axes.
+fn live_inputs(now: &DeviceState, moving: &[u8]) -> Vec<Input> {
+    let mut out = Vec::new();
+    for (i, on) in now.buttons.iter().enumerate() {
+        if *on {
+            out.push(Input::Button(i as u16 + 1));
+        }
+    }
+    for (i, h) in now.hats.iter().enumerate() {
+        if let Some(angle) = h {
+            out.push(Input::HatDirection(
+                i as u8 + 1,
+                Direction::of_angle(*angle),
+            ));
+        }
+    }
+    out.extend(moving.iter().map(|slot| Input::Axis(*slot)));
+    out
+}
+
+/// An input as the Devices page names it ("Button 7", "Hat 1 ↑", "X Axis").
+fn input_text(i18n: &I18n, input: Input) -> String {
+    let name = |kind: &str, n: u8| crate::output_marks::input_name(i18n, kind, &n.to_string());
+    match input {
+        Input::Button(n) => crate::output_marks::input_name(i18n, "button", &n.to_string()),
+        Input::Axis(slot) => name("axis", slot),
+        Input::Hat(n) => name("hat", n),
+        Input::HatDirection(n, d) => {
+            let arrow = match d {
+                Direction::Up => icon::ARROW_UP,
+                Direction::Right => icon::ARROW_RIGHT,
+                Direction::Down => icon::ARROW_DOWN,
+                Direction::Left => icon::ARROW_LEFT,
+            };
+            format!("{} {arrow}", name("hat", n))
+        }
     }
 }
 
@@ -365,12 +441,21 @@ impl GameView {
         else {
             return;
         };
-        let controls: Vec<&Control> = plugin
-            .manifest
-            .controls
-            .iter()
-            .filter(|c| c.view == tab.view)
-            .collect();
+        // Live: what the device sends now, also before it is taught, so every press shows.
+        if tab
+            .motion
+            .as_ref()
+            .is_none_or(|(id, _)| *id != device.info.guid)
+        {
+            tab.motion = Some((device.info.guid.clone(), Motion::new(device)));
+        }
+        let now = ui.input(|i| i.time);
+        let moving = tab
+            .motion
+            .as_mut()
+            .map(|(_, m)| m.update(device, now))
+            .unwrap_or_default();
+        let live = live_inputs(device, &moving);
         let teaching = tab.teach.as_ref().and_then(|t| t.queue.first()).cloned();
         // Per control part: what it shows; per control: (action, output) of its bindings.
         let mut menus: HashMap<String, Vec<(String, GameOutput)>> = HashMap::new();
@@ -394,7 +479,11 @@ impl GameView {
                     }
                     _ => None,
                 };
-                let held = asked || active(device, input);
+                let held = asked
+                    || match input {
+                        Input::Axis(slot) => moving.contains(&slot),
+                        _ => active(device, input),
+                    };
                 let p = pressed_of(device, input);
                 let (_, bindings) = bindings_of(ctx, &p);
                 let mut names: Vec<String> = Vec::new();
@@ -428,14 +517,15 @@ impl GameView {
                     value,
                 }
             });
-        if tab.teach.is_some()
-            || controls.iter().any(|c| {
-                active_any(device, plugin, c) || matches!(c.kind, Kind::Stick | Kind::Axis)
-            })
-        {
-            ui.ctx()
-                .request_repaint_after(std::time::Duration::from_millis(33));
-        }
+        let unknown: Vec<Input> = live
+            .iter()
+            .copied()
+            .filter(|i| plugin.control_of(*i).is_none())
+            .collect();
+        self.live_strip(ui, i18n, plugin, &live);
+        let tab = &mut self.device;
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(33));
         let response = style::DevicePicture::new(
             ("game-device", plugin.id(), &tab.view),
             egui::Image::new(&texture),
@@ -446,12 +536,52 @@ impl GameView {
         .max_height((ui.available_height() - 24.0).max(240.0))
         .show(ui);
 
+        let mut quick = None;
         for (i, r) in response.callouts.iter().enumerate() {
             let shown: Vec<&Control> = built
                 .controls(i)
                 .into_iter()
                 .filter_map(|id| plugin.control(id))
                 .collect();
+            // Clicked while an input the picture does not know yet is held: it is this part.
+            if r.clicked()
+                && let [input] = unknown.as_slice()
+            {
+                let on_line = response
+                    .line
+                    .filter(|(c, _)| *c == i)
+                    .and_then(|(c, n)| built.part(c, n));
+                let single = (built.parts[i].len() == 1)
+                    .then(|| built.part(i, 0))
+                    .flatten();
+                let by_direction = match input {
+                    Input::HatDirection(_, d) => built.parts[i]
+                        .iter()
+                        .find(|(_, part)| part == d.name())
+                        .map(|(c, p)| (c.as_str(), p.as_str())),
+                    _ => None,
+                };
+                if let Some((control, part)) = on_line.or(single).or(by_direction) {
+                    let mut taught = Inputs::default();
+                    taught.set(control, part, *input);
+                    let what =
+                        plugin.control(control).map_or_else(String::new, |c| {
+                            match part_label(Some(i18n), part) {
+                                l if l.is_empty() => c.name.clone(),
+                                l => format!("{} {l}", c.name),
+                            }
+                        });
+                    keep_taught(tab, plugin, &taught);
+                    quick = Some(i18n.trf(
+                        "game-device-quick-taught",
+                        &[
+                            ("input", input_text(i18n, *input).into()),
+                            ("control", what.into()),
+                        ],
+                    ));
+                    break;
+                }
+            }
             if let Some(action) = r.dnd_release_payload::<String>() {
                 // Dropped on a line, badge or hat arrow: that part; on a control with one part:
                 // that one; else ask which.
@@ -511,6 +641,46 @@ impl GameView {
             });
             r.clone().on_hover_text(i18n.tr("game-device-card-tip"));
         }
+        if quick.is_some() {
+            self.note = quick;
+        }
+    }
+
+    /// What the device sends now, one chip per input: the control it is on the picture, or
+    /// its number while the picture does not know it (hold it and click the control).
+    fn live_strip(&self, ui: &mut egui::Ui, i18n: &I18n, plugin: &DevicePlugin, live: &[Input]) {
+        let accent = style::accent(ui);
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                RichText::new(icon::HAND_POINTING).color(if live.is_empty() {
+                    ui.visuals().weak_text_color()
+                } else {
+                    accent
+                }),
+            )
+            .on_hover_text(i18n.tr("game-device-live-tip"));
+            if live.is_empty() {
+                ui.label(RichText::new(i18n.tr("game-device-live-none")).weak());
+                return;
+            }
+            for input in live {
+                let raw = input_text(i18n, *input);
+                match plugin.control_of(*input) {
+                    Some((c, part)) => {
+                        let text = match part_label(Some(i18n), part) {
+                            l if l.is_empty() => c.name.clone(),
+                            l => format!("{} {l}", c.name),
+                        };
+                        ui.label(RichText::new(text).color(accent).strong())
+                            .on_hover_text(raw);
+                    }
+                    None => {
+                        ui.label(RichText::new(format!("{raw}  {}", icon::QUESTION)).weak())
+                            .on_hover_text(i18n.tr("game-device-live-unknown"));
+                    }
+                }
+            }
+        });
     }
 
     /// While teaching: what to press, Skip and Cancel; takes the press and keeps it.
@@ -679,13 +849,6 @@ fn on_joystick(state: &State, action: &str) -> bool {
         .any(|b| b.mark.in_effect() && b.output.combo().is_none())
 }
 
-fn active_any(device: &DeviceState, plugin: &DevicePlugin, c: &Control) -> bool {
-    c.parts()
-        .into_iter()
-        .filter_map(|p| plugin.input_of(&c.id, p))
-        .any(|i| active(device, i))
-}
-
 fn start_teach(
     tab: &mut DeviceTab,
     device: &DeviceState,
@@ -710,7 +873,12 @@ fn finish_teach(tab: &mut DeviceTab, plugin: &DevicePlugin) {
     let Some(teach) = tab.teach.take() else {
         return;
     };
-    if teach.taught.0.is_empty() {
+    keep_taught(tab, plugin, &teach.taught);
+}
+
+/// Adds `taught` to the user's numbering of the plugin and shows it at once.
+fn keep_taught(tab: &mut DeviceTab, plugin: &DevicePlugin, taught: &Inputs) {
+    if taught.0.is_empty() {
         return;
     }
     let Some(dir) = crate::device_pictures::user_dir() else {
@@ -725,7 +893,7 @@ fn finish_teach(tab: &mut DeviceTab, plugin: &DevicePlugin) {
         }
     };
     // Part by part: a skipped part keeps what was taught before.
-    for (control, entry) in &teach.taught.0 {
+    for (control, entry) in &taught.0 {
         match entry {
             gob_devices::Entry::One(input) => all.set(control, "", *input),
             gob_devices::Entry::Parts(parts) => {
