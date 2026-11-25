@@ -199,29 +199,31 @@ fn input_text(i18n: &I18n, input: Input) -> String {
 
 /// The first input that changed from `rest`: a button or hat direction that went on, or an
 /// axis that moved far.
-fn changed(rest: &Snapshot, now: &DeviceState, axis_wanted: bool) -> Option<Input> {
+/// Every input that changed from `rest`, in that order.
+fn changed(rest: &Snapshot, now: &DeviceState, axis_wanted: bool) -> Vec<Input> {
+    let mut out = Vec::new();
     if axis_wanted {
         for (i, (v, r)) in now.axes.iter().zip(&rest.axes).enumerate() {
             if (v - r).abs() > AXIS_TRAVEL {
-                return Some(Input::Axis(i as u8 + 1));
+                out.push(Input::Axis(i as u8 + 1));
             }
         }
-        return None;
+        return out;
     }
     for (i, (on, was)) in now.buttons.iter().zip(&rest.buttons).enumerate() {
         if *on && !*was {
-            return Some(Input::Button(i as u16 + 1));
+            out.push(Input::Button(i as u16 + 1));
         }
     }
     for (i, (h, was)) in now.hats.iter().zip(&rest.hats).enumerate() {
         if let (Some(angle), None) = (h, was) {
-            return Some(Input::HatDirection(
+            out.push(Input::HatDirection(
                 i as u8 + 1,
                 Direction::of_angle(*angle),
             ));
         }
     }
-    None
+    out
 }
 
 impl GameView {
@@ -736,30 +738,31 @@ impl GameView {
             return;
         };
         let rest = teach.rest.get_or_insert_with(|| Snapshot::of(device));
-        let found = changed(rest, device, c.kind.is_axis_part(&part));
-        let clash = found.and_then(|input| taken_by(teach, plugin, &control, input));
+        let candidates = changed(rest, device, c.kind.is_axis_part(&part));
+        // A mini stick may click its push while it is moved: what another part of the same
+        // control already sends is not this part (pushes are asked for first).
+        let mine = |input: &Input| {
+            c.parts()
+                .into_iter()
+                .any(|p| p != part && teach.taught.get(&control, p).is_some_and(|t| t == *input))
+        };
+        let fresh: Vec<Input> = candidates.into_iter().filter(|i| !mine(i)).collect();
+        let free = fresh
+            .iter()
+            .copied()
+            .find(|i| taken_by(teach, plugin, &control, *i).is_none());
+        let found = free.or(fresh.first().copied());
+        let clash = match free {
+            Some(_) => None,
+            None => found.and_then(|input| taken_by(teach, plugin, &control, input)),
+        };
         if let (Some(input), Some(other)) = (found, clash) {
             // Another control sends it already (a slip onto a neighbour, or a press still
             // held): ask again instead of keeping two controls on one input.
             teach.clash = Some((input, other));
             teach.rest = None;
         } else if let Some(input) = found {
-            teach.clash = None;
-            match input {
-                // A hat (or a mini stick set up as one) reports its directions on one POV:
-                // the whole hat is taught at once, its other directions need no press.
-                Input::HatDirection(n, _) if c.kind == Kind::Hat => {
-                    set_hat(&mut teach.taught, &control, n);
-                    teach
-                        .queue
-                        .retain(|(qc, qp)| *qc != control || qp.parse::<Direction>().is_err());
-                }
-                _ => {
-                    teach.taught.set(&control, &part, input);
-                    teach.queue.remove(0);
-                }
-            }
-            teach.rest = None;
+            accept(teach, c, &part, input);
         }
         let what = match part_label(Some(i18n), &part) {
             l if l.is_empty() => c.name.clone(),
@@ -767,6 +770,7 @@ impl GameView {
         };
         let mut skip = false;
         let mut cancel = false;
+        let mut take = false;
         egui::Frame::new()
             .fill(style::accent(ui).gamma_multiply(0.15))
             .corner_radius(6.0)
@@ -792,12 +796,24 @@ impl GameView {
                             ))
                             .color(ui.visuals().warn_fg_color),
                         );
+                        take = ui
+                            .button(i18n.tr("game-device-teach-take"))
+                            .on_hover_text(i18n.tr("game-device-teach-take-tip"))
+                            .clicked();
                     }
                     skip = ui.button(i18n.tr("game-device-teach-skip")).clicked();
                     cancel = ui.button(i18n.tr("cancel")).clicked();
                 });
             });
         if let Some(teach) = &mut tab.teach {
+            // The refused input belongs to this part after all: it moves here from the other
+            // control when the numbering is kept.
+            if take
+                && let Some((input, _)) = teach.clash
+                && let Some(c) = plugin.control(&control)
+            {
+                accept(teach, c, &part, input);
+            }
             if skip && !teach.queue.is_empty() {
                 teach.queue.remove(0);
                 teach.rest = None;
@@ -890,6 +906,26 @@ fn on_joystick(state: &State, action: &str) -> bool {
         .any(|b| b.mark.in_effect() && b.output.combo().is_none())
 }
 
+/// Keeps `input` for `part` of control `c` (the part asked for now) and moves on. A hat (or a
+/// mini stick set up as one) reporting a POV direction is taught whole: its other directions
+/// need no press.
+fn accept(teach: &mut Teach, c: &Control, part: &str, input: Input) {
+    teach.clash = None;
+    match input {
+        Input::HatDirection(n, _) if c.kind == Kind::Hat => {
+            set_hat(&mut teach.taught, &c.id, n);
+            teach
+                .queue
+                .retain(|(qc, qp)| *qc != c.id || qp.parse::<Direction>().is_err());
+        }
+        _ => {
+            teach.taught.set(&c.id, part, input);
+            teach.queue.remove(0);
+        }
+    }
+    teach.rest = None;
+}
+
 /// All four directions of hat `control` come from POV hat `n` (its push stays as it is).
 fn set_hat(taught: &mut Inputs, control: &str, n: u8) {
     for d in Direction::ALL {
@@ -935,9 +971,17 @@ fn start_teach(
     plugin: &DevicePlugin,
     controls: Vec<&Control>,
 ) {
+    // A hat's push first: a mini stick that clicks its push while moved is then not taught
+    // the push for a direction.
     let queue = controls
         .iter()
-        .flat_map(|c| c.parts().into_iter().map(|p| (c.id.clone(), p.to_string())))
+        .flat_map(|c| {
+            let mut parts = c.parts();
+            if c.kind == Kind::Hat {
+                parts.sort_by_key(|p| p.parse::<Direction>().is_ok());
+            }
+            parts.into_iter().map(|p| (c.id.clone(), p.to_string()))
+        })
         .collect();
     tab.teach = Some(Teach {
         device: device.info.guid.clone(),
@@ -973,6 +1017,36 @@ fn keep_taught(tab: &mut DeviceTab, plugin: &DevicePlugin, taught: &Inputs) {
             Inputs::default()
         }
     };
+    // An input belongs to one control: what was just taught leaves every other control.
+    let new: Vec<Input> = taught
+        .0
+        .values()
+        .flat_map(|e| match e {
+            gob_devices::Entry::One(i) => vec![*i],
+            gob_devices::Entry::Parts(p) => p.values().copied().collect(),
+        })
+        .collect();
+    let same = |a: &Input| {
+        new.iter().any(|b| match (a, b) {
+            (
+                Input::HatDirection(n, _) | Input::Hat(n),
+                Input::HatDirection(m, _) | Input::Hat(m),
+            ) => n == m,
+            (a, b) => a == b,
+        })
+    };
+    all.0.retain(|control, entry| {
+        if taught.0.contains_key(control) {
+            return true;
+        }
+        match entry {
+            gob_devices::Entry::One(i) => !same(i),
+            gob_devices::Entry::Parts(parts) => {
+                parts.retain(|_, i| !same(i));
+                !parts.is_empty()
+            }
+        }
+    });
     // Part by part: a skipped part keeps what was taught before.
     for (control, entry) in &taught.0 {
         match entry {
