@@ -1,4 +1,4 @@
-# Gladiator NXT EVO "Space Combat Edition", left hand on the Omni Throttle adapter: the stick works as a throttle: SCG standard grip (twist, dual action
+# Gladiator NXT EVO "Space Combat Edition", left hand on the Omni Throttle adapter: the stick works as a throttle: SCG Premium grip (twist, dual action, rapid fire
 # trigger, 3 four-way hats with push, a grey mini stick that works as a fourth hat, 4 buttons) on the GNX EVO base (X/Y, 3 buttons, encoder,
 # throttle wheel, auto-centering 3-position switch), as listed by VKB's stores.
 # The grip sends what VKBDevCfg sets up; inputs.gob is the factory profile, users teach their own.
@@ -51,6 +51,13 @@ at = [366, 224]
 side = "right"
 
 [[control]]
+id = "rapid_fire"
+name = "Rapid fire trigger"
+kind = "lever"
+at = [440, 204]
+side = "left"
+
+[[control]]
 id = "trigger"
 name = "Trigger"
 kind = "trigger"
@@ -86,7 +93,7 @@ side = "left"
 id = "f2"
 name = "F2"
 kind = "button"
-at = [243, 492]
+at = [164, 455]
 side = "left"
 group = "Base buttons"
 
@@ -102,7 +109,7 @@ group = "Base buttons"
 id = "f3"
 name = "F3"
 kind = "button"
-at = [164, 455]
+at = [243, 492]
 side = "left"
 group = "Base buttons"
 
@@ -110,7 +117,7 @@ group = "Base buttons"
 id = "en1"
 name = "EN1 encoder"
 kind = "encoder"
-at = [114, 517]
+at = [194, 567]
 side = "left"
 
 [[control]]
@@ -124,5 +131,5 @@ side = "left"
 id = "sw1"
 name = "SW1 switch"
 kind = "switch"
-at = [194, 567]
+at = [114, 517]
 side = "left"

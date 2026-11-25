@@ -1,4 +1,4 @@
-# Gladiator NXT EVO "Space Combat Edition", left hand: SCG standard grip (twist, dual action
+# Gladiator NXT EVO "Space Combat Edition", left hand: SCG Premium grip (twist, dual action, rapid fire
 # trigger, 3 four-way hats with push, a grey mini stick that works as a fourth hat, 4 buttons) on the GNX EVO base (X/Y, 3 buttons, encoder,
 # throttle wheel, auto-centering 3-position switch), as listed by VKB's stores.
 # The grip sends what VKBDevCfg sets up; inputs.gob is the factory profile, users teach their own.
@@ -24,7 +24,7 @@ id = "right_hat"
 name = "Right hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [411, 73]
+at = [408, 65]
 side = "right"
 
 [[control]]
@@ -32,14 +32,14 @@ id = "centre_hat"
 name = "Centre hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [367, 110]
+at = [365, 108]
 side = "right"
 
 [[control]]
 id = "red_button"
 name = "Red button"
 kind = "button"
-at = [411, 140]
+at = [410, 135]
 side = "right"
 
 [[control]]
@@ -47,21 +47,28 @@ id = "mini_stick"
 name = "Mini stick"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [353, 256]
+at = [358, 248]
+side = "right"
+
+[[control]]
+id = "rapid_fire"
+name = "Rapid fire trigger"
+kind = "lever"
+at = [480, 178]
 side = "right"
 
 [[control]]
 id = "trigger"
 name = "Trigger"
 kind = "trigger"
-at = [436, 200]
+at = [425, 200]
 side = "right"
 
 [[control]]
 id = "pinky"
 name = "Pinky button"
 kind = "button"
-at = [392, 330]
+at = [395, 330]
 side = "right"
 
 [[control]]
@@ -69,7 +76,7 @@ id = "left_hat"
 name = "Left hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [355, 56]
+at = [355, 52]
 side = "left"
 
 [[control]]
@@ -77,7 +84,7 @@ id = "stick"
 name = "Stick axes"
 kind = "stick"
 parts = ["x", "y", "twist"]
-at = [303, 460]
+at = [300, 450]
 side = "left"
 
 # Base
@@ -86,7 +93,7 @@ side = "left"
 id = "f2"
 name = "F2"
 kind = "button"
-at = [220, 552]
+at = [148, 522]
 side = "left"
 group = "Base buttons"
 
@@ -94,7 +101,7 @@ group = "Base buttons"
 id = "f1"
 name = "F1"
 kind = "button"
-at = [183, 532]
+at = [188, 538]
 side = "left"
 group = "Base buttons"
 
@@ -102,7 +109,7 @@ group = "Base buttons"
 id = "f3"
 name = "F3"
 kind = "button"
-at = [147, 521]
+at = [232, 560]
 side = "left"
 group = "Base buttons"
 
@@ -110,19 +117,19 @@ group = "Base buttons"
 id = "en1"
 name = "EN1 encoder"
 kind = "encoder"
-at = [93, 603]
+at = [192, 600]
 side = "left"
 
 [[control]]
 id = "wheel"
 name = "Centre wheel"
 kind = "axis"
-at = [137, 610]
+at = [148, 590]
 side = "left"
 
 [[control]]
 id = "sw1"
 name = "SW1 switch"
 kind = "switch"
-at = [179, 630]
+at = [100, 578]
 side = "left"
