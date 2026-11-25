@@ -292,8 +292,11 @@ pub fn callouts(
         for part in &parts {
             let shown = line(c, part);
             callout.lit |= shown.lit;
-            known |= shown.value.is_some();
-            values.push(shown.value.unwrap_or(0.0));
+            // The glyph's axes: x, y and twist in that order, a push of a mini stick is no axis.
+            if c.kind.is_axis_part(part) {
+                known |= shown.value.is_some();
+                values.push(shown.value.unwrap_or(0.0));
+            }
             callout.lines.push(style::CalloutLine {
                 label: part_label(i18n, part),
                 badge: badge(c.kind, part),

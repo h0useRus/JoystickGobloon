@@ -197,8 +197,7 @@ fn input_text(i18n: &I18n, input: Input) -> String {
 
 /// The first input that changed from `rest`: a button or hat direction that went on, or an
 /// axis that moved far.
-fn changed(rest: &Snapshot, now: &DeviceState, kind: Kind) -> Option<Input> {
-    let axis_wanted = matches!(kind, Kind::Axis | Kind::Stick);
+fn changed(rest: &Snapshot, now: &DeviceState, axis_wanted: bool) -> Option<Input> {
     if axis_wanted {
         for (i, (v, r)) in now.axes.iter().zip(&rest.axes).enumerate() {
             if (v - r).abs() > AXIS_TRAVEL {
@@ -563,7 +562,15 @@ impl GameView {
                 };
                 if let Some((control, part)) = on_line.or(single).or(by_direction) {
                     let mut taught = Inputs::default();
-                    taught.set(control, part, *input);
+                    match *input {
+                        Input::HatDirection(n, _)
+                            if plugin.control(control).is_some_and(|c| c.kind == Kind::Hat)
+                                && part.parse::<Direction>().is_ok() =>
+                        {
+                            set_hat(&mut taught, control, n);
+                        }
+                        input => taught.set(control, part, input),
+                    }
                     let what =
                         plugin.control(control).map_or_else(String::new, |c| {
                             match part_label(Some(i18n), part) {
@@ -727,9 +734,21 @@ impl GameView {
             return;
         };
         let rest = teach.rest.get_or_insert_with(|| Snapshot::of(device));
-        if let Some(input) = changed(rest, device, c.kind) {
-            teach.taught.set(&control, &part, input);
-            teach.queue.remove(0);
+        if let Some(input) = changed(rest, device, c.kind.is_axis_part(&part)) {
+            match input {
+                // A hat (or a mini stick set up as one) reports its directions on one POV:
+                // the whole hat is taught at once, its other directions need no press.
+                Input::HatDirection(n, _) if c.kind == Kind::Hat => {
+                    set_hat(&mut teach.taught, &control, n);
+                    teach
+                        .queue
+                        .retain(|(qc, qp)| *qc != control || qp.parse::<Direction>().is_err());
+                }
+                _ => {
+                    teach.taught.set(&control, &part, input);
+                    teach.queue.remove(0);
+                }
+            }
             teach.rest = None;
         }
         let what = match part_label(Some(i18n), &part) {
@@ -847,6 +866,13 @@ fn on_joystick(state: &State, action: &str) -> bool {
         .of(action)
         .iter()
         .any(|b| b.mark.in_effect() && b.output.combo().is_none())
+}
+
+/// All four directions of hat `control` come from POV hat `n` (its push stays as it is).
+fn set_hat(taught: &mut Inputs, control: &str, n: u8) {
+    for d in Direction::ALL {
+        taught.set(control, d.name(), Input::HatDirection(n, d));
+    }
 }
 
 fn start_teach(
