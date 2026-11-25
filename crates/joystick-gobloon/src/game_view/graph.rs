@@ -28,6 +28,9 @@ pub(super) struct Graph {
     pub(super) actions: Vec<ActionNode>,
     /// (input, output) indices.
     pub(super) input_edges: Vec<(usize, usize)>,
+    /// Per input edge: how the input reaches the output ([`route_label`]), empty for a plain
+    /// mapping.
+    pub(super) input_routes: Vec<String>,
     /// (output, action) indices.
     pub(super) action_edges: Vec<(usize, usize)>,
 }
@@ -46,7 +49,7 @@ impl Graph {
         // Outputs: what the profile writes (hats as their directions), the keys and mouse
         // buttons it sends, and what it binds without writing it.
         let mut outputs: Vec<GameOutput> = Vec::new();
-        let mut sources: HashMap<GameOutput, Vec<usize>> = HashMap::new();
+        let mut sources: HashMap<GameOutput, Vec<(usize, String)>> = HashMap::new();
         for (v, uses) in &profile.output_usage(None) {
             let list: Vec<GameOutput> = match v {
                 VirtualOutput::Vjoy {
@@ -63,13 +66,19 @@ impl Graph {
                 _ => vec![GameOutput::Virtual(v.clone())],
             };
             for o in list {
-                sources.insert(o.clone(), uses.iter().map(|u| u.binding).collect());
+                sources.insert(
+                    o.clone(),
+                    uses.iter().map(|u| (u.binding, u.action.clone())).collect(),
+                );
                 outputs.push(o);
             }
         }
         for (combo, uses) in profile.key_usage(None) {
             let o = GameOutput::Keys(combo);
-            sources.insert(o.clone(), uses.iter().map(|u| u.binding).collect());
+            sources.insert(
+                o.clone(),
+                uses.iter().map(|u| (u.binding, u.action.clone())).collect(),
+            );
             outputs.push(o);
         }
         let node = |id: &str| {
@@ -105,8 +114,10 @@ impl Graph {
         // Inputs: the bindings writing those outputs.
         let mut inputs: Vec<InputNode> = Vec::new();
         let mut input_edges = Vec::new();
+        let mut input_routes: Vec<String> = Vec::new();
         for (m, o) in outputs.iter().enumerate() {
-            for &b in sources.get(o).into_iter().flatten() {
+            for (b, action) in sources.get(o).into_iter().flatten() {
+                let b = *b;
                 let Some(binding) = profile.inputs.get(b) else {
                     continue;
                 };
@@ -126,8 +137,20 @@ impl Graph {
                         inputs.len() - 1
                     }
                 };
-                if !input_edges.contains(&(l, m)) {
-                    input_edges.push((l, m));
+                let route = route_label(i18n, profile, b, action);
+                match input_edges.iter().position(|e| *e == (l, m)) {
+                    None => {
+                        input_edges.push((l, m));
+                        input_routes.push(route);
+                    }
+                    Some(e) if !route.is_empty() && !input_routes[e].contains(&route) => {
+                        let r = &mut input_routes[e];
+                        if !r.is_empty() {
+                            r.push_str(", ");
+                        }
+                        r.push_str(&route);
+                    }
+                    Some(_) => {}
                 }
             }
         }
@@ -162,9 +185,48 @@ impl Graph {
             outputs,
             actions,
             input_edges,
+            input_routes,
             action_edges,
         }
     }
+}
+
+/// How binding `binding` reaches `action`, in a few words: its mode (unless it is the first),
+/// its modifier layer and the branches on the way ("Long press › Double tap"). Empty for a
+/// plain mapping.
+pub(super) fn route_label(i18n: &I18n, profile: &Profile, binding: usize, action: &str) -> String {
+    let Some(route) = profile.route(binding, action) else {
+        return String::new();
+    };
+    let mut parts: Vec<String> = Vec::new();
+    // The first mode is where the profile starts: named only for the others.
+    if profile.modes.first().is_some_and(|m| m.name != route.mode) {
+        parts.push(route.mode.clone());
+    }
+    if !route.layer.is_base() {
+        parts.push(route.layer.to_string());
+    }
+    for (kind, group) in &route.branches {
+        let key = match (kind.as_str(), group.as_str()) {
+            ("tempo", "short-actions") => "edit-short",
+            ("tempo", "long-actions") => "edit-long",
+            ("double-tap", "single-actions") => "edit-single",
+            ("double-tap", "double-actions") => "edit-double",
+            ("condition", "true-actions") => "edit-cond-true",
+            ("condition", "false-actions") => "edit-cond-false",
+            ("split-axis", "lower-actions") => "edit-lower",
+            ("split-axis", "upper-actions") => "edit-upper",
+            ("chain", g) => {
+                if let Some(n) = g.strip_prefix("chain-").and_then(|n| n.parse::<u32>().ok()) {
+                    parts.push(i18n.trf("edit-chain-step", &[("n", (n + 1).into())]));
+                }
+                continue;
+            }
+            _ => continue,
+        };
+        parts.push(i18n.tr(key));
+    }
+    parts.join(" › ")
 }
 
 pub(super) fn matches(a: &ActionNode, search: &str) -> bool {
