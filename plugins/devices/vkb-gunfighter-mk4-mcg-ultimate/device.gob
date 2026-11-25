@@ -1,6 +1,7 @@
 # Gunfighter Mk.IV "Modern Combat Edition" Ultimate: MCG Ultimate grip (right hand) on the Gunfighter Mk.IV base, as
 # listed by VKB's stores and its forum: Master Mode and Gate Cont mini sticks (modular: either can be a 4-way hat
-# with push instead), Manvr/PC, DC and Reset 4-way hats with push, a red and two grey buttons, a dual-stage trigger,
+# with push instead), Manvr/PC and DC 4-way hats with push, the Reset mini stick under AP DISENGAGE (a hat with push),
+# a red and two grey buttons, a side button, a dual-stage trigger,
 # a metal folding trigger and a brake lever axis; the base gives X/Y, the twist module (optional) a twist axis.
 # The grip sends what VKBDevCfg sets up; inputs.gob is empty until a stick on the factory profile teaches it.
 id = "vkb-gunfighter-mk4-mcg-ultimate"
@@ -19,8 +20,13 @@ name = "MCG Ultimate"
 
 [[view]]
 id = "main"
-name = "Stick"
+name = "Left side"
 image = "views/main.png"
+
+[[view]]
+id = "right"
+name = "Right side"
+image = "views/right.png"
 
 # Head
 
@@ -28,7 +34,7 @@ image = "views/main.png"
 id = "red_button"
 name = "Red button"
 kind = "button"
-at = [308, 52]
+at = [262, 25]
 side = "left"
 
 [[control]]
@@ -36,21 +42,21 @@ id = "master_mode"
 name = "Master Mode mini stick"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [340, 40]
-side = "left"
+at = [310, 35]
+side = "right"
 
 [[control]]
 id = "upper_grey"
 name = "Upper grey button"
 kind = "button"
-at = [382, 30]
+at = [355, 28]
 side = "right"
 
 [[control]]
 id = "lower_grey"
 name = "Lower grey button"
 kind = "button"
-at = [378, 80]
+at = [360, 80]
 side = "right"
 
 [[control]]
@@ -58,15 +64,15 @@ id = "manvr_pc"
 name = "Manvr/PC hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [333, 105]
-side = "left"
+at = [335, 92]
+side = "right"
 
 [[control]]
 id = "gate_cont"
 name = "Gate Cont mini stick"
 kind = "stick"
 parts = ["x", "y"]
-at = [290, 112]
+at = [275, 92]
 side = "left"
 
 [[control]]
@@ -74,39 +80,47 @@ id = "dc_hat"
 name = "DC hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
+view = "right"
 at = [478, 120]
 side = "right"
 
 # Grip
 
 [[control]]
-id = "reset_hat"
-name = "Reset hat"
-kind = "hat"
-parts = ["up", "right", "down", "left", "push"]
-at = [268, 203]
-side = "left"
-
-[[control]]
 id = "trigger"
 name = "Trigger"
 kind = "trigger"
-at = [387, 210]
-side = "right"
+at = [285, 195]
+side = "left"
 
 [[control]]
 id = "folding_trigger"
 name = "Folding trigger"
 kind = "button"
-at = [430, 212]
+at = [272, 218]
+side = "left"
+
+[[control]]
+id = "reset"
+name = "Reset mini stick"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [325, 190]
+side = "right"
+
+[[control]]
+id = "side_button"
+name = "Side button"
+kind = "button"
+at = [335, 278]
 side = "right"
 
 [[control]]
 id = "brake"
 name = "Brake lever"
 kind = "axis"
-at = [420, 295]
-side = "right"
+at = [228, 300]
+side = "left"
 
 # Base
 
@@ -115,5 +129,5 @@ id = "stick"
 name = "Stick axes"
 kind = "stick"
 parts = ["x", "y", "twist"]
-at = [340, 500]
+at = [350, 495]
 side = "left"
