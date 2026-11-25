@@ -9,9 +9,9 @@ license.workspace = true
 gob-core.workspace = true
 serde.workspace = true
 toml.workspace = true
+# Pictures to pixels: drawings themed, photos decoded (the resvg egui_extras' svg loader uses).
+resvg = "0.45.1"
 
 [dev-dependencies]
 # device_teach: reads the controller while its controls are pressed.
 gob-input.workspace = true
-# device_check: renders each view with its hotspots to PNG (same resvg as egui_extras' svg loader).
-resvg = "0.45.1"

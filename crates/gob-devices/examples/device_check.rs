@@ -3,8 +3,8 @@
 //! (PNGs go to `target/device_check/<id>-<view>.png` by default). Exits with 1 on errors.
 use std::path::PathBuf;
 
-use gob_devices::{DevicePlugin, Level, Palette, Picture, Side, check, themed};
-use resvg::{tiny_skia, usvg};
+use gob_devices::{DevicePlugin, Level, Palette, Side, check, rasterize_svg};
+use resvg::tiny_skia;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -58,7 +58,7 @@ fn main() {
             let svg = with_hotspots(
                 &plugin,
                 &view.id,
-                &as_svg(&plugin.pictures[&view.id], &palette),
+                &plugin.pictures[&view.id].as_svg(&palette),
             );
             let background = if light { [245, 246, 248] } else { [14, 15, 17] };
             let path = out.join(format!("{}-{}.png", plugin.id(), view.id));
@@ -75,38 +75,6 @@ fn main() {
         }
     }
     std::process::exit(i32::from(failed));
-}
-
-/// The picture as SVG: a drawing themed, a photo embedded as an image.
-fn as_svg(picture: &Picture, palette: &Palette) -> String {
-    let (mime, bytes, [w, h]) = match picture {
-        Picture::Svg(svg) => return themed(svg, palette),
-        Picture::Png { bytes, size } => ("image/png", bytes, size),
-        Picture::Jpeg { bytes, size } => ("image/jpeg", bytes, size),
-    };
-    format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}"><image width="{w}" height="{h}" href="data:{mime};base64,{}"/></svg>"#,
-        base64(bytes)
-    )
-}
-
-fn base64(bytes: &[u8]) -> String {
-    const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(bytes.len() * 4 / 3 + 4);
-    for chunk in bytes.chunks(3) {
-        let n = chunk
-            .iter()
-            .enumerate()
-            .fold(0u32, |n, (i, b)| n | u32::from(*b) << (16 - 8 * i));
-        for i in 0..4 {
-            if i <= chunk.len() {
-                out.push(ABC[(n >> (18 - 6 * i) & 63) as usize] as char);
-            } else {
-                out.push('=');
-            }
-        }
-    }
-    out
 }
 
 /// The SVG with a marker and a label (id and inputs) per hotspot of the view.
@@ -149,13 +117,12 @@ fn with_hotspots(plugin: &DevicePlugin, view: &str, svg: &str) -> String {
     }
 }
 
-fn render(svg: &str, [r, g, b]: [u8; 3]) -> Result<tiny_skia::Pixmap, String> {
-    let mut options = usvg::Options::default();
-    options.fontdb_mut().load_system_fonts();
-    let tree = usvg::Tree::from_str(svg, &options).map_err(|e| e.to_string())?;
-    let size = tree.size().to_int_size();
-    let mut pixmap = tiny_skia::Pixmap::new(size.width(), size.height()).ok_or("empty picture")?;
-    pixmap.fill(tiny_skia::Color::from_rgba8(r, g, b, 255));
-    resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
-    Ok(pixmap)
+fn render(svg: &str, background: [u8; 3]) -> Result<tiny_skia::Pixmap, String> {
+    let rgba = rasterize_svg(svg, 1.0, Some(background))?;
+    let [w, h] = rgba.size;
+    tiny_skia::Pixmap::from_vec(
+        rgba.pixels,
+        tiny_skia::IntSize::from_wh(w, h).ok_or("empty")?,
+    )
+    .ok_or_else(|| "bad pixels".into())
 }

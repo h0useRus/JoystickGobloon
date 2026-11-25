@@ -20,6 +20,6 @@ pub use catalog::{Catalog, taught_path};
 pub use check::{Issue, Level, check};
 pub use input::{Direction, Input};
 pub use inputs::{Entry, Inputs};
-pub use picture::Picture;
-pub use plugin::{Control, DevicePlugin, Kind, Manifest, Match, Side, View};
+pub use picture::{Picture, Rgba, rasterize_svg};
+pub use plugin::{Control, DevicePlugin, Kind, Manifest, Match, Side, View, with_hotspots};
 pub use svg::{Palette, themed, view_box};

@@ -154,7 +154,7 @@ pub struct Control {
     pub parts: Option<Vec<String>>,
     #[serde(default = "main_view")]
     pub view: String,
-    /// Hotspot, in the view's SVG units.
+    /// Hotspot, in the view's picture units (pixels of a photo, the viewBox of a drawing).
     pub at: [f32; 2],
     #[serde(default)]
     pub side: Side,
@@ -285,9 +285,69 @@ impl DevicePlugin {
     }
 }
 
+/// `device.gob`'s text with new hotspots (`at`, by control id), everything else (comments,
+/// order, spacing) kept. Positions are rounded to whole units.
+pub fn with_hotspots(manifest: &str, at: &[(&str, [f32; 2])]) -> String {
+    let mut out = String::with_capacity(manifest.len());
+    let mut control: Option<String> = None;
+    for line in manifest.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            control = None;
+        } else if let Some(id) = trimmed
+            .strip_prefix("id")
+            .map(str::trim_start)
+            .and_then(|r| r.strip_prefix('='))
+            .map(|r| r.trim().trim_matches('"').to_string())
+        {
+            control = Some(id);
+        } else if (trimmed.starts_with("at ") || trimmed.starts_with("at="))
+            && let Some((_, [x, y])) = control
+                .as_deref()
+                .and_then(|c| at.iter().find(|(id, _)| *id == c))
+        {
+            let indent = &line[..line.len() - line.trim_start().len()];
+            let end = &line[line.trim_end().len()..];
+            out.push_str(&format!("{indent}at = [{}, {}]{end}", x.round(), y.round()));
+            continue;
+        }
+        out.push_str(line);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rewrites_hotspots_only() {
+        let text = [
+            "# keep me",
+            "id = \"dev\"",
+            "name = \"Dev\"",
+            "brand = \"Test\"",
+            "",
+            "[[control]]",
+            "id = \"a\"",
+            "name = \"A\"",
+            "kind = \"button\"",
+            "at = [1, 2]",
+            "side = \"left\"",
+            "",
+            "[[control]]",
+            "id = \"b\"",
+            "name = \"B\"",
+            "kind = \"button\"",
+            "  at = [3, 4]\r",
+            "",
+        ]
+        .join("\n");
+        let out = with_hotspots(&text, &[("b", [10.4, 20.6])]);
+        assert_eq!(out, text.replace("  at = [3, 4]", "  at = [10, 21]"));
+        let manifest: Manifest = toml::from_str(&out).unwrap();
+        assert_eq!(manifest.controls[1].at, [10.0, 21.0]);
+    }
 
     #[test]
     fn matching() {

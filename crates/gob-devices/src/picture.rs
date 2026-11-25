@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use crate::svg::view_box;
+use crate::svg::{Palette, themed, view_box};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Picture {
@@ -58,6 +58,83 @@ impl Picture {
     }
 }
 
+impl Picture {
+    /// The picture as SVG: a drawing themed, a photo embedded as an image.
+    pub fn as_svg(&self, palette: &Palette) -> String {
+        let (mime, bytes, [w, h]) = match self {
+            Self::Svg(svg) => return themed(svg, palette),
+            Self::Png { bytes, size } => ("image/png", bytes, size),
+            Self::Jpeg { bytes, size } => ("image/jpeg", bytes, size),
+        };
+        format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}"><image width="{w}" height="{h}" href="data:{mime};base64,{}"/></svg>"#,
+            base64(bytes)
+        )
+    }
+
+    /// Pixels to show: a photo at its own size, a drawing `scale` times its viewBox.
+    pub fn rasterize(&self, palette: &Palette, scale: f32) -> Result<Rgba, String> {
+        let scale = if matches!(self, Self::Svg(_)) {
+            scale
+        } else {
+            1.0
+        };
+        rasterize_svg(&self.as_svg(palette), scale, None)
+    }
+}
+
+/// Premultiplied RGBA pixels, row by row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rgba {
+    pub size: [u32; 2],
+    pub pixels: Vec<u8>,
+}
+
+/// Renders `svg` at `scale` over `background` (transparent without one).
+pub fn rasterize_svg(svg: &str, scale: f32, background: Option<[u8; 3]>) -> Result<Rgba, String> {
+    use resvg::{tiny_skia, usvg};
+    let mut options = usvg::Options::default();
+    options.fontdb_mut().load_system_fonts();
+    let tree = usvg::Tree::from_str(svg, &options).map_err(|e| e.to_string())?;
+    let size = tree
+        .size()
+        .to_int_size()
+        .scale_by(scale)
+        .ok_or("empty picture")?;
+    let mut pixmap = tiny_skia::Pixmap::new(size.width(), size.height()).ok_or("empty picture")?;
+    if let Some([r, g, b]) = background {
+        pixmap.fill(tiny_skia::Color::from_rgba8(r, g, b, 255));
+    }
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+    Ok(Rgba {
+        size: [size.width(), size.height()],
+        pixels: pixmap.take(),
+    })
+}
+
+fn base64(bytes: &[u8]) -> String {
+    const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len() * 4 / 3 + 4);
+    for chunk in bytes.chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |n, (i, b)| n | u32::from(*b) << (16 - 8 * i));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(ABC[(n >> (18 - 6 * i) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
 /// Width and height from a PNG's IHDR chunk.
 pub fn png_size(bytes: &[u8]) -> Option<[u32; 2]> {
     const SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
@@ -102,6 +179,18 @@ mod tests {
         png.extend_from_slice(&900u32.to_be_bytes());
         assert_eq!(png_size(&png), Some([1200, 900]));
         assert_eq!(png_size(b"GIF89a"), None);
+    }
+
+    #[test]
+    fn rasterizes_drawings_and_photos() {
+        let svg = Picture::Svg(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 20"><rect class="body" width="10" height="20"/></svg>"#.into(),
+        );
+        let rgba = svg.rasterize(&Palette::dark(), 2.0).unwrap();
+        assert_eq!(rgba.size, [20, 40]);
+        assert_eq!(rgba.pixels.len(), 20 * 40 * 4);
+        assert_eq!(rgba.pixels[3], 255, "drawn opaque");
+        assert_eq!(base64(b"Ma"), "TWE=");
     }
 
     #[test]
