@@ -47,6 +47,9 @@ fn main() {
             issues.iter().filter(|i| i.level == Level::Error).count(),
             issues.iter().filter(|i| i.level == Level::Warning).count()
         );
+        if let Some(credit) = &plugin.manifest.credit {
+            println!("  pictures: {credit}");
+        }
         for issue in &issues {
             println!("  {issue}");
         }

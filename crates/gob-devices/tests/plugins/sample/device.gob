@@ -2,6 +2,7 @@
 id = "sample-stick"
 name = "Sample stick"
 brand = "Sample"
+credit = "Drawn for the tests"
 
 [[match]]
 vid = 0x0001

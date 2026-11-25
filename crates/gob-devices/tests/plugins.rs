@@ -12,6 +12,10 @@ fn loads_and_finds() {
     assert!(catalog.errors.is_empty(), "{:?}", catalog.errors);
     let plugin = catalog.find(0x0001, 0x0099, "The Sample Stick v2").unwrap();
     assert_eq!(plugin.id(), "sample-stick");
+    assert_eq!(
+        plugin.manifest.credit.as_deref(),
+        Some("Drawn for the tests")
+    );
     assert!(catalog.find(0x0001, 0x0099, "Other").is_none());
     assert!(catalog.find(0x0001, 0x0002, "Other").is_some());
     assert_eq!(plugin.input_of("hat", "push"), Some(Input::Button(3)));

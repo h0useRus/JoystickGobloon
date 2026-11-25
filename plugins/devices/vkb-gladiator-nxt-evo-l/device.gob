@@ -5,6 +5,7 @@
 id = "vkb-gladiator-nxt-evo-l"
 name = "Gladiator NXT EVO (left)"
 brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
 version = "1"
 
 [[match]]
@@ -14,7 +15,7 @@ name = "Gladiator EVO L"
 [[view]]
 id = "main"
 name = "Stick"
-image = "views/main.svg"
+image = "views/main.png"
 
 # Grip
 
@@ -23,7 +24,7 @@ id = "right_hat"
 name = "Right hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [532, 178]
+at = [411, 73]
 side = "right"
 
 [[control]]
@@ -31,35 +32,35 @@ id = "centre_hat"
 name = "Centre hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [470, 218]
+at = [367, 110]
 side = "right"
 
 [[control]]
 id = "red_button"
 name = "Red button"
 kind = "button"
-at = [570, 244]
+at = [411, 140]
 side = "right"
 
 [[control]]
 id = "front_lever"
 name = "Front lever"
 kind = "lever"
-at = [610, 286]
+at = [353, 256]
 side = "right"
 
 [[control]]
 id = "trigger"
 name = "Trigger"
 kind = "trigger"
-at = [616, 350]
+at = [436, 200]
 side = "right"
 
 [[control]]
 id = "pinky"
 name = "Pinky button"
 kind = "button"
-at = [576, 458]
+at = [392, 330]
 side = "right"
 
 [[control]]
@@ -67,7 +68,7 @@ id = "left_hat"
 name = "Left hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [416, 178]
+at = [355, 56]
 side = "left"
 
 [[control]]
@@ -75,7 +76,7 @@ id = "stick"
 name = "Stick axes"
 kind = "stick"
 parts = ["x", "y", "twist"]
-at = [500, 690]
+at = [303, 460]
 side = "left"
 
 # Base
@@ -84,7 +85,7 @@ side = "left"
 id = "f2"
 name = "F2"
 kind = "button"
-at = [423, 722]
+at = [220, 552]
 side = "left"
 group = "Base buttons"
 
@@ -92,7 +93,7 @@ group = "Base buttons"
 id = "f1"
 name = "F1"
 kind = "button"
-at = [377, 720]
+at = [183, 532]
 side = "left"
 group = "Base buttons"
 
@@ -100,7 +101,7 @@ group = "Base buttons"
 id = "f3"
 name = "F3"
 kind = "button"
-at = [331, 718]
+at = [147, 521]
 side = "left"
 group = "Base buttons"
 
@@ -108,19 +109,19 @@ group = "Base buttons"
 id = "en1"
 name = "EN1 encoder"
 kind = "encoder"
-at = [410, 805]
+at = [93, 603]
 side = "left"
 
 [[control]]
 id = "wheel"
 name = "Centre wheel"
 kind = "axis"
-at = [333, 804]
+at = [137, 610]
 side = "left"
 
 [[control]]
 id = "sw1"
 name = "SW1 switch"
 kind = "switch"
-at = [256, 800]
+at = [179, 630]
 side = "left"

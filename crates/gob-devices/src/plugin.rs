@@ -5,6 +5,7 @@
 //! id = "vkb-gladiator-nxt-evo-r"
 //! name = "Gladiator NXT EVO (right)"
 //! brand = "VKB"
+//! credit = "Product images (c) VKB-Sim, used with permission"
 //!
 //! [[match]]
 //! vid = 0x231D
@@ -185,6 +186,10 @@ pub struct Manifest {
     pub version: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub authors: Vec<String>,
+    /// Where the pictures come from, shown with them wherever they appear (app and site):
+    /// vendor images are used only with the vendor's permission and the credit it was given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credit: Option<String>,
     #[serde(default = "first_api")]
     pub api: u32,
     #[serde(default, rename = "match")]

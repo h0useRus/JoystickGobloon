@@ -5,6 +5,7 @@
 id = "vkb-gladiator-nxt-evo-ot-l"
 name = "Gladiator NXT EVO Omni Throttle (left)"
 brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
 version = "1"
 
 [[match]]
@@ -14,7 +15,7 @@ name = "Gladiator EVO OT L"
 [[view]]
 id = "main"
 name = "Throttle"
-image = "views/main.svg"
+image = "views/main.png"
 
 # Grip
 
@@ -23,7 +24,7 @@ id = "right_hat"
 name = "Right hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [532, 178]
+at = [521, 139]
 side = "right"
 
 [[control]]
@@ -31,43 +32,43 @@ id = "centre_hat"
 name = "Centre hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [470, 218]
-side = "right"
+at = [474, 121]
+side = "left"
 
 [[control]]
 id = "red_button"
 name = "Red button"
 kind = "button"
-at = [570, 244]
+at = [482, 184]
 side = "right"
 
 [[control]]
 id = "front_lever"
 name = "Front lever"
 kind = "lever"
-at = [610, 286]
+at = [366, 224]
 side = "right"
 
 [[control]]
 id = "trigger"
 name = "Trigger"
 kind = "trigger"
-at = [616, 350]
+at = [421, 211]
 side = "right"
 
 [[control]]
 id = "pinky"
 name = "Pinky button"
 kind = "button"
-at = [576, 458]
-side = "right"
+at = [265, 275]
+side = "left"
 
 [[control]]
 id = "left_hat"
 name = "Left hat"
 kind = "hat"
 parts = ["up", "right", "down", "left", "push"]
-at = [416, 178]
+at = [508, 55]
 side = "left"
 
 [[control]]
@@ -75,7 +76,7 @@ id = "stick"
 name = "Throttle axes"
 kind = "stick"
 parts = ["x", "y", "twist"]
-at = [500, 690]
+at = [332, 342]
 side = "left"
 
 # Base
@@ -84,7 +85,7 @@ side = "left"
 id = "f2"
 name = "F2"
 kind = "button"
-at = [423, 722]
+at = [243, 492]
 side = "left"
 group = "Base buttons"
 
@@ -92,7 +93,7 @@ group = "Base buttons"
 id = "f1"
 name = "F1"
 kind = "button"
-at = [377, 720]
+at = [202, 471]
 side = "left"
 group = "Base buttons"
 
@@ -100,7 +101,7 @@ group = "Base buttons"
 id = "f3"
 name = "F3"
 kind = "button"
-at = [331, 718]
+at = [164, 455]
 side = "left"
 group = "Base buttons"
 
@@ -108,19 +109,19 @@ group = "Base buttons"
 id = "en1"
 name = "EN1 encoder"
 kind = "encoder"
-at = [410, 805]
+at = [114, 517]
 side = "left"
 
 [[control]]
 id = "wheel"
 name = "Centre wheel"
 kind = "axis"
-at = [333, 804]
+at = [150, 542]
 side = "left"
 
 [[control]]
 id = "sw1"
 name = "SW1 switch"
 kind = "switch"
-at = [256, 800]
+at = [194, 567]
 side = "left"
