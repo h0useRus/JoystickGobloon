@@ -126,7 +126,7 @@ fn active(d: &DeviceState, input: Input) -> bool {
 /// How long an axis counts as used after it last moved, seconds.
 const AXIS_LIVE: f64 = 0.6;
 /// How far an axis has to move between frames to count as moving (noise stays below it).
-const AXIS_STEP: f32 = 0.02;
+const AXIS_STEP: f32 = 0.04;
 
 /// Where each axis was and when it last moved.
 struct Motion {
@@ -315,6 +315,10 @@ impl GameView {
             for b in bindings.iter().filter(|b| b.mark.in_effect()) {
                 drives.entry(b.output).or_default().push(action);
             }
+        }
+        // The page's state is rebuilt every frame in no fixed order: sorted, the cards keep still.
+        for actions in drives.values_mut() {
+            actions.sort_unstable();
         }
         let name_of = |id: &str| {
             graph
@@ -511,6 +515,7 @@ impl GameView {
                         }
                     }
                 }
+                names.sort();
                 PartLine {
                     empty: names.is_empty(),
                     text: if names.is_empty() {
@@ -663,7 +668,19 @@ impl GameView {
     /// its number while the picture does not know it (hold it and click the control).
     fn live_strip(&self, ui: &mut egui::Ui, i18n: &I18n, plugin: &DevicePlugin, live: &[Input]) {
         let accent = style::accent(ui);
-        ui.horizontal_wrapped(|ui| {
+        // One row of fixed height, cut at the right edge: what it shows changes every frame and
+        // must not move the picture below it.
+        let height = ui.spacing().interact_size.y;
+        let (rect, _) =
+            ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::hover());
+        let mut row = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(rect)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        row.set_clip_rect(rect.intersect(ui.clip_rect()));
+        let ui = &mut row;
+        {
             ui.label(
                 RichText::new(icon::HAND_POINTING).color(if live.is_empty() {
                     ui.visuals().weak_text_color()
@@ -693,7 +710,7 @@ impl GameView {
                     }
                 }
             }
-        });
+        }
     }
 
     /// While teaching: what to press, Skip and Cancel; takes the press and keeps it.
