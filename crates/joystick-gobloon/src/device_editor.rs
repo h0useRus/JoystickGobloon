@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use eframe::egui;
 
-use crate::device_pictures::{DevicePictures, callouts};
+use crate::device_pictures::{DevicePictures, PartLine, callouts};
 use crate::style;
 
 #[derive(Default)]
@@ -113,29 +113,24 @@ impl DeviceEditor {
         let Some(plugin) = pictures.catalog().get(&self.plugin) else {
             return open;
         };
-        let mut list = callouts(plugin, &self.view, |c| {
-            let inputs: Vec<String> = c
-                .parts()
-                .into_iter()
-                .map(|part| {
-                    let input = plugin
-                        .input_of(&c.id, part)
-                        .map_or("?".to_string(), |i| i.to_string());
-                    if part.is_empty() {
-                        input
-                    } else {
-                        format!("{part} {input}")
-                    }
-                })
-                .collect();
-            (vec![c.id.clone(), inputs.join("  ")], false)
+        // One callout per control (groups not merged): each spot can be dragged on its own.
+        let built = callouts(plugin, &self.view, None, false, |c, part| {
+            let input = plugin
+                .input_of(&c.id, part)
+                .map_or("?".to_string(), |i| i.to_string());
+            PartLine {
+                text: format!("{}  {input}", c.id),
+                ..Default::default()
+            }
         });
-        let ids: Vec<String> = plugin
-            .manifest
-            .controls
-            .iter()
-            .filter(|c| c.view == self.view)
-            .map(|c| c.id.clone())
+        let mut list = built.list.clone();
+        let ids: Vec<String> = (0..list.len())
+            .map(|i| {
+                built
+                    .controls(i)
+                    .first()
+                    .map_or(String::new(), |c| c.to_string())
+            })
             .collect();
         for (callout, id) in list.iter_mut().zip(&ids) {
             if let Some([x, y]) = self.moved.get(id) {

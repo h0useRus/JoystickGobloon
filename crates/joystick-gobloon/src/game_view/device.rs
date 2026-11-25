@@ -8,11 +8,12 @@ use std::collections::HashMap;
 
 use gob_devices::{Control, DevicePlugin, Direction, Input, Inputs, Kind};
 
-use super::bind::{Aim, bindings_of, outputs_of, remove_ops};
+use super::bind::{Aim, bindings_of, outputs_of, remove_ops, route_of};
 use super::capture::Pressed;
 use super::graph::Graph;
 use super::state::State;
 use super::*;
+use crate::device_pictures::{PartLine, part_label};
 
 /// Width of the action list.
 const LIST_WIDTH: f32 = 260.0;
@@ -69,20 +70,6 @@ pub(super) struct DeviceTab {
     choose: Option<(String, String)>,
     /// An action to bind to a pressed control, once the page has what binding needs.
     pub(super) pending: Option<(String, Pressed)>,
-}
-
-/// A control part's name on its card: arrows for directions, words for the rest.
-fn part_label(i18n: &I18n, part: &str) -> String {
-    match part {
-        "" => String::new(),
-        "up" => icon::ARROW_UP.into(),
-        "right" => icon::ARROW_RIGHT.into(),
-        "down" => icon::ARROW_DOWN.into(),
-        "left" => icon::ARROW_LEFT.into(),
-        "x" => "X".into(),
-        "y" => "Y".into(),
-        other => i18n.tr(&format!("device-part-{other}")),
-    }
 }
 
 /// The press a control part stands for.
@@ -384,56 +371,68 @@ impl GameView {
             .iter()
             .filter(|c| c.view == tab.view)
             .collect();
-        let teaching = tab
-            .teach
-            .as_ref()
-            .and_then(|t| t.queue.first())
-            .map(|(c, _)| c.clone());
-        // Per control: its lines, and (action, output) of every binding for its menu.
-        let mut menus: Vec<Vec<(String, GameOutput)>> = Vec::new();
-        let callouts = crate::device_pictures::callouts(plugin, &tab.view, |c| {
-            let mut lines = Vec::new();
-            let mut menu = Vec::new();
-            let mut lit = teaching.as_deref() == Some(c.id.as_str());
-            for part in c.parts() {
-                let label = part_label(i18n, part);
+        let teaching = tab.teach.as_ref().and_then(|t| t.queue.first()).cloned();
+        // Per control part: what it shows; per control: (action, output) of its bindings.
+        let mut menus: HashMap<String, Vec<(String, GameOutput)>> = HashMap::new();
+        let built =
+            crate::device_pictures::callouts(plugin, &tab.view, Some(i18n), true, |c, part| {
+                let menu = menus.entry(c.id.clone()).or_default();
+                let asked = teaching
+                    .as_ref()
+                    .is_some_and(|(tc, tp)| *tc == c.id && tp == part);
                 let Some(input) = plugin.input_of(&c.id, part) else {
-                    lines.push(format!("{label} {}", i18n.tr("game-device-unknown")));
-                    continue;
+                    return PartLine {
+                        text: i18n.tr("game-device-unknown"),
+                        lit: asked,
+                        empty: true,
+                        value: None,
+                    };
                 };
-                lit |= active(device, input);
+                let value = match input {
+                    Input::Axis(slot) => {
+                        device.axes.get(usize::from(slot).wrapping_sub(1)).copied()
+                    }
+                    _ => None,
+                };
+                let held = asked || active(device, input);
                 let p = pressed_of(device, input);
                 let (_, bindings) = bindings_of(ctx, &p);
                 let mut names: Vec<String> = Vec::new();
                 for o in outputs_of(ctx, &p, &bindings) {
+                    let mut route = None;
                     for action in drives.get(&o).into_iter().flatten() {
-                        if !menu
-                            .iter()
-                            .any(|(a, out): &(String, GameOutput)| a == action && *out == o)
-                        {
+                        if !menu.iter().any(|(a, out)| a == action && *out == o) {
                             menu.push((action.to_string(), o.clone()));
                         }
-                        let name = name_of(action);
+                        // Several outputs of one control (short or long press, modes) say
+                        // which is which.
+                        let route = route.get_or_insert_with(|| route_of(ctx, i18n, &bindings, &o));
+                        let name = if route.is_empty() {
+                            name_of(action)
+                        } else {
+                            format!("{} ({route})", name_of(action))
+                        };
                         if !names.contains(&name) {
                             names.push(name);
                         }
                     }
                 }
-                let what = if names.is_empty() {
-                    i18n.tr("game-device-drop")
-                } else {
-                    names.join(", ")
-                };
-                lines.push(if label.is_empty() {
-                    what
-                } else {
-                    format!("{label}  {what}")
-                });
-            }
-            menus.push(menu);
-            (lines, lit)
-        });
-        if tab.teach.is_some() || controls.iter().any(|c| active_any(device, plugin, c)) {
+                PartLine {
+                    empty: names.is_empty(),
+                    text: if names.is_empty() {
+                        i18n.tr("game-device-drop")
+                    } else {
+                        names.join(", ")
+                    },
+                    lit: held,
+                    value,
+                }
+            });
+        if tab.teach.is_some()
+            || controls.iter().any(|c| {
+                active_any(device, plugin, c) || matches!(c.kind, Kind::Stick | Kind::Axis)
+            })
+        {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(33));
         }
@@ -441,30 +440,48 @@ impl GameView {
             ("game-device", plugin.id(), &tab.view),
             egui::Image::new(&texture),
             size,
-            &callouts,
+            &built.list,
         )
         .caption(plugin.manifest.credit.as_deref())
         .max_height((ui.available_height() - 24.0).max(240.0))
         .show(ui);
 
         for (i, r) in response.callouts.iter().enumerate() {
-            let control = controls[i];
+            let shown: Vec<&Control> = built
+                .controls(i)
+                .into_iter()
+                .filter_map(|id| plugin.control(id))
+                .collect();
             if let Some(action) = r.dnd_release_payload::<String>() {
-                let parts = control.parts();
-                if parts.len() == 1 {
-                    match plugin.input_of(&control.id, parts[0]) {
+                // Dropped on a line, badge or hat arrow: that part; on a control with one part:
+                // that one; else ask which.
+                let on_line = response
+                    .line
+                    .filter(|(c, _)| *c == i)
+                    .and_then(|(c, n)| built.part(c, n));
+                let single = (built.parts[i].len() == 1)
+                    .then(|| built.part(i, 0))
+                    .flatten();
+                match on_line.or(single) {
+                    Some((control, part)) => match plugin.input_of(control, part) {
                         Some(input) => {
                             tab.pending = Some((action.to_string(), pressed_of(device, input)));
                         }
-                        None => start_teach(tab, device, plugin, vec![control]),
+                        None => start_teach(tab, device, plugin, shown.clone()),
+                    },
+                    None => {
+                        if let Some(c) = shown.first() {
+                            tab.choose = Some((action.to_string(), c.id.clone()));
+                        }
                     }
-                } else {
-                    tab.choose = Some((action.to_string(), control.id.clone()));
                 }
             }
-            let menu = &menus[i];
+            let menu: Vec<(String, GameOutput)> = shown
+                .iter()
+                .flat_map(|c| menus.get(&c.id).cloned().unwrap_or_default())
+                .collect();
             r.context_menu(|ui| {
-                for (action, output) in menu {
+                for (action, output) in &menu {
                     let text = i18n.trf(
                         "game-device-unbind",
                         &[
@@ -488,7 +505,7 @@ impl GameView {
                     ))
                     .clicked()
                 {
-                    start_teach(tab, device, plugin, vec![control]);
+                    start_teach(tab, device, plugin, shown.clone());
                     ui.close();
                 }
             });
@@ -545,7 +562,7 @@ impl GameView {
             teach.queue.remove(0);
             teach.rest = None;
         }
-        let what = match part_label(i18n, &part) {
+        let what = match part_label(Some(i18n), &part) {
             l if l.is_empty() => c.name.clone(),
             l => format!("{} {l}", c.name),
         };
@@ -616,7 +633,7 @@ impl GameView {
             );
             ui.horizontal_wrapped(|ui| {
                 for part in c.parts() {
-                    let label = match part_label(i18n, part) {
+                    let label = match part_label(Some(i18n), part) {
                         l if l.is_empty() => c.name.clone(),
                         l => l,
                     };

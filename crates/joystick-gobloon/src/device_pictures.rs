@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use eframe::egui;
-use gob_devices::{Catalog, DevicePlugin, Palette, Side};
+use gob_devices::{Catalog, Control, DevicePlugin, Kind, Palette, Side};
+use gob_i18n::I18n;
 
 use crate::style;
 
@@ -122,30 +123,196 @@ fn load() -> Catalog {
     catalog
 }
 
-/// One callout per control of `view`: its name, and the lines `lines` gives for it.
+/// What a control part shows on its line.
+#[derive(Default)]
+pub struct PartLine {
+    pub text: String,
+    /// Held now.
+    pub lit: bool,
+    /// Nothing on it yet.
+    pub empty: bool,
+    /// Where the axis is now, -1 to 1, for axis parts that are read.
+    pub value: Option<f32>,
+}
+
+/// Callouts of a view and which control part each of their lines is.
+pub struct Callouts {
+    pub list: Vec<style::Callout>,
+    /// Per callout, per line: (control id, part).
+    pub parts: Vec<Vec<(String, String)>>,
+}
+
+impl Callouts {
+    /// The control part of a callout's line.
+    pub fn part(&self, callout: usize, line: usize) -> Option<(&str, &str)> {
+        let (c, p) = self.parts.get(callout)?.get(line)?;
+        Some((c, p))
+    }
+
+    /// The controls a callout shows (one, or a group's).
+    pub fn controls(&self, callout: usize) -> Vec<&str> {
+        let mut ids: Vec<&str> = Vec::new();
+        for (c, _) in self.parts.get(callout).into_iter().flatten() {
+            if !ids.contains(&c.as_str()) {
+                ids.push(c);
+            }
+        }
+        ids
+    }
+}
+
+/// A part's short name on its line: arrows for directions, words for the rest.
+pub fn part_label(i18n: Option<&I18n>, part: &str) -> String {
+    match part {
+        "" => String::new(),
+        "up" => style::icon::ARROW_UP.into(),
+        "right" => style::icon::ARROW_RIGHT.into(),
+        "down" => style::icon::ARROW_DOWN.into(),
+        "left" => style::icon::ARROW_LEFT.into(),
+        "x" => "X".into(),
+        "y" => "Y".into(),
+        other => i18n.map_or_else(
+            || other.to_string(),
+            |i| i.tr(&format!("device-part-{other}")),
+        ),
+    }
+}
+
+/// What a part's badge shows.
+fn badge(kind: Kind, part: &str) -> String {
+    match (kind, part) {
+        (Kind::Trigger, "first") => "1".into(),
+        (Kind::Trigger, "second") => "2".into(),
+        (_, "fwd") => style::icon::CARET_UP.into(),
+        (_, "back") => style::icon::CARET_DOWN.into(),
+        (_, "cw") => style::icon::ARROW_CLOCKWISE.into(),
+        (_, "ccw") => style::icon::ARROW_COUNTER_CLOCKWISE.into(),
+        (_, "up") => style::icon::ARROW_UP.into(),
+        (_, "down") => style::icon::ARROW_DOWN.into(),
+        (_, "left") => style::icon::ARROW_LEFT.into(),
+        (_, "right") => style::icon::ARROW_RIGHT.into(),
+        _ => String::new(),
+    }
+}
+
+/// A control's short name for a badge: kept when it fits ("F2"), else none (a dot).
+fn short_name(name: &str) -> String {
+    if name.chars().count() <= 3 {
+        name.to_string()
+    } else {
+        String::new()
+    }
+}
+
+fn side(s: Side) -> style::CalloutSide {
+    match s {
+        Side::Left => style::CalloutSide::Left,
+        Side::Right => style::CalloutSide::Right,
+    }
+}
+
+/// The callouts of `view`: one per control, drawn by its kind (a hat as a compass, stick axes
+/// as a ring, one axis as a gauge, the rest as badges); with `merge`, the controls of one group
+/// ("Base buttons") share one callout with a badge and a leader each. `line` gives what each
+/// part shows.
 pub fn callouts(
     plugin: &DevicePlugin,
     view: &str,
-    mut lines: impl FnMut(&gob_devices::Control) -> (Vec<String>, bool),
-) -> Vec<style::Callout> {
-    plugin
-        .manifest
-        .controls
-        .iter()
-        .filter(|c| c.view == view)
-        .map(|c| {
-            let (lines, lit) = lines(c);
-            style::Callout {
-                at: egui::pos2(c.at[0], c.at[1]),
-                side: match c.side {
-                    Side::Left => style::CalloutSide::Left,
-                    Side::Right => style::CalloutSide::Right,
-                },
-                title: c.name.clone(),
-                lines,
-                group: c.group.clone(),
-                lit,
+    i18n: Option<&I18n>,
+    merge: bool,
+    mut line: impl FnMut(&Control, &str) -> PartLine,
+) -> Callouts {
+    let mut out = Callouts {
+        list: Vec::new(),
+        parts: Vec::new(),
+    };
+    let mut groups: Vec<(String, Side, usize)> = Vec::new();
+    for c in plugin.manifest.controls.iter().filter(|c| c.view == view) {
+        let at = egui::pos2(c.at[0], c.at[1]);
+        if merge && let Some(group) = &c.group {
+            let n = match groups.iter().find(|(g, s, _)| g == group && *s == c.side) {
+                Some((_, _, n)) => *n,
+                None => {
+                    out.list.push(style::Callout {
+                        at,
+                        side: side(c.side),
+                        title: group.clone(),
+                        ..Default::default()
+                    });
+                    out.parts.push(Vec::new());
+                    groups.push((group.clone(), c.side, out.list.len() - 1));
+                    out.list.len() - 1
+                }
+            };
+            for part in c.parts() {
+                let shown = line(c, part);
+                let label = match part_label(i18n, part) {
+                    l if l.is_empty() => c.name.clone(),
+                    l => format!("{} {l}", c.name),
+                };
+                let callout = &mut out.list[n];
+                callout.lit |= shown.lit;
+                callout.lines.push(style::CalloutLine {
+                    label,
+                    badge: match badge(c.kind, part) {
+                        b if b.is_empty() => short_name(&c.name),
+                        b => b,
+                    },
+                    text: shown.text,
+                    lit: shown.lit,
+                    empty: shown.empty,
+                    at: Some(at),
+                });
+                out.parts[n].push((c.id.clone(), part.to_string()));
             }
-        })
-        .collect()
+            // The group's spot for ordering: the middle of its controls.
+            let spots: Vec<egui::Pos2> = out.list[n].lines.iter().filter_map(|l| l.at).collect();
+            let y = spots.iter().map(|p| p.y).sum::<f32>() / spots.len().max(1) as f32;
+            out.list[n].at.y = y;
+            continue;
+        }
+        let parts = c.parts();
+        let glyph = match c.kind {
+            Kind::Hat if parts.starts_with(&["up", "right", "down", "left"]) => {
+                style::CalloutGlyph::Hat
+            }
+            Kind::Stick => style::CalloutGlyph::Stick,
+            Kind::Axis => style::CalloutGlyph::Gauge,
+            _ => style::CalloutGlyph::Badges,
+        };
+        let mut callout = style::Callout {
+            at,
+            side: side(c.side),
+            title: c.name.clone(),
+            glyph,
+            ..Default::default()
+        };
+        let mut values = Vec::new();
+        let mut known = false;
+        for part in &parts {
+            let shown = line(c, part);
+            callout.lit |= shown.lit;
+            known |= shown.value.is_some();
+            values.push(shown.value.unwrap_or(0.0));
+            callout.lines.push(style::CalloutLine {
+                label: part_label(i18n, part),
+                badge: badge(c.kind, part),
+                text: shown.text,
+                lit: shown.lit,
+                empty: shown.empty,
+                at: None,
+            });
+        }
+        if known {
+            callout.axes = values;
+        }
+        out.list.push(callout);
+        out.parts.push(
+            parts
+                .iter()
+                .map(|p| (c.id.clone(), p.to_string()))
+                .collect(),
+        );
+    }
+    out
 }
