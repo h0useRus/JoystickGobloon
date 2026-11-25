@@ -1,5 +1,5 @@
 # Gladiator NXT EVO "Space Combat Edition", left hand on the Omni Throttle adapter: the stick works as a throttle: SCG Premium grip (twist, dual action, rapid fire
-# trigger, 3 four-way hats with push (the right hat is the analog mini stick: X/Y axes and a push), a grey mini stick that works as a fourth hat, 4 buttons) on the GNX EVO base (X/Y, 3 buttons, encoder,
+# trigger, 3 four-way hats with push (the right hat is a mini stick; as a hat by default), a grey mini stick that works as a fourth hat, 4 buttons) on the GNX EVO base (X/Y, 3 buttons, encoder,
 # throttle wheel, auto-centering 3-position switch), as listed by VKB's stores.
 # The grip sends what VKBDevCfg sets up; inputs.gob is the factory profile, users teach their own.
 id = "vkb-gladiator-nxt-evo-ot-l"
@@ -22,8 +22,8 @@ image = "views/main.png"
 [[control]]
 id = "right_hat"
 name = "Right hat (mini stick)"
-kind = "stick"
-parts = ["x", "y", "push"]
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
 at = [521, 139]
 side = "right"
 
