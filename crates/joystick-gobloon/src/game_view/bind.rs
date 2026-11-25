@@ -24,6 +24,8 @@ pub(super) enum Dialog {
         aim: Aim,
         input: String,
         outputs: Vec<GameOutput>,
+        /// Per output: how the input reaches it ([`route_of`]).
+        routes: Vec<String>,
     },
     /// Other actions use the control already.
     Conflict {
@@ -135,6 +137,31 @@ pub(super) fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<
     };
     out.sort_by_key(|o| (!lit(o), super::graph::sort_key(o)));
     out
+}
+
+/// How the pressed input's `bindings` reach output `o` ("Long press"), empty for a plain
+/// mapping: tells apart several outputs of one control.
+pub(super) fn route_of(ctx: &Context, i18n: &I18n, bindings: &[usize], o: &GameOutput) -> String {
+    let uses: Vec<gob_core::OutputUse> = match o {
+        GameOutput::Virtual(v) | GameOutput::HatDirection(v, _) => {
+            ctx.profile.output_usage(None).remove(v).unwrap_or_default()
+        }
+        GameOutput::Keys(c) => ctx
+            .profile
+            .key_usage(None)
+            .into_iter()
+            .find(|(k, _)| k == c)
+            .map(|(_, u)| u)
+            .unwrap_or_default(),
+    };
+    let mut labels: Vec<String> = Vec::new();
+    for u in uses.iter().filter(|u| bindings.contains(&u.binding)) {
+        let l = super::graph::route_label(i18n, ctx.profile, u.binding, &u.action);
+        if !l.is_empty() && !labels.contains(&l) {
+            labels.push(l);
+        }
+    }
+    labels.join(", ")
 }
 
 /// The first output of the input's kind that no input of the profile writes and no game action
@@ -363,11 +390,18 @@ impl GameView {
                 }))
             }
             1 => self.settle(scene, aim, outputs.remove(0), ops),
-            _ => Step::Go(Box::new(Dialog::Choose {
-                aim,
-                input,
-                outputs,
-            })),
+            _ => {
+                let routes = outputs
+                    .iter()
+                    .map(|o| route_of(scene.ctx, scene.i18n, &bindings, o))
+                    .collect();
+                Step::Go(Box::new(Dialog::Choose {
+                    aim,
+                    input,
+                    outputs,
+                    routes,
+                }))
+            }
         }
     }
 
@@ -390,7 +424,8 @@ impl GameView {
                 aim,
                 input,
                 outputs,
-            } => self.choose_dialog(ui, scene, aim, input, outputs, ops),
+                routes,
+            } => self.choose_dialog(ui, scene, aim, input, outputs, routes, ops),
             Dialog::Conflict {
                 action,
                 replace,
@@ -521,6 +556,7 @@ impl GameView {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn choose_dialog(
         &mut self,
         ui: &mut egui::Ui,
@@ -528,6 +564,7 @@ impl GameView {
         aim: Aim,
         input: String,
         outputs: Vec<GameOutput>,
+        routes: Vec<String>,
         ops: &mut Vec<Op>,
     ) -> (Option<Dialog>, Step) {
         let i18n = scene.i18n;
@@ -543,7 +580,11 @@ impl GameView {
             ui.label(i18n.trf("game-choose-text", &[("input", input.clone().into())]));
             ui.add_space(style::SPACE_S);
             for (n, o) in outputs.iter().enumerate() {
-                if ui.button(output_name(i18n, o)).clicked() {
+                let text = match routes.get(n).filter(|r| !r.is_empty()) {
+                    Some(r) => format!("{}  ·  {r}", output_name(i18n, o)),
+                    None => output_name(i18n, o),
+                };
+                if ui.button(text).clicked() {
                     chosen = Some(n);
                 }
             }
@@ -565,6 +606,7 @@ impl GameView {
                     aim,
                     input,
                     outputs,
+                    routes,
                 }),
                 Step::Stay,
             ),
@@ -806,6 +848,7 @@ impl GameView {
                     output,
                     GameOutput::parse("vjoy:1:button:6").expect("an output id"),
                 ],
+                routes: vec![scene.i18n.tr("edit-short"), scene.i18n.tr("edit-long")],
             }),
             "unmapped" => Some(Dialog::Unmapped {
                 action,
