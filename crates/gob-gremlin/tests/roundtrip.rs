@@ -514,3 +514,30 @@ fn a_profile_nested_too_deep_is_refused_without_crashing() {
     );
     assert!(gob_gremlin::from_str(&text).is_err());
 }
+
+/// Joystick Gremlin Ex profiles carry R14-like version numbers in a format of their own: they
+/// are refused instead of read as an empty R14 profile.
+#[test]
+fn gremlin_ex_profiles_are_refused() {
+    let ex = r#"<?xml version="1.0" ?>
+<profile version="17" start_mode="Default" default_mode="Default" guid="{0}">
+    <devices>
+        <device name="VPC Stick" label="" device-guid="{11111111-0000-0000-0000-000000000001}" type="joystick">
+            <mode name="Default"><axis id="1"/></mode>
+        </device>
+    </devices>
+</profile>"#;
+    assert!(matches!(
+        gob_gremlin::from_str(ex),
+        Err(gob_gremlin::Error::GremlinEx(v)) if v == "17"
+    ));
+    let bare = ex.replace(
+        r#" start_mode="Default" default_mode="Default" guid="{0}""#,
+        "",
+    );
+    assert!(matches!(
+        gob_gremlin::from_str(&bare),
+        Err(gob_gremlin::Error::GremlinEx(_))
+    ));
+    assert!(gob_gremlin::from_str(SAMPLE).is_ok());
+}

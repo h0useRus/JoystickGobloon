@@ -24,6 +24,8 @@ pub enum Error {
     UnsupportedVersion(String),
     /// Written by a newer Joystick Gobloon.
     NewerFormat(String),
+    /// A Joystick Gremlin Ex profile: its own format, not Gremlin R14's.
+    GremlinEx(String),
 }
 
 impl fmt::Display for Error {
@@ -38,6 +40,10 @@ impl fmt::Display for Error {
                     "Joystick Gremlin profile format version {v:?} is not supported (need {MIN_VERSION} or newer)"
                 )
             }
+            Self::GremlinEx(v) => write!(
+                f,
+                "a Joystick Gremlin Ex profile (version {v:?}): only Joystick Gremlin R14+ profiles can be opened"
+            ),
             Self::NewerFormat(v) => write!(
                 f,
                 "profile format version {v:?} is from a newer Joystick Gobloon (this one reads up to {FORMAT_VERSION})"
