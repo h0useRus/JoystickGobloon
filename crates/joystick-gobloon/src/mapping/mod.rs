@@ -56,8 +56,10 @@ pub struct Mapper {
     /// When each input last counted (lights axes' tags for a moment).
     pub seen: HashMap<Input, Instant>,
     pub selected: Option<String>,
-    /// The tag being dragged to a new place: (control id, its spot in picture units).
+    /// The tag being dragged to a new place: (control id, where it is now in picture units).
     pub moving: Option<(String, [f32; 2])>,
+    /// What of it moves.
+    pub grip: Grip,
     /// The control a tag's menu is open for.
     pub menu: Option<String>,
     /// The selected control's name while it is typed.
@@ -71,6 +73,17 @@ pub struct Mapper {
     pub error: Option<String>,
     /// Where things were drawn last frame (tests drag between them).
     pub layout: Layout,
+}
+
+/// What a drag moves of a placed control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Grip {
+    /// The control on its spot.
+    Whole,
+    /// Only where it is drawn: off its spot, a line joining them (Shift held, or moved out).
+    Glyph,
+    /// Only its spot (the dot at the end of its line).
+    Spot,
 }
 
 /// Where the picture and the waiting numbers were drawn last frame.
@@ -117,6 +130,7 @@ impl Mapper {
             seen: HashMap::new(),
             selected: None,
             moving: None,
+            grip: Grip::Whole,
             menu: None,
             name_edit: None,
             textures: HashMap::new(),
@@ -354,6 +368,7 @@ impl Mapper {
             parts: None,
             view: self.view.clone(),
             at: [at[0].round(), at[1].round()],
+            glyph: None,
             side: if at[0] > width / 2.0 {
                 Side::Right
             } else {
@@ -557,6 +572,19 @@ impl Mapper {
             gob_devices::edit::set_control(text, old_id, &control)
         });
         self.report(result);
+    }
+
+    /// Draws control `id` at `glyph` (picture units) off its spot, a line joining them; `None`
+    /// puts it back on its spot.
+    pub fn move_out(&mut self, id: &str, glyph: Option<[f32; 2]>) {
+        let Some(mut c) = self.plugin().and_then(|p| p.control(id)).cloned() else {
+            return;
+        };
+        let glyph = glyph.map(|[x, y]| [x.round(), y.round()]);
+        if c.glyph != glyph {
+            c.glyph = glyph;
+            self.put_control(id, c);
+        }
     }
 
     /// Takes control `control` off the picture (its input can be placed again).

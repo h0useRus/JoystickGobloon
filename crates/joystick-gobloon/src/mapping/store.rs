@@ -228,11 +228,13 @@ impl Store {
                 (Some(f), Some(t)) => (f, t),
                 _ => continue,
             };
-            let mut x = c.at[0] / fw * tw;
-            let y = c.at[1] / fh * th;
+            let place = |[x, y]: [f32; 2]| {
+                let x = x / fw * tw;
+                let x = if mirror { tw - x } else { x };
+                [x.round(), (y / fh * th).round()]
+            };
             let mut side = c.side;
             if mirror {
-                x = tw - x;
                 side = match side {
                     gob_devices::Side::Left => gob_devices::Side::Right,
                     gob_devices::Side::Right => gob_devices::Side::Left,
@@ -240,7 +242,8 @@ impl Store {
             }
             let mut c = c.clone();
             c.view = view;
-            c.at = [x.round(), y.round()];
+            c.at = place(c.at);
+            c.glyph = c.glyph.map(place);
             c.side = side;
             controls.push(c);
         }

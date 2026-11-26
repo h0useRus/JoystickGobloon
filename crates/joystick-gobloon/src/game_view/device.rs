@@ -222,7 +222,8 @@ impl GameView {
                     lines.push("—".into());
                 }
                 style::Callout {
-                    at: Pos2::new(c.at[0], c.at[1]),
+                    // The card points at the control as drawn (off its spot when moved out).
+                    at: Pos2::new(c.drawn()[0], c.drawn()[1]),
                     side: match c.side {
                         gob_devices::Side::Left => style::CalloutSide::Left,
                         gob_devices::Side::Right => style::CalloutSide::Right,
@@ -270,8 +271,19 @@ impl GameView {
                 }
                 // The controls drawn over their spots, as in the Input viewer.
                 let painter = ui.painter_at(r.response.rect.expand(48.0));
+                let to_screen = |at: [f32; 2]| r.picture.min + Vec2::new(at[0], at[1]) * r.scale;
+                for c in &controls {
+                    gob_devices::draw::leader_of(
+                        &painter,
+                        &pal,
+                        c,
+                        &shown.inputs,
+                        &to_screen,
+                        &live,
+                    );
+                }
                 for (n, c) in controls.iter().enumerate() {
-                    let at = r.picture.min + Vec2::new(c.at[0], c.at[1]) * r.scale;
+                    let at = to_screen(c.drawn());
                     gob_devices::draw::control(
                         &painter,
                         &pal,

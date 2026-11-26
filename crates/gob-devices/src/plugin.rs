@@ -156,6 +156,10 @@ pub struct Control {
     pub view: String,
     /// Hotspot, in the view's picture units (pixels of a photo, the viewBox of a drawing).
     pub at: [f32; 2],
+    /// Where the control is drawn when moved off its spot (a line joins them), in the same
+    /// units; it may lie beside the picture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glyph: Option<[f32; 2]>,
     #[serde(default)]
     pub side: Side,
     /// Callout heading when several controls share one (e.g. "Base buttons").
@@ -179,6 +183,11 @@ fn main_view() -> String {
 }
 
 impl Control {
+    /// Where the control is drawn: off its spot when moved out, else on it.
+    pub fn drawn(&self) -> [f32; 2] {
+        self.glyph.unwrap_or(self.at)
+    }
+
     pub fn parts(&self) -> Vec<&str> {
         match &self.parts {
             Some(parts) => parts.iter().map(String::as_str).collect(),

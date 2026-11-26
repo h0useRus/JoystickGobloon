@@ -28,7 +28,7 @@ impl Mapper {
             ui.add_space(style::SPACE_XS);
             ui.label(
                 RichText::new(i18n.trf(
-                    "panel-copy",
+                    "map-panel-copy",
                     &[(
                         "path",
                         FluentValue::from(self.store.write_dir.display().to_string()),

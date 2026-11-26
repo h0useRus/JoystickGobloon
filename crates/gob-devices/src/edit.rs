@@ -61,6 +61,9 @@ pub fn control_text(c: &Control) -> String {
         c.at[0].round(),
         c.at[1].round()
     ));
+    if let Some([x, y]) = c.glyph {
+        out.push_str(&format!("glyph = [{}, {}]\n", x.round(), y.round()));
+    }
     if c.side == Side::Right {
         out.push_str("side = \"right\"\n");
     }
@@ -213,6 +216,7 @@ at = [3, 4]
             parts: None,
             view: MAIN_VIEW.into(),
             at: [10.4, 20.6],
+            glyph: None,
             side: Side::Right,
             group: None,
             look: None,

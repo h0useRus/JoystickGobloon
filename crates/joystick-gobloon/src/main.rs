@@ -162,11 +162,19 @@ mod tests {
                     continue;
                 }
                 let text = std::fs::read_to_string(&path).unwrap();
-                for call in [".tr(\"", ".trf(\""] {
+                // The key may come on the next line, after the opening parenthesis.
+                for call in [".tr(", ".trf("] {
                     for (at, _) in text.match_indices(call) {
-                        let rest = &text[at + call.len()..];
+                        let rest = text[at + call.len()..].trim_start();
+                        let Some(rest) = rest.strip_prefix('"') else {
+                            continue;
+                        };
                         let key = &rest[..rest.find('"').unwrap()];
-                        if !defined.contains(key) {
+                        let like_key = !key.is_empty()
+                            && key
+                                .chars()
+                                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+                        if like_key && !defined.contains(key) {
                             missing.push(format!("{}: {key}", path.display()));
                         }
                     }

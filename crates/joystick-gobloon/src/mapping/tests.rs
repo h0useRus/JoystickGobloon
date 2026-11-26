@@ -403,3 +403,35 @@ fn a_file_without_a_device_is_refused() {
     assert!(super::share::unpack(&store, &file).is_err());
     assert!(!f.root.join("evil.gob").exists());
 }
+
+/// A control moved out is drawn off its spot with a line: dragging it moves only the drawing,
+/// dragging the dot at the line's end moves the spot, and dropped on its spot it is back.
+#[test]
+fn a_control_moved_out_keeps_a_line_to_its_spot() {
+    let f = Folders::new("out");
+    let mut app = app(&f);
+    app.move_out("trigger", Some([70.0, 30.0]));
+    let trigger = |f: &Folders| {
+        f.manifest()
+            .controls
+            .into_iter()
+            .find(|c| c.id == "trigger")
+            .unwrap()
+    };
+    assert_eq!(trigger(&f).glyph, Some([70.0, 30.0]));
+    let mut h = harness(app);
+    // The drawing moves, even beside the picture; the spot stays.
+    let (from, to) = (spot(&h, [70.0, 30.0]), spot(&h, [115.0, 50.0]));
+    drag(&mut h, from, to);
+    let c = trigger(&f);
+    assert_eq!((c.at, c.glyph), ([40.0, 30.0], Some([115.0, 50.0])));
+    // The dot moves the spot.
+    let (from, to) = (spot(&h, [40.0, 30.0]), spot(&h, [30.0, 20.0]));
+    drag(&mut h, from, to);
+    let c = trigger(&f);
+    assert_eq!((c.at, c.glyph), ([30.0, 20.0], Some([115.0, 50.0])));
+    // Dropped on its spot: back on it, no line.
+    let (from, to) = (spot(&h, [115.0, 50.0]), spot(&h, [30.0, 20.0]));
+    drag(&mut h, from, to);
+    assert_eq!(trigger(&f).glyph, None);
+}

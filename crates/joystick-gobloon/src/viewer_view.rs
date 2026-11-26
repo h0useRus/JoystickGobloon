@@ -385,12 +385,17 @@ impl ViewerView {
                 continue;
             };
             let width = ui.available_width();
-            let scale = (width / size.x)
-                .min(PICTURE_HEIGHT / size.y)
+            // Controls moved off their spots may lie beside the picture.
+            let on_view = || mapped.controls.iter().filter(|c| c.view == *view);
+            let extent = gob_devices::draw::extent(on_view(), size, size.x * 0.06);
+            let scale = (width / extent.width())
+                .min(PICTURE_HEIGHT / extent.height())
                 .min(PICTURE_ZOOM);
             let (rect, response) =
-                ui.allocate_exact_size(Vec2::new(width, size.y * scale), Sense::hover());
-            let picture = Rect::from_center_size(rect.center(), size * scale);
+                ui.allocate_exact_size(Vec2::new(width, extent.height() * scale), Sense::hover());
+            let shown = Rect::from_center_size(rect.center(), extent.size() * scale);
+            let origin = shown.min - extent.min.to_vec2() * scale;
+            let picture = Rect::from_min_size(origin, size * scale);
             let painter = ui.painter_at(rect);
             painter.image(
                 texture.id(),
@@ -398,26 +403,29 @@ impl ViewerView {
                 Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
                 Color32::WHITE,
             );
-            let to_screen = |at: [f32; 2]| picture.min + Vec2::new(at[0], at[1]) * scale;
+            let to_screen = |at: [f32; 2]| origin + Vec2::new(at[0], at[1]) * scale;
             let pointer = response.hover_pos();
             let hovered = pointer.and_then(|p| {
                 mapped
                     .controls
                     .iter()
                     .filter(|c| c.view == *view)
-                    .map(|c| (c, to_screen(c.at).distance(p)))
+                    .map(|c| (c, to_screen(c.drawn()).distance(p)))
                     .filter(|(c, d)| *d <= gob_devices::draw::reach(c))
                     .min_by(|a, b| a.1.total_cmp(&b.1))
                     .map(|(c, _)| c.id.clone())
             });
-            for c in mapped.controls.iter().filter(|c| c.view == *view) {
+            for c in on_view() {
+                gob_devices::draw::leader_of(&painter, &pal, c, &mapped.inputs, &to_screen, &live);
+            }
+            for c in on_view() {
                 let strong = hovered.as_deref() == Some(c.id.as_str());
                 gob_devices::draw::control(
                     &painter,
                     &pal,
                     c,
                     &mapped.inputs,
-                    to_screen(c.at),
+                    to_screen(c.drawn()),
                     None,
                     strong,
                     None,
@@ -428,7 +436,8 @@ impl ViewerView {
                 .as_deref()
                 .and_then(|id| mapped.controls.iter().find(|c| c.id == id))
             {
-                let above = to_screen(c.at) - Vec2::new(0.0, gob_devices::draw::reach(c) + 14.0);
+                let above =
+                    to_screen(c.drawn()) - Vec2::new(0.0, gob_devices::draw::reach(c) + 14.0);
                 gob_devices::draw::caption(&painter, &pal, above, &c.name);
             }
         }

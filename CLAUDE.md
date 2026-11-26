@@ -114,7 +114,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - joystick-gobloon mapping/ = device pictures in the Input viewer (Picture view per device with a plugin, lit live)
   and mapping ("Edit mapping"; "Add a picture" for a device without one): each button/axis/hat worked gets the next
   number, waiting in the picture's top left corner until dragged onto it (a control with that one input, `button_7`);
-  tags move by drag, right-click menu (make a hat, split, remove), buttons gather into hats, axes into sticks, copy
+  tags move by drag (Shift+drag or the menu moves one out of its spot with a line: `glyph` in device.gob, its dot
+  moves the spot), right-click menu (make a hat, split, move out/back, remove), buttons gather into hats, axes into sticks, copy
   another device's controls (mirrored for the other hand); store.rs writes the plugin (debug builds: the repository's
   plugins/devices, release: the user's folder, a shipped plugin copied there first) and reloads plugins whose files
   changed; share.rs = export a plugin as `<id>.zip` (folder inside) / import one (enclosed names, plugin file kinds,

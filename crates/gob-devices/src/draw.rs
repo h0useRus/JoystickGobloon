@@ -381,6 +381,78 @@ pub fn caption(painter: &egui::Painter, pal: &Pal, at: Pos2, text: &str) {
     painter.galley(rect.min + Vec2::new(6.0, 3.0), galley, pal.strong);
 }
 
+/// A control drawn off its spot: a line from the edge of its glyph at `glyph` to a dot on the
+/// spot, bright while the control is worked.
+pub fn leader(painter: &egui::Painter, pal: &Pal, spot: Pos2, glyph: Pos2, reach: f32, lit: bool) {
+    let color = if lit {
+        pal.accent
+    } else {
+        pal.accent.gamma_multiply(0.7)
+    };
+    let away = glyph - spot;
+    if away.length() > reach + 4.0 {
+        let start = glyph - away.normalized() * (reach + 2.0);
+        painter.line_segment(
+            [start, spot],
+            Stroke::new(3.0, Color32::BLACK.gamma_multiply(0.5)),
+        );
+        painter.line_segment(
+            [start, spot],
+            Stroke::new(if lit { 2.0 } else { 1.3 }, color),
+        );
+    }
+    painter.circle(spot, 4.5, pal.fill, Stroke::new(2.0, color));
+    if lit {
+        painter.circle_filled(spot, 2.0, pal.accent);
+    }
+}
+
+/// The line of control `c` when it is drawn off its spot (`to_screen` maps picture units onto
+/// the screen); nothing when it sits on its spot.
+pub fn leader_of(
+    painter: &egui::Painter,
+    pal: &Pal,
+    c: &Control,
+    inputs: &Inputs,
+    to_screen: &dyn Fn([f32; 2]) -> Pos2,
+    live: &dyn Fn(Input) -> Live,
+) {
+    if let Some(glyph) = c.glyph {
+        let lit = c
+            .parts()
+            .iter()
+            .filter_map(|p| inputs.get(&c.id, p))
+            .any(|i| live(i).lit);
+        leader(
+            painter,
+            pal,
+            to_screen(c.at),
+            to_screen(glyph),
+            reach(c),
+            lit,
+        );
+    }
+}
+
+/// The picture units a view's controls need besides the picture itself (`size`): the picture
+/// grown to every glyph moved off its spot, with room for the glyph (`margin` units).
+pub fn extent<'a>(
+    controls: impl IntoIterator<Item = &'a Control>,
+    size: Vec2,
+    margin: f32,
+) -> Rect {
+    let mut rect = Rect::from_min_size(Pos2::ZERO, size);
+    for c in controls {
+        if let Some([x, y]) = c.glyph {
+            rect = rect.union(Rect::from_center_size(
+                Pos2::new(x, y),
+                Vec2::splat(margin * 2.0),
+            ));
+        }
+    }
+    rect
+}
+
 /// How far from its spot a control is still under the pointer.
 pub fn reach(c: &Control) -> f32 {
     match c.kind {

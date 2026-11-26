@@ -5,6 +5,8 @@
 //! stick): dragged near such a group, it opens a slot per part to drop onto. Axes are square.
 
 use crate::style::{self, icon};
+
+use super::Grip;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use gob_devices::{Control, Input, Kind};
 
@@ -62,10 +64,15 @@ impl Mapper {
             .collect();
 
         let area = ui.available_rect_before_wrap();
-        // A row above the picture stays free for the waiting numbers.
+        // A row above the picture stays free for the waiting numbers; controls moved off
+        // their spots may lie beside the picture.
         let room = Rect::from_min_max(area.min + Vec2::new(0.0, SLOT + 8.0), area.max);
-        let scale = (room.width() / size.x).min(room.height() / size.y).min(3.0);
-        let picture = Rect::from_center_size(room.center(), size * scale);
+        let extent = glyphs::extent(controls.iter().map(|(_, c)| c), size, size.x * 0.06);
+        let scale = (room.width() / extent.width())
+            .min(room.height() / extent.height())
+            .min(3.0);
+        let shown = Rect::from_center_size(room.center(), extent.size() * scale);
+        let picture = Rect::from_min_size(shown.min - extent.min.to_vec2() * scale, size * scale);
         let response = ui.allocate_rect(area, Sense::click_and_drag());
         self.layout.picture = Some((picture, scale));
         let painter = ui.painter_at(area);
@@ -76,20 +83,37 @@ impl Mapper {
             Color32::WHITE,
         );
         let to_screen = |at: [f32; 2]| picture.min + Vec2::new(at[0], at[1]) * scale;
+        // A spot stays on the picture; a control drawn off its spot anywhere in the room.
         let to_picture = |p: Pos2| {
             let v = (p - picture.min) / scale;
             [v.x.clamp(0.0, size.x), v.y.clamp(0.0, size.y)]
         };
+        let to_room = |p: Pos2| {
+            let p = p.clamp(room.min, room.max);
+            let v = (p - picture.min) / scale;
+            [v.x, v.y]
+        };
         let moving = self.moving.clone();
+        let grip = self.grip;
+        // Where a control's spot and drawing are now (the one being dragged follows the pointer).
         let spot = |c: &Control| match &moving {
-            Some((id, at)) if *id == c.id => *at,
+            Some((id, at)) if *id == c.id && grip != Grip::Glyph => *at,
             _ => c.at,
+        };
+        let drawn = |c: &Control| match &moving {
+            Some((id, at)) if *id == c.id && grip == Grip::Glyph => *at,
+            Some((id, at)) if *id == c.id && grip == Grip::Whole && c.glyph.is_none() => *at,
+            _ => c.drawn(),
+        };
+        let out = |c: &Control| {
+            c.glyph.is_some()
+                || matches!(&moving, Some((id, _)) if *id == c.id && grip == Grip::Glyph)
         };
         let pointer = ctx.pointer_latest_pos().filter(|p| area.contains(*p));
         let near_at = |p: Pos2| {
             controls
                 .iter()
-                .map(|(n, c)| (*n, c, to_screen(spot(c)).distance(p)))
+                .map(|(n, c)| (*n, c, to_screen(drawn(c)).distance(p)))
                 .filter(|(_, c, d)| {
                     *d <= if c.kind == Kind::Hat {
                         glyphs::RADIUS
@@ -101,6 +125,14 @@ impl Mapper {
                 .map(|(n, c, _)| (n, c.clone()))
         };
         let near = pointer.and_then(near_at);
+        // The dot of a control drawn off its spot.
+        let spot_at = |p: Pos2| {
+            controls
+                .iter()
+                .filter(|(_, c)| c.glyph.is_some())
+                .find(|(_, c)| to_screen(c.at).distance(p) <= 8.0)
+                .map(|(_, c)| c.clone())
+        };
 
         // What is being dragged: a waiting number, or a placed tag with one input. Either can
         // go into a group: a button into a hat of buttons, an axis into another axis or a stick.
@@ -140,11 +172,11 @@ impl Mapper {
                     };
                     Some((c, (*parts)?))
                 })
-                .map(|(c, parts)| (c, parts, to_screen(c.at).distance(p)))
+                .map(|(c, parts)| (c, parts, to_screen(c.drawn()).distance(p)))
                 .filter(|(_, _, d)| *d <= REACH)
                 .min_by(|a, b| a.2.total_cmp(&b.2))
                 .map(|(c, parts, _)| (c, parts))?;
-            let center = to_screen(group.at);
+            let center = to_screen(group.drawn());
             let part = if group.kind == Kind::Hat {
                 let push = group.parts().contains(&"push");
                 glyphs::hat_part_at(p - center, push).map(|n| HAT_PARTS[n])
@@ -162,8 +194,14 @@ impl Mapper {
         let accent = style::accent(ui);
         let visuals = ui.visuals().clone();
         let pal = glyphs::Pal::new(&visuals, accent);
+        // Lines first, under every control.
+        for (_, c) in controls.iter().filter(|(_, c)| out(c)) {
+            let lit = self.inputs_of(c).into_iter().any(|i| self.is_lit(i));
+            let (from, to) = (to_screen(spot(c)), to_screen(drawn(c)));
+            glyphs::leader(&painter, &pal, from, to, glyphs::reach(c), lit);
+        }
         for (n, c) in &controls {
-            let at = to_screen(spot(c));
+            let at = to_screen(drawn(c));
             let open = target
                 .as_ref()
                 .filter(|((g, _), _)| g.id == c.id)
@@ -188,7 +226,7 @@ impl Mapper {
                 Some(part) => format!("{} {}", group.name, self.part_label(i18n, part)),
                 None => group.name.clone(),
             };
-            let at = to_screen(group.at) + Vec2::new(0.0, -GROUP_GAP - GROUP_SLOT - 16.0);
+            let at = to_screen(group.drawn()) + Vec2::new(0.0, -GROUP_GAP - GROUP_SLOT - 16.0);
             glyphs::caption(&painter, &pal, at, &caption);
         }
 
@@ -269,35 +307,57 @@ impl Mapper {
 
         // Moving and selecting placed tags; a tag moves from where the button went down, and a
         // tag with one input dropped on a group's part goes into the group.
-        let pressed_on = ui.input(|i| i.pointer.press_origin()).and_then(near_at);
-        if response.drag_started()
-            && let Some((_, c)) = &pressed_on
-        {
-            self.moving = Some((c.id.clone(), c.at));
-            self.selected = Some(c.id.clone());
+        // Shift (or a control already moved out) drags only its drawing, a line staying to its
+        // spot; the dot at the line's end moves the spot.
+        let origin = ui.input(|i| i.pointer.press_origin());
+        let shift = ui.input(|i| i.modifiers.shift);
+        if response.drag_started() {
+            if let Some(c) = origin.and_then(spot_at) {
+                self.moving = Some((c.id.clone(), c.at));
+                self.grip = Grip::Spot;
+                self.selected = Some(c.id.clone());
+            } else if let Some((_, c)) = origin.and_then(near_at) {
+                self.grip = if shift || c.glyph.is_some() {
+                    Grip::Glyph
+                } else {
+                    Grip::Whole
+                };
+                self.moving = Some((c.id.clone(), c.drawn()));
+                self.selected = Some(c.id.clone());
+            }
         }
         if let Some((_, at)) = &mut self.moving
             && let Some(p) = pointer
         {
-            *at = to_picture(p);
+            *at = match self.grip {
+                Grip::Glyph => to_room(p),
+                _ => to_picture(p),
+            };
         }
         if response.drag_stopped()
             && let Some((id, at)) = self.moving.take()
         {
             let into = pointer
+                .filter(|_| self.grip != Grip::Spot)
                 .zip(dragged_tag.as_ref().filter(|(t, _)| *t == id))
                 .and_then(|(p, (_, input))| group_at(p, *input));
-            match into {
-                Some((group, Some(part))) => self.merge_into(&id, &group.id, part),
-                Some((_, None)) => {}
-                None => {
-                    if let Some(mut c) = self.plugin().and_then(|pl| pl.control(&id)).cloned()
-                        && c.at != at
-                    {
+            let control = self.plugin().and_then(|pl| pl.control(&id)).cloned();
+            match (into, control) {
+                (Some((group, Some(part))), _) => self.merge_into(&id, &group.id, part),
+                (Some((_, None)), _) | (None, None) => {}
+                (None, Some(c)) => match self.grip {
+                    Grip::Glyph => {
+                        // Dropped back on its spot: no line any more.
+                        let home = to_screen(c.at).distance(to_screen(at)) <= glyphs::reach(&c);
+                        self.move_out(&id, (!home).then_some(at));
+                    }
+                    Grip::Whole | Grip::Spot if c.at != at => {
+                        let mut c = c;
                         c.at = [at[0].round(), at[1].round()];
                         self.put_control(&id, c);
                     }
-                }
+                    _ => {}
+                },
             }
         }
         if response.clicked() {
@@ -309,8 +369,8 @@ impl Mapper {
         if let Some((_, c)) = &near
             && self.moving.is_none()
         {
-            let at = to_screen(spot(c));
-            glyphs::caption(&painter, &pal, at + Vec2::new(0.0, -TAG - 14.0), &c.name);
+            let at = to_screen(drawn(c)) - Vec2::new(0.0, glyphs::reach(c) + 14.0);
+            glyphs::caption(&painter, &pal, at, &c.name);
         }
         if let Some(id) = self.menu.clone() {
             let control = controls
@@ -328,6 +388,25 @@ impl Mapper {
                         && ui.button(i18n.tr("map-tag-split")).clicked()
                     {
                         self.split(&c.id);
+                        self.menu = None;
+                        ui.close();
+                    }
+                }
+                if let Some(c) = &control {
+                    if c.glyph.is_none() && ui.button(i18n.tr("map-tag-out")).clicked() {
+                        // Beside it, toward its side of the picture.
+                        let step = size.x * 0.12;
+                        let dx = if c.side == gob_devices::Side::Right {
+                            step
+                        } else {
+                            -step
+                        };
+                        self.move_out(&c.id, Some([c.at[0] + dx, c.at[1]]));
+                        self.menu = None;
+                        ui.close();
+                    }
+                    if c.glyph.is_some() && ui.button(i18n.tr("map-tag-back")).clicked() {
+                        self.move_out(&c.id, None);
                         self.menu = None;
                         ui.close();
                     }
