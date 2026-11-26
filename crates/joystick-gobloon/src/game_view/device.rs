@@ -252,7 +252,8 @@ impl GameView {
                     &callouts,
                 )
                 .caption(shown.credit.as_deref())
-                .max_height(ui.available_height().max(480.0))
+                // The same size as in the Input viewer (smaller only when it does not fit).
+                .max_height(size.y * crate::mapping::picture_scale(size))
                 .show(ui);
                 // A card's whole text when it does not fit.
                 for (c, response) in callouts.iter().zip(&r.callouts) {

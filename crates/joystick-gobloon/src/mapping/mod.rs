@@ -35,6 +35,17 @@ const HAT_GATHER: f32 = 0.05;
 /// The parts of a stick made of axes.
 pub const STICK_PARTS: [&str; 3] = ["x", "y", "twist"];
 
+/// How tall a device picture is drawn, in screen points: the same in the Input viewer, while
+/// mapping and on the Game page, so its controls sit at the same size everywhere (smaller only
+/// where the room is too small).
+const PICTURE_HEIGHT: f32 = 620.0;
+
+/// The scale (screen points per picture unit) every view draws a picture of `size` at, before
+/// shrinking it to its room.
+pub fn picture_scale(size: egui::Vec2) -> f32 {
+    (PICTURE_HEIGHT / size.y.max(1.0)).clamp(0.1, 4.0)
+}
+
 /// How long an axis' tag stays lit after the axis moved.
 pub const AXIS_LIT: Duration = Duration::from_millis(700);
 

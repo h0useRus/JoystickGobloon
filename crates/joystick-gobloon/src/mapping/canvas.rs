@@ -70,7 +70,7 @@ impl Mapper {
         let extent = glyphs::extent(controls.iter().map(|(_, c)| c), size, size.x * 0.06);
         let scale = (room.width() / extent.width())
             .min(room.height() / extent.height())
-            .min(3.0);
+            .min(super::picture_scale(size));
         let shown = Rect::from_center_size(room.center(), extent.size() * scale);
         let picture = Rect::from_min_size(shown.min - extent.min.to_vec2() * scale, size * scale);
         let response = ui.allocate_rect(area, Sense::click_and_drag());

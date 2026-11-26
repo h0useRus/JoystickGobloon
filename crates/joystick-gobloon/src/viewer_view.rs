@@ -26,9 +26,6 @@ const MIN_LIT: Duration = Duration::from_millis(150);
 const AXIS_LIT: Duration = Duration::from_millis(600);
 /// How far an axis has to move to count as moving (noise stays below it).
 const AXIS_STEP: f32 = 0.04;
-/// The tallest a device picture is drawn, and how much it may be enlarged.
-const PICTURE_HEIGHT: f32 = 640.0;
-const PICTURE_ZOOM: f32 = 1.5;
 
 /// One colour per axis slot (X, Y, Z, Rx, Ry, Rz, Slider 1, Slider 2).
 const AXIS_COLORS: [Color32; 8] = [
@@ -388,9 +385,7 @@ impl ViewerView {
             // Controls moved off their spots may lie beside the picture.
             let on_view = || mapped.controls.iter().filter(|c| c.view == *view);
             let extent = gob_devices::draw::extent(on_view(), size, size.x * 0.06);
-            let scale = (width / extent.width())
-                .min(PICTURE_HEIGHT / extent.height())
-                .min(PICTURE_ZOOM);
+            let scale = (width / extent.width()).min(crate::mapping::picture_scale(size));
             let (rect, response) =
                 ui.allocate_exact_size(Vec2::new(width, extent.height() * scale), Sense::hover());
             let shown = Rect::from_center_size(rect.center(), extent.size() * scale);
