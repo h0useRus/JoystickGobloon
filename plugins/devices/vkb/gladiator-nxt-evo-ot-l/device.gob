@@ -18,18 +18,11 @@ name = "Throttle"
 image = "views/main.png"
 
 [[control]]
-id = "axis_y"
-name = "Stick"
-kind = "stick"
-parts = ["x", "y", "twist"]
-at = [338, 436]
-side = "right"
-
-[[control]]
 id = "hat_1"
 name = "Hat 1"
 kind = "hat"
 at = [535, 148]
+glyph = [700, 148]
 side = "right"
 
 [[control]]
@@ -71,7 +64,7 @@ side = "right"
 id = "button_3"
 name = "Button 3"
 kind = "button"
-at = [481, 186]
+at = [535, 280]
 side = "right"
 
 [[control]]
@@ -108,12 +101,14 @@ id = "button_28"
 name = "Button 28"
 kind = "button"
 at = [163, 457]
+glyph = [-2, 437]
 
 [[control]]
 id = "button_27"
 name = "Button 27"
 kind = "button"
 at = [201, 472]
+glyph = [-4, 468]
 
 [[control]]
 id = "button_29"
@@ -150,3 +145,11 @@ id = "button_23"
 name = "Button 23"
 kind = "button"
 at = [205, 550]
+
+[[control]]
+id = "axis_x"
+name = "Stick"
+kind = "stick"
+parts = ["x", "y", "twist"]
+at = [335, 434]
+side = "right"

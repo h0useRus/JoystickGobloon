@@ -15,10 +15,10 @@ button_4 = "button:4"
 button_5 = "button:5"
 hat_1 = "hat:1"
 
-[axis_y]
+[axis_x]
 twist = "axis:rz"
-x = "axis:y"
-y = "axis:x"
+x = "axis:x"
+y = "axis:y"
 
 [hat]
 down = "button:8"
