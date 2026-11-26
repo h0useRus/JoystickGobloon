@@ -16,7 +16,7 @@ use gob_input::{DeviceState, InputEvent, InputService};
 use gob_ui as style;
 use style::icon;
 
-use crate::dialogs::NewDevice;
+use crate::dialogs::{CopyControls, NewDevice};
 use crate::settings::{Own, Shared, Theme};
 use crate::store::Store;
 
@@ -74,6 +74,7 @@ pub struct MapApp {
     pub name_edit: Option<(String, String)>,
     textures: HashMap<(String, String, bool), (egui::TextureHandle, egui::Vec2)>,
     pub new_device: Option<NewDevice>,
+    pub copy: Option<CopyControls>,
     pub error: Option<String>,
     /// Where things were drawn last frame (tests drag between them).
     pub layout: Layout,
@@ -155,6 +156,7 @@ impl MapApp {
             name_edit: None,
             textures: HashMap::new(),
             new_device: None,
+            copy: None,
             error: None,
             layout: Layout::default(),
         }
@@ -798,6 +800,14 @@ impl MapApp {
             {
                 self.new_device = Some(NewDevice::new(self));
             }
+            let can_copy = self
+                .plugin()
+                .is_some_and(|p| !p.manifest.controls.is_empty());
+            if style::toolbar_button(ui, can_copy, icon::COPY, &self.i18n.tr("toolbar-copy"))
+                .clicked()
+            {
+                self.copy = Some(CopyControls::default());
+            }
             ui.separator();
             ui.label(egui::RichText::new(icon::JOYSTICK).size(style::LARGE_ICON_SIZE))
                 .on_hover_text(self.i18n.tr("toolbar-controller"));
@@ -852,6 +862,7 @@ impl MapApp {
 
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.new_device_dialog(ctx);
+        self.copy_dialog(ctx);
         if let Some(error) = self.error.clone() {
             let mut close = false;
             style::modal(ctx, "error").show(ctx, |ui| {

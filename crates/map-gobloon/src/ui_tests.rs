@@ -336,3 +336,26 @@ fn a_hat_gathers_the_buttons_around_it() {
     }
     assert!(app.pending.is_empty());
 }
+
+#[test]
+fn controls_copy_to_another_device() {
+    let f = Folders::new("copy");
+    let mut store = Store::with(vec![f.shipped(), f.user()], f.user());
+    let picture = f.shipped().join("sample/sample-stick/views/main.svg");
+    let id = store
+        .create("Sample", "Other hand", &picture, None)
+        .unwrap();
+    store.copy_controls(SAMPLE, &id, true).unwrap();
+    let copy = store.get(&id).unwrap();
+    let trigger = copy.control("trigger").unwrap();
+    // The sample's trigger at 40, 30 on a 100 x 100 picture, mirrored.
+    assert_eq!(trigger.at, [60.0, 30.0]);
+    assert_eq!(trigger.side, gob_devices::Side::Right);
+    assert_eq!(copy.input_of("trigger", "first"), Some(Input::Button(1)));
+    assert_eq!(copy.manifest.controls.len(), 3);
+    // Copying again replaces, it does not add.
+    store.copy_controls(SAMPLE, &id, false).unwrap();
+    let copy = store.get(&id).unwrap();
+    assert_eq!(copy.manifest.controls.len(), 3);
+    assert_eq!(copy.control("trigger").unwrap().at, [40.0, 30.0]);
+}

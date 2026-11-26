@@ -9,6 +9,13 @@ toolbar-no-controller = Контроллер не подключён
 toolbar-reload = Загрузить устройства заново
 toolbar-folder = Открыть папку устройства
 
+toolbar-copy = Скопировать элементы на другое устройство
+copy-title = Скопировать элементы
+copy-to = Куда
+copy-mirror = Отразить слева направо (устройство для другой руки)
+copy-replaces = Заменит его элементы: { $n }
+copy-do = Скопировать
+
 input-button = Кнопка { $n }
 input-axis = Ось { $name }
 input-hat = Хатка { $n }

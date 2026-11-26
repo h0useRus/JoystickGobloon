@@ -9,6 +9,13 @@ toolbar-no-controller = Aucun contrôleur connecté
 toolbar-reload = Recharger les appareils
 toolbar-folder = Ouvrir le dossier de l'appareil
 
+toolbar-copy = Copier les commandes vers un autre appareil
+copy-title = Copier les commandes
+copy-to = Vers
+copy-mirror = Inverser gauche et droite (appareil pour l'autre main)
+copy-replaces = Remplace ses { $n } commandes
+copy-do = Copier
+
 input-button = Bouton { $n }
 input-axis = Axe { $name }
 input-hat = Chapeau { $n }

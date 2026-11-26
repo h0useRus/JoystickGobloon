@@ -1,4 +1,5 @@
-//! New device: brand, name, picture and the connected controller it is for.
+//! New device (brand, name, picture and the connected controller it is for) and copying the
+//! open device's controls to another device.
 
 use std::path::PathBuf;
 
@@ -29,6 +30,14 @@ impl NewDevice {
             controller: app.device.clone(),
         }
     }
+}
+
+/// Copying the open device's controls to another device.
+#[derive(Default)]
+pub struct CopyControls {
+    target: Option<String>,
+    /// For the other hand's device: left and right swap.
+    mirror: bool,
 }
 
 impl MapApp {
@@ -149,6 +158,85 @@ impl MapApp {
             }
             Some(_) => {}
             None => self.new_device = Some(form),
+        }
+    }
+
+    pub fn copy_dialog(&mut self, ctx: &egui::Context) {
+        let Some(mut form) = self.copy.take() else {
+            return;
+        };
+        let Some(from) = self.plugin.clone() else {
+            return;
+        };
+        let mut devices: Vec<(String, String)> = self
+            .store
+            .catalog
+            .plugins
+            .iter()
+            .filter(|p| p.id() != from)
+            .map(|p| {
+                let name = format!("{} {}", p.manifest.brand, p.manifest.name);
+                (p.id().to_string(), name)
+            })
+            .collect();
+        devices.sort_by_key(|(_, name)| name.to_lowercase());
+        let replaced = form
+            .target
+            .as_deref()
+            .and_then(|id| self.store.get(id))
+            .map_or(0, |p| p.manifest.controls.len());
+        let mut result = None;
+        style::modal(ctx, "copy-controls").show(ctx, |ui| {
+            ui.set_width(440.0);
+            style::dialog_title(ui, Some((icon::COPY, None)), &self.i18n.tr("copy-title"));
+            ui.horizontal(|ui| {
+                ui.label(self.i18n.tr("copy-to"));
+                let shown = form
+                    .target
+                    .as_deref()
+                    .and_then(|id| devices.iter().find(|(d, _)| d == id))
+                    .map_or_else(String::new, |(_, name)| name.clone());
+                egui::ComboBox::from_id_salt("copy-target")
+                    .selected_text(shown)
+                    .width(320.0)
+                    .show_ui(ui, |ui| {
+                        for (id, name) in &devices {
+                            ui.selectable_value(&mut form.target, Some(id.clone()), name);
+                        }
+                    });
+            });
+            ui.add_space(style::SPACE_S);
+            ui.add(style::switch(&mut form.mirror, self.i18n.tr("copy-mirror")));
+            if replaced > 0 {
+                use gob_i18n::FluentValue;
+                ui.add_space(style::SPACE_S);
+                ui.label(
+                    egui::RichText::new(
+                        self.i18n
+                            .trf("copy-replaces", &[("n", FluentValue::from(replaced))]),
+                    )
+                    .color(style::RED),
+                );
+            }
+            result = style::dialog_buttons(
+                ui,
+                &[
+                    style::DialogButton::primary(self.i18n.tr("copy-do"))
+                        .enabled(form.target.is_some()),
+                    style::DialogButton::secondary(self.i18n.tr("cancel")),
+                ],
+            );
+        });
+        match result {
+            Some(0) => {
+                let to = form.target.clone().expect("checked");
+                match self.store.copy_controls(&from, &to, form.mirror) {
+                    Ok(()) => self.open(&to),
+                    Err(e) => self.error = Some(e),
+                }
+            }
+            Some(_) => {}
+            None => self.copy = Some(form),
         }
     }
 }

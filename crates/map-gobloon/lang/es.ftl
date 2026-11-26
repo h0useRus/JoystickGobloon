@@ -9,6 +9,13 @@ toolbar-no-controller = Ningún mando conectado
 toolbar-reload = Volver a cargar los dispositivos
 toolbar-folder = Abrir la carpeta del dispositivo
 
+toolbar-copy = Copiar los controles a otro dispositivo
+copy-title = Copiar los controles
+copy-to = A
+copy-mirror = Reflejar izquierda y derecha (dispositivo para la otra mano)
+copy-replaces = Reemplaza sus { $n } controles
+copy-do = Copiar
+
 input-button = Botón { $n }
 input-axis = Eje { $name }
 input-hat = Hat { $n }

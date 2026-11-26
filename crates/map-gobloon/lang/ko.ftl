@@ -9,6 +9,13 @@ toolbar-no-controller = 연결된 컨트롤러 없음
 toolbar-reload = 장치 다시 불러오기
 toolbar-folder = 장치 폴더 열기
 
+toolbar-copy = 컨트롤을 다른 장치로 복사
+copy-title = 컨트롤 복사
+copy-to = 대상
+copy-mirror = 좌우 반전 (다른 손용 장치)
+copy-replaces = 기존 컨트롤 { $n }개를 바꿉니다
+copy-do = 복사
+
 input-button = 버튼 { $n }
 input-axis = 축 { $name }
 input-hat = 햇 { $n }

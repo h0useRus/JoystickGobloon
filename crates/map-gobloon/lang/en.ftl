@@ -9,6 +9,13 @@ toolbar-no-controller = No controller connected
 toolbar-reload = Load the devices again
 toolbar-folder = Open the device's folder
 
+toolbar-copy = Copy the controls to another device
+copy-title = Copy the controls
+copy-to = To
+copy-mirror = Mirror left and right (the other hand's device)
+copy-replaces = Replaces its { $n } controls
+copy-do = Copy
+
 input-button = Button { $n }
 input-axis = Axis { $name }
 input-hat = Hat { $n }

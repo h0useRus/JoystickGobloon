@@ -9,6 +9,13 @@ toolbar-no-controller = 未连接控制器
 toolbar-reload = 重新加载设备
 toolbar-folder = 打开设备文件夹
 
+toolbar-copy = 把控件复制到另一个设备
+copy-title = 复制控件
+copy-to = 复制到
+copy-mirror = 左右镜像（另一只手的设备）
+copy-replaces = 将替换它的 { $n } 个控件
+copy-do = 复制
+
 input-button = 按钮 { $n }
 input-axis = 轴 { $name }
 input-hat = 苦力帽 { $n }

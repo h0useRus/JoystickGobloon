@@ -168,6 +168,72 @@ impl Store {
         Ok(id)
     }
 
+    /// Puts plugin `from`'s controls and inputs on plugin `to` in place of its own: each
+    /// control keeps its place relative to the picture (mirrored left to right with `mirror`,
+    /// for the other hand's device), on the view with the same id or else the first one.
+    pub fn copy_controls(&mut self, from: &str, to: &str, mirror: bool) -> Result<(), String> {
+        let source = self.get(from).ok_or_else(|| format!("no device {from}"))?;
+        let target = self.get(to).ok_or_else(|| format!("no device {to}"))?;
+        let size = |plugin: &DevicePlugin, view: &str| {
+            plugin
+                .pictures
+                .get(view)
+                .and_then(|p| p.bounds())
+                .map(|[_, _, w, h]| [w, h])
+        };
+        let first_view = target
+            .manifest
+            .views
+            .first()
+            .map(|v| v.id.clone())
+            .ok_or("the device has no picture")?;
+        let old: Vec<String> = target
+            .manifest
+            .controls
+            .iter()
+            .map(|c| c.id.clone())
+            .collect();
+        let mut controls = Vec::new();
+        for c in &source.manifest.controls {
+            let view = if target.manifest.views.iter().any(|v| v.id == c.view) {
+                c.view.clone()
+            } else {
+                first_view.clone()
+            };
+            let ([fw, fh], [tw, th]) = match (size(source, &c.view), size(target, &view)) {
+                (Some(f), Some(t)) => (f, t),
+                _ => continue,
+            };
+            let mut x = c.at[0] / fw * tw;
+            let y = c.at[1] / fh * th;
+            let mut side = c.side;
+            if mirror {
+                x = tw - x;
+                side = match side {
+                    gob_devices::Side::Left => gob_devices::Side::Right,
+                    gob_devices::Side::Right => gob_devices::Side::Left,
+                };
+            }
+            let mut c = c.clone();
+            c.view = view;
+            c.at = [x.round(), y.round()];
+            c.side = side;
+            controls.push(c);
+        }
+        let inputs = source.defaults.clone();
+        self.edit_manifest(to, |text| {
+            let mut text = text.to_string();
+            for id in &old {
+                text = edit::remove_control(&text, id);
+            }
+            for c in &controls {
+                text = edit::set_control(&text, &c.id, c);
+            }
+            text
+        })?;
+        self.save_inputs(to, &inputs)
+    }
+
     /// The folder to show for plugin `id` (the user's folder when there is none).
     pub fn folder_of(&self, id: Option<&str>) -> PathBuf {
         id.and_then(|id| self.get(id))
