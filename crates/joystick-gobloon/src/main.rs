@@ -11,6 +11,7 @@ mod calibration_view;
 mod condition_editor;
 mod curve_editor;
 mod device_access;
+mod device_pictures;
 mod devices_view;
 mod game_view;
 mod hidhide_view;

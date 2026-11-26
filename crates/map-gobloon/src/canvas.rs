@@ -9,11 +9,10 @@ use gob_devices::{Control, Input, Kind};
 use gob_ui as style;
 use style::icon;
 
-use crate::app::{HAT_PARTS, MapApp};
-use crate::glyphs;
+use gob_devices::draw::{self as glyphs, HAT_PARTS, TAG};
 
-/// Tag radius, in screen points.
-const TAG: f32 = 12.0;
+use crate::app::MapApp;
+
 /// Room per waiting number in the corner.
 const SLOT: f32 = 44.0;
 /// How near a dragged input has to come to a group (hat of buttons, stick of axes) to open it.
@@ -173,7 +172,7 @@ impl MapApp {
             if let Some((part, _)) = open
                 && c.kind == Kind::Hat
             {
-                self.draw_control(&painter, &pal, accent, &visuals, c, at, *n, true, part);
+                self.draw_control(&painter, &pal, c, at, *n, true, part);
                 continue;
             }
             if let Some((part, input)) = open {
@@ -183,17 +182,7 @@ impl MapApp {
             }
             let selected = self.selected.as_deref() == Some(c.id.as_str());
             let hovered = near.as_ref().is_some_and(|(m, _)| m == n);
-            self.draw_control(
-                &painter,
-                &pal,
-                accent,
-                &visuals,
-                c,
-                at,
-                *n,
-                selected || hovered,
-                None,
-            );
+            self.draw_control(&painter, &pal, c, at, *n, selected || hovered, None);
         }
         if let Some(((group, part), _)) = &target {
             let caption = match part {
@@ -201,7 +190,7 @@ impl MapApp {
                 None => group.name.clone(),
             };
             let at = to_screen(group.at) + Vec2::new(0.0, -GROUP_GAP - GROUP_SLOT - 16.0);
-            caption_at(&painter, &visuals, at, &caption);
+            glyphs::caption(&painter, &pal, at, &caption);
         }
 
         // The waiting numbers, in the corner; dragged onto the picture to place them.
@@ -249,12 +238,8 @@ impl MapApp {
             } else {
                 painter.clone()
             };
-            let shape = if matches!(input, Input::Axis(_)) {
-                Shape::Square
-            } else {
-                Shape::Round
-            };
-            draw_tag(&on_top, &visuals, accent, at, n, lit, true, shape);
+            let square = matches!(input, Input::Axis(_));
+            glyphs::tag(&on_top, &pal, at, &n.to_string(), lit, true, square);
             on_top.text(
                 at + Vec2::new(0.0, TAG + 8.0),
                 Align2::CENTER_CENTER,
@@ -326,12 +311,7 @@ impl MapApp {
             && self.moving.is_none()
         {
             let at = to_screen(spot(c));
-            caption_at(
-                &painter,
-                &visuals,
-                at + Vec2::new(0.0, -TAG - 14.0),
-                &c.name,
-            );
+            glyphs::caption(&painter, &pal, at + Vec2::new(0.0, -TAG - 14.0), &c.name);
         }
         if let Some(id) = self.menu.clone() {
             let control = controls
@@ -417,85 +397,30 @@ impl MapApp {
         &self,
         painter: &egui::Painter,
         pal: &glyphs::Pal,
-        accent: Color32,
-        visuals: &egui::Visuals,
         c: &Control,
         at: Pos2,
         n: usize,
         strong: bool,
         over: Option<&str>,
     ) {
-        let inputs = self
-            .plugin()
-            .map(|p| p.defaults.clone())
-            .unwrap_or_default();
-        let state = |input: Option<Input>| match input {
-            Some(i) if self.is_lit(i) => glyphs::Part::Lit,
-            Some(_) => glyphs::Part::Mapped,
-            None => glyphs::Part::Empty,
+        let Some(plugin) = self.plugin() else {
+            return;
         };
-        let value = |input: Option<Input>| input.and_then(|i| self.axis_value(i));
-        match c.kind {
-            Kind::Hat => {
-                let push = c.parts().contains(&"push");
-                let shown = if push {
-                    &HAT_PARTS[..]
-                } else {
-                    &HAT_PARTS[..4]
-                };
-                let parts: Vec<glyphs::PadPart> = shown
-                    .iter()
-                    .map(|p| {
-                        let input = inputs.get(&c.id, p);
-                        // A button shows its number, a hat direction (or nothing) its arrow.
-                        let label = match input {
-                            Some(Input::Button(b)) => b.to_string(),
-                            // A hat direction or nothing yet: its chevron says enough.
-                            _ => String::new(),
-                        };
-                        glyphs::PadPart {
-                            part: state(input),
-                            label,
-                        }
-                    })
-                    .collect();
-                let over = over.and_then(|o| HAT_PARTS.iter().position(|p| *p == o));
-                // The pad shows its buttons' numbers: no number of its own.
-                glyphs::hat(painter, at, &parts, over, strong, pal);
-            }
-            Kind::Stick => {
-                let x = inputs.get(&c.id, "x");
-                let y = inputs.get(&c.id, "y");
-                let twist = inputs.get(&c.id, "twist");
-                let xy = value(x)
-                    .or(value(y))
-                    .map(|_| [value(x).unwrap_or(0.0), value(y).unwrap_or(0.0)]);
-                let pad = match (state(x), state(y)) {
-                    (glyphs::Part::Lit, _) | (_, glyphs::Part::Lit) => glyphs::Part::Lit,
-                    (glyphs::Part::Empty, glyphs::Part::Empty) => glyphs::Part::Empty,
-                    _ => glyphs::Part::Mapped,
-                };
-                glyphs::stick(
-                    painter,
-                    at,
-                    xy,
-                    value(twist),
-                    pad,
-                    state(twist),
-                    strong,
-                    pal,
-                );
-            }
-            Kind::Axis => {
-                let input = inputs.get(&c.id, "");
-                glyphs::gauge(painter, at, value(input), state(input), strong, pal);
-                glyphs::number(painter, glyphs::gauge_number_at(at), n, strong, pal);
-            }
-            _ => {
-                let lit = self.inputs_of(c).into_iter().any(|i| self.is_lit(i));
-                draw_tag(painter, visuals, accent, at, n, lit, strong, Shape::Round);
-            }
-        }
+        let live = |i: Input| glyphs::Live {
+            lit: self.is_lit(i),
+            value: self.axis_value(i),
+        };
+        glyphs::control(
+            painter,
+            pal,
+            c,
+            &plugin.inputs,
+            at,
+            Some(n),
+            strong,
+            over,
+            &live,
+        );
     }
 
     /// A part's caption: arrows for directions, letters for axes.
@@ -532,69 +457,4 @@ fn slot_glyph(part: &str) -> &'static str {
         "twist" => icon::ARROWS_CLOCKWISE,
         _ => icon::CIRCLE,
     }
-}
-
-/// How a tag looks: round for buttons and hats, square for axes.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Shape {
-    Round,
-    Square,
-}
-
-#[allow(clippy::too_many_arguments)]
-fn draw_tag(
-    painter: &egui::Painter,
-    visuals: &egui::Visuals,
-    accent: Color32,
-    at: Pos2,
-    n: usize,
-    lit: bool,
-    strong: bool,
-    shape: Shape,
-) {
-    let ring = if strong {
-        Stroke::new(2.5, visuals.strong_text_color())
-    } else {
-        Stroke::new(1.5, Color32::from_rgba_unmultiplied(255, 255, 255, 200))
-    };
-    match shape {
-        Shape::Round => {
-            if lit {
-                painter.circle_filled(at, TAG + 7.0, accent.gamma_multiply(0.45));
-            }
-            painter.circle_filled(at, TAG, accent);
-            painter.circle_stroke(at, TAG, ring);
-        }
-        Shape::Square => {
-            let rect = Rect::from_center_size(at, Vec2::splat(TAG * 2.0));
-            if lit {
-                painter.rect_filled(rect.expand(7.0), 6.0, accent.gamma_multiply(0.45));
-            }
-            let fill = Color32::from_rgb(0x4a, 0xa8, 0xe0);
-            painter.rect(rect, 4.0, fill, ring, egui::StrokeKind::Middle);
-        }
-    }
-    painter.text(
-        at,
-        Align2::CENTER_CENTER,
-        n.to_string(),
-        FontId::proportional(12.0),
-        Color32::from_rgb(0x10, 0x12, 0x14),
-    );
-}
-
-/// A caption on a dark plate, centered at `at`.
-fn caption_at(painter: &egui::Painter, visuals: &egui::Visuals, at: Pos2, text: &str) {
-    let galley = painter.layout_no_wrap(
-        text.to_string(),
-        FontId::proportional(13.0),
-        visuals.strong_text_color(),
-    );
-    let rect = Rect::from_center_size(at, galley.size() + Vec2::new(12.0, 6.0));
-    painter.rect_filled(rect, 4.0, visuals.extreme_bg_color.gamma_multiply(0.92));
-    painter.galley(
-        rect.min + Vec2::new(6.0, 3.0),
-        galley,
-        visuals.strong_text_color(),
-    );
 }

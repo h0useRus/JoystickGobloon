@@ -660,6 +660,7 @@ update-debug = 디버그 빌드는 업데이트되지 않습니다
 update-install-error = 업데이트를 설치할 수 없습니다: { $error }
 
 # Input viewer
+viewer-picture = 그림
 viewer-history = 시간에 따른 축
 viewer-current = 현재 축
 viewer-buttons = 버튼과 햇 스위치

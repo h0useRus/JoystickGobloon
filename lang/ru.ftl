@@ -680,6 +680,7 @@ update-debug = Отладочные сборки не обновляются
 update-install-error = Не удалось установить обновление: { $error }
 
 # Input viewer
+viewer-picture = Изображение
 viewer-history = Оси во времени
 viewer-current = Оси сейчас
 viewer-buttons = Кнопки и хатки

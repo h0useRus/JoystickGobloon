@@ -10,6 +10,8 @@ gob-core.workspace = true
 # live.rs: a connected device's readings as plugin inputs.
 gob-input.workspace = true
 serde.workspace = true
+# draw.rs: controls on their picture, the same in every program that shows them.
+egui.workspace = true
 toml.workspace = true
 # Pictures to pixels: drawings themed, photos decoded (the resvg egui_extras' svg loader uses).
 resvg = "0.45.1"

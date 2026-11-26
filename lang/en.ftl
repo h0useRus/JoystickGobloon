@@ -672,6 +672,7 @@ update-debug = Debug builds do not update themselves
 update-install-error = Could not install the update: { $error }
 
 # Input viewer
+viewer-picture = Picture
 viewer-history = Axes over time
 viewer-current = Axes now
 viewer-buttons = Buttons and hats

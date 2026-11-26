@@ -660,6 +660,7 @@ update-debug = 调试版本不会自动更新
 update-install-error = 无法安装更新：{ $error }
 
 # Input viewer
+viewer-picture = 图片
 viewer-history = 轴随时间变化
 viewer-current = 当前轴
 viewer-buttons = 按钮和苦力帽

@@ -108,8 +108,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Gobloon and Joystick Gobloon: plugins/devices/<brand>/<device>/ (device.gob: id, name, brand, `[[match]]` vid + name
   part, `[[view]]` pictures, `[[control]]` id/name/kind/parts/at; inputs.gob: control -> `button:N`/`axis:x`/`hat:N`/
   `hat:N:up`), shipped in `devices/` next to the exe, user copies in `<data dir>/devices` win by id; edit.rs = device.gob
-  changed as text (comments kept), live.rs = gob-input events -> inputs (`Detector`, `is_active`); examples
-  `device_check`, `device_teach`. The Device tab of the Game page waits in archive/device-pictures
+  changed as text (comments kept), live.rs = gob-input events -> inputs (`Detector`, `is_active`), draw.rs = how
+  controls look on the picture in both apps (egui: hat pad, stick, gauge, tag; `draw::control`); examples
+  `device_check`, `device_teach`. Joystick Gobloon: device_pictures.rs (catalog, textures, reloads when plugin
+  files change) + the Input viewer's Picture view. The Device tab of the Game page waits in archive/device-pictures
 - crates/map-gobloon Map Gobloon (MapGobloon.exe): pick brand + device; each button/axis/hat worked on the controller
   gets the next number (a hat = one number), waiting in the picture's top left corner until dragged onto the picture:
   then it is a control with that one input (`button_7`, kind from the input); placed tags move by drag, come off by

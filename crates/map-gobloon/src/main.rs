@@ -6,7 +6,6 @@
 mod app;
 mod canvas;
 mod dialogs;
-mod glyphs;
 mod panel;
 mod platform;
 mod settings;

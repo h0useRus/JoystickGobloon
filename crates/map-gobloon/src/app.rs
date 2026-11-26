@@ -20,8 +20,7 @@ use crate::dialogs::{CopyControls, NewDevice};
 use crate::settings::{Own, Shared, Theme};
 use crate::store::Store;
 
-/// The parts of a hat made of buttons.
-pub const HAT_PARTS: [&str; 5] = ["up", "right", "down", "left", "push"];
+pub use gob_devices::draw::HAT_PARTS;
 /// How far around a button (a share of the picture's width) "Make it a hat" takes buttons in.
 const HAT_GATHER: f32 = 0.05;
 /// The parts of a stick made of axes.

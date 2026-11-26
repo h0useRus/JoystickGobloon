@@ -672,6 +672,7 @@ update-debug = Debug-Versionen aktualisieren sich nicht
 update-install-error = Das Update konnte nicht installiert werden: { $error }
 
 # Input viewer
+viewer-picture = Bild
 viewer-history = Achsen im Zeitverlauf
 viewer-current = Achsen jetzt
 viewer-buttons = Tasten und Coolie-Hats

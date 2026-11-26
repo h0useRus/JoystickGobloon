@@ -11,6 +11,7 @@
 
 pub mod catalog;
 pub mod check;
+pub mod draw;
 pub mod edit;
 pub mod input;
 pub mod inputs;

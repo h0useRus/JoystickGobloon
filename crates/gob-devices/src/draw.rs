@@ -1,10 +1,15 @@
-//! How placed controls look on the picture, in Gobloon's green: a hat is a pad (four segments
-//! split by an X, each with a chevron and its button's number, push in the middle), stick
-//! axes a pad with a dot where the stick is inside a ring whose dot shows the twist, one axis an
-//! upright gauge; each carries its number in a small badge. Parts light up while they are
-//! worked.
+//! How a plugin's controls look on its picture, in Gobloon's green, for every program that shows
+//! them (Map Gobloon, Joystick Gobloon): a hat is a pad (four segments split by an X, each with
+//! a chevron or its button's number, push in the middle), stick axes a pad with a dot where the
+//! stick is inside a ring whose arc shows the twist, one axis an upright gauge, anything else a
+//! round tag. Parts light up while they are worked.
 
-use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Pos2, Rect, Stroke, Vec2};
+use egui::{self, Align2, Color32, CornerRadius, FontId, Pos2, Rect, Stroke, Vec2};
+
+use crate::{Control, Input, Inputs, Kind};
+
+/// A hat's parts in the order its pad draws them.
+pub const HAT_PARTS: [&str; 5] = ["up", "right", "down", "left", "push"];
 
 /// Hat and stick pad radius, in screen points.
 pub const RADIUS: f32 = 32.0;
@@ -26,8 +31,8 @@ pub enum Part {
 pub struct Pal {
     pub accent: Color32,
     pub strong: Color32,
-    fill: Color32,
-    weak: Color32,
+    pub fill: Color32,
+    pub weak: Color32,
 }
 
 impl Pal {
@@ -323,4 +328,167 @@ fn segment_mesh(outline: &[Pos2], fill: Color32) -> egui::Mesh {
         mesh.add_triangle(o0, i1, i0);
     }
     mesh
+}
+
+/// Round tag radius, in screen points.
+pub const TAG: f32 = 12.0;
+
+/// A tag: round for buttons, square for axes (still waiting to be placed), with its number or
+/// label; a glow while it is worked, a bright rim when `strong`.
+#[allow(clippy::too_many_arguments)]
+pub fn tag(
+    painter: &egui::Painter,
+    pal: &Pal,
+    at: Pos2,
+    label: &str,
+    lit: bool,
+    strong: bool,
+    square: bool,
+) {
+    let ring = if strong {
+        Stroke::new(2.5, pal.strong)
+    } else {
+        Stroke::new(1.5, Color32::from_rgba_unmultiplied(255, 255, 255, 200))
+    };
+    if square {
+        let rect = Rect::from_center_size(at, Vec2::splat(TAG * 2.0));
+        if lit {
+            painter.rect_filled(rect.expand(7.0), 6.0, pal.accent.gamma_multiply(0.45));
+        }
+        let fill = Color32::from_rgb(0x4a, 0xa8, 0xe0);
+        painter.rect(rect, 4.0, fill, ring, egui::StrokeKind::Middle);
+    } else {
+        if lit {
+            painter.circle_filled(at, TAG + 7.0, pal.accent.gamma_multiply(0.45));
+        }
+        painter.circle_filled(at, TAG, pal.accent);
+        painter.circle_stroke(at, TAG, ring);
+    }
+    painter.text(
+        at,
+        Align2::CENTER_CENTER,
+        label,
+        FontId::proportional(12.0),
+        Color32::from_rgb(0x10, 0x12, 0x14),
+    );
+}
+
+/// A caption on a dark plate, centered at `at`.
+pub fn caption(painter: &egui::Painter, pal: &Pal, at: Pos2, text: &str) {
+    let galley = painter.layout_no_wrap(text.to_string(), FontId::proportional(13.0), pal.strong);
+    let rect = Rect::from_center_size(at, galley.size() + Vec2::new(12.0, 6.0));
+    painter.rect_filled(rect, 4.0, pal.fill.gamma_multiply(0.92));
+    painter.galley(rect.min + Vec2::new(6.0, 3.0), galley, pal.strong);
+}
+
+/// How far from its spot a control is still under the pointer.
+pub fn reach(c: &Control) -> f32 {
+    match c.kind {
+        Kind::Hat | Kind::Stick => RADIUS,
+        Kind::Axis => GAUGE.y / 2.0,
+        _ => TAG + 2.0,
+    }
+}
+
+/// What the device does with one input now.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Live {
+    /// Held, or an axis moving.
+    pub lit: bool,
+    /// Where an axis is, -1 to 1.
+    pub value: Option<f32>,
+}
+
+/// Control `c` at `at` by its kind, its parts' inputs from `inputs` and what each does now from
+/// `live`; `badge` = the number on a button's tag and beside a gauge (none: a button's own
+/// number); `over` = the hat part a dragged input would go to.
+#[allow(clippy::too_many_arguments)]
+pub fn control(
+    painter: &egui::Painter,
+    pal: &Pal,
+    c: &Control,
+    inputs: &Inputs,
+    at: Pos2,
+    badge: Option<usize>,
+    strong: bool,
+    over: Option<&str>,
+    live: &dyn Fn(Input) -> Live,
+) {
+    let state = |input: Option<Input>| match input {
+        Some(i) if live(i).lit => Part::Lit,
+        Some(_) => Part::Mapped,
+        None => Part::Empty,
+    };
+    let value = |input: Option<Input>| input.and_then(|i| live(i).value);
+    match c.kind {
+        Kind::Hat => {
+            let push = c.parts().contains(&"push");
+            let shown = if push {
+                &HAT_PARTS[..]
+            } else {
+                &HAT_PARTS[..4]
+            };
+            let parts: Vec<PadPart> = shown
+                .iter()
+                .map(|p| {
+                    let input = inputs.get(&c.id, p);
+                    // A button shows its number, a hat direction (or nothing) its chevron.
+                    let label = match input {
+                        Some(Input::Button(b)) => b.to_string(),
+                        _ => String::new(),
+                    };
+                    PadPart {
+                        part: state(input),
+                        label,
+                    }
+                })
+                .collect();
+            let over = over.and_then(|o| HAT_PARTS.iter().position(|p| *p == o));
+            hat(painter, at, &parts, over, strong, pal);
+        }
+        Kind::Stick => {
+            let x = inputs.get(&c.id, "x");
+            let y = inputs.get(&c.id, "y");
+            let twist = inputs.get(&c.id, "twist");
+            let xy = value(x)
+                .or(value(y))
+                .map(|_| [value(x).unwrap_or(0.0), value(y).unwrap_or(0.0)]);
+            let pad = match (state(x), state(y)) {
+                (Part::Lit, _) | (_, Part::Lit) => Part::Lit,
+                (Part::Empty, Part::Empty) => Part::Empty,
+                _ => Part::Mapped,
+            };
+            stick(
+                painter,
+                at,
+                xy,
+                value(twist),
+                pad,
+                state(twist),
+                strong,
+                pal,
+            );
+        }
+        Kind::Axis => {
+            let input = inputs.get(&c.id, "");
+            gauge(painter, at, value(input), state(input), strong, pal);
+            if let Some(n) = badge {
+                number(painter, gauge_number_at(at), n, strong, pal);
+            }
+        }
+        _ => {
+            let own: Vec<Input> = c
+                .parts()
+                .iter()
+                .filter_map(|p| inputs.get(&c.id, p))
+                .collect();
+            let lit = own.iter().any(|i| live(*i).lit);
+            let label = match (badge, own.as_slice()) {
+                (Some(n), _) => n.to_string(),
+                (None, [Input::Button(b)]) => b.to_string(),
+                _ => String::new(),
+            };
+            tag(painter, pal, at, &label, lit, strong, false);
+        }
+    }
 }

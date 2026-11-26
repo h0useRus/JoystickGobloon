@@ -1,5 +1,6 @@
 //! Input viewer (like Gremlin's): per device an axis history graph, the current axis
-//! values and the buttons and hats, for physical, vJoy and the profile's logical device alike.
+//! values and the buttons and hats, for physical, vJoy and the profile's logical device alike;
+//! a controller with a device plugin also as its picture with its controls lit as they are worked.
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
@@ -10,6 +11,7 @@ use gob_engine::LogicalValues;
 use gob_i18n::I18n;
 use gob_input::{AXIS_SLOTS, DeviceInfo, DeviceState};
 
+use crate::device_pictures::{DevicePictures, Mapped};
 use crate::devices_view::hat_glyph;
 use crate::style::{self, icon};
 
@@ -19,6 +21,13 @@ const SAMPLE_EVERY: Duration = Duration::from_millis(30);
 const REFRESH: Duration = Duration::from_millis(33);
 /// A button press or hat direction stays lit at least this long, so a quick tap shows.
 const MIN_LIT: Duration = Duration::from_millis(150);
+/// An axis on the picture stays lit this long after it last moved.
+const AXIS_LIT: Duration = Duration::from_millis(600);
+/// How far an axis has to move to count as moving (noise stays below it).
+const AXIS_STEP: f32 = 0.04;
+/// The tallest a device picture is drawn, and how much it may be enlarged.
+const PICTURE_HEIGHT: f32 = 640.0;
+const PICTURE_ZOOM: f32 = 1.5;
 
 /// One colour per axis slot (X, Y, Z, Rx, Ry, Rz, Slider 1, Slider 2).
 const AXIS_COLORS: [Color32; 8] = [
@@ -38,9 +47,11 @@ struct Shown {
     history: bool,
     current: bool,
     buttons: bool,
+    /// The device's picture (only for devices with a plugin).
+    picture: bool,
 }
 
-/// Nothing is shown until the user switches it on.
+/// Only the picture is shown until the user switches the rest on.
 impl Default for Shown {
     fn default() -> Self {
         Self::all(false)
@@ -53,6 +64,7 @@ impl Shown {
             history: on,
             current: on,
             buttons: on,
+            picture: true,
         }
     }
 
@@ -75,6 +87,9 @@ pub struct ViewerView {
     last_sample: Option<Instant>,
     /// Per device and button or hat index: how it is shown.
     lit: HashMap<(String, Lit), Shine>,
+    pictures: DevicePictures,
+    /// Per device: where each axis was and when it last moved (for lighting it on the picture).
+    moved: HashMap<String, ([f32; 8], [Option<Instant>; 8])>,
 }
 
 /// A button or hat as the viewer shows it.
@@ -160,6 +175,10 @@ impl ViewerView {
             return toggle;
         }
 
+        let mapped: HashMap<String, Mapped> = devices
+            .iter()
+            .filter_map(|d| Some((d.info.guid.clone(), self.pictures.plugin_for(&d.info)?)))
+            .collect();
         egui::Panel::left("viewer-devices")
             .resizable(true)
             .default_size(230.0)
@@ -181,6 +200,12 @@ impl ViewerView {
                             .id_salt(&d.info.guid)
                             .default_open(true)
                             .show(ui, |ui| {
+                                if mapped.contains_key(&d.info.guid) {
+                                    ui.add(style::switch(
+                                        &mut shown.picture,
+                                        i18n.tr("viewer-picture"),
+                                    ));
+                                }
                                 ui.add(style::switch(
                                     &mut shown.history,
                                     i18n.tr("viewer-history"),
@@ -206,6 +231,12 @@ impl ViewerView {
                     let shown = self.shown.get(&d.info.guid).copied().unwrap_or_default();
                     let name = d.info.name.trim();
                     let names = Names::of(i18n, &d.info);
+                    if shown.picture
+                        && let Some(mapped) = mapped.get(&d.info.guid)
+                    {
+                        section(ui, &format!("{name} · {}", i18n.tr("viewer-picture")));
+                        self.picture(ui, d, mapped);
+                    }
                     if shown.history && !d.info.axes.is_empty() {
                         section(ui, &format!("{name} · {}", i18n.tr("viewer-history")));
                         let samples = self.history.get(&d.info.guid);
@@ -245,6 +276,95 @@ impl ViewerView {
             })
             .collect();
         (buttons, hats)
+    }
+
+    /// The device's pictures with its controls drawn on them, lit as they are worked; the
+    /// control under the pointer shows its name.
+    fn picture(&mut self, ui: &mut egui::Ui, d: &DeviceState, mapped: &Mapped) {
+        let (buttons, hats) = self.lit_state(d);
+        let now = Instant::now();
+        let (at, moved) = self
+            .moved
+            .entry(d.info.guid.clone())
+            .or_insert((d.axes, [None; 8]));
+        for i in 0..8 {
+            if (d.axes[i] - at[i]).abs() > AXIS_STEP {
+                at[i] = d.axes[i];
+                moved[i] = Some(now);
+            }
+        }
+        let moving: [bool; 8] = moved.map(|t| t.is_some_and(|t| now - t < AXIS_LIT));
+        // Taps stay lit a moment, as in the button grid.
+        let mut shown = d.clone();
+        shown.buttons = buttons;
+        shown.hats = hats;
+        let live = |input: gob_devices::Input| gob_devices::draw::Live {
+            lit: match input {
+                gob_devices::Input::Axis(slot) => {
+                    moving.get(usize::from(slot).wrapping_sub(1)) == Some(&true)
+                }
+                _ => gob_devices::is_active(&shown, input),
+            },
+            value: gob_devices::axis_value(&shown, input),
+        };
+        let dark = ui.visuals().dark_mode;
+        let pal = gob_devices::draw::Pal::new(ui.visuals(), style::accent(ui));
+        for view in &mapped.views {
+            let Some((texture, size)) = self.pictures.picture(ui.ctx(), &mapped.id, view, dark)
+            else {
+                continue;
+            };
+            let width = ui.available_width();
+            let scale = (width / size.x)
+                .min(PICTURE_HEIGHT / size.y)
+                .min(PICTURE_ZOOM);
+            let (rect, response) =
+                ui.allocate_exact_size(Vec2::new(width, size.y * scale), Sense::hover());
+            let picture = Rect::from_center_size(rect.center(), size * scale);
+            let painter = ui.painter_at(rect);
+            painter.image(
+                texture.id(),
+                picture,
+                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                Color32::WHITE,
+            );
+            let to_screen = |at: [f32; 2]| picture.min + Vec2::new(at[0], at[1]) * scale;
+            let pointer = response.hover_pos();
+            let hovered = pointer.and_then(|p| {
+                mapped
+                    .controls
+                    .iter()
+                    .filter(|c| c.view == *view)
+                    .map(|c| (c, to_screen(c.at).distance(p)))
+                    .filter(|(c, d)| *d <= gob_devices::draw::reach(c))
+                    .min_by(|a, b| a.1.total_cmp(&b.1))
+                    .map(|(c, _)| c.id.clone())
+            });
+            for c in mapped.controls.iter().filter(|c| c.view == *view) {
+                let strong = hovered.as_deref() == Some(c.id.as_str());
+                gob_devices::draw::control(
+                    &painter,
+                    &pal,
+                    c,
+                    &mapped.inputs,
+                    to_screen(c.at),
+                    None,
+                    strong,
+                    None,
+                    &live,
+                );
+            }
+            if let Some(c) = hovered
+                .as_deref()
+                .and_then(|id| mapped.controls.iter().find(|c| c.id == id))
+            {
+                let above = to_screen(c.at) - Vec2::new(0.0, gob_devices::draw::reach(c) + 14.0);
+                gob_devices::draw::caption(&painter, &pal, above, &c.name);
+            }
+        }
+        if let Some(credit) = &mapped.credit {
+            ui.label(RichText::new(credit).weak().small());
+        }
     }
 
     fn now(&mut self) -> f64 {

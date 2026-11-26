@@ -2048,6 +2048,7 @@ version = "0.6.0"
 name = "gob-devices"
 version = "0.6.0"
 dependencies = [
+ "egui 0.37.0",
  "gob-core",
  "gob-input",
  "resvg",
@@ -2643,6 +2644,7 @@ dependencies = [
  "eframe",
  "futures-util",
  "gob-core",
+ "gob-devices",
  "gob-engine",
  "gob-export",
  "gob-gremlin",

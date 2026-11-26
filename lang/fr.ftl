@@ -672,6 +672,7 @@ update-debug = Les versions de débogage ne se mettent pas à jour
 update-install-error = Impossible d’installer la mise à jour : { $error }
 
 # Input viewer
+viewer-picture = Image
 viewer-history = Axes dans le temps
 viewer-current = Axes maintenant
 viewer-buttons = Boutons et chapeaux

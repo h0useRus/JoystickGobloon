@@ -672,6 +672,7 @@ update-debug = Las versiones de depuración no se actualizan
 update-install-error = No se pudo instalar la actualización: { $error }
 
 # Input viewer
+viewer-picture = Imagen
 viewer-history = Ejes a lo largo del tiempo
 viewer-current = Ejes ahora
 viewer-buttons = Botones y crucetas
