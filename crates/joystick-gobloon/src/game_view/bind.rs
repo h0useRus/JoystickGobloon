@@ -144,7 +144,8 @@ pub(super) fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<
 /// How the pressed input's `bindings` reach output `o` ("Long press"), empty for a plain
 /// mapping: tells apart several outputs of one control.
 pub(super) fn route_of(ctx: &Context, i18n: &I18n, bindings: &[usize], o: &GameOutput) -> String {
-    let uses: Vec<gob_core::OutputUse> = match o {
+    // A game's long or double press comes from what writes its button.
+    let uses: Vec<gob_core::OutputUse> = match o.base() {
         GameOutput::Virtual(v) | GameOutput::HatDirection(v, _) => {
             ctx.profile.output_usage(None).remove(v).unwrap_or_default()
         }
@@ -155,6 +156,7 @@ pub(super) fn route_of(ctx: &Context, i18n: &I18n, bindings: &[usize], o: &GameO
             .find(|(k, _)| k == c)
             .map(|(_, u)| u)
             .unwrap_or_default(),
+        GameOutput::Pressed(..) => Vec::new(),
     };
     let mut labels: Vec<String> = Vec::new();
     for u in uses.iter().filter(|u| bindings.contains(&u.binding)) {
