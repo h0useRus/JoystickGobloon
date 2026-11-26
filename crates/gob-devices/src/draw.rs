@@ -214,8 +214,9 @@ pub fn gauge(
     if part == Part::Lit {
         painter.rect_filled(rect.expand(6.0), 8, pal.accent.gamma_multiply(0.3));
     }
+    // Selected or hovered: a green rim (no white outline).
     let ring = if strong {
-        Stroke::new(2.0, pal.strong)
+        Stroke::new(2.0, pal.accent)
     } else {
         Stroke::new(1.0, Color32::BLACK.gamma_multiply(0.6))
     };
@@ -241,10 +242,6 @@ pub fn gauge(
             y.min(inner.center().y)..=y.max(inner.center().y),
         );
         painter.rect_filled(bar, 3, fill);
-        painter.line_segment(
-            [Pos2::new(inner.left(), y), Pos2::new(inner.right(), y)],
-            Stroke::new(2.0, Color32::WHITE),
-        );
     }
 }
 
