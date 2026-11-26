@@ -20,6 +20,10 @@ panel-copy = 更改保存在您的副本中：{ $path }
 dock-hint = 按下控制器上的按钮或移动轴或苦力帽：它的编号会出现在这里，把它拖到图片中该控件所在的位置
 dock-drag = 拖到图片中该控件所在的位置；右键单击可丢弃
 tag-remove = 从图片中移除
+tag-make-hat = 设为苦力帽
+tag-split = 拆开
+part-push = 按下
+part-twist = 扭转
 panel-empty = 尚未放置任何内容
 
 control-name = 名称

@@ -20,6 +20,10 @@ panel-copy = Los cambios van a tu copia en { $path }
 dock-hint = Pulsa un botón o mueve un eje o un hat del mando: su número aparece aquí, arrástralo al lugar de la imagen donde está ese control
 dock-drag = Arrastra al lugar de la imagen donde está este control; clic derecho para descartarlo
 tag-remove = Quitar de la imagen
+tag-make-hat = Convertir en hat
+tag-split = Separar
+part-push = Pulsar
+part-twist = Giro
 panel-empty = Aún no hay nada colocado
 
 control-name = Nombre

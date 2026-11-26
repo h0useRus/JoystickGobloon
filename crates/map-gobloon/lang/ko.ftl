@@ -20,6 +20,10 @@ panel-copy = 변경 내용은 사용자 사본에 저장됩니다: { $path }
 dock-hint = 컨트롤러의 버튼을 누르거나 축이나 햇을 움직이세요. 여기에 번호가 나타나면 그 컨트롤이 있는 그림 위치로 끌어다 놓으세요
 dock-drag = 이 컨트롤이 있는 그림 위치로 끌어다 놓으세요. 오른쪽 클릭하면 버립니다
 tag-remove = 그림에서 제거
+tag-make-hat = 햇으로 만들기
+tag-split = 나누기
+part-push = 누르기
+part-twist = 비틀기
 panel-empty = 아직 배치된 것이 없습니다
 
 control-name = 이름

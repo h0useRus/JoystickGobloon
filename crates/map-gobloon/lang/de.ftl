@@ -20,6 +20,10 @@ panel-copy = Änderungen gehen in deine Kopie in { $path }
 dock-hint = Drücke eine Taste oder bewege eine Achse oder einen Hat am Controller: Ihre Nummer erscheint hier, ziehe sie auf die Stelle im Bild, wo das Bedienelement ist
 dock-drag = Auf die Stelle im Bild ziehen, wo dieses Bedienelement ist; Rechtsklick verwirft sie
 tag-remove = Aus dem Bild entfernen
+tag-make-hat = Zum Hat machen
+tag-split = Aufteilen
+part-push = Drücken
+part-twist = Drehen
 panel-empty = Noch nichts platziert
 
 control-name = Name

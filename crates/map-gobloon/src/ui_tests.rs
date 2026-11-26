@@ -217,3 +217,63 @@ fn new_device_from_a_picture() {
     );
     assert_eq!(store.brands(), ["Acme Sim", "Sample"]);
 }
+
+/// Where `part` of group `id` opens while something is dragged near it.
+fn slot(h: &Harness<'_, MapApp>, id: &str, offset: Vec2) -> Pos2 {
+    let at = h.state().plugin().unwrap().control(id).unwrap().at;
+    spot(h, at) + offset * 32.0
+}
+
+#[test]
+fn a_button_becomes_a_hat_filled_by_dragging() {
+    let f = Folders::new("hat");
+    let mut app = app(&f);
+    app.note(Input::Button(7));
+    app.place(Input::Button(7), [80.0, 40.0], 100.0);
+    app.make_hat("button_7");
+    let hat = f.manifest().controls.into_iter().last().unwrap();
+    assert_eq!((hat.id.as_str(), hat.kind), ("hat_2", Kind::Hat));
+    // Its own button waits to go onto its direction.
+    assert_eq!(app.pending, [Input::Button(7)]);
+    app.note(Input::Button(8));
+    // A button placed elsewhere goes in too.
+    app.place(Input::Button(8), [10.0, 90.0], 100.0);
+    let mut h = harness(app);
+    let from = h.state().layout.pending(Input::Button(7)).unwrap();
+    let to = slot(&h, "hat_2", Vec2::new(-1.0, 0.0));
+    drag(&mut h, from, to);
+    let from = spot(&h, [10.0, 90.0]);
+    let to = slot(&h, "hat_2", Vec2::ZERO);
+    drag(&mut h, from, to);
+    let inputs = f.inputs();
+    assert_eq!(inputs.get("hat_2", "left"), Some(Input::Button(7)));
+    assert_eq!(inputs.get("hat_2", "push"), Some(Input::Button(8)));
+    assert!(f.manifest().controls.iter().all(|c| c.id != "button_8"));
+    assert!(h.state().pending.is_empty());
+    // Split up, its buttons wait again.
+    h.state_mut().split("hat_2");
+    assert_eq!(h.state().pending, [Input::Button(7), Input::Button(8)]);
+}
+
+#[test]
+fn an_axis_dropped_on_an_axis_makes_a_stick() {
+    let f = Folders::new("stick");
+    let mut app = app(&f);
+    app.note(Input::Axis(4));
+    app.place(Input::Axis(4), [85.0, 50.0], 100.0);
+    app.note(Input::Axis(5));
+    let mut h = harness(app);
+    let from = h.state().layout.pending(Input::Axis(5)).unwrap();
+    let to = slot(&h, "axis_rx", Vec2::new(0.0, 1.0));
+    drag(&mut h, from, to);
+    let manifest = f.manifest();
+    let stick = manifest
+        .controls
+        .iter()
+        .find(|c| c.id == "axis_rx")
+        .unwrap();
+    assert_eq!((stick.kind, stick.name.as_str()), (Kind::Stick, "Stick"));
+    let inputs = f.inputs();
+    assert_eq!(inputs.get("axis_rx", "x"), Some(Input::Axis(4)));
+    assert_eq!(inputs.get("axis_rx", "y"), Some(Input::Axis(5)));
+}

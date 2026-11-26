@@ -1,18 +1,25 @@
 //! The picture with a numbered tag per placed input, and the inputs waiting to be placed in its
 //! top left corner: each is dragged to the spot of the picture where its control is. Placed tags
-//! are dragged to move them, clicked to select them, right-clicked to take them off again.
+//! are dragged to move them, clicked to select them, right-clicked for their menu. Buttons go
+//! into hats made of buttons (a button's menu makes one) and axes into other axes (they become a
+//! stick): dragged near such a group, it opens a slot per part to drop onto. Axes are square.
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
-use gob_devices::Control;
+use gob_devices::{Control, Input, Kind};
 use gob_ui as style;
 use style::icon;
 
-use crate::app::MapApp;
+use crate::app::{HAT_PARTS, MapApp, STICK_PARTS};
 
 /// Tag radius, in screen points.
 const TAG: f32 = 12.0;
 /// Room per waiting number in the corner.
 const SLOT: f32 = 44.0;
+/// How near a dragged input has to come to a group (hat of buttons, stick of axes) to open it.
+const REACH: f32 = 56.0;
+/// Distance of a group's part slots from its tag, and their radius.
+const GROUP_GAP: f32 = 32.0;
+const GROUP_SLOT: f32 = 12.0;
 
 impl MapApp {
     pub fn canvas(&mut self, ui: &mut egui::Ui) {
@@ -90,21 +97,102 @@ impl MapApp {
         };
         let near = pointer.and_then(near_at);
 
+        // What is being dragged: a waiting number, or a placed tag with one input. Either can
+        // go into a group: a button into a hat of buttons, an axis into another axis or a stick.
+        let dragged_tag = self.moving.as_ref().and_then(|(id, _)| {
+            let (_, c) = controls.iter().find(|(_, c)| c.id == *id)?;
+            match self.inputs_of(c)[..] {
+                [input] => Some((id.clone(), input)),
+                _ => None,
+            }
+        });
+        let dragged = self
+            .pending
+            .iter()
+            .copied()
+            .find(|i| ctx.is_being_dragged(egui::Id::unique(("pending", *i))))
+            .or(dragged_tag.as_ref().map(|(_, i)| *i));
+        let skip = dragged_tag.as_ref().map(|(id, _)| id.clone());
+        // The group the pointer is at while dragging `input`, and the part under it.
+        // What each control takes: (control, parts for a button, parts for an axis).
+        type Parts = Option<&'static [&'static str]>;
+        let groups: Vec<(Control, Parts, Parts)> = controls
+            .iter()
+            .filter(|(_, c)| Some(&c.id) != skip.as_ref())
+            .map(|(_, c)| {
+                let button = self.group_parts(c, Input::Button(1));
+                (c.clone(), button, self.group_parts(c, Input::Axis(1)))
+            })
+            .collect();
+        let group_at = |p: Pos2, input: Input| -> Option<(Control, Option<&'static str>)> {
+            let (group, parts) = groups
+                .iter()
+                .filter_map(|(c, button, axis)| {
+                    let parts = if matches!(input, Input::Axis(_)) {
+                        axis
+                    } else {
+                        button
+                    };
+                    Some((c, (*parts)?))
+                })
+                .map(|(c, parts)| (c, parts, to_screen(c.at).distance(p)))
+                .filter(|(_, _, d)| *d <= REACH)
+                .min_by(|a, b| a.2.total_cmp(&b.2))
+                .map(|(c, parts, _)| (c, parts))?;
+            let center = to_screen(group.at);
+            let part = parts.iter().copied().find(|part| {
+                (center + slot_offset(part) * GROUP_GAP).distance(p) <= GROUP_SLOT + 3.0
+            });
+            Some((group.clone(), part))
+        };
+        let target = pointer
+            .zip(dragged)
+            .and_then(|(p, input)| Some((group_at(p, input)?, input)));
+
         let accent = style::accent(ui);
         let visuals = ui.visuals().clone();
         for (n, c) in &controls {
+            let at = to_screen(spot(c));
+            let open = target
+                .as_ref()
+                .filter(|((g, _), _)| g.id == c.id)
+                .map(|((_, part), input)| (*part, *input));
+            if let Some((part, input)) = open {
+                let parts = self.group_parts(c, input).unwrap_or(&[]);
+                self.draw_slots(&painter, &visuals, accent, c, at, parts, part);
+                continue;
+            }
             let lit = self.inputs_of(c).into_iter().any(|i| self.is_lit(i));
             let selected = self.selected.as_deref() == Some(c.id.as_str());
             let hovered = near.as_ref().is_some_and(|(m, _)| m == n);
+            let shape = if MapApp::is_axis(c) {
+                Shape::Square
+            } else {
+                Shape::Round
+            };
             draw_tag(
                 &painter,
                 &visuals,
                 accent,
-                to_screen(spot(c)),
+                at,
                 *n,
                 lit,
                 selected || hovered,
+                shape,
             );
+            if self.is_button_hat(c) {
+                self.draw_dots(&painter, accent, c, at, &HAT_PARTS[..4]);
+            } else if c.kind == Kind::Stick {
+                self.draw_dots(&painter, accent, c, at, &STICK_PARTS);
+            }
+        }
+        if let Some(((group, part), _)) = &target {
+            let caption = match part {
+                Some(part) => format!("{} {}", group.name, self.part_label(part)),
+                None => group.name.clone(),
+            };
+            let at = to_screen(group.at) + Vec2::new(0.0, -GROUP_GAP - GROUP_SLOT - 16.0);
+            caption_at(&painter, &visuals, at, &caption);
         }
 
         // The waiting numbers, in the corner; dragged onto the picture to place them.
@@ -119,6 +207,10 @@ impl MapApp {
                 FontId::proportional(13.0),
                 visuals.weak_text_color(),
             );
+        }
+        enum Drop {
+            New(Input, [f32; 2]),
+            Part(Input, String, &'static str),
         }
         let mut dropped = None;
         for (k, input) in pending.iter().enumerate() {
@@ -148,7 +240,12 @@ impl MapApp {
             } else {
                 painter.clone()
             };
-            draw_tag(&on_top, &visuals, accent, at, n, lit, true);
+            let shape = if matches!(input, Input::Axis(_)) {
+                Shape::Square
+            } else {
+                Shape::Round
+            };
+            draw_tag(&on_top, &visuals, accent, at, n, lit, true, shape);
             on_top.text(
                 at + Vec2::new(0.0, TAG + 8.0),
                 Align2::CENTER_CENTER,
@@ -158,20 +255,27 @@ impl MapApp {
             );
             if r.drag_stopped()
                 && let Some(p) = pointer
-                && picture.contains(p)
             {
-                dropped = Some((*input, to_picture(p)));
+                dropped = match group_at(p, *input) {
+                    Some((group, Some(part))) => Some(Drop::Part(*input, group.id, part)),
+                    Some((_, None)) => None,
+                    None => picture
+                        .contains(p)
+                        .then(|| Drop::New(*input, to_picture(p))),
+                };
             }
             if r.secondary_clicked() {
                 self.pending.retain(|i| i != input);
             }
         }
-        if let Some((input, at)) = dropped {
-            self.place(input, at, size.x);
-            return;
+        match dropped {
+            Some(Drop::New(input, at)) => return self.place(input, at, size.x),
+            Some(Drop::Part(input, group, part)) => return self.place_part(input, &group, part),
+            None => {}
         }
 
-        // Moving and selecting placed tags; a tag moves from where the button went down.
+        // Moving and selecting placed tags; a tag moves from where the button went down, and a
+        // tag with one input dropped on a group's part goes into the group.
         let pressed_on = ui.input(|i| i.pointer.press_origin()).and_then(near_at);
         if response.drag_started()
             && let Some((_, c)) = &pressed_on
@@ -186,11 +290,22 @@ impl MapApp {
         }
         if response.drag_stopped()
             && let Some((id, at)) = self.moving.take()
-            && let Some(mut c) = self.plugin().and_then(|pl| pl.control(&id)).cloned()
-            && c.at != at
         {
-            c.at = [at[0].round(), at[1].round()];
-            self.put_control(&id, c);
+            let into = pointer
+                .zip(dragged_tag.as_ref().filter(|(t, _)| *t == id))
+                .and_then(|(p, (_, input))| group_at(p, *input));
+            match into {
+                Some((group, Some(part))) => self.merge_into(&id, &group.id, part),
+                Some((_, None)) => {}
+                None => {
+                    if let Some(mut c) = self.plugin().and_then(|pl| pl.control(&id)).cloned()
+                        && c.at != at
+                    {
+                        c.at = [at[0].round(), at[1].round()];
+                        self.put_control(&id, c);
+                    }
+                }
+            }
         }
         if response.clicked() {
             self.selected = near.as_ref().map(|(_, c)| c.id.clone());
@@ -209,19 +324,155 @@ impl MapApp {
                 &c.name,
             );
         }
-        if self.menu.is_some() {
+        if let Some(id) = self.menu.clone() {
+            let control = controls
+                .iter()
+                .find(|(_, c)| c.id == id)
+                .map(|(_, c)| c.clone());
             response.context_menu(|ui| {
-                if ui.button(self.i18n.tr("tag-remove")).clicked()
-                    && let Some(id) = self.menu.take()
-                {
+                if let Some(c) = &control {
+                    if c.kind == Kind::Button && ui.button(self.i18n.tr("tag-make-hat")).clicked() {
+                        self.make_hat(&c.id);
+                        self.menu = None;
+                        ui.close();
+                    }
+                    if (self.is_button_hat(c) || c.kind == Kind::Stick)
+                        && ui.button(self.i18n.tr("tag-split")).clicked()
+                    {
+                        self.split(&c.id);
+                        self.menu = None;
+                        ui.close();
+                    }
+                }
+                if ui.button(self.i18n.tr("tag-remove")).clicked() {
                     self.delete_control(&id);
+                    self.menu = None;
                     ui.close();
                 }
             });
         }
     }
+
+    /// A group opened while something is dragged near it: a big slot per part to drop onto
+    /// (filled when it has its input), the one under the pointer highlighted.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_slots(
+        &self,
+        painter: &egui::Painter,
+        visuals: &egui::Visuals,
+        accent: Color32,
+        c: &Control,
+        at: Pos2,
+        parts: &[&str],
+        over: Option<&str>,
+    ) {
+        let inputs = self
+            .plugin()
+            .map(|p| p.defaults.clone())
+            .unwrap_or_default();
+        let own = self.inputs_of(c);
+        for part in parts {
+            let center = at + slot_offset(part) * GROUP_GAP;
+            let over = over == Some(*part);
+            // A single axis about to become a stick: its axis shows on X.
+            let filled = inputs.get(&c.id, part).is_some()
+                || (c.kind == Kind::Axis && *part == "x" && !own.is_empty());
+            let fill = if over {
+                accent
+            } else if filled {
+                accent.gamma_multiply(0.45)
+            } else {
+                visuals.extreme_bg_color
+            };
+            painter.circle_filled(center, GROUP_SLOT, fill);
+            painter.circle_stroke(center, GROUP_SLOT, Stroke::new(1.5, accent));
+            let color = if over {
+                visuals.extreme_bg_color
+            } else {
+                visuals.strong_text_color()
+            };
+            painter.text(
+                center,
+                Align2::CENTER_CENTER,
+                slot_glyph(part),
+                FontId::proportional(12.0),
+                color,
+            );
+        }
+    }
+
+    /// Small dots around a group's tag, one per part: filled when it has its input, lit while
+    /// it is worked.
+    fn draw_dots(
+        &self,
+        painter: &egui::Painter,
+        accent: Color32,
+        c: &Control,
+        at: Pos2,
+        parts: &[&str],
+    ) {
+        let inputs = self
+            .plugin()
+            .map(|p| p.defaults.clone())
+            .unwrap_or_default();
+        for part in parts {
+            let center = at + slot_offset(part) * (TAG + 6.0);
+            let input = inputs.get(&c.id, part);
+            if input.is_some_and(|i| self.is_lit(i)) {
+                painter.circle_filled(center, 7.0, accent.gamma_multiply(0.5));
+            }
+            if input.is_some() {
+                painter.circle_filled(center, 3.5, accent);
+            } else {
+                painter.circle_stroke(center, 3.5, Stroke::new(1.2, accent));
+            }
+        }
+    }
+
+    /// A part's caption: arrows for directions, letters for axes.
+    fn part_label(&self, part: &str) -> String {
+        match part {
+            "push" => self.i18n.tr("part-push"),
+            "twist" => self.i18n.tr("part-twist"),
+            other => slot_glyph(other).into(),
+        }
+    }
 }
 
+/// Where a group's part sits around its tag (unit offset; push in the middle).
+fn slot_offset(part: &str) -> Vec2 {
+    let d = std::f32::consts::FRAC_1_SQRT_2;
+    match part {
+        "up" => Vec2::new(0.0, -1.0),
+        "right" | "x" => Vec2::new(1.0, 0.0),
+        "down" | "y" => Vec2::new(0.0, 1.0),
+        "left" => Vec2::new(-1.0, 0.0),
+        "twist" => Vec2::new(-d, -d),
+        _ => Vec2::ZERO,
+    }
+}
+
+fn slot_glyph(part: &str) -> &'static str {
+    match part {
+        "up" => icon::ARROW_UP,
+        "right" => icon::ARROW_RIGHT,
+        "down" => icon::ARROW_DOWN,
+        "left" => icon::ARROW_LEFT,
+        "x" => "X",
+        "y" => "Y",
+        "twist" => icon::ARROWS_CLOCKWISE,
+        _ => icon::CIRCLE,
+    }
+}
+
+/// How a tag looks: round for buttons and hats, square for axes.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Shape {
+    Round,
+    Square,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn draw_tag(
     painter: &egui::Painter,
     visuals: &egui::Visuals,
@@ -230,17 +481,30 @@ fn draw_tag(
     n: usize,
     lit: bool,
     strong: bool,
+    shape: Shape,
 ) {
-    if lit {
-        painter.circle_filled(at, TAG + 7.0, accent.gamma_multiply(0.45));
-    }
-    painter.circle_filled(at, TAG, accent);
     let ring = if strong {
         Stroke::new(2.5, visuals.strong_text_color())
     } else {
         Stroke::new(1.5, Color32::from_rgba_unmultiplied(255, 255, 255, 200))
     };
-    painter.circle_stroke(at, TAG, ring);
+    match shape {
+        Shape::Round => {
+            if lit {
+                painter.circle_filled(at, TAG + 7.0, accent.gamma_multiply(0.45));
+            }
+            painter.circle_filled(at, TAG, accent);
+            painter.circle_stroke(at, TAG, ring);
+        }
+        Shape::Square => {
+            let rect = Rect::from_center_size(at, Vec2::splat(TAG * 2.0));
+            if lit {
+                painter.rect_filled(rect.expand(7.0), 6.0, accent.gamma_multiply(0.45));
+            }
+            let fill = Color32::from_rgb(0x4a, 0xa8, 0xe0);
+            painter.rect(rect, 4.0, fill, ring, egui::StrokeKind::Middle);
+        }
+    }
     painter.text(
         at,
         Align2::CENTER_CENTER,

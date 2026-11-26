@@ -20,6 +20,10 @@ panel-copy = Les modifications vont dans votre copie : { $path }
 dock-hint = Appuyez sur un bouton ou bougez un axe ou un chapeau du contrôleur : son numéro apparaît ici, faites-le glisser à l'endroit de l'image où se trouve cette commande
 dock-drag = Faites glisser à l'endroit de l'image où se trouve cette commande ; clic droit pour l'écarter
 tag-remove = Retirer de l'image
+tag-make-hat = En faire un chapeau
+tag-split = Séparer
+part-push = Appui
+part-twist = Rotation
 panel-empty = Rien n'est encore placé
 
 control-name = Nom

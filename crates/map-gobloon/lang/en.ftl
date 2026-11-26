@@ -20,6 +20,10 @@ panel-copy = Changes go to your copy in { $path }
 dock-hint = Press a button or move an axis or hat on the controller: its number appears here, drag it onto the picture where that control is
 dock-drag = Drag onto the picture where this control is; right-click to drop it
 tag-remove = Remove from the picture
+tag-make-hat = Make it a hat
+tag-split = Split it up
+part-push = Push
+part-twist = Twist
 panel-empty = Nothing placed yet
 
 control-name = Name

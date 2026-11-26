@@ -20,6 +20,11 @@ use crate::dialogs::NewDevice;
 use crate::settings::{Own, Shared, Theme};
 use crate::store::Store;
 
+/// The parts of a hat made of buttons.
+pub const HAT_PARTS: [&str; 5] = ["up", "right", "down", "left", "push"];
+/// The parts of a stick made of axes.
+pub const STICK_PARTS: [&str; 3] = ["x", "y", "twist"];
+
 /// How long an axis' tag stays lit after the axis moved.
 pub const AXIS_LIT: Duration = Duration::from_millis(700);
 
@@ -395,6 +400,147 @@ impl MapApp {
         self.report(result);
         self.pending.retain(|i| *i != input);
         self.selected = Some(id);
+    }
+
+    /// Turns control `id` (a button) into a hat of buttons: up, right, down, left and push to
+    /// fill by dragging numbers onto them. Its own input waits to be dragged onto its direction.
+    pub fn make_hat(&mut self, id: &str) {
+        let Some(plugin) = self.plugin() else {
+            return;
+        };
+        let Some(old) = plugin.control(id).cloned() else {
+            return;
+        };
+        let plugin_id = plugin.id().to_string();
+        let own = self.inputs_of(&old);
+        let mut new_id = "hat".to_string();
+        let mut n = 2;
+        while plugin.control(&new_id).is_some() {
+            new_id = format!("hat_{n}");
+            n += 1;
+        }
+        let hat = Control {
+            id: new_id.clone(),
+            name: format!("Hat {}", n - 1),
+            kind: Kind::Hat,
+            parts: Some(HAT_PARTS.map(String::from).to_vec()),
+            look: None,
+            ..old
+        };
+        let mut inputs = plugin.defaults.clone();
+        inputs.clear(id, "");
+        let result = self
+            .store
+            .edit_manifest(&plugin_id, |text| {
+                gob_devices::edit::set_control(text, id, &hat)
+            })
+            .and_then(|()| self.store.save_inputs(&plugin_id, &inputs));
+        self.report(result);
+        for input in own.into_iter().rev() {
+            self.pending.retain(|i| *i != input);
+            self.pending.insert(0, input);
+        }
+        self.selected = Some(new_id);
+    }
+
+    /// Takes a group (a hat of buttons, a stick of axes) apart: its inputs wait to be placed
+    /// again, the group goes.
+    pub fn split(&mut self, id: &str) {
+        let Some(control) = self.plugin().and_then(|p| p.control(id)).cloned() else {
+            return;
+        };
+        let own = self.inputs_of(&control);
+        self.delete_control(id);
+        for input in own.into_iter().rev() {
+            self.pending.retain(|i| *i != input);
+            self.pending.insert(0, input);
+        }
+    }
+
+    /// Puts `input` on `part` of group `group` (off wherever it was before). A single axis
+    /// becomes a stick: its own axis takes the first other part. An input that was on that part
+    /// waits to be placed again.
+    pub fn place_part(&mut self, input: Input, group: &str, part: &str) {
+        let Some(plugin) = self.plugin() else {
+            return;
+        };
+        let Some(control) = plugin.control(group).cloned() else {
+            return;
+        };
+        let plugin_id = plugin.id().to_string();
+        let mut inputs = plugin.defaults.clone();
+        let mut back = Vec::new();
+        if control.kind == Kind::Axis {
+            let own = self.inputs_of(&control);
+            inputs.clear(group, "");
+            let stick = Control {
+                kind: Kind::Stick,
+                parts: Some(STICK_PARTS.map(String::from).to_vec()),
+                name: if control.name.starts_with("Axis ") {
+                    "Stick".into()
+                } else {
+                    control.name.clone()
+                },
+                ..control.clone()
+            };
+            let result = self.store.edit_manifest(&plugin_id, |text| {
+                gob_devices::edit::set_control(text, group, &stick)
+            });
+            self.report(result);
+            if let Some(old) = own.first().filter(|old| **old != input)
+                && let Some(free) = STICK_PARTS.into_iter().find(|p| *p != part)
+            {
+                inputs.set(group, free, *old);
+            }
+        } else if let Some(previous) = inputs.get(group, part).filter(|p| *p != input) {
+            back.push(previous);
+        }
+        inputs.remove_input(input);
+        inputs.set(group, part, input);
+        let result = self.store.save_inputs(&plugin_id, &inputs);
+        self.report(result);
+        self.pending.retain(|i| *i != input);
+        for previous in back {
+            self.pending.insert(0, previous);
+        }
+        self.selected = Some(group.to_string());
+    }
+
+    /// Moves placed control `from` (one input) into `part` of group `group`; `from` goes.
+    pub fn merge_into(&mut self, from: &str, group: &str, part: &str) {
+        let Some(control) = self.plugin().and_then(|p| p.control(from)).cloned() else {
+            return;
+        };
+        let [input] = self.inputs_of(&control)[..] else {
+            return;
+        };
+        self.delete_control(from);
+        self.place_part(input, group, part);
+    }
+
+    /// Whether control `c` is a hat made of buttons (its directions filled one by one).
+    pub fn is_button_hat(&self, c: &Control) -> bool {
+        c.kind == Kind::Hat
+            && c.parts().len() > 1
+            && !matches!(
+                self.plugin().and_then(|p| p.defaults.0.get(&c.id)),
+                Some(gob_devices::Entry::One(_))
+            )
+    }
+
+    /// The parts of control `c` that `input` can be dropped into: a button into a hat of
+    /// buttons, an axis into another axis or a stick.
+    pub fn group_parts(&self, c: &Control, input: Input) -> Option<&'static [&'static str]> {
+        match input {
+            Input::Button(_) if self.is_button_hat(c) => Some(&HAT_PARTS),
+            Input::Axis(_) if matches!(c.kind, Kind::Axis | Kind::Stick) => Some(&STICK_PARTS),
+            _ => None,
+        }
+    }
+
+    /// Whether control `c` shows as an axis (a square tag).
+    pub fn is_axis(c: &Control) -> bool {
+        matches!(c.kind, Kind::Axis | Kind::Stick)
     }
 
     /// Writes `control` in place of control `old_id`.

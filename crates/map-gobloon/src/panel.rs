@@ -86,7 +86,7 @@ impl MapApp {
         ui.separator();
         // The name: written when the field is left.
         ui.horizontal(|ui| {
-            ui.label(self.i18n.tr("control-name"));
+            let label = ui.label(self.i18n.tr("control-name"));
             let text = match &mut self.name_edit {
                 Some((for_id, text)) if *for_id == control.id => text,
                 other => {
@@ -94,7 +94,9 @@ impl MapApp {
                     &mut other.as_mut().expect("just set").1
                 }
             };
-            let r = ui.add(style::text_field(text).desired_width(f32::INFINITY));
+            let r = ui
+                .add(style::text_field(text).desired_width(f32::INFINITY))
+                .labelled_by(label.id);
             if r.lost_focus() && !text.trim().is_empty() && text.trim() != control.name {
                 let mut c = control.clone();
                 c.name = text.trim().to_string();
@@ -103,6 +105,18 @@ impl MapApp {
             }
         });
         ui.add_space(style::SPACE_S);
+        ui.horizontal(|ui| {
+            if control.kind == gob_devices::Kind::Button
+                && ui.button(self.i18n.tr("tag-make-hat")).clicked()
+            {
+                self.make_hat(&control.id);
+            }
+            if (self.is_button_hat(&control) || control.kind == gob_devices::Kind::Stick)
+                && ui.button(self.i18n.tr("tag-split")).clicked()
+            {
+                self.split(&control.id);
+            }
+        });
         if style::icon_button_colored(
             ui,
             true,
