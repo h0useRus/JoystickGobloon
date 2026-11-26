@@ -7,7 +7,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
 - gob-ui + gob-i18n live in the shared repo h0useRus/gobloon-common-ui (also used by Keyboard Gobloon), taken by git tag
-  in `[workspace.dependencies]` (now `v0.4.0`); move the tag on purpose. Local work on both: clone it to
+  in `[workspace.dependencies]` (now `v0.5.0`); move the tag on purpose. Local work on both: clone it to
   `..\gobloon-common-ui`, rename the gitignored `.cargo/config.toml.off` to `config.toml` (a `[patch]` to its crates by
   path) and back when done; Cargo.lock changes while it is on, don't commit that. Its gallery example
   (`cargo run -p gob-ui --example gallery` there) shows every widget. egui upgrades start there; both apps move together.
@@ -154,13 +154,16 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `<aircraft>/<game id>`, `<device> {instance GUID}.diff.lua` per joystick + Keyboard.diff.lua via `luadata.parse/write`
   (Lua data without running it, sorted keys + tabs like the game); defaults = HTML less added plus removed; the game is not
   installed here, tested on made-up files in tests/data/dcs-world, the HTML format is a guess). A binding's output (gob-core game.rs
-  `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
+  `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`),
+  a button or hat direction may carry a press (`Press`: `vjoy:1:button:5@long` / `@double`; plugins list theirs in plugin.gob
+  `presses`, Star Citizen = activationMode delayed_press / double_tap, the capture dialog asks);
   keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
   plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,
   detaches like calibration): worker.rs (plugins on a worker thread), state.rs (one state per action: the profile set
   against the game's files), wiring.rs (schematic, a lane per output), table.rs ("As in the game": groups, chips), capture.rs
   + bind.rs (press a key/mouse button/joystick control to bind or look up; warning listing where a control is used; mapping
-  an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs). Releases put
+  an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs); device.rs = Controller tab (a connected controller's picture with the
+  actions per control through the profile, gob-ui `DevicePicture` callouts, `JOYSTICK_GOBLOON_TAB=game-device`). Releases put
   plugins/export (without `dev/`) into `export/` next to the exe (installer, portable zip, AppImage)
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; two engines (`Engine`, Settings > Voice, default Vosk): vosk.rs = libvosk 0.3.45 in grammar mode

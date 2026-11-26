@@ -3,6 +3,8 @@ name = "Star Citizen"
 version = "1.0.0"
 authors = ["Joystick Gobloon"]
 api = 1
+# The game binds a button held long (activationMode="delayed_press") or pressed twice apart.
+presses = ["long", "double"]
 
 [game]
 min = "4.10"

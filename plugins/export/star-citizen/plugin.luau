@@ -4,6 +4,8 @@
 -- Inputs as the game writes them: js<instance>_button<n>, js<n>_hat<h>_<up|right|down|left>,
 -- js<n>_<x|y|z|rotx|roty|rotz|slider1|slider2>, kb1_<key>, kb1_<key>+<key>, mo1_<button>;
 -- "js1_ " (a space) unbinds. A rebind on a device replaces the game's default on that device.
+-- A rebind's activationMode (or multiTap) says how it is pressed: delayed_press* and
+-- delayed_hold* = held long (our "@long"), double_tap* or multiTap="2" = pressed twice ("@double").
 -- Every vJoy device has the same product GUID, so the game tells them apart only by instance.
 
 local CHANNELS = { "LIVE", "PTU", "EPTU", "TECH-PREVIEW", "HOTFIX" }
@@ -220,6 +222,47 @@ local function from_input(input, output_of)
 	return nil
 end
 
+-- How a rebind is pressed: "long", "double" or nil (as the action says).
+local function press_of(rebind)
+	local mode = rebind.attrs.activationMode or ""
+	if string.match(mode, "^delayed_press") or string.match(mode, "^delayed_hold") then
+		return "long"
+	end
+	if string.match(mode, "^double_tap") or rebind.attrs.multiTap == "2" then
+		return "double"
+	end
+	return nil
+end
+
+-- The activationMode we write for a press.
+local MODES = { long = "delayed_press", double = "double_tap" }
+
+-- Makes a rebind pressed as `press` (nil: as the action says), keeping a mode it has already.
+local function set_press(rebind, press)
+	if press_of(rebind) == press then
+		return
+	end
+	rebind.attrs.activationMode = press and MODES[press] or nil
+	rebind.attrs.multiTap = nil
+end
+
+-- "vjoy:1:button:5@long" -> "vjoy:1:button:5", "long".
+local function split_press(output)
+	local base, press = string.match(output, "^(.-)@(%a+)$")
+	if base and MODES[press] then
+		return base, press
+	end
+	return output, nil
+end
+
+-- An input with its press, for the change list: "js1_button5 (long)".
+local function shown(input, press)
+	if press then
+		return input .. " (" .. press .. ")"
+	end
+	return input
+end
+
 local function is_vjoy(device)
 	return string.match(device.output, "^vjoy:%d+$") ~= nil
 end
@@ -304,6 +347,10 @@ plugin.read(function(ctx)
 				end
 				local output = from_input(input, output_of)
 				if output then
+					local press = press_of(rebind)
+					if press and not is_keys(output) then
+						output ..= "@" .. press
+					end
 					table.insert(binds, { action = id, output = output })
 				end
 			end
@@ -384,23 +431,29 @@ plugin.write(function(ctx)
 	for _, id in ctx.cleared or {} do
 		keyed[id] = true
 	end
-	local wanted = {}
+	local wanted, press_in = {}, {}
 	for _, b in ctx.binds do
 		if is_keys(b.output) then
 			keyed[b.action] = true
 		end
-		local input = to_input(b.output, js_of)
+		local base, press = split_press(b.output)
+		local input = to_input(base, js_of)
 		if input then
 			wanted[b.action] = wanted[b.action] or {}
 			table.insert(wanted[b.action], input)
+			press_in[b.action] = press_in[b.action] or {}
+			press_in[b.action][canon(input)] = press
 		end
+	end
+	local function press_for(id, input)
+		return press_in[id] and press_in[id][canon(input)]
 	end
 	local real, bound_on = {}, {}
 	for id, inputs in wanted do
 		local list = {}
 		bound_on[id] = {}
 		for _, input in inputs do
-			table.insert(list, canon(input))
+			table.insert(list, shown(canon(input), press_for(id, input)))
 			bound_on[id][device_of(input) or ""] = true
 		end
 		table.sort(list)
@@ -475,10 +528,13 @@ plugin.write(function(ctx)
 							in_file[id][dev] = true
 							if not is_unbind(input) then
 								old[id] = old[id] or {}
-								table.insert(old[id], canon(input))
-								-- An input that stays keeps its element (activationMode, multiTap).
+								table.insert(old[id], shown(canon(input), press_of(rebind)))
+								-- An input that stays keeps its element (activationMode, multiTap)
+								-- unless it is pressed another way now.
 								if not (want[id] and want[id][canon(input)]) then
 									xml.remove(action, rebind)
+								else
+									set_press(rebind, press_for(id, input))
 								end
 							elseif bound_on[id] and bound_on[id][dev] then
 								xml.remove(action, rebind)
@@ -512,7 +568,11 @@ plugin.write(function(ctx)
 					end
 					for _, input in wanted[id] do
 						if not have[canon(input)] then
-							xml.append(action, xml.element("rebind", { input = input }))
+							local press = press_for(id, input)
+							xml.append(
+								action,
+								xml.element("rebind", { input = input, activationMode = press and MODES[press] or nil }, { "input", "activationMode" })
+							)
 						end
 					end
 				end
@@ -587,7 +647,7 @@ plugin.write(function(ctx)
 					maps[map_name] = {}
 					table.insert(order, map_name)
 				end
-				table.insert(maps[map_name], { name = action_name, inputs = wanted[id] })
+				table.insert(maps[map_name], { id = id, name = action_name, inputs = wanted[id] })
 			end
 		end
 		for _, map_name in order do
@@ -595,7 +655,9 @@ plugin.write(function(ctx)
 			for _, a in maps[map_name] do
 				table.insert(out, '  <action name="' .. escape(a.name) .. '">')
 				for _, input in a.inputs do
-					table.insert(out, '   <rebind input="' .. escape(input) .. '"/>')
+					local press = press_for(a.id, input)
+					local mode = if press then ' activationMode="' .. MODES[press] .. '"' else ""
+					table.insert(out, '   <rebind input="' .. escape(input) .. '"' .. mode .. "/>")
 				end
 				table.insert(out, "  </action>")
 			end

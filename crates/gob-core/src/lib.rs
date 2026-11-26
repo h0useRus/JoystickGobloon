@@ -37,7 +37,9 @@ pub use edit::{NewAction, child_groups, new_uuid};
 pub use events::{
     EVENT_INPUT_TYPE, EVENTS_GUID, ProfileEvent, is_builtin_device, is_event_binding,
 };
-pub use game::{Combo, ComboPart, GameBind, GameBindings, GameDevice, GameOutput, HatDirection};
+pub use game::{
+    Combo, ComboPart, GameBind, GameBindings, GameDevice, GameOutput, HatDirection, Press,
+};
 pub use logical::{
     KEYBOARD_GUID, LOGICAL_DEVICE_GUID, LogicalInput, key_from_input_id, key_input_id,
 };

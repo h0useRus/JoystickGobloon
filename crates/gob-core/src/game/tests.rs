@@ -121,3 +121,26 @@ fn keys_are_the_games_until_set() {
     p.set_game_keys("g", "eject", None);
     assert!(p.game_bindings.is_empty());
 }
+
+#[test]
+fn long_and_double_presses() {
+    let long = GameOutput::parse("vjoy:1:button:5@long").unwrap();
+    assert_eq!(long.press(), Some(crate::Press::Long));
+    assert_eq!(long.base(), &GameOutput::parse("vjoy:1:button:5").unwrap());
+    assert_eq!(long.to_string(), "vjoy:1:button:5@long");
+    let hat = GameOutput::parse("vjoy:1:hat:1:up@double").unwrap();
+    assert_eq!(hat.to_string(), "vjoy:1:hat:1:up@double");
+    assert_eq!(hat.device().as_deref(), Some("vjoy:1"));
+    // Axes and keys take no press; unknown presses are no output.
+    assert_eq!(
+        GameOutput::parse("vjoy:1:axis:x@long").unwrap().press(),
+        None
+    );
+    assert_eq!(GameOutput::parse("key:0x2e@long").unwrap().press(), None);
+    assert!(GameOutput::parse("vjoy:1:button:5@triple").is_none());
+    assert_eq!(long.clone().with_press(None).to_string(), "vjoy:1:button:5");
+    assert_eq!(
+        long.with_press(Some(crate::Press::Double)).to_string(),
+        "vjoy:1:button:5@double"
+    );
+}
