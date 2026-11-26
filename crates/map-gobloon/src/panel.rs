@@ -70,7 +70,14 @@ impl MapApp {
                             }
                             let shown: Vec<String> =
                                 inputs.iter().map(|i| self.input_label(*i)).collect();
-                            ui.label(RichText::new(shown.join(", ")).weak());
+                            let shown = shown.join(", ");
+                            // A name that only repeats the input shows it once.
+                            let shown = if shown == c.name {
+                                String::new()
+                            } else {
+                                shown
+                            };
+                            ui.label(RichText::new(shown).weak());
                             ui.end_row();
                         }
                     });
