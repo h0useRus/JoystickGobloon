@@ -1,5 +1,5 @@
 //! How a plugin's controls look on its picture, in Gobloon's green, for every program that shows
-//! them (Map Gobloon, Joystick Gobloon): a hat is a pad (four segments split by an X, each with
+//! them (mapping, the Input viewer, the Game page): a hat is a pad (four segments split by an X, each with
 //! a chevron or its button's number, push in the middle), stick axes a pad with a dot where the
 //! stick is inside a ring whose arc shows the twist, one axis an upright gauge, anything else a
 //! round tag. Parts light up while they are worked.
@@ -248,30 +248,6 @@ pub fn gauge(
     }
 }
 
-/// A control's number in a small badge at `at`.
-pub fn number(painter: &egui::Painter, at: Pos2, n: usize, strong: bool, pal: &Pal) {
-    let r = 8.5;
-    painter.circle_filled(at, r, pal.accent);
-    let ring = if strong {
-        Stroke::new(2.0, pal.strong)
-    } else {
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 180))
-    };
-    painter.circle_stroke(at, r, ring);
-    painter.text(
-        at,
-        Align2::CENTER_CENTER,
-        n.to_string(),
-        FontId::proportional(10.0),
-        Color32::from_rgb(0x10, 0x12, 0x14),
-    );
-}
-
-/// Where a gauge's number badge goes: its top left.
-pub fn gauge_number_at(center: Pos2) -> Pos2 {
-    center + Vec2::new(-GAUGE.x / 2.0 - 6.0, -GAUGE.y / 2.0)
-}
-
 fn direction(n: usize) -> Vec2 {
     match n {
         0 => Vec2::new(0.0, -1.0),
@@ -472,7 +448,7 @@ pub struct Live {
 }
 
 /// Control `c` at `at` by its kind, its parts' inputs from `inputs` and what each does now from
-/// `live`; `badge` = the number on a button's tag and beside a gauge (none: a button's own
+/// `live`; `badge` = the number on a button's tag (none: the button's own
 /// number); `over` = the hat part a dragged input would go to.
 #[allow(clippy::too_many_arguments)]
 pub fn control(
@@ -543,10 +519,8 @@ pub fn control(
         }
         Kind::Axis => {
             let input = inputs.get(&c.id, "");
+            // The gauge shows the axis itself: no number of its own.
             gauge(painter, at, value(input), state(input), strong, pal);
-            if let Some(n) = badge {
-                number(painter, gauge_number_at(at), n, strong, pal);
-            }
         }
         _ => {
             let own: Vec<Input> = c
