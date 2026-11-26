@@ -150,26 +150,21 @@ pub fn stick(
 ) {
     let lit = xy == Part::Lit || turn == Part::Lit;
     plate(painter, center, RADIUS, strong, lit, pal);
-    // The twist ring: a band with a mark at its top; the twist fills it from the mark toward
-    // where the grip is turned, arrows either side of the mark show the two ways.
+    // The twist ring: a thin track with a mark at its top (the grip straight); the twist runs
+    // from the mark toward where the grip is turned and ends in a knob.
     let (_, edge, _) = pal.part(turn, false);
     let band = RADIUS - 5.0;
     let track = match turn {
         Part::Empty => pal.weak.gamma_multiply(0.25),
-        _ => pal.accent.gamma_multiply(0.22),
+        _ => pal.accent.gamma_multiply(0.25),
     };
-    painter.circle_stroke(center, band, Stroke::new(6.0, track));
+    painter.circle_stroke(center, band, Stroke::new(3.0, track));
     let top = -std::f32::consts::FRAC_PI_2;
     let up = Vec2::angled(top);
     painter.line_segment(
-        [center + up * (band - 3.5), center + up * (band + 3.5)],
+        [center + up * (band - 4.0), center + up * (band + 4.0)],
         Stroke::new(1.5, edge),
     );
-    for side in [-1.0f32, 1.0] {
-        let a = top + side * 0.75;
-        let tangent = Vec2::angled(a + side * std::f32::consts::FRAC_PI_2);
-        chevron(painter, center + Vec2::angled(a) * band, tangent, 2.6, edge);
-    }
     if let Some(twist) = twist {
         let turn_by = twist.clamp(-1.0, 1.0) * std::f32::consts::FRAC_PI_2 * 1.2;
         let ink = if turn == Part::Lit {
@@ -180,12 +175,12 @@ pub fn stick(
         let points: Vec<Pos2> = (0..=16)
             .map(|k| center + Vec2::angled(top + turn_by * k as f32 / 16.0) * band)
             .collect();
-        painter.line(points, Stroke::new(4.0, ink));
+        painter.line(points, Stroke::new(3.0, ink));
         painter.circle(
             center + Vec2::angled(top + turn_by) * band,
-            3.6,
+            3.8,
             ink,
-            Stroke::new(1.2, pal.fill),
+            Stroke::new(1.5, pal.fill),
         );
     }
     // The pad.
