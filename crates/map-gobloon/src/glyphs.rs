@@ -150,25 +150,42 @@ pub fn stick(
 ) {
     let lit = xy == Part::Lit || turn == Part::Lit;
     plate(painter, center, RADIUS, strong, lit, pal);
-    // The twist ring: a band between two outlines, chevrons left and right of its top.
-    let (fill, edge, ink) = pal.part(turn, false);
+    // The twist ring: a band with a mark at its top; the twist fills it from the mark toward
+    // where the grip is turned, arrows either side of the mark show the two ways.
+    let (_, edge, _) = pal.part(turn, false);
     let band = RADIUS - 5.0;
-    painter.circle_stroke(center, band, Stroke::new(6.0, fill));
-    painter.circle_stroke(center, band + 3.0, Stroke::new(1.0, edge));
-    painter.circle_stroke(center, band - 3.0, Stroke::new(1.0, edge));
+    let track = match turn {
+        Part::Empty => pal.weak.gamma_multiply(0.25),
+        _ => pal.accent.gamma_multiply(0.22),
+    };
+    painter.circle_stroke(center, band, Stroke::new(6.0, track));
     let top = -std::f32::consts::FRAC_PI_2;
+    let up = Vec2::angled(top);
+    painter.line_segment(
+        [center + up * (band - 3.5), center + up * (band + 3.5)],
+        Stroke::new(1.5, edge),
+    );
     for side in [-1.0f32, 1.0] {
-        let a = top + side * 0.6;
+        let a = top + side * 0.75;
         let tangent = Vec2::angled(a + side * std::f32::consts::FRAC_PI_2);
-        chevron(painter, center + Vec2::angled(a) * band, tangent, 2.2, ink);
+        chevron(painter, center + Vec2::angled(a) * band, tangent, 2.6, edge);
     }
     if let Some(twist) = twist {
-        let a = top + twist.clamp(-1.0, 1.0) * std::f32::consts::FRAC_PI_2;
+        let turn_by = twist.clamp(-1.0, 1.0) * std::f32::consts::FRAC_PI_2 * 1.2;
+        let ink = if turn == Part::Lit {
+            pal.accent
+        } else {
+            pal.accent.gamma_multiply(0.85)
+        };
+        let points: Vec<Pos2> = (0..=16)
+            .map(|k| center + Vec2::angled(top + turn_by * k as f32 / 16.0) * band)
+            .collect();
+        painter.line(points, Stroke::new(4.0, ink));
         painter.circle(
-            center + Vec2::angled(a) * band,
-            3.2,
-            pal.accent,
-            Stroke::new(1.0, pal.fill),
+            center + Vec2::angled(top + turn_by) * band,
+            3.6,
+            ink,
+            Stroke::new(1.2, pal.fill),
         );
     }
     // The pad.
@@ -248,11 +265,6 @@ pub fn number(painter: &egui::Painter, at: Pos2, n: usize, strong: bool, pal: &P
         FontId::proportional(10.0),
         Color32::from_rgb(0x10, 0x12, 0x14),
     );
-}
-
-/// Where a pad's number badge goes: its top left.
-pub fn pad_number_at(center: Pos2) -> Pos2 {
-    center + Vec2::splat(-RADIUS * 0.82)
 }
 
 /// Where a gauge's number badge goes: its top left.

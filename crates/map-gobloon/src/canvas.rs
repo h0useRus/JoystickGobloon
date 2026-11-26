@@ -485,7 +485,6 @@ impl MapApp {
                     strong,
                     pal,
                 );
-                glyphs::number(painter, glyphs::pad_number_at(at), n, strong, pal);
             }
             Kind::Axis => {
                 let input = inputs.get(&c.id, "");
