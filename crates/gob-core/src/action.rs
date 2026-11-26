@@ -783,6 +783,24 @@ impl Action {
         out
     }
 
+    /// Each child with the tag of the top-level group holding it (e.g. `long-actions`), or ""
+    /// for a reference outside any group.
+    pub fn children_by_group(&self) -> Vec<(&str, &str)> {
+        let mut out = Vec::new();
+        for item in &self.items {
+            match item {
+                Item::ActionRef(id) => out.push(("", id.as_str())),
+                Item::Group { tag, items, .. } => {
+                    let mut refs = Vec::new();
+                    collect_refs(items, &mut refs);
+                    out.extend(refs.into_iter().map(|id| (tag.as_str(), id)));
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
     /// Ids of the actions a macro's run-action steps run (not its children: they are shown
     /// and edited where they are bound).
     pub fn run_targets(&self) -> Vec<&str> {

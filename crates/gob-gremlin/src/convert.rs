@@ -17,6 +17,17 @@ pub const FORMAT_VERSION: u32 = 1;
 /// Axis names of virtual joysticks by slot (vJoy's), as `<joystick axes="...">` lists them.
 const AXIS_NAMES: [&str; 8] = ["X", "Y", "Z", "Rx", "Ry", "Rz", "Sl0", "Sl1"];
 
+/// Joystick Gremlin Ex writes its own format (grown from Gremlin R13) with version numbers
+/// that look like R14+: devices carry their inputs (`<device device-guid=".." name="..">` with
+/// modes inside) and the root names the start mode.
+fn is_gremlin_ex(root: &Element) -> bool {
+    root.attr("start_mode").is_some()
+        || root.attr("default_mode").is_some()
+        || named(root, "devices")
+            .any(|d| named(d, "device").any(|d| d.attr("device-guid").is_some()))
+        || named(root, "vjoy-devices").next().is_some()
+}
+
 pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
     if root.name != "profile" {
         return Err(Error::NotAProfile);
@@ -32,6 +43,9 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
         }
         Some(_) => return Err(Error::NotAProfile),
         None => {
+            if is_gremlin_ex(root) {
+                return Err(Error::GremlinEx(version));
+            }
             if number.is_none_or(|v| v < MIN_VERSION) {
                 return Err(Error::UnsupportedVersion(version));
             }

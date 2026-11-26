@@ -408,15 +408,23 @@ impl GameView {
                             }
                         }
                         // Where they come from: the controller inputs writing those outputs.
-                        let mut sources: BTreeSet<&str> = BTreeSet::new();
+                        let mut sources: BTreeSet<String> = BTreeSet::new();
                         for b in bindings.iter().filter(|b| b.mark.in_effect()) {
                             if let Some(m) = where_from.get(b.output) {
                                 sources.extend(
                                     graph
                                         .input_edges
                                         .iter()
-                                        .filter(|(_, x)| x == m)
-                                        .map(|(l, _)| graph.inputs[*l].label.as_str()),
+                                        .zip(&graph.input_routes)
+                                        .filter(|((_, x), _)| x == m)
+                                        .map(|((l, _), route)| {
+                                            let label = &graph.inputs[*l].label;
+                                            if route.is_empty() {
+                                                label.clone()
+                                            } else {
+                                                format!("{label} ({route})")
+                                            }
+                                        }),
                                 );
                             }
                         }

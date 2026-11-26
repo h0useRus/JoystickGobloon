@@ -62,6 +62,7 @@ status-switch-off = Switching profiles by program is off until the next activati
 status-saved = Saved { $file }
 status-last-missing = Last profile not found: { $file }
 import-error = Could not open the profile: { $error }
+import-gremlin-ex = This is a Joystick Gremlin Ex profile. Joystick Gobloon opens profiles of Joystick Gremlin R14 and newer; Joystick Gremlin Ex has a format of its own that cannot be read yet.
 save-error = Could not save the profile: { $error }
 file-filter-gremlin = Joystick Gremlin profile
 

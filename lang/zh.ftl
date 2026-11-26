@@ -62,6 +62,7 @@ status-switch-off = 在下次激活之前，按程序切换配置文件已关闭
 status-saved = 已保存 { $file }
 status-last-missing = 未找到上次的配置文件：{ $file }
 import-error = 无法打开配置文件：{ $error }
+import-gremlin-ex = 这是 Joystick Gremlin Ex 配置文件。Joystick Gobloon 可打开 Joystick Gremlin R14 及更新版本的配置文件；Joystick Gremlin Ex 使用自己的格式，目前还无法读取。
 save-error = 无法保存配置文件：{ $error }
 file-filter-gremlin = Joystick Gremlin 配置文件
 
