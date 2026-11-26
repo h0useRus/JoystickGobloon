@@ -115,7 +115,7 @@ impl GameView {
                     }
                     let at = node(1, lane.top);
                     let lit = live.outputs.get(m).copied().unwrap_or(0.0);
-                    for (k, l) in lane.inputs.iter().enumerate() {
+                    for (k, (l, _)) in lane.inputs.iter().enumerate() {
                         let on = live.inputs.get(*l).copied().unwrap_or(0.0).min(lit);
                         wire(
                             &painter,
@@ -133,12 +133,15 @@ impl GameView {
                             stroke(on),
                         );
                     }
-                    for (k, l) in lane.inputs.iter().enumerate() {
+                    for (k, (l, e)) in lane.inputs.iter().enumerate() {
                         let i = &graph.inputs[*l];
                         let v = live.inputs.get(*l).copied().unwrap_or(0.0);
+                        let at = node(0, lane.top + k);
+                        let route = graph.input_routes[*e].as_str();
+                        let tag = tag_width(&painter, at, route);
                         draw_node(
                             &painter,
-                            node(0, lane.top + k),
+                            at,
                             &i.label,
                             v,
                             i.axis.then_some(v),
@@ -146,7 +149,17 @@ impl GameView {
                             look.fill,
                             look.text,
                             &look.font,
+                            tag,
                         );
+                        if tag > 0.0 {
+                            draw_tag(&painter, at, tag, route, look.accent);
+                            ui.interact(at, ui.scope_id().with(("game-in", m, k)), Sense::hover())
+                                .on_hover_text(format!(
+                                    "{}
+{route}",
+                                    i.label
+                                ));
+                        }
                     }
                     let picked = self.picked.as_ref() == Some(o);
                     draw_node(
@@ -167,6 +180,7 @@ impl GameView {
                             look.text
                         },
                         &look.font,
+                        0.0,
                     );
                     let resp = ui.interact(at, ui.scope_id().with(("game-out", m)), Sense::click());
                     if resp.clicked() {
@@ -231,6 +245,7 @@ impl GameView {
             look.fill,
             if a.bound { look.text } else { look.weak },
             &look.font,
+            0.0,
         );
         let salt = (lane.map(GameOutput::to_string), &a.id);
         let resp = ui.interact(r, ui.scope_id().with(("game-act", &salt)), Sense::click());
@@ -283,7 +298,8 @@ struct Lane {
     output: usize,
     top: usize,
     height: usize,
-    inputs: Vec<usize>,
+    /// (input, index into the graph's input edges).
+    inputs: Vec<(usize, usize)>,
     actions: Vec<usize>,
 }
 
@@ -325,11 +341,12 @@ impl Lanes {
             if searching && actions.is_empty() && picked != Some(o) {
                 continue;
             }
-            let inputs: Vec<usize> = graph
+            let inputs: Vec<(usize, usize)> = graph
                 .input_edges
                 .iter()
-                .filter(|(_, output)| *output == m)
-                .map(|(l, _)| *l)
+                .enumerate()
+                .filter(|(_, (_, output))| *output == m)
+                .map(|(e, (l, _))| (*l, e))
                 .collect();
             let name = output_parts(i18n, o).0;
             if device.as_ref() != Some(&name) {
@@ -376,6 +393,35 @@ fn wire(painter: &egui::Painter, from: Pos2, to: Pos2, stroke: Stroke) {
     painter.add(shape);
 }
 
+/// Room the route tag of an input node takes at its right end (0 without a route).
+const TAG_MAX: f32 = 150.0;
+
+fn tag_width(painter: &egui::Painter, rect: Rect, route: &str) -> f32 {
+    if route.is_empty() {
+        return 0.0;
+    }
+    let galley = painter.layout_no_wrap(route.to_string(), TAG_FONT, Color32::WHITE);
+    (galley.size().x + 14.0)
+        .min(TAG_MAX)
+        .min(rect.width() * 0.5)
+}
+
+const TAG_FONT: FontId = FontId::proportional(11.0);
+
+/// The route of an input node ("Long press") as a chip `w` wide at its right end.
+fn draw_tag(painter: &egui::Painter, rect: Rect, w: f32, route: &str, accent: Color32) {
+    let chip = Rect::from_min_max(
+        Pos2::new(rect.right() - w - 4.0, rect.top() + 4.0),
+        Pos2::new(rect.right() - 4.0, rect.bottom() - 4.0),
+    );
+    painter.rect_filled(chip, chip.height() / 2.0, accent.gamma_multiply(0.22));
+    let galley = painter.layout_no_wrap(route.to_string(), TAG_FONT, accent);
+    let pos = Pos2::new(chip.left() + 7.0, chip.center().y - galley.size().y / 2.0);
+    painter
+        .with_clip_rect(chip.shrink(1.0))
+        .galley(pos, galley, accent);
+}
+
 #[allow(clippy::too_many_arguments)]
 fn draw_node(
     painter: &egui::Painter,
@@ -387,6 +433,8 @@ fn draw_node(
     fill: Color32,
     text: Color32,
     font: &FontId,
+    // Room kept free at the right end (for a tag).
+    right: f32,
 ) {
     let radius = 6.0;
     painter.rect_filled(rect, radius, fill);
@@ -404,9 +452,14 @@ fn draw_node(
         Stroke::new(1.0, text.gamma_multiply(0.25))
     };
     painter.rect_stroke(rect, radius, stroke, egui::StrokeKind::Inside);
-    let galley = painter.layout(label.to_string(), font.clone(), text, rect.width() - 28.0);
+    let galley = painter.layout(
+        label.to_string(),
+        font.clone(),
+        text,
+        rect.width() - 28.0 - right,
+    );
     let pos = Pos2::new(rect.left() + 10.0, rect.center().y - galley.size().y / 2.0);
-    painter
-        .with_clip_rect(rect.shrink(2.0))
-        .galley(pos, galley, text);
+    let mut clip = rect.shrink(2.0);
+    clip.max.x -= right;
+    painter.with_clip_rect(clip).galley(pos, galley, text);
 }

@@ -18,6 +18,7 @@ pub mod logical;
 pub mod modifier;
 pub mod osc;
 pub mod profile;
+pub mod route;
 pub mod script;
 pub mod two_axis;
 pub mod voice;
@@ -51,6 +52,7 @@ pub use profile::{
     VirtualButton, VirtualDevices, VirtualJoystick, VirtualOutput, same_device_name,
     virtual_output, virtual_outputs,
 };
+pub use route::Route;
 pub use script::{ScriptInstance, ScriptLanguage, ScriptSource, ScriptValue, script_path};
 pub use two_axis::{AxisInput, TWO_AXIS_KINDS};
 pub use voice::{
