@@ -1,25 +1,27 @@
-//! The window: toolbar (brand, device, connected controller), the strip of inputs the controller
-//! sends (`strip`), the picture with the controls' tags (`canvas`) and the controls' list and
-//! editor (`panel`).
+//! The window: toolbar (brand, device, connected controller), the picture with a numbered tag
+//! per placed input (`canvas`) and the list of placed inputs (`panel`).
+//!
+//! Mapping works by the controller itself: every button, axis or hat the user works gets the
+//! next number, waiting in the picture's top left corner until it is dragged to the spot of the
+//! picture where that control is. A placed number is a control of the device plugin with that one
+//! input.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32};
-use gob_devices::{Control, Detector, DevicePlugin, Direction, Input, Inputs, Kind, Palette};
+use gob_devices::{Control, Detector, DevicePlugin, Input, Kind, Palette, Side};
 use gob_i18n::I18n;
 use gob_input::{DeviceState, InputEvent, InputService};
 use gob_ui as style;
 use style::icon;
 
-use crate::dialogs::{NewControl, NewDevice};
+use crate::dialogs::NewDevice;
 use crate::settings::{Own, Shared, Theme};
 use crate::store::Store;
 
-/// How long an axis' control stays lit after the axis moved.
+/// How long an axis' tag stays lit after the axis moved.
 pub const AXIS_LIT: Duration = Duration::from_millis(700);
-/// The most inputs the strip keeps.
-const RECENT: usize = 24;
 
 const PALETTES: style::Palettes = style::Palettes {
     dark: style::Palette {
@@ -49,34 +51,33 @@ pub struct MapApp {
     pub input: Option<InputService>,
     /// Connected controllers (not our virtual ones), read each frame.
     pub devices: Vec<DeviceState>,
-    /// The controller whose inputs the strip shows (instance GUID).
+    /// The controller read (instance GUID).
     pub device: Option<String>,
     detector: Option<Detector>,
-    /// Inputs the controller sent, newest first.
-    pub recent: Vec<Input>,
-    /// When each input last counted (lights axes' controls for a moment).
+    /// Inputs worked but not placed yet, in the order they came: they get the next numbers.
+    pub pending: Vec<Input>,
+    /// When each input last counted (lights axes' tags for a moment).
     pub seen: HashMap<Input, Instant>,
-    /// The strip shows every input of the controller, not only the ones worked.
-    pub show_all: bool,
     pub selected: Option<String>,
     /// The tag being dragged to a new place: (control id, its spot in picture units).
     pub moving: Option<(String, [f32; 2])>,
+    /// The control a tag's menu is open for.
+    pub menu: Option<String>,
     /// The selected control's name while it is typed.
     pub name_edit: Option<(String, String)>,
     textures: HashMap<(String, String, bool), (egui::TextureHandle, egui::Vec2)>,
     pub new_device: Option<NewDevice>,
-    pub new_control: Option<NewControl>,
     pub error: Option<String>,
     /// Where things were drawn last frame (tests drag between them).
     pub layout: Layout,
 }
 
-/// Where the picture and the chips were drawn last frame.
+/// Where the picture and the waiting numbers were drawn last frame.
 #[derive(Debug, Default, Clone)]
 pub struct Layout {
     /// The picture's rectangle on screen and its scale (screen points per picture unit).
     pub picture: Option<(egui::Rect, f32)>,
-    pub chips: Vec<(Input, egui::Rect)>,
+    pub pending: Vec<(Input, egui::Rect)>,
 }
 
 #[cfg(test)]
@@ -87,11 +88,11 @@ impl Layout {
         Some(rect.min + egui::vec2(at[0], at[1]) * scale)
     }
 
-    pub fn chip(&self, input: Input) -> Option<egui::Rect> {
-        self.chips
+    pub fn pending(&self, input: Input) -> Option<egui::Pos2> {
+        self.pending
             .iter()
             .find(|(i, _)| *i == input)
-            .map(|(_, r)| *r)
+            .map(|(_, r)| r.center())
     }
 }
 
@@ -115,9 +116,6 @@ impl MapApp {
         let ctx = cc.egui_ctx.clone();
         let input = InputService::start(move || ctx.request_repaint());
         let mut app = Self::with(i18n, Store::new(), Some(input), Own::load());
-        // Debug builds: JOYSTICK_GOBLOON_MAP_ALL=1 shows every input at start.
-        app.show_all =
-            cfg!(debug_assertions) && std::env::var_os("JOYSTICK_GOBLOON_MAP_ALL").is_some();
         // Debug builds open a device at start for screenshots: JOYSTICK_GOBLOON_MAP_DEVICE=<id>.
         let start = std::env::var("JOYSTICK_GOBLOON_MAP_DEVICE")
             .ok()
@@ -142,15 +140,14 @@ impl MapApp {
             devices: Vec::new(),
             device: None,
             detector: None,
-            recent: Vec::new(),
+            pending: Vec::new(),
             seen: HashMap::new(),
-            show_all: false,
             selected: None,
             moving: None,
+            menu: None,
             name_edit: None,
             textures: HashMap::new(),
             new_device: None,
-            new_control: None,
             error: None,
             layout: Layout::default(),
         }
@@ -174,6 +171,7 @@ impl MapApp {
         self.plugin = Some(id.to_string());
         self.selected = None;
         self.name_edit = None;
+        self.pending.clear();
         if self.own.last_device.as_deref() != Some(id) {
             self.own.last_device = Some(id.to_string());
             self.own.save();
@@ -197,7 +195,7 @@ impl MapApp {
             return;
         }
         self.device = guid;
-        self.recent.clear();
+        self.pending.clear();
         self.seen.clear();
         self.detector = self.device_state().map(Detector::new);
     }
@@ -209,7 +207,6 @@ impl MapApp {
 
     /// Reads the controllers and what they sent since the last frame.
     fn read_input(&mut self) {
-        let mut changed = false;
         let Some(service) = &self.input else {
             return;
         };
@@ -219,25 +216,20 @@ impl MapApp {
             .into_iter()
             .filter(|d| !d.info.is_own())
             .collect();
+        let mut changed = false;
         for event in &events {
-            if matches!(event, InputEvent::DevicesChanged) {
-                changed = true;
-            }
+            changed |= matches!(event, InputEvent::DevicesChanged);
             if let Some(input) = self.detector.as_mut().and_then(|d| d.feed(event)) {
-                self.seen.insert(input, Instant::now());
-                self.recent.retain(|i| *i != input);
-                self.recent.insert(0, input);
-                self.recent.truncate(RECENT);
+                self.note(input);
             }
         }
-        let gone = self.device.is_some() && self.device_state().is_none();
-        if gone {
+        if self.device.is_some() && self.device_state().is_none() {
             self.detector = None;
         } else if self.detector.is_none() && self.device_state().is_some() {
             self.detector = self.device_state().map(Detector::new);
         }
         // A controller appears: read it when it fits the open device, or when it is the only one.
-        if (changed || self.device.is_none()) && self.device.is_none() {
+        if (changed || self.detector.is_none()) && self.device.is_none() {
             let id = self.plugin.clone();
             let fits = self.devices.iter().find(|d| {
                 let i = &d.info;
@@ -254,6 +246,52 @@ impl MapApp {
                 self.choose_device(Some(guid));
             }
         }
+    }
+
+    /// The user worked `input`: a new one gets the next number (a hat is one number for all its
+    /// directions); one already placed or waiting only lights up.
+    pub fn note(&mut self, input: Input) {
+        let input = match input {
+            Input::HatDirection(n, _) => Input::Hat(n),
+            other => other,
+        };
+        self.seen.insert(input, Instant::now());
+        if self.plugin.is_none() || self.pending.contains(&input) || self.placed(input).is_some() {
+            return;
+        }
+        self.pending.push(input);
+    }
+
+    /// The control `input` is placed as.
+    pub fn placed(&self, input: Input) -> Option<String> {
+        let plugin = self.plugin()?;
+        plugin
+            .manifest
+            .controls
+            .iter()
+            .find(|c| {
+                // A hat placed by its directions counts as the whole hat.
+                self.inputs_of(c).iter().any(|i| match (*i, input) {
+                    (Input::HatDirection(m, _), Input::Hat(n)) => m == n,
+                    (i, input) => i == input,
+                })
+            })
+            .map(|c| c.id.clone())
+    }
+
+    /// The inputs control `id` has.
+    pub fn inputs_of(&self, control: &Control) -> Vec<Input> {
+        let Some(plugin) = self.plugin() else {
+            return Vec::new();
+        };
+        if let Some(gob_devices::Entry::One(input)) = plugin.defaults.0.get(&control.id) {
+            return vec![*input];
+        }
+        control
+            .parts()
+            .iter()
+            .filter_map(|p| plugin.defaults.get(&control.id, p))
+            .collect()
     }
 
     /// Whether `input` is worked now: held, or (an axis) moved a moment ago.
@@ -304,94 +342,62 @@ impl MapApp {
         Some(entry)
     }
 
-    /// Runs a change of the open plugin, showing what failed.
+    /// Shows what failed.
     pub fn report(&mut self, result: Result<(), String>) {
         if let Err(e) = result {
             self.error = Some(e);
         }
     }
 
-    /// Puts `input` on `part` of `control` (and off wherever else it was).
-    pub fn assign(&mut self, control: &str, part: &str, input: Input) {
+    /// Puts waiting `input` on the picture at `at` (picture units, `width` wide): a new control
+    /// named after the input, with that input.
+    pub fn place(&mut self, input: Input, at: [f32; 2], width: f32) {
         let Some(plugin) = self.plugin() else {
             return;
         };
-        let id = plugin.id().to_string();
-        let kind = plugin.control(control).map(|c| c.kind);
+        let plugin_id = plugin.id().to_string();
+        let base = gob_devices::edit::slug(&input.to_string()).replace('-', "_");
+        let mut id = base.clone();
+        let mut n = 2;
+        while plugin.control(&id).is_some() {
+            id = format!("{base}_{n}");
+            n += 1;
+        }
+        let kind = match input {
+            Input::Axis(_) => Kind::Axis,
+            Input::Hat(_) | Input::HatDirection(..) => Kind::Hat,
+            Input::Button(_) => Kind::Button,
+        };
+        let control = Control {
+            id: id.clone(),
+            name: plain_label(input),
+            kind,
+            parts: None,
+            view: self.view.clone(),
+            at: [at[0].round(), at[1].round()],
+            side: if at[0] > width / 2.0 {
+                Side::Right
+            } else {
+                Side::Left
+            },
+            group: None,
+            look: None,
+        };
         let mut inputs = plugin.defaults.clone();
-        take_off(&mut inputs, input);
-        inputs.set(control, part, input);
-        if kind == Some(Kind::Hat) {
-            inputs.compact_hat(control);
-        }
-        let result = self.store.save_inputs(&id, &inputs);
+        inputs.remove_input(input);
+        inputs.set(&id, "", input);
+        let result = self
+            .store
+            .edit_manifest(&plugin_id, |text| {
+                gob_devices::edit::set_control(text, &id, &control)
+            })
+            .and_then(|()| self.store.save_inputs(&plugin_id, &inputs));
         self.report(result);
-        self.selected = Some(control.to_string());
+        self.pending.retain(|i| *i != input);
+        self.selected = Some(id);
     }
 
-    /// Puts `input` on the part of `control` it fits best: a hat direction on a hat takes the
-    /// whole hat, an axis the first free axis part, a button the first free other part.
-    /// Returns whether it went anywhere.
-    pub fn assign_best(&mut self, control: &str, input: Input) -> bool {
-        let Some(plugin) = self.plugin() else {
-            return false;
-        };
-        let Some(c) = plugin.control(control).cloned() else {
-            return false;
-        };
-        let parts = c.parts();
-        let inputs = plugin.defaults.clone();
-        if parts == [""] {
-            if c.kind.is_axis_part("") == matches!(input, Input::Axis(_)) {
-                self.assign(control, "", input);
-                return true;
-            }
-            return false;
-        }
-        if let Input::HatDirection(n, _) = input
-            && Direction::ALL.iter().all(|d| parts.contains(&d.name()))
-        {
-            for d in Direction::ALL {
-                self.assign(control, d.name(), Input::HatDirection(n, d));
-            }
-            return true;
-        }
-        let axis = matches!(input, Input::Axis(_));
-        let fitting: Vec<&str> = parts
-            .iter()
-            .copied()
-            .filter(|p| c.kind.is_axis_part(p) == axis)
-            .collect();
-        let named = match input {
-            Input::HatDirection(_, d) => fitting.iter().copied().find(|p| *p == d.name()),
-            _ => None,
-        };
-        let free = fitting
-            .iter()
-            .copied()
-            .find(|p| inputs.get(control, p).is_none());
-        match named.or(free).or(fitting.first().copied()) {
-            Some(part) => {
-                self.assign(control, part, input);
-                true
-            }
-            None => false,
-        }
-    }
-
-    /// Takes the input off `part` of `control`.
-    pub fn unassign(&mut self, control: &str, part: &str) {
-        let Some(plugin) = self.plugin() else {
-            return;
-        };
-        let id = plugin.id().to_string();
-        let mut inputs = plugin.defaults.clone();
-        inputs.clear(control, part);
-        let result = self.store.save_inputs(&id, &inputs);
-        self.report(result);
-    }
-
-    /// Writes `control` in place of control `old_id` (or as a new one).
+    /// Writes `control` in place of control `old_id`.
     pub fn put_control(&mut self, old_id: &str, control: Control) {
         let Some(id) = self.plugin.clone() else {
             return;
@@ -402,6 +408,7 @@ impl MapApp {
         self.report(result);
     }
 
+    /// Takes control `control` off the picture (its input can be placed again).
     pub fn delete_control(&mut self, control: &str) {
         let Some(plugin) = self.plugin() else {
             return;
@@ -419,116 +426,41 @@ impl MapApp {
         }
     }
 
-    /// An input's caption: "Button 12", "Axis X", "Hat 1 ↑".
+    /// An input's caption in the user's language: "Button 12", "Axis X", "Hat 1".
     pub fn input_label(&self, input: Input) -> String {
         use gob_i18n::FluentValue;
         match input {
             Input::Button(n) => self
                 .i18n
                 .trf("input-button", &[("n", FluentValue::from(n))]),
-            Input::Axis(slot) => {
-                let name = gob_devices::input::AXES[usize::from(slot - 1)];
-                self.i18n.trf(
-                    "input-axis",
-                    &[("name", FluentValue::from(axis_name(name)))],
-                )
-            }
-            Input::Hat(n) => self.i18n.trf("input-hat", &[("n", FluentValue::from(n))]),
-            Input::HatDirection(n, d) => format!(
-                "{} {}",
-                self.i18n.trf("input-hat", &[("n", FluentValue::from(n))]),
-                direction_glyph(d)
+            Input::Axis(slot) => self.i18n.trf(
+                "input-axis",
+                &[("name", FluentValue::from(axis_name(slot)))],
             ),
-        }
-    }
-
-    /// A part's short name: arrows for directions, words for the rest.
-    pub fn part_label(&self, part: &str) -> String {
-        match part {
-            "" => String::new(),
-            "up" => icon::ARROW_UP.into(),
-            "right" => icon::ARROW_RIGHT.into(),
-            "down" => icon::ARROW_DOWN.into(),
-            "left" => icon::ARROW_LEFT.into(),
-            "x" => "X".into(),
-            "y" => "Y".into(),
-            other => self.i18n.tr(&format!("part-{other}")),
-        }
-    }
-
-    pub fn kind_label(&self, kind: Kind) -> String {
-        self.i18n.tr(&format!("kind-{}", kind_name(kind)))
-    }
-
-    /// Where `input` is: "Trigger · 1", or `None` when it is on no control.
-    pub fn mapped_to(&self, input: Input) -> Option<String> {
-        let plugin = self.plugin()?;
-        let (control, part) = plugin.defaults.parts_with(input).into_iter().next()?;
-        let name = plugin
-            .control(&control)
-            .map_or(control.clone(), |c| c.name.clone());
-        Some(match self.part_label(&part) {
-            p if p.is_empty() => name,
-            p => format!("{name} {p}"),
-        })
-    }
-}
-
-/// Takes `input` off every control part it is on (a whole hat: each of its directions).
-fn take_off(inputs: &mut Inputs, input: Input) {
-    inputs.remove_input(input);
-    if let Input::Hat(n) = input {
-        for d in Direction::ALL {
-            inputs.remove_input(Input::HatDirection(n, d));
+            Input::Hat(n) | Input::HatDirection(n, _) => {
+                self.i18n.trf("input-hat", &[("n", FluentValue::from(n))])
+            }
         }
     }
 }
 
-pub fn direction_glyph(d: Direction) -> &'static str {
-    match d {
-        Direction::Up => icon::ARROW_UP,
-        Direction::Right => icon::ARROW_RIGHT,
-        Direction::Down => icon::ARROW_DOWN,
-        Direction::Left => icon::ARROW_LEFT,
+/// A placed control's first name, kept in the plugin (product wording is not translated).
+fn plain_label(input: Input) -> String {
+    match input {
+        Input::Button(n) => format!("Button {n}"),
+        Input::Axis(slot) => format!("Axis {}", axis_name(slot)),
+        Input::Hat(n) | Input::HatDirection(n, _) => format!("Hat {n}"),
     }
 }
 
 /// DirectInput's axis names as players know them from controller tools.
-fn axis_name(name: &str) -> String {
-    match name {
-        "x" | "y" | "z" => name.to_uppercase(),
-        "rx" => "RX".into(),
-        "ry" => "RY".into(),
-        "rz" => "RZ".into(),
+fn axis_name(slot: u8) -> String {
+    match gob_devices::input::AXES[usize::from(slot.clamp(1, 8) - 1)] {
         "slider" => "Slider".into(),
         "dial" => "Dial".into(),
-        other => other.into(),
+        other => other.to_uppercase(),
     }
 }
-
-pub fn kind_name(kind: Kind) -> &'static str {
-    match kind {
-        Kind::Button => "button",
-        Kind::Trigger => "trigger",
-        Kind::Hat => "hat",
-        Kind::Encoder => "encoder",
-        Kind::Switch => "switch",
-        Kind::Lever => "lever",
-        Kind::Axis => "axis",
-        Kind::Stick => "stick",
-    }
-}
-
-pub const KINDS: [Kind; 8] = [
-    Kind::Button,
-    Kind::Trigger,
-    Kind::Hat,
-    Kind::Encoder,
-    Kind::Switch,
-    Kind::Lever,
-    Kind::Axis,
-    Kind::Stick,
-];
 
 pub fn install_fonts(ctx: &egui::Context, cjk: bool) {
     let mut fonts = egui::FontDefinitions::default();
@@ -564,7 +496,7 @@ impl MapApp {
     /// Every frame, drawn or not: reads the controllers.
     pub fn tick(&mut self, ctx: &egui::Context) {
         self.read_input();
-        // Axes' controls go dark again after a moment.
+        // Axes' tags go dark again after a moment.
         if self.seen.values().any(|t| t.elapsed() < AXIS_LIT) {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
@@ -572,21 +504,14 @@ impl MapApp {
 
     pub fn show(&mut self, root: &mut egui::Ui) {
         let ctx = root.ctx().clone();
-        self.layout.chips.clear();
         let margin = egui::Margin::symmetric(16, 4);
         egui::Panel::top("toolbar")
             .frame(egui::Frame::side_top_panel(&ctx.global_style()).inner_margin(margin))
             .show(root, |ui| self.toolbar(ui));
-        egui::Panel::top("strip")
-            .frame(
-                egui::Frame::side_top_panel(&ctx.global_style())
-                    .inner_margin(egui::Margin::symmetric(16, 8)),
-            )
-            .show(root, |ui| self.strip(ui));
         egui::Panel::right("panel")
             .resizable(true)
-            .default_size(320.0)
-            .min_size(260.0)
+            .default_size(300.0)
+            .min_size(240.0)
             .show(root, |ui| self.panel(ui));
         let frame = egui::Frame::central_panel(&ctx.global_style()).inner_margin(16);
         egui::CentralPanel::default()
@@ -594,9 +519,7 @@ impl MapApp {
             .show(root, |ui| self.canvas(ui));
         self.dialogs(&ctx);
     }
-}
 
-impl MapApp {
     fn toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.set_min_height(style::TOOLBAR_BUTTON);
@@ -708,7 +631,6 @@ impl MapApp {
 
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.new_device_dialog(ctx);
-        self.new_control_dialog(ctx);
         if let Some(error) = self.error.clone() {
             let mut close = false;
             style::modal(ctx, "error").show(ctx, |ui| {

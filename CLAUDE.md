@@ -110,11 +110,13 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `hat:N:up`), shipped in `devices/` next to the exe, user copies in `<data dir>/devices` win by id; edit.rs = device.gob
   changed as text (comments kept), live.rs = gob-input events -> inputs (`Detector`, `is_active`); examples
   `device_check`, `device_teach`. The Device tab of the Game page waits in archive/device-pictures
-- crates/map-gobloon Map Gobloon (MapGobloon.exe): pick brand + device, press/move the controller, drag the input
-  chips onto the picture's tags (parts open around a tag; empty spot = new control; drag tags to move); writes the
-  plugin (debug builds: the repository's plugins/devices, release: the user's folder, shipped plugins copied there
-  first); own lang/*.ftl in the crate; lists itself in HidHide and restarts once to see hidden sticks;
-  debug env `JOYSTICK_GOBLOON_MAP_DEVICE=<plugin id>`, `JOYSTICK_GOBLOON_MAP_ALL=1`. Not in releases yet
+- crates/map-gobloon Map Gobloon (MapGobloon.exe): pick brand + device; each button/axis/hat worked on the controller
+  gets the next number (a hat = one number), waiting in the picture's top left corner until dragged onto the picture:
+  then it is a control with that one input (`button_7`, kind from the input); placed tags move by drag, come off by
+  right-click; writes the plugin (debug builds: the repository's plugins/devices, release: the user's folder, shipped
+  plugins copied there first); own lang/*.ftl in the crate; lists itself in HidHide and restarts once to see hidden
+  sticks; debug env `JOYSTICK_GOBLOON_MAP_DEVICE=<plugin id>`; src/ui_tests.rs drives it with egui_kittest. Not in
+  releases yet
 - crates/gob-script  Lua user scripts (plans/completed/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
   (`send`: the engine is built off its thread), one sandboxed state per script (sandbox.rs `new_state`: time budget +
   memory cap, also used by gob-export plugins), 5 ms per call (interrupt), off after

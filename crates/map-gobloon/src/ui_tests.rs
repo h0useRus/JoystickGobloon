@@ -1,12 +1,12 @@
-//! The window driven like a user would (egui events, no real mouse): chips dragged onto the
-//! picture, tags moved, on a copy of gob-devices' sample plugin in a temporary folder.
+//! The window driven like a user would (egui events, no real mouse): worked inputs get numbers
+//! that are dragged onto the picture, placed tags move and come off again; on a copy of
+//! gob-devices' sample plugin in a temporary folder.
 
 use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Pos2, Vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
-use gob_devices::{Direction, Entry, Input, Inputs, Manifest};
+use gob_devices::{Direction, Entry, Input, Inputs, Kind, Manifest};
 
 use crate::app::{MapApp, install_fonts};
 use crate::settings::Own;
@@ -69,12 +69,15 @@ fn copy(from: &Path, to: &Path) {
     }
 }
 
-fn harness(folders: &Folders, recent: Vec<Input>) -> Harness<'static, MapApp> {
+fn app(folders: &Folders) -> MapApp {
     let store = Store::with(vec![folders.shipped(), folders.user()], folders.user());
     let i18n = gob_i18n::I18n::new(crate::LANGUAGES, None);
     let mut app = MapApp::with(i18n, store, None, Own::default());
     app.open(SAMPLE);
-    app.recent = recent;
+    app
+}
+
+fn harness(app: MapApp) -> Harness<'static, MapApp> {
     let mut h = Harness::builder()
         .with_size(Vec2::new(1280.0, 820.0))
         .with_context_setup(|ctx| install_fonts(ctx, false))
@@ -103,93 +106,90 @@ fn drag(h: &mut Harness<'_, MapApp>, from: Pos2, to: Pos2) {
     h.step();
 }
 
-/// Where a control's tag is on screen.
-fn tag(h: &Harness<'_, MapApp>, control: &str) -> Pos2 {
-    let app = h.state();
-    let at = app.plugin().unwrap().control(control).unwrap().at;
-    app.layout.to_screen(at).unwrap()
-}
-
-fn chip(h: &Harness<'_, MapApp>, input: Input) -> Pos2 {
-    h.state().layout.chip(input).expect("chip shown").center()
+fn spot(h: &Harness<'_, MapApp>, at: [f32; 2]) -> Pos2 {
+    h.state().layout.to_screen(at).unwrap()
 }
 
 #[test]
-fn chip_on_a_part_slot() {
-    let f = Folders::new("slot");
-    let mut h = harness(&f, vec![Input::Button(5)]);
-    // The trigger's second stage sits right of its tag.
-    let to = tag(&h, "trigger") + Vec2::new(32.0, 0.0);
-    let from = chip(&h, Input::Button(5));
+fn worked_inputs_get_the_next_numbers() {
+    let f = Folders::new("note");
+    let mut app = app(&f);
+    // Already on the sample's controls: they only light up.
+    app.note(Input::Button(1));
+    app.note(Input::HatDirection(1, Direction::Left));
+    app.note(Input::Axis(2));
+    assert!(app.pending.is_empty());
+    app.note(Input::Button(7));
+    app.note(Input::HatDirection(2, Direction::Up));
+    app.note(Input::HatDirection(2, Direction::Down));
+    app.note(Input::Button(7));
+    assert_eq!(app.pending, [Input::Button(7), Input::Hat(2)]);
+}
+
+#[test]
+fn a_waiting_number_dragged_onto_the_picture_becomes_a_control() {
+    let f = Folders::new("place");
+    let mut app = app(&f);
+    app.note(Input::Button(7));
+    app.note(Input::HatDirection(2, Direction::Right));
+    let mut h = harness(app);
+    let from = h.state().layout.pending(Input::Hat(2)).unwrap();
+    let to = spot(&h, [80.0, 40.0]);
     drag(&mut h, from, to);
     assert_eq!(h.state().error, None);
-    let inputs = f.inputs();
-    assert_eq!(inputs.get("trigger", "second"), Some(Input::Button(5)));
-    assert_eq!(inputs.get("trigger", "first"), Some(Input::Button(1)));
-    // The shipped plugin stays as it was; Map Gobloon now shows the copy.
-    let shipped = Inputs::load(&f.shipped().join("sample/sample-stick/inputs.gob")).unwrap();
-    assert_eq!(shipped.get("trigger", "second"), Some(Input::Button(2)));
-    assert!(h.state().store.is_own(SAMPLE));
-}
-
-#[test]
-fn an_input_moves_from_its_old_part() {
-    let f = Folders::new("move-input");
-    let mut h = harness(&f, vec![Input::Button(2)]);
-    // The hat's push sits to its lower right.
-    let d = std::f32::consts::FRAC_1_SQRT_2 * 32.0;
-    let to = tag(&h, "hat") + Vec2::new(d, d);
-    let from = chip(&h, Input::Button(2));
-    drag(&mut h, from, to);
-    let inputs = f.inputs();
-    assert_eq!(inputs.get("hat", "push"), Some(Input::Button(2)));
-    assert_eq!(inputs.get("trigger", "second"), None);
-}
-
-#[test]
-fn hat_direction_on_a_hat_takes_the_whole_hat() {
-    let f = Folders::new("hat");
-    let input = Input::HatDirection(2, Direction::Left);
-    let mut h = harness(&f, vec![input]);
-    let (from, to) = (chip(&h, input), tag(&h, "hat"));
-    drag(&mut h, from, to);
-    let inputs = f.inputs();
-    for d in Direction::ALL {
-        assert_eq!(inputs.get("hat", d.name()), Some(Input::HatDirection(2, d)));
-    }
-    assert_eq!(inputs.get("hat", "push"), Some(Input::Button(3)));
-    assert!(matches!(inputs.0.get("hat"), Some(Entry::Parts(_))));
-}
-
-#[test]
-fn axis_on_a_stick() {
-    let f = Folders::new("axis");
-    let mut h = harness(&f, vec![Input::Axis(3)]);
-    let (from, to) = (chip(&h, Input::Axis(3)), tag(&h, "stick"));
-    drag(&mut h, from, to);
-    // Both axis parts are taken: the first one gets it.
-    assert_eq!(f.inputs().get("stick", "x"), Some(Input::Axis(3)));
-}
-
-#[test]
-fn chip_on_an_empty_spot_asks_for_a_new_control() {
-    let f = Folders::new("new");
-    let mut h = harness(&f, vec![Input::Button(9)]);
-    let to = h.state().layout.to_screen([95.0, 55.0]).unwrap();
-    let from = chip(&h, Input::Button(9));
-    drag(&mut h, from, to);
-    assert!(h.state().new_control.is_some());
-    h.get_by_label("Add").click();
-    h.run_steps(3);
     let manifest = f.manifest();
-    let added = manifest.controls.last().unwrap();
+    let placed = manifest.controls.last().unwrap();
     assert_eq!(
-        (added.id.as_str(), added.name.as_str()),
-        ("button_9", "Button 9")
+        (placed.id.as_str(), placed.name.as_str(), placed.kind),
+        ("hat_2", "Hat 2", Kind::Hat)
     );
-    assert_eq!(added.at, [95.0, 55.0]);
-    assert_eq!(f.inputs().get("button_9", ""), Some(Input::Button(9)));
-    assert_eq!(h.state().selected.as_deref(), Some("button_9"));
+    assert_eq!(placed.at, [80.0, 40.0]);
+    assert_eq!(f.inputs().0.get("hat_2"), Some(&Entry::One(Input::Hat(2))));
+    // The other number still waits; the shipped plugin stays as it was.
+    assert_eq!(h.state().pending, [Input::Button(7)]);
+    assert!(h.state().store.is_own(SAMPLE));
+    let shipped: Manifest = toml::from_str(
+        &std::fs::read_to_string(f.shipped().join("sample/sample-stick/device.gob")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(shipped.controls.len(), 3);
+}
+
+#[test]
+fn dropped_outside_the_picture_it_keeps_waiting() {
+    let f = Folders::new("outside");
+    let mut app = app(&f);
+    app.note(Input::Axis(3));
+    let mut h = harness(app);
+    let from = h.state().layout.pending(Input::Axis(3)).unwrap();
+    let (picture, _) = h.state().layout.picture.unwrap();
+    let to = Pos2::new(picture.right() + 20.0, picture.center().y);
+    drag(&mut h, from, to);
+    assert_eq!(h.state().pending, [Input::Axis(3)]);
+    assert!(!f.copy().exists());
+}
+
+#[test]
+fn tags_move_and_come_off() {
+    let f = Folders::new("tag");
+    let mut h = harness(app(&f));
+    let from = spot(&h, [40.0, 30.0]);
+    let to = spot(&h, [20.0, 60.0]);
+    drag(&mut h, from, to);
+    let trigger = f
+        .manifest()
+        .controls
+        .into_iter()
+        .find(|c| c.id == "trigger")
+        .unwrap();
+    assert_eq!(trigger.at, [20.0, 60.0]);
+    assert_eq!(h.state().selected.as_deref(), Some("trigger"));
+    h.state_mut().delete_control("trigger");
+    assert!(f.manifest().controls.iter().all(|c| c.id != "trigger"));
+    assert_eq!(f.inputs().get("trigger", "first"), None);
+    // Its inputs can be placed again.
+    h.state_mut().note(Input::Button(1));
+    assert_eq!(h.state().pending, [Input::Button(1)]);
 }
 
 #[test]
@@ -216,21 +216,4 @@ fn new_device_from_a_picture() {
             .is_err()
     );
     assert_eq!(store.brands(), ["Acme Sim", "Sample"]);
-}
-
-#[test]
-fn tags_move() {
-    let f = Folders::new("tag");
-    let mut h = harness(&f, Vec::new());
-    let from = tag(&h, "trigger");
-    let to = h.state().layout.to_screen([20.0, 60.0]).unwrap();
-    drag(&mut h, from, to);
-    let manifest = f.manifest();
-    let trigger = manifest
-        .controls
-        .iter()
-        .find(|c| c.id == "trigger")
-        .unwrap();
-    assert_eq!(trigger.at, [20.0, 60.0]);
-    assert_eq!(h.state().selected.as_deref(), Some("trigger"));
 }

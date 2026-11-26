@@ -10,7 +10,6 @@ mod panel;
 mod platform;
 mod settings;
 mod store;
-mod strip;
 #[cfg(test)]
 mod ui_tests;
 
