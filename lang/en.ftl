@@ -1126,6 +1126,7 @@ game-capture-long = Long press
 game-capture-double = Double tap
 game-tab-device = Controller
 game-device-none = Connect a controller that has a picture: add one in the Input viewer and place its controls
+game-device-arrange = Arrange the cards by themselves
 game-capture-hint = Press a key or several keys together, a mouse button over this box, or a joystick button, hat or axis.
 game-capture-now = Now: { $control }
 game-capture-clear = Clear the binding

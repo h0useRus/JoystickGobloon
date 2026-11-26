@@ -1126,6 +1126,7 @@ game-capture-long = Appui long
 game-capture-double = Double appui
 game-tab-device = Manette
 game-device-none = Branchez une manette qui a une image : ajoutez-la dans la visionneuse d'entrées et placez ses commandes
+game-device-arrange = Placer les cartes automatiquement
 game-capture-hint = Appuyez sur une touche ou plusieurs ensemble, sur un bouton de la souris au-dessus de ce cadre, ou actionnez un bouton, un chapeau ou un axe du joystick.
 game-capture-now = Actuellement : { $control }
 game-capture-clear = Effacer la liaison

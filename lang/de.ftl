@@ -1126,6 +1126,7 @@ game-capture-long = Langer Druck
 game-capture-double = Doppeltipp
 game-tab-device = Controller
 game-device-none = Schließe einen Controller mit Bild an: füge eines in der Eingabeanzeige hinzu und platziere seine Bedienelemente
+game-device-arrange = Karten automatisch anordnen
 game-capture-hint = Drücken Sie eine Taste oder mehrere Tasten zusammen, eine Maustaste über diesem Feld oder eine Taste, einen Hat oder eine Achse am Joystick.
 game-capture-now = Jetzt: { $control }
 game-capture-clear = Belegung löschen

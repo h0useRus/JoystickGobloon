@@ -393,6 +393,7 @@ pub enum Section {
     KeyCombos,
     GameBindings,
     OscInputs,
+    PictureCards,
     /// Index into [`Profile::extra`].
     Extra(usize),
 }
@@ -421,6 +422,8 @@ pub struct Profile {
     pub osc_inputs: Vec<crate::osc::OscInput>,
     /// Joystick Gobloon only (see [`crate::game`]).
     pub game_bindings: Vec<crate::game::GameBindings>,
+    /// Joystick Gobloon only (see [`crate::cards`]).
+    pub picture_cards: Vec<crate::cards::PictureCard>,
     pub extra: Vec<Element>,
     pub order: Vec<Section>,
 }
@@ -445,6 +448,7 @@ impl Default for Profile {
             key_combos: Vec::new(),
             osc_inputs: Vec::new(),
             game_bindings: Vec::new(),
+            picture_cards: Vec::new(),
             extra: Vec::new(),
             order: vec![
                 Section::Inputs,
@@ -485,6 +489,7 @@ impl Profile {
                         | Section::KeyCombos
                         | Section::GameBindings
                         | Section::OscInputs
+                        | Section::PictureCards
                 )
             })
             .map_or(self.order.len(), |i| i + 1);
@@ -504,6 +509,7 @@ impl Profile {
             || !self.key_combos.is_empty()
             || !self.osc_inputs.is_empty()
             || !self.game_bindings.is_empty()
+            || !self.picture_cards.is_empty()
             || self
                 .inputs
                 .iter()

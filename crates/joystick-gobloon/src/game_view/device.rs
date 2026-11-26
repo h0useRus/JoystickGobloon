@@ -1,8 +1,10 @@
 //! The Controller tab: a connected controller's picture (its device plugin, mapped in the Input
 //! viewer) with the game actions each of its controls drives through the profile, lit as the
-//! controls are worked: a preview to check the bindings on the real stick.
+//! controls are worked: a preview to check the bindings on the real stick. The cards can be
+//! dragged elsewhere; where they go is kept in the profile (`<picture-cards>`), so a shared
+//! profile shows them the same.
 
-use gob_core::Press;
+use gob_core::{CardSide, PictureCard, Press};
 use gob_devices::{Control, Direction, Input, Inputs};
 
 use super::bind::{bindings_of, outputs_of};
@@ -78,6 +80,7 @@ impl GameView {
         ctx: &Context,
         catalog: &Catalog,
         state: &State,
+        ops: &mut Vec<Op>,
     ) {
         let tab = &mut self.device;
         let pictures = tab.pictures.get_or_insert_with(Default::default);
@@ -124,7 +127,12 @@ impl GameView {
         {
             tab.view = v.clone();
         }
-        if fitting.len() > 1 || shown.views.len() > 1 {
+        let placed = ctx
+            .profile
+            .picture_cards
+            .iter()
+            .any(|c| c.plugin == shown.id && c.view == tab.view);
+        if fitting.len() > 1 || shown.views.len() > 1 || placed {
             ui.horizontal_wrapped(|ui| {
                 for (d, _) in &fitting {
                     let on = tab.device.as_deref() == Some(d.info.guid.as_str());
@@ -138,6 +146,22 @@ impl GameView {
                         if style::tab(ui, tab.view == *id, icon::IMAGE, name).clicked() {
                             tab.view = id.clone();
                         }
+                    }
+                }
+                if placed {
+                    ui.add_space(style::SPACE_L);
+                    if style::icon_button(
+                        ui,
+                        true,
+                        icon::MAGIC_WAND,
+                        &i18n.tr("game-device-arrange"),
+                    )
+                    .clicked()
+                    {
+                        ops.push(Op::ResetPictureCards {
+                            plugin: shown.id.clone(),
+                            view: tab.view.clone(),
+                        });
                     }
                 }
             });
@@ -221,17 +245,23 @@ impl GameView {
                 if lines.is_empty() {
                     lines.push("—".into());
                 }
+                let placed = ctx.profile.picture_card(&shown.id, &tab.view, &c.id);
                 style::Callout {
                     // The card points at the control as drawn (off its spot when moved out).
                     at: Pos2::new(c.drawn()[0], c.drawn()[1]),
-                    side: match c.side {
-                        gob_devices::Side::Left => style::CalloutSide::Left,
-                        gob_devices::Side::Right => style::CalloutSide::Right,
+                    side: match (placed.map(|p| p.side), c.side) {
+                        (Some(CardSide::Left), _) | (None, gob_devices::Side::Left) => {
+                            style::CalloutSide::Left
+                        }
+                        (Some(CardSide::Right), _) | (None, gob_devices::Side::Right) => {
+                            style::CalloutSide::Right
+                        }
                     },
                     title: c.name.clone(),
                     lines,
                     group: None,
                     lit,
+                    place: placed.map(|p| p.y),
                 }
             })
             .collect();
@@ -254,7 +284,23 @@ impl GameView {
                 .caption(shown.credit.as_deref())
                 // The same size as in the Input viewer (smaller only when it does not fit).
                 .max_height(size.y * crate::mapping::picture_scale(size))
+                .movable_cards(true)
                 .show(ui);
+                // A card dropped elsewhere stays there (in the profile).
+                if let Some((i, side, y)) = r.moved
+                    && let Some(c) = controls.get(i)
+                {
+                    ops.push(Op::PictureCard(PictureCard {
+                        plugin: shown.id.clone(),
+                        view: tab.view.clone(),
+                        control: c.id.clone(),
+                        side: match side {
+                            style::CalloutSide::Left => CardSide::Left,
+                            style::CalloutSide::Right => CardSide::Right,
+                        },
+                        y,
+                    }));
+                }
                 // A card's whole text when it does not fit.
                 for (c, response) in callouts.iter().zip(&r.callouts) {
                     if c.lines.len() > 1 || c.lines.first().is_some_and(|l| l.chars().count() > 24)
