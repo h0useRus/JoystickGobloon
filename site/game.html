@@ -150,6 +150,7 @@
           <li><a class="toc-group" href="#page">The page</a><ul>
             <li><a href="#table">In game</a></li>
             <li><a href="#wiring">Wiring</a></li>
+            <li><a href="#controller">Controller</a></li>
             <li><a href="#press">Press a control</a></li>
             <li><a href="#keys">Keyboard and mouse</a></li>
             <li><a href="#versions">Game versions</a></li>
@@ -233,10 +234,15 @@
             <p>When one control sends several outputs, a tag on it says which is which: <span class="term">Short press</span> or <span class="term">Long press</span>, <span class="term">Single tap</span> or <span class="term">Double tap</span>, a chain step, the modifiers that must be held, and the mode when it is not the first one. The same words show in the <span class="term">In game</span> table and when you press a control that sends more than one output.</p>
             <figure class="shot"><img src="img/game-wiring.png" loading="lazy" width="1102" height="732" alt="Wiring tab: the axes and buttons of the left stick, the virtual joystick outputs they write and the Star Citizen actions each output drives; the Z axis lane is lit up to Increase / Decrease Mining Laser Power and Absolute Beam Spacing"></figure>
           </article>
+          <article class="learn-action" id="controller">
+            <h3><i class="ph ph-joystick" aria-hidden="true"></i>Controller</h3>
+            <p>A picture of your own stick with the game actions next to each of its buttons, hats and axes: a preview to check the bindings on the real controller, lit as you work its controls. It shows every connected controller that has a picture; add one and place its controls in the Input viewer (the pen on its picture). Until the profile holds bindings for the game, it shows the game's own.</p>
+          </article>
           <article class="learn-action" id="press">
             <h3><i class="ph ph-hand-pointing" aria-hidden="true"></i>Press a control</h3>
             <p>The hand button in the toolbar waits for a press. With an action selected in the list, the control you press is bound to it; with none, the list shows only the actions that control drives, which answers "what does this button do in the game?".</p>
             <figure class="shot"><img src="img/game-capture.png" loading="lazy" width="518" height="286" alt="Press a control: waiting for a key, a key combination, a mouse button or a joystick button, hat or axis to bind to MouseReset"></figure>
+            <p>For games that tell them apart, like Star Citizen, the dialog also asks how the button is pressed: a plain <span class="term">Press</span>, a <span class="term">Long press</span> (held a moment) or a <span class="term">Double tap</span>. One button can then drive one action when pressed and another when held.</p>
             <p>When the control already drives other actions, the program lists them, the game's defaults included: <span class="term">Replace</span> takes it away from them, <span class="term">Add anyway</span> keeps both. A stick button that writes several outputs asks which one the game should listen to. A stick button the profile does not map yet can be mapped to a free output of a virtual joystick and bound in one go.</p>
             <figure class="shot"><img src="img/game-conflict.png" loading="lazy" width="578" height="312" alt="Already in use: Joystick 1 Button 5 is already used by three actions, one of them a game default, with the buttons Replace, Add anyway and Cancel"></figure>
           </article>
@@ -258,6 +264,7 @@
             <ul>
               <li><strong>Layout file</strong>: <code>controls\mappings\layout_&lt;name&gt;_exported.xml</code>, named after the profile unless you name it. Load it in the game under Options, Keybindings, Control Profiles. The game never changes it.</li>
               <li><strong>actionmaps.xml</strong>: the bindings the game uses at its next start. Close the game first: it writes this file when it quits and would put its old bindings back.</li>
+              <li><strong>Long press and double tap</strong>: written as the game's own activation modes (<code>delayed_press</code>, <code>double_tap</code>), and read back from it, so bindings set as held or double-tapped in the game show as such.</li>
               <li><strong>Unbind the game's own joystick bindings on js1</strong> (on by default): the game binds many actions of joystick 1 by default; with this option, an action your profile binds elsewhere loses that default, so one button does not set off two things.</li>
             </ul>
           </article>

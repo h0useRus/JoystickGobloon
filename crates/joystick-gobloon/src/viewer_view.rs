@@ -1,5 +1,7 @@
 //! Input viewer (like Gremlin's): per device an axis history graph, the current axis
-//! values and the buttons and hats, for physical, vJoy and the profile's logical device alike.
+//! values and the buttons and hats, for physical, vJoy and the profile's logical device alike;
+//! a controller with a device plugin also as its picture with its controls lit as they are worked,
+//! and mapped onto it ("Edit mapping", [`Mapper`]).
 
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
@@ -11,6 +13,7 @@ use gob_i18n::I18n;
 use gob_input::{AXIS_SLOTS, DeviceInfo, DeviceState};
 
 use crate::devices_view::hat_glyph;
+use crate::mapping::Mapper;
 use crate::style::{self, icon};
 
 /// Seconds shown by the history graph.
@@ -19,6 +22,10 @@ const SAMPLE_EVERY: Duration = Duration::from_millis(30);
 const REFRESH: Duration = Duration::from_millis(33);
 /// A button press or hat direction stays lit at least this long, so a quick tap shows.
 const MIN_LIT: Duration = Duration::from_millis(150);
+/// An axis on the picture stays lit this long after it last moved.
+const AXIS_LIT: Duration = Duration::from_millis(600);
+/// How far an axis has to move to count as moving (noise stays below it).
+const AXIS_STEP: f32 = 0.04;
 
 /// One colour per axis slot (X, Y, Z, Rx, Ry, Rz, Slider 1, Slider 2).
 const AXIS_COLORS: [Color32; 8] = [
@@ -38,9 +45,11 @@ struct Shown {
     history: bool,
     current: bool,
     buttons: bool,
+    /// The device's picture (only for devices with a plugin).
+    picture: bool,
 }
 
-/// Nothing is shown until the user switches it on.
+/// Only the picture is shown until the user switches the rest on.
 impl Default for Shown {
     fn default() -> Self {
         Self::all(false)
@@ -53,6 +62,7 @@ impl Shown {
             history: on,
             current: on,
             buttons: on,
+            picture: true,
         }
     }
 
@@ -75,6 +85,12 @@ pub struct ViewerView {
     last_sample: Option<Instant>,
     /// Per device and button or hat index: how it is shown.
     lit: HashMap<(String, Lit), Shine>,
+    /// Device pictures, and mapping a controller onto its picture.
+    mapper: Mapper,
+    /// Debug builds: JOYSTICK_GOBLOON_TAB=mapping was looked at (maps the first pictured device).
+    debug_start: bool,
+    /// Per device: where each axis was and when it last moved (for lighting it on the picture).
+    moved: HashMap<String, ([f32; 8], [Option<Instant>; 8])>,
 }
 
 /// A button or hat as the viewer shows it.
@@ -152,14 +168,51 @@ impl ViewerView {
             ui.label(RichText::new(i18n.tr("nav-viewer")).strong());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 toggle = style::icon_button(ui, true, glyph, &i18n.tr(key)).clicked();
+                if !self.mapper.editing
+                    && style::icon_button(ui, true, icon::DOWNLOAD_SIMPLE, &i18n.tr("map-import"))
+                        .clicked()
+                {
+                    self.mapper.import_file();
+                }
             });
         });
         ui.separator();
+        self.mapper.update(devices);
+        self.mapper.dialogs(ui.ctx(), i18n);
+        if self.mapper.editing {
+            self.mapper.show(ui, i18n);
+            return toggle;
+        }
         if devices.is_empty() {
             crate::app::empty_state(ui, icon::JOYSTICK, &i18n.tr("no-devices-attached"));
             return toggle;
         }
 
+        let mapped: HashMap<String, Mapped> = devices
+            .iter()
+            .filter_map(|d| {
+                let p = self.mapper.plugin_for(&d.info)?;
+                let mapped = Mapped {
+                    id: p.id().to_string(),
+                    views: p.manifest.views.iter().map(|v| v.id.clone()).collect(),
+                    controls: p.manifest.controls.clone(),
+                    inputs: p.inputs.clone(),
+                    credit: p.manifest.credit.clone(),
+                };
+                Some((d.info.guid.clone(), mapped))
+            })
+            .collect();
+        if cfg!(debug_assertions) && !self.debug_start {
+            self.debug_start = true;
+            if std::env::var("JOYSTICK_GOBLOON_TAB").is_ok_and(|t| t == "mapping")
+                && let Some((guid, m)) = devices
+                    .iter()
+                    .find_map(|d| Some((d.info.guid.clone(), mapped.get(&d.info.guid)?)))
+            {
+                self.mapper.edit(&guid, &m.id);
+            }
+        }
+        let mut add_picture = None;
         egui::Panel::left("viewer-devices")
             .resizable(true)
             .default_size(230.0)
@@ -181,6 +234,19 @@ impl ViewerView {
                             .id_salt(&d.info.guid)
                             .default_open(true)
                             .show(ui, |ui| {
+                                if mapped.contains_key(&d.info.guid) {
+                                    ui.add(style::switch(
+                                        &mut shown.picture,
+                                        i18n.tr("viewer-picture"),
+                                    ));
+                                } else if !d.info.is_own()
+                                    && d.info.guid != gob_core::LOGICAL_DEVICE_GUID
+                                    && ui
+                                        .button(format!("{}  {}", icon::IMAGE, i18n.tr("map-add")))
+                                        .clicked()
+                                {
+                                    add_picture = Some(d.info.guid.clone());
+                                }
                                 ui.add(style::switch(
                                     &mut shown.history,
                                     i18n.tr("viewer-history"),
@@ -197,8 +263,12 @@ impl ViewerView {
                     }
                 });
             });
+        if let Some(guid) = add_picture {
+            self.mapper.add_picture(&guid);
+        }
 
         let now = self.now();
+        let mut edit = None;
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
@@ -206,6 +276,33 @@ impl ViewerView {
                     let shown = self.shown.get(&d.info.guid).copied().unwrap_or_default();
                     let name = d.info.name.trim();
                     let names = Names::of(i18n, &d.info);
+                    if shown.picture
+                        && let Some(mapped) = mapped.get(&d.info.guid)
+                    {
+                        let title = format!("{name} · {}", i18n.tr("viewer-picture"));
+                        let (edit_it, export_it) = section_with(ui, &title, |ui| {
+                            // The two icons belong together: next to each other.
+                            ui.spacing_mut().item_spacing.x = 0.0;
+                            let edit = style::icon_button(
+                                ui,
+                                true,
+                                icon::PENCIL_SIMPLE,
+                                &i18n.tr("map-edit"),
+                            )
+                            .clicked();
+                            let export =
+                                style::icon_button(ui, true, icon::EXPORT, &i18n.tr("map-export"))
+                                    .clicked();
+                            (edit, export)
+                        });
+                        if edit_it {
+                            edit = Some((d.info.guid.clone(), mapped.id.clone()));
+                        }
+                        if export_it {
+                            self.mapper.export_file(&mapped.id);
+                        }
+                        self.picture(ui, d, mapped);
+                    }
                     if shown.history && !d.info.axes.is_empty() {
                         section(ui, &format!("{name} · {}", i18n.tr("viewer-history")));
                         let samples = self.history.get(&d.info.guid);
@@ -222,6 +319,9 @@ impl ViewerView {
                     }
                 }
             });
+        if let Some((guid, id)) = edit {
+            self.mapper.edit(&guid, &id);
+        }
         toggle
     }
 
@@ -245,6 +345,100 @@ impl ViewerView {
             })
             .collect();
         (buttons, hats)
+    }
+
+    /// The device's pictures with its controls drawn on them, lit as they are worked; the
+    /// control under the pointer shows its name.
+    fn picture(&mut self, ui: &mut egui::Ui, d: &DeviceState, mapped: &Mapped) {
+        let (buttons, hats) = self.lit_state(d);
+        let now = Instant::now();
+        let (at, moved) = self
+            .moved
+            .entry(d.info.guid.clone())
+            .or_insert((d.axes, [None; 8]));
+        for i in 0..8 {
+            if (d.axes[i] - at[i]).abs() > AXIS_STEP {
+                at[i] = d.axes[i];
+                moved[i] = Some(now);
+            }
+        }
+        let moving: [bool; 8] = moved.map(|t| t.is_some_and(|t| now - t < AXIS_LIT));
+        // Taps stay lit a moment, as in the button grid.
+        let mut shown = d.clone();
+        shown.buttons = buttons;
+        shown.hats = hats;
+        let live = |input: gob_devices::Input| gob_devices::draw::Live {
+            lit: match input {
+                gob_devices::Input::Axis(slot) => {
+                    moving.get(usize::from(slot).wrapping_sub(1)) == Some(&true)
+                }
+                _ => gob_devices::is_active(&shown, input),
+            },
+            value: gob_devices::axis_value(&shown, input),
+        };
+        let pal = gob_devices::draw::Pal::new(ui.visuals(), style::accent(ui));
+        for view in &mapped.views {
+            let Some((texture, size)) = self.mapper.picture(ui.ctx(), &mapped.id, view) else {
+                continue;
+            };
+            let width = ui.available_width();
+            // Controls moved off their spots may lie beside the picture.
+            let on_view = || mapped.controls.iter().filter(|c| c.view == *view);
+            let extent = gob_devices::draw::extent(on_view(), size, size.x * 0.06);
+            let scale = (width / extent.width()).min(crate::mapping::picture_scale(size));
+            let (rect, response) =
+                ui.allocate_exact_size(Vec2::new(width, extent.height() * scale), Sense::hover());
+            let shown = Rect::from_center_size(rect.center(), extent.size() * scale);
+            let origin = shown.min - extent.min.to_vec2() * scale;
+            let picture = Rect::from_min_size(origin, size * scale);
+            let painter = ui.painter_at(rect);
+            painter.image(
+                texture.id(),
+                picture,
+                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                Color32::WHITE,
+            );
+            let to_screen = |at: [f32; 2]| origin + Vec2::new(at[0], at[1]) * scale;
+            let pointer = response.hover_pos();
+            let hovered = pointer.and_then(|p| {
+                mapped
+                    .controls
+                    .iter()
+                    .filter(|c| c.view == *view)
+                    .map(|c| (c, to_screen(c.drawn()).distance(p)))
+                    .filter(|(c, d)| *d <= gob_devices::draw::reach(c))
+                    .min_by(|a, b| a.1.total_cmp(&b.1))
+                    .map(|(c, _)| c.id.clone())
+            });
+            for c in on_view() {
+                gob_devices::draw::leader_of(&painter, &pal, c, &mapped.inputs, &to_screen, &live);
+            }
+            for c in on_view() {
+                let strong = hovered.as_deref() == Some(c.id.as_str());
+                gob_devices::draw::control(
+                    &painter,
+                    &pal,
+                    c,
+                    &mapped.inputs,
+                    to_screen(c.drawn()),
+                    None,
+                    strong,
+                    None,
+                    &live,
+                );
+            }
+            if let Some(c) = hovered
+                .as_deref()
+                .and_then(|id| mapped.controls.iter().find(|c| c.id == id))
+            {
+                let above =
+                    to_screen(c.drawn()) - Vec2::new(0.0, gob_devices::draw::reach(c) + 14.0);
+                gob_devices::draw::caption(&painter, &pal, above, &c.name);
+            }
+        }
+        if let Some(credit) = &mapped.credit {
+            ui.label(RichText::new(credit).weak().small());
+        }
     }
 
     fn now(&mut self) -> f64 {
@@ -320,6 +514,35 @@ pub fn logical_device(
         }
     }
     Some(d)
+}
+
+/// A device plugin's controls, as the viewer draws them.
+struct Mapped {
+    id: String,
+    views: Vec<String>,
+    controls: Vec<gob_devices::Control>,
+    inputs: gob_devices::Inputs,
+    credit: Option<String>,
+}
+
+/// A section's title with something after it (a button) and the line.
+fn section_with<R>(ui: &mut egui::Ui, title: &str, after: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.add_space(6.0);
+    let r = ui
+        .horizontal(|ui| {
+            ui.label(RichText::new(title).strong());
+            let r = after(ui);
+            let rect = ui.available_rect_before_wrap();
+            let y = rect.center().y;
+            ui.painter().line_segment(
+                [Pos2::new(rect.left() + 6.0, y), Pos2::new(rect.right(), y)],
+                ui.visuals().widgets.noninteractive.bg_stroke,
+            );
+            r
+        })
+        .inner;
+    ui.add_space(4.0);
+    r
 }
 
 fn section(ui: &mut egui::Ui, title: &str) {

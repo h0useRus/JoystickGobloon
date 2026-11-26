@@ -109,6 +109,12 @@ impl Graph {
                 }
             }
         }
+        // A long or double press comes from what writes its button.
+        for o in &extra {
+            if let Some(from) = sources.get(o.base()).cloned() {
+                sources.insert(o.clone(), from);
+            }
+        }
         outputs.extend(extra);
         outputs.sort_by_key(sort_key);
         // Inputs: the bindings writing those outputs.
@@ -251,6 +257,11 @@ pub(super) fn sort_key(o: &GameOutput) -> (u8, u32, u8, u32, u8, String) {
             (0, *device, 2, *id, *d as u8, String::new())
         }
         GameOutput::Keys(c) => (3, 0, 0, 0, 0, c.to_string()),
+        GameOutput::Pressed(o, p) => {
+            let mut key = sort_key(o);
+            key.5 = format!("{}@{}", key.5, p.name());
+            key
+        }
         other => (2, 0, 0, 0, 0, other.to_string()),
     }
 }
@@ -332,7 +343,7 @@ impl Live {
                 continue;
             }
             let mut v = inputs[*l];
-            if let GameOutput::HatDirection(_, d) = &graph.outputs[*m] {
+            if let GameOutput::HatDirection(_, d) = graph.outputs[*m].base() {
                 v = match hats[*l] {
                     Some(angle) if hat_has(angle, *d) => 1.0,
                     _ => 0.0,
@@ -399,6 +410,8 @@ pub(super) fn sent_lit(
                 })
                 .fold(1.0, f32::min),
         ),
+        // A long or double press is lit while its button is.
+        GameOutput::Pressed(o, _) => sent_lit(map, o, now),
     }
 }
 

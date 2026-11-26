@@ -1,7 +1,7 @@
 //! Binding by pressing: the wait for a press, what the pressed control is in the profile, the
 //! warning when other actions already use it, and mapping a control the profile does not map.
 
-use gob_core::{Combo, ComboPart};
+use gob_core::{Combo, ComboPart, Press};
 
 use super::capture::{Capture, Captured, Pressed};
 use super::state::{Mark, State};
@@ -14,6 +14,8 @@ pub(super) struct Aim {
     pub(super) action: Option<String>,
     /// The binding of the action the press replaces.
     pub(super) replace: Option<GameOutput>,
+    /// How the game takes the button: held long, pressed twice (games that tell them apart).
+    pub(super) press: Option<Press>,
 }
 
 pub(super) enum Dialog {
@@ -75,7 +77,7 @@ fn is_hat(v: &VirtualOutput) -> bool {
 
 /// The profile's id of the device `guid` (a profile made on another computer names it by its
 /// old id), and the bindings of the pressed input.
-fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
+pub(super) fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
     let aliases = crate::substitute_view::auto_aliases(ctx.profile, ctx.devices);
     let mut device = p.device.clone();
     let mut found = Vec::new();
@@ -104,7 +106,7 @@ fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
 
 /// What a game can bind of what the pressed input sends: virtual joystick and gamepad outputs,
 /// keys and mouse buttons. What the running profile sends right now comes first.
-fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput> {
+pub(super) fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput> {
     let mine = |uses: &[gob_core::OutputUse]| uses.iter().any(|u| bindings.contains(&u.binding));
     let mut out: Vec<GameOutput> = Vec::new();
     for (v, uses) in ctx.profile.output_usage(None) {
@@ -142,7 +144,8 @@ fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput>
 /// How the pressed input's `bindings` reach output `o` ("Long press"), empty for a plain
 /// mapping: tells apart several outputs of one control.
 pub(super) fn route_of(ctx: &Context, i18n: &I18n, bindings: &[usize], o: &GameOutput) -> String {
-    let uses: Vec<gob_core::OutputUse> = match o {
+    // A game's long or double press comes from what writes its button.
+    let uses: Vec<gob_core::OutputUse> = match o.base() {
         GameOutput::Virtual(v) | GameOutput::HatDirection(v, _) => {
             ctx.profile.output_usage(None).remove(v).unwrap_or_default()
         }
@@ -153,6 +156,7 @@ pub(super) fn route_of(ctx: &Context, i18n: &I18n, bindings: &[usize], o: &GameO
             .find(|(k, _)| k == c)
             .map(|(_, u)| u)
             .unwrap_or_default(),
+        GameOutput::Pressed(..) => Vec::new(),
     };
     let mut labels: Vec<String> = Vec::new();
     for u in uses.iter().filter(|u| bindings.contains(&u.binding)) {
@@ -283,6 +287,8 @@ pub(super) struct Scene<'a> {
     pub(super) game: &'a str,
     pub(super) catalog: &'a Catalog,
     pub(super) state: &'a State<'a>,
+    /// The presses the game tells apart from a plain press.
+    pub(super) presses: &'a [Press],
 }
 
 impl Scene<'_> {
@@ -304,11 +310,18 @@ impl Scene<'_> {
 impl GameView {
     /// Starts the wait for a press.
     pub(super) fn press_for(&mut self, action: Option<String>, replace: Option<GameOutput>) {
-        self.dialog = Some(Dialog::Capture(Aim { action, replace }, Capture::default()));
+        let press = replace.as_ref().and_then(GameOutput::press);
+        let aim = Aim {
+            action,
+            replace,
+            press,
+        };
+        self.dialog = Some(Dialog::Capture(aim, Capture::default()));
     }
 
     /// The control is known: looked up, bound, or held back for the warning.
     fn settle(&mut self, scene: &Scene, aim: Aim, output: GameOutput, ops: &mut Vec<Op>) -> Step {
+        let output = output.with_press(aim.press.filter(|_| aim.action.is_some()));
         let Some(action) = aim.action else {
             if self.tab == Tab::Wiring {
                 self.picked = Some(output.clone());
@@ -379,7 +392,8 @@ impl GameView {
                 let bind = match p.hat {
                     Some(d) => GameOutput::HatDirection(output.clone(), d),
                     None => GameOutput::Virtual(output.clone()),
-                };
+                }
+                .with_press(aim.press);
                 Step::Go(Box::new(Dialog::Unmapped {
                     action,
                     replace: aim.replace,
@@ -446,7 +460,7 @@ impl GameView {
         &mut self,
         ui: &mut egui::Ui,
         scene: &Scene,
-        aim: Aim,
+        mut aim: Aim,
         mut capture: Capture,
         ops: &mut Vec<Op>,
     ) -> (Option<Dialog>, Step) {
@@ -470,6 +484,24 @@ impl GameView {
                     ))
                     .weak(),
                 );
+                ui.add_space(style::SPACE_S);
+            }
+            // How the game takes the button, for games that tell presses apart.
+            if aim.action.is_some() && !scene.presses.is_empty() {
+                ui.horizontal(|ui| {
+                    let mut choices = vec![(None, i18n.tr("game-capture-press"))];
+                    choices.extend(
+                        scene
+                            .presses
+                            .iter()
+                            .map(|p| (Some(*p), i18n.tr(&format!("game-capture-{}", p.name())))),
+                    );
+                    for (press, label) in choices {
+                        if style::tab(ui, aim.press == press, press_icon(press), &label).clicked() {
+                            aim.press = press;
+                        }
+                    }
+                });
                 ui.add_space(style::SPACE_S);
             }
             let (rect, _) =
@@ -790,15 +822,17 @@ impl GameView {
     /// Debug builds open a dialog at start with `JOYSTICK_GOBLOON_GAME_DIALOG` = capture |
     /// conflict | choose | unmapped, for checks.
     pub(super) fn debug_dialog(&mut self, scene: &Scene) {
-        if !cfg!(debug_assertions) || std::mem::replace(&mut self.debug_done, true) {
+        if !cfg!(debug_assertions) || self.debug_done {
             return;
         }
         let Ok(which) = std::env::var("JOYSTICK_GOBLOON_GAME_DIALOG") else {
             return;
         };
+        // Once the game's actions are there.
         let Some(first) = scene.catalog.actions.first() else {
             return;
         };
+        self.debug_done = true;
         let action = first.id.clone();
         let output = GameOutput::parse("vjoy:1:button:5").expect("an output id");
         let pressed = Pressed {
@@ -813,6 +847,7 @@ impl GameView {
                 Aim {
                     action: Some(action),
                     replace: None,
+                    press: None,
                 },
                 Capture::default(),
             )),
@@ -834,6 +869,7 @@ impl GameView {
                 aim: Aim {
                     action: Some(action),
                     replace: None,
+                    press: None,
                 },
                 input: pressed_name(scene.i18n, &pressed),
                 outputs: vec![
@@ -856,6 +892,15 @@ impl GameView {
             }),
             _ => None,
         };
+    }
+}
+
+/// The icon of a press in the capture dialog.
+fn press_icon(press: Option<Press>) -> &'static str {
+    match press {
+        None => icon::HAND_TAP,
+        Some(Press::Long) => icon::HOURGLASS_MEDIUM,
+        Some(Press::Double) => icon::CURSOR_CLICK,
     }
 }
 

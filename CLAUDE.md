@@ -7,7 +7,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
 - gob-ui + gob-i18n live in the shared repo h0useRus/gobloon-common-ui (also used by Keyboard Gobloon), taken by git tag
-  in `[workspace.dependencies]` (now `v0.4.0`); move the tag on purpose. Local work on both: clone it to
+  in `[workspace.dependencies]` (now `v0.5.0`); move the tag on purpose. Local work on both: clone it to
   `..\gobloon-common-ui`, rename the gitignored `.cargo/config.toml.off` to `config.toml` (a `[patch]` to its crates by
   path) and back when done; Cargo.lock changes while it is on, don't commit that. Its gallery example
   (`cargo run -p gob-ui --example gallery` there) shows every widget. egui upgrades start there; both apps move together.
@@ -104,6 +104,23 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/completed/LIGHTING_PLAN.md
+- crates/gob-devices device plugins = a controller's picture + its controls + which input each sends:
+  plugins/devices/<brand>/<device>/ (device.gob: id, name, brand, `[[match]]` vid + name part, `[[view]]` pictures,
+  `[[control]]` id/name/kind/parts/at; inputs.gob: control -> `button:N`/`axis:x`/`hat:N`/`hat:N:up`), shipped in
+  `devices/` next to the exe, user copies in `<data dir>/devices` win by id; edit.rs = device.gob changed as text
+  (comments kept), live.rs = inputs from events or readings (`Detector::feed`/`poll`, `is_active`), draw.rs = how
+  controls look on the picture (egui: hat pad, stick, gauge, tag; `draw::control`); examples `device_check`,
+  `device_teach`. The Device tab of the Game page waits in archive/device-pictures
+- joystick-gobloon mapping/ = device pictures in the Input viewer (Picture view per device with a plugin, lit live)
+  and mapping ("Edit mapping"; "Add a picture" for a device without one): each button/axis/hat worked gets the next
+  number, waiting in the picture's top left corner until dragged onto it (a control with that one input, `button_7`);
+  tags move by drag (Shift+drag or the menu moves one out of its spot with a line: `glyph` in device.gob, its dot
+  moves the spot), right-click menu (make a hat, split, move out/back, remove), buttons gather into hats, axes into sticks, copy
+  another device's controls (mirrored for the other hand); store.rs writes the plugin (debug builds: the repository's
+  plugins/devices, release: the user's folder, a shipped plugin copied there first) and reloads plugins whose files
+  changed; share.rs = export a plugin as `<id>.zip` (folder inside) / import one (enclosed names, plugin file kinds,
+  size caps, must load; replacing the user's own asks first); tests.rs drives it with egui_kittest; debug env `JOYSTICK_GOBLOON_TAB=mapping` maps the first pictured
+  device (with START_PAGE=viewer). Map Gobloon (the separate tool) is gone
 - crates/gob-script  Lua user scripts (plans/completed/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
   (`send`: the engine is built off its thread), one sandboxed state per script (sandbox.rs `new_state`: time budget +
   memory cap, also used by gob-export plugins), 5 ms per call (interrupt), off after
@@ -138,13 +155,16 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `<aircraft>/<game id>`, `<device> {instance GUID}.diff.lua` per joystick + Keyboard.diff.lua via `luadata.parse/write`
   (Lua data without running it, sorted keys + tabs like the game); defaults = HTML less added plus removed; the game is not
   installed here, tested on made-up files in tests/data/dcs-world, the HTML format is a guess). A binding's output (gob-core game.rs
-  `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
+  `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`),
+  a button or hat direction may carry a press (`Press`: `vjoy:1:button:5@long` / `@double`; plugins list theirs in plugin.gob
+  `presses`, Star Citizen = activationMode delayed_press / double_tap, the capture dialog asks);
   keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
   plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,
   detaches like calibration): worker.rs (plugins on a worker thread), state.rs (one state per action: the profile set
   against the game's files), wiring.rs (schematic, a lane per output), table.rs ("As in the game": groups, chips), capture.rs
   + bind.rs (press a key/mouse button/joystick control to bind or look up; warning listing where a control is used; mapping
-  an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs). Releases put
+  an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs); device.rs = Controller tab (a connected controller's picture with the
+  actions per control through the profile, gob-ui `DevicePicture` callouts, `JOYSTICK_GOBLOON_TAB=game-device`). Releases put
   plugins/export (without `dev/`) into `export/` next to the exe (installer, portable zip, AppImage)
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; two engines (`Engine`, Settings > Voice, default Vosk): vosk.rs = libvosk 0.3.45 in grammar mode

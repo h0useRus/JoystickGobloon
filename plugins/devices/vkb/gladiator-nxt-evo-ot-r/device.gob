@@ -1,0 +1,152 @@
+# Gladiator NXT EVO "Space Combat Edition", right hand on the Omni Throttle adapter: the stick works as a throttle: SCG Premium grip (twist, dual action, rapid fire
+# trigger, 3 four-way hats with push (the left hat is a mini stick on a POV hat; its push only switches it between 8 and 4 ways), a grey mini stick that works as a fourth hat, 4 buttons) on the GNX EVO base (X/Y, 3 buttons, encoder,
+# throttle wheel, auto-centering 3-position switch), as listed by VKB's stores.
+# The grip sends what VKBDevCfg sets up; controls are placed with Map Gobloon.
+id = "vkb-gladiator-nxt-evo-ot-r"
+name = "Gladiator NXT EVO Omni Throttle (right)"
+brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Gladiator EVO OT R"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"
+
+[[control]]
+id = "hat_1"
+name = "Hat 1"
+kind = "hat"
+at = [153, 147]
+
+[[control]]
+id = "button_1"
+name = "Button 1"
+kind = "button"
+at = [92, 216]
+
+[[control]]
+id = "button_2"
+name = "Button 2"
+kind = "button"
+at = [122, 223]
+
+[[control]]
+id = "button_22"
+name = "Button 22"
+kind = "button"
+at = [56, 179]
+
+[[control]]
+id = "button_21"
+name = "Button 21"
+kind = "button"
+at = [53, 153]
+
+[[control]]
+id = "button_4"
+name = "Button 4"
+kind = "button"
+at = [90, 77]
+
+[[control]]
+id = "button_3"
+name = "Button 3"
+kind = "button"
+at = [196, 191]
+
+[[control]]
+id = "hat"
+name = "Hat 1"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [210, 131]
+
+[[control]]
+id = "hat_2"
+name = "Hat 2"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [186, 55]
+side = "right"
+
+[[control]]
+id = "hat_3"
+name = "Hat 3"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [300, 238]
+side = "right"
+
+[[control]]
+id = "button_5"
+name = "Button 5"
+kind = "button"
+at = [322, 131]
+
+[[control]]
+id = "button_28"
+name = "Button 28"
+kind = "button"
+at = [412, 515]
+side = "right"
+
+[[control]]
+id = "button_27"
+name = "Button 27"
+kind = "button"
+at = [451, 489]
+side = "right"
+
+[[control]]
+id = "button_29"
+name = "Button 29"
+kind = "button"
+at = [488, 471]
+side = "right"
+
+[[control]]
+id = "button_26"
+name = "Button 26"
+kind = "button"
+at = [470, 618]
+side = "right"
+
+[[control]]
+id = "button_25"
+name = "Button 25"
+kind = "button"
+at = [455, 562]
+side = "right"
+
+[[control]]
+id = "axis_z"
+name = "Axis Z"
+kind = "axis"
+at = [508, 568]
+side = "right"
+
+[[control]]
+id = "button_24"
+name = "Button 24"
+kind = "button"
+at = [554, 576]
+side = "right"
+
+[[control]]
+id = "button_23"
+name = "Button 23"
+kind = "button"
+at = [530, 522]
+side = "right"
+
+[[control]]
+id = "axis_x"
+name = "Stick"
+kind = "stick"
+parts = ["x", "y", "twist"]
+at = [313, 445]

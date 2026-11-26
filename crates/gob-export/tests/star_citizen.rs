@@ -108,7 +108,8 @@ fn reads_our_devices_and_bindings() {
     assert_eq!(
         set,
         [
-            &bind("seat_general/v_eject", "vjoy:1:button:47"),
+            // Pressed twice, as its activation mode says.
+            &bind("seat_general/v_eject", "vjoy:1:button:47@double"),
             &bind("seat_general/v_emergency_exit", "key:0x148"),
             &bind("seat_general/v_emergency_exit", "vjoy:1:button:17"),
         ]
@@ -143,7 +144,7 @@ fn writes_actionmaps_and_a_layout() {
         },
     ];
     let binds = [
-        bind("seat_general/v_eject", "vjoy:1:button:47"),
+        bind("seat_general/v_eject", "vjoy:1:button:47@double"),
         bind("spaceship_movement/v_strafe_up", "vjoy:2:hat:1:up"),
         bind("spaceship_movement/v_roll", "vjoy:2:axis:rz"),
         bind("seat_general/v_emergency_exit", "key:0x148"),
@@ -225,6 +226,78 @@ fn writes_actionmaps_and_a_layout() {
     }
 }
 
+/// A button held long or pressed twice gets its activation mode; one pressed another way now
+/// changes its mode, and a plain press drops it.
+#[test]
+fn writes_long_and_double_presses() {
+    let p = plugin();
+    let t = target(&p);
+    let catalog = p.catalogs.pick(Some("4.10.197.2878")).unwrap().0;
+    let devices = [DeviceLink {
+        output: "vjoy:1".into(),
+        game_device: "js1".into(),
+    }];
+    let binds = [
+        // Was a double tap: now plain.
+        bind("seat_general/v_eject", "vjoy:1:button:47"),
+        // Was plain: now held long.
+        bind("seat_general/v_emergency_exit", "vjoy:1:button:17@long"),
+        bind("spaceship_movement/v_strafe_up", "vjoy:1:hat:1:up@double"),
+    ];
+    let mut options = BTreeMap::new();
+    options.insert("clear_defaults".to_string(), OptionValue::Bool(false));
+    let options = p.option_values(&options).unwrap();
+    let files = files(&t, ACTIONMAPS);
+    let out = p
+        .write(&WriteContext {
+            target: &t,
+            files: &files,
+            catalog,
+            ours: &ours(1),
+            devices: &devices,
+            binds: &binds,
+            cleared: &[],
+            profile: "My profile",
+            options: &options,
+        })
+        .unwrap();
+    let text = &out.files["actionmaps"];
+    assert!(text.contains("<rebind input=\"js1_button47\"/>"), "{text}");
+    assert!(
+        text.contains("<rebind input=\"js1_button17\" activationMode=\"delayed_press\"/>"),
+        "{text}"
+    );
+    assert!(
+        text.contains("<rebind input=\"js1_hat1_up\" activationMode=\"double_tap\"/>"),
+        "{text}"
+    );
+    let layout = &out.create[0].text;
+    assert!(
+        layout.contains("<rebind input=\"js1_button17\" activationMode=\"delayed_press\"/>"),
+        "{layout}"
+    );
+    let eject = out
+        .changes
+        .iter()
+        .find(|c| c.action == "seat_general/v_eject")
+        .unwrap();
+    assert_eq!(eject.from.as_deref(), Some("js1_button47 (double)"));
+    assert_eq!(eject.to.as_deref(), Some("js1_button47"));
+    // Read back, every press is as written.
+    let read = p
+        .read(&ReadContext {
+            target: &t,
+            files: &files_with(&t, text),
+            catalog,
+            ours: &ours(1),
+            devices: &[],
+        })
+        .unwrap();
+    for b in &binds {
+        assert!(read.binds.contains(b), "{b:?} in {:?}", read.binds);
+    }
+}
+
 #[test]
 fn writes_keys_and_mouse_only_for_the_actions_held() {
     let p = plugin();
@@ -250,7 +323,7 @@ fn writes_keys_and_mouse_only_for_the_actions_held() {
         .unwrap()
     };
     let joystick = [
-        bind("seat_general/v_eject", "vjoy:1:button:47"),
+        bind("seat_general/v_eject", "vjoy:1:button:47@double"),
         bind("seat_general/v_emergency_exit", "vjoy:1:button:17"),
     ];
     // Nothing held: the keyboard binding in the file stays, nothing changes.
@@ -291,8 +364,8 @@ fn writes_keys_and_mouse_only_for_the_actions_held() {
             (
                 ChangeKind::Changed,
                 "seat_general/v_eject",
-                Some("js1_button47, kb1_ralt+y"),
-                Some("js1_button47, kb1_lalt+mouse2, mo1_mwheel_up")
+                Some("js1_button47 (double), kb1_ralt+y"),
+                Some("js1_button47 (double), kb1_lalt+mouse2, mo1_mwheel_up")
             ),
             (
                 ChangeKind::Changed,

@@ -58,6 +58,10 @@ pub struct Manifest {
     /// The game versions it can write.
     #[serde(default)]
     pub game: Range,
+    /// Presses the game tells apart from a plain press, besides it: "long", "double". Bindings
+    /// with one come as output ids with `@long` / `@double` at their end.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub presses: Vec<String>,
 }
 
 fn first_api() -> u32 {
