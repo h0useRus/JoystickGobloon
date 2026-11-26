@@ -16,3 +16,137 @@ name = "Gladiator EVO L"
 id = "main"
 name = "Stick"
 image = "views/main.png"
+
+[[control]]
+id = "hat_1"
+name = "Hat 1"
+kind = "hat"
+at = [419, 76]
+side = "right"
+
+[[control]]
+id = "button_1"
+name = "Button 1"
+kind = "button"
+at = [443, 190]
+side = "right"
+
+[[control]]
+id = "button_2"
+name = "Button 2"
+kind = "button"
+at = [429, 215]
+side = "right"
+
+[[control]]
+id = "button_22"
+name = "Button 22"
+kind = "button"
+at = [480, 187]
+side = "right"
+
+[[control]]
+id = "button_21"
+name = "Button 21"
+kind = "button"
+at = [485, 162]
+side = "right"
+
+[[control]]
+id = "button_4"
+name = "Button 4"
+kind = "button"
+at = [507, 91]
+side = "right"
+
+[[control]]
+id = "button_3"
+name = "Button 3"
+kind = "button"
+at = [408, 137]
+side = "right"
+
+[[control]]
+id = "hat"
+name = "Hat 1"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [356, 116]
+side = "right"
+
+[[control]]
+id = "hat_2"
+name = "Hat 2"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [349, 50]
+
+[[control]]
+id = "hat_3"
+name = "Hat 3"
+kind = "hat"
+parts = ["up", "right", "down", "left", "push"]
+at = [373, 253]
+
+[[control]]
+id = "button_5"
+name = "Button 5"
+kind = "button"
+at = [289, 287]
+side = "right"
+
+[[control]]
+id = "button_28"
+name = "Button 28"
+kind = "button"
+at = [154, 516]
+
+[[control]]
+id = "button_27"
+name = "Button 27"
+kind = "button"
+at = [194, 532]
+
+[[control]]
+id = "button_29"
+name = "Button 29"
+kind = "button"
+at = [242, 548]
+
+[[control]]
+id = "button_26"
+name = "Button 26"
+kind = "button"
+at = [91, 620]
+
+[[control]]
+id = "button_25"
+name = "Button 25"
+kind = "button"
+at = [111, 563]
+
+[[control]]
+id = "axis_z"
+name = "Axis Z"
+kind = "axis"
+at = [142, 613]
+
+[[control]]
+id = "button_24"
+name = "Button 24"
+kind = "button"
+at = [179, 650]
+
+[[control]]
+id = "button_23"
+name = "Button 23"
+kind = "button"
+at = [206, 600]
+
+[[control]]
+id = "axis_x"
+name = "Stick"
+kind = "stick"
+parts = ["x", "y", "twist"]
+at = [324, 484]
+side = "right"

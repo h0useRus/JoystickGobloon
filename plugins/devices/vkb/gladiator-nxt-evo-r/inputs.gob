@@ -1,1 +1,42 @@
-# Filled by device_teach from a stick on the factory profile.
+axis_z = "axis:z"
+button_1 = "button:1"
+button_2 = "button:2"
+button_21 = "button:21"
+button_22 = "button:22"
+button_23 = "button:23"
+button_24 = "button:24"
+button_25 = "button:25"
+button_26 = "button:26"
+button_27 = "button:27"
+button_28 = "button:28"
+button_29 = "button:29"
+button_3 = "button:3"
+button_4 = "button:4"
+button_5 = "button:5"
+hat_1 = "hat:1"
+
+[axis_x]
+twist = "axis:rz"
+x = "axis:x"
+y = "axis:y"
+
+[hat]
+down = "button:8"
+left = "button:9"
+push = "button:10"
+right = "button:7"
+up = "button:6"
+
+[hat_2]
+down = "button:13"
+left = "button:14"
+push = "button:15"
+right = "button:12"
+up = "button:11"
+
+[hat_3]
+down = "button:18"
+left = "button:19"
+push = "button:20"
+right = "button:17"
+up = "button:16"
