@@ -92,7 +92,13 @@ impl MapApp {
             controls
                 .iter()
                 .map(|(n, c)| (*n, c, to_screen(spot(c)).distance(p)))
-                .filter(|(_, _, d)| *d <= glyphs::RADIUS + 3.0)
+                .filter(|(_, c, d)| {
+                    *d <= if c.kind == Kind::Hat {
+                        glyphs::RADIUS
+                    } else {
+                        glyphs::GAUGE.y / 2.0
+                    }
+                })
                 .min_by(|a, b| a.2.total_cmp(&b.2))
                 .map(|(n, c, _)| (n, c.clone()))
         };
@@ -141,9 +147,14 @@ impl MapApp {
                 .min_by(|a, b| a.2.total_cmp(&b.2))
                 .map(|(c, parts, _)| (c, parts))?;
             let center = to_screen(group.at);
-            let part = parts.iter().copied().find(|part| {
-                (center + slot_offset(part) * GROUP_GAP).distance(p) <= GROUP_SLOT + 3.0
-            });
+            let part = if group.kind == Kind::Hat {
+                let push = group.parts().contains(&"push");
+                glyphs::hat_part_at(p - center, push).map(|n| HAT_PARTS[n])
+            } else {
+                parts.iter().copied().find(|part| {
+                    (center + slot_offset(part) * GROUP_GAP).distance(p) <= GROUP_SLOT + 3.0
+                })
+            };
             Some((group.clone(), part))
         };
         let target = pointer
@@ -159,6 +170,12 @@ impl MapApp {
                 .as_ref()
                 .filter(|((g, _), _)| g.id == c.id)
                 .map(|((_, part), input)| (*part, *input));
+            if let Some((part, _)) = open
+                && c.kind == Kind::Hat
+            {
+                self.draw_control(&painter, &pal, accent, &visuals, c, at, *n, true, part);
+                continue;
+            }
             if let Some((part, input)) = open {
                 let parts = self.group_parts(c, input).unwrap_or(&[]);
                 self.draw_slots(&painter, &visuals, accent, c, at, parts, part);
@@ -175,6 +192,7 @@ impl MapApp {
                 at,
                 *n,
                 selected || hovered,
+                None,
             );
         }
         if let Some(((group, part), _)) = &target {
@@ -405,6 +423,7 @@ impl MapApp {
         at: Pos2,
         n: usize,
         strong: bool,
+        over: Option<&str>,
     ) {
         let inputs = self
             .plugin()
@@ -418,32 +437,60 @@ impl MapApp {
         let value = |input: Option<Input>| input.and_then(|i| self.axis_value(i));
         match c.kind {
             Kind::Hat => {
-                let mut parts: Vec<glyphs::Part> = HAT_PARTS[..4]
+                let push = c.parts().contains(&"push");
+                let shown = if push {
+                    &HAT_PARTS[..]
+                } else {
+                    &HAT_PARTS[..4]
+                };
+                let parts: Vec<glyphs::PadPart> = shown
                     .iter()
-                    .map(|p| state(inputs.get(&c.id, p)))
+                    .map(|p| {
+                        let input = inputs.get(&c.id, p);
+                        // A button shows its number, a hat direction (or nothing) its arrow.
+                        let label = match input {
+                            Some(Input::Button(b)) => b.to_string(),
+                            // A hat direction or nothing yet: its chevron says enough.
+                            _ => String::new(),
+                        };
+                        glyphs::PadPart {
+                            part: state(input),
+                            label,
+                        }
+                    })
                     .collect();
-                if c.parts().contains(&"push") {
-                    parts.push(state(inputs.get(&c.id, "push")));
-                }
-                glyphs::hat(painter, at, &parts, strong, pal);
-                glyphs::number(painter, glyphs::number_at(at, false), n, strong, pal);
+                let over = over.and_then(|o| HAT_PARTS.iter().position(|p| *p == o));
+                // The pad shows its buttons' numbers: no number of its own.
+                glyphs::hat(painter, at, &parts, over, strong, pal);
             }
             Kind::Stick => {
                 let x = inputs.get(&c.id, "x");
                 let y = inputs.get(&c.id, "y");
                 let twist = inputs.get(&c.id, "twist");
-                let lit = [x, y, twist].into_iter().flatten().any(|i| self.is_lit(i));
                 let xy = value(x)
                     .or(value(y))
                     .map(|_| [value(x).unwrap_or(0.0), value(y).unwrap_or(0.0)]);
-                glyphs::stick(painter, at, xy, value(twist), lit, strong, pal);
-                glyphs::number(painter, glyphs::number_at(at, false), n, strong, pal);
+                let pad = match (state(x), state(y)) {
+                    (glyphs::Part::Lit, _) | (_, glyphs::Part::Lit) => glyphs::Part::Lit,
+                    (glyphs::Part::Empty, glyphs::Part::Empty) => glyphs::Part::Empty,
+                    _ => glyphs::Part::Mapped,
+                };
+                glyphs::stick(
+                    painter,
+                    at,
+                    xy,
+                    value(twist),
+                    pad,
+                    state(twist),
+                    strong,
+                    pal,
+                );
+                glyphs::number(painter, glyphs::pad_number_at(at), n, strong, pal);
             }
             Kind::Axis => {
                 let input = inputs.get(&c.id, "");
-                let lit = input.is_some_and(|i| self.is_lit(i));
-                glyphs::gauge(painter, at, value(input), lit, strong, pal);
-                glyphs::number(painter, glyphs::number_at(at, true), n, strong, pal);
+                glyphs::gauge(painter, at, value(input), state(input), strong, pal);
+                glyphs::number(painter, glyphs::gauge_number_at(at), n, strong, pal);
             }
             _ => {
                 let lit = self.inputs_of(c).into_iter().any(|i| self.is_lit(i));
