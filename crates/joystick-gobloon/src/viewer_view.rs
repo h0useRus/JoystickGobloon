@@ -284,6 +284,8 @@ impl ViewerView {
                     {
                         let title = format!("{name} · {}", i18n.tr("viewer-picture"));
                         let (edit_it, export_it) = section_with(ui, &title, |ui| {
+                            // The two icons belong together: next to each other.
+                            ui.spacing_mut().item_spacing.x = 0.0;
                             let edit = style::icon_button(
                                 ui,
                                 true,
