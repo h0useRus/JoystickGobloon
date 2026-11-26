@@ -601,8 +601,9 @@ impl Mapper {
                 &i18n.tr("map-export"),
             )
             .clicked()
+                && let Some(id) = self.plugin.clone()
             {
-                self.export_file();
+                self.export_file(&id);
             }
         });
         ui.separator();
@@ -618,11 +619,8 @@ impl Mapper {
         }
     }
 
-    /// Saves the mapped device's picture and mapping as one file to share.
-    pub fn export_file(&mut self) {
-        let Some(id) = self.plugin.clone() else {
-            return;
-        };
+    /// Saves device plugin `id`'s picture and mapping as one file to share.
+    pub fn export_file(&mut self, id: &str) {
         let Some(to) = rfd::FileDialog::new()
             .set_file_name(format!("{id}.zip"))
             .add_filter("ZIP", &["zip"])
@@ -630,7 +628,7 @@ impl Mapper {
         else {
             return;
         };
-        let result = share::export(&self.store, &id, &to);
+        let result = share::export(&self.store, id, &to);
         if result.is_ok() {
             log::info!("device plugin {id} exported to {}", to.display());
         }

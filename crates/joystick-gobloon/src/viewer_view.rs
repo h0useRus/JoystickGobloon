@@ -283,12 +283,24 @@ impl ViewerView {
                         && let Some(mapped) = mapped.get(&d.info.guid)
                     {
                         let title = format!("{name} · {}", i18n.tr("viewer-picture"));
-                        let clicked = section_with(ui, &title, |ui| {
-                            ui.button(format!("{}  {}", icon::PENCIL_SIMPLE, i18n.tr("map-edit")))
-                                .clicked()
+                        let (edit_it, export_it) = section_with(ui, &title, |ui| {
+                            let edit = style::icon_button(
+                                ui,
+                                true,
+                                icon::PENCIL_SIMPLE,
+                                &i18n.tr("map-edit"),
+                            )
+                            .clicked();
+                            let export =
+                                style::icon_button(ui, true, icon::EXPORT, &i18n.tr("map-export"))
+                                    .clicked();
+                            (edit, export)
                         });
-                        if clicked {
+                        if edit_it {
                             edit = Some((d.info.guid.clone(), mapped.id.clone()));
+                        }
+                        if export_it {
+                            self.mapper.export_file(&mapped.id);
                         }
                         self.picture(ui, d, mapped);
                     }
