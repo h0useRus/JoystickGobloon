@@ -45,7 +45,8 @@ pub struct MapApp {
     pub plugin: Option<String>,
     /// Its view shown.
     pub view: String,
-    pub input: InputService,
+    /// The controllers; `None` in tests.
+    pub input: Option<InputService>,
     /// Connected controllers (not our virtual ones), read each frame.
     pub devices: Vec<DeviceState>,
     /// The controller whose inputs the strip shows (instance GUID).
@@ -66,6 +67,32 @@ pub struct MapApp {
     pub new_device: Option<NewDevice>,
     pub new_control: Option<NewControl>,
     pub error: Option<String>,
+    /// Where things were drawn last frame (tests drag between them).
+    pub layout: Layout,
+}
+
+/// Where the picture and the chips were drawn last frame.
+#[derive(Debug, Default, Clone)]
+pub struct Layout {
+    /// The picture's rectangle on screen and its scale (screen points per picture unit).
+    pub picture: Option<(egui::Rect, f32)>,
+    pub chips: Vec<(Input, egui::Rect)>,
+}
+
+#[cfg(test)]
+impl Layout {
+    /// A spot of the picture on screen.
+    pub fn to_screen(&self, at: [f32; 2]) -> Option<egui::Pos2> {
+        let (rect, scale) = self.picture?;
+        Some(rect.min + egui::vec2(at[0], at[1]) * scale)
+    }
+
+    pub fn chip(&self, input: Input) -> Option<egui::Rect> {
+        self.chips
+            .iter()
+            .find(|(i, _)| *i == input)
+            .map(|(_, r)| *r)
+    }
 }
 
 impl MapApp {
@@ -87,9 +114,24 @@ impl MapApp {
         style::apply(&cc.egui_ctx, &PALETTES, preference);
         let ctx = cc.egui_ctx.clone();
         let input = InputService::start(move || ctx.request_repaint());
-        let store = Store::new();
-        let own = Own::load();
-        let mut app = Self {
+        let mut app = Self::with(i18n, Store::new(), Some(input), Own::load());
+        // Debug builds: JOYSTICK_GOBLOON_MAP_ALL=1 shows every input at start.
+        app.show_all =
+            cfg!(debug_assertions) && std::env::var_os("JOYSTICK_GOBLOON_MAP_ALL").is_some();
+        // Debug builds open a device at start for screenshots: JOYSTICK_GOBLOON_MAP_DEVICE=<id>.
+        let start = std::env::var("JOYSTICK_GOBLOON_MAP_DEVICE")
+            .ok()
+            .filter(|_| cfg!(debug_assertions));
+        if let Some(id) = start.or_else(|| app.own.last_device.clone())
+            && app.store.get(&id).is_some()
+        {
+            app.open(&id);
+        }
+        app
+    }
+
+    pub fn with(i18n: I18n, store: Store, input: Option<InputService>, own: Own) -> Self {
+        Self {
             i18n,
             store,
             own,
@@ -102,9 +144,7 @@ impl MapApp {
             detector: None,
             recent: Vec::new(),
             seen: HashMap::new(),
-            // Debug builds: JOYSTICK_GOBLOON_MAP_ALL=1 shows every input at start.
-            show_all: cfg!(debug_assertions)
-                && std::env::var_os("JOYSTICK_GOBLOON_MAP_ALL").is_some(),
+            show_all: false,
             selected: None,
             moving: None,
             name_edit: None,
@@ -112,17 +152,8 @@ impl MapApp {
             new_device: None,
             new_control: None,
             error: None,
-        };
-        // Debug builds open a device at start for screenshots: JOYSTICK_GOBLOON_MAP_DEVICE=<id>.
-        let start = std::env::var("JOYSTICK_GOBLOON_MAP_DEVICE")
-            .ok()
-            .filter(|_| cfg!(debug_assertions));
-        if let Some(id) = start.or_else(|| app.own.last_device.clone())
-            && app.store.get(&id).is_some()
-        {
-            app.open(&id);
+            layout: Layout::default(),
         }
-        app
     }
 
     pub fn plugin(&self) -> Option<&DevicePlugin> {
@@ -179,9 +210,11 @@ impl MapApp {
     /// Reads the controllers and what they sent since the last frame.
     fn read_input(&mut self) {
         let mut changed = false;
-        let events: Vec<InputEvent> = self.input.events().collect();
-        self.devices = self
-            .input
+        let Some(service) = &self.input else {
+            return;
+        };
+        let events: Vec<InputEvent> = service.events().collect();
+        self.devices = service
             .devices()
             .into_iter()
             .filter(|d| !d.info.is_own())
@@ -497,7 +530,7 @@ pub const KINDS: [Kind; 8] = [
     Kind::Stick,
 ];
 
-fn install_fonts(ctx: &egui::Context, cjk: bool) {
+pub fn install_fonts(ctx: &egui::Context, cjk: bool) {
     let mut fonts = egui::FontDefinitions::default();
     style::add_icon_font(&mut fonts);
     if cjk {
@@ -519,6 +552,17 @@ fn install_fonts(ctx: &egui::Context, cjk: bool) {
 
 impl eframe::App for MapApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.tick(ctx);
+    }
+
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.show(root);
+    }
+}
+
+impl MapApp {
+    /// Every frame, drawn or not: reads the controllers.
+    pub fn tick(&mut self, ctx: &egui::Context) {
         self.read_input();
         // Axes' controls go dark again after a moment.
         if self.seen.values().any(|t| t.elapsed() < AXIS_LIT) {
@@ -526,8 +570,9 @@ impl eframe::App for MapApp {
         }
     }
 
-    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    pub fn show(&mut self, root: &mut egui::Ui) {
         let ctx = root.ctx().clone();
+        self.layout.chips.clear();
         let margin = egui::Margin::symmetric(16, 4);
         egui::Panel::top("toolbar")
             .frame(egui::Frame::side_top_panel(&ctx.global_style()).inner_margin(margin))

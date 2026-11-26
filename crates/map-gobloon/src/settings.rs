@@ -66,6 +66,10 @@ impl Own {
     }
 
     pub fn save(&self) {
+        // Tests leave the user's file alone.
+        if cfg!(test) {
+            return;
+        }
         let Some(dir) = data_dir() else {
             return;
         };

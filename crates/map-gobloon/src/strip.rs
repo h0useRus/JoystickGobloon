@@ -98,6 +98,7 @@ impl MapApp {
         let padding = egui::vec2(10.0, 4.0);
         // One fixed-size piece, so the wrapped row breaks before it rather than squeezing it.
         let (rect, response) = ui.allocate_exact_size(text + padding * 2.0, Sense::drag());
+        self.layout.chips.push((input, rect));
         let draw = |painter: &egui::Painter, rect: Rect| {
             painter.rect(
                 rect,

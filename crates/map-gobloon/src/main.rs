@@ -11,6 +11,8 @@ mod platform;
 mod settings;
 mod store;
 mod strip;
+#[cfg(test)]
+mod ui_tests;
 
 pub const APP_NAME: &str = "Map Gobloon";
 /// The window's app id (Wayland) and class (X11).

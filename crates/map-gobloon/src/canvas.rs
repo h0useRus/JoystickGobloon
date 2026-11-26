@@ -72,6 +72,7 @@ impl MapApp {
         let scale = (area.width() / size.x).min(area.height() / size.y).min(3.0);
         let picture = Rect::from_center_size(area.center(), size * scale);
         let response = ui.allocate_rect(area, Sense::click_and_drag());
+        self.layout.picture = Some((picture, scale));
         let painter = ui.painter_at(area);
         painter.image(
             texture.id(),
@@ -95,14 +96,15 @@ impl MapApp {
 
         // The control under the pointer: within reach of a dragged chip, on the tag otherwise.
         let reach = if chip.is_some() { REACH } else { TAG + 3.0 };
-        let near = pointer.and_then(|p| {
+        let near_at = |p: Pos2| {
             controls
                 .iter()
                 .map(|(n, c)| (*n, c, to_screen(spot(c)).distance(p)))
                 .filter(|(_, _, d)| *d <= reach)
                 .min_by(|a, b| a.2.total_cmp(&b.2))
                 .map(|(n, c, _)| (n, c.clone()))
-        });
+        };
+        let near = pointer.and_then(near_at);
 
         let accent = style::accent(ui);
         let visuals = ui.visuals().clone();
@@ -213,8 +215,10 @@ impl MapApp {
         }
 
         // Moving and selecting tags.
+        // A tag is moved from where the button went down: the pointer has left it by now.
+        let pressed_on = ui.input(|i| i.pointer.press_origin()).and_then(near_at);
         if response.drag_started()
-            && let Some((_, c)) = &near
+            && let Some((_, c)) = &pressed_on
         {
             self.moving = Some((c.id.clone(), c.at));
             self.selected = Some(c.id.clone());

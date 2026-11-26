@@ -20,6 +20,11 @@ pub struct Store {
 impl Store {
     pub fn new() -> Self {
         let (dirs, write_dir) = folders();
+        Self::with(dirs, write_dir)
+    }
+
+    /// Plugins from `dirs`, changes into `write_dir`.
+    pub fn with(dirs: Vec<PathBuf>, write_dir: PathBuf) -> Self {
         let catalog = Catalog::load(&dirs);
         Self {
             dirs,
