@@ -104,21 +104,21 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/completed/LIGHTING_PLAN.md
-- crates/gob-devices device plugins = a controller's picture + its controls + which input each sends, shared by Map
-  Gobloon and Joystick Gobloon: plugins/devices/<brand>/<device>/ (device.gob: id, name, brand, `[[match]]` vid + name
-  part, `[[view]]` pictures, `[[control]]` id/name/kind/parts/at; inputs.gob: control -> `button:N`/`axis:x`/`hat:N`/
-  `hat:N:up`), shipped in `devices/` next to the exe, user copies in `<data dir>/devices` win by id; edit.rs = device.gob
-  changed as text (comments kept), live.rs = gob-input events -> inputs (`Detector`, `is_active`), draw.rs = how
-  controls look on the picture in both apps (egui: hat pad, stick, gauge, tag; `draw::control`); examples
-  `device_check`, `device_teach`. Joystick Gobloon: device_pictures.rs (catalog, textures, reloads when plugin
-  files change) + the Input viewer's Picture view. The Device tab of the Game page waits in archive/device-pictures
-- crates/map-gobloon Map Gobloon (MapGobloon.exe): pick brand + device; each button/axis/hat worked on the controller
-  gets the next number (a hat = one number), waiting in the picture's top left corner until dragged onto the picture:
-  then it is a control with that one input (`button_7`, kind from the input); placed tags move by drag, come off by
-  right-click; writes the plugin (debug builds: the repository's plugins/devices, release: the user's folder, shipped
-  plugins copied there first); own lang/*.ftl in the crate; lists itself in HidHide and restarts once to see hidden
-  sticks; debug env `JOYSTICK_GOBLOON_MAP_DEVICE=<plugin id>`; src/ui_tests.rs drives it with egui_kittest. Not in
-  releases yet
+- crates/gob-devices device plugins = a controller's picture + its controls + which input each sends:
+  plugins/devices/<brand>/<device>/ (device.gob: id, name, brand, `[[match]]` vid + name part, `[[view]]` pictures,
+  `[[control]]` id/name/kind/parts/at; inputs.gob: control -> `button:N`/`axis:x`/`hat:N`/`hat:N:up`), shipped in
+  `devices/` next to the exe, user copies in `<data dir>/devices` win by id; edit.rs = device.gob changed as text
+  (comments kept), live.rs = inputs from events or readings (`Detector::feed`/`poll`, `is_active`), draw.rs = how
+  controls look on the picture (egui: hat pad, stick, gauge, tag; `draw::control`); examples `device_check`,
+  `device_teach`. The Device tab of the Game page waits in archive/device-pictures
+- joystick-gobloon mapping/ = device pictures in the Input viewer (Picture view per device with a plugin, lit live)
+  and mapping ("Edit mapping"; "Add a picture" for a device without one): each button/axis/hat worked gets the next
+  number, waiting in the picture's top left corner until dragged onto it (a control with that one input, `button_7`);
+  tags move by drag, right-click menu (make a hat, split, remove), buttons gather into hats, axes into sticks, copy
+  another device's controls (mirrored for the other hand); store.rs writes the plugin (debug builds: the repository's
+  plugins/devices, release: the user's folder, a shipped plugin copied there first) and reloads plugins whose files
+  changed; tests.rs drives it with egui_kittest; debug env `JOYSTICK_GOBLOON_TAB=mapping` maps the first pictured
+  device (with START_PAGE=viewer). Map Gobloon (the separate tool) is gone
 - crates/gob-script  Lua user scripts (plans/completed/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
   (`send`: the engine is built off its thread), one sandboxed state per script (sandbox.rs `new_state`: time budget +
   memory cap, also used by gob-export plugins), 5 ms per call (interrupt), off after

@@ -1,24 +1,31 @@
-//! The window: toolbar (brand, device, connected controller), the picture with a numbered tag
-//! per placed input (`canvas`) and the list of placed inputs (`panel`).
+//! Device pictures and mapping a controller onto its picture, on the Input viewer's Picture view.
 //!
-//! Mapping works by the controller itself: every button, axis or hat the user works gets the
-//! next number, waiting in the picture's top left corner until it is dragged to the spot of the
-//! picture where that control is. A placed number is a control of the device plugin with that one
-//! input.
+//! [`Mapper`] holds the device plugins (pictures of controllers with their controls placed) and
+//! edits them: every button, axis or hat the user works on the controller gets the next number,
+//! waiting in the picture's top left corner until it is dragged to the spot of the picture where
+//! that control is (`canvas`). A placed number is a control of the device plugin with that one
+//! input; buttons gather into hats and axes into sticks. `panel` lists the placed controls,
+//! `dialogs` makes a new device from a picture and copies the controls of another device.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use eframe::egui::{self, Color32};
+use eframe::egui;
 use gob_devices::{Control, Detector, DevicePlugin, Input, Kind, Palette, Side};
 use gob_i18n::I18n;
-use gob_input::{DeviceState, InputEvent, InputService};
-use gob_ui as style;
-use style::icon;
+use gob_input::{DeviceInfo, DeviceState};
 
-use crate::dialogs::{CopyControls, NewDevice};
-use crate::settings::{Own, Shared, Theme};
-use crate::store::Store;
+use crate::style::{self, icon};
+
+mod canvas;
+mod dialogs;
+mod panel;
+mod store;
+#[cfg(test)]
+mod tests;
+
+use dialogs::{CopyControls, NewDevice};
+use store::Store;
 
 pub use gob_devices::draw::HAT_PARTS;
 /// How far around a button (a share of the picture's width) "Make it a hat" takes buttons in.
@@ -29,35 +36,17 @@ pub const STICK_PARTS: [&str; 3] = ["x", "y", "twist"];
 /// How long an axis' tag stays lit after the axis moved.
 pub const AXIS_LIT: Duration = Duration::from_millis(700);
 
-const PALETTES: style::Palettes = style::Palettes {
-    dark: style::Palette {
-        accent: Color32::from_rgb(0x8c, 0xc8, 0x2c),
-        panel: Color32::from_rgb(0x1b, 0x1d, 0x22),
-        window: Color32::from_rgb(0x23, 0x26, 0x2c),
-        faint: Color32::from_rgb(0x2a, 0x2d, 0x34),
-    },
-    light: style::Palette {
-        accent: Color32::from_rgb(0x6f, 0x9e, 0x1e),
-        panel: Color32::from_rgb(0xf4, 0xf5, 0xf7),
-        window: Color32::from_rgb(0xff, 0xff, 0xff),
-        faint: Color32::from_rgb(0xe8, 0xea, 0xee),
-    },
-};
-
-pub struct MapApp {
-    pub i18n: I18n,
+pub struct Mapper {
     pub store: Store,
-    own: Own,
-    pub brand: Option<String>,
-    /// The device plugin open.
+    /// Mapping now (else only the pictures are shown).
+    pub editing: bool,
+    /// The device plugin edited.
     pub plugin: Option<String>,
     /// Its view shown.
     pub view: String,
-    /// The controllers; `None` in tests.
-    pub input: Option<InputService>,
-    /// Connected controllers (not our virtual ones), read each frame.
+    /// Connected controllers (not our virtual ones), as read this frame.
     pub devices: Vec<DeviceState>,
-    /// The controller read (instance GUID).
+    /// The controller mapped (instance GUID).
     pub device: Option<String>,
     detector: Option<Detector>,
     /// Inputs worked but not placed yet, in the order they came: they get the next numbers.
@@ -71,6 +60,7 @@ pub struct MapApp {
     pub menu: Option<String>,
     /// The selected control's name while it is typed.
     pub name_edit: Option<(String, String)>,
+    /// (plugin id, view id, dark) -> texture and the picture's size in control units.
     textures: HashMap<(String, String, bool), (egui::TextureHandle, egui::Vec2)>,
     pub new_device: Option<NewDevice>,
     pub copy: Option<CopyControls>,
@@ -103,47 +93,19 @@ impl Layout {
     }
 }
 
-impl MapApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let shared = Shared::load();
-        let lang_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("lang").join("map-gobloon")));
-        let mut i18n = I18n::new(crate::LANGUAGES, lang_dir.as_deref());
-        if !shared.language.is_empty() {
-            i18n.set_language(&shared.language);
-        }
-        install_fonts(&cc.egui_ctx, matches!(i18n.language(), "ko" | "zh"));
-        let preference = match shared.theme {
-            Theme::Light => egui::ThemePreference::Light,
-            Theme::Dark => egui::ThemePreference::Dark,
-            Theme::System => egui::ThemePreference::System,
-        };
-        style::apply(&cc.egui_ctx, &PALETTES, preference);
-        let ctx = cc.egui_ctx.clone();
-        let input = InputService::start(move || ctx.request_repaint());
-        let mut app = Self::with(i18n, Store::new(), Some(input), Own::load());
-        // Debug builds open a device at start for screenshots: JOYSTICK_GOBLOON_MAP_DEVICE=<id>.
-        let start = std::env::var("JOYSTICK_GOBLOON_MAP_DEVICE")
-            .ok()
-            .filter(|_| cfg!(debug_assertions));
-        if let Some(id) = start.or_else(|| app.own.last_device.clone())
-            && app.store.get(&id).is_some()
-        {
-            app.open(&id);
-        }
-        app
+impl Default for Mapper {
+    fn default() -> Self {
+        Self::with(Store::new())
     }
+}
 
-    pub fn with(i18n: I18n, store: Store, input: Option<InputService>, own: Own) -> Self {
+impl Mapper {
+    pub fn with(store: Store) -> Self {
         Self {
-            i18n,
             store,
-            own,
-            brand: None,
+            editing: false,
             plugin: None,
             view: gob_devices::plugin::MAIN_VIEW.into(),
-            input,
             devices: Vec::new(),
             device: None,
             detector: None,
@@ -161,8 +123,60 @@ impl MapApp {
         }
     }
 
+    /// Every frame: the controllers' readings, what the mapped one did since the last frame,
+    /// and the plugins again when their files changed.
+    pub fn update(&mut self, devices: &[DeviceState]) {
+        self.devices = devices
+            .iter()
+            .filter(|d| !d.info.is_own() && d.info.guid != gob_core::LOGICAL_DEVICE_GUID)
+            .cloned()
+            .collect();
+        if self.store.reload_if_changed() {
+            self.textures.clear();
+        }
+        if !self.editing {
+            return;
+        }
+        let Some(state) = self.device_state().cloned() else {
+            self.detector = None;
+            return;
+        };
+        let detector = self.detector.get_or_insert_with(|| Detector::new(&state));
+        for input in detector.poll(&state) {
+            self.note(input);
+        }
+    }
+
+    /// The plugin for a connected device, if there is one.
+    pub fn plugin_for(&self, info: &DeviceInfo) -> Option<&DevicePlugin> {
+        if info.is_own() {
+            return None;
+        }
+        self.store
+            .catalog
+            .find(info.vendor_id, info.product_id, &info.name)
+    }
+
     pub fn plugin(&self) -> Option<&DevicePlugin> {
         self.store.get(self.plugin.as_deref()?)
+    }
+
+    /// Starts mapping controller `guid` onto plugin `id`.
+    pub fn edit(&mut self, guid: &str, id: &str) {
+        self.device = Some(guid.to_string());
+        self.detector = self.device_state().map(Detector::new);
+        self.seen.clear();
+        self.open(id);
+        self.editing = true;
+    }
+
+    /// Mapping is done.
+    pub fn done(&mut self) {
+        self.editing = false;
+        self.detector = None;
+        self.pending.clear();
+        self.moving = None;
+        self.menu = None;
     }
 
     /// Opens device plugin `id`.
@@ -170,90 +184,24 @@ impl MapApp {
         let Some(plugin) = self.store.get(id) else {
             return;
         };
-        self.brand = Some(plugin.manifest.brand.clone());
-        self.view = plugin
-            .manifest
-            .views
-            .first()
-            .map_or_else(|| gob_devices::plugin::MAIN_VIEW.into(), |v| v.id.clone());
+        if self.plugin.as_deref() != Some(id)
+            || !plugin.manifest.views.iter().any(|v| v.id == self.view)
+        {
+            self.view = plugin
+                .manifest
+                .views
+                .first()
+                .map_or_else(|| gob_devices::plugin::MAIN_VIEW.into(), |v| v.id.clone());
+        }
         self.plugin = Some(id.to_string());
         self.selected = None;
         self.name_edit = None;
         self.pending.clear();
-        if self.own.last_device.as_deref() != Some(id) {
-            self.own.last_device = Some(id.to_string());
-            self.own.save();
-        }
-        // A connected controller this plugin fits is the one to read.
-        let fits = self.devices.iter().find(|d| {
-            let i = &d.info;
-            self.store
-                .get(id)
-                .and_then(|p| p.score(i.vendor_id, i.product_id, &i.name))
-                .is_some()
-        });
-        if let Some(guid) = fits.map(|d| d.info.guid.clone()) {
-            self.choose_device(Some(guid));
-        }
-    }
-
-    /// Reads controller `guid` from now on.
-    pub fn choose_device(&mut self, guid: Option<String>) {
-        if self.device == guid {
-            return;
-        }
-        self.device = guid;
-        self.pending.clear();
-        self.seen.clear();
-        self.detector = self.device_state().map(Detector::new);
     }
 
     pub fn device_state(&self) -> Option<&DeviceState> {
         let guid = self.device.as_deref()?;
         self.devices.iter().find(|d| d.info.guid == guid)
-    }
-
-    /// Reads the controllers and what they sent since the last frame.
-    fn read_input(&mut self) {
-        let Some(service) = &self.input else {
-            return;
-        };
-        let events: Vec<InputEvent> = service.events().collect();
-        self.devices = service
-            .devices()
-            .into_iter()
-            .filter(|d| !d.info.is_own())
-            .collect();
-        let mut changed = false;
-        for event in &events {
-            changed |= matches!(event, InputEvent::DevicesChanged);
-            if let Some(input) = self.detector.as_mut().and_then(|d| d.feed(event)) {
-                self.note(input);
-            }
-        }
-        if self.device.is_some() && self.device_state().is_none() {
-            self.detector = None;
-        } else if self.detector.is_none() && self.device_state().is_some() {
-            self.detector = self.device_state().map(Detector::new);
-        }
-        // A controller appears: read it when it fits the open device, or when it is the only one.
-        if (changed || self.detector.is_none()) && self.device.is_none() {
-            let id = self.plugin.clone();
-            let fits = self.devices.iter().find(|d| {
-                let i = &d.info;
-                id.as_deref()
-                    .and_then(|id| self.store.get(id))
-                    .and_then(|p| p.score(i.vendor_id, i.product_id, &i.name))
-                    .is_some()
-            });
-            let pick = fits.or(match self.devices.as_slice() {
-                [only] => Some(only),
-                _ => None,
-            });
-            if let Some(guid) = pick.map(|d| d.info.guid.clone()) {
-                self.choose_device(Some(guid));
-            }
-        }
     }
 
     /// The user worked `input`: a new one gets the next number (a hat is one number for all its
@@ -319,15 +267,26 @@ impl MapApp {
         gob_devices::axis_value(self.device_state()?, input)
     }
 
-    /// The open view's picture as a texture and its size in hotspot units.
+    /// The edited view's picture as a texture and its size in control units.
     pub fn texture(&mut self, ctx: &egui::Context) -> Option<(egui::TextureHandle, egui::Vec2)> {
         let id = self.plugin.clone()?;
+        let view = self.view.clone();
+        self.picture(ctx, &id, &view)
+    }
+
+    /// A view's picture for the current theme and its size in control units.
+    pub fn picture(
+        &mut self,
+        ctx: &egui::Context,
+        id: &str,
+        view: &str,
+    ) -> Option<(egui::TextureHandle, egui::Vec2)> {
         let dark = ctx.global_style().visuals.dark_mode;
-        let key = (id.clone(), self.view.clone(), dark);
+        let key = (id.to_string(), view.to_string(), dark);
         if let Some(t) = self.textures.get(&key) {
             return Some(t.clone());
         }
-        let picture = self.store.get(&id)?.pictures.get(&self.view)?;
+        let picture = self.store.get(id)?.pictures.get(view)?;
         let [_, _, w, h] = picture.bounds()?;
         let palette = if dark {
             Palette::dark()
@@ -337,16 +296,17 @@ impl MapApp {
         let mut rgba = match picture.rasterize(&palette, 2.0) {
             Ok(rgba) => rgba,
             Err(e) => {
-                self.error = Some(e);
+                log::warn!("device plugin {id}: picture {view}: {e}");
                 return None;
             }
         };
+        // The window is transparent: near-black pixels would show what is behind it.
         rgba.lift_blacks();
         let [pw, ph] = rgba.size;
         let image =
             egui::ColorImage::from_rgba_premultiplied([pw as usize, ph as usize], &rgba.pixels);
         let texture = ctx.load_texture(
-            format!("device-{id}-{}-{dark}", self.view),
+            format!("device-{id}-{view}-{dark}"),
             image,
             egui::TextureOptions::LINEAR,
         );
@@ -358,6 +318,7 @@ impl MapApp {
     /// Shows what failed.
     pub fn report(&mut self, result: Result<(), String>) {
         if let Err(e) = result {
+            log::error!("device mapping: {e}");
             self.error = Some(e);
         }
     }
@@ -611,22 +572,80 @@ impl MapApp {
         }
     }
 
-    /// An input's caption in the user's language: "Button 12", "Axis X", "Hat 1".
-    pub fn input_label(&self, input: Input) -> String {
-        use gob_i18n::FluentValue;
-        match input {
-            Input::Button(n) => self
-                .i18n
-                .trf("input-button", &[("n", FluentValue::from(n))]),
-            Input::Axis(slot) => self.i18n.trf(
-                "input-axis",
-                &[("name", FluentValue::from(axis_name(slot)))],
-            ),
-            Input::Hat(n) | Input::HatDirection(n, _) => {
-                self.i18n.trf("input-hat", &[("n", FluentValue::from(n))])
+    /// While mapping: the bar (done, the device's views, copying another device's controls),
+    /// the list of placed controls and the picture.
+    pub fn show(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
+        ui.horizontal(|ui| {
+            if ui
+                .button(format!("{}  {}", icon::CHECK, i18n.tr("map-done")))
+                .clicked()
+            {
+                self.done();
+            }
+            if let Some(name) = self.device_state().map(|d| d.info.name.trim().to_string()) {
+                ui.label(egui::RichText::new(name).strong());
+            }
+            let can_copy = self.store.catalog.plugins.len() > 1;
+            if style::icon_button(ui, can_copy, icon::COPY, &i18n.tr("map-copy")).clicked() {
+                self.copy = Some(CopyControls::default());
+            }
+        });
+        ui.separator();
+        egui::Panel::right("mapping-panel")
+            .resizable(true)
+            .default_size(300.0)
+            .min_size(240.0)
+            .show(ui, |ui| self.panel(ui, i18n));
+        self.canvas(ui, i18n);
+        // Axes' tags go dark again after a moment.
+        if self.seen.values().any(|t| t.elapsed() < AXIS_LIT) {
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    /// Asks for a picture of controller `guid` (a device without a plugin).
+    pub fn add_picture(&mut self, guid: &str) {
+        let name = self
+            .devices
+            .iter()
+            .find(|d| d.info.guid == guid)
+            .map(|d| d.info.name.trim().to_string())
+            .unwrap_or_default();
+        self.new_device = Some(NewDevice::new(guid, name));
+    }
+
+    /// The dialogs, shown on top of whatever the page shows.
+    pub fn dialogs(&mut self, ctx: &egui::Context, i18n: &I18n) {
+        self.new_device_dialog(ctx, i18n);
+        self.copy_dialog(ctx, i18n);
+        if let Some(error) = self.error.clone() {
+            let mut close = false;
+            style::modal(ctx, "mapping-error").show(ctx, |ui| {
+                ui.set_max_width(480.0);
+                style::dialog_title(
+                    ui,
+                    Some((icon::WARNING, Some(style::RED))),
+                    &i18n.tr("map-error"),
+                );
+                ui.label(&error);
+                close = style::dialog_buttons(ui, &[style::DialogButton::primary(i18n.tr("ok"))])
+                    .is_some();
+            });
+            if close {
+                self.error = None;
             }
         }
     }
+}
+
+/// An input's caption in the user's language, as the Devices page names it.
+pub fn input_label(i18n: &I18n, input: Input) -> String {
+    let (kind, n) = match input {
+        Input::Button(n) => ("button", u32::from(n)),
+        Input::Axis(slot) => ("axis", u32::from(slot)),
+        Input::Hat(n) | Input::HatDirection(n, _) => ("hat", u32::from(n)),
+    };
+    crate::output_marks::input_name(i18n, kind, &n.to_string())
 }
 
 /// Which hat direction each neighbour of a hat at `center` sits in on the picture: the
@@ -681,204 +700,5 @@ fn axis_name(slot: u8) -> String {
         "slider" => "Slider".into(),
         "dial" => "Dial".into(),
         other => other.to_uppercase(),
-    }
-}
-
-pub fn install_fonts(ctx: &egui::Context, cjk: bool) {
-    let mut fonts = egui::FontDefinitions::default();
-    style::add_icon_font(&mut fonts);
-    if cjk {
-        for (name, file) in crate::platform::cjk_fonts() {
-            let Ok(bytes) = std::fs::read(&file) else {
-                continue;
-            };
-            fonts.font_data.insert(
-                name.into(),
-                std::sync::Arc::new(egui::FontData::from_owned(bytes)),
-            );
-            for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-                fonts.families.entry(family).or_default().push(name.into());
-            }
-        }
-    }
-    ctx.set_fonts(fonts);
-}
-
-impl eframe::App for MapApp {
-    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.tick(ctx);
-    }
-
-    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.show(root);
-    }
-}
-
-impl MapApp {
-    /// Every frame, drawn or not: reads the controllers.
-    pub fn tick(&mut self, ctx: &egui::Context) {
-        self.read_input();
-        // Axes' tags go dark again after a moment.
-        if self.seen.values().any(|t| t.elapsed() < AXIS_LIT) {
-            ctx.request_repaint_after(Duration::from_millis(100));
-        }
-    }
-
-    pub fn show(&mut self, root: &mut egui::Ui) {
-        let ctx = root.ctx().clone();
-        let margin = egui::Margin::symmetric(16, 4);
-        egui::Panel::top("toolbar")
-            .frame(egui::Frame::side_top_panel(&ctx.global_style()).inner_margin(margin))
-            .show(root, |ui| self.toolbar(ui));
-        egui::Panel::right("panel")
-            .resizable(true)
-            .default_size(300.0)
-            .min_size(240.0)
-            .show(root, |ui| self.panel(ui));
-        let frame = egui::Frame::central_panel(&ctx.global_style()).inner_margin(16);
-        egui::CentralPanel::default()
-            .frame(frame)
-            .show(root, |ui| self.canvas(ui));
-        self.dialogs(&ctx);
-    }
-
-    fn toolbar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.set_min_height(style::TOOLBAR_BUTTON);
-            let brands = self.store.brands();
-            let brand_text = self
-                .brand
-                .clone()
-                .unwrap_or_else(|| self.i18n.tr("toolbar-brand"));
-            egui::ComboBox::from_id_salt("brand")
-                .selected_text(brand_text)
-                .width(140.0)
-                .show_ui(ui, |ui| {
-                    for b in &brands {
-                        if ui
-                            .selectable_label(self.brand.as_deref() == Some(b), b)
-                            .clicked()
-                        {
-                            self.brand = Some(b.clone());
-                        }
-                    }
-                })
-                .response
-                .on_hover_text(self.i18n.tr("toolbar-brand"));
-            let devices = self
-                .brand
-                .as_deref()
-                .map(|b| self.store.devices_of(b))
-                .unwrap_or_default();
-            let device_text = self
-                .plugin()
-                .filter(|p| Some(&p.manifest.brand) == self.brand.as_ref())
-                .map(|p| p.manifest.name.clone())
-                .unwrap_or_else(|| self.i18n.tr("toolbar-device"));
-            let mut open = None;
-            egui::ComboBox::from_id_salt("device")
-                .selected_text(device_text)
-                .width(280.0)
-                .show_ui(ui, |ui| {
-                    for (id, name) in &devices {
-                        if ui
-                            .selectable_label(self.plugin.as_deref() == Some(id), name)
-                            .clicked()
-                        {
-                            open = Some(id.clone());
-                        }
-                    }
-                })
-                .response
-                .on_hover_text(self.i18n.tr("toolbar-device"));
-            if let Some(id) = open {
-                self.open(&id);
-            }
-            if style::toolbar_button(ui, true, icon::PLUS_CIRCLE, &self.i18n.tr("toolbar-new"))
-                .clicked()
-            {
-                self.new_device = Some(NewDevice::new(self));
-            }
-            let can_copy = self
-                .plugin()
-                .is_some_and(|p| !p.manifest.controls.is_empty());
-            if style::toolbar_button(ui, can_copy, icon::COPY, &self.i18n.tr("toolbar-copy"))
-                .clicked()
-            {
-                self.copy = Some(CopyControls::default());
-            }
-            ui.separator();
-            ui.label(egui::RichText::new(icon::JOYSTICK).size(style::LARGE_ICON_SIZE))
-                .on_hover_text(self.i18n.tr("toolbar-controller"));
-            let current = self
-                .device_state()
-                .map(|d| d.info.name.clone())
-                .unwrap_or_else(|| self.i18n.tr("toolbar-no-controller"));
-            let mut pick = None;
-            egui::ComboBox::from_id_salt("controller")
-                .selected_text(current)
-                .width(260.0)
-                .show_ui(ui, |ui| {
-                    for d in &self.devices {
-                        let on = self.device.as_deref() == Some(d.info.guid.as_str());
-                        if ui.selectable_label(on, &d.info.name).clicked() {
-                            pick = Some(d.info.guid.clone());
-                        }
-                    }
-                })
-                .response
-                .on_hover_text(self.i18n.tr("toolbar-controller"));
-            if let Some(guid) = pick {
-                self.choose_device(Some(guid));
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if style::toolbar_button(
-                    ui,
-                    true,
-                    icon::ARROWS_CLOCKWISE,
-                    &self.i18n.tr("toolbar-reload"),
-                )
-                .clicked()
-                {
-                    self.store.reload();
-                    self.textures.clear();
-                }
-                if style::toolbar_button(
-                    ui,
-                    true,
-                    icon::FOLDER_OPEN,
-                    &self.i18n.tr("toolbar-folder"),
-                )
-                .clicked()
-                {
-                    let dir = self.store.folder_of(self.plugin.as_deref());
-                    let _ = std::fs::create_dir_all(&dir);
-                    crate::platform::open_folder(&dir);
-                }
-            });
-        });
-    }
-
-    fn dialogs(&mut self, ctx: &egui::Context) {
-        self.new_device_dialog(ctx);
-        self.copy_dialog(ctx);
-        if let Some(error) = self.error.clone() {
-            let mut close = false;
-            style::modal(ctx, "error").show(ctx, |ui| {
-                ui.set_max_width(480.0);
-                style::dialog_title(
-                    ui,
-                    Some((icon::WARNING, Some(style::RED))),
-                    &self.i18n.tr("error-title"),
-                );
-                ui.label(&error);
-                close =
-                    style::dialog_buttons(ui, &[style::DialogButton::primary(self.i18n.tr("ok"))])
-                        .is_some();
-            });
-            if close {
-                self.error = None;
-            }
-        }
     }
 }

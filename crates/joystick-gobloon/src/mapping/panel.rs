@@ -1,16 +1,15 @@
 //! The side panel: the device, its placed inputs by number, and the selected one's name.
 
+use crate::style::{self, icon};
 use eframe::egui::{self, RichText};
-use gob_ui as style;
-use style::icon;
 
-use crate::app::MapApp;
+use super::{Mapper, input_label};
 
-impl MapApp {
-    pub fn panel(&mut self, ui: &mut egui::Ui) {
+impl Mapper {
+    pub fn panel(&mut self, ui: &mut egui::Ui, i18n: &gob_i18n::I18n) {
         ui.add_space(style::SPACE_M);
         let Some(plugin) = self.plugin() else {
-            ui.label(RichText::new(self.i18n.tr("canvas-empty")).weak());
+            ui.label(RichText::new(i18n.tr("map-canvas-empty")).weak());
             return;
         };
         let id = plugin.id().to_string();
@@ -28,7 +27,7 @@ impl MapApp {
             use gob_i18n::FluentValue;
             ui.add_space(style::SPACE_XS);
             ui.label(
-                RichText::new(self.i18n.trf(
+                RichText::new(i18n.trf(
                     "panel-copy",
                     &[(
                         "path",
@@ -42,7 +41,7 @@ impl MapApp {
         ui.add_space(style::SPACE_M);
         ui.separator();
         if controls.is_empty() {
-            ui.label(RichText::new(self.i18n.tr("panel-empty")).weak());
+            ui.label(RichText::new(i18n.tr("map-panel-empty")).weak());
             return;
         }
 
@@ -69,7 +68,7 @@ impl MapApp {
                                 self.view = c.view.clone();
                             }
                             let shown: Vec<String> =
-                                inputs.iter().map(|i| self.input_label(*i)).collect();
+                                inputs.iter().map(|i| input_label(i18n, *i)).collect();
                             let shown = shown.join(", ");
                             // A name that only repeats the input shows it once.
                             let shown = if shown == c.name {
@@ -93,7 +92,7 @@ impl MapApp {
         ui.separator();
         // The name: written when the field is left.
         ui.horizontal(|ui| {
-            let label = ui.label(self.i18n.tr("control-name"));
+            let label = ui.label(i18n.tr("map-control-name"));
             let text = match &mut self.name_edit {
                 Some((for_id, text)) if *for_id == control.id => text,
                 other => {
@@ -114,12 +113,12 @@ impl MapApp {
         ui.add_space(style::SPACE_S);
         ui.horizontal(|ui| {
             if control.kind == gob_devices::Kind::Button
-                && ui.button(self.i18n.tr("tag-make-hat")).clicked()
+                && ui.button(i18n.tr("map-tag-make-hat")).clicked()
             {
                 self.make_hat(&control.id);
             }
             if (self.is_button_hat(&control) || control.kind == gob_devices::Kind::Stick)
-                && ui.button(self.i18n.tr("tag-split")).clicked()
+                && ui.button(i18n.tr("map-tag-split")).clicked()
             {
                 self.split(&control.id);
             }
@@ -129,7 +128,7 @@ impl MapApp {
             true,
             icon::TRASH,
             style::RED,
-            &self.i18n.tr("tag-remove"),
+            &i18n.tr("map-tag-remove"),
         )
         .clicked()
         {

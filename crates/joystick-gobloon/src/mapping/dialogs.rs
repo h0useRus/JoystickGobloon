@@ -1,14 +1,13 @@
-//! New device (brand, name, picture and the connected controller it is for) and copying the
-//! open device's controls to another device.
+//! New device (brand, name, picture and the connected controller it is for) and copying another
+//! device's controls onto the one mapped.
 
 use std::path::PathBuf;
 
+use crate::style::{self, icon};
 use eframe::egui;
 use gob_devices::edit::slug;
-use gob_ui as style;
-use style::icon;
 
-use crate::app::MapApp;
+use super::Mapper;
 
 pub struct NewDevice {
     brand: String,
@@ -19,29 +18,27 @@ pub struct NewDevice {
 }
 
 impl NewDevice {
-    pub fn new(app: &MapApp) -> Self {
+    /// For connected controller `guid`, named `name`.
+    pub fn new(guid: &str, name: String) -> Self {
         Self {
-            brand: app.brand.clone().unwrap_or_default(),
-            name: app
-                .device_state()
-                .map(|d| d.info.name.clone())
-                .unwrap_or_default(),
+            brand: String::new(),
+            name,
             picture: None,
-            controller: app.device.clone(),
+            controller: Some(guid.to_string()),
         }
     }
 }
 
-/// Copying the open device's controls to another device.
+/// Copying another device's controls onto the one mapped.
 #[derive(Default)]
 pub struct CopyControls {
-    target: Option<String>,
+    source: Option<String>,
     /// For the other hand's device: left and right swap.
     mirror: bool,
 }
 
-impl MapApp {
-    pub fn new_device_dialog(&mut self, ctx: &egui::Context) {
+impl Mapper {
+    pub fn new_device_dialog(&mut self, ctx: &egui::Context, i18n: &gob_i18n::I18n) {
         let Some(mut form) = self.new_device.take() else {
             return;
         };
@@ -52,13 +49,13 @@ impl MapApp {
             style::dialog_title(
                 ui,
                 Some((icon::PLUS_CIRCLE, None)),
-                &self.i18n.tr("new-title"),
+                &i18n.tr("map-new-title"),
             );
             egui::Grid::new("new-device")
                 .num_columns(2)
                 .spacing([style::SPACE_M, style::SPACE_S])
                 .show(ui, |ui| {
-                    ui.label(self.i18n.tr("new-brand"));
+                    ui.label(i18n.tr("map-new-brand"));
                     ui.horizontal(|ui| {
                         ui.add(style::text_field(&mut form.brand).desired_width(260.0));
                         ui.menu_button(icon::CARET_DOWN, |ui| {
@@ -71,10 +68,10 @@ impl MapApp {
                         });
                     });
                     ui.end_row();
-                    ui.label(self.i18n.tr("new-name"));
+                    ui.label(i18n.tr("map-new-name"));
                     ui.add(style::text_field(&mut form.name).desired_width(300.0));
                     ui.end_row();
-                    ui.label(self.i18n.tr("new-picture"));
+                    ui.label(i18n.tr("map-new-picture"));
                     ui.horizontal(|ui| {
                         let shown = form
                             .picture
@@ -83,7 +80,7 @@ impl MapApp {
                             .map(|n| n.to_string_lossy().to_string())
                             .unwrap_or_default();
                         ui.label(shown);
-                        if ui.button(self.i18n.tr("new-pick")).clicked()
+                        if ui.button(i18n.tr("map-new-pick")).clicked()
                             && let Some(file) = rfd::FileDialog::new()
                                 .add_filter("PNG, JPEG, SVG", &["png", "jpg", "jpeg", "svg"])
                                 .pick_file()
@@ -92,8 +89,8 @@ impl MapApp {
                         }
                     });
                     ui.end_row();
-                    ui.label(self.i18n.tr("new-controller"));
-                    let none = self.i18n.tr("new-no-controller");
+                    ui.label(i18n.tr("map-new-controller"));
+                    let none = i18n.tr("map-new-no-controller");
                     let current = form
                         .controller
                         .as_deref()
@@ -115,7 +112,7 @@ impl MapApp {
                     ui.end_row();
                 });
             ui.label(
-                egui::RichText::new(self.i18n.tr("new-picture-hint"))
+                egui::RichText::new(i18n.tr("map-new-picture-hint"))
                     .small()
                     .weak(),
             );
@@ -125,8 +122,8 @@ impl MapApp {
             result = style::dialog_buttons(
                 ui,
                 &[
-                    style::DialogButton::primary(self.i18n.tr("new-create")).enabled(ready),
-                    style::DialogButton::secondary(self.i18n.tr("cancel")),
+                    style::DialogButton::primary(i18n.tr("map-new-create")).enabled(ready),
+                    style::DialogButton::secondary(i18n.tr("cancel")),
                 ],
             );
         });
@@ -144,12 +141,10 @@ impl MapApp {
                     device.as_ref().map(|(vid, name)| (*vid, name.as_str())),
                 );
                 match created {
-                    Ok(id) => {
-                        if let Some(guid) = form.controller.clone() {
-                            self.choose_device(Some(guid));
-                        }
-                        self.open(&id);
-                    }
+                    Ok(id) => match form.controller.clone() {
+                        Some(guid) => self.edit(&guid, &id),
+                        None => self.open(&id),
+                    },
                     Err(e) => {
                         self.error = Some(e);
                         self.new_device = Some(form);
@@ -161,11 +156,11 @@ impl MapApp {
         }
     }
 
-    pub fn copy_dialog(&mut self, ctx: &egui::Context) {
+    pub fn copy_dialog(&mut self, ctx: &egui::Context, i18n: &gob_i18n::I18n) {
         let Some(mut form) = self.copy.take() else {
             return;
         };
-        let Some(from) = self.plugin.clone() else {
+        let Some(to) = self.plugin.clone() else {
             return;
         };
         let mut devices: Vec<(String, String)> = self
@@ -173,47 +168,42 @@ impl MapApp {
             .catalog
             .plugins
             .iter()
-            .filter(|p| p.id() != from)
+            .filter(|p| p.id() != to)
             .map(|p| {
                 let name = format!("{} {}", p.manifest.brand, p.manifest.name);
                 (p.id().to_string(), name)
             })
             .collect();
         devices.sort_by_key(|(_, name)| name.to_lowercase());
-        let replaced = form
-            .target
-            .as_deref()
-            .and_then(|id| self.store.get(id))
-            .map_or(0, |p| p.manifest.controls.len());
+        let replaced = self.store.get(&to).map_or(0, |p| p.manifest.controls.len());
         let mut result = None;
         style::modal(ctx, "copy-controls").show(ctx, |ui| {
             ui.set_width(440.0);
-            style::dialog_title(ui, Some((icon::COPY, None)), &self.i18n.tr("copy-title"));
+            style::dialog_title(ui, Some((icon::COPY, None)), &i18n.tr("map-copy-title"));
             ui.horizontal(|ui| {
-                ui.label(self.i18n.tr("copy-to"));
+                ui.label(i18n.tr("map-copy-from"));
                 let shown = form
-                    .target
+                    .source
                     .as_deref()
                     .and_then(|id| devices.iter().find(|(d, _)| d == id))
                     .map_or_else(String::new, |(_, name)| name.clone());
-                egui::ComboBox::from_id_salt("copy-target")
+                egui::ComboBox::from_id_salt("copy-source")
                     .selected_text(shown)
                     .width(320.0)
                     .show_ui(ui, |ui| {
                         for (id, name) in &devices {
-                            ui.selectable_value(&mut form.target, Some(id.clone()), name);
+                            ui.selectable_value(&mut form.source, Some(id.clone()), name);
                         }
                     });
             });
             ui.add_space(style::SPACE_S);
-            ui.add(style::switch(&mut form.mirror, self.i18n.tr("copy-mirror")));
+            ui.add(style::switch(&mut form.mirror, i18n.tr("map-copy-mirror")));
             if replaced > 0 {
                 use gob_i18n::FluentValue;
                 ui.add_space(style::SPACE_S);
                 ui.label(
                     egui::RichText::new(
-                        self.i18n
-                            .trf("copy-replaces", &[("n", FluentValue::from(replaced))]),
+                        i18n.trf("map-copy-replaces", &[("n", FluentValue::from(replaced))]),
                     )
                     .color(style::RED),
                 );
@@ -221,15 +211,15 @@ impl MapApp {
             result = style::dialog_buttons(
                 ui,
                 &[
-                    style::DialogButton::primary(self.i18n.tr("copy-do"))
-                        .enabled(form.target.is_some()),
-                    style::DialogButton::secondary(self.i18n.tr("cancel")),
+                    style::DialogButton::primary(i18n.tr("map-copy-do"))
+                        .enabled(form.source.is_some()),
+                    style::DialogButton::secondary(i18n.tr("cancel")),
                 ],
             );
         });
         match result {
             Some(0) => {
-                let to = form.target.clone().expect("checked");
+                let from = form.source.clone().expect("checked");
                 match self.store.copy_controls(&from, &to, form.mirror) {
                     Ok(()) => self.open(&to),
                     Err(e) => self.error = Some(e),

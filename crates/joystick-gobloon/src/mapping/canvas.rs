@@ -4,14 +4,13 @@
 //! into hats made of buttons (a button's menu makes one) and axes into other axes (they become a
 //! stick): dragged near such a group, it opens a slot per part to drop onto. Axes are square.
 
+use crate::style::{self, icon};
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use gob_devices::{Control, Input, Kind};
-use gob_ui as style;
-use style::icon;
 
 use gob_devices::draw::{self as glyphs, HAT_PARTS, TAG};
 
-use crate::app::MapApp;
+use super::{Mapper, input_label};
 
 /// Room per waiting number in the corner.
 const SLOT: f32 = 44.0;
@@ -21,12 +20,12 @@ const REACH: f32 = 56.0;
 const GROUP_GAP: f32 = 32.0;
 const GROUP_SLOT: f32 = 12.0;
 
-impl MapApp {
-    pub fn canvas(&mut self, ui: &mut egui::Ui) {
+impl Mapper {
+    pub fn canvas(&mut self, ui: &mut egui::Ui, i18n: &gob_i18n::I18n) {
         let ctx = ui.ctx().clone();
         let Some(plugin) = self.plugin() else {
             ui.centered_and_justified(|ui| {
-                ui.label(egui::RichText::new(self.i18n.tr("canvas-empty")).weak());
+                ui.label(egui::RichText::new(i18n.tr("map-canvas-empty")).weak());
             });
             return;
         };
@@ -186,7 +185,7 @@ impl MapApp {
         }
         if let Some(((group, part), _)) = &target {
             let caption = match part {
-                Some(part) => format!("{} {}", group.name, self.part_label(part)),
+                Some(part) => format!("{} {}", group.name, self.part_label(i18n, part)),
                 None => group.name.clone(),
             };
             let at = to_screen(group.at) + Vec2::new(0.0, -GROUP_GAP - GROUP_SLOT - 16.0);
@@ -201,7 +200,7 @@ impl MapApp {
             painter.text(
                 corner.left_center() + Vec2::new(4.0, 0.0),
                 Align2::LEFT_CENTER,
-                self.i18n.tr("dock-hint"),
+                i18n.tr("map-dock-hint"),
                 FontId::proportional(13.0),
                 visuals.weak_text_color(),
             );
@@ -216,7 +215,7 @@ impl MapApp {
             let home = corner.left_center() + Vec2::new(TAG + 8.0 + k as f32 * SLOT, -6.0);
             let slot = Rect::from_center_size(home + Vec2::new(0.0, 6.0), Vec2::splat(SLOT));
             self.layout.pending.push((*input, slot));
-            let label = self.input_label(*input);
+            let label = input_label(i18n, *input);
             let r = ui
                 .interact(
                     slot,
@@ -224,7 +223,7 @@ impl MapApp {
                     Sense::click_and_drag(),
                 )
                 .on_hover_cursor(egui::CursorIcon::Grab)
-                .on_hover_text(format!("{label}\n{}", self.i18n.tr("dock-drag")));
+                .on_hover_text(format!("{label}\n{}", i18n.tr("map-dock-drag")));
             let lit = self.is_lit(*input);
             let at = match (r.dragged(), ctx.pointer_latest_pos()) {
                 (true, Some(p)) => p,
@@ -320,20 +319,20 @@ impl MapApp {
                 .map(|(_, c)| c.clone());
             response.context_menu(|ui| {
                 if let Some(c) = &control {
-                    if c.kind == Kind::Button && ui.button(self.i18n.tr("tag-make-hat")).clicked() {
+                    if c.kind == Kind::Button && ui.button(i18n.tr("map-tag-make-hat")).clicked() {
                         self.make_hat(&c.id);
                         self.menu = None;
                         ui.close();
                     }
                     if (self.is_button_hat(c) || c.kind == Kind::Stick)
-                        && ui.button(self.i18n.tr("tag-split")).clicked()
+                        && ui.button(i18n.tr("map-tag-split")).clicked()
                     {
                         self.split(&c.id);
                         self.menu = None;
                         ui.close();
                     }
                 }
-                if ui.button(self.i18n.tr("tag-remove")).clicked() {
+                if ui.button(i18n.tr("map-tag-remove")).clicked() {
                     self.delete_control(&id);
                     self.menu = None;
                     ui.close();
@@ -424,10 +423,10 @@ impl MapApp {
     }
 
     /// A part's caption: arrows for directions, letters for axes.
-    fn part_label(&self, part: &str) -> String {
+    fn part_label(&self, i18n: &gob_i18n::I18n, part: &str) -> String {
         match part {
-            "push" => self.i18n.tr("part-push"),
-            "twist" => self.i18n.tr("part-twist"),
+            "push" => i18n.tr("map-part-push"),
+            "twist" => i18n.tr("map-part-twist"),
             other => slot_glyph(other).into(),
         }
     }

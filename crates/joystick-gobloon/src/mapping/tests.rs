@@ -1,4 +1,4 @@
-//! The window driven like a user would (egui events, no real mouse): worked inputs get numbers
+//! Mapping driven like a user would (egui events, no real mouse): worked inputs get numbers
 //! that are dragged onto the picture, placed tags move and come off again; on a copy of
 //! gob-devices' sample plugin in a temporary folder.
 
@@ -8,9 +8,8 @@ use eframe::egui::{self, Pos2, Vec2};
 use egui_kittest::Harness;
 use gob_devices::{Direction, Entry, Input, Inputs, Kind, Manifest};
 
-use crate::app::{MapApp, install_fonts};
-use crate::settings::Own;
-use crate::store::Store;
+use super::Mapper;
+use super::store::Store;
 
 const SAMPLE: &str = "sample-stick";
 
@@ -21,7 +20,8 @@ struct Folders {
 
 impl Folders {
     fn new(name: &str) -> Self {
-        let root = std::env::temp_dir().join(format!("map-gobloon-{name}-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("gobloon-mapping-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let from =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../gob-devices/tests/plugins/sample");
@@ -69,25 +69,26 @@ fn copy(from: &Path, to: &Path) {
     }
 }
 
-fn app(folders: &Folders) -> MapApp {
+fn app(folders: &Folders) -> Mapper {
     let store = Store::with(vec![folders.shipped(), folders.user()], folders.user());
-    let i18n = gob_i18n::I18n::new(crate::LANGUAGES, None);
-    let mut app = MapApp::with(i18n, store, None, Own::default());
+    let mut app = Mapper::with(store);
     app.open(SAMPLE);
+    app.editing = true;
     app
 }
 
-fn harness(app: MapApp) -> Harness<'static, MapApp> {
+fn harness(app: Mapper) -> Harness<'static, Mapper> {
+    let i18n = gob_i18n::I18n::new(crate::LANGUAGES, None);
     let mut h = Harness::builder()
         .with_size(Vec2::new(1280.0, 820.0))
-        .with_context_setup(|ctx| install_fonts(ctx, false))
-        .build_ui_state(|ui, app: &mut MapApp| app.show(ui), app);
+        .with_context_setup(|ctx| crate::style::install_fonts(ctx, false))
+        .build_ui_state(move |ui, app: &mut Mapper| app.show(ui, &i18n), app);
     h.run_steps(3);
     h
 }
 
 /// Presses at `from`, moves to `to` in a few steps and lets go there.
-fn drag(h: &mut Harness<'_, MapApp>, from: Pos2, to: Pos2) {
+fn drag(h: &mut Harness<'_, Mapper>, from: Pos2, to: Pos2) {
     h.hover_at(from);
     h.step();
     h.drag_at(from);
@@ -106,7 +107,7 @@ fn drag(h: &mut Harness<'_, MapApp>, from: Pos2, to: Pos2) {
     h.step();
 }
 
-fn spot(h: &Harness<'_, MapApp>, at: [f32; 2]) -> Pos2 {
+fn spot(h: &Harness<'_, Mapper>, at: [f32; 2]) -> Pos2 {
     h.state().layout.to_screen(at).unwrap()
 }
 
@@ -219,7 +220,7 @@ fn new_device_from_a_picture() {
 }
 
 /// Where `part` of group `id` opens while something is dragged near it.
-fn slot(h: &Harness<'_, MapApp>, id: &str, offset: Vec2) -> Pos2 {
+fn slot(h: &Harness<'_, Mapper>, id: &str, offset: Vec2) -> Pos2 {
     let at = h.state().plugin().unwrap().control(id).unwrap().at;
     spot(h, at) + offset * 32.0
 }

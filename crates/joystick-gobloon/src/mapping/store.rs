@@ -1,9 +1,11 @@
-//! The device plugins Map Gobloon shows and changes: shipped ones (`devices/` next to the
-//! program) and the user's own (`<data dir>/devices`), in folders per brand. Changes always go
-//! to the user's folder: a shipped plugin is copied there the first time it changes, and
-//! Joystick Gobloon then uses the copy. Debug builds work on the repository's plugins instead.
+//! The device plugins shown and mapped: shipped ones (`devices/` next to the program) and the
+//! user's own (`<data dir>/devices`), in folders per brand; the user's win by id. Changes always
+//! go to the user's folder: a shipped plugin is copied there the first time it changes. Debug
+//! builds change the repository's plugins instead. Plugins load again when their files change
+//! (edited by hand or by another copy of the program).
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant, SystemTime};
 
 use gob_devices::edit::{self, NewDevice};
 use gob_devices::plugin::{INPUTS, MANIFEST};
@@ -15,7 +17,13 @@ pub struct Store {
     /// Where changes and new plugins go.
     pub write_dir: PathBuf,
     pub catalog: Catalog,
+    /// When each plugin's files last changed, as loaded.
+    stamps: Vec<(PathBuf, Option<SystemTime>)>,
+    checked: Option<Instant>,
 }
+
+/// How often the plugin files are checked for changes.
+const CHECK_EVERY: Duration = Duration::from_secs(2);
 
 impl Store {
     pub fn new() -> Self {
@@ -25,16 +33,42 @@ impl Store {
 
     /// Plugins from `dirs`, changes into `write_dir`.
     pub fn with(dirs: Vec<PathBuf>, write_dir: PathBuf) -> Self {
-        let catalog = Catalog::load(&dirs);
-        Self {
+        let mut store = Self {
             dirs,
             write_dir,
-            catalog,
-        }
+            catalog: Catalog::default(),
+            stamps: Vec::new(),
+            checked: None,
+        };
+        store.reload();
+        store
     }
 
     pub fn reload(&mut self) {
         self.catalog = Catalog::load(&self.dirs);
+        for (dir, e) in &self.catalog.errors {
+            log::warn!("device plugin {}: {e}", dir.display());
+        }
+        self.stamps = self
+            .catalog
+            .plugins
+            .iter()
+            .map(|p| (p.dir.clone(), stamp(&p.dir)))
+            .collect();
+    }
+
+    /// Loads the plugins again when one's files changed since (checked every few seconds).
+    pub fn reload_if_changed(&mut self) -> bool {
+        if self.checked.is_some_and(|t| t.elapsed() < CHECK_EVERY) {
+            return false;
+        }
+        self.checked = Some(Instant::now());
+        let changed = self.stamps.iter().any(|(dir, at)| stamp(dir) != *at);
+        if changed {
+            log::debug!("device plugins changed, loading them again");
+            self.reload();
+        }
+        changed
     }
 
     pub fn get(&self, id: &str) -> Option<&DevicePlugin> {
@@ -52,19 +86,6 @@ impl Store {
         brands.sort_by_key(|b| b.to_lowercase());
         brands.dedup();
         brands
-    }
-
-    /// The devices of `brand`, sorted by name: (id, name).
-    pub fn devices_of(&self, brand: &str) -> Vec<(String, String)> {
-        let mut devices: Vec<(String, String)> = self
-            .catalog
-            .plugins
-            .iter()
-            .filter(|p| p.manifest.brand == brand)
-            .map(|p| (p.id().to_string(), p.manifest.name.clone()))
-            .collect();
-        devices.sort_by_key(|(_, name)| name.to_lowercase());
-        devices
     }
 
     /// Whether plugin `id` changes in place (else a change copies it to the user's folder).
@@ -96,6 +117,9 @@ impl Store {
     fn load_plugin(&mut self, dir: &Path) -> Result<(), String> {
         let plugin = DevicePlugin::load(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         self.catalog.add(plugin);
+        // Our own change is no reason to load everything again.
+        self.stamps.retain(|(d, _)| d != dir);
+        self.stamps.push((dir.to_path_buf(), stamp(dir)));
         Ok(())
     }
 
@@ -233,13 +257,6 @@ impl Store {
         })?;
         self.save_inputs(to, &inputs)
     }
-
-    /// The folder to show for plugin `id` (the user's folder when there is none).
-    pub fn folder_of(&self, id: Option<&str>) -> PathBuf {
-        id.and_then(|id| self.get(id))
-            .map(|p| p.dir.clone())
-            .unwrap_or_else(|| self.write_dir.clone())
-    }
 }
 
 fn write_text(path: &Path, text: &str) -> Result<(), String> {
@@ -252,10 +269,13 @@ fn write_text(path: &Path, text: &str) -> Result<(), String> {
 
 /// (folders to load from, folder changes go to).
 fn folders() -> (Vec<PathBuf>, PathBuf) {
+    let user = crate::settings::data_dir()
+        .map(|d| d.join("devices"))
+        .unwrap_or_else(|| PathBuf::from("devices"));
     if cfg!(debug_assertions) {
         let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
         let repo = repo.canonicalize().unwrap_or(repo);
-        return (vec![repo.clone()], repo);
+        return (vec![repo.clone(), user], repo);
     }
     let mut dirs = Vec::new();
     if let Some(shipped) = std::env::current_exe()
@@ -264,11 +284,16 @@ fn folders() -> (Vec<PathBuf>, PathBuf) {
     {
         dirs.push(shipped);
     }
-    let user = crate::settings::data_dir()
-        .map(|d| d.join("devices"))
-        .unwrap_or_else(|| PathBuf::from("devices"));
     dirs.push(user.clone());
     (dirs, user)
+}
+
+/// When a plugin's control files last changed.
+fn stamp(dir: &Path) -> Option<SystemTime> {
+    [MANIFEST, INPUTS]
+        .iter()
+        .filter_map(|f| std::fs::metadata(dir.join(f)).ok()?.modified().ok())
+        .max()
 }
 
 fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {

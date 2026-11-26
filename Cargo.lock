@@ -2642,6 +2642,7 @@ version = "0.6.0"
 dependencies = [
  "ashpd",
  "eframe",
+ "egui_kittest",
  "futures-util",
  "gob-core",
  "gob-devices",
@@ -2887,24 +2888,6 @@ name = "mach2"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
-
-[[package]]
-name = "map-gobloon"
-version = "0.6.0"
-dependencies = [
- "eframe",
- "egui_kittest",
- "gob-core",
- "gob-devices",
- "gob-hide",
- "gob-i18n",
- "gob-input",
- "gob-ui",
- "rfd",
- "serde",
- "toml 1.2.2+spec-1.1.0",
- "winresource",
-]
 
 [[package]]
 name = "maybe-dangling"

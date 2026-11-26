@@ -15,6 +15,9 @@ pub struct Detector {
     device: String,
     /// Where each axis was when it last counted (or when watching began).
     from: [f32; AXIS_SLOTS],
+    /// The last readings [`Detector::poll`] saw.
+    buttons: Vec<bool>,
+    hats: Vec<Option<u16>>,
 }
 
 impl Detector {
@@ -23,7 +26,38 @@ impl Detector {
         Self {
             device: state.info.guid.clone(),
             from: state.axes,
+            buttons: state.buttons.clone(),
+            hats: state.hats.clone(),
         }
+    }
+
+    /// The inputs worked since the last reading, for callers that only see readings (no
+    /// events): buttons that went down, hats that point a new way, axes moved far.
+    pub fn poll(&mut self, state: &DeviceState) -> Vec<Input> {
+        let mut out = Vec::new();
+        for (i, on) in state.buttons.iter().enumerate() {
+            if *on && !self.buttons.get(i).copied().unwrap_or(false) {
+                out.push(Input::Button(i as u16 + 1));
+            }
+        }
+        for (i, hat) in state.hats.iter().enumerate() {
+            if let Some(angle) = hat {
+                let d = Direction::of_angle(*angle);
+                let was = self.hats.get(i).copied().flatten().map(Direction::of_angle);
+                if was != Some(d) {
+                    out.push(Input::HatDirection(i as u8 + 1, d));
+                }
+            }
+        }
+        for (i, (value, from)) in state.axes.iter().zip(self.from.iter_mut()).enumerate() {
+            if (value - *from).abs() > AXIS_TRAVEL {
+                *from = *value;
+                out.push(Input::Axis(i as u8 + 1));
+            }
+        }
+        self.buttons.clone_from(&state.buttons);
+        self.hats.clone_from(&state.hats);
+        out
     }
 
     pub fn device(&self) -> &str {
@@ -115,6 +149,26 @@ mod tests {
             hats: 1,
             ..Default::default()
         })
+    }
+
+    #[test]
+    fn polls_readings() {
+        let mut s = state();
+        let mut d = Detector::new(&s);
+        assert!(d.poll(&s).is_empty());
+        s.buttons[1] = true;
+        s.hats[0] = Some(9000);
+        s.axes[0] = 0.8;
+        assert_eq!(
+            d.poll(&s),
+            [
+                Input::Button(2),
+                Input::HatDirection(1, Direction::Right),
+                Input::Axis(1)
+            ]
+        );
+        // Still held, nothing new.
+        assert!(d.poll(&s).is_empty());
     }
 
     #[test]
