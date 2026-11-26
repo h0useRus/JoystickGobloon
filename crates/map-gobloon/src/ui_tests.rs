@@ -277,3 +277,62 @@ fn an_axis_dropped_on_an_axis_makes_a_stick() {
     assert_eq!(inputs.get("axis_rx", "x"), Some(Input::Axis(4)));
     assert_eq!(inputs.get("axis_rx", "y"), Some(Input::Axis(5)));
 }
+
+/// Buttons placed right around a hat (as the hat's directions sit on the grip) go in too.
+#[test]
+fn buttons_next_to_a_hat_go_into_it() {
+    let f = Folders::new("close");
+    let mut app = app(&f);
+    for (n, at) in [(7, [80.0, 40.0]), (8, [80.0, 33.0]), (9, [87.0, 40.0])] {
+        app.note(Input::Button(n));
+        app.place(Input::Button(n), at, 100.0);
+    }
+    app.make_hat("button_7");
+    let mut h = harness(app);
+    // Button 8 sits just above the hat: dragged onto the up slot.
+    let from = spot(&h, [80.0, 33.0]);
+    let to = slot(&h, "hat_2", Vec2::new(0.0, -1.0));
+    drag(&mut h, from, to);
+    let from = spot(&h, [87.0, 40.0]);
+    let to = slot(&h, "hat_2", Vec2::new(1.0, 0.0));
+    drag(&mut h, from, to);
+    let inputs = f.inputs();
+    assert_eq!(inputs.get("hat_2", "up"), Some(Input::Button(8)));
+    assert_eq!(inputs.get("hat_2", "right"), Some(Input::Button(9)));
+    let ids: Vec<String> = f.manifest().controls.into_iter().map(|c| c.id).collect();
+    assert!(!ids.contains(&"button_8".to_string()) && !ids.contains(&"button_9".to_string()));
+}
+
+/// "Make it a hat" on a button with buttons right around it (a hat's push in the middle of its
+/// directions) takes them in by where they sit.
+#[test]
+fn a_hat_gathers_the_buttons_around_it() {
+    let f = Folders::new("gather");
+    let mut app = app(&f);
+    let around = [
+        (7, [80.0, 40.0]),
+        (8, [80.0, 36.0]),
+        (9, [84.0, 41.0]),
+        (10, [79.0, 44.0]),
+        (11, [76.0, 39.0]),
+        // Too far to be one of its directions.
+        (12, [80.0, 60.0]),
+    ];
+    for (n, at) in around {
+        app.note(Input::Button(n));
+        app.place(Input::Button(n), at, 100.0);
+    }
+    app.make_hat("button_7");
+    let inputs = f.inputs();
+    assert_eq!(inputs.get("hat_2", "up"), Some(Input::Button(8)));
+    assert_eq!(inputs.get("hat_2", "right"), Some(Input::Button(9)));
+    assert_eq!(inputs.get("hat_2", "down"), Some(Input::Button(10)));
+    assert_eq!(inputs.get("hat_2", "left"), Some(Input::Button(11)));
+    assert_eq!(inputs.get("hat_2", "push"), Some(Input::Button(7)));
+    let ids: Vec<String> = f.manifest().controls.into_iter().map(|c| c.id).collect();
+    assert!(ids.contains(&"button_12".to_string()));
+    for gone in ["button_7", "button_8", "button_9", "button_10", "button_11"] {
+        assert!(!ids.contains(&gone.to_string()), "{gone}");
+    }
+    assert!(app.pending.is_empty());
+}

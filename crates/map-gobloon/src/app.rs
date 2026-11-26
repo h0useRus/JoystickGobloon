@@ -22,6 +22,8 @@ use crate::store::Store;
 
 /// The parts of a hat made of buttons.
 pub const HAT_PARTS: [&str; 5] = ["up", "right", "down", "left", "push"];
+/// How far around a button (a share of the picture's width) "Make it a hat" takes buttons in.
+const HAT_GATHER: f32 = 0.05;
 /// The parts of a stick made of axes.
 pub const STICK_PARTS: [&str; 3] = ["x", "y", "twist"];
 
@@ -311,6 +313,11 @@ impl MapApp {
                 .is_some_and(|t| t.elapsed() < AXIS_LIT)
     }
 
+    /// Where an axis input is now, -1 to 1.
+    pub fn axis_value(&self, input: Input) -> Option<f32> {
+        gob_devices::axis_value(self.device_state()?, input)
+    }
+
     /// The open view's picture as a texture and its size in hotspot units.
     pub fn texture(&mut self, ctx: &egui::Context) -> Option<(egui::TextureHandle, egui::Vec2)> {
         let id = self.plugin.clone()?;
@@ -402,8 +409,10 @@ impl MapApp {
         self.selected = Some(id);
     }
 
-    /// Turns control `id` (a button) into a hat of buttons: up, right, down, left and push to
-    /// fill by dragging numbers onto them. Its own input waits to be dragged onto its direction.
+    /// Turns control `id` (a button) into a hat of buttons: up, right, down, left and push.
+    /// Buttons placed right around it go into the direction they sit in on the picture, and the
+    /// button itself, then in the middle, is the push; without such neighbours its button waits
+    /// to be dragged onto its direction.
     pub fn make_hat(&mut self, id: &str) {
         let Some(plugin) = self.plugin() else {
             return;
@@ -413,6 +422,24 @@ impl MapApp {
         };
         let plugin_id = plugin.id().to_string();
         let own = self.inputs_of(&old);
+        let width = plugin
+            .pictures
+            .get(&old.view)
+            .and_then(|p| p.bounds())
+            .map_or(500.0, |b| b[2]);
+        let reach = width * HAT_GATHER;
+        let neighbours: Vec<(String, Input, [f32; 2])> = plugin
+            .manifest
+            .controls
+            .iter()
+            .filter(|c| c.id != id && c.view == old.view && c.kind == Kind::Button)
+            .filter(|c| (c.at[0] - old.at[0]).hypot(c.at[1] - old.at[1]) <= reach)
+            .filter_map(|c| match self.inputs_of(c)[..] {
+                [input @ Input::Button(_)] => Some((c.id.clone(), input, c.at)),
+                _ => None,
+            })
+            .collect();
+        let directions = directions_of(old.at, &neighbours);
         let mut new_id = "hat".to_string();
         let mut n = 2;
         while plugin.control(&new_id).is_some() {
@@ -429,16 +456,32 @@ impl MapApp {
         };
         let mut inputs = plugin.defaults.clone();
         inputs.clear(id, "");
+        let mut text_change: Vec<String> = Vec::new();
+        for (part, (control, input)) in &directions {
+            inputs.clear(control, "");
+            inputs.set(&new_id, part, *input);
+            text_change.push(control.clone());
+        }
+        let gathered = !directions.is_empty();
+        if gathered && let [push] = own[..] {
+            inputs.set(&new_id, "push", push);
+        }
         let result = self
             .store
             .edit_manifest(&plugin_id, |text| {
-                gob_devices::edit::set_control(text, id, &hat)
+                let mut text = gob_devices::edit::set_control(text, id, &hat);
+                for control in &text_change {
+                    text = gob_devices::edit::remove_control(&text, control);
+                }
+                text
             })
             .and_then(|()| self.store.save_inputs(&plugin_id, &inputs));
         self.report(result);
-        for input in own.into_iter().rev() {
-            self.pending.retain(|i| *i != input);
-            self.pending.insert(0, input);
+        if !gathered {
+            for input in own.into_iter().rev() {
+                self.pending.retain(|i| *i != input);
+                self.pending.insert(0, input);
+            }
         }
         self.selected = Some(new_id);
     }
@@ -538,11 +581,6 @@ impl MapApp {
         }
     }
 
-    /// Whether control `c` shows as an axis (a square tag).
-    pub fn is_axis(c: &Control) -> bool {
-        matches!(c.kind, Kind::Axis | Kind::Stick)
-    }
-
     /// Writes `control` in place of control `old_id`.
     pub fn put_control(&mut self, old_id: &str, control: Control) {
         let Some(id) = self.plugin.clone() else {
@@ -588,6 +626,43 @@ impl MapApp {
             }
         }
     }
+}
+
+/// Which hat direction each neighbour of a hat at `center` sits in on the picture: the
+/// closest fits first, one neighbour per direction.
+fn directions_of(
+    center: [f32; 2],
+    neighbours: &[(String, Input, [f32; 2])],
+) -> Vec<(&'static str, (String, Input))> {
+    let angle_of = |part: &str| match part {
+        "up" => -std::f32::consts::FRAC_PI_2,
+        "right" => 0.0,
+        "down" => std::f32::consts::FRAC_PI_2,
+        _ => std::f32::consts::PI,
+    };
+    let mut pairs: Vec<(f32, &'static str, usize)> = Vec::new();
+    for (k, (_, _, at)) in neighbours.iter().enumerate() {
+        let a = (at[1] - center[1]).atan2(at[0] - center[0]);
+        for part in &HAT_PARTS[..4] {
+            let d = (a - angle_of(part)).rem_euclid(std::f32::consts::TAU);
+            pairs.push((d.min(std::f32::consts::TAU - d), part, k));
+        }
+    }
+    pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut out: Vec<(&'static str, (String, Input))> = Vec::new();
+    let mut used = Vec::new();
+    for (d, part, k) in pairs {
+        // More than 60 degrees off: not that direction.
+        if d > std::f32::consts::FRAC_PI_3
+            || used.contains(&k)
+            || out.iter().any(|(p, _)| *p == part)
+        {
+            continue;
+        }
+        used.push(k);
+        out.push((part, (neighbours[k].0.clone(), neighbours[k].1)));
+    }
+    out
 }
 
 /// A placed control's first name, kept in the plugin (product wording is not translated).

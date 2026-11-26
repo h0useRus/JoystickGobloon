@@ -9,7 +9,8 @@ use gob_devices::{Control, Input, Kind};
 use gob_ui as style;
 use style::icon;
 
-use crate::app::{HAT_PARTS, MapApp, STICK_PARTS};
+use crate::app::{HAT_PARTS, MapApp};
+use crate::glyphs;
 
 /// Tag radius, in screen points.
 const TAG: f32 = 12.0;
@@ -91,7 +92,7 @@ impl MapApp {
             controls
                 .iter()
                 .map(|(n, c)| (*n, c, to_screen(spot(c)).distance(p)))
-                .filter(|(_, _, d)| *d <= TAG + 3.0)
+                .filter(|(_, _, d)| *d <= glyphs::RADIUS + 3.0)
                 .min_by(|a, b| a.2.total_cmp(&b.2))
                 .map(|(n, c, _)| (n, c.clone()))
         };
@@ -151,6 +152,7 @@ impl MapApp {
 
         let accent = style::accent(ui);
         let visuals = ui.visuals().clone();
+        let pal = glyphs::Pal::new(&visuals, accent);
         for (n, c) in &controls {
             let at = to_screen(spot(c));
             let open = target
@@ -162,29 +164,18 @@ impl MapApp {
                 self.draw_slots(&painter, &visuals, accent, c, at, parts, part);
                 continue;
             }
-            let lit = self.inputs_of(c).into_iter().any(|i| self.is_lit(i));
             let selected = self.selected.as_deref() == Some(c.id.as_str());
             let hovered = near.as_ref().is_some_and(|(m, _)| m == n);
-            let shape = if MapApp::is_axis(c) {
-                Shape::Square
-            } else {
-                Shape::Round
-            };
-            draw_tag(
+            self.draw_control(
                 &painter,
-                &visuals,
+                &pal,
                 accent,
+                &visuals,
+                c,
                 at,
                 *n,
-                lit,
                 selected || hovered,
-                shape,
             );
-            if self.is_button_hat(c) {
-                self.draw_dots(&painter, accent, c, at, &HAT_PARTS[..4]);
-            } else if c.kind == Kind::Stick {
-                self.draw_dots(&painter, accent, c, at, &STICK_PARTS);
-            }
         }
         if let Some(((group, part), _)) = &target {
             let caption = match part {
@@ -401,30 +392,62 @@ impl MapApp {
         }
     }
 
-    /// Small dots around a group's tag, one per part: filled when it has its input, lit while
-    /// it is worked.
-    fn draw_dots(
+    /// A placed control by its kind: a hat as a compass, stick axes as a ring, one axis as a
+    /// gauge (each with its number in a badge), anything else as a numbered tag.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_control(
         &self,
         painter: &egui::Painter,
+        pal: &glyphs::Pal,
         accent: Color32,
+        visuals: &egui::Visuals,
         c: &Control,
         at: Pos2,
-        parts: &[&str],
+        n: usize,
+        strong: bool,
     ) {
         let inputs = self
             .plugin()
             .map(|p| p.defaults.clone())
             .unwrap_or_default();
-        for part in parts {
-            let center = at + slot_offset(part) * (TAG + 6.0);
-            let input = inputs.get(&c.id, part);
-            if input.is_some_and(|i| self.is_lit(i)) {
-                painter.circle_filled(center, 7.0, accent.gamma_multiply(0.5));
+        let state = |input: Option<Input>| match input {
+            Some(i) if self.is_lit(i) => glyphs::Part::Lit,
+            Some(_) => glyphs::Part::Mapped,
+            None => glyphs::Part::Empty,
+        };
+        let value = |input: Option<Input>| input.and_then(|i| self.axis_value(i));
+        match c.kind {
+            Kind::Hat => {
+                let mut parts: Vec<glyphs::Part> = HAT_PARTS[..4]
+                    .iter()
+                    .map(|p| state(inputs.get(&c.id, p)))
+                    .collect();
+                if c.parts().contains(&"push") {
+                    parts.push(state(inputs.get(&c.id, "push")));
+                }
+                glyphs::hat(painter, at, &parts, strong, pal);
+                glyphs::number(painter, glyphs::number_at(at, false), n, strong, pal);
             }
-            if input.is_some() {
-                painter.circle_filled(center, 3.5, accent);
-            } else {
-                painter.circle_stroke(center, 3.5, Stroke::new(1.2, accent));
+            Kind::Stick => {
+                let x = inputs.get(&c.id, "x");
+                let y = inputs.get(&c.id, "y");
+                let twist = inputs.get(&c.id, "twist");
+                let lit = [x, y, twist].into_iter().flatten().any(|i| self.is_lit(i));
+                let xy = value(x)
+                    .or(value(y))
+                    .map(|_| [value(x).unwrap_or(0.0), value(y).unwrap_or(0.0)]);
+                glyphs::stick(painter, at, xy, value(twist), lit, strong, pal);
+                glyphs::number(painter, glyphs::number_at(at, false), n, strong, pal);
+            }
+            Kind::Axis => {
+                let input = inputs.get(&c.id, "");
+                let lit = input.is_some_and(|i| self.is_lit(i));
+                glyphs::gauge(painter, at, value(input), lit, strong, pal);
+                glyphs::number(painter, glyphs::number_at(at, true), n, strong, pal);
+            }
+            _ => {
+                let lit = self.inputs_of(c).into_iter().any(|i| self.is_lit(i));
+                draw_tag(painter, visuals, accent, at, n, lit, strong, Shape::Round);
             }
         }
     }
