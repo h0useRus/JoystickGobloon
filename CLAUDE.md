@@ -117,7 +117,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   tags move by drag, right-click menu (make a hat, split, remove), buttons gather into hats, axes into sticks, copy
   another device's controls (mirrored for the other hand); store.rs writes the plugin (debug builds: the repository's
   plugins/devices, release: the user's folder, a shipped plugin copied there first) and reloads plugins whose files
-  changed; tests.rs drives it with egui_kittest; debug env `JOYSTICK_GOBLOON_TAB=mapping` maps the first pictured
+  changed; share.rs = export a plugin as `<id>.zip` (folder inside) / import one (enclosed names, plugin file kinds,
+  size caps, must load; replacing the user's own asks first); tests.rs drives it with egui_kittest; debug env `JOYSTICK_GOBLOON_TAB=mapping` maps the first pictured
   device (with START_PAGE=viewer). Map Gobloon (the separate tool) is gone
 - crates/gob-script  Lua user scripts (plans/completed/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
   (`send`: the engine is built off its thread), one sandboxed state per script (sandbox.rs `new_state`: time budget +

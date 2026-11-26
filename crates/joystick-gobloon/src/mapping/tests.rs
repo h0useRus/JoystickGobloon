@@ -360,3 +360,46 @@ fn controls_copy_to_another_device() {
     assert_eq!(copy.manifest.controls.len(), 3);
     assert_eq!(copy.control("trigger").unwrap().at, [40.0, 30.0]);
 }
+
+#[test]
+fn a_device_shared_as_a_file_comes_in_on_another_computer() {
+    let f = Folders::new("share");
+    let store = Store::with(vec![f.shipped(), f.user()], f.user());
+    let file = f.root.join("shared.zip");
+    super::share::export(&store, SAMPLE, &file).unwrap();
+    // Another computer: nothing of the sample yet.
+    let other = f.root.join("other");
+    let mut there = Store::with(vec![other.clone()], other.clone());
+    let unpacked = super::share::unpack(&there, &file).unwrap();
+    assert_eq!(unpacked.id, SAMPLE);
+    assert!(unpacked.replaces.is_none());
+    unpacked.install(&mut there).unwrap();
+    let plugin = there.get(SAMPLE).unwrap();
+    assert_eq!(plugin.dir, other.join("sample/sample-stick"));
+    assert_eq!(plugin.manifest.controls.len(), 3);
+    assert_eq!(plugin.input_of("trigger", "first"), Some(Input::Button(1)));
+    // Taken in again: it replaces that copy, and says so first.
+    let again = super::share::unpack(&there, &file).unwrap();
+    assert_eq!(again.replaces.as_deref(), Some(plugin.dir.as_path()));
+    again.install(&mut there).unwrap();
+    assert!(there.get(SAMPLE).is_some());
+    assert!(
+        !other
+            .join(format!(".import-{}", std::process::id()))
+            .exists()
+    );
+}
+
+#[test]
+fn a_file_without_a_device_is_refused() {
+    let f = Folders::new("refuse");
+    let store = Store::with(vec![f.user()], f.user());
+    let file = f.root.join("other.zip");
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&file).unwrap());
+    zip.start_file("../evil.gob", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    std::io::Write::write_all(&mut zip, b"x").unwrap();
+    zip.finish().unwrap();
+    assert!(super::share::unpack(&store, &file).is_err());
+    assert!(!f.root.join("evil.gob").exists());
+}

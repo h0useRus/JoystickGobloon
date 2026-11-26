@@ -5,7 +5,8 @@
 //! waiting in the picture's top left corner until it is dragged to the spot of the picture where
 //! that control is (`canvas`). A placed number is a control of the device plugin with that one
 //! input; buttons gather into hats and axes into sticks. `panel` lists the placed controls,
-//! `dialogs` makes a new device from a picture and copies the controls of another device.
+//! `dialogs` makes a new device from a picture and copies the controls of another device, `share`
+//! packs a device's picture and mapping into a file to share and takes such files in.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -20,6 +21,7 @@ use crate::style::{self, icon};
 mod canvas;
 mod dialogs;
 mod panel;
+mod share;
 mod store;
 #[cfg(test)]
 mod tests;
@@ -64,6 +66,8 @@ pub struct Mapper {
     textures: HashMap<(String, String, bool), (egui::TextureHandle, egui::Vec2)>,
     pub new_device: Option<NewDevice>,
     pub copy: Option<CopyControls>,
+    /// A shared file unpacked that replaces the user's own mapping: asked first.
+    import: Option<share::Unpacked>,
     pub error: Option<String>,
     /// Where things were drawn last frame (tests drag between them).
     pub layout: Layout,
@@ -118,6 +122,7 @@ impl Mapper {
             textures: HashMap::new(),
             new_device: None,
             copy: None,
+            import: None,
             error: None,
             layout: Layout::default(),
         }
@@ -589,6 +594,16 @@ impl Mapper {
             if style::icon_button(ui, can_copy, icon::COPY, &i18n.tr("map-copy")).clicked() {
                 self.copy = Some(CopyControls::default());
             }
+            if style::icon_button(
+                ui,
+                self.plugin.is_some(),
+                icon::EXPORT,
+                &i18n.tr("map-export"),
+            )
+            .clicked()
+            {
+                self.export_file();
+            }
         });
         ui.separator();
         egui::Panel::right("mapping-panel")
@@ -600,6 +615,45 @@ impl Mapper {
         // Axes' tags go dark again after a moment.
         if self.seen.values().any(|t| t.elapsed() < AXIS_LIT) {
             ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    /// Saves the mapped device's picture and mapping as one file to share.
+    pub fn export_file(&mut self) {
+        let Some(id) = self.plugin.clone() else {
+            return;
+        };
+        let Some(to) = rfd::FileDialog::new()
+            .set_file_name(format!("{id}.zip"))
+            .add_filter("ZIP", &["zip"])
+            .save_file()
+        else {
+            return;
+        };
+        let result = share::export(&self.store, &id, &to);
+        if result.is_ok() {
+            log::info!("device plugin {id} exported to {}", to.display());
+        }
+        self.report(result);
+    }
+
+    /// Takes in a shared file: a device's picture and mapping (asks first when it replaces the
+    /// user's own mapping of that device).
+    pub fn import_file(&mut self) {
+        let Some(from) = rfd::FileDialog::new()
+            .add_filter("ZIP", &["zip"])
+            .pick_file()
+        else {
+            return;
+        };
+        match share::unpack(&self.store, &from) {
+            Ok(unpacked) if unpacked.replaces.is_some() => self.import = Some(unpacked),
+            Ok(unpacked) => {
+                let result = unpacked.install(&mut self.store).map(|_| ());
+                self.textures.clear();
+                self.report(result);
+            }
+            Err(e) => self.report(Err(e)),
         }
     }
 
@@ -618,6 +672,7 @@ impl Mapper {
     pub fn dialogs(&mut self, ctx: &egui::Context, i18n: &I18n) {
         self.new_device_dialog(ctx, i18n);
         self.copy_dialog(ctx, i18n);
+        self.import_dialog(ctx, i18n);
         if let Some(error) = self.error.clone() {
             let mut close = false;
             style::modal(ctx, "mapping-error").show(ctx, |ui| {
@@ -634,6 +689,44 @@ impl Mapper {
             if close {
                 self.error = None;
             }
+        }
+    }
+}
+
+impl Mapper {
+    /// A shared file would replace the user's own mapping of that device: replace or keep.
+    fn import_dialog(&mut self, ctx: &egui::Context, i18n: &I18n) {
+        let Some(unpacked) = self.import.take() else {
+            return;
+        };
+        let mut result = None;
+        style::modal(ctx, "mapping-import").show(ctx, |ui| {
+            ui.set_max_width(480.0);
+            style::dialog_title(
+                ui,
+                Some((icon::DOWNLOAD_SIMPLE, None)),
+                &i18n.tr("map-import"),
+            );
+            ui.label(i18n.trf(
+                "map-import-replaces",
+                &[("name", unpacked.name.clone().into())],
+            ));
+            result = style::dialog_buttons(
+                ui,
+                &[
+                    style::DialogButton::primary(i18n.tr("map-import-do")),
+                    style::DialogButton::secondary(i18n.tr("cancel")),
+                ],
+            );
+        });
+        match result {
+            Some(0) => {
+                let result = unpacked.install(&mut self.store).map(|_| ());
+                self.textures.clear();
+                self.report(result);
+            }
+            Some(_) => unpacked.discard(),
+            None => self.import = Some(unpacked),
         }
     }
 }

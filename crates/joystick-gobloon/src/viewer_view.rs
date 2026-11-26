@@ -171,6 +171,12 @@ impl ViewerView {
             ui.label(RichText::new(i18n.tr("nav-viewer")).strong());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 toggle = style::icon_button(ui, true, glyph, &i18n.tr(key)).clicked();
+                if !self.mapper.editing
+                    && style::icon_button(ui, true, icon::DOWNLOAD_SIMPLE, &i18n.tr("map-import"))
+                        .clicked()
+                {
+                    self.mapper.import_file();
+                }
             });
         });
         ui.separator();
