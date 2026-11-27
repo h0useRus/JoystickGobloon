@@ -121,6 +121,8 @@ impl Graph {
         let mut inputs: Vec<InputNode> = Vec::new();
         let mut input_edges = Vec::new();
         let mut input_routes: Vec<String> = Vec::new();
+        // Built once: a route is looked up per edge, and the graph is built every frame.
+        let index = profile.action_index();
         for (m, o) in outputs.iter().enumerate() {
             for (b, action) in sources.get(o).into_iter().flatten() {
                 let b = *b;
@@ -143,13 +145,16 @@ impl Graph {
                         inputs.len() - 1
                     }
                 };
-                let route = route_label(i18n, profile, b, action);
+                let route = route_label(i18n, profile, &index, b, action);
                 match input_edges.iter().position(|e| *e == (l, m)) {
                     None => {
                         input_edges.push((l, m));
                         input_routes.push(route);
                     }
-                    Some(e) if !route.is_empty() && !input_routes[e].contains(&route) => {
+                    Some(e)
+                        if !route.is_empty()
+                            && !input_routes[e].split(", ").any(|r| r == route) =>
+                    {
                         let r = &mut input_routes[e];
                         if !r.is_empty() {
                             r.push_str(", ");
@@ -200,8 +205,14 @@ impl Graph {
 /// How binding `binding` reaches `action`, in a few words: its mode (unless it is the first),
 /// its modifier layer and the branches on the way ("Long press › Double tap"). Empty for a
 /// plain mapping.
-pub(super) fn route_label(i18n: &I18n, profile: &Profile, binding: usize, action: &str) -> String {
-    let Some(route) = profile.route(binding, action) else {
+pub(super) fn route_label(
+    i18n: &I18n,
+    profile: &Profile,
+    index: &HashMap<&str, &gob_core::Action>,
+    binding: usize,
+    action: &str,
+) -> String {
+    let Some(route) = profile.route_in(index, binding, action) else {
         return String::new();
     };
     let mut parts: Vec<String> = Vec::new();

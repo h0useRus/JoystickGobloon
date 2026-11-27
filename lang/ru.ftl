@@ -1134,6 +1134,7 @@ game-capture-long = Долгое нажатие
 game-capture-double = Двойное нажатие
 game-tab-device = Контроллер
 game-device-none = Подключите контроллер с изображением: добавьте его в просмотре входов и расставьте элементы
+game-device-arrange = Расставить карточки автоматически
 game-capture-hint = Нажмите клавишу или несколько клавиш вместе, кнопку мыши над этим полем либо кнопку, хатку или ось джойстика.
 game-capture-now = Сейчас: { $control }
 game-capture-clear = Очистить привязку
@@ -1207,6 +1208,9 @@ osc-arg-input = Значение входа (0–1)
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = Изменить разметку
 map-add = Добавить изображение
+map-download = Скачать изображение
+map-downloading = Скачивание изображения…
+map-download-failed = Не удалось скачать изображение. Проверьте подключение к интернету и попробуйте снова.
 map-done = Готово
 map-copy = Скопировать элементы с другого устройства
 map-copy-title = Скопировать элементы

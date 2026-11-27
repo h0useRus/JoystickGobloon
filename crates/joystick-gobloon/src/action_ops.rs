@@ -413,6 +413,13 @@ pub enum Op {
         target: String,
         version: Option<String>,
     },
+    /// Game page: a controller picture's card dragged to another place.
+    PictureCard(gob_core::PictureCard),
+    /// Game page: a controller picture's cards back where they go by themselves.
+    ResetPictureCards {
+        plugin: String,
+        view: String,
+    },
 }
 
 pub fn apply(p: &mut Profile, op: Op) {
@@ -749,6 +756,8 @@ pub fn apply(p: &mut Profile, op: Op) {
             }
         }
         Op::GameDevices { game, devices } => p.set_game_devices(&game, devices),
+        Op::PictureCard(card) => p.set_picture_card(card),
+        Op::ResetPictureCards { plugin, view } => p.reset_picture_cards(&plugin, &view),
         Op::GameExported {
             game,
             target,

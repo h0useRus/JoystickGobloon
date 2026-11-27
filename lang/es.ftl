@@ -1126,6 +1126,7 @@ game-capture-long = Pulsación larga
 game-capture-double = Doble toque
 game-tab-device = Mando
 game-device-none = Conecta un mando con imagen: añádela en el visor de entradas y coloca sus controles
+game-device-arrange = Colocar las tarjetas automáticamente
 game-capture-hint = Pulse una tecla o varias a la vez, un botón del ratón sobre este recuadro, o un botón, seta o eje del joystick.
 game-capture-now = Ahora: { $control }
 game-capture-clear = Borrar la asignación
@@ -1199,6 +1200,9 @@ osc-arg-input = Valor de la entrada (0–1)
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = Editar el mapeo
 map-add = Añadir una imagen
+map-download = Descargar imagen
+map-downloading = Descargando la imagen…
+map-download-failed = No se pudo descargar la imagen. Comprueba la conexión a internet e inténtalo de nuevo.
 map-done = Listo
 map-copy = Copiar los controles de otro dispositivo
 map-copy-title = Copiar los controles

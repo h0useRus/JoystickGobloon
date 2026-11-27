@@ -1126,6 +1126,7 @@ game-capture-long = Langer Druck
 game-capture-double = Doppeltipp
 game-tab-device = Controller
 game-device-none = Schließe einen Controller mit Bild an: füge eines in der Eingabeanzeige hinzu und platziere seine Bedienelemente
+game-device-arrange = Karten automatisch anordnen
 game-capture-hint = Drücken Sie eine Taste oder mehrere Tasten zusammen, eine Maustaste über diesem Feld oder eine Taste, einen Hat oder eine Achse am Joystick.
 game-capture-now = Jetzt: { $control }
 game-capture-clear = Belegung löschen
@@ -1199,6 +1200,9 @@ osc-arg-input = Wert der Eingabe (0–1)
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = Zuordnung bearbeiten
 map-add = Bild hinzufügen
+map-download = Bild herunterladen
+map-downloading = Bild wird heruntergeladen…
+map-download-failed = Das Bild konnte nicht heruntergeladen werden. Prüfe die Internetverbindung und versuche es erneut.
 map-done = Fertig
 map-copy = Bedienelemente von einem anderen Gerät kopieren
 map-copy-title = Bedienelemente kopieren

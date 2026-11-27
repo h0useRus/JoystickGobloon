@@ -1,0 +1,20 @@
+# Gladiator NXT EVO "WWII Combat Edition": KG12 grip on the GNX EVO base.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "vkb-gladiator-nxt-evo-kg12"
+name = "Gladiator NXT EVO WWII (KG12)"
+brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Gladiator EVO KG12"
+
+[[match]]
+vid = 0x231D
+name = "Gladiator EVO WWII"
+
+[[view]]
+id = "main"
+name = "Stick"
+image = "views/main.png"

@@ -269,7 +269,8 @@ impl Updater {
     }
 }
 
-fn agent() -> ureq::Agent {
+/// The HTTP client for GitHub (updates, device plugins).
+pub(crate) fn agent() -> ureq::Agent {
     let tls = ureq::tls::TlsConfig::builder()
         .provider(ureq::tls::TlsProvider::NativeTls)
         .root_certs(ureq::tls::RootCerts::PlatformVerifier)

@@ -1114,6 +1114,7 @@ game-capture-long = 长按
 game-capture-double = 双击
 game-tab-device = 控制器
 game-device-none = 连接一个有图片的控制器：在输入查看器中添加图片并放置它的控件
+game-device-arrange = 自动排列卡片
 game-capture-hint = 按下一个键或同时按下多个键，在此框上按鼠标按键，或操作摇杆的按钮、苦力帽或轴。
 game-capture-now = 当前：{ $control }
 game-capture-clear = 清除绑定
@@ -1187,6 +1188,9 @@ osc-arg-input = 输入值（0–1）
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = 编辑映射
 map-add = 添加图片
+map-download = 下载图片
+map-downloading = 正在下载图片…
+map-download-failed = 无法下载图片。请检查网络连接后重试。
 map-done = 完成
 map-copy = 从另一个设备复制控件
 map-copy-title = 复制控件

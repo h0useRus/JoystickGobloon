@@ -20,6 +20,7 @@ use crate::style::{self, icon};
 
 mod canvas;
 mod dialogs;
+pub mod download;
 mod panel;
 mod share;
 mod store;

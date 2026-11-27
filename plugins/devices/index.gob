@@ -1,0 +1,577 @@
+# The device plugins Joystick Gobloon downloads for connected devices.
+# Made by `cargo run -p gob-devices --example device_index`; do not edit.
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-f14"
+name = "Gladiator NXT EVO F-14"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-f14"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO F14"
+
+[[device.file]]
+path = "device.gob"
+size = 418
+sha256 = "7aeb1216045ab194aeeb0fbf77e5490192593b06caba3f70a28ee1e0ed2fe39e"
+
+[[device.file]]
+path = "views/main.png"
+size = 120416
+sha256 = "3a9e0419536ca015a3eaf30ed93af7a9d2955848c574323056b1f5299c8f28e9"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-kg12"
+name = "Gladiator NXT EVO WWII (KG12)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-kg12"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO KG12"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO WWII"
+
+[[device.file]]
+path = "device.gob"
+size = 479
+sha256 = "ad4b9546f1e655ede061cc3e779462e4e101798fc1edeb4ed67c1274822d4c9f"
+
+[[device.file]]
+path = "views/main.png"
+size = 128268
+sha256 = "431aa6cae26b03cc07e38dff241bf192c6de6f93726977ccfa04d0baf2881c95"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-l"
+name = "Gladiator NXT EVO (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-l"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO L"
+
+[[device.file]]
+path = "device.gob"
+size = 2627
+sha256 = "49a523038f661f22fc23011739919500705bb3f83b1ad0246f17d5710bb58df2"
+
+[[device.file]]
+path = "inputs.gob"
+size = 717
+sha256 = "a73a63cfcfa2e3bf029c8fda3ac8d234c2c103a28880a87811415e2e9acafffd"
+
+[[device.file]]
+path = "views/main.png"
+size = 278014
+sha256 = "d967d76e02c0419c86de96534dbf10158b81feb18c74b2a8270242e0f0368173"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-ot-l"
+name = "Gladiator NXT EVO Omni Throttle (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-ot-l"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO OT L"
+
+[[device.file]]
+path = "device.gob"
+size = 3080
+sha256 = "79ab0c2d600c3497477e7c662f7f6e061d1b5c5e0fc0967b7bee2f3fad222429"
+
+[[device.file]]
+path = "inputs.gob"
+size = 717
+sha256 = "a73a63cfcfa2e3bf029c8fda3ac8d234c2c103a28880a87811415e2e9acafffd"
+
+[[device.file]]
+path = "views/main.png"
+size = 331831
+sha256 = "3499f93bdb50bfdf073428f2a2476d4555c7f2bf361f444593f37472581ae9ce"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-ot-r"
+name = "Gladiator NXT EVO Omni Throttle (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-ot-r"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO OT R"
+
+[[device.file]]
+path = "device.gob"
+size = 2709
+sha256 = "244bee42490a9acb003fdf824e017ff76bc03bd8a40f8f7efacf8bdffa7fb8ee"
+
+[[device.file]]
+path = "inputs.gob"
+size = 717
+sha256 = "a73a63cfcfa2e3bf029c8fda3ac8d234c2c103a28880a87811415e2e9acafffd"
+
+[[device.file]]
+path = "views/main.png"
+size = 325729
+sha256 = "00de99e666087123d8e40aca63cf00a52daa93a96cdd4db4182078458bb07c15"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-r"
+name = "Gladiator NXT EVO (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-r"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO R"
+
+[[device.file]]
+path = "device.gob"
+size = 2628
+sha256 = "0076614638f8ca39a1ce5fcb557984cd5816d2b0e02e027110b14a35d04f8992"
+
+[[device.file]]
+path = "inputs.gob"
+size = 717
+sha256 = "a73a63cfcfa2e3bf029c8fda3ac8d234c2c103a28880a87811415e2e9acafffd"
+
+[[device.file]]
+path = "views/main.png"
+size = 289743
+sha256 = "94e081a0a253cd2463bd5f08136da145ed87b2d0c6f645eca07208edf2789541"
+
+[[device]]
+id = "vkb-gunfighter-mk4-f14"
+name = "Gunfighter Mk.IV F-14"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-f14"
+
+[[device.match]]
+vid = 8989
+name = "Gunfighter F14"
+
+[[device.match]]
+vid = 8989
+name = "Gunfighter F-14"
+
+[[device.file]]
+path = "device.gob"
+size = 428
+sha256 = "26ad552c333f9e02c7ee30775c8209b7ed6546181e260e40ad166233f66ab54a"
+
+[[device.file]]
+path = "views/main.png"
+size = 213869
+sha256 = "c95f5a3c4dd6679e1532023af8494c19f32487e7a446cbeaa0e5af994a29e49f"
+
+[[device]]
+id = "vkb-gunfighter-mk4-kg12"
+name = "Gunfighter Mk.IV WWII (KG12)"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-kg12"
+
+[[device.match]]
+vid = 8989
+name = "Gunfighter KG12"
+
+[[device.match]]
+vid = 8989
+name = "Gunfighter WWII"
+
+[[device.file]]
+path = "device.gob"
+size = 448
+sha256 = "3b4b54a7870399a6f3b135f3285e9b9312835131ebf4654802317ebed5f66280"
+
+[[device.file]]
+path = "views/main.png"
+size = 222716
+sha256 = "b6f3832dd349133d8aae0bf4b954cdda8314fb9784262f21b8c40073987f4d5b"
+
+[[device]]
+id = "vkb-gunfighter-mk4-mcg-pro"
+name = "Gunfighter Mk.IV MCG Pro"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-mcg-pro"
+
+[[device.match]]
+vid = 8989
+name = "Modern Combat Pro"
+
+[[device.match]]
+vid = 8989
+name = "MCG Pro"
+
+[[device.file]]
+path = "device.gob"
+size = 446
+sha256 = "17cf1dde6f560f97c8299b83be3baeb413dbb2d189ab24472f0863d6595ed02d"
+
+[[device.file]]
+path = "views/main.png"
+size = 207286
+sha256 = "c4fe366d1eeac6fff7f51d1eb09eded578eb7b4f012b491be4c0f8899419ce55"
+
+[[device]]
+id = "vkb-gunfighter-mk4-mcg-ultimate"
+name = "Gunfighter Mk.IV MCG Ultimate"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-mcg-ultimate"
+
+[[device.match]]
+vid = 8989
+name = "Modern Combat Ultimate"
+
+[[device.match]]
+vid = 8989
+name = "MCG Ultimate"
+
+[[device.file]]
+path = "device.gob"
+size = 1042
+sha256 = "1ad544bd9cc7a84b66b203ffeab01e8a3fd08f7dc6633e95df5cdf2725eecad3"
+
+[[device.file]]
+path = "inputs.gob"
+size = 62
+sha256 = "7cca6ff0ed9ed00d1d92d054d772982d9d99d13a94a5ec6d4160c1dd1cc88601"
+
+[[device.file]]
+path = "views/main.png"
+size = 205601
+sha256 = "178689450ee26aab83751dcae85bd978465e2ae2daf0f0be24bb4aab1742cd7a"
+
+[[device.file]]
+path = "views/right.png"
+size = 208284
+sha256 = "8e7388479105bae463a737ffa4302ced1c44b2ae27f8d61455a14551f06852a4"
+
+[[device]]
+id = "vkb-gunfighter-mk4-scg-l"
+name = "Gunfighter Mk.IV SCG (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-scg-l"
+
+[[device.match]]
+vid = 8989
+name = "Space Gunfighter L"
+
+[[device.file]]
+path = "device.gob"
+size = 413
+sha256 = "06e7a388d34f4945372126fffd8977f188b7a64519c85da06b0c726e2671cb2c"
+
+[[device.file]]
+path = "views/main.png"
+size = 221342
+sha256 = "fd7c4131c7356b17890e3916356e1c3c62de9b334059e7f7ec41256d7dc9c5df"
+
+[[device]]
+id = "vkb-gunfighter-mk4-scg-r"
+name = "Gunfighter Mk.IV SCG (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-scg-r"
+
+[[device.match]]
+vid = 8989
+name = "Space Gunfighter"
+
+[[device.file]]
+path = "device.gob"
+size = 413
+sha256 = "682350a63b0c3936ed244ed4c7469bf2ad66b3e1ea2e0935b600e8b5bf319def"
+
+[[device.file]]
+path = "views/main.png"
+size = 215608
+sha256 = "97aa6e45673e648b5b5583651418dc677779bb6b25060206a6b1882caebac049"
+
+[[device]]
+id = "vkb-stecs-modern-max"
+name = "STECS Modern Throttle Max"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-modern-max"
+
+[[device.match]]
+vid = 8989
+name = "Modern Throttle Max"
+
+[[device.file]]
+path = "device.gob"
+size = 411
+sha256 = "670f630a78077a1b38094475ae5eb282516e5c084fc9d19c68c6261d82a22d99"
+
+[[device.file]]
+path = "views/main.png"
+size = 566389
+sha256 = "e77d79d036ededee6ef13f123fc9072632c2ae80ef798b7f947b5ab2a7d61a28"
+
+[[device]]
+id = "vkb-stecs-modern-mini"
+name = "STECS Modern Throttle Mini"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-modern-mini"
+
+[[device.match]]
+vid = 8989
+name = "Modern Throttle Mini"
+
+[[device.file]]
+path = "device.gob"
+size = 394
+sha256 = "224259a66170a40905b6addef1de4abda1c70421b58cee10b2836b21ad2c9406"
+
+[[device.file]]
+path = "views/main.png"
+size = 389345
+sha256 = "ab9f2c427099e926a7b9004e944d267dddeddaa9812828ec8221a8ea644d3c99"
+
+[[device]]
+id = "vkb-stecs-modern-mini-plus"
+name = "STECS Modern Throttle Mini Plus"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-modern-mini-plus"
+
+[[device.match]]
+vid = 8989
+name = "Modern Throttle Mini Plus"
+
+[[device.file]]
+path = "device.gob"
+size = 414
+sha256 = "c794bd3b95c33e7a851068fc6b3fefc412785e2692326abaa5e658159799d40d"
+
+[[device.file]]
+path = "views/main.png"
+size = 435752
+sha256 = "3df499b85647d0f73860da5198f60c07fa9f76b854622083cfe5e5b9fed67d96"
+
+[[device]]
+id = "vkb-stecs-modern-standard"
+name = "STECS Modern Throttle Standard"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-modern-standard"
+
+[[device.match]]
+vid = 8989
+name = "Modern Throttle Standard"
+
+[[device.file]]
+path = "device.gob"
+size = 422
+sha256 = "d9384e5ae514568e95909d3a7a8d119e32f6f0c32f65abe5b6b6b9a1507be721"
+
+[[device.file]]
+path = "views/main.png"
+size = 494189
+sha256 = "ae765726c7c54a7118a33409253d7f13825b30f03bb7c2e9a1abc0bd33b1ae30"
+
+[[device]]
+id = "vkb-stecs-space-max-l"
+name = "STECS Space Throttle Max (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-max-l"
+
+[[device.match]]
+vid = 8989
+name = "Space-L Throttle Max"
+
+[[device.file]]
+path = "device.gob"
+size = 412
+sha256 = "e40a6160cb2297373868df188d1ae87a27b5755adb168a1ace97a246385ffc10"
+
+[[device.file]]
+path = "views/main.png"
+size = 303374
+sha256 = "87c4d83042c0deb75b9adaefcc3c74f5f1abfea7fae0eaffe55a1cb49971e532"
+
+[[device]]
+id = "vkb-stecs-space-max-r"
+name = "STECS Space Throttle Max (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-max-r"
+
+[[device.match]]
+vid = 8989
+name = "Space-R Throttle Max"
+
+[[device.file]]
+path = "device.gob"
+size = 414
+sha256 = "947adccc1c8c26158684081ec2f8a4434ac328de19c27386d81ebf36df48f7ef"
+
+[[device.file]]
+path = "views/main.png"
+size = 548385
+sha256 = "62c6f5dc1c7c4f9bf3ba9fd518dd701c04b104f45b1d9e90b55ae558c3953629"
+
+[[device]]
+id = "vkb-stecs-space-mini-l"
+name = "STECS Space Throttle Mini (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-mini-l"
+
+[[device.match]]
+vid = 8989
+name = "Space-L Throttle Mini"
+
+[[device.file]]
+path = "device.gob"
+size = 416
+sha256 = "2bdd2e6d253aa5e90e2064942701bb0d8bd116f08c98fcb675cc715d5ca08ced"
+
+[[device.file]]
+path = "views/main.png"
+size = 288423
+sha256 = "6e0a89d69321c121e080f3ffeae54a8b0db9a3051aecb3d1d2ca4d0631a3aa1e"
+
+[[device]]
+id = "vkb-stecs-space-mini-plus-l"
+name = "STECS Space Throttle Mini Plus (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-mini-plus-l"
+
+[[device.match]]
+vid = 8989
+name = "Space-L Throttle Mini Plus"
+
+[[device.file]]
+path = "device.gob"
+size = 436
+sha256 = "860d92b280bd3d5f9fdaa9c0c0e0d76b5d67bbb8e8ac419214a997075acf9211"
+
+[[device.file]]
+path = "views/main.png"
+size = 361797
+sha256 = "612fb156ed8492b0e936cba5aecfc5724b28d97ecee337ea88013794a2a3d854"
+
+[[device]]
+id = "vkb-stecs-space-mini-plus-r"
+name = "STECS Space Throttle Mini Plus (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-mini-plus-r"
+
+[[device.match]]
+vid = 8989
+name = "Space-R Throttle Mini Plus"
+
+[[device.file]]
+path = "device.gob"
+size = 438
+sha256 = "3a580bd6f861ac3c27ac7a66bca18bfb9a5f05a871092103bb85bee500a17a2b"
+
+[[device.file]]
+path = "views/main.png"
+size = 345983
+sha256 = "12c0ae8145563425cd72c1912dbfd3fd66a13b19d864f1ffcb0dcf3b653a577f"
+
+[[device]]
+id = "vkb-stecs-space-mini-r"
+name = "STECS Space Throttle Mini (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-mini-r"
+
+[[device.match]]
+vid = 8989
+name = "Space-R Throttle Mini"
+
+[[device.file]]
+path = "device.gob"
+size = 418
+sha256 = "90177aad9e291836b7c8a195b8f82cedc1086213f8d90767773e11b200b8f4a1"
+
+[[device.file]]
+path = "views/main.png"
+size = 493378
+sha256 = "821f86d95846dc9db80f67c650d5002e0e5ba460a2fc5c5e44ec2f2f6bcbe737"
+
+[[device]]
+id = "vkb-stecs-space-standard-l"
+name = "STECS Space Throttle Standard (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-standard-l"
+
+[[device.match]]
+vid = 8989
+name = "Space-L Throttle Standard"
+
+[[device.file]]
+path = "device.gob"
+size = 432
+sha256 = "2c8813ebec5519c00ac6e4ac224c400fdc5c2f4b5f42a419daf3cbb3898335a1"
+
+[[device.file]]
+path = "views/main.png"
+size = 308914
+sha256 = "d4692b0f388c9a86161e9542e40643ab561daace44749248436be7744852b6bb"
+
+[[device]]
+id = "vkb-stecs-space-standard-r"
+name = "STECS Space Throttle Standard (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-standard-r"
+
+[[device.match]]
+vid = 8989
+name = "Space-R Throttle Standard"
+
+[[device.file]]
+path = "device.gob"
+size = 434
+sha256 = "92a8abf58ea1a87f1a885c5e092c6540d0b962ece4e219ffe3eba79555deccd7"
+
+[[device.file]]
+path = "views/main.png"
+size = 301572
+sha256 = "823492f97a93963a0d531494ab378a03c77c0b824d70b6a8b949d8b0dcba4efe"
+
+[[device]]
+id = "vkb-t-rudder-mk5"
+name = "T-Rudder Mk.V"
+brand = "VKB"
+version = "1"
+path = "vkb/t-rudder-mk5"
+
+[[device.match]]
+vid = 8989
+name = "T-Rudder"
+
+[[device.file]]
+path = "device.gob"
+size = 349
+sha256 = "4d9d77be083805151121e87c356e9cec5f9a56aa3ab599ed79246482aa391fe1"
+
+[[device.file]]
+path = "views/main.png"
+size = 534073
+sha256 = "7c28c92f378c784a77b2fcc7ca78f578ac6649715b53210a3cbf14ed5f5dd1c7"

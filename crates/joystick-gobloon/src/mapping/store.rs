@@ -1,6 +1,7 @@
-//! The device plugins shown and mapped: shipped ones (`devices/` next to the program) and the
-//! user's own (`<data dir>/devices`), in folders per brand; the user's win by id. Changes always
-//! go to the user's folder: a shipped plugin is copied there the first time it changes. Debug
+//! The device plugins shown and mapped: ones next to the program (`devices/`, if any: releases
+//! ship none, see [`super::download`]) and the user's own and downloaded ones
+//! (`<data dir>/devices`), in folders per brand; the user's win by id. Changes always go to the
+//! user's folder: a shipped plugin is copied there the first time it changes. Debug
 //! builds change the repository's plugins instead. Plugins load again when their files change
 //! (edited by hand or by another copy of the program).
 
@@ -20,6 +21,8 @@ pub struct Store {
     /// When each plugin's files last changed, as loaded.
     stamps: Vec<(PathBuf, Option<SystemTime>)>,
     checked: Option<Instant>,
+    /// Downloads finished when the plugins were last loaded ([`super::download::downloaded`]).
+    downloads: u64,
 }
 
 /// How often the plugin files are checked for changes.
@@ -39,12 +42,14 @@ impl Store {
             catalog: Catalog::default(),
             stamps: Vec::new(),
             checked: None,
+            downloads: 0,
         };
         store.reload();
         store
     }
 
     pub fn reload(&mut self) {
+        self.downloads = super::download::downloaded();
         self.catalog = Catalog::load(&self.dirs);
         for (dir, e) in &self.catalog.errors {
             log::warn!("device plugin {}: {e}", dir.display());
@@ -59,6 +64,10 @@ impl Store {
 
     /// Loads the plugins again when one's files changed since (checked every few seconds).
     pub fn reload_if_changed(&mut self) -> bool {
+        if self.downloads != super::download::downloaded() {
+            self.reload();
+            return true;
+        }
         if self.checked.is_some_and(|t| t.elapsed() < CHECK_EVERY) {
             return false;
         }

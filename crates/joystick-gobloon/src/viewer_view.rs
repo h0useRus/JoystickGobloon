@@ -14,6 +14,7 @@ use gob_input::{AXIS_SLOTS, DeviceInfo, DeviceState};
 
 use crate::devices_view::hat_glyph;
 use crate::mapping::Mapper;
+use crate::mapping::download::Offer;
 use crate::style::{self, icon};
 
 /// Seconds shown by the history graph.
@@ -213,6 +214,15 @@ impl ViewerView {
             }
         }
         let mut add_picture = None;
+        let mut download = None;
+        // A failed download of a device's picture, told once.
+        if let Some(e) = crate::mapping::download::take_errors().pop() {
+            self.mapper.error = Some(format!(
+                "{}
+{e}",
+                i18n.tr("map-download-failed")
+            ));
+        }
         egui::Panel::left("viewer-devices")
             .resizable(true)
             .default_size(230.0)
@@ -241,11 +251,37 @@ impl ViewerView {
                                     ));
                                 } else if !d.info.is_own()
                                     && d.info.guid != gob_core::LOGICAL_DEVICE_GUID
-                                    && ui
+                                {
+                                    // A picture made for this device can be downloaded; any
+                                    // device can get one drawn by the user.
+                                    match crate::mapping::download::offer(ui.ctx(), &d.info) {
+                                        Offer::Available { id, name } => {
+                                            if ui
+                                                .button(format!(
+                                                    "{}  {}",
+                                                    icon::DOWNLOAD_SIMPLE,
+                                                    i18n.tr("map-download")
+                                                ))
+                                                .on_hover_text(name)
+                                                .clicked()
+                                            {
+                                                download = Some(id);
+                                            }
+                                        }
+                                        Offer::Downloading => {
+                                            ui.horizontal(|ui| {
+                                                ui.spinner();
+                                                ui.label(i18n.tr("map-downloading"));
+                                            });
+                                        }
+                                        Offer::None => {}
+                                    }
+                                    if ui
                                         .button(format!("{}  {}", icon::IMAGE, i18n.tr("map-add")))
                                         .clicked()
-                                {
-                                    add_picture = Some(d.info.guid.clone());
+                                    {
+                                        add_picture = Some(d.info.guid.clone());
+                                    }
                                 }
                                 ui.add(style::switch(
                                     &mut shown.history,
@@ -265,6 +301,10 @@ impl ViewerView {
             });
         if let Some(guid) = add_picture {
             self.mapper.add_picture(&guid);
+        }
+        // Downloads go to the user's folder (debug builds too, which edit the repository's).
+        if let Some((id, dir)) = download.zip(self.mapper.store.dirs.last().cloned()) {
+            crate::mapping::download::start(ui.ctx(), &id, dir);
         }
 
         let now = self.now();

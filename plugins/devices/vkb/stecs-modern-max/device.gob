@@ -1,0 +1,16 @@
+# STECS Modern Throttle System Mk.II, Max (with STEM and ATEM).
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "vkb-stecs-modern-max"
+name = "STECS Modern Throttle Max"
+brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Modern Throttle Max"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"

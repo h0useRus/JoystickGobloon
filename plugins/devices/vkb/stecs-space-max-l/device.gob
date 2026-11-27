@@ -1,0 +1,16 @@
+# STECS Space Throttle System, Max, left hand: STG grip.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "vkb-stecs-space-max-l"
+name = "STECS Space Throttle Max (left)"
+brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Space-L Throttle Max"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"

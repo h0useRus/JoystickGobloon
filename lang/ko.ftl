@@ -1114,6 +1114,7 @@ game-capture-long = 길게 누르기
 game-capture-double = 두 번 누르기
 game-tab-device = 컨트롤러
 game-device-none = 그림이 있는 컨트롤러를 연결하세요. 입력 뷰어에서 그림을 추가하고 컨트롤을 배치하세요
+game-device-arrange = 카드 자동 배치
 game-capture-hint = 키 하나 또는 여러 키를 함께 누르거나, 이 상자 위에서 마우스 버튼을 누르거나, 조이스틱의 버튼·햇·축을 움직이세요.
 game-capture-now = 현재: { $control }
 game-capture-clear = 연결 지우기
@@ -1187,6 +1188,9 @@ osc-arg-input = 입력 값(0–1)
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = 매핑 편집
 map-add = 그림 추가
+map-download = 그림 내려받기
+map-downloading = 그림 내려받는 중…
+map-download-failed = 그림을 내려받지 못했습니다. 인터넷 연결을 확인하고 다시 시도하세요.
 map-done = 완료
 map-copy = 다른 장치에서 컨트롤 복사
 map-copy-title = 컨트롤 복사

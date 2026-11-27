@@ -1126,6 +1126,7 @@ game-capture-long = Long press
 game-capture-double = Double tap
 game-tab-device = Controller
 game-device-none = Connect a controller that has a picture: add one in the Input viewer and place its controls
+game-device-arrange = Arrange the cards by themselves
 game-capture-hint = Press a key or several keys together, a mouse button over this box, or a joystick button, hat or axis.
 game-capture-now = Now: { $control }
 game-capture-clear = Clear the binding
@@ -1199,6 +1200,9 @@ osc-arg-input = Input value (0–1)
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = Edit mapping
 map-add = Add a picture
+map-download = Download picture
+map-downloading = Downloading the picture…
+map-download-failed = The picture could not be downloaded. Check the internet connection and try again.
 map-done = Done
 map-copy = Copy the controls from another device
 map-copy-title = Copy the controls

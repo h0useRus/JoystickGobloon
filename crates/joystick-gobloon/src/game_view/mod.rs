@@ -560,7 +560,7 @@ impl GameView {
         match self.tab {
             Tab::Wiring => self.wiring(ui, i18n, &game, &graph, &live, &state, now, ops),
             Tab::List => self.table(ui, i18n, ctx, &game, &graph, &live, &state, now, ops),
-            Tab::Device => self.device_tab(ui, i18n, ctx, &catalog, &state),
+            Tab::Device => self.device_tab(ui, i18n, ctx, &catalog, &state, ops),
         }
         let presses: Vec<gob_core::Press> = self
             .plugin()

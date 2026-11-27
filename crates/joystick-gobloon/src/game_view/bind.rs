@@ -79,6 +79,16 @@ fn is_hat(v: &VirtualOutput) -> bool {
 /// old id), and the bindings of the pressed input.
 pub(super) fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
     let aliases = crate::substitute_view::auto_aliases(ctx.profile, ctx.devices);
+    bindings_with(ctx, &aliases, p)
+}
+
+/// [`bindings_of`] with the device aliases worked out already (for callers asking about many
+/// inputs at once).
+pub(super) fn bindings_with(
+    ctx: &Context,
+    aliases: &HashMap<String, String>,
+    p: &Pressed,
+) -> (String, Vec<usize>) {
     let mut device = p.device.clone();
     let mut found = Vec::new();
     for (n, b) in ctx.profile.inputs.iter().enumerate() {
@@ -107,12 +117,40 @@ pub(super) fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
 /// What a game can bind of what the pressed input sends: virtual joystick and gamepad outputs,
 /// keys and mouse buttons. What the running profile sends right now comes first.
 pub(super) fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput> {
+    let usage = Usage::of(ctx);
+    outputs_with(ctx, &usage, p, bindings)
+}
+
+/// What the profile writes and sends, by the bindings doing it (worked out once for callers
+/// asking about many inputs at once).
+pub(super) struct Usage {
+    outputs: Vec<(VirtualOutput, Vec<gob_core::OutputUse>)>,
+    keys: Vec<(Combo, Vec<gob_core::OutputUse>)>,
+}
+
+impl Usage {
+    pub(super) fn of(ctx: &Context) -> Self {
+        Self {
+            outputs: ctx.profile.output_usage(None).into_iter().collect(),
+            keys: ctx.profile.key_usage(None),
+        }
+    }
+}
+
+/// [`outputs_of`] from usage worked out already.
+pub(super) fn outputs_with(
+    ctx: &Context,
+    usage: &Usage,
+    p: &Pressed,
+    bindings: &[usize],
+) -> Vec<GameOutput> {
     let mine = |uses: &[gob_core::OutputUse]| uses.iter().any(|u| bindings.contains(&u.binding));
     let mut out: Vec<GameOutput> = Vec::new();
-    for (v, uses) in ctx.profile.output_usage(None) {
-        if !mine(&uses) || matches!(v, VirtualOutput::Logical { .. }) {
+    for (v, uses) in &usage.outputs {
+        if !mine(uses) || matches!(v, VirtualOutput::Logical { .. }) {
             continue;
         }
+        let v = v.clone();
         if !is_hat(&v) {
             out.push(GameOutput::Virtual(v));
         } else if let Some(d) = p.hat {
@@ -125,9 +163,9 @@ pub(super) fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<
             );
         }
     }
-    for (combo, uses) in ctx.profile.key_usage(None) {
-        if mine(&uses) {
-            out.push(GameOutput::Keys(combo));
+    for (combo, uses) in &usage.keys {
+        if mine(uses) {
+            out.push(GameOutput::Keys(combo.clone()));
         }
     }
     let now = std::time::Instant::now();
@@ -158,9 +196,10 @@ pub(super) fn route_of(ctx: &Context, i18n: &I18n, bindings: &[usize], o: &GameO
             .unwrap_or_default(),
         GameOutput::Pressed(..) => Vec::new(),
     };
+    let index = ctx.profile.action_index();
     let mut labels: Vec<String> = Vec::new();
     for u in uses.iter().filter(|u| bindings.contains(&u.binding)) {
-        let l = super::graph::route_label(i18n, ctx.profile, u.binding, &u.action);
+        let l = super::graph::route_label(i18n, ctx.profile, &index, u.binding, &u.action);
         if !l.is_empty() && !labels.contains(&l) {
             labels.push(l);
         }

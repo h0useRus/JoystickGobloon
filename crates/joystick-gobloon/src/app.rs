@@ -2323,6 +2323,9 @@ impl eframe::App for JoystickGobloonApp {
     }
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        crate::mapping::download::set_alpha(
+            self.settings.update_channel == crate::settings::UpdateChannel::Alpha,
+        );
         self.sync_activation();
         // Placing the overlay ends when its tab is not shown: another page, or the window
         // hidden or minimized (otherwise it would stay on screen catching clicks).

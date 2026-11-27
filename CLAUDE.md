@@ -7,7 +7,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
 - gob-ui + gob-i18n live in the shared repo h0useRus/gobloon-common-ui (also used by Keyboard Gobloon), taken by git tag
-  in `[workspace.dependencies]` (now `v0.5.0`); move the tag on purpose. Local work on both: clone it to
+  in `[workspace.dependencies]` (now `v0.6.0`); move the tag on purpose. Local work on both: clone it to
   `..\gobloon-common-ui`, rename the gitignored `.cargo/config.toml.off` to `config.toml` (a `[patch]` to its crates by
   path) and back when done; Cargo.lock changes while it is on, don't commit that. Its gallery example
   (`cargo run -p gob-ui --example gallery` there) shows every widget. egui upgrades start there; both apps move together.
@@ -107,7 +107,10 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 - crates/gob-devices device plugins = a controller's picture + its controls + which input each sends:
   plugins/devices/<brand>/<device>/ (device.gob: id, name, brand, `[[match]]` vid + name part, `[[view]]` pictures,
   `[[control]]` id/name/kind/parts/at; inputs.gob: control -> `button:N`/`axis:x`/`hat:N`/`hat:N:up`), shipped in
-  `devices/` next to the exe, user copies in `<data dir>/devices` win by id; edit.rs = device.gob changed as text
+  releases ship none: index.rs = plugins/devices/index.gob (ids, matches, files with SHA-256; rebuild with example
+  `device_index`, a test checks it), joystick-gobloon mapping/download.rs reads it from GitHub raw (`main`, Alpha channel `dev`)
+  and downloads a fitting plugin into `<data dir>/devices` ("Download picture" in the Input viewer); `devices/` next to the
+  exe still loads if present, user copies win by id; edit.rs = device.gob changed as text
   (comments kept), live.rs = inputs from events or readings (`Detector::feed`/`poll`, `is_active`), draw.rs = how
   controls look on the picture (egui: hat pad, stick, gauge, tag; `draw::control`); examples `device_check`,
   `device_teach`. The Device tab of the Game page waits in archive/device-pictures

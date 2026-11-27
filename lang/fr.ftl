@@ -1126,6 +1126,7 @@ game-capture-long = Appui long
 game-capture-double = Double appui
 game-tab-device = Manette
 game-device-none = Branchez une manette qui a une image : ajoutez-la dans la visionneuse d'entrées et placez ses commandes
+game-device-arrange = Placer les cartes automatiquement
 game-capture-hint = Appuyez sur une touche ou plusieurs ensemble, sur un bouton de la souris au-dessus de ce cadre, ou actionnez un bouton, un chapeau ou un axe du joystick.
 game-capture-now = Actuellement : { $control }
 game-capture-clear = Effacer la liaison
@@ -1199,6 +1200,9 @@ osc-arg-input = Valeur de l’entrée (0–1)
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = Modifier le placement
 map-add = Ajouter une image
+map-download = Télécharger l'image
+map-downloading = Téléchargement de l'image…
+map-download-failed = L'image n'a pas pu être téléchargée. Vérifiez la connexion internet et réessayez.
 map-done = Terminé
 map-copy = Copier les commandes d'un autre appareil
 map-copy-title = Copier les commandes
