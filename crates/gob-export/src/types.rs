@@ -67,7 +67,7 @@ pub struct GameFile {
 pub type Files = BTreeMap<String, GameFile>;
 
 /// One of our virtual devices, as the plugin may find it in the game's files.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct OurDevice {
     /// The output id in the profile, like "vjoy:1".
     pub output: String,
@@ -78,6 +78,11 @@ pub struct OurDevice {
     /// The DirectInput instance GUID of the device on this computer, "{XXXXXXXX-...}"; empty
     /// when not known (the device is not attached, or the system has no such GUIDs).
     pub instance: String,
+    /// Its axes in DirectInput order, by our names ("x", "y", "z", "rx", "ry", "rz", "slider",
+    /// "dial"): for games that number a device's controls one after another.
+    pub axes: Vec<String>,
+    pub buttons: u32,
+    pub hats: u32,
 }
 
 /// How the game numbers one of our devices ("vjoy:1" -> "js1").

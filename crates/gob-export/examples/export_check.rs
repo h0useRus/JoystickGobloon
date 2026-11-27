@@ -40,6 +40,7 @@ fn main() {
             name: "vJoy Device".into(),
             guid: "{BEAD1234-0000-0000-0000-504944564944}".into(),
             instance: String::new(),
+            ..Default::default()
         })
         .collect();
     let env = Env {

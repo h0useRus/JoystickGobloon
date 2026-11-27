@@ -52,6 +52,7 @@ fn ours(n: u32) -> Vec<OurDevice> {
             name: "vJoy Device".into(),
             guid: "{BEAD1234-0000-0000-0000-504944564944}".into(),
             instance: String::new(),
+            ..Default::default()
         })
         .collect()
 }

@@ -157,7 +157,11 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   header) and the diff files' names, returned in `ReadResult::actions` (the Game page adds them to the catalog), ids
   `<aircraft>/<game id>`, `<device> {instance GUID}.diff.lua` per joystick + Keyboard.diff.lua via `luadata.parse/write`
   (Lua data without running it, sorted keys + tabs like the game); defaults = HTML less added plus removed; the game is not
-  installed here, tested on made-up files in tests/data/dcs-world, the HTML format is a guess). A binding's output (gob-core game.rs
+  installed here, tested on made-up files in tests/data/dcs-world, the HTML format is a guess; war-thunder: the game keeps controls on its
+  servers, so the target = controls files the player exported (`*.blk` with `controls{` in Documents/My Games/WarThunder, the
+  game's folders), DataBlock text re-emitted in the game's layout; joyButton/axisId numbered across deviceMapping's joysticks
+  (buttons, then 4 per hat; DirectInput axes, then 2 per hat) using `OurDevice::axes/buttons/hats`; vJoy entries in order,
+  `joystick N` links; catalog from public exported files by dev/catalog.py; tested on public files in tests/data/war-thunder). A binding's output (gob-core game.rs
   `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`),
   a button or hat direction may carry a press (`Press`: `vjoy:1:button:5@long` / `@double`; plugins list theirs in plugin.gob
   `presses`, Star Citizen = activationMode delayed_press / double_tap, the capture dialog asks);
