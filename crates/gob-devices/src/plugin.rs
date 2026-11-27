@@ -253,6 +253,17 @@ impl DevicePlugin {
         let defaults = Inputs::load(&dir.join(INPUTS)).map_err(|e| format!("{INPUTS}: {e}"))?;
         let mut pictures = BTreeMap::new();
         for view in &manifest.views {
+            // Pictures come from the plugin's own folder (a shared plugin names no other file).
+            let enclosed = !view.image.is_empty()
+                && Path::new(&view.image)
+                    .components()
+                    .all(|c| matches!(c, std::path::Component::Normal(_)));
+            if !enclosed {
+                return Err(format!(
+                    "view {}: picture `{}` is not inside the plugin folder",
+                    view.id, view.image
+                ));
+            }
             pictures.insert(view.id.clone(), Picture::load(&dir.join(&view.image))?);
         }
         Ok(Self {
@@ -302,6 +313,18 @@ impl DevicePlugin {
             .iter()
             .filter_map(|m| m.score(vid, pid, name))
             .max()
+    }
+
+    /// The longest product name part of a fitting match: between plugins that fit as well, the
+    /// one naming more of the device wins (`Space Gunfighter L` over `Space Gunfighter`).
+    pub fn name_fit(&self, vid: u16, pid: u16, name: &str) -> usize {
+        self.manifest
+            .matches
+            .iter()
+            .filter(|m| m.score(vid, pid, name).is_some())
+            .filter_map(|m| m.name.as_ref().map(|n| n.trim().len()))
+            .max()
+            .unwrap_or(0)
     }
 }
 

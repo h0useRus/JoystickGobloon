@@ -1,0 +1,20 @@
+# Gunfighter Mk.IV "WWII Combat Edition": KG12 grip.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "vkb-gunfighter-mk4-kg12"
+name = "Gunfighter Mk.IV WWII (KG12)"
+brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Gunfighter KG12"
+
+[[match]]
+vid = 0x231D
+name = "Gunfighter WWII"
+
+[[view]]
+id = "main"
+name = "Stick"
+image = "views/main.png"

@@ -59,11 +59,14 @@ impl Catalog {
         self.plugins.iter().find(|p| p.id() == id)
     }
 
-    /// The plugin fitting a connected device best, if any.
+    /// The plugin fitting a connected device best, if any (see [`DevicePlugin::name_fit`]).
     pub fn find(&self, vid: u16, pid: u16, name: &str) -> Option<&DevicePlugin> {
         self.plugins
             .iter()
-            .filter_map(|p| p.score(vid, pid, name).map(|s| (s, p)))
+            .filter_map(|p| {
+                p.score(vid, pid, name)
+                    .map(|s| ((s, p.name_fit(vid, pid, name)), p))
+            })
             .max_by_key(|(s, _)| *s)
             .map(|(_, p)| p)
     }

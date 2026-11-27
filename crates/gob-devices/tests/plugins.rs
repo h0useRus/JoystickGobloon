@@ -81,3 +81,48 @@ fn shipped_plugins() {
         assert!(errors.is_empty(), "{}: {errors:?}", plugin.id());
     }
 }
+
+/// Product names VKB devices report find their own plugin, not a shorter look-alike.
+#[test]
+fn vkb_names_find_their_plugin() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
+    let catalog = Catalog::load(&[dir]);
+    for (name, id) in [
+        (" VKBsim Gladiator EVO R  ", "vkb-gladiator-nxt-evo-r"),
+        (" VKBsim Gladiator EVO L  ", "vkb-gladiator-nxt-evo-l"),
+        (" VKBsim Gladiator EVO OT R  ", "vkb-gladiator-nxt-evo-ot-r"),
+        (" VKBsim Gladiator EVO F14  ", "vkb-gladiator-nxt-evo-f14"),
+        (
+            " VKBSim Gunfighter MCG Ultimate ",
+            "vkb-gunfighter-mk4-mcg-ultimate",
+        ),
+        (
+            "VKBsim Gunfighter Modern Combat PRO",
+            "vkb-gunfighter-mk4-mcg-pro",
+        ),
+        ("VKBSim Space Gunfighter", "vkb-gunfighter-mk4-scg-r"),
+        ("VKBSim Space Gunfighter L", "vkb-gunfighter-mk4-scg-l"),
+        ("S-TECS MODERN THROTTLE MINI", "vkb-stecs-modern-mini"),
+        (
+            "S-TECS MODERN THROTTLE MINI PLUS  ",
+            "vkb-stecs-modern-mini-plus",
+        ),
+        (
+            "S-TECS MODERN THROTTLE STANDARD STEM ",
+            "vkb-stecs-modern-standard",
+        ),
+        ("S-TECS MODERN THROTTLE MAX STEM ", "vkb-stecs-modern-max"),
+        (
+            "S-TECS SPACE-L THROTTLE STANDARD  STEM ",
+            "vkb-stecs-space-standard-l",
+        ),
+        (
+            "S-TECS SPACE-R THROTTLE MINI PLUS",
+            "vkb-stecs-space-mini-plus-r",
+        ),
+        (" VKBSim T-Rudder  ", "vkb-t-rudder-mk5"),
+    ] {
+        let found = catalog.find(0x231D, 0x0001, name).map(|p| p.id());
+        assert_eq!(found, Some(id), "{name}");
+    }
+}
