@@ -113,10 +113,12 @@ impl File {
     }
 }
 
-/// A plain relative path: names only, no `..`, root or drive.
+/// A plain relative path: names only, no `..`, root or drive (no `:` on any system: `C:/x` is
+/// a plain name to Linux, and on Windows a `:` inside a name opens a file stream).
 pub fn is_plain(path: &str) -> bool {
     !path.is_empty()
         && !path.contains('\\')
+        && !path.contains(':')
         && Path::new(path)
             .components()
             .all(|c| matches!(c, Component::Normal(_)))
@@ -190,7 +192,7 @@ mod tests {
     fn plain_paths_only() {
         assert!(is_plain("vkb/stick"));
         assert!(is_plain("views/main.png"));
-        for bad in ["", "../x", "/x", "a/../b", "C:/x", "a\\b"] {
+        for bad in ["", "../x", "/x", "a/../b", "C:/x", "a\\b", "views/a.png:s"] {
             assert!(!is_plain(bad), "{bad}");
         }
     }

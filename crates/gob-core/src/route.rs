@@ -22,12 +22,22 @@ impl Profile {
     /// The route from binding `binding` to action `target`: the first configuration whose tree
     /// holds it, the first way found in that tree. `None` when no configuration reaches it.
     pub fn route(&self, binding: usize, target: &str) -> Option<Route> {
+        self.route_in(&self.action_index(), binding, target)
+    }
+
+    /// [`Profile::route`] with the [`Profile::action_index`] built already (for callers asking
+    /// about many routes at once).
+    pub fn route_in(
+        &self,
+        index: &HashMap<&str, &Action>,
+        binding: usize,
+        target: &str,
+    ) -> Option<Route> {
         let b = self.inputs.get(binding)?;
-        let index = self.action_index();
         b.configs.iter().find_map(|c| {
             let mut branches = Vec::new();
             let mut seen = HashSet::new();
-            walk(&index, &c.root_action, target, &mut seen, &mut branches).then(|| Route {
+            walk(index, &c.root_action, target, &mut seen, &mut branches).then(|| Route {
                 mode: b.mode.clone(),
                 layer: c.layer.clone(),
                 branches,

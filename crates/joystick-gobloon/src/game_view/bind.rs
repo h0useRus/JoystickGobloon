@@ -196,9 +196,10 @@ pub(super) fn route_of(ctx: &Context, i18n: &I18n, bindings: &[usize], o: &GameO
             .unwrap_or_default(),
         GameOutput::Pressed(..) => Vec::new(),
     };
+    let index = ctx.profile.action_index();
     let mut labels: Vec<String> = Vec::new();
     for u in uses.iter().filter(|u| bindings.contains(&u.binding)) {
-        let l = super::graph::route_label(i18n, ctx.profile, u.binding, &u.action);
+        let l = super::graph::route_label(i18n, ctx.profile, &index, u.binding, &u.action);
         if !l.is_empty() && !labels.contains(&l) {
             labels.push(l);
         }
