@@ -936,6 +936,21 @@ fn pause_toggle_stops_other_bindings() {
 }
 
 #[test]
+fn release_runs_while_paused_for_a_press_before_it() {
+    let mut r = Rig::new();
+    r.button(1, true, 0);
+    assert_eq!(r.take(), [Out::Button(1, true)]);
+    r.button(8, true, 10);
+    r.button(8, false, 20);
+    assert!(r.engine.is_paused());
+    r.button(1, false, 30);
+    assert_eq!(r.take(), [Out::Button(1, false)], "held output goes up");
+    r.button(1, true, 40);
+    r.button(1, false, 50);
+    assert!(r.take().is_empty(), "new presses stay paused");
+}
+
+#[test]
 fn split_axis_rescales_halves() {
     let mut r = Rig::new();
     r.axis(5, 0.5);

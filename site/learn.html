@@ -115,9 +115,10 @@
       <li style="--i:6"><a href="panels.html">Panels</a></li>
       <li style="--i:7"><a href="scripts.html">Scripts</a></li>
       <li style="--i:8"><a href="game.html">Games</a></li>
-      <li style="--i:9"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:10"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:11"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:9"><a href="devices.html">Devices</a></li>
+      <li style="--i:10"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:11"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:12"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -252,31 +253,31 @@
             <h3><i class="ph ph-joystick" aria-hidden="true"></i>Map to virtual stick</h3>
             <p>Sends the value to a virtual joystick: an axis to an axis, a button to a button, a hat to a hat. Pick the virtual stick (vJoy device on Windows) and its input; a button can be inverted, and <a href="#how-to-send">How to send</a> sets how it follows the input. An axis can also be <strong>relative</strong>: then the input sets the speed at which the virtual axis moves, and the axis stays where it is when you let go.</p>
             <p>A new Map to virtual stick starts on the virtual stick you picked last and its first output that nothing else uses yet. The grid button next to the lists shows every output of each virtual stick at once, and a click picks one. There and in the output list, outputs other inputs already use are <strong>blue</strong>, outputs that several inputs running at the same time write are <strong>amber</strong>, and a tooltip names the inputs. Outputs that another action of the same input already writes are grayed out: two actions of one input never write the same output. If a profile already has that, a warning sign shows next to the action. A copied Map to virtual stick moves to a free output by itself.</p>
-            <figure class="shot"><img src="img/actions/map-to-vjoy.png" loading="lazy" alt="Map to virtual stick: vJoy device 1, button 1, not inverted, runs on press and release, held while the input is"></figure>
+            <figure class="shot"><img src="img/actions/map-to-vjoy.png" width="597" height="535" loading="lazy" alt="Map to virtual stick: vJoy device 1, button 1, not inverted, runs on press and release, held while the input is"></figure>
           </article>
           <article class="learn-action" id="map-to-gamepad">
             <h3><i class="ph ph-game-controller" aria-hidden="true"></i>Map to gamepad</h3>
             <p>Linux only for now. Sends the value to a virtual <strong>Xbox-style gamepad</strong>: games, Steam and Proton see an Xbox 360 controller, so a game that only understands gamepads can be played with a stick. Add the gamepad on the <span class="term">Virtual joysticks</span> page first (up to four), then pick it and a control that suits the input: a button presses a gamepad button, a d-pad direction or a trigger; an axis moves a stick axis or a trigger (the whole axis range becomes the trigger's travel); a hat drives the d-pad. Buttons and axes can be inverted; for a button, <a href="#how-to-send">How to send</a> sets how it follows the input.</p>
             <p><strong>Picking the control works like <a href="#map-to-vjoy">Map to virtual stick</a>.</strong> A new one starts on the gamepad you picked last and its first free control. The grid button next to the lists shows the controls of every gamepad at once, and a click picks one. Controls other inputs already use are marked the same way.</p>
-            <figure class="shot"><img src="img/actions/map-to-gamepad.png" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release, held while the input is; on Windows a note says gamepad 1 does not exist yet"></figure>
+            <figure class="shot"><img src="img/actions/map-to-gamepad.png" width="597" height="535" loading="lazy" alt="Map to gamepad: gamepad 1, button A, not inverted, runs on press and release, held while the input is; on Windows a note says gamepad 1 does not exist yet"></figure>
           </article>
           <article class="learn-action" id="map-to-keyboard">
             <h3><i class="ph ph-keyboard" aria-hidden="true"></i>Map to keyboard</h3>
             <p>Presses keys while the input is held: they go down in order and come up in reverse order. Click the record button and press the keys together; recording ends when all are let go. The keyboard button opens a full-size keyboard: click keys to add them, click again to remove them. It also has the keys most keyboards lack: F13 to F24, the media keys (play/pause, stop, next and previous track, volume, mute), the browser and launch keys (back, forward, refresh, stop, home, search, favorites, mail, calculator, my computer, media player), sleep, wake and power, and the extra keys of other layouts: the ISO key next to Left Shift, the Japanese and Korean keys and the numpad's = and ,. If the input is let go in another mode, the keys still come up. How the keys follow the input, held, pulsed, repeated or toggled, is set with <a href="#how-to-send">How to send</a>.</p>
-            <figure class="shot"><img src="img/actions/map-to-keyboard.png" loading="lazy" alt="Map to keyboard with the keys Ctrl and F, sent repeatedly while the button is held"></figure>
-            <figure class="shot wide"><img src="img/actions/map-to-keyboard-picker.png" loading="lazy" alt="The keyboard behind the keyboard button, with Ctrl and F picked"></figure>
+            <figure class="shot"><img src="img/actions/map-to-keyboard.png" width="597" height="535" loading="lazy" alt="Map to keyboard with the keys Ctrl and F, sent repeatedly while the button is held"></figure>
+            <figure class="shot wide"><img src="img/actions/map-to-keyboard-picker.png" width="790" height="301" loading="lazy" alt="The keyboard behind the keyboard button, with Ctrl and F picked"></figure>
           </article>
           <article class="learn-action" id="map-to-mouse">
             <h3><i class="ph ph-mouse" aria-hidden="true"></i>Map to mouse</h3>
             <p>A button clicks a mouse button (left, right, middle, back, forward) or turns the wheel one notch; <a href="#how-to-send">How to send</a> sets whether it is held, pulsed, repeated or toggled. An axis or a hat moves the cursor instead: set the direction and the speed range; the further the axis is pushed, the faster the cursor moves.</p>
-            <figure class="shot"><img src="img/actions/map-to-mouse.png" loading="lazy" alt="Map to mouse: left button, held while the input is"></figure>
-            <figure class="shot"><img src="img/actions/map-to-mouse-motion.png" loading="lazy" alt="Map to mouse on an axis: cursor motion with direction and speed"></figure>
+            <figure class="shot"><img src="img/actions/map-to-mouse.png" width="597" height="535" loading="lazy" alt="Map to mouse: left button, held while the input is"></figure>
+            <figure class="shot"><img src="img/actions/map-to-mouse-motion.png" width="597" height="535" loading="lazy" alt="Map to mouse on an axis: cursor motion with direction and speed"></figure>
           </article>
           <article class="learn-action" id="map-to-logical-device">
             <h3><i class="ph ph-cube" aria-hidden="true"></i>Map to logical device</h3>
             <p>The <strong>Logical device</strong> tab is a joystick that only exists inside the profile. Mapping inputs to it lets several physical inputs feed one logical input, whose own actions then do the rest. Logical inputs are added and renamed on that tab.</p>
             <p><strong>Picking the input works like <a href="#map-to-vjoy">Map to virtual stick</a>.</strong> A new one takes the first logical input of that type nothing uses yet, or adds one. The grid button next to the list shows every logical input of that type at once, and a click picks one. Logical inputs that other inputs already write to are marked the same way.</p>
-            <figure class="shot"><img src="img/actions/map-to-logical-device.png" loading="lazy" alt="Map to logical device: logical button 1"></figure>
+            <figure class="shot"><img src="img/actions/map-to-logical-device.png" width="597" height="535" loading="lazy" alt="Map to logical device: logical button 1"></figure>
           </article>
           <article class="learn-action" id="how-to-send">
             <h3><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>How to send</h3>
@@ -311,7 +312,7 @@
               <li><strong>Smooth</strong>: each press moves the target one step and the axis glides there within the response time.</li>
             </ul>
             <p>The axis keeps its position when the mode changes. Turn on <strong>Start value</strong> to put it somewhere when the profile starts; off, it stays where it was.</p>
-            <figure class="shot"><img src="img/actions/button-axis.png" loading="lazy" alt="Axis from buttons: button 3 moves Z axis of vJoy device 1 up through five positions, button 4 moves it down, starting at -1"></figure>
+            <figure class="shot"><img src="img/actions/button-axis.png" width="597" height="535" loading="lazy" alt="Axis from buttons: button 3 moves Z axis of vJoy device 1 up through five positions, button 4 moves it down, starting at -1"></figure>
           </article>
         </section>
         <section class="learn-group" id="axes" aria-labelledby="axes-title">
@@ -336,12 +337,12 @@
               <li><strong>Cubic Bezier spline</strong>: a smooth curve shaped with handles next to each point.</li>
             </ul>
             <p>The deadzones below the chart set where the axis does nothing: at both ends and around the center.</p>
-            <figure class="shot"><img src="img/actions/response-curve.png" loading="lazy" alt="Response curve: a cubic spline that is flat around the center, with its points"></figure>
+            <figure class="shot"><img src="img/actions/response-curve.png" width="597" height="535" loading="lazy" alt="Response curve: a cubic spline that is flat around the center, with its points"></figure>
           </article>
           <article class="learn-action" id="split-axis">
             <h3><i class="ph ph-arrows-split" aria-hidden="true"></i>Split axis</h3>
             <p>Splits an axis at a point (the center by default) into two halves, and gives each half its own actions; each half is stretched to the full range again. Useful for one axis driving two outputs, like two pedals on a single rudder axis.</p>
-            <figure class="shot"><img src="img/actions/split-axis.png" loading="lazy" alt="Split axis: the lower half to vJoy axis 2, the upper half to vJoy axis 3"></figure>
+            <figure class="shot"><img src="img/actions/split-axis.png" width="597" height="535" loading="lazy" alt="Split axis: the lower half to vJoy axis 2, the upper half to vJoy axis 3"></figure>
           </article>
           <article class="learn-action" id="axis-zones">
             <h3><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>Axis zones</h3>
@@ -353,22 +354,22 @@
               <li><strong>Points</strong>: the field between two zones moves the point, the bin removes it (the zone above goes, with its actions), <span class="term">Point</span> adds one near the top.</li>
             </ul>
             <p>When the axis leaves a zone, that zone's actions get the edge it was left at, so the throttle sits at full when the afterburner zone takes over and the afterburner goes back to zero when you pull back. To press a button at a point instead, use <span class="term">Treat as a button</span> on the axis with a narrow range and a direction.</p>
-            <figure class="shot"><img src="img/actions/axis-zones.png" loading="lazy" alt="Axis zones on the Z axis: up to 0.80 the travel is stretched onto the virtual Z axis, from 0.80 on onto the slider named Afterburner"></figure>
+            <figure class="shot"><img src="img/actions/axis-zones.png" width="597" height="555" loading="lazy" alt="Axis zones on the Z axis: up to 0.80 the travel is stretched onto the virtual Z axis, from 0.80 on onto the slider named Afterburner"></figure>
           </article>
           <article class="learn-action" id="merge-axis">
             <h3><i class="ph ph-arrows-merge" aria-hidden="true"></i>Merge axis</h3>
             <p>Combines two axes into one value: average, minimum, maximum, sum, difference (for two pedals as one rudder), the one deflected most, or the one closer to the center. Three more let one axis adjust the other: <strong>Multiply</strong> (axis 1 times axis 2), <strong>Scale</strong> (axis 2 sets how much of axis 1 passes: all the way down nothing, centered half, all the way up all of it, like a sensitivity slider) and <strong>Trim</strong> (axis 2 moves the center of axis 1 while its ends stay where they are). It runs when either axis moves, so it is bound to both: picking an axis in its editor binds it there and takes it off the axis it no longer reads, and linking a new merge to another axis makes that its second axis. A merge reads two axes, so it cannot be linked to a third one.</p>
-            <figure class="shot"><img src="img/actions/merge-axis.png" loading="lazy" alt="Merge axis with its two axes and the operation"></figure>
+            <figure class="shot"><img src="img/actions/merge-axis.png" width="597" height="535" loading="lazy" alt="Merge axis with its two axes and the operation"></figure>
           </article>
           <article class="learn-action" id="dual-axis-deadzone">
             <h3><i class="ph ph-crosshair" aria-hidden="true"></i>Dual axis deadzone</h3>
             <p>A round deadzone for two axes of one stick (X and Y), instead of a square one per axis: the stick has to leave a circle of the inner size before either axis moves. Each axis then goes to its own list of actions.</p>
-            <figure class="shot"><img src="img/actions/dual-axis-deadzone.png" loading="lazy" alt="Dual axis deadzone: inner and outer size, the two axes and their outputs"></figure>
+            <figure class="shot"><img src="img/actions/dual-axis-deadzone.png" width="597" height="535" loading="lazy" alt="Dual axis deadzone: inner and outer size, the two axes and their outputs"></figure>
           </article>
           <article class="learn-action" id="axis-delta">
             <h3><i class="ph ph-trend-up" aria-hidden="true"></i>Axis delta</h3>
             <p>Turns movement into button presses: every time the axis has moved by the threshold, it presses the actions of that direction once. Good for a rotary or a slider that should step something up and down.</p>
-            <figure class="shot"><img src="img/actions/axis-delta.png" loading="lazy" alt="Axis delta: moving up presses vJoy button 20, moving down vJoy button 21"></figure>
+            <figure class="shot"><img src="img/actions/axis-delta.png" width="597" height="535" loading="lazy" alt="Axis delta: moving up presses vJoy button 20, moving down vJoy button 21"></figure>
           </article>
         </section>
         <section class="learn-group" id="as-button" aria-labelledby="as-button-title">
@@ -377,7 +378,7 @@
             <h3><i class="ph ph-radio-button" aria-hidden="true"></i>What it does</h3>
             <p>An axis or a hat can press a button: a throttle pushed into its last tenth, a rotary turned past a mark, a hat pointing up. Every set of actions on an axis or a hat has a <span class="term">Treat as a button</span> switch above it. Switched on, the set runs as a button: pressed while the axis is inside the range you set (or the hat points one of the ways you pick) and released when it leaves. Everything a button can do works there: a virtual stick button, a key, a macro, a mode change.</p>
             <p>To add one, select the axis or hat on the Devices page and click <i class="ph ph-radio-button" aria-hidden="true"></i> next to <i class="ph ph-plus-circle" aria-hidden="true"></i> (add action): a new set appears with the switch on, ready for button actions. On an axis that already has actions, the switch above them turns those into a button instead.</p>
-            <figure class="shot"><img src="img/actions/axis-as-button.png" loading="lazy" alt="The Z axis maps to the virtual Z axis, and between 0.90 and 1.00, moving up, presses vJoy button 20"></figure>
+            <figure class="shot"><img src="img/actions/axis-as-button.png" width="597" height="535" loading="lazy" alt="The Z axis maps to the virtual Z axis, and between 0.90 and 1.00, moving up, presses vJoy button 20"></figure>
           </article>
           <article class="learn-action" id="as-button-range">
             <h3><i class="ph ph-arrows-horizontal" aria-hidden="true"></i>The range</h3>
@@ -407,7 +408,7 @@
           <article class="learn-action" id="hat-as-button">
             <h3><i class="ph ph-compass" aria-hidden="true"></i>Hats</h3>
             <p>On a hat, the switch is followed by its eight directions and the center: pick the ones that press the button. Several picked directions make one button, so up, up-left and up-right together press it whenever the hat leans up. Two sets give a hat an up button and a down button that also work on the diagonals.</p>
-            <figure class="shot"><img src="img/actions/hat-as-button.png" loading="lazy" alt="Hat 1 with two sets: north, north-east and north-west press vJoy button 5, south, south-east and south-west press button 6"></figure>
+            <figure class="shot"><img src="img/actions/hat-as-button.png" width="597" height="535" loading="lazy" alt="Hat 1 with two sets: north, north-east and north-west press vJoy button 5, south, south-east and south-west press button 6"></figure>
             <p>For one button per direction, <a href="#hat-buttons">Hat buttons</a> is quicker: it splits the hat into four or eight buttons in one action.</p>
           </article>
           <article class="learn-action" id="as-button-tips">
@@ -425,43 +426,43 @@
           <article class="learn-action" id="tempo">
             <h3><i class="ph ph-timer" aria-hidden="true"></i>Tempo</h3>
             <p>A short press and a long press do different things. Set the time that counts as long, and whether the long action starts as soon as that time has passed or when you let go.</p>
-            <figure class="shot"><img src="img/actions/tempo.png" loading="lazy" alt="Tempo: a tap presses vJoy button 2, holding changes the mode"></figure>
+            <figure class="shot"><img src="img/actions/tempo.png" width="597" height="535" loading="lazy" alt="Tempo: a tap presses vJoy button 2, holding changes the mode"></figure>
           </article>
           <article class="learn-action" id="double-tap">
             <h3><i class="ph ph-hand-tap" aria-hidden="true"></i>Double tap</h3>
             <p>A single press and a quick double press do different things. <span class="term">Exclusive</span> waits to see if a second press comes, so a double press runs only the double actions. <span class="term">Combined</span> runs the single actions at once and adds the double ones when the second press comes.</p>
-            <figure class="shot"><img src="img/actions/double-tap.png" loading="lazy" alt="Double tap: single press to vJoy button 3, double press to vJoy button 4"></figure>
+            <figure class="shot"><img src="img/actions/double-tap.png" width="597" height="535" loading="lazy" alt="Double tap: single press to vJoy button 3, double press to vJoy button 4"></figure>
           </article>
           <article class="learn-action" id="smart-toggle">
             <h3><i class="ph ph-toggle-right" aria-hidden="true"></i>Smart toggle</h3>
             <p>A quick press switches its actions on until the next press; holding the button longer works like a normal button and lets go with it.</p>
-            <figure class="shot"><img src="img/actions/smart-toggle.png" loading="lazy" alt="Smart toggle with vJoy button 5 inside"></figure>
+            <figure class="shot"><img src="img/actions/smart-toggle.png" width="597" height="535" loading="lazy" alt="Smart toggle with vJoy button 5 inside"></figure>
           </article>
           <article class="learn-action" id="delay">
             <h3><i class="ph ph-hourglass-medium" aria-hidden="true"></i>Delay</h3>
             <p>Runs its actions a set time after the press. With <span class="term">Only if still held</span> on, letting go before the time is up runs nothing: hold to activate, for an action you don't want to trigger by a brush of the button. Off, a short press still runs the actions when the time is up, as a quick press; held longer, they stay pressed until you let go. Pressing again before the time is up starts it over.</p>
-            <figure class="shot"><img src="img/actions/delay.png" loading="lazy" alt="Delay of half a second, only if still held, with a vJoy button inside"></figure>
+            <figure class="shot"><img src="img/actions/delay.png" width="597" height="535" loading="lazy" alt="Delay of half a second, only if still held, with a vJoy button inside"></figure>
           </article>
           <article class="learn-action" id="chain">
             <h3><i class="ph ph-link" aria-hidden="true"></i>Chain</h3>
             <p>Every press runs the next step: first press step 1, second press step 2, and around again. With a timeout, a pause longer than that starts again from step 1.</p>
-            <figure class="shot"><img src="img/actions/chain.png" loading="lazy" alt="Chain with three steps, each pressing a different vJoy button"></figure>
+            <figure class="shot"><img src="img/actions/chain.png" width="597" height="535" loading="lazy" alt="Chain with three steps, each pressing a different vJoy button"></figure>
           </article>
           <article class="learn-action" id="macro">
             <h3><i class="ph ph-list-numbers" aria-hidden="true"></i>Macro</h3>
             <p>Plays a sequence of steps: keys, mouse buttons and motion, buttons, axes and hats of a virtual stick, buttons, sticks, triggers and the d-pad of a virtual gamepad (Linux only for now), inputs of the profile's <a href="#map-to-logical-device">logical device</a>, other actions of the profile, and pauses. Each step picks its device and output like <a href="#map-to-vjoy">Map to virtual stick</a> does, with the same grid of outputs and the same marks for outputs other inputs use. It can run once, a number of times, while the button is held, or until the next press.</p>
             <p>A <span class="term">Run action</span> step runs another action of the profile, as a short press of its input would: give that action a name in its title first, then pick it in the step. It is the same action its input runs, so a toggle the macro starts stops on that input. Actions that use the macro (also through another macro) are left out of the list, so a macro never runs itself, and so are actions a button press means nothing to, like response curves. An action a macro runs stays in the profile even when it is removed from its input.</p>
-            <figure class="shot"><img src="img/actions/macro.png" loading="lazy" alt="Macro: Ctrl down, run the action named Lights, a pause, run the action named Landing gear, then Ctrl up"></figure>
+            <figure class="shot"><img src="img/actions/macro.png" width="597" height="535" loading="lazy" alt="Macro: Ctrl down, run the action named Lights, a pause, run the action named Landing gear, then Ctrl up"></figure>
           </article>
           <article class="learn-action" id="hat-buttons">
             <h3><i class="ph ph-compass" aria-hidden="true"></i>Hat buttons</h3>
             <p>Makes a hat four (or eight) buttons, one per direction, plus one for the center. Each direction gets its own actions; with four buttons, diagonals press none.</p>
-            <figure class="shot"><img src="img/actions/hat-buttons.png" loading="lazy" alt="Hat buttons: North, East, South, West and Center"></figure>
+            <figure class="shot"><img src="img/actions/hat-buttons.png" width="597" height="535" loading="lazy" alt="Hat buttons: North, East, South, West and Center"></figure>
           </article>
           <article class="learn-action" id="condition">
             <h3><i class="ph ph-git-branch" aria-hidden="true"></i>Condition</h3>
             <p>Runs one list of actions when its conditions hold and another when they don't. A condition can look at a button, axis or hat of any controller, at keyboard keys, at the input itself or at what was last sent to vJoy; <span class="term">all</span> or <span class="term">any</span> of them has to hold. A button keeps the branch it was pressed in until it is released.</p>
-            <figure class="shot"><img src="img/actions/condition.png" loading="lazy" alt="Condition: if button 3 of the right stick is held, vJoy button 10, otherwise vJoy button 11"></figure>
+            <figure class="shot"><img src="img/actions/condition.png" width="597" height="535" loading="lazy" alt="Condition: if button 3 of the right stick is held, vJoy button 10, otherwise vJoy button 11"></figure>
           </article>
         </section>
         <section class="learn-group" id="profile" aria-labelledby="profile-title">
@@ -469,17 +470,17 @@
           <article class="learn-action" id="change-mode">
             <h3><i class="ph ph-swap" aria-hidden="true"></i>Change mode</h3>
             <p>Switches the profile's mode: to a given mode, back to the previous one, back through all previous ones, to the next one of a cycle, or only while the button is held (<span class="term">Temporary</span>).</p>
-            <figure class="shot"><img src="img/actions/change-mode.png" loading="lazy" alt="Change mode to the Alternate mode"></figure>
+            <figure class="shot"><img src="img/actions/change-mode.png" width="597" height="535" loading="lazy" alt="Change mode to the Alternate mode"></figure>
           </article>
           <article class="learn-action" id="pause-and-resume">
             <h3><i class="ph ph-pause" aria-hidden="true"></i>Pause and resume</h3>
             <p>Pauses the running profile, resumes it, or toggles between the two. While paused, only inputs with this action (and <span class="term">Load profile</span>) still work.</p>
-            <figure class="shot"><img src="img/actions/pause-resume.png" loading="lazy" alt="Pause and resume: toggle"></figure>
+            <figure class="shot"><img src="img/actions/pause-resume.png" width="597" height="535" loading="lazy" alt="Pause and resume: toggle"></figure>
           </article>
           <article class="learn-action" id="load-profile">
             <h3><i class="ph ph-folder-open" aria-hidden="true"></i>Load profile</h3>
             <p>Opens another profile and starts it, asking first if the current one has unsaved changes.</p>
-            <figure class="shot"><img src="img/actions/load-profile.png" loading="lazy" alt="Load profile with the path of the second profile"></figure>
+            <figure class="shot"><img src="img/actions/load-profile.png" width="597" height="535" loading="lazy" alt="Load profile with the path of the second profile"></figure>
           </article>
         </section>
         <section class="learn-group" id="other" aria-labelledby="other-title">
@@ -487,33 +488,33 @@
           <article class="learn-action" id="play-sound">
             <h3><i class="ph ph-speaker-high" aria-hidden="true"></i>Play sound</h3>
             <p>Plays a sound file (wav, mp3, ogg or flac) at the set volume; the ▶ button plays it right away.</p>
-            <figure class="shot"><img src="img/actions/play-sound.png" loading="lazy" alt="Play sound: a wav file and its volume"></figure>
+            <figure class="shot"><img src="img/actions/play-sound.png" width="597" height="535" loading="lazy" alt="Play sound: a wav file and its volume"></figure>
           </article>
           <article class="learn-action" id="text-to-speech">
             <h3><i class="ph ph-chat-text" aria-hidden="true"></i>Text to speech</h3>
             <p>Speaks a text with a voice of the system or a natural voice. <code>${current_mode}</code> becomes the name of the active mode. Speed, volume and pitch can be set; the new text can wait for the current one or interrupt it.</p>
             <p>Natural (Piper) voices sound like a person reading. Get them in <span class="term">Settings</span>, <span class="term">Voice</span>, <span class="term">Text to speech</span>: choose <span class="term">Piper</span> instead of <span class="term">The system's voice</span>, download the voice library once (about 8 MB on Windows, 10 MB on Linux), then a voice for each language you want (60-80 MB each; English, German, Spanish, French, Russian and Chinese). They are listed first in the action's voice list, named with their language, and one of them speaks for every action without a voice of its own. Switching back to <span class="term">The system's voice</span> makes every action speak with the system's voice and keeps the downloaded voices. Pitch does not change a natural voice. A voice takes about 100 MB of memory while it is in use and is let go after five quiet minutes. The voice library contains espeak-ng, which is under the GNU GPL 3, so it is a download of its own rather than part of the installer.</p>
-            <figure class="shot"><img src="img/actions/text-to-speech.png" loading="lazy" alt="Text to speech saying the mode name"></figure>
+            <figure class="shot"><img src="img/actions/text-to-speech.png" width="597" height="535" loading="lazy" alt="Text to speech saying the mode name"></figure>
           </article>
           <article class="learn-action" id="voice-input">
             <h3><i class="ph ph-microphone" aria-hidden="true"></i>Voice input</h3>
             <p>Makes its button a push-to-talk button: while it is held, the microphone listens for the profile's voice commands, and a phrase said runs its command when you let go. Choose the microphone, or leave the default one. The commands and their phrases are on the Voice tab of the Devices page; <a href="voice.html">Voice commands</a> shows the whole setup.</p>
-            <figure class="shot"><img src="img/actions/voice-input.png" loading="lazy" alt="Button 5 of a stick with the Voice input action listening on the default microphone"></figure>
+            <figure class="shot"><img src="img/actions/voice-input.png" width="597" height="535" loading="lazy" alt="Button 5 of a stick with the Voice input action listening on the default microphone"></figure>
           </article>
           <article class="learn-action" id="run-command">
             <h3><i class="ph ph-terminal-window" aria-hidden="true"></i>Run command</h3>
             <p>Starts a program, with arguments if needed.</p>
-            <figure class="shot"><img src="img/actions/run-command.png" loading="lazy" alt="Run command: notepad.exe"></figure>
+            <figure class="shot"><img src="img/actions/run-command.png" width="597" height="535" loading="lazy" alt="Run command: notepad.exe"></figure>
           </article>
           <article class="learn-action" id="send-osc">
             <h3><i class="ph ph-paper-plane-right" aria-hidden="true"></i>Send OSC</h3>
             <p>Sends an OSC message to a program or device: to Bitfocus Companion to change the text or color of a Stream Deck key, to a touch panel to light a control, or to anything else that listens for OSC. Set where to (127.0.0.1 is this computer; it starts with Companion's port, 12321), the address, and the arguments in order: integers, numbers, text, true, false, or the input's own value (0 to 1 for an axis, 1 or 0 for a button). On a button it sends on press, release or both; on an axis, every time the axis moves. Put it on the Events tab's Mode enter to show the mode on your panel. <a href="panels.html">Stream Deck and touch panels</a> shows the whole setup, and how panels send their keys and faders here as inputs.</p>
-            <figure class="shot"><img src="img/actions/send-osc.png" loading="lazy" alt="The /deck/mode input: Change mode to Landing, then Send OSC to 127.0.0.1 port 12321, address /location/1/0/2/style/text, one text argument LANDING, on press"></figure>
+            <figure class="shot"><img src="img/actions/send-osc.png" width="597" height="500" loading="lazy" alt="The /deck/mode input: Change mode to Landing, then Send OSC to 127.0.0.1 port 12321, address /location/1/0/2/style/text, one text argument LANDING, on press"></figure>
           </article>
           <article class="learn-action" id="description">
             <h3><i class="ph ph-note-pencil" aria-hidden="true"></i>Description</h3>
             <p>A note that does nothing when the input is used: what this input is for, for you and whoever uses the profile next. It reads as text; click it to edit it.</p>
-            <figure class="shot"><img src="img/actions/description.png" loading="lazy" alt="A description note above a Map to virtual stick action"></figure>
+            <figure class="shot"><img src="img/actions/description.png" width="597" height="535" loading="lazy" alt="A description note above a Map to virtual stick action"></figure>
           </article>
         </section>
       </div>
@@ -538,6 +539,7 @@
             <li><a href="panels.html">Panels</a></li>
             <li><a href="scripts.html">Scripts</a></li>
             <li><a href="game.html">Games</a></li>
+            <li><a href="devices.html">Devices</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>

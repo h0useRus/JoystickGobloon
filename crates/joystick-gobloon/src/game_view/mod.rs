@@ -25,6 +25,7 @@ use crate::style::{self, icon};
 
 mod bind;
 mod capture;
+mod device;
 mod export_dialog;
 mod graph;
 mod state;
@@ -66,6 +67,8 @@ enum Tab {
     #[default]
     List,
     Wiring,
+    /// A connected controller's picture with the actions on its controls.
+    Device,
 }
 
 #[derive(Default)]
@@ -78,6 +81,7 @@ pub struct GameView {
     target: usize,
     scanning: bool,
     tab: Tab,
+    device: device::DeviceTab,
     search: String,
     /// The schematic's picked output: the next game action clicked gets it.
     picked: Option<GameOutput>,
@@ -386,11 +390,14 @@ impl GameView {
         let mut out = Output::default();
         if self.worker.is_none() {
             self.worker = Some(spawn_worker(ui.ctx().clone()));
-            // Debug builds open the schematic with JOYSTICK_GOBLOON_TAB=game-wiring, for checks.
-            if cfg!(debug_assertions)
-                && std::env::var("JOYSTICK_GOBLOON_TAB").is_ok_and(|t| t == "game-wiring")
-            {
-                self.tab = Tab::Wiring;
+            // Debug builds open a tab with JOYSTICK_GOBLOON_TAB=game-wiring | game-device, for
+            // checks.
+            if cfg!(debug_assertions) {
+                match std::env::var("JOYSTICK_GOBLOON_TAB").as_deref() {
+                    Ok("game-wiring") => self.tab = Tab::Wiring,
+                    Ok("game-device") => self.tab = Tab::Device,
+                    _ => {}
+                }
             }
         }
         self.poll(ctx, ops);
@@ -436,6 +443,16 @@ impl GameView {
             .clicked()
             {
                 self.tab = Tab::Wiring;
+            }
+            if style::tab(
+                ui,
+                self.tab == Tab::Device,
+                icon::JOYSTICK,
+                &i18n.tr("game-tab-device"),
+            )
+            .clicked()
+            {
+                self.tab = Tab::Device;
             }
             ui.add_space(style::SPACE_L);
             ui.label(icon::MAGNIFYING_GLASS);
@@ -543,13 +560,25 @@ impl GameView {
         match self.tab {
             Tab::Wiring => self.wiring(ui, i18n, &game, &graph, &live, &state, now, ops),
             Tab::List => self.table(ui, i18n, ctx, &game, &graph, &live, &state, now, ops),
+            Tab::Device => self.device_tab(ui, i18n, ctx, &catalog, &state, ops),
         }
+        let presses: Vec<gob_core::Press> = self
+            .plugin()
+            .map(|p| {
+                p.manifest
+                    .presses
+                    .iter()
+                    .filter_map(|p| gob_core::Press::parse(p))
+                    .collect()
+            })
+            .unwrap_or_default();
         let scene = bind::Scene {
             i18n,
             ctx,
             game: &game,
             catalog: &catalog,
             state: &state,
+            presses: &presses,
         };
         self.debug_dialog(&scene);
         self.bind_dialog(ui, &scene, ops);
@@ -911,6 +940,9 @@ fn device_links(ctx: &Context, game: &str) -> Vec<DeviceLink> {
         .unwrap_or_default()
 }
 
+/// Axis slots 1..=8 by the names game export plugins use.
+const AXIS_NAMES: [&str; 8] = ["x", "y", "z", "rx", "ry", "rz", "slider", "dial"];
+
 /// The profile's virtual joysticks as games see them.
 fn our_devices(ctx: &Context) -> Vec<OurDevice> {
     let mut ids: BTreeSet<u32> = ctx.vjoy.iter().map(|d| d.id).collect();
@@ -941,11 +973,25 @@ fn our_devices(ctx: &Context) -> Vec<OurDevice> {
                 .map_or(String::new(), |d| {
                     format!("{{{}}}", d.info.guid.to_ascii_uppercase())
                 });
+            // Its controls: as on this computer, else as the profile keeps them.
+            let (slots, buttons, hats) = match ctx.vjoy.iter().find(|d| d.id == id) {
+                Some(d) => (d.axes.clone(), d.buttons, d.hats()),
+                None => stored.map_or((Vec::new(), 0, 0), |j| (j.axes.clone(), j.buttons, j.hats)),
+            };
+            let mut slots = slots;
+            slots.sort_unstable();
             OurDevice {
                 output: format!("vjoy:{id}"),
                 name: known.name,
                 guid: known.product_guid,
                 instance,
+                axes: slots
+                    .iter()
+                    .filter_map(|s| AXIS_NAMES.get(usize::from(*s).wrapping_sub(1)))
+                    .map(|n| (*n).to_string())
+                    .collect(),
+                buttons,
+                hats,
             }
         })
         .collect()
@@ -989,7 +1035,16 @@ fn output_parts(i18n: &I18n, o: &GameOutput) -> (String, String) {
             (device, format!("{what} {}", arrow(*d)))
         }
         GameOutput::Keys(c) => (i18n.tr("keyboard-device"), combo_name(i18n, c)),
+        GameOutput::Pressed(o, p) => {
+            let (device, what) = output_parts(i18n, o);
+            (device, format!("{what} · {}", press_name(i18n, *p)))
+        }
     }
+}
+
+/// "long press", "double tap".
+pub(super) fn press_name(i18n: &I18n, p: gob_core::Press) -> String {
+    i18n.tr(&format!("game-press-{}", p.name()))
 }
 
 /// Keys and mouse buttons pressed together, as "Right Alt + Y".

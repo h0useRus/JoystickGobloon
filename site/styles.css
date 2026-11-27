@@ -2064,3 +2064,54 @@ footer {
 .games .more {
   text-align: center;
 }
+
+/* Device pictures: makers' logos */
+
+.brands-ribbon .games-track {
+  align-items: center;
+  animation-duration: 30s;
+}
+
+.brand-tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 260px;
+  height: 84px;
+}
+
+.brand-tile span {
+  color: var(--text-muted);
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.brand-tile:hover span {
+  color: var(--text);
+}
+
+.brands .more {
+  text-align: center;
+}
+
+/* Device lists (devices.html) */
+
+.learn-action h4 {
+  margin: var(--s-200) 0 var(--s-50);
+  font-size: 0.9375rem;
+}
+
+.device-list {
+  columns: 2 15rem;
+  column-gap: var(--s-300);
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.device-list li {
+  break-inside: avoid;
+}
+

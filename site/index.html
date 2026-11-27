@@ -223,9 +223,10 @@
       <li style="--i:6"><a href="panels.html">Panels</a></li>
       <li style="--i:7"><a href="scripts.html">Scripts</a></li>
       <li style="--i:8"><a href="game.html">Games</a></li>
-      <li style="--i:9"><a href="#platforms">Windows and Linux</a></li>
-      <li style="--i:10"><a href="#faq">FAQ</a></li>
-      <li style="--i:11"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:9"><a href="devices.html">Devices</a></li>
+      <li style="--i:10"><a href="#platforms">Windows and Linux</a></li>
+      <li style="--i:11"><a href="#faq">FAQ</a></li>
+      <li style="--i:12"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -390,7 +391,7 @@
           <div>
             <div class="benefit-icon" data-k="pop"><i class="ph ph-chart-line" aria-hidden="true"></i></div>
             <h3 data-k="up">See every input move live</h3>
-            <p data-k="up">Graphs of every axis, button and hat for physical sticks and vJoy devices alike, in the main window or a window of its own. Calibrate center and end points on the spot, and filter axes that jitter and buttons that bounce.</p>
+            <p data-k="up">Graphs of every axis, button and hat for physical sticks and vJoy devices alike, in the main window or a window of its own. Sticks with a device picture show it too, their hats, buttons and axes lighting up as you work them; a picture made for your stick downloads with one click, or add a picture of your own stick, place its controls on it by pressing them, and export it as a file for others to import. Calibrate center and end points on the spot, and filter axes that jitter and buttons that bounce.</p>
           </div>
           <figure class="shot" data-k="card"><div class="stage" data-story="viewer"><img src="img/viewer.png" loading="lazy" width="1102" height="732" alt="Input viewer: axes over time, current axis values, buttons and hats of a vJoy device"></div></figure>
         </article>
@@ -425,6 +426,36 @@
       </div>
     </section>
 
+    <!-- Device pictures -->
+    <section class="brands" aria-labelledby="brands-title">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <p class="kicker">Device pictures</p>
+          <h2 id="brands-title">See your own stick, every control lit</h2>
+          <p>Pictures of joysticks, throttles, pedals and panels download with one click, and the Input viewer and the game's bindings show them with every hat, button and axis lighting up as you work it. Yours is not there yet? Make one from a photo in a few minutes and share it.</p>
+        </div>
+      </div>
+      <div class="games-ribbon brands-ribbon">
+        <ul class="games-track">
+              <li class="brand-tile"><span>VKB</span></li>
+              <li class="brand-tile"><span>VIRPIL</span></li>
+              <li class="brand-tile"><span>Honeycomb</span></li>
+              <li class="brand-tile"><span>Logitech</span></li>
+              <li class="brand-tile"><span>MOZA</span></li>
+        </ul>
+        <ul class="games-track" aria-hidden="true">
+              <li class="brand-tile"><span>VKB</span></li>
+              <li class="brand-tile"><span>VIRPIL</span></li>
+              <li class="brand-tile"><span>Honeycomb</span></li>
+              <li class="brand-tile"><span>Logitech</span></li>
+              <li class="brand-tile"><span>MOZA</span></li>
+        </ul>
+      </div>
+      <div class="wrap">
+        <p class="more reveal"><a href="devices.html">How device pictures work <i class="ph-bold ph-arrow-right" aria-hidden="true"></i></a></p>
+      </div>
+    </section>
+
     <!-- Game export -->
     <section class="games" aria-labelledby="games-title">
       <div class="wrap">
@@ -442,6 +473,7 @@
               <li class="game-tile"><i class="ph ph-rocket-launch" aria-hidden="true"></i><span><strong>Elite Dangerous</strong><small>Odyssey and Horizons</small></span></li>
               <li class="game-tile"><i class="ph ph-shooting-star" aria-hidden="true"></i><span><strong>X4: Foundations</strong><small>Joystick and keyboard</small></span></li>
               <li class="game-tile"><i class="ph ph-airplane-in-flight" aria-hidden="true"></i><span><strong>DCS World</strong><small>Every aircraft</small></span></li>
+              <li class="game-tile"><i class="ph ph-crosshair" aria-hidden="true"></i><span><strong>War Thunder</strong><small>Air, ground and naval</small></span></li>
         </ul>
         <ul class="games-track" aria-hidden="true">
               <li class="game-tile"><i class="ph ph-planet" aria-hidden="true"></i><span><strong>Star Citizen</strong><small>4.10+, LIVE and PTU</small></span></li>
@@ -450,6 +482,7 @@
               <li class="game-tile"><i class="ph ph-rocket-launch" aria-hidden="true"></i><span><strong>Elite Dangerous</strong><small>Odyssey and Horizons</small></span></li>
               <li class="game-tile"><i class="ph ph-shooting-star" aria-hidden="true"></i><span><strong>X4: Foundations</strong><small>Joystick and keyboard</small></span></li>
               <li class="game-tile"><i class="ph ph-airplane-in-flight" aria-hidden="true"></i><span><strong>DCS World</strong><small>Every aircraft</small></span></li>
+              <li class="game-tile"><i class="ph ph-crosshair" aria-hidden="true"></i><span><strong>War Thunder</strong><small>Air, ground and naval</small></span></li>
         </ul>
       </div>
       <div class="wrap">
@@ -602,6 +635,10 @@
             <div class="answer"><p>Use the portable zip: unpack it anywhere and start it. Delete the folder and it is gone. On Linux the AppImage is a single file.</p></div>
           </details>
           <details>
+            <summary>How does it update?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
+            <div class="answer"><p>It looks for a new version when it starts (Settings &gt; General) and installs it for you. Under <span class="term">Settings &gt; About</span> you choose what it takes: <strong>Releases only</strong>, the default, or <strong>Alpha builds too</strong> for the newest changes as soon as they are out, together with every final release.</p></div>
+          </details>
+          <details>
             <summary>Which languages does it speak?<i class="ph-bold ph-plus" aria-hidden="true"></i></summary>
             <div class="answer"><p>English, Русский, Deutsch, Español, Français, 简体中文 and 한국어. Another language is one text file: copy <code>lang/en.ftl</code>, translate it and put it next to the app.</p></div>
           </details>
@@ -670,6 +707,7 @@
             <li><a href="panels.html">Panels</a></li>
             <li><a href="scripts.html">Scripts</a></li>
             <li><a href="game.html">Games</a></li>
+            <li><a href="devices.html">Devices</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>

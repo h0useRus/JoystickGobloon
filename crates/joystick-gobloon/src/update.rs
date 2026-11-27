@@ -3,6 +3,7 @@
 //! silently, which starts the app again; a portable copy swaps its files and restarts itself.
 //! Downloads are checked against the SHA-256 digest GitHub keeps for every release asset.
 
+use crate::settings::UpdateChannel;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
@@ -15,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use crate::style::{self, icon};
 
 const LATEST: &str = "https://api.github.com/repos/h0useRus/JoystickGobloon/releases/latest";
+/// The newest releases, alpha builds included (newest first).
+const RECENT: &str = "https://api.github.com/repos/h0useRus/JoystickGobloon/releases?per_page=30";
 /// The restarted copy waits for the old process (`--wait-pid <pid>`) before the
 /// single-instance check, which would otherwise hand over to the old window.
 pub const WAIT_PID: &str = "--wait-pid";
@@ -110,8 +113,9 @@ fn exe_dir() -> Option<PathBuf> {
 }
 
 impl Updater {
-    /// Asks GitHub for the latest release in the background. `auto`: install it right away.
-    pub fn check(&mut self, ctx: &egui::Context, auto: bool) {
+    /// Asks GitHub for the newest release of `channel` in the background. `auto`: install it
+    /// right away.
+    pub fn check(&mut self, ctx: &egui::Context, auto: bool, which: UpdateChannel) {
         if self.job.is_some() {
             return;
         }
@@ -120,10 +124,21 @@ impl Updater {
         let (tx, rx) = channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(Done::Checked(latest()));
+            let _ = tx.send(Done::Checked(latest(which)));
             ctx.request_repaint();
         });
         self.job = Some(rx);
+    }
+
+    /// The channel changed: what the last check found (an update, or none) was for the other
+    /// channel, and a check still running for it is dropped. A running download goes on.
+    pub fn forget(&mut self) {
+        if matches!(self.state, State::Downloading(_)) {
+            return;
+        }
+        self.job = None;
+        self.auto = false;
+        self.state = State::Idle;
     }
 
     fn download(&mut self, ctx: &egui::Context) {
@@ -173,7 +188,7 @@ impl Updater {
 
     /// The update block of the About page: a status line and a button, each centered by the
     /// caller's top-down layout.
-    pub fn ui(&mut self, ui: &mut egui::Ui, i18n: &I18n) {
+    pub fn ui(&mut self, ui: &mut egui::Ui, i18n: &I18n, channel: UpdateChannel) {
         let busy = self.job.is_some();
         let weak = |t: String| RichText::new(t).weak();
         let status = match &self.state {
@@ -249,12 +264,13 @@ impl Updater {
             )
             .clicked()
         {
-            self.check(ui.ctx(), false);
+            self.check(ui.ctx(), false, channel);
         }
     }
 }
 
-fn agent() -> ureq::Agent {
+/// The HTTP client for GitHub (updates, device plugins).
+pub(crate) fn agent() -> ureq::Agent {
     let tls = ureq::tls::TlsConfig::builder()
         .provider(ureq::tls::TlsProvider::NativeTls)
         .root_certs(ureq::tls::RootCerts::PlatformVerifier)
@@ -267,35 +283,62 @@ fn agent() -> ureq::Agent {
         .new_agent()
 }
 
-/// The latest final release, when it is newer than this build and has the asset this copy
-/// updates from (installer or portable zip).
-fn latest() -> Result<Option<Release>, String> {
+/// The newest release of `channel` when it is newer than this build and has the asset this
+/// copy updates from (installer, portable zip or AppImage).
+fn latest(channel: UpdateChannel) -> Result<Option<Release>, String> {
     let Some(suffix) = crate::platform::update_asset(installed()) else {
         return Ok(None);
     };
     let current = Version::parse(crate::VERSION).map_err(|e| format!("own version: {e}"))?;
-    let release: GhRelease = agent()
-        .get(LATEST)
-        .header("Accept", "application/vnd.github+json")
-        .call()
-        .map_err(|e| e.to_string())?
-        .body_mut()
-        .read_json()
-        .map_err(|e| e.to_string())?;
-    if release.draft || release.prerelease {
-        return Ok(None);
-    }
-    let version = Version::parse(release.tag_name.trim_start_matches('v'))
-        .map_err(|e| format!("release tag {}: {e}", release.tag_name))?;
-    if !version.pre.is_empty() || version <= current {
-        return Ok(None);
-    }
-    let asset = release
-        .assets
+    let get = |url: &str| {
+        agent()
+            .get(url)
+            .header("Accept", "application/vnd.github+json")
+            .call()
+            .map_err(|e| e.to_string())
+    };
+    let releases: Vec<GhRelease> = match channel {
+        UpdateChannel::Release => vec![
+            get(LATEST)?
+                .body_mut()
+                .read_json()
+                .map_err(|e| e.to_string())?,
+        ],
+        UpdateChannel::Alpha => get(RECENT)?
+            .body_mut()
+            .read_json()
+            .map_err(|e| e.to_string())?,
+    };
+    newest(releases, &current, suffix, channel)
+}
+
+/// The newest of `releases` that `channel` takes, newer than `current`, with its asset. Final
+/// releases only on the release channel; on the alpha channel alpha builds too (semver puts
+/// `1.0.1-alpha.5` after `1.0.0` and before `1.0.1`). A release without the asset (still
+/// uploading, or a build that failed) is passed over for the next newest that has it.
+fn newest(
+    releases: Vec<GhRelease>,
+    current: &Version,
+    suffix: &str,
+    channel: UpdateChannel,
+) -> Result<Option<Release>, String> {
+    let best = releases
         .into_iter()
-        .find(|a| a.name.ends_with(suffix))
-        .ok_or_else(|| format!("release {version} has no *{suffix}"))?;
-    Ok(Some(Release { version, asset }))
+        .filter(|r| !r.draft)
+        .filter_map(|r| {
+            let version = Version::parse(r.tag_name.trim_start_matches('v')).ok()?;
+            let alpha = r.prerelease || !version.pre.is_empty();
+            if (alpha && channel != UpdateChannel::Alpha) || version <= *current {
+                return None;
+            }
+            let asset = r.assets.into_iter().find(|a| a.name.ends_with(suffix));
+            if asset.is_none() {
+                log::debug!("update: release {version} has no *{suffix} (yet)");
+            }
+            Some((version, asset?))
+        })
+        .max_by(|a, b| a.0.cmp(&b.0));
+    Ok(best.map(|(version, asset)| Release { version, asset }))
 }
 
 /// Downloads (and for portable copies unpacks) the update into a temporary folder.
@@ -672,370 +715,4 @@ pub fn wait_for_previous() {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn zip_with(dir: &Path, names: &[&str]) -> PathBuf {
-        use std::io::Write;
-        let path = dir.join("test.zip");
-        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
-        for name in names {
-            zip.start_file(*name, zip::write::SimpleFileOptions::default())
-                .unwrap();
-            zip.write_all(b"x").unwrap();
-        }
-        zip.finish().unwrap();
-        path
-    }
-
-    #[test]
-    fn unpacks_a_portable_zip_and_refuses_paths_outside_the_folder() {
-        let dir = std::env::temp_dir().join(format!("gobloon-unzip-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("out")).unwrap();
-        let good = zip_with(&dir, &["JoystickGobloon/lang/de.ftl"]);
-        unpack_zip(&good, &dir.join("out")).unwrap();
-        assert!(dir.join("out/JoystickGobloon/lang/de.ftl").is_file());
-        let bad = zip_with(&dir, &["../evil.txt"]);
-        assert!(unpack_zip(&bad, &dir.join("out")).is_err());
-        assert!(!dir.join("evil.txt").exists());
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn a_failed_portable_update_puts_every_file_back() {
-        let root = std::env::temp_dir().join(format!("gobloon-rollback-{}", std::process::id()));
-        let (new, old) = (root.join("new"), root.join("old"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(new.join("lang")).unwrap();
-        std::fs::create_dir_all(old.join("lang")).unwrap();
-        for name in ["sherpa-onnx-c-api.dll", "LICENSE", "NEW.txt", "lang/de.ftl"] {
-            std::fs::write(new.join(name), "new").unwrap();
-        }
-        for name in ["sherpa-onnx-c-api.dll", "LICENSE", "lang/de.ftl"] {
-            std::fs::write(old.join(name), "old").unwrap();
-        }
-        // The language files copy after the others; one fails, as when it cannot be written.
-        let failing = |from: &Path, to: &Path| {
-            if from.ends_with("de.ftl") {
-                Err(std::io::Error::other("locked"))
-            } else {
-                std::fs::copy(from, to).map(|_| ())
-            }
-        };
-        assert!(copy_portable_with(&new, &old, failing).is_err());
-        let mut left: Vec<String> = ["", "lang"]
-            .iter()
-            .flat_map(|d| std::fs::read_dir(old.join(d)).unwrap().flatten())
-            .filter(|e| e.path().is_file())
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .collect();
-        left.sort_unstable();
-        assert_eq!(
-            left,
-            ["LICENSE", "de.ftl", "sherpa-onnx-c-api.dll"],
-            "nothing new, nothing aside"
-        );
-        for name in ["sherpa-onnx-c-api.dll", "LICENSE", "lang/de.ftl"] {
-            assert_eq!(
-                std::fs::read_to_string(old.join(name)).unwrap(),
-                "old",
-                "{name}"
-            );
-        }
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn a_portable_update_copies_every_file() {
-        let root = std::env::temp_dir().join(format!("gobloon-portable-{}", std::process::id()));
-        let (new, old) = (root.join("new"), root.join("old"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(new.join("lang")).unwrap();
-        std::fs::create_dir_all(&old).unwrap();
-        let exe = crate::platform::exe_name();
-        for (name, text) in [
-            (exe, "new exe"),
-            ("sherpa-onnx-c-api.dll", "speech"),
-            ("LICENSE", "license"),
-            ("lang/de.ftl", "de"),
-        ] {
-            std::fs::write(new.join(name), text).unwrap();
-        }
-        std::fs::write(old.join(exe), "old exe").unwrap();
-        copy_portable(&new, &old).unwrap();
-        for (name, text) in [
-            (exe, "new exe"),
-            ("sherpa-onnx-c-api.dll", "speech"),
-            ("LICENSE", "license"),
-            ("lang/de.ftl", "de"),
-        ] {
-            assert_eq!(
-                std::fs::read_to_string(old.join(name)).unwrap(),
-                text,
-                "{name}"
-            );
-        }
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn a_portable_update_follows_the_manifest() {
-        let root = std::env::temp_dir().join(format!("gobloon-manifest-{}", std::process::id()));
-        let (new, old) = (root.join("new"), root.join("old"));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(new.join("lang")).unwrap();
-        std::fs::create_dir_all(old.join("lang")).unwrap();
-        let exe = crate::platform::exe_name();
-        std::fs::write(
-            new.join(MANIFEST),
-            format!(
-                "files = [\"{exe}\", \"sherpa-onnx-c-api.dll\", \"lang/de.ftl\", \"voice/model.txt\"]
-"
-            ),
-        )
-        .unwrap();
-        std::fs::create_dir_all(new.join("voice")).unwrap();
-        for name in [
-            exe,
-            "sherpa-onnx-c-api.dll",
-            "lang/de.ftl",
-            "voice/model.txt",
-            "stray.txt",
-        ] {
-            std::fs::write(new.join(name), "new").unwrap();
-        }
-        std::fs::write(
-            old.join(MANIFEST),
-            format!(
-                "files = [\"{exe}\", \"libold.dll\", \"lang/de.ftl\"]
-"
-            ),
-        )
-        .unwrap();
-        for name in [exe, "libold.dll", "lang/de.ftl", "lang/xx.ftl"] {
-            std::fs::write(old.join(name), "old").unwrap();
-        }
-        copy_portable(&new, &old).unwrap();
-        for name in [
-            exe,
-            "sherpa-onnx-c-api.dll",
-            "lang/de.ftl",
-            "voice/model.txt",
-        ] {
-            assert_eq!(
-                std::fs::read_to_string(old.join(name)).unwrap(),
-                "new",
-                "{name}"
-            );
-        }
-        assert!(old.join(MANIFEST).exists(), "the new manifest comes along");
-        assert!(!old.join("stray.txt").exists(), "only listed files");
-        assert!(
-            !old.join("libold.dll").exists(),
-            "no longer listed: removed"
-        );
-        assert!(
-            old.join("libold.dll.old").exists(),
-            "set aside until the next start"
-        );
-        assert_eq!(
-            std::fs::read_to_string(old.join("lang/xx.ftl")).unwrap(),
-            "old",
-            "the user's own language stays"
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn a_manifest_never_leaves_the_folder() {
-        let dir = std::env::temp_dir().join(format!("gobloon-bad-manifest-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        for bad in [
-            "../evil.dll",
-            "C:/Windows/evil.dll",
-            "/etc/evil",
-            "lang\\..\\..\\evil.dll",
-            "a/./b",
-            "JoystickGobloon.exe.old",
-            "",
-        ] {
-            std::fs::write(
-                dir.join(MANIFEST),
-                format!(
-                    "files = [{bad:?}]
-"
-                ),
-            )
-            .unwrap();
-            assert!(manifest(&dir).is_err(), "{bad}");
-        }
-        std::fs::write(
-            dir.join(MANIFEST),
-            "files = [\"lang/en.ftl\"]
-",
-        )
-        .unwrap();
-        assert_eq!(
-            manifest(&dir).unwrap().unwrap(),
-            [PathBuf::from("lang/en.ftl"), PathBuf::from(MANIFEST)]
-        );
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    fn temp(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("gobloon-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("new")).unwrap();
-        std::fs::create_dir_all(root.join("old")).unwrap();
-        root
-    }
-
-    #[test]
-    fn a_name_differing_only_in_case_is_not_removed() {
-        let root = temp("case");
-        let (new, old) = (root.join("new"), root.join("old"));
-        std::fs::create_dir_all(new.join("lang")).unwrap();
-        std::fs::create_dir_all(old.join("lang")).unwrap();
-        std::fs::write(new.join(MANIFEST), "files = [\"lang/de.ftl\"]\n").unwrap();
-        std::fs::write(new.join("lang/de.ftl"), "new").unwrap();
-        std::fs::write(old.join(MANIFEST), "files = [\"lang/DE.ftl\"]\n").unwrap();
-        std::fs::write(old.join("lang/DE.ftl"), "old").unwrap();
-        copy_portable(&new, &old).unwrap();
-        // Not set aside as gone (on Windows both names are the same file).
-        assert_eq!(
-            std::fs::read_to_string(old.join("lang/de.ftl")).unwrap(),
-            "new"
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn cleanup_removes_what_was_set_aside_and_the_emptied_folders() {
-        let root = temp("cleanup");
-        let (new, old) = (root.join("new"), root.join("old"));
-        std::fs::write(new.join(MANIFEST), "files = [\"a.dll\"]\n").unwrap();
-        std::fs::write(new.join("a.dll"), "new").unwrap();
-        std::fs::create_dir_all(old.join("voice/deep")).unwrap();
-        std::fs::write(
-            old.join(MANIFEST),
-            "files = [\"a.dll\", \"voice/deep/x.dll\"]\n",
-        )
-        .unwrap();
-        std::fs::write(old.join("a.dll"), "old").unwrap();
-        std::fs::write(old.join("voice/deep/x.dll"), "old").unwrap();
-        copy_portable(&new, &old).unwrap();
-        assert!(old.join("voice/deep/x.dll.old").exists());
-        cleanup_in(&old);
-        assert!(!old.join("voice").exists(), "the emptied folders go");
-        assert!(!old.join("a.dll.old").exists());
-        assert!(!old.join(ASIDE).exists());
-        assert_eq!(std::fs::read_to_string(old.join("a.dll")).unwrap(), "new");
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn a_failed_update_removes_the_folders_it_made() {
-        let root = temp("folders");
-        let (new, old) = (root.join("new"), root.join("old"));
-        std::fs::create_dir_all(new.join("voice/deep")).unwrap();
-        std::fs::write(
-            new.join(MANIFEST),
-            "files = [\"voice/deep/model.txt\", \"b.dll\"]\n",
-        )
-        .unwrap();
-        std::fs::write(new.join("voice/deep/model.txt"), "new").unwrap();
-        std::fs::write(new.join("b.dll"), "new").unwrap();
-        let failing = |from: &Path, to: &Path| {
-            if from.ends_with("b.dll") {
-                Err(std::io::Error::other("locked"))
-            } else {
-                std::fs::copy(from, to).map(|_| ())
-            }
-        };
-        assert!(copy_portable_with(&new, &old, failing).is_err());
-        assert_eq!(std::fs::read_dir(&old).unwrap().count(), 0, "nothing left");
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn an_unreadable_new_folder_is_an_error() {
-        let root = temp("unreadable");
-        assert!(copy_portable(&root.join("missing"), &root.join("old")).is_err());
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn a_portable_version_must_list_its_exe() {
-        let root = temp("exe");
-        let new = root.join("new");
-        let exe = crate::platform::exe_name();
-        std::fs::write(new.join(exe), "new").unwrap();
-        std::fs::write(new.join("a.dll"), "new").unwrap();
-        std::fs::write(new.join(MANIFEST), "files = [\"a.dll\"]\n").unwrap();
-        assert!(check_portable(&new).is_err());
-        std::fs::write(
-            new.join(MANIFEST),
-            format!("files = [\"a.dll\", \"{exe}\"]\n"),
-        )
-        .unwrap();
-        check_portable(&new).unwrap();
-        std::fs::write(
-            new.join(MANIFEST),
-            format!("files = [\"b.dll\", \"{exe}\"]\n"),
-        )
-        .unwrap();
-        assert!(check_portable(&new).is_err(), "a listed file is missing");
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// Network: `cargo test -p joystick-gobloon -- --ignored`. This build's version is not older than
-    /// the latest release, so nothing is offered; the request, TLS and JSON work.
-    #[test]
-    #[ignore]
-    fn asks_github_for_the_latest_release() {
-        assert!(latest().unwrap().is_none());
-    }
-
-    /// Network: downloads the 0.4.0 portable zip, checks its digest and unpacks it.
-    #[test]
-    #[ignore]
-    fn downloads_and_unpacks_a_release() {
-        let release: GhRelease = agent()
-            .get("https://api.github.com/repos/h0useRus/JoystickGobloon/releases/tags/v0.4.0")
-            .call()
-            .unwrap()
-            .body_mut()
-            .read_json()
-            .unwrap();
-        let asset = release
-            .assets
-            .into_iter()
-            .find(|a| a.name.ends_with("-portable.zip"))
-            .unwrap();
-        assert!(asset.digest.is_some(), "GitHub gives the digest");
-        let release = Release {
-            version: Version::parse("0.4.0").unwrap(),
-            asset,
-        };
-        let Prepared::Portable(dir) = prepare(&release).unwrap() else {
-            panic!("expected the portable folder");
-        };
-        assert!(dir.join(crate::platform::exe_name()).exists());
-        assert!(dir.join("lang").join("en.ftl").exists());
-        let _ = std::fs::remove_dir_all(dir.parent().unwrap().parent().unwrap());
-    }
-
-    #[test]
-    fn only_newer_final_releases() {
-        let v = |s: &str| Version::parse(s).unwrap();
-        assert!(v("0.4.1") > v("0.4.0"));
-        // An alpha of the same version is older than its release.
-        assert!(v("0.4.1") > v("0.4.1-alpha.12"));
-        assert!(v("0.4.0") < v("0.4.1-alpha.12"));
-        assert_eq!(
-            sha256_hex(b"abc"),
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-        );
-    }
-}
+mod tests;

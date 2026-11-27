@@ -53,6 +53,9 @@ imports Joystick Gremlin profiles and keeps the workflow you know.
 - **Device hiding** with one click on a stick's eye, so games see only the virtual devices.
 - **Game bindings**: read a game's joystick bindings and write the profile's straight into the game's own
   settings files, with a backup ([supported games](https://h0userus.github.io/joystick-gobloon/game.html)).
+- **Device pictures**: your stick, throttle or pedals on screen with every control lighting up; pictures for VKB,
+  VIRPIL, Honeycomb, Logitech and MOZA controllers download with one click, or make your own from a photo
+  ([how](https://h0userus.github.io/joystick-gobloon/devices.html)).
 - **Profile per program**: the profile and mode switch by themselves when a game comes to the front.
 - **Game overlay**: mode, layer, the action just run, latency and voice status on top of the game.
 - **Voice commands**: hold a push-to-talk button and say a phrase; recognized offline on your PC

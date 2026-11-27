@@ -1,0 +1,20 @@
+# Gunfighter Mk.IV "F-14 Combat Edition".
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "vkb-gunfighter-mk4-f14"
+name = "Gunfighter Mk.IV F-14"
+brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Gunfighter F14"
+
+[[match]]
+vid = 0x231D
+name = "Gunfighter F-14"
+
+[[view]]
+id = "main"
+name = "Stick"
+image = "views/main.png"

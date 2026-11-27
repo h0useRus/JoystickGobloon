@@ -10,7 +10,7 @@ license = "MIT"
 
 [workspace.dependencies]
 foldhash = "0.2"
-gob-i18n = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.4.1" }
+gob-i18n = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.6.0" }
 gob-core = { path = "crates/gob-core" }
 gob-gremlin = { path = "crates/gob-gremlin" }
 quick-xml = "0.42"
@@ -23,15 +23,17 @@ gob-hidhide = { path = "crates/gob-hidhide" }
 gob-hide = { path = "crates/gob-hide" }
 gob-engine = { path = "crates/gob-engine" }
 gob-lighting = { path = "crates/gob-lighting" }
-gob-ui = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.4.1" }
+gob-ui = { git = "https://github.com/h0useRus/gobloon-common-ui", tag = "v0.6.0" }
 gob-system = { path = "crates/gob-system" }
 gob-voice = { path = "crates/gob-voice" }
 gob-script = { path = "crates/gob-script" }
 gob-export = { path = "crates/gob-export" }
 gob-osc = { path = "crates/gob-osc" }
+gob-devices = { path = "crates/gob-devices" }
 # User scripts: Luau (Lua 5.1 syntax, sandboxed), built from source; "send": the engine moves threads.
 mlua = { version = "0.12", features = ["luau", "send"] }
 # The OpenGL renderer: wgpu reserves hundreds of MB, the window stays small with glow.
+egui = { version = "0.37", default-features = false }
 eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "glow", "links", "wayland", "x11"] }
 serde = { version = "1", features = ["derive"] }
 toml = "1"

@@ -1,0 +1,20 @@
+# VIRPIL CDT-AEROMAX [L] flightstick, left hand (the Z version reports the same).
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "virpil-cdt-aeromax-l"
+name = "CDT-AEROMAX (left)"
+brand = "VIRPIL"
+credit = "Product images (c) VIRPIL Controls"
+version = "1"
+
+[[match]]
+vid = 0x3344
+name = "L-VPC Stick CDT-AEROMAX"
+
+[[match]]
+vid = 0x3344
+name = "CDT-AEROMAX L"
+
+[[view]]
+id = "main"
+name = "Stick"
+image = "views/main.png"

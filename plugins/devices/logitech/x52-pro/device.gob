@@ -1,0 +1,40 @@
+# Logitech G (formerly Saitek) X52 Professional: stick and throttle, one device.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "logitech-x52-pro"
+name = "X52 Professional H.O.T.A.S."
+brand = "Logitech"
+credit = "Product images (c) Logitech"
+version = "1"
+
+[[match]]
+vid = 0x06A3
+pid = 0x0762
+
+[[match]]
+vid = 0x06A3
+name = "X52 Professional"
+
+[[match]]
+vid = 0x046D
+name = "X52 Professional"
+
+[[match]]
+vid = 0x0738
+name = "X52 Professional"
+
+[[match]]
+vid = 0x06A3
+name = "X52 Pro"
+
+[[match]]
+vid = 0x046D
+name = "X52 Pro"
+
+[[match]]
+vid = 0x0738
+name = "X52 Pro"
+
+[[view]]
+id = "main"
+name = "HOTAS"
+image = "views/main.png"

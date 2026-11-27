@@ -1,0 +1,16 @@
+# Honeycomb Sierra TPM (throttle, propeller, mixture) module.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "honeycomb-sierra-tpm-module"
+name = "Sierra TPM Module"
+brand = "Honeycomb"
+credit = "Product images (c) Honeycomb Aeronautical"
+version = "1"
+
+[[match]]
+vid = 0x294B
+name = "Sierra"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"

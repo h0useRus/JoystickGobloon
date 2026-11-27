@@ -636,6 +636,7 @@ impl Config {
             keep_value: false,
             send_state: false,
             description: None,
+            held: false,
         }
     }
 }
@@ -657,6 +658,9 @@ struct Config {
     send_state: bool,
     /// The binding's description (its root action's label), shown when its input is pressed.
     description: Option<Arc<str>>,
+    /// Its button or hat is down and its press ran: the release runs even while paused, so
+    /// what the press holds (keys, mouse and virtual buttons) goes up.
+    held: bool,
 }
 
 pub struct Engine {
@@ -1029,6 +1033,7 @@ impl Engine {
                         // Gremlin writes "None" for a binding without one.
                         .filter(|l| !l.is_empty() && *l != "None")
                         .map(Arc::from),
+                    held: false,
                 });
                 // A button-axis action's decrease input runs it too, in the same mode and layer,
                 // through copies of the containers it sits in (their own state).
@@ -2169,12 +2174,26 @@ impl Engine {
         now: Instant,
         out: &mut dyn Output,
     ) {
-        if self.paused && !self.sets[set][ci].always {
+        // While paused only the release of an input pressed before the pause runs: what its
+        // press holds (keys, mouse and virtual buttons) must not stay down.
+        let paused = self.paused && !self.sets[set][ci].always;
+        if paused && !self.sets[set][ci].held {
             return;
         }
         let (root, virtual_id) = (self.sets[set][ci].root, self.sets[set][ci].virtual_id);
         let states = match self.sets[set][ci].vbutton.as_mut() {
             None => {
+                let down = match value {
+                    Value::Button(pressed) => Some(pressed),
+                    Value::Hat(direction) => Some(direction.is_some()),
+                    Value::Axis(_) => None,
+                };
+                if paused && down != Some(false) {
+                    return;
+                }
+                if let Some(down) = down {
+                    self.sets[set][ci].held = down;
+                }
                 self.run(root, src, &mut value.clone(), now, out, 0);
                 return;
             }
@@ -2190,6 +2209,10 @@ impl Engine {
             no_auto_release: false,
         };
         for pressed in states {
+            if paused && pressed {
+                continue;
+            }
+            self.sets[set][ci].held = pressed;
             self.run(root, &vsrc, &mut Value::Button(pressed), now, out, 0);
             self.process_release(&vsrc.key, pressed, now, out);
         }

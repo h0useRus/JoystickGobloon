@@ -1,7 +1,7 @@
 //! Binding by pressing: the wait for a press, what the pressed control is in the profile, the
 //! warning when other actions already use it, and mapping a control the profile does not map.
 
-use gob_core::{Combo, ComboPart};
+use gob_core::{Combo, ComboPart, Press};
 
 use super::capture::{Capture, Captured, Pressed};
 use super::state::{Mark, State};
@@ -14,6 +14,8 @@ pub(super) struct Aim {
     pub(super) action: Option<String>,
     /// The binding of the action the press replaces.
     pub(super) replace: Option<GameOutput>,
+    /// How the game takes the button: held long, pressed twice (games that tell them apart).
+    pub(super) press: Option<Press>,
 }
 
 pub(super) enum Dialog {
@@ -24,6 +26,8 @@ pub(super) enum Dialog {
         aim: Aim,
         input: String,
         outputs: Vec<GameOutput>,
+        /// Per output: how the input reaches it ([`route_of`]).
+        routes: Vec<String>,
     },
     /// Other actions use the control already.
     Conflict {
@@ -73,8 +77,18 @@ fn is_hat(v: &VirtualOutput) -> bool {
 
 /// The profile's id of the device `guid` (a profile made on another computer names it by its
 /// old id), and the bindings of the pressed input.
-fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
+pub(super) fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
     let aliases = crate::substitute_view::auto_aliases(ctx.profile, ctx.devices);
+    bindings_with(ctx, &aliases, p)
+}
+
+/// [`bindings_of`] with the device aliases worked out already (for callers asking about many
+/// inputs at once).
+pub(super) fn bindings_with(
+    ctx: &Context,
+    aliases: &HashMap<String, String>,
+    p: &Pressed,
+) -> (String, Vec<usize>) {
     let mut device = p.device.clone();
     let mut found = Vec::new();
     for (n, b) in ctx.profile.inputs.iter().enumerate() {
@@ -102,13 +116,41 @@ fn bindings_of(ctx: &Context, p: &Pressed) -> (String, Vec<usize>) {
 
 /// What a game can bind of what the pressed input sends: virtual joystick and gamepad outputs,
 /// keys and mouse buttons. What the running profile sends right now comes first.
-fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput> {
+pub(super) fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput> {
+    let usage = Usage::of(ctx);
+    outputs_with(ctx, &usage, p, bindings)
+}
+
+/// What the profile writes and sends, by the bindings doing it (worked out once for callers
+/// asking about many inputs at once).
+pub(super) struct Usage {
+    outputs: Vec<(VirtualOutput, Vec<gob_core::OutputUse>)>,
+    keys: Vec<(Combo, Vec<gob_core::OutputUse>)>,
+}
+
+impl Usage {
+    pub(super) fn of(ctx: &Context) -> Self {
+        Self {
+            outputs: ctx.profile.output_usage(None).into_iter().collect(),
+            keys: ctx.profile.key_usage(None),
+        }
+    }
+}
+
+/// [`outputs_of`] from usage worked out already.
+pub(super) fn outputs_with(
+    ctx: &Context,
+    usage: &Usage,
+    p: &Pressed,
+    bindings: &[usize],
+) -> Vec<GameOutput> {
     let mine = |uses: &[gob_core::OutputUse]| uses.iter().any(|u| bindings.contains(&u.binding));
     let mut out: Vec<GameOutput> = Vec::new();
-    for (v, uses) in ctx.profile.output_usage(None) {
-        if !mine(&uses) || matches!(v, VirtualOutput::Logical { .. }) {
+    for (v, uses) in &usage.outputs {
+        if !mine(uses) || matches!(v, VirtualOutput::Logical { .. }) {
             continue;
         }
+        let v = v.clone();
         if !is_hat(&v) {
             out.push(GameOutput::Virtual(v));
         } else if let Some(d) = p.hat {
@@ -121,9 +163,9 @@ fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput>
             );
         }
     }
-    for (combo, uses) in ctx.profile.key_usage(None) {
-        if mine(&uses) {
-            out.push(GameOutput::Keys(combo));
+    for (combo, uses) in &usage.keys {
+        if mine(uses) {
+            out.push(GameOutput::Keys(combo.clone()));
         }
     }
     let now = std::time::Instant::now();
@@ -135,6 +177,34 @@ fn outputs_of(ctx: &Context, p: &Pressed, bindings: &[usize]) -> Vec<GameOutput>
     };
     out.sort_by_key(|o| (!lit(o), super::graph::sort_key(o)));
     out
+}
+
+/// How the pressed input's `bindings` reach output `o` ("Long press"), empty for a plain
+/// mapping: tells apart several outputs of one control.
+pub(super) fn route_of(ctx: &Context, i18n: &I18n, bindings: &[usize], o: &GameOutput) -> String {
+    // A game's long or double press comes from what writes its button.
+    let uses: Vec<gob_core::OutputUse> = match o.base() {
+        GameOutput::Virtual(v) | GameOutput::HatDirection(v, _) => {
+            ctx.profile.output_usage(None).remove(v).unwrap_or_default()
+        }
+        GameOutput::Keys(c) => ctx
+            .profile
+            .key_usage(None)
+            .into_iter()
+            .find(|(k, _)| k == c)
+            .map(|(_, u)| u)
+            .unwrap_or_default(),
+        GameOutput::Pressed(..) => Vec::new(),
+    };
+    let index = ctx.profile.action_index();
+    let mut labels: Vec<String> = Vec::new();
+    for u in uses.iter().filter(|u| bindings.contains(&u.binding)) {
+        let l = super::graph::route_label(i18n, ctx.profile, &index, u.binding, &u.action);
+        if !l.is_empty() && !labels.contains(&l) {
+            labels.push(l);
+        }
+    }
+    labels.join(", ")
 }
 
 /// The first output of the input's kind that no input of the profile writes and no game action
@@ -256,6 +326,8 @@ pub(super) struct Scene<'a> {
     pub(super) game: &'a str,
     pub(super) catalog: &'a Catalog,
     pub(super) state: &'a State<'a>,
+    /// The presses the game tells apart from a plain press.
+    pub(super) presses: &'a [Press],
 }
 
 impl Scene<'_> {
@@ -277,11 +349,18 @@ impl Scene<'_> {
 impl GameView {
     /// Starts the wait for a press.
     pub(super) fn press_for(&mut self, action: Option<String>, replace: Option<GameOutput>) {
-        self.dialog = Some(Dialog::Capture(Aim { action, replace }, Capture::default()));
+        let press = replace.as_ref().and_then(GameOutput::press);
+        let aim = Aim {
+            action,
+            replace,
+            press,
+        };
+        self.dialog = Some(Dialog::Capture(aim, Capture::default()));
     }
 
     /// The control is known: looked up, bound, or held back for the warning.
     fn settle(&mut self, scene: &Scene, aim: Aim, output: GameOutput, ops: &mut Vec<Op>) -> Step {
+        let output = output.with_press(aim.press.filter(|_| aim.action.is_some()));
         let Some(action) = aim.action else {
             if self.tab == Tab::Wiring {
                 self.picked = Some(output.clone());
@@ -352,7 +431,8 @@ impl GameView {
                 let bind = match p.hat {
                     Some(d) => GameOutput::HatDirection(output.clone(), d),
                     None => GameOutput::Virtual(output.clone()),
-                };
+                }
+                .with_press(aim.press);
                 Step::Go(Box::new(Dialog::Unmapped {
                     action,
                     replace: aim.replace,
@@ -363,11 +443,18 @@ impl GameView {
                 }))
             }
             1 => self.settle(scene, aim, outputs.remove(0), ops),
-            _ => Step::Go(Box::new(Dialog::Choose {
-                aim,
-                input,
-                outputs,
-            })),
+            _ => {
+                let routes = outputs
+                    .iter()
+                    .map(|o| route_of(scene.ctx, scene.i18n, &bindings, o))
+                    .collect();
+                Step::Go(Box::new(Dialog::Choose {
+                    aim,
+                    input,
+                    outputs,
+                    routes,
+                }))
+            }
         }
     }
 
@@ -382,7 +469,8 @@ impl GameView {
                 aim,
                 input,
                 outputs,
-            } => self.choose_dialog(ui, scene, aim, input, outputs, ops),
+                routes,
+            } => self.choose_dialog(ui, scene, aim, input, outputs, routes, ops),
             Dialog::Conflict {
                 action,
                 replace,
@@ -411,7 +499,7 @@ impl GameView {
         &mut self,
         ui: &mut egui::Ui,
         scene: &Scene,
-        aim: Aim,
+        mut aim: Aim,
         mut capture: Capture,
         ops: &mut Vec<Op>,
     ) -> (Option<Dialog>, Step) {
@@ -435,6 +523,24 @@ impl GameView {
                     ))
                     .weak(),
                 );
+                ui.add_space(style::SPACE_S);
+            }
+            // How the game takes the button, for games that tell presses apart.
+            if aim.action.is_some() && !scene.presses.is_empty() {
+                ui.horizontal(|ui| {
+                    let mut choices = vec![(None, i18n.tr("game-capture-press"))];
+                    choices.extend(
+                        scene
+                            .presses
+                            .iter()
+                            .map(|p| (Some(*p), i18n.tr(&format!("game-capture-{}", p.name())))),
+                    );
+                    for (press, label) in choices {
+                        if style::tab(ui, aim.press == press, press_icon(press), &label).clicked() {
+                            aim.press = press;
+                        }
+                    }
+                });
                 ui.add_space(style::SPACE_S);
             }
             let (rect, _) =
@@ -513,6 +619,7 @@ impl GameView {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn choose_dialog(
         &mut self,
         ui: &mut egui::Ui,
@@ -520,6 +627,7 @@ impl GameView {
         aim: Aim,
         input: String,
         outputs: Vec<GameOutput>,
+        routes: Vec<String>,
         ops: &mut Vec<Op>,
     ) -> (Option<Dialog>, Step) {
         let i18n = scene.i18n;
@@ -535,7 +643,11 @@ impl GameView {
             ui.label(i18n.trf("game-choose-text", &[("input", input.clone().into())]));
             ui.add_space(style::SPACE_S);
             for (n, o) in outputs.iter().enumerate() {
-                if ui.button(output_name(i18n, o)).clicked() {
+                let text = match routes.get(n).filter(|r| !r.is_empty()) {
+                    Some(r) => format!("{}  ·  {r}", output_name(i18n, o)),
+                    None => output_name(i18n, o),
+                };
+                if ui.button(text).clicked() {
                     chosen = Some(n);
                 }
             }
@@ -557,6 +669,7 @@ impl GameView {
                     aim,
                     input,
                     outputs,
+                    routes,
                 }),
                 Step::Stay,
             ),
@@ -748,15 +861,17 @@ impl GameView {
     /// Debug builds open a dialog at start with `JOYSTICK_GOBLOON_GAME_DIALOG` = capture |
     /// conflict | choose | unmapped, for checks.
     pub(super) fn debug_dialog(&mut self, scene: &Scene) {
-        if !cfg!(debug_assertions) || std::mem::replace(&mut self.debug_done, true) {
+        if !cfg!(debug_assertions) || self.debug_done {
             return;
         }
         let Ok(which) = std::env::var("JOYSTICK_GOBLOON_GAME_DIALOG") else {
             return;
         };
+        // Once the game's actions are there.
         let Some(first) = scene.catalog.actions.first() else {
             return;
         };
+        self.debug_done = true;
         let action = first.id.clone();
         let output = GameOutput::parse("vjoy:1:button:5").expect("an output id");
         let pressed = Pressed {
@@ -771,6 +886,7 @@ impl GameView {
                 Aim {
                     action: Some(action),
                     replace: None,
+                    press: None,
                 },
                 Capture::default(),
             )),
@@ -792,12 +908,14 @@ impl GameView {
                 aim: Aim {
                     action: Some(action),
                     replace: None,
+                    press: None,
                 },
                 input: pressed_name(scene.i18n, &pressed),
                 outputs: vec![
                     output,
                     GameOutput::parse("vjoy:1:button:6").expect("an output id"),
                 ],
+                routes: vec![scene.i18n.tr("edit-short"), scene.i18n.tr("edit-long")],
             }),
             "unmapped" => Some(Dialog::Unmapped {
                 action,
@@ -813,6 +931,15 @@ impl GameView {
             }),
             _ => None,
         };
+    }
+}
+
+/// The icon of a press in the capture dialog.
+fn press_icon(press: Option<Press>) -> &'static str {
+    match press {
+        None => icon::HAND_TAP,
+        Some(Press::Long) => icon::HOURGLASS_MEDIUM,
+        Some(Press::Double) => icon::CURSOR_CLICK,
     }
 }
 

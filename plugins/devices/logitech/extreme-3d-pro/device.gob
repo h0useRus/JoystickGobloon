@@ -1,0 +1,28 @@
+# Logitech G (formerly Saitek) Extreme 3D Pro joystick.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "logitech-extreme-3d-pro"
+name = "Extreme 3D Pro"
+brand = "Logitech"
+credit = "Product images (c) Logitech"
+version = "1"
+
+[[match]]
+vid = 0x046D
+pid = 0xC215
+
+[[match]]
+vid = 0x06A3
+name = "Extreme 3D"
+
+[[match]]
+vid = 0x046D
+name = "Extreme 3D"
+
+[[match]]
+vid = 0x0738
+name = "Extreme 3D"
+
+[[view]]
+id = "main"
+name = "Stick"
+image = "views/main.png"

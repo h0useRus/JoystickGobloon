@@ -4,7 +4,11 @@
 -- Inputs as the game writes them: js<instance>_button<n>, js<n>_hat<h>_<up|right|down|left>,
 -- js<n>_<x|y|z|rotx|roty|rotz|slider1|slider2>, kb1_<key>, kb1_<key>+<key>, mo1_<button>;
 -- "js1_ " (a space) unbinds. A rebind on a device replaces the game's default on that device.
+-- A rebind's activationMode (or multiTap) says how it is pressed: delayed_press* and
+-- delayed_hold* = held long (our "@long"), double_tap* or multiTap="2" = pressed twice ("@double").
 -- Every vJoy device has the same product GUID, so the game tells them apart only by instance.
+-- An axis is inverted per joystick instance and option group (the catalog's `invert`):
+-- <options type="joystick" instance="1" ...><flight_move_pitch invert="1"/></options>.
 
 local CHANNELS = { "LIVE", "PTU", "EPTU", "TECH-PREVIEW", "HOTFIX" }
 local INSTALLS = {
@@ -220,6 +224,47 @@ local function from_input(input, output_of)
 	return nil
 end
 
+-- How a rebind is pressed: "long", "double" or nil (as the action says).
+local function press_of(rebind)
+	local mode = rebind.attrs.activationMode or ""
+	if string.match(mode, "^delayed_press") or string.match(mode, "^delayed_hold") then
+		return "long"
+	end
+	if string.match(mode, "^double_tap") or rebind.attrs.multiTap == "2" then
+		return "double"
+	end
+	return nil
+end
+
+-- The activationMode we write for a press.
+local MODES = { long = "delayed_press", double = "double_tap" }
+
+-- Makes a rebind pressed as `press` (nil: as the action says), keeping a mode it has already.
+local function set_press(rebind, press)
+	if press_of(rebind) == press then
+		return
+	end
+	rebind.attrs.activationMode = press and MODES[press] or nil
+	rebind.attrs.multiTap = nil
+end
+
+-- "vjoy:1:button:5@long" -> "vjoy:1:button:5", "long".
+local function split_press(output)
+	local base, press = string.match(output, "^(.-)@(%a+)$")
+	if base and MODES[press] then
+		return base, press
+	end
+	return output, nil
+end
+
+-- An input with its press, for the change list: "js1_button5 (long)".
+local function shown(input, press)
+	if press then
+		return input .. " (" .. press .. ")"
+	end
+	return input
+end
+
 local function is_vjoy(device)
 	return string.match(device.output, "^vjoy:%d+$") ~= nil
 end
@@ -260,6 +305,76 @@ local function profiles_of(doc)
 	return xml.find(root, "ActionProfiles") or root
 end
 
+-- ---- inverted axes -----------------------------------------------------------------------------
+
+-- Action id -> the option group that inverts it.
+local function invert_groups(catalog)
+	local out = {}
+	for _, a in catalog.actions do
+		if a.invert then
+			out[a.id] = a.invert
+		end
+	end
+	return out
+end
+
+-- Whether a joystick input is an axis ("js1_x", not a button or hat).
+local function is_axis_input(input)
+	local rest = string.match(input, "^js%d+_(.+)$")
+	return rest ~= nil and AXES_BACK[rest] ~= nil
+end
+
+-- The joystick options of an instance ("1"), if the file has them.
+local function joystick_options(profiles, instance)
+	return xml.find(profiles, "options", { type = "joystick", instance = instance })
+end
+
+-- Whether option group `group` is inverted in `opt`.
+local function is_inverted(opt, group)
+	local el = opt and xml.find(opt, group)
+	return el ~= nil and el.attrs.invert == "1"
+end
+
+-- The whitespace in front of `child` among `parent`'s children.
+local function indent_of(parent, child)
+	local list = parent.children
+	for i, c in list do
+		if c == child then
+			local before = list[i - 1]
+			if type(before) == "string" and string.match(before, "^%s*$") then
+				return before
+			end
+		end
+	end
+	return "\n "
+end
+
+-- Sets or clears the invert of `group` in `opt`, indented one step deeper than `opt`.
+local function set_inverted(profiles, opt, group, on)
+	local el = xml.find(opt, group)
+	if on then
+		if el then
+			el.attrs.invert = "1"
+			return
+		end
+		el = xml.element(group, { invert = "1" }, { "invert" })
+		if #xml.elements(opt) == 0 then
+			local outer = indent_of(profiles, opt)
+			opt.children = { outer .. " ", el, outer }
+		else
+			xml.append(opt, el)
+		end
+	elseif el and el.attrs.invert == "1" then
+		el.attrs.invert = nil
+		if next(el.attrs) == nil and #xml.elements(el) == 0 then
+			xml.remove(opt, el)
+			if #xml.elements(opt) == 0 then
+				opt.children = {}
+			end
+		end
+	end
+end
+
 -- ---- read --------------------------------------------------------------------------------------
 
 plugin.read(function(ctx)
@@ -291,6 +406,7 @@ plugin.read(function(ctx)
 	end
 	-- The player's bindings; a rebind on the keyboard or mouse (an unbind too) replaces the
 	-- game's default there.
+	local groups = invert_groups(ctx.catalog)
 	local binds, rebound = {}, {}
 	for _, map in xml.elements(profiles, "actionmap") do
 		for _, action in xml.elements(map, "action") do
@@ -304,7 +420,16 @@ plugin.read(function(ctx)
 				end
 				local output = from_input(input, output_of)
 				if output then
-					table.insert(binds, { action = id, output = output })
+					local press = press_of(rebind)
+					if press and not is_keys(output) then
+						output ..= "@" .. press
+					end
+					local invert = nil
+					if groups[id] and is_axis_input(input) then
+						local opt = joystick_options(profiles, string.match(input, "^js(%d+)_"))
+						invert = is_inverted(opt, groups[id]) or nil
+					end
+					table.insert(binds, { action = id, output = output, invert = invert })
 				end
 			end
 		end
@@ -384,23 +509,45 @@ plugin.write(function(ctx)
 	for _, id in ctx.cleared or {} do
 		keyed[id] = true
 	end
-	local wanted = {}
+	local groups = invert_groups(ctx.catalog)
+	-- Option groups of the axes the profile binds on our devices: js -> group -> inverted.
+	local inverts, inverted_id = {}, {}
+	local wanted, press_in = {}, {}
 	for _, b in ctx.binds do
 		if is_keys(b.output) then
 			keyed[b.action] = true
 		end
-		local input = to_input(b.output, js_of)
+		local base, press = split_press(b.output)
+		local input = to_input(base, js_of)
+		local group = groups[b.action]
+		if input and group and is_axis_input(input) then
+			local js = device_of(input)
+			inverts[js] = inverts[js] or {}
+			inverts[js][group] = inverts[js][group] or b.invert or false
+			if b.invert then
+				inverted_id[b.action] = true
+			end
+		end
 		if input then
 			wanted[b.action] = wanted[b.action] or {}
 			table.insert(wanted[b.action], input)
+			press_in[b.action] = press_in[b.action] or {}
+			press_in[b.action][canon(input)] = press
 		end
+	end
+	local function press_for(id, input)
+		return press_in[id] and press_in[id][canon(input)]
 	end
 	local real, bound_on = {}, {}
 	for id, inputs in wanted do
 		local list = {}
 		bound_on[id] = {}
 		for _, input in inputs do
-			table.insert(list, canon(input))
+			local text = shown(canon(input), press_for(id, input))
+			if inverted_id[id] and groups[id] and is_axis_input(input) then
+				text ..= " (inverted)"
+			end
+			table.insert(list, text)
 			bound_on[id][device_of(input) or ""] = true
 		end
 		table.sort(list)
@@ -475,10 +622,19 @@ plugin.write(function(ctx)
 							in_file[id][dev] = true
 							if not is_unbind(input) then
 								old[id] = old[id] or {}
-								table.insert(old[id], canon(input))
-								-- An input that stays keeps its element (activationMode, multiTap).
+								local text = shown(canon(input), press_of(rebind))
+								if groups[id] and is_axis_input(input) then
+									if is_inverted(joystick_options(profiles, string.sub(dev, 3)), groups[id]) then
+										text ..= " (inverted)"
+									end
+								end
+								table.insert(old[id], text)
+								-- An input that stays keeps its element (activationMode, multiTap)
+								-- unless it is pressed another way now.
 								if not (want[id] and want[id][canon(input)]) then
 									xml.remove(action, rebind)
+								else
+									set_press(rebind, press_for(id, input))
 								end
 							elseif bound_on[id] and bound_on[id][dev] then
 								xml.remove(action, rebind)
@@ -512,8 +668,21 @@ plugin.write(function(ctx)
 					end
 					for _, input in wanted[id] do
 						if not have[canon(input)] then
-							xml.append(action, xml.element("rebind", { input = input }))
+							local press = press_for(id, input)
+							xml.append(
+								action,
+								xml.element("rebind", { input = input, activationMode = press and MODES[press] or nil }, { "input", "activationMode" })
+							)
 						end
+					end
+				end
+			end
+			-- Inverted axes as the profile has them, on our devices only.
+			for js, by_group in inverts do
+				local opt = ours[js] and joystick_options(profiles, string.sub(js, 3))
+				if opt then
+					for _, group in sorted_keys(by_group) do
+						set_inverted(profiles, opt, group, by_group[group])
 					end
 				end
 			end
@@ -575,7 +744,22 @@ plugin.write(function(ctx)
 		table.insert(out, " </CustomisationUIHeader>")
 		for _, l in links do
 			if product_of[l.output] then
-				table.insert(out, ' <options type="joystick" instance="' .. string.sub(l.game_device, 3) .. '" Product="' .. escape(product_of[l.output]) .. '"/>')
+				local head = ' <options type="joystick" instance="' .. string.sub(l.game_device, 3) .. '" Product="' .. escape(product_of[l.output]) .. '"'
+				local on = {}
+				for _, group in sorted_keys(inverts[l.game_device] or {}) do
+					if inverts[l.game_device][group] then
+						table.insert(on, group)
+					end
+				end
+				if #on == 0 then
+					table.insert(out, head .. "/>")
+				else
+					table.insert(out, head .. ">")
+					for _, group in on do
+						table.insert(out, "  <" .. group .. ' invert="1"/>')
+					end
+					table.insert(out, " </options>")
+				end
 			end
 		end
 		table.insert(out, " <modifiers />")
@@ -587,7 +771,7 @@ plugin.write(function(ctx)
 					maps[map_name] = {}
 					table.insert(order, map_name)
 				end
-				table.insert(maps[map_name], { name = action_name, inputs = wanted[id] })
+				table.insert(maps[map_name], { id = id, name = action_name, inputs = wanted[id] })
 			end
 		end
 		for _, map_name in order do
@@ -595,7 +779,9 @@ plugin.write(function(ctx)
 			for _, a in maps[map_name] do
 				table.insert(out, '  <action name="' .. escape(a.name) .. '">')
 				for _, input in a.inputs do
-					table.insert(out, '   <rebind input="' .. escape(input) .. '"/>')
+					local press = press_for(a.id, input)
+					local mode = if press then ' activationMode="' .. MODES[press] .. '"' else ""
+					table.insert(out, '   <rebind input="' .. escape(input) .. '"' .. mode .. "/>")
 				end
 				table.insert(out, "  </action>")
 			end

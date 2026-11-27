@@ -31,6 +31,17 @@ pub enum LogLevel {
     Critical,
 }
 
+/// Which releases update the program (About page).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateChannel {
+    /// Final releases only.
+    #[default]
+    Release,
+    /// Alpha builds and final releases, whichever is newest.
+    Alpha,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -153,6 +164,15 @@ pub struct Settings {
     /// Hidden option (not in the UI, written only when on): allow several running copies.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub multi_instance: bool,
+    /// `keep_alive_keys` switch a mouse nudge on and off (`keep_alive`), every `keep_alive_secs`;
+    /// keys as `overlay_keys` stores them.
+    pub keep_alive: bool,
+    pub keep_alive_secs: u32,
+    pub keep_alive_keys: Vec<u16>,
+    /// Keep alive brings the window in front at switch-on (the game) forward for each nudge.
+    pub keep_alive_front: bool,
+    /// Which releases update the program.
+    pub update_channel: UpdateChannel,
 }
 
 /// A program on the Applications page; options per program (e.g. its profile) go here.
@@ -425,6 +445,11 @@ impl Default for Settings {
             debounce: BTreeMap::new(),
             leds: BTreeMap::new(),
             experimental: false,
+            keep_alive: false,
+            keep_alive_secs: 60,
+            keep_alive_keys: crate::keep_alive::DEFAULT_KEYS.to_vec(),
+            keep_alive_front: true,
+            update_channel: UpdateChannel::Release,
             game_folders: Vec::new(),
             multi_instance: false,
         }

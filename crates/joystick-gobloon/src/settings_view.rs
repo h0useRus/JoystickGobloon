@@ -137,7 +137,9 @@ pub fn show(
         }
         SettingsTab::Lighting => lighting(ui, i18n, settings, attached.led_devices),
         SettingsTab::About => {
-            about(ui, i18n, logo, updater);
+            if about(ui, i18n, logo, updater, &mut settings.update_channel) {
+                settings.save();
+            }
             None
         }
     }
@@ -420,6 +422,55 @@ fn general(
         .on_hover_text(i18n.tr("settings-warn-gremlin-tip"));
 
     ui.add_space(18.0);
+    section_title(ui, icon::COFFEE, &i18n.tr("settings-group-keep-alive"));
+    let keep_alive = ui
+        .add(style::switch(
+            &mut settings.keep_alive,
+            i18n.tr("settings-keep-alive"),
+        ))
+        .on_hover_text(i18n.tr("settings-keep-alive-tip"));
+    let mut keep_alive_keys = false;
+    ui.add_enabled_ui(settings.keep_alive, |ui| {
+        ui.horizontal(|ui| {
+            let keys: Vec<gob_core::Key> = settings
+                .keep_alive_keys
+                .iter()
+                .map(|&c| crate::overlay::key_from_code(c))
+                .collect();
+            let id = ui.scope_id().with("keep-alive-keys");
+            if let Some(new) = crate::key_capture::keys_field(ui, id, &keys, i18n) {
+                settings.keep_alive_keys = new.into_iter().map(crate::overlay::key_code).collect();
+                keep_alive_keys = true;
+            }
+            ui.label(i18n.tr("settings-keep-alive-keys"));
+        });
+    });
+    let keep_alive_every = ui
+        .add_enabled_ui(settings.keep_alive, |ui| {
+            ui.horizontal(|ui| {
+                let r = ui.add(
+                    style::Spin::new(&mut settings.keep_alive_secs)
+                        .range(crate::keep_alive::MIN_SECS..=crate::keep_alive::MAX_SECS),
+                );
+                ui.label(i18n.tr("settings-keep-alive-every"));
+                r
+            })
+            .inner
+        })
+        .inner
+        .on_hover_text(i18n.tr("settings-keep-alive-every-tip"));
+    let keep_alive_front = crate::platform::window_switching().then(|| {
+        ui.add_enabled_ui(settings.keep_alive, |ui| {
+            ui.add(style::switch(
+                &mut settings.keep_alive_front,
+                i18n.tr("settings-keep-alive-front"),
+            ))
+        })
+        .inner
+        .on_hover_text(i18n.tr("settings-keep-alive-front-tip"))
+    });
+
+    ui.add_space(18.0);
     section_title(ui, icon::FILE_TEXT, &i18n.tr("settings-group-log"));
     let log_level = ui
         .horizontal(|ui| {
@@ -470,11 +521,15 @@ fn general(
         &curves,
         &curve_invert,
         &gremlin,
+        &keep_alive,
+        &keep_alive_every,
     ]
     .iter()
     .any(|r| r.changed())
         || see_hidden.is_some_and(|r| r.changed())
-        || log_level;
+        || keep_alive_front.is_some_and(|r| r.changed())
+        || log_level
+        || keep_alive_keys;
     if changed {
         settings.save();
     }
@@ -591,12 +646,15 @@ fn backends() -> &'static [(&'static str, BackendInfo)] {
     })
 }
 
+/// The About tab; true when the update channel changed.
 fn about(
     ui: &mut egui::Ui,
     i18n: &I18n,
     logo: &egui::TextureHandle,
     updater: &mut crate::update::Updater,
-) {
+    channel: &mut crate::settings::UpdateChannel,
+) -> bool {
+    let mut channel_changed = false;
     let accent = style::accent(ui);
     ui.add_space(12.0);
     ui.vertical_centered(|ui| {
@@ -624,11 +682,40 @@ fn about(
                 .corner_radius(10)
                 .sense(egui::Sense::hover()),
         );
-        // Update check, centered under the version.
+        // Update check, centered under the version, with the channel it follows.
         ui.add_space(6.0);
         ui.scope_builder(
             egui::UiBuilder::new().layout(egui::Layout::top_down(egui::Align::Center)),
-            |ui| updater.ui(ui, i18n),
+            |ui| {
+                use crate::settings::UpdateChannel;
+                let choices = [
+                    (UpdateChannel::Release, "update-channel-release"),
+                    (UpdateChannel::Alpha, "update-channel-alpha"),
+                ];
+                let current = choices
+                    .iter()
+                    .find(|(c, _)| c == channel)
+                    .map_or_else(String::new, |(_, key)| i18n.tr(key));
+                egui::ComboBox::from_id_salt("update-channel")
+                    .selected_text(current)
+                    .show_ui(ui, |ui| {
+                        for (choice, key) in choices {
+                            let item = ui
+                                .selectable_label(*channel == choice, i18n.tr(key))
+                                .on_hover_text(i18n.tr(&format!("{key}-tip")));
+                            if item.clicked() && *channel != choice {
+                                *channel = choice;
+                                channel_changed = true;
+                            }
+                        }
+                    })
+                    .response
+                    .on_hover_text(i18n.tr("update-channel-tip"));
+                if channel_changed {
+                    updater.forget();
+                }
+                updater.ui(ui, i18n, *channel);
+            },
         );
         ui.add_space(10.0);
         ui.label(RichText::new(i18n.tr("about-text")).size(15.0));
@@ -697,4 +784,5 @@ fn about(
         ui.label(RichText::new(i18n.tr("about-gremlin")).weak());
         ui.label(RichText::new(i18n.tr("about-license")).weak());
     });
+    channel_changed
 }

@@ -1,0 +1,20 @@
+# Gunfighter Mk.IV "Modern Combat Edition": MCG Pro grip.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "vkb-gunfighter-mk4-mcg-pro"
+name = "Gunfighter Mk.IV MCG Pro"
+brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Modern Combat Pro"
+
+[[match]]
+vid = 0x231D
+name = "MCG Pro"
+
+[[view]]
+id = "main"
+name = "Stick"
+image = "views/main.png"

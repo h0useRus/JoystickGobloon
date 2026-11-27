@@ -1,0 +1,28 @@
+# Logitech G (formerly Saitek) Flight Multi Panel (autopilot).
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "logitech-flight-multi-panel"
+name = "Flight Multi Panel"
+brand = "Logitech"
+credit = "Product images (c) Logitech"
+version = "1"
+
+[[match]]
+vid = 0x06A3
+pid = 0x0D06
+
+[[match]]
+vid = 0x06A3
+name = "Multi Panel"
+
+[[match]]
+vid = 0x046D
+name = "Multi Panel"
+
+[[match]]
+vid = 0x0738
+name = "Multi Panel"
+
+[[view]]
+id = "main"
+name = "Panel"
+image = "views/main.png"

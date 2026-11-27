@@ -1,0 +1,29 @@
+# Gunfighter Mk.IV "Modern Combat Edition" Ultimate: MCG Ultimate grip (right hand) on the Gunfighter Mk.IV base, as
+# listed by VKB's stores and its forum: Master Mode and Gate Cont mini sticks (modular: either can be a 4-way hat
+# with push instead), Manvr/PC and DC 4-way hats with push, the Reset mini stick under AP DISENGAGE (a hat with push),
+# a red and two grey buttons, a side button, a dual-stage trigger,
+# a metal folding trigger and a brake lever axis; the base gives X/Y, the twist module (optional) a twist axis.
+# The grip sends what VKBDevCfg sets up; inputs.gob is empty until a stick on the factory profile teaches it.
+id = "vkb-gunfighter-mk4-mcg-ultimate"
+name = "Gunfighter Mk.IV MCG Ultimate"
+brand = "VKB"
+credit = "Product images (c) VKB-Sim, used with permission"
+version = "1"
+
+[[match]]
+vid = 0x231D
+name = "Modern Combat Ultimate"
+
+[[match]]
+vid = 0x231D
+name = "MCG Ultimate"
+
+[[view]]
+id = "main"
+name = "Left side"
+image = "views/main.png"
+
+[[view]]
+id = "right"
+name = "Right side"
+image = "views/right.png"

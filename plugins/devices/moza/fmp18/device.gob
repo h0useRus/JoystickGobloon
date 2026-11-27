@@ -1,0 +1,16 @@
+# MOZA FMP18 panel set.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "moza-fmp18"
+name = "FMP18 Panel"
+brand = "MOZA"
+credit = "Product images (c) MOZA Racing"
+version = "1"
+
+[[match]]
+vid = 0x346E
+name = "FMP18"
+
+[[view]]
+id = "main"
+name = "Panel"
+image = "views/main.png"

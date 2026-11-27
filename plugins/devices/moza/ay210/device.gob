@@ -1,0 +1,16 @@
+# MOZA AY210 force feedback yoke base with the MFY yoke handle.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "moza-ay210"
+name = "AY210 Yoke"
+brand = "MOZA"
+credit = "Product images (c) MOZA Racing"
+version = "1"
+
+[[match]]
+vid = 0x346E
+name = "AY210"
+
+[[view]]
+id = "main"
+name = "Yoke"
+image = "views/main.png"

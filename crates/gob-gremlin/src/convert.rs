@@ -17,6 +17,17 @@ pub const FORMAT_VERSION: u32 = 1;
 /// Axis names of virtual joysticks by slot (vJoy's), as `<joystick axes="...">` lists them.
 const AXIS_NAMES: [&str; 8] = ["X", "Y", "Z", "Rx", "Ry", "Rz", "Sl0", "Sl1"];
 
+/// Joystick Gremlin Ex writes its own format (grown from Gremlin R13) with version numbers
+/// that look like R14+: devices carry their inputs (`<device device-guid=".." name="..">` with
+/// modes inside) and the root names the start mode.
+fn is_gremlin_ex(root: &Element) -> bool {
+    root.attr("start_mode").is_some()
+        || root.attr("default_mode").is_some()
+        || named(root, "devices")
+            .any(|d| named(d, "device").any(|d| d.attr("device-guid").is_some()))
+        || named(root, "vjoy-devices").next().is_some()
+}
+
 pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
     if root.name != "profile" {
         return Err(Error::NotAProfile);
@@ -32,6 +43,9 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
         }
         Some(_) => return Err(Error::NotAProfile),
         None => {
+            if is_gremlin_ex(root) {
+                return Err(Error::GremlinEx(version));
+            }
             if number.is_none_or(|v| v < MIN_VERSION) {
                 return Err(Error::UnsupportedVersion(version));
             }
@@ -118,6 +132,10 @@ pub fn profile_from_element(root: &Element) -> Result<Profile, Error> {
                 p.osc_inputs = osc_from(section);
                 Section::OscInputs
             }
+            "picture-cards" => {
+                p.picture_cards = cards_from(section);
+                Section::PictureCards
+            }
             _ => {
                 p.extra.push(section.clone());
                 Section::Extra(p.extra.len() - 1)
@@ -145,6 +163,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
             Section::KeyCombos => p.key_combos.is_empty(),
             Section::GameBindings => p.game_bindings.is_empty(),
             Section::OscInputs => p.osc_inputs.is_empty(),
+            Section::PictureCards => p.picture_cards.is_empty(),
             _ => false,
         };
         if empty {
@@ -190,6 +209,7 @@ pub fn profile_to_element(p: &Profile) -> Element {
             Section::KeyCombos => combos_to(&p.key_combos),
             Section::GameBindings => games_to(&p.game_bindings),
             Section::OscInputs => osc_to(&p.osc_inputs),
+            Section::PictureCards => cards_to(&p.picture_cards),
             Section::Extra(i) => p.extra[i].clone(),
         });
     }
@@ -465,6 +485,70 @@ fn combos_to(combos: &[gob_core::KeyCombo]) -> Element {
                 }),
             )
             .with_attr("id", c.id.to_string())
+        }),
+    )
+}
+
+/// `<picture-cards>`: `<card plugin="vkb-x" view="main" control="hat-2" side="left" y="120"/>`.
+/// Cards without a plugin, view, control or height, or placed already, are skipped.
+fn cards_from(section: &Element) -> Vec<gob_core::PictureCard> {
+    let mut cards: Vec<gob_core::PictureCard> = Vec::new();
+    for e in named(section, "card") {
+        let text = |name: &str| {
+            e.attr(name)
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+        };
+        let (Some(plugin), Some(view), Some(control)) =
+            (text("plugin"), text("view"), text("control"))
+        else {
+            continue;
+        };
+        let Some(y) = e
+            .attr("y")
+            .and_then(|v| v.trim().parse::<f32>().ok())
+            .filter(|y| y.is_finite())
+        else {
+            continue;
+        };
+        let side = if e.attr("side").is_some_and(|v| v.trim() == "right") {
+            gob_core::CardSide::Right
+        } else {
+            gob_core::CardSide::Left
+        };
+        if cards
+            .iter()
+            .any(|c| c.plugin == plugin && c.view == view && c.control == control)
+        {
+            continue;
+        }
+        cards.push(gob_core::PictureCard {
+            plugin,
+            view,
+            control,
+            side,
+            y,
+        });
+    }
+    cards
+}
+
+fn cards_to(cards: &[gob_core::PictureCard]) -> Element {
+    container(
+        "picture-cards",
+        cards.iter().map(|c| {
+            Element::new("card")
+                .with_attr("plugin", &c.plugin)
+                .with_attr("view", &c.view)
+                .with_attr("control", &c.control)
+                .with_attr(
+                    "side",
+                    match c.side {
+                        gob_core::CardSide::Left => "left",
+                        gob_core::CardSide::Right => "right",
+                    },
+                )
+                .with_attr("y", c.y.round().to_string())
         }),
     )
 }

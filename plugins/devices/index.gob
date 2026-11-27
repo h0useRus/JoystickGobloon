@@ -1,0 +1,1628 @@
+# The device plugins Joystick Gobloon downloads for connected devices.
+# Made by `cargo run -p gob-devices --example device_index`; do not edit.
+
+[[device]]
+id = "honeycomb-alpha-flight-controls"
+name = "Alpha Flight Controls"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/alpha-flight-controls"
+
+[[device.match]]
+vid = 10571
+name = "Alpha Flight Controls"
+
+[[device.file]]
+path = "device.gob"
+size = 391
+sha256 = "98c9c13f3ea7098f3e435a2eaa9b341e47462ea52b9d22353cf2ea03b0c6e3f0"
+
+[[device.file]]
+path = "views/main.png"
+size = 352658
+sha256 = "8e5fc97e5ade5c8c56e6fa6429bb9c282a8c149136ffbbdb8b6ab2c516a4e4c8"
+
+[[device]]
+id = "honeycomb-alpha-flight-controls-lite"
+name = "Alpha Flight Controls Lite"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/alpha-flight-controls-lite"
+
+[[device.match]]
+vid = 10571
+name = "Alpha Flight Controls Lite"
+
+[[device.match]]
+vid = 10571
+name = "Alpha Lite"
+
+[[device.file]]
+path = "device.gob"
+size = 455
+sha256 = "bac56419296f7b6ef5854e934395000a8edf17a24ec58687e5d7ba591ff7499f"
+
+[[device.file]]
+path = "views/main.png"
+size = 297653
+sha256 = "4980e15bdd4cccaf1c4f9fefc603d591a1cfbeaf5faa2411552d01c4cadb5d78"
+
+[[device]]
+id = "honeycomb-alpha-flight-controls-xpc"
+name = "Alpha Flight Controls XPC"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/alpha-flight-controls-xpc"
+
+[[device.match]]
+vid = 10571
+name = "Alpha Flight Controls XPC"
+
+[[device.match]]
+vid = 10571
+name = "Alpha XPC"
+
+[[device.file]]
+path = "device.gob"
+size = 464
+sha256 = "366df5b1e14949d3ee0c2938cd60caa47f142ddf944347bc35d8a5701b47209d"
+
+[[device.file]]
+path = "views/main.png"
+size = 350922
+sha256 = "b6412ae39fb6c4ca2212cb3cfdb4b976b3597098a49acbfa632d584e9fbd3f23"
+
+[[device]]
+id = "honeycomb-bravo-throttle-quadrant"
+name = "Bravo Throttle Quadrant"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/bravo-throttle-quadrant"
+
+[[device.match]]
+vid = 10571
+name = "Bravo Throttle"
+
+[[device.file]]
+path = "device.gob"
+size = 389
+sha256 = "dc13c7858f1e53a188c81c6bbee7dfbec6cf8c63ec3e75cbad10ced1081322fe"
+
+[[device.file]]
+path = "views/main.png"
+size = 254486
+sha256 = "29abe5e4a662713915f2ba38113aa7d618fd45d2086f07b04685123ee3f48016"
+
+[[device]]
+id = "honeycomb-bravo-throttle-quadrant-lite"
+name = "Bravo Throttle Quadrant Lite"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/bravo-throttle-quadrant-lite"
+
+[[device.match]]
+vid = 10571
+name = "Bravo Throttle Quadrant Lite"
+
+[[device.match]]
+vid = 10571
+name = "Bravo Lite"
+
+[[device.file]]
+path = "device.gob"
+size = 462
+sha256 = "b617871b64a9ab4e4124838274733e21b6dd4b9a980bdd98d2c6811ee0602dfb"
+
+[[device.file]]
+path = "views/main.png"
+size = 322688
+sha256 = "c6a3678e2a24f821ab28cdbee435e822aa1ce7aea7dc6132f0e13fa5bf01a406"
+
+[[device]]
+id = "honeycomb-charlie-rudder-pedals"
+name = "Charlie Rudder Pedals"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/charlie-rudder-pedals"
+
+[[device.match]]
+vid = 10571
+name = "Charlie"
+
+[[device.file]]
+path = "device.gob"
+size = 374
+sha256 = "a542db292695a422497b759f0084a84f7a88bf9bb9d55775a767c6d30972f8bc"
+
+[[device.file]]
+path = "views/main.png"
+size = 318281
+sha256 = "02402bd20f8bc7b00df4f1ce139905e0898672ab32d64efadb2ab50b2ad3f571"
+
+[[device]]
+id = "honeycomb-echo-aviation-controller"
+name = "Echo Aviation Controller"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/echo-aviation-controller"
+
+[[device.match]]
+vid = 10571
+name = "Echo"
+
+[[device.file]]
+path = "device.gob"
+size = 384
+sha256 = "c79daffb108a01fd9ff88a9d27b5992de34d8f85d0b9af1a85a061d4d75bf9f6"
+
+[[device.file]]
+path = "views/main.png"
+size = 393278
+sha256 = "f72ca9a41f1b811cb6afe5969d97750b6d7a5ae11fcfbad8be778fdb5ced2c30"
+
+[[device]]
+id = "honeycomb-echo-aviation-controller-xpc"
+name = "Echo Aviation Controller XPC"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/echo-aviation-controller-xpc"
+
+[[device.match]]
+vid = 10571
+name = "Echo Aviation Controller XPC"
+
+[[device.match]]
+vid = 10571
+name = "Echo XPC"
+
+[[device.file]]
+path = "device.gob"
+size = 476
+sha256 = "793d0740e34c84ea5dad765272faa8e06d189b9bc5558f34c4f03e5aa7284a60"
+
+[[device.file]]
+path = "views/main.png"
+size = 469938
+sha256 = "6d61fafbf9ba5f60bbde8bc667512c974b3394a3ecd01521c9f22e6719fee2f9"
+
+[[device]]
+id = "honeycomb-foxtrot-aviation-stick"
+name = "Foxtrot Aviation Stick"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/foxtrot-aviation-stick"
+
+[[device.match]]
+vid = 10571
+name = "Foxtrot"
+
+[[device.file]]
+path = "device.gob"
+size = 376
+sha256 = "9f65b947d06f63d46e0ddcb089ffafba40c1f0a158be3ece13ba4196667c0e01"
+
+[[device.file]]
+path = "views/main.png"
+size = 230801
+sha256 = "e1a08154564fd9d66279e667a19300b29802b2909bb907b10afd98fc3d3693f9"
+
+[[device]]
+id = "honeycomb-sierra-tpm-module"
+name = "Sierra TPM Module"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/sierra-tpm-module"
+
+[[device.match]]
+vid = 10571
+name = "Sierra"
+
+[[device.file]]
+path = "device.gob"
+size = 394
+sha256 = "3656597a7223818307ed7f53afc330ee30cee23ebe8be9fb60c1f048f31617fa"
+
+[[device.file]]
+path = "views/main.png"
+size = 422722
+sha256 = "c7075ef83f1baedbee9917970eb3257aaa8bac1808f47094231b93def545ff21"
+
+[[device]]
+id = "logitech-extreme-3d-pro"
+name = "Extreme 3D Pro"
+brand = "Logitech"
+version = "1"
+path = "logitech/extreme-3d-pro"
+
+[[device.match]]
+vid = 1133
+pid = 49685
+
+[[device.match]]
+vid = 1699
+name = "Extreme 3D"
+
+[[device.match]]
+vid = 1133
+name = "Extreme 3D"
+
+[[device.match]]
+vid = 1848
+name = "Extreme 3D"
+
+[[device.file]]
+path = "device.gob"
+size = 492
+sha256 = "ce2275bac94500f216e73975c3efbf0a0787324520f0f930bc312851ffd641ac"
+
+[[device.file]]
+path = "views/main.png"
+size = 372113
+sha256 = "a64ca0aca953ac97f03662944fa6128885e29ef9b063d2d1ed36911f67f6dbd6"
+
+[[device]]
+id = "logitech-flight-multi-panel"
+name = "Flight Multi Panel"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-multi-panel"
+
+[[device.match]]
+vid = 1699
+pid = 3334
+
+[[device.match]]
+vid = 1699
+name = "Multi Panel"
+
+[[device.match]]
+vid = 1133
+name = "Multi Panel"
+
+[[device.match]]
+vid = 1848
+name = "Multi Panel"
+
+[[device.file]]
+path = "device.gob"
+size = 510
+sha256 = "ae370a1b34ca2393af3a2c6c77297bfd4495843fc04846212802f532e41d03b3"
+
+[[device.file]]
+path = "views/main.png"
+size = 96612
+sha256 = "33da05eff1ee5becc497dfb0da480c1fbcdaa0be062506547cc287182327fdc4"
+
+[[device]]
+id = "logitech-flight-radio-panel"
+name = "Flight Radio Panel"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-radio-panel"
+
+[[device.match]]
+vid = 1699
+pid = 3333
+
+[[device.match]]
+vid = 1699
+name = "Radio Panel"
+
+[[device.match]]
+vid = 1133
+name = "Radio Panel"
+
+[[device.match]]
+vid = 1848
+name = "Radio Panel"
+
+[[device.file]]
+path = "device.gob"
+size = 498
+sha256 = "41e96d5b516a8f7eaec987190feccd9c763ced619225ec06d82094ba7219765c"
+
+[[device.file]]
+path = "views/main.png"
+size = 100077
+sha256 = "840ab291855475d3330a6053eaa775f8857dcede0118bbf5645ef6901b714f1d"
+
+[[device]]
+id = "logitech-flight-rudder-pedals"
+name = "Flight Rudder Pedals"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-rudder-pedals"
+
+[[device.match]]
+vid = 1699
+pid = 1891
+
+[[device.match]]
+vid = 1699
+name = "Flight Rudder Pedals"
+
+[[device.match]]
+vid = 1133
+name = "Flight Rudder Pedals"
+
+[[device.match]]
+vid = 1848
+name = "Flight Rudder Pedals"
+
+[[device.file]]
+path = "device.gob"
+size = 532
+sha256 = "84f0a6f2ab3ee1e68291dc22a7030c3b2223abb4ce9f002783e2efbf03d84d84"
+
+[[device.file]]
+path = "views/main.png"
+size = 145727
+sha256 = "9b1617c7f646387c563d9c72ece141fc14b5043d5b26f4f7e04a5bec943f9b25"
+
+[[device]]
+id = "logitech-flight-switch-panel"
+name = "Flight Switch Panel"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-switch-panel"
+
+[[device.match]]
+vid = 1699
+pid = 3431
+
+[[device.match]]
+vid = 1699
+name = "Switch Panel"
+
+[[device.match]]
+vid = 1133
+name = "Switch Panel"
+
+[[device.match]]
+vid = 1848
+name = "Switch Panel"
+
+[[device.file]]
+path = "device.gob"
+size = 504
+sha256 = "82659e7acd559467bb0e37349079383b3bc51edba5230b30efd082a91c2e28dc"
+
+[[device.file]]
+path = "views/main.png"
+size = 143331
+sha256 = "1d351d8206b6692e93ac11c8f2292adc543202873e6b390543ce15bee0bdc2f7"
+
+[[device]]
+id = "logitech-flight-throttle-quadrant"
+name = "Flight Throttle Quadrant"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-throttle-quadrant"
+
+[[device.match]]
+vid = 1699
+pid = 3117
+
+[[device.match]]
+vid = 1699
+name = "Throttle Quadrant"
+
+[[device.match]]
+vid = 1133
+name = "Throttle Quadrant"
+
+[[device.match]]
+vid = 1848
+name = "Throttle Quadrant"
+
+[[device.file]]
+path = "device.gob"
+size = 537
+sha256 = "a3f5106e7f1faa029ee18bdf26540301daa552378ba4232145cf98db97fa7210"
+
+[[device.file]]
+path = "views/main.png"
+size = 268231
+sha256 = "924995a9608432a1aab54464bfe027dab517da54b4008dc026919a7db19f03cb"
+
+[[device]]
+id = "logitech-flight-yoke-system"
+name = "Flight Yoke System"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-yoke-system"
+
+[[device.match]]
+vid = 1699
+pid = 2988
+
+[[device.match]]
+vid = 1699
+name = "Flight Yoke"
+
+[[device.match]]
+vid = 1133
+name = "Flight Yoke"
+
+[[device.match]]
+vid = 1848
+name = "Flight Yoke"
+
+[[device.file]]
+path = "device.gob"
+size = 531
+sha256 = "da41d580c53805e1978698dc3c158464df9ef2ae17db5a8c8469de6531336790"
+
+[[device.file]]
+path = "views/main.png"
+size = 176827
+sha256 = "5072a5f92730f822a58f571d989d5b3fec61284a7ea70f1910e1c3a53b66c32f"
+
+[[device]]
+id = "logitech-x52"
+name = "X52 H.O.T.A.S."
+brand = "Logitech"
+version = "1"
+path = "logitech/x52"
+
+[[device.match]]
+vid = 1699
+pid = 1884
+
+[[device.match]]
+vid = 1699
+pid = 597
+
+[[device.match]]
+vid = 1699
+name = "X52 H.O.T.A.S."
+
+[[device.match]]
+vid = 1133
+name = "X52 H.O.T.A.S."
+
+[[device.match]]
+vid = 1848
+name = "X52 H.O.T.A.S."
+
+[[device.match]]
+vid = 1699
+name = "X52 Flight Control"
+
+[[device.match]]
+vid = 1133
+name = "X52 Flight Control"
+
+[[device.match]]
+vid = 1848
+name = "X52 Flight Control"
+
+[[device.file]]
+path = "device.gob"
+size = 698
+sha256 = "f0137c36a15c606638797aab8b0f4a3322af8a63b06acff17fb5064aaffa66a1"
+
+[[device.file]]
+path = "views/main.png"
+size = 183662
+sha256 = "c939c192a552c4b900301c0b7c0df49b054897a832bf48fbe0ad9fd5f5d522ea"
+
+[[device]]
+id = "logitech-x52-pro"
+name = "X52 Professional H.O.T.A.S."
+brand = "Logitech"
+version = "1"
+path = "logitech/x52-pro"
+
+[[device.match]]
+vid = 1699
+pid = 1890
+
+[[device.match]]
+vid = 1699
+name = "X52 Professional"
+
+[[device.match]]
+vid = 1133
+name = "X52 Professional"
+
+[[device.match]]
+vid = 1848
+name = "X52 Professional"
+
+[[device.match]]
+vid = 1699
+name = "X52 Pro"
+
+[[device.match]]
+vid = 1133
+name = "X52 Pro"
+
+[[device.match]]
+vid = 1848
+name = "X52 Pro"
+
+[[device.file]]
+path = "device.gob"
+size = 664
+sha256 = "2e48b4fb2687ea05ba2fe2a723668a8348507aedf2e11ba31805e02f199446ba"
+
+[[device.file]]
+path = "views/main.png"
+size = 255360
+sha256 = "a04be1059041483bc4a409bee1ac508e04d5aad3f4a38ff1172be42316920856"
+
+[[device]]
+id = "logitech-x56-stick"
+name = "X56 Stick"
+brand = "Logitech"
+version = "1"
+path = "logitech/x56-stick"
+
+[[device.match]]
+vid = 1848
+pid = 8737
+
+[[device.match]]
+vid = 1699
+name = "X56 H.O.T.A.S. Stick"
+
+[[device.match]]
+vid = 1133
+name = "X56 H.O.T.A.S. Stick"
+
+[[device.match]]
+vid = 1848
+name = "X56 H.O.T.A.S. Stick"
+
+[[device.match]]
+vid = 1699
+name = "X-56 Rhino Stick"
+
+[[device.match]]
+vid = 1133
+name = "X-56 Rhino Stick"
+
+[[device.match]]
+vid = 1848
+name = "X-56 Rhino Stick"
+
+[[device.match]]
+vid = 1699
+name = "X56 Stick"
+
+[[device.match]]
+vid = 1133
+name = "X56 Stick"
+
+[[device.match]]
+vid = 1848
+name = "X56 Stick"
+
+[[device.file]]
+path = "device.gob"
+size = 815
+sha256 = "d1ca0b632d1ddd74404bcf803ef4903f41b8d1936da7f7e429dc53a21c14d575"
+
+[[device.file]]
+path = "views/main.png"
+size = 197738
+sha256 = "ae6f6b885a2b78bde81f679a98e8771c97da15e54e91926fd6ec5890315231ef"
+
+[[device]]
+id = "logitech-x56-throttle"
+name = "X56 Throttle"
+brand = "Logitech"
+version = "1"
+path = "logitech/x56-throttle"
+
+[[device.match]]
+vid = 1848
+pid = 41505
+
+[[device.match]]
+vid = 1699
+name = "X56 H.O.T.A.S. Throttle"
+
+[[device.match]]
+vid = 1133
+name = "X56 H.O.T.A.S. Throttle"
+
+[[device.match]]
+vid = 1848
+name = "X56 H.O.T.A.S. Throttle"
+
+[[device.match]]
+vid = 1699
+name = "X-56 Rhino Throttle"
+
+[[device.match]]
+vid = 1133
+name = "X-56 Rhino Throttle"
+
+[[device.match]]
+vid = 1848
+name = "X-56 Rhino Throttle"
+
+[[device.match]]
+vid = 1699
+name = "X56 Throttle"
+
+[[device.match]]
+vid = 1133
+name = "X56 Throttle"
+
+[[device.match]]
+vid = 1848
+name = "X56 Throttle"
+
+[[device.file]]
+path = "device.gob"
+size = 851
+sha256 = "18c22f66ca894c793104ef1174886931814a2d6203f8c3435af14b2194601310"
+
+[[device.file]]
+path = "views/main.png"
+size = 292129
+sha256 = "71078b720d3580e07a2644bc98377c4928c487519ea49720a929c82f2d934f65"
+
+[[device]]
+id = "moza-ab6"
+name = "AB6 Flight Simulator"
+brand = "MOZA"
+version = "1"
+path = "moza/ab6"
+
+[[device.match]]
+vid = 13422
+name = "AB6"
+
+[[device.file]]
+path = "device.gob"
+size = 352
+sha256 = "541ffa50e46c5814c01b8e9c0997d0b4abdf9dc14462abdc9a7606da8699fba2"
+
+[[device.file]]
+path = "views/main.png"
+size = 176245
+sha256 = "142816c3f7dd5607692d3948db3f43865e8fe305a8d77ea448d85cf1c12c0566"
+
+[[device]]
+id = "moza-ay210"
+name = "AY210 Yoke"
+brand = "MOZA"
+version = "1"
+path = "moza/ay210"
+
+[[device.match]]
+vid = 13422
+name = "AY210"
+
+[[device.file]]
+path = "device.gob"
+size = 351
+sha256 = "9e038a6ee468472074bdc44c6437e72f24364a531c6a725a5e1005310e938f7b"
+
+[[device.file]]
+path = "views/main.png"
+size = 308386
+sha256 = "abe301b46a283764cc038b60aa86b898744017c06c01e2f7e099146b3eaa7095"
+
+[[device]]
+id = "moza-ay90"
+name = "AY90 Yoke"
+brand = "MOZA"
+version = "1"
+path = "moza/ay90"
+
+[[device.match]]
+vid = 13422
+name = "AY90"
+
+[[device.file]]
+path = "device.gob"
+size = 332
+sha256 = "2cffeb15c31c0927e12700bdb6ada91a0f4db6751b026021f7e9c3255937baef"
+
+[[device.file]]
+path = "views/main.png"
+size = 273550
+sha256 = "ad656c14ed51cb6c7d3801c40f950a9ab01882e30da334c6670964ae90260b81"
+
+[[device]]
+id = "moza-fmp18"
+name = "FMP18 Panel"
+brand = "MOZA"
+version = "1"
+path = "moza/fmp18"
+
+[[device.match]]
+vid = 13422
+name = "FMP18"
+
+[[device.file]]
+path = "device.gob"
+size = 313
+sha256 = "0576f28fda13da8c853051b5771bea7504f3ec192de0e3e3bf576744d4891cb3"
+
+[[device.file]]
+path = "views/main.png"
+size = 574841
+sha256 = "01b1d7fa6254542bbe41f362ce57e08f2407a001170ee167957de152a825862f"
+
+[[device]]
+id = "moza-mgx1000"
+name = "MGX1000 Instrument Panel"
+brand = "MOZA"
+version = "1"
+path = "moza/mgx1000"
+
+[[device.match]]
+vid = 13422
+name = "MGX1000"
+
+[[device.file]]
+path = "device.gob"
+size = 339
+sha256 = "06c04ad9d6ad2948784a88458cb57468fe79988456a3d85a1829302362106e75"
+
+[[device.file]]
+path = "views/main.png"
+size = 771405
+sha256 = "87f72c9469a511a1b580402470b3244592d5741ea08610e3798f36972022acd6"
+
+[[device]]
+id = "moza-mrp-rudder-pedals"
+name = "MRP Rudder Pedals"
+brand = "MOZA"
+version = "1"
+path = "moza/mrp-rudder-pedals"
+
+[[device.match]]
+vid = 13422
+name = "MRP"
+
+[[device.file]]
+path = "device.gob"
+size = 332
+sha256 = "171af99f47e48671615bd9f83ab90443c11109daedca7b20617d17722339bbdd"
+
+[[device.file]]
+path = "views/main.png"
+size = 343057
+sha256 = "b84f4a17fdf6b82e0736f319feb8924a5079f8381803ab905c58944fd49f771a"
+
+[[device]]
+id = "moza-mtp-throttle"
+name = "MTP Throttle"
+brand = "MOZA"
+version = "1"
+path = "moza/mtp-throttle"
+
+[[device.match]]
+vid = 13422
+name = "MTP"
+
+[[device.file]]
+path = "device.gob"
+size = 319
+sha256 = "27850d44f8ee643f1b2b7470d95164be48466d25587b016d452f8dfe43d28f18"
+
+[[device.file]]
+path = "views/main.png"
+size = 274638
+sha256 = "3740e844d5a78b5c5890405ba5db9cfbee7203107c2c2e81a4c189b141b24db3"
+
+[[device]]
+id = "moza-mtq-throttle"
+name = "MTQ Throttle Quadrant"
+brand = "MOZA"
+version = "1"
+path = "moza/mtq-throttle"
+
+[[device.match]]
+vid = 13422
+name = "MTQ"
+
+[[device.file]]
+path = "device.gob"
+size = 337
+sha256 = "28c4fa3898f3594b645abad44ff3867593caba44d10586ba38b75557a1daeb7f"
+
+[[device.file]]
+path = "views/main.png"
+size = 310678
+sha256 = "e6bd64ddc12a45c8b5ac4d51160afde97fd9fcc6f3c645e50a16c44b9d8192cf"
+
+[[device]]
+id = "virpil-cdt-aeromax-l"
+name = "CDT-AEROMAX (left)"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/cdt-aeromax-l"
+
+[[device.match]]
+vid = 13124
+name = "L-VPC Stick CDT-AEROMAX"
+
+[[device.match]]
+vid = 13124
+name = "CDT-AEROMAX L"
+
+[[device.file]]
+path = "device.gob"
+size = 459
+sha256 = "193ed4ba2f6508e80f142a3b6e4aa25feed261356e54f3cdffa9f5430df7c764"
+
+[[device.file]]
+path = "views/main.png"
+size = 293689
+sha256 = "2acc54afc9015ce762467341a7baadffa683c66e7c69c917e8701277cf1de11f"
+
+[[device]]
+id = "virpil-cdt-aeromax-r"
+name = "CDT-AEROMAX (right)"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/cdt-aeromax-r"
+
+[[device.match]]
+vid = 13124
+name = "CDT-AEROMAX"
+
+[[device.match]]
+vid = 13124
+name = "R-VPC Stick CDT-AEROMAX"
+
+[[device.file]]
+path = "device.gob"
+size = 459
+sha256 = "83408cec4addb4a1a3fb74824b309e874855ad1b8af9789d3f9a9c50db978cb9"
+
+[[device.file]]
+path = "views/main.png"
+size = 315162
+sha256 = "c8429cf59b8018922d793404cce77505de969b0835843ddc15a535b57c100f59"
+
+[[device]]
+id = "virpil-cdt-vmax-throttle"
+name = "CDT-VMAX Throttle"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/cdt-vmax-throttle"
+
+[[device.match]]
+vid = 13124
+name = "VMAX"
+
+[[device.file]]
+path = "device.gob"
+size = 345
+sha256 = "7fece7e6f801c23940f383b5b996bcde30d7102864d8e6dd1e7b26bed0e10fcb"
+
+[[device.file]]
+path = "views/main.png"
+size = 514349
+sha256 = "23a9a6285a6efe4362d7b877192bdc81ca799217ae1247448ee080bc80f12e4c"
+
+[[device]]
+id = "virpil-control-panel-1"
+name = "Control Panel #1"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/control-panel-1"
+
+[[device.match]]
+vid = 13124
+name = "Panel #1"
+
+[[device.file]]
+path = "device.gob"
+size = 352
+sha256 = "28de49bd9a186ad1b49f57e8b4672aefd38f8c3bf86d1157fa1b61110c0b590a"
+
+[[device.file]]
+path = "views/main.png"
+size = 458902
+sha256 = "0e13e8b08578cb2c247856e9d4f9353de8dcef82d85026dac0bd5ea5e8f7769d"
+
+[[device]]
+id = "virpil-control-panel-2"
+name = "Control Panel #2"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/control-panel-2"
+
+[[device.match]]
+vid = 13124
+name = "Panel #2"
+
+[[device.file]]
+path = "device.gob"
+size = 352
+sha256 = "7693c6a4d9cb44b171218cf6c1b62a1a8e9bc363d7b64a122b7b95c6505bf4e7"
+
+[[device.file]]
+path = "views/main.png"
+size = 488948
+sha256 = "3f6d3a3f88c98b9ddb35a2951c9e2dbc4972d764923a36b053a49dae253e79bb"
+
+[[device]]
+id = "virpil-control-panel-3"
+name = "Control Panel #3"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/control-panel-3"
+
+[[device.match]]
+vid = 13124
+name = "Panel #3"
+
+[[device.file]]
+path = "device.gob"
+size = 352
+sha256 = "2466bbdddc270b696948f41f653719754b56b98bdd70e01e53cee483809e89cd"
+
+[[device.file]]
+path = "views/main.png"
+size = 766614
+sha256 = "b4933d6f73c536ad5ed0edc2877f09dac8dbc5c585784b869a8c46a3b655a490"
+
+[[device]]
+id = "virpil-mongoost-50cm4-throttle"
+name = "MongoosT-50CM4 Throttle"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/mongoost-50cm4-throttle"
+
+[[device.match]]
+vid = 13124
+name = "50CM4"
+
+[[device.file]]
+path = "device.gob"
+size = 364
+sha256 = "7bc9039b6ee73b5434f90462f3c76c8f9e21bdf9a0b122f2e229ef3b0d57234f"
+
+[[device.file]]
+path = "views/main.png"
+size = 488853
+sha256 = "f1ec0a36de49c25a883f27fd05e3ebeb2fbc2b489b0a4d3911c28ad0ee231d9f"
+
+[[device]]
+id = "virpil-r1-falcon"
+name = "R1-FALCON Rudder Pedals"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/r1-falcon"
+
+[[device.match]]
+vid = 13124
+name = "FALCON"
+
+[[device.file]]
+path = "device.gob"
+size = 349
+sha256 = "a001ed79681d88726431fed593b417d3704e9d92ec4d174ff8fc3535b73d7573"
+
+[[device.file]]
+path = "views/main.png"
+size = 524019
+sha256 = "a4c97b0cbd79bcc674279b9e25be28f921554e09ee0ce25f8d8d1a869637fbd0"
+
+[[device]]
+id = "virpil-r1-legend"
+name = "R1-LEGEND Rudder Pedals"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/r1-legend"
+
+[[device.match]]
+vid = 13124
+name = "LEGEND"
+
+[[device.file]]
+path = "device.gob"
+size = 349
+sha256 = "9de926b46a2c237f687339ac7cded3197e9328431d49026c477d6b1ea9d91b37"
+
+[[device.file]]
+path = "views/main.png"
+size = 728205
+sha256 = "9419bd07790da444496d54864fcf5ee056d14f3b58c1c367b152e0ad433cb4cf"
+
+[[device]]
+id = "virpil-vmax-prime-throttle"
+name = "VMAX Prime Throttle"
+brand = "VIRPIL"
+version = "1"
+path = "virpil/vmax-prime-throttle"
+
+[[device.match]]
+vid = 13124
+name = "VMAX Prime"
+
+[[device.file]]
+path = "device.gob"
+size = 357
+sha256 = "23905c5378f0a4a30fd02a579fee653b9da20dd01cda08ec6dfb9b7d78f833b9"
+
+[[device.file]]
+path = "views/main.png"
+size = 410317
+sha256 = "cc4d988224ec5551dae850e1d927816f3e1a22cd35a7549470acd602b6015f4e"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-f14"
+name = "Gladiator NXT EVO F-14"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-f14"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO F14"
+
+[[device.file]]
+path = "device.gob"
+size = 418
+sha256 = "7aeb1216045ab194aeeb0fbf77e5490192593b06caba3f70a28ee1e0ed2fe39e"
+
+[[device.file]]
+path = "views/main.png"
+size = 120416
+sha256 = "3a9e0419536ca015a3eaf30ed93af7a9d2955848c574323056b1f5299c8f28e9"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-kg12"
+name = "Gladiator NXT EVO WWII (KG12)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-kg12"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO KG12"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO WWII"
+
+[[device.file]]
+path = "device.gob"
+size = 479
+sha256 = "ad4b9546f1e655ede061cc3e779462e4e101798fc1edeb4ed67c1274822d4c9f"
+
+[[device.file]]
+path = "views/main.png"
+size = 128268
+sha256 = "431aa6cae26b03cc07e38dff241bf192c6de6f93726977ccfa04d0baf2881c95"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-l"
+name = "Gladiator NXT EVO (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-l"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO L"
+
+[[device.file]]
+path = "device.gob"
+size = 2627
+sha256 = "49a523038f661f22fc23011739919500705bb3f83b1ad0246f17d5710bb58df2"
+
+[[device.file]]
+path = "inputs.gob"
+size = 717
+sha256 = "a73a63cfcfa2e3bf029c8fda3ac8d234c2c103a28880a87811415e2e9acafffd"
+
+[[device.file]]
+path = "views/main.png"
+size = 278014
+sha256 = "d967d76e02c0419c86de96534dbf10158b81feb18c74b2a8270242e0f0368173"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-ot-l"
+name = "Gladiator NXT EVO Omni Throttle (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-ot-l"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO OT L"
+
+[[device.file]]
+path = "device.gob"
+size = 3080
+sha256 = "79ab0c2d600c3497477e7c662f7f6e061d1b5c5e0fc0967b7bee2f3fad222429"
+
+[[device.file]]
+path = "inputs.gob"
+size = 717
+sha256 = "a73a63cfcfa2e3bf029c8fda3ac8d234c2c103a28880a87811415e2e9acafffd"
+
+[[device.file]]
+path = "views/main.png"
+size = 331831
+sha256 = "3499f93bdb50bfdf073428f2a2476d4555c7f2bf361f444593f37472581ae9ce"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-ot-r"
+name = "Gladiator NXT EVO Omni Throttle (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-ot-r"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO OT R"
+
+[[device.file]]
+path = "device.gob"
+size = 2709
+sha256 = "244bee42490a9acb003fdf824e017ff76bc03bd8a40f8f7efacf8bdffa7fb8ee"
+
+[[device.file]]
+path = "inputs.gob"
+size = 717
+sha256 = "a73a63cfcfa2e3bf029c8fda3ac8d234c2c103a28880a87811415e2e9acafffd"
+
+[[device.file]]
+path = "views/main.png"
+size = 325729
+sha256 = "00de99e666087123d8e40aca63cf00a52daa93a96cdd4db4182078458bb07c15"
+
+[[device]]
+id = "vkb-gladiator-nxt-evo-r"
+name = "Gladiator NXT EVO (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/gladiator-nxt-evo-r"
+
+[[device.match]]
+vid = 8989
+name = "Gladiator EVO R"
+
+[[device.file]]
+path = "device.gob"
+size = 2628
+sha256 = "0076614638f8ca39a1ce5fcb557984cd5816d2b0e02e027110b14a35d04f8992"
+
+[[device.file]]
+path = "inputs.gob"
+size = 717
+sha256 = "a73a63cfcfa2e3bf029c8fda3ac8d234c2c103a28880a87811415e2e9acafffd"
+
+[[device.file]]
+path = "views/main.png"
+size = 289743
+sha256 = "94e081a0a253cd2463bd5f08136da145ed87b2d0c6f645eca07208edf2789541"
+
+[[device]]
+id = "vkb-gunfighter-mk4-f14"
+name = "Gunfighter Mk.IV F-14"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-f14"
+
+[[device.match]]
+vid = 8989
+name = "Gunfighter F14"
+
+[[device.match]]
+vid = 8989
+name = "Gunfighter F-14"
+
+[[device.file]]
+path = "device.gob"
+size = 428
+sha256 = "26ad552c333f9e02c7ee30775c8209b7ed6546181e260e40ad166233f66ab54a"
+
+[[device.file]]
+path = "views/main.png"
+size = 213869
+sha256 = "c95f5a3c4dd6679e1532023af8494c19f32487e7a446cbeaa0e5af994a29e49f"
+
+[[device]]
+id = "vkb-gunfighter-mk4-kg12"
+name = "Gunfighter Mk.IV WWII (KG12)"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-kg12"
+
+[[device.match]]
+vid = 8989
+name = "Gunfighter KG12"
+
+[[device.match]]
+vid = 8989
+name = "Gunfighter WWII"
+
+[[device.file]]
+path = "device.gob"
+size = 448
+sha256 = "3b4b54a7870399a6f3b135f3285e9b9312835131ebf4654802317ebed5f66280"
+
+[[device.file]]
+path = "views/main.png"
+size = 222716
+sha256 = "b6f3832dd349133d8aae0bf4b954cdda8314fb9784262f21b8c40073987f4d5b"
+
+[[device]]
+id = "vkb-gunfighter-mk4-mcg-pro"
+name = "Gunfighter Mk.IV MCG Pro"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-mcg-pro"
+
+[[device.match]]
+vid = 8989
+name = "Modern Combat Pro"
+
+[[device.match]]
+vid = 8989
+name = "MCG Pro"
+
+[[device.file]]
+path = "device.gob"
+size = 446
+sha256 = "17cf1dde6f560f97c8299b83be3baeb413dbb2d189ab24472f0863d6595ed02d"
+
+[[device.file]]
+path = "views/main.png"
+size = 207286
+sha256 = "c4fe366d1eeac6fff7f51d1eb09eded578eb7b4f012b491be4c0f8899419ce55"
+
+[[device]]
+id = "vkb-gunfighter-mk4-mcg-ultimate"
+name = "Gunfighter Mk.IV MCG Ultimate"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-mcg-ultimate"
+
+[[device.match]]
+vid = 8989
+name = "Modern Combat Ultimate"
+
+[[device.match]]
+vid = 8989
+name = "MCG Ultimate"
+
+[[device.file]]
+path = "device.gob"
+size = 1042
+sha256 = "1ad544bd9cc7a84b66b203ffeab01e8a3fd08f7dc6633e95df5cdf2725eecad3"
+
+[[device.file]]
+path = "inputs.gob"
+size = 62
+sha256 = "7cca6ff0ed9ed00d1d92d054d772982d9d99d13a94a5ec6d4160c1dd1cc88601"
+
+[[device.file]]
+path = "views/main.png"
+size = 205601
+sha256 = "178689450ee26aab83751dcae85bd978465e2ae2daf0f0be24bb4aab1742cd7a"
+
+[[device.file]]
+path = "views/right.png"
+size = 208284
+sha256 = "8e7388479105bae463a737ffa4302ced1c44b2ae27f8d61455a14551f06852a4"
+
+[[device]]
+id = "vkb-gunfighter-mk4-scg-l"
+name = "Gunfighter Mk.IV SCG (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-scg-l"
+
+[[device.match]]
+vid = 8989
+name = "Space Gunfighter L"
+
+[[device.file]]
+path = "device.gob"
+size = 413
+sha256 = "06e7a388d34f4945372126fffd8977f188b7a64519c85da06b0c726e2671cb2c"
+
+[[device.file]]
+path = "views/main.png"
+size = 221342
+sha256 = "fd7c4131c7356b17890e3916356e1c3c62de9b334059e7f7ec41256d7dc9c5df"
+
+[[device]]
+id = "vkb-gunfighter-mk4-scg-r"
+name = "Gunfighter Mk.IV SCG (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/gunfighter-mk4-scg-r"
+
+[[device.match]]
+vid = 8989
+name = "Space Gunfighter"
+
+[[device.file]]
+path = "device.gob"
+size = 413
+sha256 = "682350a63b0c3936ed244ed4c7469bf2ad66b3e1ea2e0935b600e8b5bf319def"
+
+[[device.file]]
+path = "views/main.png"
+size = 215608
+sha256 = "97aa6e45673e648b5b5583651418dc677779bb6b25060206a6b1882caebac049"
+
+[[device]]
+id = "vkb-stecs-modern-max"
+name = "STECS Modern Throttle Max"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-modern-max"
+
+[[device.match]]
+vid = 8989
+name = "Modern Throttle Max"
+
+[[device.file]]
+path = "device.gob"
+size = 411
+sha256 = "670f630a78077a1b38094475ae5eb282516e5c084fc9d19c68c6261d82a22d99"
+
+[[device.file]]
+path = "views/main.png"
+size = 566389
+sha256 = "e77d79d036ededee6ef13f123fc9072632c2ae80ef798b7f947b5ab2a7d61a28"
+
+[[device]]
+id = "vkb-stecs-modern-mini"
+name = "STECS Modern Throttle Mini"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-modern-mini"
+
+[[device.match]]
+vid = 8989
+name = "Modern Throttle Mini"
+
+[[device.file]]
+path = "device.gob"
+size = 394
+sha256 = "224259a66170a40905b6addef1de4abda1c70421b58cee10b2836b21ad2c9406"
+
+[[device.file]]
+path = "views/main.png"
+size = 389345
+sha256 = "ab9f2c427099e926a7b9004e944d267dddeddaa9812828ec8221a8ea644d3c99"
+
+[[device]]
+id = "vkb-stecs-modern-mini-plus"
+name = "STECS Modern Throttle Mini Plus"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-modern-mini-plus"
+
+[[device.match]]
+vid = 8989
+name = "Modern Throttle Mini Plus"
+
+[[device.file]]
+path = "device.gob"
+size = 414
+sha256 = "c794bd3b95c33e7a851068fc6b3fefc412785e2692326abaa5e658159799d40d"
+
+[[device.file]]
+path = "views/main.png"
+size = 435752
+sha256 = "3df499b85647d0f73860da5198f60c07fa9f76b854622083cfe5e5b9fed67d96"
+
+[[device]]
+id = "vkb-stecs-modern-standard"
+name = "STECS Modern Throttle Standard"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-modern-standard"
+
+[[device.match]]
+vid = 8989
+name = "Modern Throttle Standard"
+
+[[device.file]]
+path = "device.gob"
+size = 422
+sha256 = "d9384e5ae514568e95909d3a7a8d119e32f6f0c32f65abe5b6b6b9a1507be721"
+
+[[device.file]]
+path = "views/main.png"
+size = 494189
+sha256 = "ae765726c7c54a7118a33409253d7f13825b30f03bb7c2e9a1abc0bd33b1ae30"
+
+[[device]]
+id = "vkb-stecs-space-max-l"
+name = "STECS Space Throttle Max (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-max-l"
+
+[[device.match]]
+vid = 8989
+name = "Space-L Throttle Max"
+
+[[device.file]]
+path = "device.gob"
+size = 412
+sha256 = "e40a6160cb2297373868df188d1ae87a27b5755adb168a1ace97a246385ffc10"
+
+[[device.file]]
+path = "views/main.png"
+size = 303374
+sha256 = "87c4d83042c0deb75b9adaefcc3c74f5f1abfea7fae0eaffe55a1cb49971e532"
+
+[[device]]
+id = "vkb-stecs-space-max-r"
+name = "STECS Space Throttle Max (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-max-r"
+
+[[device.match]]
+vid = 8989
+name = "Space-R Throttle Max"
+
+[[device.file]]
+path = "device.gob"
+size = 414
+sha256 = "947adccc1c8c26158684081ec2f8a4434ac328de19c27386d81ebf36df48f7ef"
+
+[[device.file]]
+path = "views/main.png"
+size = 548385
+sha256 = "62c6f5dc1c7c4f9bf3ba9fd518dd701c04b104f45b1d9e90b55ae558c3953629"
+
+[[device]]
+id = "vkb-stecs-space-mini-l"
+name = "STECS Space Throttle Mini (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-mini-l"
+
+[[device.match]]
+vid = 8989
+name = "Space-L Throttle Mini"
+
+[[device.file]]
+path = "device.gob"
+size = 416
+sha256 = "2bdd2e6d253aa5e90e2064942701bb0d8bd116f08c98fcb675cc715d5ca08ced"
+
+[[device.file]]
+path = "views/main.png"
+size = 288423
+sha256 = "6e0a89d69321c121e080f3ffeae54a8b0db9a3051aecb3d1d2ca4d0631a3aa1e"
+
+[[device]]
+id = "vkb-stecs-space-mini-plus-l"
+name = "STECS Space Throttle Mini Plus (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-mini-plus-l"
+
+[[device.match]]
+vid = 8989
+name = "Space-L Throttle Mini Plus"
+
+[[device.file]]
+path = "device.gob"
+size = 436
+sha256 = "860d92b280bd3d5f9fdaa9c0c0e0d76b5d67bbb8e8ac419214a997075acf9211"
+
+[[device.file]]
+path = "views/main.png"
+size = 361797
+sha256 = "612fb156ed8492b0e936cba5aecfc5724b28d97ecee337ea88013794a2a3d854"
+
+[[device]]
+id = "vkb-stecs-space-mini-plus-r"
+name = "STECS Space Throttle Mini Plus (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-mini-plus-r"
+
+[[device.match]]
+vid = 8989
+name = "Space-R Throttle Mini Plus"
+
+[[device.file]]
+path = "device.gob"
+size = 438
+sha256 = "3a580bd6f861ac3c27ac7a66bca18bfb9a5f05a871092103bb85bee500a17a2b"
+
+[[device.file]]
+path = "views/main.png"
+size = 345983
+sha256 = "12c0ae8145563425cd72c1912dbfd3fd66a13b19d864f1ffcb0dcf3b653a577f"
+
+[[device]]
+id = "vkb-stecs-space-mini-r"
+name = "STECS Space Throttle Mini (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-mini-r"
+
+[[device.match]]
+vid = 8989
+name = "Space-R Throttle Mini"
+
+[[device.file]]
+path = "device.gob"
+size = 418
+sha256 = "90177aad9e291836b7c8a195b8f82cedc1086213f8d90767773e11b200b8f4a1"
+
+[[device.file]]
+path = "views/main.png"
+size = 493378
+sha256 = "821f86d95846dc9db80f67c650d5002e0e5ba460a2fc5c5e44ec2f2f6bcbe737"
+
+[[device]]
+id = "vkb-stecs-space-standard-l"
+name = "STECS Space Throttle Standard (left)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-standard-l"
+
+[[device.match]]
+vid = 8989
+name = "Space-L Throttle Standard"
+
+[[device.file]]
+path = "device.gob"
+size = 432
+sha256 = "2c8813ebec5519c00ac6e4ac224c400fdc5c2f4b5f42a419daf3cbb3898335a1"
+
+[[device.file]]
+path = "views/main.png"
+size = 308914
+sha256 = "d4692b0f388c9a86161e9542e40643ab561daace44749248436be7744852b6bb"
+
+[[device]]
+id = "vkb-stecs-space-standard-r"
+name = "STECS Space Throttle Standard (right)"
+brand = "VKB"
+version = "1"
+path = "vkb/stecs-space-standard-r"
+
+[[device.match]]
+vid = 8989
+name = "Space-R Throttle Standard"
+
+[[device.file]]
+path = "device.gob"
+size = 434
+sha256 = "92a8abf58ea1a87f1a885c5e092c6540d0b962ece4e219ffe3eba79555deccd7"
+
+[[device.file]]
+path = "views/main.png"
+size = 301572
+sha256 = "823492f97a93963a0d531494ab378a03c77c0b824d70b6a8b949d8b0dcba4efe"
+
+[[device]]
+id = "vkb-t-rudder-mk5"
+name = "T-Rudder Mk.V"
+brand = "VKB"
+version = "1"
+path = "vkb/t-rudder-mk5"
+
+[[device.match]]
+vid = 8989
+name = "T-Rudder"
+
+[[device.file]]
+path = "device.gob"
+size = 349
+sha256 = "4d9d77be083805151121e87c356e9cec5f9a56aa3ab599ed79246482aa391fe1"
+
+[[device.file]]
+path = "views/main.png"
+size = 534073
+sha256 = "7c28c92f378c784a77b2fcc7ca78f578ac6649715b53210a3cbf14ed5f5dd1c7"

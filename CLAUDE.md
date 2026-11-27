@@ -7,7 +7,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
 
 ## Layout
 - gob-ui + gob-i18n live in the shared repo h0useRus/gobloon-common-ui (also used by Keyboard Gobloon), taken by git tag
-  in `[workspace.dependencies]` (now `v0.4.0`); move the tag on purpose. Local work on both: clone it to
+  in `[workspace.dependencies]` (now `v0.6.0`); move the tag on purpose. Local work on both: clone it to
   `..\gobloon-common-ui`, rename the gitignored `.cargo/config.toml.off` to `config.toml` (a `[patch]` to its crates by
   path) and back when done; Cargo.lock changes while it is on, don't commit that. Its gallery example
   (`cargo run -p gob-ui --example gallery` there) shows every widget. egui upgrades start there; both apps move together.
@@ -104,6 +104,26 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   protocol/SDK in its own file (vkb.rs: HID report 0x59 after pyvkb, CRC, dummy LED 99; hid/ = shared transport trait,
   hid/windows.rs = SetupAPI + HidD_Get/SetFeature). Writes last until reconnect; profiles set the colors they need on activation. Device path = DirectInput
   DIPROP_GUIDANDPATH. Examples `led_probe` (read-only), `led_set` (writes, ask first). Plan: plans/completed/LIGHTING_PLAN.md
+- crates/gob-devices device plugins = a controller's picture + its controls + which input each sends:
+  plugins/devices/<brand>/<device>/ (device.gob: id, name, brand, `[[match]]` vid + name part, `[[view]]` pictures,
+  `[[control]]` id/name/kind/parts/at; inputs.gob: control -> `button:N`/`axis:x`/`hat:N`/`hat:N:up`), shipped in
+  releases ship none: index.rs = plugins/devices/index.gob (ids, matches, files with SHA-256; rebuild with example
+  `device_index`, a test checks it), joystick-gobloon mapping/download.rs reads it from GitHub raw (`main`, Alpha channel `dev`)
+  and downloads a fitting plugin into `<data dir>/devices` ("Download picture" in the Input viewer); `devices/` next to the
+  exe still loads if present, user copies win by id; edit.rs = device.gob changed as text
+  (comments kept), live.rs = inputs from events or readings (`Detector::feed`/`poll`, `is_active`), draw.rs = how
+  controls look on the picture (egui: hat pad, stick, gauge, tag; `draw::control`); examples `device_check`,
+  `device_teach`. The Device tab of the Game page waits in archive/device-pictures
+- joystick-gobloon mapping/ = device pictures in the Input viewer (Picture view per device with a plugin, lit live)
+  and mapping ("Edit mapping"; "Add a picture" for a device without one): each button/axis/hat worked gets the next
+  number, waiting in the picture's top left corner until dragged onto it (a control with that one input, `button_7`);
+  tags move by drag (Shift+drag or the menu moves one out of its spot with a line: `glyph` in device.gob, its dot
+  moves the spot), right-click menu (make a hat, split, move out/back, remove), buttons gather into hats, axes into sticks, copy
+  another device's controls (mirrored for the other hand); store.rs writes the plugin (debug builds: the repository's
+  plugins/devices, release: the user's folder, a shipped plugin copied there first) and reloads plugins whose files
+  changed; share.rs = export a plugin as `<id>.zip` (folder inside) / import one (enclosed names, plugin file kinds,
+  size caps, must load; replacing the user's own asks first); tests.rs drives it with egui_kittest; debug env `JOYSTICK_GOBLOON_TAB=mapping` maps the first pictured
+  device (with START_PAGE=viewer). Map Gobloon (the separate tool) is gone
 - crates/gob-script  Lua user scripts (plans/completed/LUA_SCRIPTS_PLAN.md), like Gremlin's Python user scripts: mlua + Luau
   (`send`: the engine is built off its thread), one sandboxed state per script (sandbox.rs `new_state`: time budget +
   memory cap, also used by gob-export plugins), 5 ms per call (interrupt), off after
@@ -137,14 +157,21 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   header) and the diff files' names, returned in `ReadResult::actions` (the Game page adds them to the catalog), ids
   `<aircraft>/<game id>`, `<device> {instance GUID}.diff.lua` per joystick + Keyboard.diff.lua via `luadata.parse/write`
   (Lua data without running it, sorted keys + tabs like the game); defaults = HTML less added plus removed; the game is not
-  installed here, tested on made-up files in tests/data/dcs-world, the HTML format is a guess). A binding's output (gob-core game.rs
-  `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`);
+  installed here, tested on made-up files in tests/data/dcs-world, the HTML format is a guess; war-thunder: the game keeps controls on its
+  servers, so the target = controls files the player exported (`*.blk` with `controls{` in Documents/My Games/WarThunder, the
+  game's folders), DataBlock text re-emitted in the game's layout; joyButton/axisId numbered across deviceMapping's joysticks
+  (buttons, then 4 per hat; DirectInput axes, then 2 per hat) using `OurDevice::axes/buttons/hats`; vJoy entries in order,
+  `joystick N` links; catalog from public exported files by dev/catalog.py; tested on public files in tests/data/war-thunder). A binding's output (gob-core game.rs
+  `GameOutput`) = a virtual output or keys and mouse buttons pressed together (`Combo`: `key:0x138+key:0x15`, `mouse:left`),
+  a button or hat direction may carry a press (`Press`: `vjoy:1:button:5@long` / `@double`; plugins list theirs in plugin.gob
+  `presses`, Star Citizen = activationMode delayed_press / double_tap, the capture dialog asks);
   keyboard and mouse bindings stay the game's until an action's are set in the profile (`set_game_keys`, `<clear>` = none),
   plugins read the game's own (defaults marked) and write only the held ones. GUI: game_view/ = Game bindings page (rail,
   detaches like calibration): worker.rs (plugins on a worker thread), state.rs (one state per action: the profile set
   against the game's files), wiring.rs (schematic, a lane per output), table.rs ("As in the game": groups, chips), capture.rs
   + bind.rs (press a key/mouse button/joystick control to bind or look up; warning listing where a control is used; mapping
-  an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs). Releases put
+  an unmapped control), import, export_dialog.rs; lit live from the runner's `OutputTap` (gob-engine tap.rs); device.rs = Controller tab (a connected controller's picture with the
+  actions per control through the profile, gob-ui `DevicePicture` callouts, `JOYSTICK_GOBLOON_TAB=game-device`). Releases put
   plugins/export (without `dev/`) into `export/` next to the exe (installer, portable zip, AppImage)
 - crates/gob-voice   voice commands (plans/completed/VOICE_PLAN.md): audio.rs = cpal capture to 16 kHz mono with gain (0-400 %)
   and level; two engines (`Engine`, Settings > Voice, default Vosk): vosk.rs = libvosk 0.3.45 in grammar mode
@@ -165,7 +192,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Text to speech: Settings > Voice > Text to speech = the system's voice (default) or Piper (`tts_engine`)
 - plans/completed/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
-  on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
+  on every release: start.html = getting started + new profile wizard, devices.html = device pictures (download, make your own, file format; its controller list
+  is built from plugins/devices/index.gob, update it with new pictures), emulation.html = virtual joysticks and
   hiding, learn.html = every action with a
   picture of its editor in site/img/actions/, the right panel cropped from a 1102x732 window; screenshots in
   site/img/). README.md is a short overview linking there; no Markdown docs besides docs/CODE_SIGNING.md.
@@ -241,6 +269,9 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   e.g. `feat(gob-gremlin): parse R14 library`). CI rejects other messages; the type sets the release version.
 
 ## Testing notes
+- Test layout: small unit tests inline (`#[cfg(test)] mod tests { .. }`); a test module over ~100 lines moves to
+  its own file (`foo.rs` -> `foo/tests.rs`, `mod.rs` -> `tests.rs` beside it) declared `#[cfg(test)] mod tests;`,
+  so it keeps access to private items; tests that need only the public API go to the crate's `tests/`.
 - Never change the user's real HidHide/vJoy state in tests without asking.
 - No synthetic mouse clicks for GUI checks: other windows may overlap and receive them. Screenshot only, ask the user to click.
   Debug builds open a page at start with env `JOYSTICK_GOBLOON_START_PAGE` = hidhide (window) | modifiers (window) | modes (window) | apps | vjoy | viewer | viewer-window | calibration | scripts | game | wizard (new profile wizard) | switch-unsaved / switch-stopped (switching-by-program dialogs) | settings | general | about | lighting | panels | overlay (Settings > Overlay, placing it),
@@ -249,7 +280,7 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   `JOYSTICK_GOBLOON_GAME_DIALOG` = capture | conflict | choose | unmapped opens that dialog of the Game page with sample data,
   the first device's info window with `JOYSTICK_GOBLOON_INFO=1`, every input viewer view with `JOYSTICK_GOBLOON_VIEWER=all` (or a
   device name part, e.g. `vjoy`)
-- Updates (joystick-gobloon/src/update.rs): GitHub's latest final release, newer than VERSION; installed copies run the new
+- Updates (joystick-gobloon/src/update.rs): GitHub's latest final release (update channel Release, default) or the newest release with alpha builds (channel Alpha, About page), newer than VERSION and with this copy's file; installed copies run the new
   setup with /UPDATE=1 (it restarts the app), portable copies swap the files listed in the zip's files.gob (written by
   release.yml; files the old list had and the new one lacks are removed, user files are never listed; what was set
   aside is listed in update-aside.gob, deleted on the next start). Debug builds never update.

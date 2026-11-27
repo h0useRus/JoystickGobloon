@@ -7,6 +7,7 @@
 pub mod action;
 pub mod automap;
 pub mod button_axis;
+pub mod cards;
 pub mod combos;
 pub mod condition;
 pub mod curve;
@@ -18,6 +19,7 @@ pub mod logical;
 pub mod modifier;
 pub mod osc;
 pub mod profile;
+pub mod route;
 pub mod script;
 pub mod two_axis;
 pub mod voice;
@@ -31,13 +33,16 @@ pub use action::{
 };
 pub use automap::Layout as InputLayout;
 pub use button_axis::{AxisMotion, AxisOutput, BUTTON_AXIS, ButtonAxis, DecreaseInput};
+pub use cards::{CardSide, PictureCard};
 pub use combos::{COMBO_INPUT_TYPE, KeyCombo, MAX_COMBO_KEYS, is_combo_binding};
 pub use condition::{Comparator, Condition, Source as ConditionSource};
 pub use edit::{NewAction, child_groups, new_uuid};
 pub use events::{
     EVENT_INPUT_TYPE, EVENTS_GUID, ProfileEvent, is_builtin_device, is_event_binding,
 };
-pub use game::{Combo, ComboPart, GameBind, GameBindings, GameDevice, GameOutput, HatDirection};
+pub use game::{
+    Combo, ComboPart, GameBind, GameBindings, GameDevice, GameOutput, HatDirection, Press,
+};
 pub use logical::{
     KEYBOARD_GUID, LOGICAL_DEVICE_GUID, LogicalInput, key_from_input_id, key_input_id,
 };
@@ -51,6 +56,7 @@ pub use profile::{
     VirtualButton, VirtualDevices, VirtualJoystick, VirtualOutput, same_device_name,
     virtual_output, virtual_outputs,
 };
+pub use route::Route;
 pub use script::{ScriptInstance, ScriptLanguage, ScriptSource, ScriptValue, script_path};
 pub use two_axis::{AxisInput, TWO_AXIS_KINDS};
 pub use voice::{

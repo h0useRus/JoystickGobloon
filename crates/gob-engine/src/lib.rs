@@ -30,6 +30,31 @@ pub use media::{Media, NaturalVoices, SpeechQueue, SpeechRequest, set_natural_vo
 pub use runner::{Latency, Reloader, Runner, RunnerStatus, VoiceHeard, VoiceStatus, wait_stopped};
 pub use tap::{OutputTap, Sent, Tapped};
 
+/// Gets the mouse output ready before the first [`nudge_mouse`] (Linux makes its virtual mouse
+/// then: the desktop needs a moment to open a new device, and events sent before that are lost).
+pub fn prepare_mouse() {
+    use platform::Injector;
+    platform::injector().prepare();
+}
+
+/// How far the mouse moves: games skip tiny movements (a pixel or two is sensor noise to them)
+/// when they decide whether the player is idle.
+const NUDGE_PIXELS: i32 = 18;
+/// How long the mouse stays moved: several frames even at a low frame rate. Games add up the raw
+/// mouse movement of each frame, and a move and its way back in the same frame add up to nothing.
+const NUDGE_HOLD: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Moves the mouse [`NUDGE_PIXELS`] and back through the system's input, so the net movement is
+/// zero: a program that signs out an idle user sees activity. Blocks for [`NUDGE_HOLD`] between
+/// the two.
+pub fn nudge_mouse() {
+    use platform::Injector;
+    let injector = platform::injector();
+    injector.mouse_move(NUDGE_PIXELS, 0);
+    std::thread::sleep(NUDGE_HOLD);
+    injector.mouse_move(-NUDGE_PIXELS, 0);
+}
+
 /// Values of the logical device's inputs that actions wrote, by input id.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LogicalValues {

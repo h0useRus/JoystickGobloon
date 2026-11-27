@@ -1,0 +1,16 @@
+# VIRPIL VMAX Prime throttle.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "virpil-vmax-prime-throttle"
+name = "VMAX Prime Throttle"
+brand = "VIRPIL"
+credit = "Product images (c) VIRPIL Controls"
+version = "1"
+
+[[match]]
+vid = 0x3344
+name = "VMAX Prime"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"

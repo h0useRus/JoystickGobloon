@@ -1,0 +1,28 @@
+# Logitech G (formerly Saitek) Flight Switch Panel.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "logitech-flight-switch-panel"
+name = "Flight Switch Panel"
+brand = "Logitech"
+credit = "Product images (c) Logitech"
+version = "1"
+
+[[match]]
+vid = 0x06A3
+pid = 0x0D67
+
+[[match]]
+vid = 0x06A3
+name = "Switch Panel"
+
+[[match]]
+vid = 0x046D
+name = "Switch Panel"
+
+[[match]]
+vid = 0x0738
+name = "Switch Panel"
+
+[[view]]
+id = "main"
+name = "Panel"
+image = "views/main.png"

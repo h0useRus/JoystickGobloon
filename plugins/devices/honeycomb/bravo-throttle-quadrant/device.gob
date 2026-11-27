@@ -1,0 +1,16 @@
+# Honeycomb Bravo Throttle Quadrant.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "honeycomb-bravo-throttle-quadrant"
+name = "Bravo Throttle Quadrant"
+brand = "Honeycomb"
+credit = "Product images (c) Honeycomb Aeronautical"
+version = "1"
+
+[[match]]
+vid = 0x294B
+name = "Bravo Throttle"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"

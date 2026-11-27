@@ -1,0 +1,16 @@
+# Honeycomb Foxtrot Aviation Stick.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "honeycomb-foxtrot-aviation-stick"
+name = "Foxtrot Aviation Stick"
+brand = "Honeycomb"
+credit = "Product images (c) Honeycomb Aeronautical"
+version = "1"
+
+[[match]]
+vid = 0x294B
+name = "Foxtrot"
+
+[[view]]
+id = "main"
+name = "Stick"
+image = "views/main.png"

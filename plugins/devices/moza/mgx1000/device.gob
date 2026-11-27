@@ -1,0 +1,16 @@
+# MOZA MGX1000 instrument panel.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "moza-mgx1000"
+name = "MGX1000 Instrument Panel"
+brand = "MOZA"
+credit = "Product images (c) MOZA Racing"
+version = "1"
+
+[[match]]
+vid = 0x346E
+name = "MGX1000"
+
+[[view]]
+id = "main"
+name = "Panel"
+image = "views/main.png"
