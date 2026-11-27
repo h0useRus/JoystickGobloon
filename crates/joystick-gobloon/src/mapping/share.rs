@@ -168,15 +168,28 @@ pub fn unpack(store: &Store, from: &Path) -> Result<Unpacked, String> {
 impl Unpacked {
     /// Puts the plugin in (in place of the one it replaces).
     pub fn install(self, store: &mut Store) -> Result<String, String> {
-        if self.target.exists() {
-            std::fs::remove_dir_all(&self.target)
+        // The plugin replaced is set aside first and comes back when the new one cannot go in.
+        let aside = self.temp.with_extension("old");
+        let _ = std::fs::remove_dir_all(&aside);
+        let replacing = self.target.exists();
+        if replacing {
+            std::fs::rename(&self.target, &aside)
                 .map_err(|e| format!("{}: {e}", self.target.display()))?;
         }
-        if let Some(dir) = self.target.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        let moved = self
+            .target
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::rename(&self.temp, &self.target));
+        if let Err(e) = moved {
+            if replacing {
+                let _ = std::fs::rename(&aside, &self.target);
+            }
+            return Err(format!("{}: {e}", self.target.display()));
         }
-        std::fs::rename(&self.temp, &self.target)
-            .map_err(|e| format!("{}: {e}", self.target.display()))?;
+        if replacing {
+            let _ = std::fs::remove_dir_all(&aside);
+        }
         store.reload();
         log::info!("device plugin {} imported", self.id);
         Ok(self.id.clone())

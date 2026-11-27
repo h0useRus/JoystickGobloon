@@ -139,9 +139,10 @@ Source: "..\target\installer\deps\{#HidHideSetup}"; Flags: dontcopy
 Source: "..\target\installer\deps\{#VJoySetup}"; Flags: dontcopy
 
 ; Device pictures are downloaded when a controller needs one (into the user's folder): the ones
-; earlier versions installed next to the program go.
+; earlier versions installed next to the program go. Not when the program keeps its settings in
+; its own folder: {app}\devices is then the user's own folder of pictures.
 [InstallDelete]
-Type: filesandordirs; Name: "{app}\devices"
+Type: filesandordirs; Name: "{app}\devices"; Check: not LocalDataDir
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
@@ -165,6 +166,12 @@ function HidHideInstalled(): Boolean;
 begin
   Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\HidHide')
     or FileExists(ExpandConstant('{sys}\drivers\HidHide.sys'));
+end;
+
+{ The program keeps its settings, log and device pictures in its own folder (settings.gob there). }
+function LocalDataDir(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\settings.gob'));
 end;
 
 { Started by Joystick Gobloon's updater (JoystickGobloon.exe runs the new setup with /UPDATE=1). }

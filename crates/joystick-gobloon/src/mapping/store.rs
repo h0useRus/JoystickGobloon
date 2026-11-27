@@ -256,7 +256,11 @@ impl Store {
             c.side = side;
             controls.push(c);
         }
-        let inputs = source.defaults.clone();
+        // Only the inputs of the controls copied (a control whose picture size is unknown stays).
+        let mut inputs = source.defaults.clone();
+        inputs
+            .0
+            .retain(|id, _| controls.iter().any(|c| c.id == *id));
         self.edit_manifest(to, |text| {
             let mut text = text.to_string();
             for id in &old {

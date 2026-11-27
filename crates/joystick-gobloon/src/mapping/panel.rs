@@ -64,6 +64,9 @@ impl Mapper {
                             ui.label(if lit { number.color(accent) } else { number });
                             let selected = self.selected.as_deref() == Some(c.id.as_str());
                             if ui.selectable_label(selected, &c.name).clicked() {
+                                // A name being typed for the control selected before is kept:
+                                // its field is not drawn again to lose its focus.
+                                self.commit_name();
                                 self.selected = Some(c.id.clone());
                                 self.view = c.view.clone();
                             }
@@ -133,6 +136,23 @@ impl Mapper {
         .clicked()
         {
             self.delete_control(&control.id);
+        }
+    }
+}
+
+impl Mapper {
+    /// Writes the name typed for a control, if it changed.
+    fn commit_name(&mut self) {
+        let Some((id, text)) = self.name_edit.take() else {
+            return;
+        };
+        let name = text.trim();
+        let Some(mut c) = self.plugin().and_then(|p| p.control(&id)).cloned() else {
+            return;
+        };
+        if !name.is_empty() && name != c.name {
+            c.name = name.to_string();
+            self.put_control(&id, c);
         }
     }
 }
