@@ -163,3 +163,33 @@ fn virpil_names_find_their_plugin() {
         assert_eq!(found, Some(id), "{name}");
     }
 }
+
+/// Product names Honeycomb devices report find their own plugin.
+#[test]
+fn honeycomb_names_find_their_plugin() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
+    let catalog = Catalog::load(&[dir]);
+    for (name, id) in [
+        ("Alpha Flight Controls", "honeycomb-alpha-flight-controls"),
+        (
+            "Alpha Flight Controls XPC",
+            "honeycomb-alpha-flight-controls-xpc",
+        ),
+        (
+            "Bravo Throttle Quadrant",
+            "honeycomb-bravo-throttle-quadrant",
+        ),
+        (
+            "Bravo Throttle Quadrant Lite",
+            "honeycomb-bravo-throttle-quadrant-lite",
+        ),
+        ("Charlie Rudder Pedals", "honeycomb-charlie-rudder-pedals"),
+        (
+            "Echo Aviation Controller XPC",
+            "honeycomb-echo-aviation-controller-xpc",
+        ),
+    ] {
+        let found = catalog.find(0x294B, 0x0001, name).map(|p| p.id());
+        assert_eq!(found, Some(id), "{name}");
+    }
+}

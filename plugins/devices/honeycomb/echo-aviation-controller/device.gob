@@ -1,0 +1,16 @@
+# Honeycomb Echo Aviation Controller.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "honeycomb-echo-aviation-controller"
+name = "Echo Aviation Controller"
+brand = "Honeycomb"
+credit = "Product images (c) Honeycomb Aeronautical"
+version = "1"
+
+[[match]]
+vid = 0x294B
+name = "Echo"
+
+[[view]]
+id = "main"
+name = "Controller"
+image = "views/main.png"

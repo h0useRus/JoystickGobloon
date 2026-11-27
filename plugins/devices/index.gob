@@ -2,6 +2,232 @@
 # Made by `cargo run -p gob-devices --example device_index`; do not edit.
 
 [[device]]
+id = "honeycomb-alpha-flight-controls"
+name = "Alpha Flight Controls"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/alpha-flight-controls"
+
+[[device.match]]
+vid = 10571
+name = "Alpha Flight Controls"
+
+[[device.file]]
+path = "device.gob"
+size = 391
+sha256 = "98c9c13f3ea7098f3e435a2eaa9b341e47462ea52b9d22353cf2ea03b0c6e3f0"
+
+[[device.file]]
+path = "views/main.png"
+size = 352658
+sha256 = "8e5fc97e5ade5c8c56e6fa6429bb9c282a8c149136ffbbdb8b6ab2c516a4e4c8"
+
+[[device]]
+id = "honeycomb-alpha-flight-controls-lite"
+name = "Alpha Flight Controls Lite"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/alpha-flight-controls-lite"
+
+[[device.match]]
+vid = 10571
+name = "Alpha Flight Controls Lite"
+
+[[device.match]]
+vid = 10571
+name = "Alpha Lite"
+
+[[device.file]]
+path = "device.gob"
+size = 455
+sha256 = "bac56419296f7b6ef5854e934395000a8edf17a24ec58687e5d7ba591ff7499f"
+
+[[device.file]]
+path = "views/main.png"
+size = 297653
+sha256 = "4980e15bdd4cccaf1c4f9fefc603d591a1cfbeaf5faa2411552d01c4cadb5d78"
+
+[[device]]
+id = "honeycomb-alpha-flight-controls-xpc"
+name = "Alpha Flight Controls XPC"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/alpha-flight-controls-xpc"
+
+[[device.match]]
+vid = 10571
+name = "Alpha Flight Controls XPC"
+
+[[device.match]]
+vid = 10571
+name = "Alpha XPC"
+
+[[device.file]]
+path = "device.gob"
+size = 464
+sha256 = "366df5b1e14949d3ee0c2938cd60caa47f142ddf944347bc35d8a5701b47209d"
+
+[[device.file]]
+path = "views/main.png"
+size = 350922
+sha256 = "b6412ae39fb6c4ca2212cb3cfdb4b976b3597098a49acbfa632d584e9fbd3f23"
+
+[[device]]
+id = "honeycomb-bravo-throttle-quadrant"
+name = "Bravo Throttle Quadrant"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/bravo-throttle-quadrant"
+
+[[device.match]]
+vid = 10571
+name = "Bravo Throttle"
+
+[[device.file]]
+path = "device.gob"
+size = 389
+sha256 = "dc13c7858f1e53a188c81c6bbee7dfbec6cf8c63ec3e75cbad10ced1081322fe"
+
+[[device.file]]
+path = "views/main.png"
+size = 254486
+sha256 = "29abe5e4a662713915f2ba38113aa7d618fd45d2086f07b04685123ee3f48016"
+
+[[device]]
+id = "honeycomb-bravo-throttle-quadrant-lite"
+name = "Bravo Throttle Quadrant Lite"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/bravo-throttle-quadrant-lite"
+
+[[device.match]]
+vid = 10571
+name = "Bravo Throttle Quadrant Lite"
+
+[[device.match]]
+vid = 10571
+name = "Bravo Lite"
+
+[[device.file]]
+path = "device.gob"
+size = 462
+sha256 = "b617871b64a9ab4e4124838274733e21b6dd4b9a980bdd98d2c6811ee0602dfb"
+
+[[device.file]]
+path = "views/main.png"
+size = 322688
+sha256 = "c6a3678e2a24f821ab28cdbee435e822aa1ce7aea7dc6132f0e13fa5bf01a406"
+
+[[device]]
+id = "honeycomb-charlie-rudder-pedals"
+name = "Charlie Rudder Pedals"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/charlie-rudder-pedals"
+
+[[device.match]]
+vid = 10571
+name = "Charlie"
+
+[[device.file]]
+path = "device.gob"
+size = 374
+sha256 = "a542db292695a422497b759f0084a84f7a88bf9bb9d55775a767c6d30972f8bc"
+
+[[device.file]]
+path = "views/main.png"
+size = 318281
+sha256 = "02402bd20f8bc7b00df4f1ce139905e0898672ab32d64efadb2ab50b2ad3f571"
+
+[[device]]
+id = "honeycomb-echo-aviation-controller"
+name = "Echo Aviation Controller"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/echo-aviation-controller"
+
+[[device.match]]
+vid = 10571
+name = "Echo"
+
+[[device.file]]
+path = "device.gob"
+size = 384
+sha256 = "c79daffb108a01fd9ff88a9d27b5992de34d8f85d0b9af1a85a061d4d75bf9f6"
+
+[[device.file]]
+path = "views/main.png"
+size = 393278
+sha256 = "f72ca9a41f1b811cb6afe5969d97750b6d7a5ae11fcfbad8be778fdb5ced2c30"
+
+[[device]]
+id = "honeycomb-echo-aviation-controller-xpc"
+name = "Echo Aviation Controller XPC"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/echo-aviation-controller-xpc"
+
+[[device.match]]
+vid = 10571
+name = "Echo Aviation Controller XPC"
+
+[[device.match]]
+vid = 10571
+name = "Echo XPC"
+
+[[device.file]]
+path = "device.gob"
+size = 476
+sha256 = "793d0740e34c84ea5dad765272faa8e06d189b9bc5558f34c4f03e5aa7284a60"
+
+[[device.file]]
+path = "views/main.png"
+size = 469938
+sha256 = "6d61fafbf9ba5f60bbde8bc667512c974b3394a3ecd01521c9f22e6719fee2f9"
+
+[[device]]
+id = "honeycomb-foxtrot-aviation-stick"
+name = "Foxtrot Aviation Stick"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/foxtrot-aviation-stick"
+
+[[device.match]]
+vid = 10571
+name = "Foxtrot"
+
+[[device.file]]
+path = "device.gob"
+size = 376
+sha256 = "9f65b947d06f63d46e0ddcb089ffafba40c1f0a158be3ece13ba4196667c0e01"
+
+[[device.file]]
+path = "views/main.png"
+size = 230801
+sha256 = "e1a08154564fd9d66279e667a19300b29802b2909bb907b10afd98fc3d3693f9"
+
+[[device]]
+id = "honeycomb-sierra-tpm-module"
+name = "Sierra TPM Module"
+brand = "Honeycomb"
+version = "1"
+path = "honeycomb/sierra-tpm-module"
+
+[[device.match]]
+vid = 10571
+name = "Sierra"
+
+[[device.file]]
+path = "device.gob"
+size = 394
+sha256 = "3656597a7223818307ed7f53afc330ee30cee23ebe8be9fb60c1f048f31617fa"
+
+[[device.file]]
+path = "views/main.png"
+size = 422722
+sha256 = "c7075ef83f1baedbee9917970eb3257aaa8bac1808f47094231b93def545ff21"
+
+[[device]]
 id = "virpil-cdt-aeromax-l"
 name = "CDT-AEROMAX (left)"
 brand = "VIRPIL"

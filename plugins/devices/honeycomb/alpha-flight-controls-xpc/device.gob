@@ -1,0 +1,20 @@
+# Honeycomb Alpha Flight Controls XPC yoke (Xbox and PC).
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "honeycomb-alpha-flight-controls-xpc"
+name = "Alpha Flight Controls XPC"
+brand = "Honeycomb"
+credit = "Product images (c) Honeycomb Aeronautical"
+version = "1"
+
+[[match]]
+vid = 0x294B
+name = "Alpha Flight Controls XPC"
+
+[[match]]
+vid = 0x294B
+name = "Alpha XPC"
+
+[[view]]
+id = "main"
+name = "Yoke"
+image = "views/main.png"
