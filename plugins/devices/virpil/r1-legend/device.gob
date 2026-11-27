@@ -1,0 +1,16 @@
+# VIRPIL R1-LEGEND rudder pedals.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "virpil-r1-legend"
+name = "R1-LEGEND Rudder Pedals"
+brand = "VIRPIL"
+credit = "Product images (c) VIRPIL Controls"
+version = "1"
+
+[[match]]
+vid = 0x3344
+name = "LEGEND"
+
+[[view]]
+id = "main"
+name = "Pedals"
+image = "views/main.png"

@@ -1,0 +1,16 @@
+# VIRPIL MongoosT-50CM4 throttle.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "virpil-mongoost-50cm4-throttle"
+name = "MongoosT-50CM4 Throttle"
+brand = "VIRPIL"
+credit = "Product images (c) VIRPIL Controls"
+version = "1"
+
+[[match]]
+vid = 0x3344
+name = "50CM4"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"

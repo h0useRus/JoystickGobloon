@@ -144,3 +144,22 @@ fn index_is_current() {
         Some("vkb-gladiator-nxt-evo-ot-l")
     );
 }
+
+/// Product names VIRPIL devices report find their own plugin.
+#[test]
+fn virpil_names_find_their_plugin() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
+    let catalog = Catalog::load(&[dir]);
+    for (name, id) in [
+        ("R-VPC Stick CDT-AEROMAX", "virpil-cdt-aeromax-r"),
+        ("L-VPC Stick CDT-AEROMAX", "virpil-cdt-aeromax-l"),
+        ("VPC Throttle CDT-VMAX", "virpil-cdt-vmax-throttle"),
+        ("VPC Throttle VMAX Prime", "virpil-vmax-prime-throttle"),
+        ("VPC Throttle MT-50CM4", "virpil-mongoost-50cm4-throttle"),
+        ("VPC Control Panel #2", "virpil-control-panel-2"),
+        ("VPC Rudder R1-FALCON", "virpil-r1-falcon"),
+    ] {
+        let found = catalog.find(0x3344, 0x0001, name).map(|p| p.id());
+        assert_eq!(found, Some(id), "{name}");
+    }
+}

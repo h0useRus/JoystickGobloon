@@ -1,0 +1,16 @@
+# VIRPIL R1-FALCON rudder pedals.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "virpil-r1-falcon"
+name = "R1-FALCON Rudder Pedals"
+brand = "VIRPIL"
+credit = "Product images (c) VIRPIL Controls"
+version = "1"
+
+[[match]]
+vid = 0x3344
+name = "FALCON"
+
+[[view]]
+id = "main"
+name = "Pedals"
+image = "views/main.png"
