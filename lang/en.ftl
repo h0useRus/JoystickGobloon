@@ -1200,6 +1200,9 @@ osc-arg-input = Input value (0–1)
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = Edit mapping
 map-add = Add a picture
+map-download = Download picture
+map-downloading = Downloading the picture…
+map-download-failed = The picture could not be downloaded. Check the internet connection and try again.
 map-done = Done
 map-copy = Copy the controls from another device
 map-copy-title = Copy the controls

@@ -1200,6 +1200,9 @@ osc-arg-input = Valeur de l’entrée (0–1)
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = Modifier le placement
 map-add = Ajouter une image
+map-download = Télécharger l'image
+map-downloading = Téléchargement de l'image…
+map-download-failed = L'image n'a pas pu être téléchargée. Vérifiez la connexion internet et réessayez.
 map-done = Terminé
 map-copy = Copier les commandes d'un autre appareil
 map-copy-title = Copier les commandes

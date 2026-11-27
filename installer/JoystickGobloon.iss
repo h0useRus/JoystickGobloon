@@ -131,14 +131,17 @@ Source: "..\target\voice\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\lang\*.ftl"; DestDir: "{app}\lang"; Flags: ignoreversion
 ; Game export plugins (release.yml copies plugins\export there, without the dev folders).
 Source: "..\target\export\*"; DestDir: "{app}\export"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Device plugins: controller pictures with their controls placed.
-Source: "..\plugins\devices\*"; DestDir: "{app}\devices"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; Extracted to {tmp} only when needed (InstallHidHide / InstallVJoy); not installed or
 ; uninstalled themselves.
 Source: "..\target\installer\deps\{#HidHideSetup}"; Flags: dontcopy
 Source: "..\target\installer\deps\{#VJoySetup}"; Flags: dontcopy
+
+; Device pictures are downloaded when a controller needs one (into the user's folder): the ones
+; earlier versions installed next to the program go.
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\devices"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"

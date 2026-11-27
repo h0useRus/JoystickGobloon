@@ -134,6 +134,20 @@ impl Match {
     }
 }
 
+/// How well a device fits a list of matches: the best [`Match::score`], then the longest product
+/// name part of a fitting match, so between plugins that fit as well the one naming more of the
+/// device wins (`Space Gunfighter L` over `Space Gunfighter`). `None` = no match fits.
+pub fn fit(matches: &[Match], vid: u16, pid: u16, name: &str) -> Option<(u8, usize)> {
+    matches
+        .iter()
+        .filter_map(|m| {
+            let score = m.score(vid, pid, name)?;
+            let named = m.name.as_ref().map_or(0, |n| n.trim().len());
+            Some((score, named))
+        })
+        .max()
+}
+
 /// One picture of the device (a stick of a pair, the base, ...).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct View {
@@ -306,25 +320,14 @@ impl DevicePlugin {
         })
     }
 
-    /// How well the device fits this plugin (see [`Match::score`]).
-    pub fn score(&self, vid: u16, pid: u16, name: &str) -> Option<u8> {
-        self.manifest
-            .matches
-            .iter()
-            .filter_map(|m| m.score(vid, pid, name))
-            .max()
+    /// How well the device fits this plugin (see [`fit`]).
+    pub fn fit(&self, vid: u16, pid: u16, name: &str) -> Option<(u8, usize)> {
+        fit(&self.manifest.matches, vid, pid, name)
     }
 
-    /// The longest product name part of a fitting match: between plugins that fit as well, the
-    /// one naming more of the device wins (`Space Gunfighter L` over `Space Gunfighter`).
-    pub fn name_fit(&self, vid: u16, pid: u16, name: &str) -> usize {
-        self.manifest
-            .matches
-            .iter()
-            .filter(|m| m.score(vid, pid, name).is_some())
-            .filter_map(|m| m.name.as_ref().map(|n| n.trim().len()))
-            .max()
-            .unwrap_or(0)
+    /// How well the device fits this plugin (see [`Match::score`]).
+    pub fn score(&self, vid: u16, pid: u16, name: &str) -> Option<u8> {
+        self.fit(vid, pid, name).map(|(s, _)| s)
     }
 }
 

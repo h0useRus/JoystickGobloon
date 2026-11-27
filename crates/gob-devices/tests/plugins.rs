@@ -126,3 +126,21 @@ fn vkb_names_find_their_plugin() {
         assert_eq!(found, Some(id), "{name}");
     }
 }
+
+/// `plugins/devices/index.gob` lists every shipped plugin with its files as they are now.
+#[test]
+fn index_is_current() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
+    let built = gob_devices::Index::build(&dir).unwrap();
+    let text = std::fs::read_to_string(dir.join(gob_devices::index::INDEX)).unwrap();
+    let saved = gob_devices::Index::parse(&text).unwrap();
+    assert!(
+        built == saved,
+        "plugins/devices/index.gob is out of date: run `cargo run -p gob-devices --example device_index`"
+    );
+    let found = saved.find(0x231D, 0x0001, " VKBsim Gladiator EVO OT L ");
+    assert_eq!(
+        found.map(|e| e.id.as_str()),
+        Some("vkb-gladiator-nxt-evo-ot-l")
+    );
+}

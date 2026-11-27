@@ -73,8 +73,6 @@ cp "$SRC"/lang/*.ftl "$APPDIR/usr/bin/lang/"
 # lists) stay out.
 cp -r "$SRC/plugins/export" "$APPDIR/usr/bin/export"
 find "$APPDIR/usr/bin/export" -type d -name dev -prune -exec rm -rf {} +
-# Device plugins (controller pictures with their controls placed) load from <exe>/devices/.
-cp -r "$SRC/plugins/devices" "$APPDIR/usr/bin/devices"
 cp "$SRC/LICENSE" "$APPDIR/usr/bin/"
 cp "$SRC/assets/THIRD-PARTY-NOTICES.txt" "$APPDIR/usr/bin/"
 cp "$SRC/assets/icon/JoystickGobloon-256.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/joystick-gobloon.png"

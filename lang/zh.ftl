@@ -1188,6 +1188,9 @@ osc-arg-input = 输入值（0–1）
 ## Device pictures: mapping a controller onto its picture (Input viewer)
 map-edit = 编辑映射
 map-add = 添加图片
+map-download = 下载图片
+map-downloading = 正在下载图片…
+map-download-failed = 无法下载图片。请检查网络连接后重试。
 map-done = 完成
 map-copy = 从另一个设备复制控件
 map-copy-title = 复制控件

@@ -7,12 +7,14 @@
 //! hotspots ([`plugin`]); `inputs.gob` is the device's default numbering ([`inputs`]); `views/`
 //! holds its pictures ([`picture`]): photos of the device as PNG with a transparent background,
 //! or SVG drawings colored by the theme ([`svg`]). Brands and models live only in
-//! plugins, never in the program.
+//! plugins, never in the program. The program ships without plugins and downloads the one a
+//! connected device needs ([`index`]).
 
 pub mod catalog;
 pub mod check;
 pub mod draw;
 pub mod edit;
+pub mod index;
 pub mod input;
 pub mod inputs;
 pub mod live;
@@ -22,6 +24,7 @@ pub mod svg;
 
 pub use catalog::{Catalog, taught_path};
 pub use check::{Issue, Level, check};
+pub use index::Index;
 pub use input::{Direction, Input};
 pub use inputs::{Entry, Inputs};
 pub use live::{Detector, axis_value, is_active};

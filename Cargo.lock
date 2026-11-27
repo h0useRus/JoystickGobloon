@@ -2053,6 +2053,7 @@ dependencies = [
  "gob-input",
  "resvg",
  "serde",
+ "sha2",
  "toml 1.2.2+spec-1.1.0",
 ]
 
