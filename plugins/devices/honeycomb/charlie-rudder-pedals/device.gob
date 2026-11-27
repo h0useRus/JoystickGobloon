@@ -1,0 +1,16 @@
+# Honeycomb Charlie Rudder Pedals.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "honeycomb-charlie-rudder-pedals"
+name = "Charlie Rudder Pedals"
+brand = "Honeycomb"
+credit = "Product images (c) Honeycomb Aeronautical"
+version = "1"
+
+[[match]]
+vid = 0x294B
+name = "Charlie"
+
+[[view]]
+id = "main"
+name = "Pedals"
+image = "views/main.png"

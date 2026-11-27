@@ -1,0 +1,16 @@
+# VIRPIL Universal Control Panel #3.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "virpil-control-panel-3"
+name = "Control Panel #3"
+brand = "VIRPIL"
+credit = "Product images (c) VIRPIL Controls"
+version = "1"
+
+[[match]]
+vid = 0x3344
+name = "Panel #3"
+
+[[view]]
+id = "main"
+name = "Panel"
+image = "views/main.png"

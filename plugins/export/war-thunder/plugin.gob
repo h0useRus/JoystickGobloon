@@ -1,0 +1,9 @@
+id = "war-thunder"
+name = "War Thunder"
+version = "1.0.0"
+authors = ["Joystick Gobloon"]
+api = 1
+
+[game]
+min = "2.0"
+max = "2.*"

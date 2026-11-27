@@ -85,6 +85,7 @@ fn ours(instances: &[&str]) -> Vec<OurDevice> {
             name: "vJoy Device".into(),
             guid: "{BEAD1234-0000-0000-0000-504944564944}".into(),
             instance: instance.to_string(),
+            ..Default::default()
         })
         .collect()
 }

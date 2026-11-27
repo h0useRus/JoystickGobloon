@@ -940,6 +940,9 @@ fn device_links(ctx: &Context, game: &str) -> Vec<DeviceLink> {
         .unwrap_or_default()
 }
 
+/// Axis slots 1..=8 by the names game export plugins use.
+const AXIS_NAMES: [&str; 8] = ["x", "y", "z", "rx", "ry", "rz", "slider", "dial"];
+
 /// The profile's virtual joysticks as games see them.
 fn our_devices(ctx: &Context) -> Vec<OurDevice> {
     let mut ids: BTreeSet<u32> = ctx.vjoy.iter().map(|d| d.id).collect();
@@ -970,11 +973,25 @@ fn our_devices(ctx: &Context) -> Vec<OurDevice> {
                 .map_or(String::new(), |d| {
                     format!("{{{}}}", d.info.guid.to_ascii_uppercase())
                 });
+            // Its controls: as on this computer, else as the profile keeps them.
+            let (slots, buttons, hats) = match ctx.vjoy.iter().find(|d| d.id == id) {
+                Some(d) => (d.axes.clone(), d.buttons, d.hats()),
+                None => stored.map_or((Vec::new(), 0, 0), |j| (j.axes.clone(), j.buttons, j.hats)),
+            };
+            let mut slots = slots;
+            slots.sort_unstable();
             OurDevice {
                 output: format!("vjoy:{id}"),
                 name: known.name,
                 guid: known.product_guid,
                 instance,
+                axes: slots
+                    .iter()
+                    .filter_map(|s| AXIS_NAMES.get(usize::from(*s).wrapping_sub(1)))
+                    .map(|n| (*n).to_string())
+                    .collect(),
+                buttons,
+                hats,
             }
         })
         .collect()

@@ -152,7 +152,12 @@ fn line_id(line: &str) -> Option<&str> {
         .strip_prefix("id")?
         .trim_start()
         .strip_prefix('=')?;
-    Some(rest.trim().trim_matches('"'))
+    let rest = rest.trim();
+    // A quoted id may have a comment after it (`id = "trigger" # first stage`).
+    match rest.strip_prefix('"') {
+        Some(quoted) => quoted.split('"').next(),
+        None => Some(rest.split('#').next().unwrap_or_default().trim()),
+    }
 }
 
 fn kind_name(c: &Control) -> String {

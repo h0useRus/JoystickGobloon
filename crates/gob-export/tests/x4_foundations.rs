@@ -71,12 +71,14 @@ fn ours() -> Vec<OurDevice> {
             name: "vJoy Device".into(),
             guid: "{BEAD1234-0000-0000-0000-504944564944}".into(),
             instance: "{42CEC570-0A3F-11F0-800B-444553540000}".into(),
+            ..Default::default()
         },
         OurDevice {
             output: "vjoy:2".into(),
             name: "vJoy Device".into(),
             guid: "{BEAD1234-0000-0000-0000-504944564944}".into(),
             instance: "{99999999-0A3F-11F0-800B-444553540000}".into(),
+            ..Default::default()
         },
     ]
 }

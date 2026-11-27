@@ -8,4 +8,4 @@ presses = ["long", "double"]
 
 [game]
 min = "4.10"
-max = "4.*"
+max = "5.*"

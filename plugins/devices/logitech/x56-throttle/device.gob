@@ -1,0 +1,52 @@
+# Logitech G (formerly Saitek) X56 throttle (the stick is a device of its own).
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "logitech-x56-throttle"
+name = "X56 Throttle"
+brand = "Logitech"
+credit = "Product images (c) Logitech"
+version = "1"
+
+[[match]]
+vid = 0x0738
+pid = 0xA221
+
+[[match]]
+vid = 0x06A3
+name = "X56 H.O.T.A.S. Throttle"
+
+[[match]]
+vid = 0x046D
+name = "X56 H.O.T.A.S. Throttle"
+
+[[match]]
+vid = 0x0738
+name = "X56 H.O.T.A.S. Throttle"
+
+[[match]]
+vid = 0x06A3
+name = "X-56 Rhino Throttle"
+
+[[match]]
+vid = 0x046D
+name = "X-56 Rhino Throttle"
+
+[[match]]
+vid = 0x0738
+name = "X-56 Rhino Throttle"
+
+[[match]]
+vid = 0x06A3
+name = "X56 Throttle"
+
+[[match]]
+vid = 0x046D
+name = "X56 Throttle"
+
+[[match]]
+vid = 0x0738
+name = "X56 Throttle"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"

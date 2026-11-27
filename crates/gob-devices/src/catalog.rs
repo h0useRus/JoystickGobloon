@@ -36,6 +36,11 @@ impl Catalog {
             .flatten()
             .map(|e| e.path())
             .filter(|p| p.is_dir())
+            // Folders of downloads and imports still being unpacked (`.download-*`, `.import-*`).
+            .filter(|p| {
+                !p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+            })
             .collect();
         folders.sort();
         for folder in folders {

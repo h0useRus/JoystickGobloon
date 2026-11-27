@@ -1,0 +1,20 @@
+# Honeycomb Echo Aviation Controller XPC (Xbox and PC).
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "honeycomb-echo-aviation-controller-xpc"
+name = "Echo Aviation Controller XPC"
+brand = "Honeycomb"
+credit = "Product images (c) Honeycomb Aeronautical"
+version = "1"
+
+[[match]]
+vid = 0x294B
+name = "Echo Aviation Controller XPC"
+
+[[match]]
+vid = 0x294B
+name = "Echo XPC"
+
+[[view]]
+id = "main"
+name = "Controller"
+image = "views/main.png"

@@ -144,3 +144,106 @@ fn index_is_current() {
         Some("vkb-gladiator-nxt-evo-ot-l")
     );
 }
+
+/// Product names VIRPIL devices report find their own plugin.
+#[test]
+fn virpil_names_find_their_plugin() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
+    let catalog = Catalog::load(&[dir]);
+    for (name, id) in [
+        ("R-VPC Stick CDT-AEROMAX", "virpil-cdt-aeromax-r"),
+        ("L-VPC Stick CDT-AEROMAX", "virpil-cdt-aeromax-l"),
+        ("VPC Throttle CDT-VMAX", "virpil-cdt-vmax-throttle"),
+        ("VPC Throttle VMAX Prime", "virpil-vmax-prime-throttle"),
+        ("VPC Throttle MT-50CM4", "virpil-mongoost-50cm4-throttle"),
+        ("VPC Control Panel #2", "virpil-control-panel-2"),
+        ("VPC Rudder R1-FALCON", "virpil-r1-falcon"),
+    ] {
+        let found = catalog.find(0x3344, 0x0001, name).map(|p| p.id());
+        assert_eq!(found, Some(id), "{name}");
+    }
+}
+
+/// Product names Honeycomb devices report find their own plugin.
+#[test]
+fn honeycomb_names_find_their_plugin() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
+    let catalog = Catalog::load(&[dir]);
+    for (name, id) in [
+        ("Alpha Flight Controls", "honeycomb-alpha-flight-controls"),
+        (
+            "Alpha Flight Controls XPC",
+            "honeycomb-alpha-flight-controls-xpc",
+        ),
+        (
+            "Bravo Throttle Quadrant",
+            "honeycomb-bravo-throttle-quadrant",
+        ),
+        (
+            "Bravo Throttle Quadrant Lite",
+            "honeycomb-bravo-throttle-quadrant-lite",
+        ),
+        ("Charlie Rudder Pedals", "honeycomb-charlie-rudder-pedals"),
+        (
+            "Echo Aviation Controller XPC",
+            "honeycomb-echo-aviation-controller-xpc",
+        ),
+    ] {
+        let found = catalog.find(0x294B, 0x0001, name).map(|p| p.id());
+        assert_eq!(found, Some(id), "{name}");
+    }
+}
+
+/// Logitech (Saitek) devices find their own plugin by product id or name.
+#[test]
+fn logitech_devices_find_their_plugin() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
+    let catalog = Catalog::load(&[dir]);
+    for (vid, pid, name, id) in [
+        (
+            0x06A3,
+            0x0762,
+            "Saitek X52 Pro Flight Control System",
+            "logitech-x52-pro",
+        ),
+        (
+            0x06A3,
+            0x075C,
+            "Saitek X52 Flight Control System",
+            "logitech-x52",
+        ),
+        (
+            0x06A3,
+            0x0001,
+            "X52 Professional H.O.T.A.S.",
+            "logitech-x52-pro",
+        ),
+        (
+            0x0738,
+            0x2221,
+            "Saitek Pro Flight X-56 Rhino Stick",
+            "logitech-x56-stick",
+        ),
+        (
+            0x0738,
+            0xA221,
+            "Saitek Pro Flight X-56 Rhino Throttle",
+            "logitech-x56-throttle",
+        ),
+        (
+            0x046D,
+            0xC215,
+            "Logitech Extreme 3D",
+            "logitech-extreme-3d-pro",
+        ),
+        (
+            0x06A3,
+            0x0763,
+            "Saitek Pro Flight Rudder Pedals",
+            "logitech-flight-rudder-pedals",
+        ),
+    ] {
+        let found = catalog.find(vid, pid, name).map(|p| p.id());
+        assert_eq!(found, Some(id), "{name}");
+    }
+}

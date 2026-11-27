@@ -1,0 +1,16 @@
+# MOZA MRP rudder pedals.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "moza-mrp-rudder-pedals"
+name = "MRP Rudder Pedals"
+brand = "MOZA"
+credit = "Product images (c) MOZA Racing"
+version = "1"
+
+[[match]]
+vid = 0x346E
+name = "MRP"
+
+[[view]]
+id = "main"
+name = "Pedals"
+image = "views/main.png"

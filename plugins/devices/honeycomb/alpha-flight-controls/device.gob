@@ -1,0 +1,16 @@
+# Honeycomb Alpha Flight Controls yoke.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "honeycomb-alpha-flight-controls"
+name = "Alpha Flight Controls"
+brand = "Honeycomb"
+credit = "Product images (c) Honeycomb Aeronautical"
+version = "1"
+
+[[match]]
+vid = 0x294B
+name = "Alpha Flight Controls"
+
+[[view]]
+id = "main"
+name = "Yoke"
+image = "views/main.png"

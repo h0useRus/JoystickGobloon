@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Game bindings: export a profile to the game | Joystick Gobloon</title>
-  <meta name="description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations and DCS World.">
+  <meta name="description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations, DCS World and War Thunder.">
   <link rel="canonical" href="https://h0userus.github.io/joystick-gobloon/game.html">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Joystick Gobloon">
   <meta property="og:title" content="Game bindings: export a profile to the game | Joystick Gobloon">
-  <meta property="og:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations and DCS World.">
+  <meta property="og:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations, DCS World and War Thunder.">
   <meta property="og:url" content="https://h0userus.github.io/joystick-gobloon/game.html">
   <meta property="og:locale" content="en_US">
   <meta property="og:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
@@ -18,7 +18,7 @@
   <meta property="og:image:alt" content="Joystick Gobloon, a free joystick mapper for Windows and Linux, next to its virtual joystick editor">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Game bindings: export a profile to the game | Joystick Gobloon">
-  <meta name="twitter:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations and DCS World.">
+  <meta name="twitter:description" content="Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations, DCS World and War Thunder.">
   <meta name="twitter:image" content="https://h0userus.github.io/joystick-gobloon/img/og.jpg">
   <meta name="author" content="Denis Ibragimov">
   <meta name="theme-color" content="#131209">
@@ -37,7 +37,7 @@
     {
       "@type": "TechArticle",
       "headline": "Game bindings: your profile, bound in the game",
-      "description": "Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations and DCS World.",
+      "description": "Game export in Joystick Gobloon: read a game's joystick bindings, see the path from your stick to the game's action, and write the bindings into Star Citizen, Microsoft Flight Simulator 2020/2024, IL-2 Sturmovik: Great Battles, Elite Dangerous, X4: Foundations, DCS World and War Thunder.",
       "url": "https://h0userus.github.io/joystick-gobloon/game.html",
       "inLanguage": "en",
       "image": "https://h0userus.github.io/joystick-gobloon/img/og.jpg",
@@ -115,9 +115,10 @@
       <li style="--i:6"><a href="panels.html">Panels</a></li>
       <li style="--i:7"><a href="scripts.html">Scripts</a></li>
       <li style="--i:8"><a href="game.html" aria-current="page">Games</a></li>
-      <li style="--i:9"><a href="index.html#platforms">Windows and Linux</a></li>
-      <li style="--i:10"><a href="index.html#faq">FAQ</a></li>
-      <li style="--i:11"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
+      <li style="--i:9"><a href="devices.html">Devices</a></li>
+      <li style="--i:10"><a href="index.html#platforms">Windows and Linux</a></li>
+      <li style="--i:11"><a href="index.html#faq">FAQ</a></li>
+      <li style="--i:12"><a class="btn btn-primary" href="https://github.com/h0useRus/JoystickGobloon/releases/latest"><i class="ph-bold ph-download-simple" aria-hidden="true"></i> Download for free</a></li>
     </ul>
   </div>
 
@@ -162,6 +163,7 @@
             <li><a href="#elite">Elite Dangerous</a></li>
             <li><a href="#x4">X4: Foundations</a></li>
             <li><a href="#dcs">DCS World</a></li>
+            <li><a href="#war-thunder">War Thunder</a></li>
             <li><a href="#linux">On Linux</a></li>
           </ul></li>
           </ul>
@@ -186,8 +188,9 @@
               <li><strong>Elite Dangerous</strong> (4.x, Odyssey and Horizons): joystick, keyboard and mouse bindings of your own preset.</li>
               <li><strong>X4: Foundations</strong>: joystick and keyboard bindings.</li>
               <li><strong>DCS World</strong>: joystick and keyboard bindings of every aircraft.</li>
+              <li><strong>War Thunder</strong>: joystick, keyboard and mouse bindings and axes of a controls file exported from the game.</li>
             </ul>
-            <p>Each game is a plugin in the <code>export</code> folder next to the program, with the game's list of actions for each version it knows. Microsoft Flight Simulator, IL-2, Elite Dangerous, X4 and DCS World were made from the games' file formats and bindings files people have shared, not tested in the games themselves yet: if something comes out wrong, a <a href="https://github.com/h0useRus/JoystickGobloon/issues">bug report</a> with the game's file helps a lot.</p>
+            <p>Each game is a plugin in the <code>export</code> folder next to the program, with the game's list of actions for each version it knows. Microsoft Flight Simulator, IL-2, Elite Dangerous, X4, DCS World and War Thunder were made from the games' file formats and bindings files people have shared, not tested in the games themselves yet: if something comes out wrong, a <a href="https://github.com/h0useRus/JoystickGobloon/issues">bug report</a> with the game's file helps a lot.</p>
           </article>
           <article class="learn-action" id="safe">
             <h3><i class="ph ph-floppy-disk" aria-hidden="true"></i>Your files are kept</h3>
@@ -236,7 +239,9 @@
           </article>
           <article class="learn-action" id="controller">
             <h3><i class="ph ph-joystick" aria-hidden="true"></i>Controller</h3>
-            <p>A picture of your own stick with the game actions next to each of its buttons, hats and axes: a preview to check the bindings on the real controller, lit as you work its controls. It shows every connected controller that has a picture; add one and place its controls in the Input viewer (the pen on its picture). Until the profile holds bindings for the game, it shows the game's own.</p>
+            <p>A picture of your own stick with the game actions next to each of its buttons, hats and axes: a preview to check the bindings on the real controller, lit as you work its controls. It shows every connected controller that has a picture; download one or make your own in the Input viewer (see <a href="devices.html">Device pictures</a>). Until the profile holds bindings for the game, it shows the game's own.</p>
+            <p>Drag a card up, down or to the other side when it hides another; where you put it is kept in the profile, so a profile you share shows the cards the same way. The magic wand above the picture arranges them by themselves again.</p>
+            <figure class="shot"><img src="img/game-controller.png" loading="lazy" width="1102" height="732" alt="Controller tab: the VKB Gladiator NXT EVO Omni Throttle with a card next to each hat and button listing the Star Citizen actions it drives"></figure>
           </article>
           <article class="learn-action" id="press">
             <h3><i class="ph ph-hand-pointing" aria-hidden="true"></i>Press a control</h3>
@@ -265,6 +270,7 @@
               <li><strong>Layout file</strong>: <code>controls\mappings\layout_&lt;name&gt;_exported.xml</code>, named after the profile unless you name it. Load it in the game under Options, Keybindings, Control Profiles. The game never changes it.</li>
               <li><strong>actionmaps.xml</strong>: the bindings the game uses at its next start. Close the game first: it writes this file when it quits and would put its old bindings back.</li>
               <li><strong>Long press and double tap</strong>: written as the game's own activation modes (<code>delayed_press</code>, <code>double_tap</code>), and read back from it, so bindings set as held or double-tapped in the game show as such.</li>
+              <li><strong>Inverted axes</strong>: invert an axis in the profile's binding and the export sets the game's invert for it on that virtual joystick (Options, Keybindings, Advanced Controls Customization). The game inverts a whole option group, not one action: pitch, yaw, roll, the strafes and the throttle each have their own. <em>Throttle - Forward / Back</em> is centred, so a throttle lever at its bottom flies backwards; invert it if forward and back are swapped.</li>
               <li><strong>Unbind the game's own joystick bindings on js1</strong> (on by default): the game binds many actions of joystick 1 by default; with this option, an action your profile binds elsewhere loses that default, so one button does not set off two things.</li>
             </ul>
           </article>
@@ -295,6 +301,11 @@
             <p>DCS keeps the bindings of each aircraft apart, so each aircraft you have flown is an install of its own in the list, named after its folder in <code>Saved Games\DCS\Config\Input</code> (the open beta's are under <code>DCS.openbeta</code>). There is one file for each device, named after the device and its id, holding only what differs from the aircraft's defaults; a virtual joystick without one gets its own file at the first export. The program finds the virtual joysticks by that id; if a file belongs to another device, type the right id (<code>{...}</code>) above the table.</p>
             <p>The aircraft's list of actions lives inside the game, so the program reads it from the files the game writes with <span class="term">Make HTML</span> on its Controls screen (<code>Saved Games\DCS\InputLayoutsTxt</code>). Open Controls in the game once for each aircraft and press Make HTML: without these files only the actions you already changed in the game are listed. Axis curves and dead zones you set in the game stay; inverting an axis in the profile sets the game's invert. Export while the game is closed or at least not on the Controls screen, which writes these files when you leave it.</p>
           </article>
+          <article class="learn-action" id="war-thunder">
+            <h3><i class="ph ph-crosshair" aria-hidden="true"></i>War Thunder</h3>
+            <p>War Thunder keeps your controls on its servers, so the export works on a file: in the game, open Controls, start the profile so the virtual joysticks are connected, and save the controls with the disk icon &rsaquo; Export into <code>Documents\My Games\WarThunder</code> (the game's folder works too, or point the program at another one with the folder button). Export from the program, then load the file back in the game with Import.</p>
+            <p>The file numbers every button and axis across all your devices, in the order of the device list the game saved with it, so it must have seen the virtual joysticks. Every vJoy device has the same name and ids there: the program takes them in order; if it picks the wrong one, type which joystick of the file it is (<code>joystick 1</code>, <code>joystick 2</code> ...) above the table. A hat is four buttons after the joystick's own buttons. Inverting an axis in the profile sets the game's invert; dead zones and curves stay as the game has them. Bindings that hold a joystick button together with another key, and the game's hold or double press settings, stay as they are.</p>
+          </article>
           <article class="learn-action" id="linux">
             <h3><i class="ph ph-linux-logo" aria-hidden="true"></i>On Linux</h3>
             <p>Games run under Proton or Wine keep their files in a Windows folder tree of their own. The program looks in the Steam prefixes, <code>~/Games</code> and <code>~/.wine</code>; for a game installed elsewhere (Lutris, a second Steam library), point it at the game's folder with the folder button. The virtual joysticks are the ones the game sees under Proton.</p>
@@ -322,6 +333,7 @@
             <li><a href="panels.html">Panels</a></li>
             <li><a href="scripts.html">Scripts</a></li>
             <li><a href="game.html">Games</a></li>
+            <li><a href="devices.html">Devices</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon/issues">Report a bug</a></li>
             <li><a href="https://github.com/h0useRus/JoystickGobloon">Source code</a></li>
             <li><a href="https://discord.gg/8cd9APqwG4" rel="noopener">Discord</a></li>

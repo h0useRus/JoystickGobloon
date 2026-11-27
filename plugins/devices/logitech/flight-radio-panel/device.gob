@@ -1,0 +1,28 @@
+# Logitech G (formerly Saitek) Flight Radio Panel.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "logitech-flight-radio-panel"
+name = "Flight Radio Panel"
+brand = "Logitech"
+credit = "Product images (c) Logitech"
+version = "1"
+
+[[match]]
+vid = 0x06A3
+pid = 0x0D05
+
+[[match]]
+vid = 0x06A3
+name = "Radio Panel"
+
+[[match]]
+vid = 0x046D
+name = "Radio Panel"
+
+[[match]]
+vid = 0x0738
+name = "Radio Panel"
+
+[[view]]
+id = "main"
+name = "Panel"
+image = "views/main.png"

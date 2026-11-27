@@ -1,0 +1,16 @@
+# MOZA MTQ throttle quadrant.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "moza-mtq-throttle"
+name = "MTQ Throttle Quadrant"
+brand = "MOZA"
+credit = "Product images (c) MOZA Racing"
+version = "1"
+
+[[match]]
+vid = 0x346E
+name = "MTQ"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"

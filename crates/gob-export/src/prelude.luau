@@ -25,7 +25,7 @@ plugin = {
 	version = hook("version"),
 	-- plugin.read(function(ctx) -> {devices = {...}, binds = {...}}): the bindings already in the
 	-- game's files. ctx: target, files, catalog, ours (our virtual devices: output, name, guid,
-	-- instance), devices (the links the profile keeps: {output, game_device}).
+	-- instance, axes = {"x", "rz", ...} in DirectInput order, buttons, hats), devices (the links the profile keeps: {output, game_device}).
 	read = hook("read"),
 	-- plugin.write(function(ctx) -> {files = {key = text}, changes = {...}}): the game's files with
 	-- the profile's bindings. ctx: target, files, catalog, ours, devices, binds, profile.

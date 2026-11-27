@@ -1,0 +1,16 @@
+# VIRPIL CDT-VMAX throttle.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "virpil-cdt-vmax-throttle"
+name = "CDT-VMAX Throttle"
+brand = "VIRPIL"
+credit = "Product images (c) VIRPIL Controls"
+version = "1"
+
+[[match]]
+vid = 0x3344
+name = "VMAX"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"
