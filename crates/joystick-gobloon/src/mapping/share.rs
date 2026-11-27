@@ -106,19 +106,24 @@ pub fn unpack(store: &Store, from: &Path) -> Result<Unpacked, String> {
             if entry.is_dir() || !kind_ok(relative) {
                 continue;
             }
-            total += entry.size();
-            if entry.size() > FILE_MAX || total > TOTAL_MAX {
-                return Err(format!("{}: too big", from.display()));
+            let too_big = || format!("{}: too big", from.display());
+            if entry.size() > FILE_MAX {
+                return Err(too_big());
             }
             let target = temp.join(relative);
             if let Some(dir) = target.parent() {
                 std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
             }
+            // The sizes a file declares may lie: what is read counts.
             let mut bytes = Vec::new();
             (&mut entry)
                 .take(FILE_MAX + 1)
                 .read_to_end(&mut bytes)
                 .map_err(|e| e.to_string())?;
+            total += bytes.len() as u64;
+            if bytes.len() as u64 > FILE_MAX || total > TOTAL_MAX {
+                return Err(too_big());
+            }
             std::fs::write(&target, bytes).map_err(|e| e.to_string())?;
         }
         DevicePlugin::load(&temp).map_err(|e| format!("{}: {e}", from.display()))
@@ -136,10 +141,20 @@ pub fn unpack(store: &Store, from: &Path) -> Result<Unpacked, String> {
         .map(|p| p.dir.clone())
         .filter(|d| d.starts_with(&store.write_dir));
     let target = replaces.clone().unwrap_or_else(|| {
-        store
+        // A new plugin never takes the folder of another one (of another id).
+        let base = store
             .write_dir
             .join(gob_devices::edit::slug(&plugin.manifest.brand))
-            .join(gob_devices::edit::slug(&plugin.manifest.name))
+            .join(gob_devices::edit::slug(&plugin.manifest.name));
+        let mut target = base.clone();
+        let mut n = 2;
+        while target.exists() {
+            let mut name = base.as_os_str().to_owned();
+            name.push(format!("-{n}"));
+            target = PathBuf::from(name);
+            n += 1;
+        }
+        target
     });
     Ok(Unpacked {
         temp,
@@ -168,7 +183,14 @@ impl Unpacked {
     }
 
     /// Drops it.
-    pub fn discard(self) {
-        let _ = std::fs::remove_dir_all(&self.temp);
+    pub fn discard(self) {}
+}
+
+impl Drop for Unpacked {
+    /// The unpacked copy goes (gone already when it went in).
+    fn drop(&mut self) {
+        if self.temp.exists() {
+            let _ = std::fs::remove_dir_all(&self.temp);
+        }
     }
 }

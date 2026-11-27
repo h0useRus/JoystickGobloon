@@ -7,7 +7,7 @@
 use gob_core::{CardSide, PictureCard, Press};
 use gob_devices::{Control, Direction, Input, Inputs};
 
-use super::bind::{bindings_of, outputs_of};
+use super::bind::{Usage, bindings_with, outputs_with};
 use super::capture::Pressed;
 use super::state::State;
 use super::*;
@@ -191,12 +191,15 @@ impl GameView {
                 .action(id)
                 .map_or_else(|| id.to_string(), |a| a.name.clone())
         };
+        // Worked out once per frame, not per control part.
+        let aliases = crate::substitute_view::auto_aliases(ctx.profile, ctx.devices);
+        let usage = Usage::of(ctx);
         // The actions of one input of the controller.
         let actions_of = |input: Input| -> Vec<String> {
             let p = pressed_of(device, input);
-            let (_, bindings) = bindings_of(ctx, &p);
+            let (_, bindings) = bindings_with(ctx, &aliases, &p);
             let mut names: Vec<String> = Vec::new();
-            for o in outputs_of(ctx, &p, &bindings) {
+            for o in outputs_with(ctx, &usage, &p, &bindings) {
                 for (action, press) in drives.get(&o).into_iter().flatten() {
                     let name = match press {
                         Some(press) => {
