@@ -1,0 +1,28 @@
+# Logitech G (formerly Saitek) Flight Yoke System (yoke with its throttle quadrant).
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "logitech-flight-yoke-system"
+name = "Flight Yoke System"
+brand = "Logitech"
+credit = "Product images (c) Logitech"
+version = "1"
+
+[[match]]
+vid = 0x06A3
+pid = 0x0BAC
+
+[[match]]
+vid = 0x06A3
+name = "Flight Yoke"
+
+[[match]]
+vid = 0x046D
+name = "Flight Yoke"
+
+[[match]]
+vid = 0x0738
+name = "Flight Yoke"
+
+[[view]]
+id = "main"
+name = "Yoke"
+image = "views/main.png"

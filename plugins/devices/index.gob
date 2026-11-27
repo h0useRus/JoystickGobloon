@@ -228,6 +228,445 @@ size = 422722
 sha256 = "c7075ef83f1baedbee9917970eb3257aaa8bac1808f47094231b93def545ff21"
 
 [[device]]
+id = "logitech-extreme-3d-pro"
+name = "Extreme 3D Pro"
+brand = "Logitech"
+version = "1"
+path = "logitech/extreme-3d-pro"
+
+[[device.match]]
+vid = 1133
+pid = 49685
+
+[[device.match]]
+vid = 1699
+name = "Extreme 3D"
+
+[[device.match]]
+vid = 1133
+name = "Extreme 3D"
+
+[[device.match]]
+vid = 1848
+name = "Extreme 3D"
+
+[[device.file]]
+path = "device.gob"
+size = 492
+sha256 = "ce2275bac94500f216e73975c3efbf0a0787324520f0f930bc312851ffd641ac"
+
+[[device.file]]
+path = "views/main.png"
+size = 520432
+sha256 = "0fb9fda7fe1e55994fce32bf14ee5a293fc39ed22453e38c48e0f9c1fb16d501"
+
+[[device]]
+id = "logitech-flight-multi-panel"
+name = "Flight Multi Panel"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-multi-panel"
+
+[[device.match]]
+vid = 1699
+pid = 3334
+
+[[device.match]]
+vid = 1699
+name = "Multi Panel"
+
+[[device.match]]
+vid = 1133
+name = "Multi Panel"
+
+[[device.match]]
+vid = 1848
+name = "Multi Panel"
+
+[[device.file]]
+path = "device.gob"
+size = 510
+sha256 = "ae370a1b34ca2393af3a2c6c77297bfd4495843fc04846212802f532e41d03b3"
+
+[[device.file]]
+path = "views/main.png"
+size = 96612
+sha256 = "33da05eff1ee5becc497dfb0da480c1fbcdaa0be062506547cc287182327fdc4"
+
+[[device]]
+id = "logitech-flight-radio-panel"
+name = "Flight Radio Panel"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-radio-panel"
+
+[[device.match]]
+vid = 1699
+pid = 3333
+
+[[device.match]]
+vid = 1699
+name = "Radio Panel"
+
+[[device.match]]
+vid = 1133
+name = "Radio Panel"
+
+[[device.match]]
+vid = 1848
+name = "Radio Panel"
+
+[[device.file]]
+path = "device.gob"
+size = 498
+sha256 = "41e96d5b516a8f7eaec987190feccd9c763ced619225ec06d82094ba7219765c"
+
+[[device.file]]
+path = "views/main.png"
+size = 100077
+sha256 = "840ab291855475d3330a6053eaa775f8857dcede0118bbf5645ef6901b714f1d"
+
+[[device]]
+id = "logitech-flight-rudder-pedals"
+name = "Flight Rudder Pedals"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-rudder-pedals"
+
+[[device.match]]
+vid = 1699
+pid = 1891
+
+[[device.match]]
+vid = 1699
+name = "Flight Rudder Pedals"
+
+[[device.match]]
+vid = 1133
+name = "Flight Rudder Pedals"
+
+[[device.match]]
+vid = 1848
+name = "Flight Rudder Pedals"
+
+[[device.file]]
+path = "device.gob"
+size = 532
+sha256 = "84f0a6f2ab3ee1e68291dc22a7030c3b2223abb4ce9f002783e2efbf03d84d84"
+
+[[device.file]]
+path = "views/main.png"
+size = 145727
+sha256 = "9b1617c7f646387c563d9c72ece141fc14b5043d5b26f4f7e04a5bec943f9b25"
+
+[[device]]
+id = "logitech-flight-switch-panel"
+name = "Flight Switch Panel"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-switch-panel"
+
+[[device.match]]
+vid = 1699
+pid = 3431
+
+[[device.match]]
+vid = 1699
+name = "Switch Panel"
+
+[[device.match]]
+vid = 1133
+name = "Switch Panel"
+
+[[device.match]]
+vid = 1848
+name = "Switch Panel"
+
+[[device.file]]
+path = "device.gob"
+size = 504
+sha256 = "82659e7acd559467bb0e37349079383b3bc51edba5230b30efd082a91c2e28dc"
+
+[[device.file]]
+path = "views/main.png"
+size = 143331
+sha256 = "1d351d8206b6692e93ac11c8f2292adc543202873e6b390543ce15bee0bdc2f7"
+
+[[device]]
+id = "logitech-flight-throttle-quadrant"
+name = "Flight Throttle Quadrant"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-throttle-quadrant"
+
+[[device.match]]
+vid = 1699
+pid = 3117
+
+[[device.match]]
+vid = 1699
+name = "Throttle Quadrant"
+
+[[device.match]]
+vid = 1133
+name = "Throttle Quadrant"
+
+[[device.match]]
+vid = 1848
+name = "Throttle Quadrant"
+
+[[device.file]]
+path = "device.gob"
+size = 537
+sha256 = "a3f5106e7f1faa029ee18bdf26540301daa552378ba4232145cf98db97fa7210"
+
+[[device.file]]
+path = "views/main.png"
+size = 268231
+sha256 = "924995a9608432a1aab54464bfe027dab517da54b4008dc026919a7db19f03cb"
+
+[[device]]
+id = "logitech-flight-yoke-system"
+name = "Flight Yoke System"
+brand = "Logitech"
+version = "1"
+path = "logitech/flight-yoke-system"
+
+[[device.match]]
+vid = 1699
+pid = 2988
+
+[[device.match]]
+vid = 1699
+name = "Flight Yoke"
+
+[[device.match]]
+vid = 1133
+name = "Flight Yoke"
+
+[[device.match]]
+vid = 1848
+name = "Flight Yoke"
+
+[[device.file]]
+path = "device.gob"
+size = 531
+sha256 = "da41d580c53805e1978698dc3c158464df9ef2ae17db5a8c8469de6531336790"
+
+[[device.file]]
+path = "views/main.png"
+size = 176827
+sha256 = "5072a5f92730f822a58f571d989d5b3fec61284a7ea70f1910e1c3a53b66c32f"
+
+[[device]]
+id = "logitech-x52"
+name = "X52 H.O.T.A.S."
+brand = "Logitech"
+version = "1"
+path = "logitech/x52"
+
+[[device.match]]
+vid = 1699
+pid = 1884
+
+[[device.match]]
+vid = 1699
+pid = 597
+
+[[device.match]]
+vid = 1699
+name = "X52 H.O.T.A.S."
+
+[[device.match]]
+vid = 1133
+name = "X52 H.O.T.A.S."
+
+[[device.match]]
+vid = 1848
+name = "X52 H.O.T.A.S."
+
+[[device.match]]
+vid = 1699
+name = "X52 Flight Control"
+
+[[device.match]]
+vid = 1133
+name = "X52 Flight Control"
+
+[[device.match]]
+vid = 1848
+name = "X52 Flight Control"
+
+[[device.file]]
+path = "device.gob"
+size = 698
+sha256 = "f0137c36a15c606638797aab8b0f4a3322af8a63b06acff17fb5064aaffa66a1"
+
+[[device.file]]
+path = "views/main.png"
+size = 183662
+sha256 = "c939c192a552c4b900301c0b7c0df49b054897a832bf48fbe0ad9fd5f5d522ea"
+
+[[device]]
+id = "logitech-x52-pro"
+name = "X52 Professional H.O.T.A.S."
+brand = "Logitech"
+version = "1"
+path = "logitech/x52-pro"
+
+[[device.match]]
+vid = 1699
+pid = 1890
+
+[[device.match]]
+vid = 1699
+name = "X52 Professional"
+
+[[device.match]]
+vid = 1133
+name = "X52 Professional"
+
+[[device.match]]
+vid = 1848
+name = "X52 Professional"
+
+[[device.match]]
+vid = 1699
+name = "X52 Pro"
+
+[[device.match]]
+vid = 1133
+name = "X52 Pro"
+
+[[device.match]]
+vid = 1848
+name = "X52 Pro"
+
+[[device.file]]
+path = "device.gob"
+size = 664
+sha256 = "2e48b4fb2687ea05ba2fe2a723668a8348507aedf2e11ba31805e02f199446ba"
+
+[[device.file]]
+path = "views/main.png"
+size = 255360
+sha256 = "a04be1059041483bc4a409bee1ac508e04d5aad3f4a38ff1172be42316920856"
+
+[[device]]
+id = "logitech-x56-stick"
+name = "X56 Stick"
+brand = "Logitech"
+version = "1"
+path = "logitech/x56-stick"
+
+[[device.match]]
+vid = 1848
+pid = 8737
+
+[[device.match]]
+vid = 1699
+name = "X56 H.O.T.A.S. Stick"
+
+[[device.match]]
+vid = 1133
+name = "X56 H.O.T.A.S. Stick"
+
+[[device.match]]
+vid = 1848
+name = "X56 H.O.T.A.S. Stick"
+
+[[device.match]]
+vid = 1699
+name = "X-56 Rhino Stick"
+
+[[device.match]]
+vid = 1133
+name = "X-56 Rhino Stick"
+
+[[device.match]]
+vid = 1848
+name = "X-56 Rhino Stick"
+
+[[device.match]]
+vid = 1699
+name = "X56 Stick"
+
+[[device.match]]
+vid = 1133
+name = "X56 Stick"
+
+[[device.match]]
+vid = 1848
+name = "X56 Stick"
+
+[[device.file]]
+path = "device.gob"
+size = 815
+sha256 = "d1ca0b632d1ddd74404bcf803ef4903f41b8d1936da7f7e429dc53a21c14d575"
+
+[[device.file]]
+path = "views/main.png"
+size = 197738
+sha256 = "ae6f6b885a2b78bde81f679a98e8771c97da15e54e91926fd6ec5890315231ef"
+
+[[device]]
+id = "logitech-x56-throttle"
+name = "X56 Throttle"
+brand = "Logitech"
+version = "1"
+path = "logitech/x56-throttle"
+
+[[device.match]]
+vid = 1848
+pid = 41505
+
+[[device.match]]
+vid = 1699
+name = "X56 H.O.T.A.S. Throttle"
+
+[[device.match]]
+vid = 1133
+name = "X56 H.O.T.A.S. Throttle"
+
+[[device.match]]
+vid = 1848
+name = "X56 H.O.T.A.S. Throttle"
+
+[[device.match]]
+vid = 1699
+name = "X-56 Rhino Throttle"
+
+[[device.match]]
+vid = 1133
+name = "X-56 Rhino Throttle"
+
+[[device.match]]
+vid = 1848
+name = "X-56 Rhino Throttle"
+
+[[device.match]]
+vid = 1699
+name = "X56 Throttle"
+
+[[device.match]]
+vid = 1133
+name = "X56 Throttle"
+
+[[device.match]]
+vid = 1848
+name = "X56 Throttle"
+
+[[device.file]]
+path = "device.gob"
+size = 851
+sha256 = "18c22f66ca894c793104ef1174886931814a2d6203f8c3435af14b2194601310"
+
+[[device.file]]
+path = "views/main.png"
+size = 292129
+sha256 = "71078b720d3580e07a2644bc98377c4928c487519ea49720a929c82f2d934f65"
+
+[[device]]
 id = "virpil-cdt-aeromax-l"
 name = "CDT-AEROMAX (left)"
 brand = "VIRPIL"

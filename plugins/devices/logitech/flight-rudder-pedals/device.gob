@@ -1,0 +1,28 @@
+# Logitech G (formerly Saitek) Flight Rudder Pedals.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "logitech-flight-rudder-pedals"
+name = "Flight Rudder Pedals"
+brand = "Logitech"
+credit = "Product images (c) Logitech"
+version = "1"
+
+[[match]]
+vid = 0x06A3
+pid = 0x0763
+
+[[match]]
+vid = 0x06A3
+name = "Flight Rudder Pedals"
+
+[[match]]
+vid = 0x046D
+name = "Flight Rudder Pedals"
+
+[[match]]
+vid = 0x0738
+name = "Flight Rudder Pedals"
+
+[[view]]
+id = "main"
+name = "Pedals"
+image = "views/main.png"

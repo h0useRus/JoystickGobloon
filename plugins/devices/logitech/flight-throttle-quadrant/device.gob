@@ -1,0 +1,28 @@
+# Logitech G (formerly Saitek) Flight Throttle Quadrant.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "logitech-flight-throttle-quadrant"
+name = "Flight Throttle Quadrant"
+brand = "Logitech"
+credit = "Product images (c) Logitech"
+version = "1"
+
+[[match]]
+vid = 0x06A3
+pid = 0x0C2D
+
+[[match]]
+vid = 0x06A3
+name = "Throttle Quadrant"
+
+[[match]]
+vid = 0x046D
+name = "Throttle Quadrant"
+
+[[match]]
+vid = 0x0738
+name = "Throttle Quadrant"
+
+[[view]]
+id = "main"
+name = "Throttle"
+image = "views/main.png"

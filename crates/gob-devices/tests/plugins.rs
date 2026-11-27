@@ -193,3 +193,57 @@ fn honeycomb_names_find_their_plugin() {
         assert_eq!(found, Some(id), "{name}");
     }
 }
+
+/// Logitech (Saitek) devices find their own plugin by product id or name.
+#[test]
+fn logitech_devices_find_their_plugin() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/devices");
+    let catalog = Catalog::load(&[dir]);
+    for (vid, pid, name, id) in [
+        (
+            0x06A3,
+            0x0762,
+            "Saitek X52 Pro Flight Control System",
+            "logitech-x52-pro",
+        ),
+        (
+            0x06A3,
+            0x075C,
+            "Saitek X52 Flight Control System",
+            "logitech-x52",
+        ),
+        (
+            0x06A3,
+            0x0001,
+            "X52 Professional H.O.T.A.S.",
+            "logitech-x52-pro",
+        ),
+        (
+            0x0738,
+            0x2221,
+            "Saitek Pro Flight X-56 Rhino Stick",
+            "logitech-x56-stick",
+        ),
+        (
+            0x0738,
+            0xA221,
+            "Saitek Pro Flight X-56 Rhino Throttle",
+            "logitech-x56-throttle",
+        ),
+        (
+            0x046D,
+            0xC215,
+            "Logitech Extreme 3D",
+            "logitech-extreme-3d-pro",
+        ),
+        (
+            0x06A3,
+            0x0763,
+            "Saitek Pro Flight Rudder Pedals",
+            "logitech-flight-rudder-pedals",
+        ),
+    ] {
+        let found = catalog.find(vid, pid, name).map(|p| p.id());
+        assert_eq!(found, Some(id), "{name}");
+    }
+}
