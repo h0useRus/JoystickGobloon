@@ -506,6 +506,7 @@ category = "Vehicles - View"
 name = "Look left / right"
 kind = "axis"
 default = ["js1_x"]
+invert = "flight_view_yaw"
 
 [[action]]
 id = "spaceship_view/v_view_pitch_up"
@@ -523,6 +524,7 @@ category = "Vehicles - View"
 name = "Look up / down"
 kind = "axis"
 default = ["js1_y"]
+invert = "flight_view_pitch"
 
 [[action]]
 id = "spaceship_view/v_view_cycle_fwd"
@@ -617,6 +619,7 @@ category = "Flight - Movement"
 name = "Pitch"
 kind = "axis"
 default = ["js1_y"]
+invert = "flight_move_pitch"
 
 [[action]]
 id = "spaceship_movement/v_yaw_left"
@@ -636,6 +639,7 @@ category = "Flight - Movement"
 name = "Yaw"
 kind = "axis"
 default = ["js1_x"]
+invert = "flight_move_yaw"
 
 [[action]]
 id = "spaceship_movement/v_roll_left"
@@ -655,11 +659,12 @@ category = "Flight - Movement"
 name = "Roll"
 kind = "axis"
 default = ["js1_rotz"]
+invert = "flight_move_roll"
 
 [[action]]
 id = "spaceship_movement/v_roll_mouse"
 category = "Flight - Movement"
-name = "Roll"
+name = "Roll (mouse)"
 
 [[action]]
 id = "spaceship_movement/v_toggle_relative_mouse_mode"
@@ -688,6 +693,7 @@ id = "spaceship_movement/v_strafe_vertical"
 category = "Flight - Movement"
 name = "Strafe up / down (abs.)"
 kind = "axis"
+invert = "flight_move_strafe_vertical"
 
 [[action]]
 id = "spaceship_movement/v_strafe_left"
@@ -706,6 +712,7 @@ id = "spaceship_movement/v_strafe_lateral"
 category = "Flight - Movement"
 name = "Strafe left / right (abs.)"
 kind = "axis"
+invert = "flight_move_strafe_lateral"
 
 [[action]]
 id = "spaceship_movement/v_strafe_forward"
@@ -724,6 +731,7 @@ id = "spaceship_movement/v_strafe_longitudinal"
 category = "Flight - Movement"
 name = "Throttle - Forward / Back"
 kind = "axis"
+invert = "flight_strafe_longitudinal"
 
 [[action]]
 id = "spaceship_movement/v_strafe_longitudinal_invert"
@@ -1691,6 +1699,7 @@ category = "Turret Movement"
 name = "Pitch"
 kind = "axis"
 default = ["js1_y"]
+invert = "turret_aim_pitch"
 
 [[action]]
 id = "turret_movement/turret_yaw_left"
@@ -1708,6 +1717,7 @@ category = "Turret Movement"
 name = "Yaw"
 kind = "axis"
 default = ["js1_x"]
+invert = "turret_aim_yaw"
 
 [[action]]
 id = "turret_movement/turret_toggle_mouse_mode"
@@ -2401,12 +2411,12 @@ default = ["kb1_l"]
 [[action]]
 id = "lights_controller/v_lights_on"
 category = "Lights"
-name = "Headlights\\n(Enable)"
+name = "Headlights\\n(Enable) (v_lights_on)"
 
 [[action]]
 id = "lights_controller/v_lights_off"
 category = "Lights"
-name = "Headlights\\n(Enable)"
+name = "Headlights\\n(Enable) (v_lights_off)"
 
 [[action]]
 id = "stopwatch/stopwatch_reset"
@@ -2447,24 +2457,28 @@ id = "player/gp_movex"
 category = "On Foot - All"
 name = "Move Left / Right"
 kind = "axis"
+invert = "fps_move_lateral"
 
 [[action]]
 id = "player/gp_movey"
 category = "On Foot - All"
 name = "Move Forward / Backward"
 kind = "axis"
+invert = "fps_move_longitudinal"
 
 [[action]]
 id = "player/gp_rotateyaw"
 category = "On Foot - All"
 name = "Look (Yaw)"
 kind = "axis"
+invert = "fps_view_yaw"
 
 [[action]]
 id = "player/gp_rotatepitch"
 category = "On Foot - All"
 name = "Look (Pitch)"
 kind = "axis"
+invert = "fps_view_pitch"
 
 [[action]]
 id = "player/jump"
@@ -2493,12 +2507,12 @@ default = ["kb1_c"]
 [[action]]
 id = "player/gp_jump"
 category = "On Foot - All"
-name = "Jump"
+name = "Jump (gamepad)"
 
 [[action]]
 id = "player/gp_crouch"
 category = "On Foot - All"
-name = "Crouch"
+name = "Crouch (gamepad)"
 
 [[action]]
 id = "player/prone"
@@ -2538,7 +2552,7 @@ default = ["kb1_space"]
 [[action]]
 id = "player/attack1"
 category = "On Foot - All"
-name = "Firearm - Attack"
+name = "Firearm - Attack (attack1)"
 
 [[action]]
 id = "player/attackSecondary"
@@ -2596,12 +2610,12 @@ default = ["kb1_s"]
 [[action]]
 id = "player/weapon_melee"
 category = "On Foot - All"
-name = "Melee - Attack (Ranged Weapon + Takedowns)"
+name = "Melee - Attack (Ranged Weapon + Takedowns) (weapon_melee)"
 
 [[action]]
 id = "player/takedown_nonLethal"
 category = "On Foot - All"
-name = "Melee - Attack (Ranged Weapon + Takedowns)"
+name = "Melee - Attack (Ranged Weapon + Takedowns) (takedown_nonLethal)"
 
 [[action]]
 id = "player/throw_overhand"
@@ -2749,7 +2763,7 @@ default = ["kb1_pgup"]
 [[action]]
 id = "player/fixed_speed_increment"
 category = "On Foot - All"
-name = "Default Movement Speed Increase"
+name = "Default Movement Speed Increase (fixed_speed_increment)"
 
 [[action]]
 id = "player/fixed_speed_decrement"
@@ -2783,7 +2797,7 @@ default = ["kb1_lalt+h"]
 [[action]]
 id = "player/toggleHelmetState"
 category = "On Foot - All"
-name = "Default Movement Speed Increase"
+name = "Default Movement Speed Increase (toggleHelmetState)"
 
 [[action]]
 id = "player/visor_wipe"
@@ -2838,7 +2852,7 @@ name = "Dismiss Corpse Marker"
 [[action]]
 id = "player/consume"
 category = "On Foot - All"
-name = "Firearm - Attack"
+name = "Firearm - Attack (consume)"
 
 [[action]]
 id = "player/port_modification_select"
@@ -2906,6 +2920,7 @@ id = "zero_gravity_eva/eva_view_yaw"
 category = "E.V.A - All"
 name = "View Left/Right"
 kind = "axis"
+invert = "fps_view_yaw"
 
 [[action]]
 id = "zero_gravity_eva/eva_view_pitch_up"
@@ -2922,6 +2937,7 @@ id = "zero_gravity_eva/eva_view_pitch"
 category = "E.V.A - All"
 name = "View Up/Down"
 kind = "axis"
+invert = "fps_view_pitch"
 
 [[action]]
 id = "zero_gravity_eva/eva_roll_left"
@@ -2940,6 +2956,7 @@ id = "zero_gravity_eva/eva_roll"
 category = "E.V.A - All"
 name = "Roll Left/Right"
 kind = "axis"
+invert = "fps_view_roll"
 
 [[action]]
 id = "zero_gravity_eva/eva_strafe_up"
@@ -2958,6 +2975,7 @@ id = "zero_gravity_eva/eva_strafe_vertical"
 category = "E.V.A - All"
 name = "Strafe Up/Down"
 kind = "axis"
+invert = "eva_move_strafe_vertical"
 
 [[action]]
 id = "zero_gravity_eva/eva_strafe_left"
@@ -2976,6 +2994,7 @@ id = "zero_gravity_eva/eva_strafe_lateral"
 category = "E.V.A - All"
 name = "Strafe Left/Right"
 kind = "axis"
+invert = "eva_move_strafe_lateral"
 
 [[action]]
 id = "zero_gravity_eva/eva_strafe_forward"
@@ -2994,6 +3013,7 @@ id = "zero_gravity_eva/eva_strafe_longitudinal"
 category = "E.V.A - All"
 name = "Strafe Forward/Backward"
 kind = "axis"
+invert = "eva_move_strafe_longitudinal"
 
 [[action]]
 id = "zero_gravity_eva/eva_brake"
@@ -3065,6 +3085,7 @@ category = "Ground Vehicle - General"
 name = "Look left / right"
 kind = "axis"
 default = ["js1_x"]
+invert = "mgv_view_yaw"
 
 [[action]]
 id = "vehicle_general/v_view_pitch"
@@ -3072,6 +3093,7 @@ category = "Ground Vehicle - General"
 name = "Look up / down"
 kind = "axis"
 default = ["js1_y"]
+invert = "mgv_view_pitch"
 
 [[action]]
 id = "vehicle_general/v_view_freelook_mode"
@@ -3167,6 +3189,7 @@ category = "Ground Vehicle - Movement"
 name = "Drive Forward / Backward"
 kind = "axis"
 default = ["js1_slider1"]
+invert = "mgv_move"
 
 [[action]]
 id = "vehicle_driver/v_yaw_left"
@@ -3186,6 +3209,7 @@ category = "Ground Vehicle - Movement"
 name = "Yaw Left / Right (Axis / HOTAS)"
 kind = "axis"
 default = ["js1_x"]
+invert = "mgv_move_yaw"
 
 [[action]]
 id = "vehicle_driver/v_pitch_up"
@@ -3203,6 +3227,7 @@ category = "Ground Vehicle - Movement"
 name = "Pitch Up / Down (Axis / HOTAS)"
 kind = "axis"
 default = ["js1_y"]
+invert = "mgv_move_pitch"
 
 [[action]]
 id = "vehicle_driver/v_brake"
@@ -3292,16 +3317,18 @@ default = ["js1_hat1_down"]
 [[action]]
 id = "spectator/spectate_rotateyaw_mouse"
 category = "Electronic Access - Spectator"
-name = "Spectator Camera Rotate Yaw"
+name = "Spectator Camera Rotate Yaw (mouse)"
 kind = "axis"
 default = ["js1_x"]
+invert = "fps_view_yaw"
 
 [[action]]
 id = "spectator/spectate_rotatepitch_mouse"
 category = "Electronic Access - Spectator"
-name = "Spectator Camera Rotate Pitch"
+name = "Spectator Camera Rotate Pitch (mouse)"
 kind = "axis"
 default = ["js1_y"]
+invert = "fps_view_pitch"
 
 [[action]]
 id = "spectator/spectate_rotateyaw"
@@ -3309,6 +3336,7 @@ category = "Electronic Access - Spectator"
 name = "Spectator Camera Rotate Yaw"
 kind = "axis"
 default = ["js1_x"]
+invert = "fps_view_yaw"
 
 [[action]]
 id = "spectator/spectate_rotatepitch"
@@ -3316,6 +3344,7 @@ category = "Electronic Access - Spectator"
 name = "Spectator Camera Rotate Pitch"
 kind = "axis"
 default = ["js1_y"]
+invert = "fps_view_pitch"
 
 [[action]]
 id = "spectator/spectate_toggle_hud"
@@ -3689,12 +3718,12 @@ default = ["js1_button6", "kb1_f"]
 [[action]]
 id = "player_choice/pc_interaction_select"
 category = "Quick Keys, Interactions, and Inner Thought"
-name = "Activate Inner Thought"
+name = "Activate Inner Thought (pc_interaction_select)"
 
 [[action]]
 id = "player_choice/pc_select"
 category = "Quick Keys, Interactions, and Inner Thought"
-name = "Activate Inner Thought"
+name = "Activate Inner Thought (pc_select)"
 default = ["js1_button1"]
 
 [[action]]
@@ -3786,7 +3815,7 @@ name = "Drop Item"
 [[action]]
 id = "player_choice/pc_pit_empty_backpack"
 category = "Quick Keys, Interactions, and Inner Thought"
-name = "Store All Commodities"
+name = "Store All Commodities"
 
 [[action]]
 id = "player_choice/pc_pit_player_actions"
@@ -3847,19 +3876,19 @@ default = ["kb1_lalt+m"]
 [[action]]
 id = "player_choice/pc_qs_weapons_pit_primary"
 category = "Quick Keys, Interactions, and Inner Thought"
-name = "Weapon Select Radial Menu"
+name = "Weapon Select Radial Menu (pc_qs_weapons_pit_primary)"
 default = ["kb1_1"]
 
 [[action]]
 id = "player_choice/pc_qs_weapons_pit_secondary"
 category = "Quick Keys, Interactions, and Inner Thought"
-name = "Weapon Select Radial Menu"
+name = "Weapon Select Radial Menu (pc_qs_weapons_pit_secondary)"
 default = ["kb1_2"]
 
 [[action]]
 id = "player_choice/pc_qs_weapons_pit_sidearm"
 category = "Quick Keys, Interactions, and Inner Thought"
-name = "Weapon Select Radial Menu"
+name = "Weapon Select Radial Menu (pc_qs_weapons_pit_sidearm)"
 default = ["kb1_3"]
 
 [[action]]
@@ -3877,13 +3906,13 @@ default = ["kb1_4"]
 [[action]]
 id = "view_director_mode/view_enable_camview_mode"
 category = "Camera - Advanced Camera Controls"
-name = "Advanced Camera Controls Modifier (Hold)"
+name = "Advanced Camera Controls Modifier (Hold) (view_enable_camview_mode)"
 default = ["kb1_f4"]
 
 [[action]]
 id = "view_director_mode/view_switch_to_alternative"
 category = "Camera - Advanced Camera Controls"
-name = "Advanced Camera Controls Modifier (Hold)"
+name = "Advanced Camera Controls Modifier (Hold) (view_switch_to_alternative)"
 default = ["kb1_z"]
 
 [[action]]
@@ -4021,7 +4050,7 @@ default = ["kb1_up"]
 [[action]]
 id = "view_director_mode/view_move_target_Y_neg"
 category = "Camera - Advanced Camera Controls"
-name = "Y Offset Negative / Spectator Freecam Focal Point Backward"
+name = "Y Offset Negative / Spectator Freecam Focal Point Backward"
 default = ["kb1_down"]
 
 [[action]]

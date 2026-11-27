@@ -33,6 +33,10 @@ pub struct GameAction {
     /// The game's own default bindings, as the plugin writes them (a key like "kb1_g").
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub default: Vec<String>,
+    /// The game's setting that inverts this axis, as the plugin writes it (Star Citizen:
+    /// the option group, "flight_move_pitch"); none = the game inverts it no other way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invert: Option<String>,
 }
 
 /// The actions of one game version.

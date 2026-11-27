@@ -7,6 +7,8 @@
 -- A rebind's activationMode (or multiTap) says how it is pressed: delayed_press* and
 -- delayed_hold* = held long (our "@long"), double_tap* or multiTap="2" = pressed twice ("@double").
 -- Every vJoy device has the same product GUID, so the game tells them apart only by instance.
+-- An axis is inverted per joystick instance and option group (the catalog's `invert`):
+-- <options type="joystick" instance="1" ...><flight_move_pitch invert="1"/></options>.
 
 local CHANNELS = { "LIVE", "PTU", "EPTU", "TECH-PREVIEW", "HOTFIX" }
 local INSTALLS = {
@@ -303,6 +305,76 @@ local function profiles_of(doc)
 	return xml.find(root, "ActionProfiles") or root
 end
 
+-- ---- inverted axes -----------------------------------------------------------------------------
+
+-- Action id -> the option group that inverts it.
+local function invert_groups(catalog)
+	local out = {}
+	for _, a in catalog.actions do
+		if a.invert then
+			out[a.id] = a.invert
+		end
+	end
+	return out
+end
+
+-- Whether a joystick input is an axis ("js1_x", not a button or hat).
+local function is_axis_input(input)
+	local rest = string.match(input, "^js%d+_(.+)$")
+	return rest ~= nil and AXES_BACK[rest] ~= nil
+end
+
+-- The joystick options of an instance ("1"), if the file has them.
+local function joystick_options(profiles, instance)
+	return xml.find(profiles, "options", { type = "joystick", instance = instance })
+end
+
+-- Whether option group `group` is inverted in `opt`.
+local function is_inverted(opt, group)
+	local el = opt and xml.find(opt, group)
+	return el ~= nil and el.attrs.invert == "1"
+end
+
+-- The whitespace in front of `child` among `parent`'s children.
+local function indent_of(parent, child)
+	local list = parent.children
+	for i, c in list do
+		if c == child then
+			local before = list[i - 1]
+			if type(before) == "string" and string.match(before, "^%s*$") then
+				return before
+			end
+		end
+	end
+	return "\n "
+end
+
+-- Sets or clears the invert of `group` in `opt`, indented one step deeper than `opt`.
+local function set_inverted(profiles, opt, group, on)
+	local el = xml.find(opt, group)
+	if on then
+		if el then
+			el.attrs.invert = "1"
+			return
+		end
+		el = xml.element(group, { invert = "1" }, { "invert" })
+		if #xml.elements(opt) == 0 then
+			local outer = indent_of(profiles, opt)
+			opt.children = { outer .. " ", el, outer }
+		else
+			xml.append(opt, el)
+		end
+	elseif el and el.attrs.invert == "1" then
+		el.attrs.invert = nil
+		if next(el.attrs) == nil and #xml.elements(el) == 0 then
+			xml.remove(opt, el)
+			if #xml.elements(opt) == 0 then
+				opt.children = {}
+			end
+		end
+	end
+end
+
 -- ---- read --------------------------------------------------------------------------------------
 
 plugin.read(function(ctx)
@@ -334,6 +406,7 @@ plugin.read(function(ctx)
 	end
 	-- The player's bindings; a rebind on the keyboard or mouse (an unbind too) replaces the
 	-- game's default there.
+	local groups = invert_groups(ctx.catalog)
 	local binds, rebound = {}, {}
 	for _, map in xml.elements(profiles, "actionmap") do
 		for _, action in xml.elements(map, "action") do
@@ -351,7 +424,12 @@ plugin.read(function(ctx)
 					if press and not is_keys(output) then
 						output ..= "@" .. press
 					end
-					table.insert(binds, { action = id, output = output })
+					local invert = nil
+					if groups[id] and is_axis_input(input) then
+						local opt = joystick_options(profiles, string.match(input, "^js(%d+)_"))
+						invert = is_inverted(opt, groups[id]) or nil
+					end
+					table.insert(binds, { action = id, output = output, invert = invert })
 				end
 			end
 		end
@@ -431,6 +509,9 @@ plugin.write(function(ctx)
 	for _, id in ctx.cleared or {} do
 		keyed[id] = true
 	end
+	local groups = invert_groups(ctx.catalog)
+	-- Option groups of the axes the profile binds on our devices: js -> group -> inverted.
+	local inverts, inverted_id = {}, {}
 	local wanted, press_in = {}, {}
 	for _, b in ctx.binds do
 		if is_keys(b.output) then
@@ -438,6 +519,15 @@ plugin.write(function(ctx)
 		end
 		local base, press = split_press(b.output)
 		local input = to_input(base, js_of)
+		local group = groups[b.action]
+		if input and group and is_axis_input(input) then
+			local js = device_of(input)
+			inverts[js] = inverts[js] or {}
+			inverts[js][group] = inverts[js][group] or b.invert or false
+			if b.invert then
+				inverted_id[b.action] = true
+			end
+		end
 		if input then
 			wanted[b.action] = wanted[b.action] or {}
 			table.insert(wanted[b.action], input)
@@ -453,7 +543,11 @@ plugin.write(function(ctx)
 		local list = {}
 		bound_on[id] = {}
 		for _, input in inputs do
-			table.insert(list, shown(canon(input), press_for(id, input)))
+			local text = shown(canon(input), press_for(id, input))
+			if inverted_id[id] and groups[id] and is_axis_input(input) then
+				text ..= " (inverted)"
+			end
+			table.insert(list, text)
 			bound_on[id][device_of(input) or ""] = true
 		end
 		table.sort(list)
@@ -528,7 +622,13 @@ plugin.write(function(ctx)
 							in_file[id][dev] = true
 							if not is_unbind(input) then
 								old[id] = old[id] or {}
-								table.insert(old[id], shown(canon(input), press_of(rebind)))
+								local text = shown(canon(input), press_of(rebind))
+								if groups[id] and is_axis_input(input) then
+									if is_inverted(joystick_options(profiles, string.sub(dev, 3)), groups[id]) then
+										text ..= " (inverted)"
+									end
+								end
+								table.insert(old[id], text)
 								-- An input that stays keeps its element (activationMode, multiTap)
 								-- unless it is pressed another way now.
 								if not (want[id] and want[id][canon(input)]) then
@@ -574,6 +674,15 @@ plugin.write(function(ctx)
 								xml.element("rebind", { input = input, activationMode = press and MODES[press] or nil }, { "input", "activationMode" })
 							)
 						end
+					end
+				end
+			end
+			-- Inverted axes as the profile has them, on our devices only.
+			for js, by_group in inverts do
+				local opt = ours[js] and joystick_options(profiles, string.sub(js, 3))
+				if opt then
+					for _, group in sorted_keys(by_group) do
+						set_inverted(profiles, opt, group, by_group[group])
 					end
 				end
 			end
@@ -635,7 +744,22 @@ plugin.write(function(ctx)
 		table.insert(out, " </CustomisationUIHeader>")
 		for _, l in links do
 			if product_of[l.output] then
-				table.insert(out, ' <options type="joystick" instance="' .. string.sub(l.game_device, 3) .. '" Product="' .. escape(product_of[l.output]) .. '"/>')
+				local head = ' <options type="joystick" instance="' .. string.sub(l.game_device, 3) .. '" Product="' .. escape(product_of[l.output]) .. '"'
+				local on = {}
+				for _, group in sorted_keys(inverts[l.game_device] or {}) do
+					if inverts[l.game_device][group] then
+						table.insert(on, group)
+					end
+				end
+				if #on == 0 then
+					table.insert(out, head .. "/>")
+				else
+					table.insert(out, head .. ">")
+					for _, group in on do
+						table.insert(out, "  <" .. group .. ' invert="1"/>')
+					end
+					table.insert(out, " </options>")
+				end
 			end
 		end
 		table.insert(out, " <modifiers />")

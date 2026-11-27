@@ -256,8 +256,14 @@ fn write_table(out: &mut String, doc: Option<&Doc>, t: &Table, depth: usize) -> 
     match (doc, orig) {
         (Some(doc), Some(orig)) if orig.tag == tag && same_attrs(orig, &attrs) => {
             let start = &doc.src[orig.start.clone()];
-            if !orig.empty {
+            if !orig.empty && has_children {
                 out.push_str(start);
+            } else if !orig.empty {
+                // Its children were all taken out: closed in its start tag, as the game
+                // writes an element with nothing in it.
+                out.push_str(start.trim_end_matches('>').trim_end());
+                out.push_str("/>");
+                return Ok(());
             } else if has_children {
                 out.push_str(start.trim_end_matches("/>").trim_end());
                 out.push('>');
