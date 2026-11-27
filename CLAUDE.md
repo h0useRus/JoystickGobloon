@@ -192,7 +192,8 @@ branch (16.x) - read it for behavior. Work on ONE crate per session.
   Text to speech: Settings > Voice > Text to speech = the system's voice (default) or Piper (`tts_engine`)
 - plans/completed/GREMLIN_ACTIONS.md  (local) all Gremlin actions, inputs, Joystick Gobloon status and per-action notes; update when adding one
 - User documentation lives only on the website (site/, published from `main` by website.yml
-  on every release: start.html = getting started + new profile wizard, emulation.html = virtual joysticks and
+  on every release: start.html = getting started + new profile wizard, devices.html = device pictures (download, make your own, file format; its controller list
+  is built from plugins/devices/index.gob, update it with new pictures), emulation.html = virtual joysticks and
   hiding, learn.html = every action with a
   picture of its editor in site/img/actions/, the right panel cropped from a 1102x732 window; screenshots in
   site/img/). README.md is a short overview linking there; no Markdown docs besides docs/CODE_SIGNING.md.
