@@ -257,8 +257,8 @@ sha256 = "ce2275bac94500f216e73975c3efbf0a0787324520f0f930bc312851ffd641ac"
 
 [[device.file]]
 path = "views/main.png"
-size = 520432
-sha256 = "0fb9fda7fe1e55994fce32bf14ee5a293fc39ed22453e38c48e0f9c1fb16d501"
+size = 372113
+sha256 = "a64ca0aca953ac97f03662944fa6128885e29ef9b063d2d1ed36911f67f6dbd6"
 
 [[device]]
 id = "logitech-flight-multi-panel"
