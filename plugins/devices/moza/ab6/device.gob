@@ -1,0 +1,16 @@
+# MOZA AB6 force feedback base with its MH16 flightstick.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "moza-ab6"
+name = "AB6 Flight Simulator"
+brand = "MOZA"
+credit = "Product images (c) MOZA Racing"
+version = "1"
+
+[[match]]
+vid = 0x346E
+name = "AB6"
+
+[[view]]
+id = "main"
+name = "Stick"
+image = "views/main.png"

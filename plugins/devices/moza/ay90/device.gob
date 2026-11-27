@@ -1,0 +1,16 @@
+# MOZA AY90 yoke base with the MFY yoke handle.
+# Picture only: the controls are placed in the Input viewer ("Edit mapping").
+id = "moza-ay90"
+name = "AY90 Yoke"
+brand = "MOZA"
+credit = "Product images (c) MOZA Racing"
+version = "1"
+
+[[match]]
+vid = 0x346E
+name = "AY90"
+
+[[view]]
+id = "main"
+name = "Yoke"
+image = "views/main.png"

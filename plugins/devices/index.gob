@@ -667,6 +667,174 @@ size = 292129
 sha256 = "71078b720d3580e07a2644bc98377c4928c487519ea49720a929c82f2d934f65"
 
 [[device]]
+id = "moza-ab6"
+name = "AB6 Flight Simulator"
+brand = "MOZA"
+version = "1"
+path = "moza/ab6"
+
+[[device.match]]
+vid = 13422
+name = "AB6"
+
+[[device.file]]
+path = "device.gob"
+size = 352
+sha256 = "541ffa50e46c5814c01b8e9c0997d0b4abdf9dc14462abdc9a7606da8699fba2"
+
+[[device.file]]
+path = "views/main.png"
+size = 176245
+sha256 = "142816c3f7dd5607692d3948db3f43865e8fe305a8d77ea448d85cf1c12c0566"
+
+[[device]]
+id = "moza-ay210"
+name = "AY210 Yoke"
+brand = "MOZA"
+version = "1"
+path = "moza/ay210"
+
+[[device.match]]
+vid = 13422
+name = "AY210"
+
+[[device.file]]
+path = "device.gob"
+size = 351
+sha256 = "9e038a6ee468472074bdc44c6437e72f24364a531c6a725a5e1005310e938f7b"
+
+[[device.file]]
+path = "views/main.png"
+size = 308386
+sha256 = "abe301b46a283764cc038b60aa86b898744017c06c01e2f7e099146b3eaa7095"
+
+[[device]]
+id = "moza-ay90"
+name = "AY90 Yoke"
+brand = "MOZA"
+version = "1"
+path = "moza/ay90"
+
+[[device.match]]
+vid = 13422
+name = "AY90"
+
+[[device.file]]
+path = "device.gob"
+size = 332
+sha256 = "2cffeb15c31c0927e12700bdb6ada91a0f4db6751b026021f7e9c3255937baef"
+
+[[device.file]]
+path = "views/main.png"
+size = 273550
+sha256 = "ad656c14ed51cb6c7d3801c40f950a9ab01882e30da334c6670964ae90260b81"
+
+[[device]]
+id = "moza-fmp18"
+name = "FMP18 Panel"
+brand = "MOZA"
+version = "1"
+path = "moza/fmp18"
+
+[[device.match]]
+vid = 13422
+name = "FMP18"
+
+[[device.file]]
+path = "device.gob"
+size = 313
+sha256 = "0576f28fda13da8c853051b5771bea7504f3ec192de0e3e3bf576744d4891cb3"
+
+[[device.file]]
+path = "views/main.png"
+size = 574841
+sha256 = "01b1d7fa6254542bbe41f362ce57e08f2407a001170ee167957de152a825862f"
+
+[[device]]
+id = "moza-mgx1000"
+name = "MGX1000 Instrument Panel"
+brand = "MOZA"
+version = "1"
+path = "moza/mgx1000"
+
+[[device.match]]
+vid = 13422
+name = "MGX1000"
+
+[[device.file]]
+path = "device.gob"
+size = 339
+sha256 = "06c04ad9d6ad2948784a88458cb57468fe79988456a3d85a1829302362106e75"
+
+[[device.file]]
+path = "views/main.png"
+size = 771405
+sha256 = "87f72c9469a511a1b580402470b3244592d5741ea08610e3798f36972022acd6"
+
+[[device]]
+id = "moza-mrp-rudder-pedals"
+name = "MRP Rudder Pedals"
+brand = "MOZA"
+version = "1"
+path = "moza/mrp-rudder-pedals"
+
+[[device.match]]
+vid = 13422
+name = "MRP"
+
+[[device.file]]
+path = "device.gob"
+size = 332
+sha256 = "171af99f47e48671615bd9f83ab90443c11109daedca7b20617d17722339bbdd"
+
+[[device.file]]
+path = "views/main.png"
+size = 343057
+sha256 = "b84f4a17fdf6b82e0736f319feb8924a5079f8381803ab905c58944fd49f771a"
+
+[[device]]
+id = "moza-mtp-throttle"
+name = "MTP Throttle"
+brand = "MOZA"
+version = "1"
+path = "moza/mtp-throttle"
+
+[[device.match]]
+vid = 13422
+name = "MTP"
+
+[[device.file]]
+path = "device.gob"
+size = 319
+sha256 = "27850d44f8ee643f1b2b7470d95164be48466d25587b016d452f8dfe43d28f18"
+
+[[device.file]]
+path = "views/main.png"
+size = 274638
+sha256 = "3740e844d5a78b5c5890405ba5db9cfbee7203107c2c2e81a4c189b141b24db3"
+
+[[device]]
+id = "moza-mtq-throttle"
+name = "MTQ Throttle Quadrant"
+brand = "MOZA"
+version = "1"
+path = "moza/mtq-throttle"
+
+[[device.match]]
+vid = 13422
+name = "MTQ"
+
+[[device.file]]
+path = "device.gob"
+size = 337
+sha256 = "28c4fa3898f3594b645abad44ff3867593caba44d10586ba38b75557a1daeb7f"
+
+[[device.file]]
+path = "views/main.png"
+size = 310678
+sha256 = "e6bd64ddc12a45c8b5ac4d51160afde97fd9fcc6f3c645e50a16c44b9d8192cf"
+
+[[device]]
 id = "virpil-cdt-aeromax-l"
 name = "CDT-AEROMAX (left)"
 brand = "VIRPIL"
